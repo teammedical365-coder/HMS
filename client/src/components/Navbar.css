@@ -1,0 +1,274 @@
+/* --- CSS Variables (Matching existing theme) --- */
+:root {
+  --primary-blue: #0A2647;
+  --primary-teal: #14C38E;
+  --accent-aqua: #00FFAB;
+  --bg-light: #F8F9FD;
+  --white: #FFFFFF;
+  --text-dark: #1E293B;
+  --text-gray: #64748B;
+  
+  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+}
+
+/* --- Navbar Container --- */
+.navbar {
+  width: 100%;
+  background: var(--white);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.navbar-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 70px;
+}
+
+/* --- Brand/Logo --- */
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--primary-blue);
+  font-size: 1.25rem;
+  font-weight: 700;
+  transition: all 0.3s ease;
+}
+
+.navbar-brand:hover {
+  transform: translateY(-2px);
+}
+
+/* Styling for the new logo image */
+.navbar-logo {
+  height: 42px; /* Optimized height for the navbar */
+  width: auto;
+  object-fit: contain;
+  transition: transform 0.3s ease;
+}
+
+.navbar-brand:hover .navbar-logo {
+  transform: scale(1.05);
+}
+
+.brand-text {
+  background: linear-gradient(135deg, var(--primary-blue), var(--primary-teal));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* --- Navigation Links --- */
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-link {
+  padding: 10px 16px;
+  text-decoration: none;
+  color: var(--text-dark);
+  font-weight: 500;
+  font-size: 0.95rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-link:hover {
+  background: rgba(20, 195, 142, 0.1);
+  color: var(--primary-teal);
+}
+
+.nav-link.active {
+  color: var(--primary-teal);
+  background: rgba(20, 195, 142, 0.1);
+  font-weight: 600;
+}
+
+.nav-link.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--primary-teal), var(--accent-aqua));
+  border-radius: 2px;
+}
+
+/* --- Settings Dropdown --- */
+.settings-dropdown {
+  position: relative;
+  margin-left: 8px;
+}
+
+.settings-link {
+  cursor: pointer;
+}
+
+.dropdown-arrow {
+  font-size: 0.7rem;
+  transition: transform 0.3s ease;
+}
+
+.settings-dropdown:hover .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+/* Dropdown Menu */
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  min-width: 220px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  overflow: hidden;
+  z-index: 1001;
+}
+
+.settings-dropdown:hover .dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Dropdown User Info */
+.dropdown-user-info {
+  padding: 16px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  background: var(--bg-light);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-name {
+  font-weight: 600;
+  color: var(--primary-blue);
+  font-size: 0.95rem;
+}
+
+.user-email {
+  font-size: 0.8rem;
+  color: var(--text-gray);
+  word-break: break-all;
+}
+
+.user-role-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  background: var(--primary-teal);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  width: fit-content;
+  margin-top: 4px;
+  letter-spacing: 0.5px;
+}
+
+/* Dropdown Items */
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  text-decoration: none;
+  color: var(--text-dark);
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.dropdown-item:hover {
+  background: rgba(20, 195, 142, 0.1);
+  color: var(--primary-teal);
+}
+
+.dropdown-icon {
+  font-size: 1.1rem;
+  width: 20px;
+  text-align: center;
+}
+
+.logout-btn {
+  color: #EF4444;
+  border-top: 1px solid rgba(226, 232, 240, 0.8) !important;
+}
+
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.05);
+  color: #DC2626;
+}
+
+/* --- Responsive Design --- */
+@media (max-width: 768px) {
+  .navbar-container {
+    padding: 0 16px;
+    height: 65px;
+  }
+
+  .navbar-logo {
+    height: 36px;
+  }
+
+  .navbar-brand {
+    font-size: 1.1rem;
+    gap: 8px;
+  }
+
+  .nav-link {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+
+  .navbar-links {
+    gap: 4px;
+  }
+}
+
+@media (max-width: 640px) {
+  .navbar-links {
+    gap: 2px;
+  }
+
+  .nav-link {
+    padding: 8px;
+    font-size: 0.8rem;
+  }
+
+  .brand-text {
+    display: none; /* Only show logo on very small screens */
+  }
+}

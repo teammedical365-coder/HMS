@@ -1,0 +1,257 @@
+/* --- Container --- */
+.report-page-container {
+  padding: 2rem;
+  background-color: #f1f5f9; /* Slate-100 */
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, sans-serif;
+  box-sizing: border-box;
+}
+
+/* --- Header --- */
+.report-header {
+  background: white;
+  padding: 1.5rem 2rem;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  border: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.header-title h1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 1.6rem;
+  color: #0f172a;
+}
+
+.header-icon { color: #22c55e; } /* Green for completed */
+.header-title p { margin: 6px 0 0; color: #64748b; font-size: 0.95rem; }
+
+/* Controls (Search & Filter) */
+.header-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.search-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 14px;
+  color: #94a3b8;
+}
+
+.search-group input {
+  padding: 12px 12px 12px 40px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  width: 280px;
+  font-size: 0.9rem;
+  background: #f8fafc;
+  transition: all 0.2s;
+  outline: none;
+  color: black;
+}
+
+.search-group input:focus {
+  background: white;
+  border-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+}
+
+.date-filter input {
+  padding: 11px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  color: #64748b;
+  font-family: inherit;
+  outline: none;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.date-filter input.active, 
+.date-filter input:focus {
+  border-color: #22c55e;
+  color: #0f172a;
+  background: white;
+}
+
+/* --- Stats Row --- */
+.stats-row {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: white;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+}
+
+.stat-label { font-size: 0.8rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-value { font-size: 1.8rem; color: #0f172a; font-weight: 700; margin-top: 5px; }
+
+/* --- Grid --- */
+.reports-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1.5rem;
+}
+
+/* --- Report Card --- */
+.report-card {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.report-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  border-color: #cbd5e1;
+}
+
+.card-top {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fcfcfc;
+}
+
+.patient-meta { display: flex; flex-direction: column; gap: 4px; }
+.id-badge { font-family: monospace; font-weight: 600; color: #64748b; font-size: 0.85rem; }
+.date-meta { font-size: 0.75rem; color: #94a3b8; display: flex; align-items: center; gap: 5px; }
+
+.status-pill {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-pill.success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+
+/* Card Content */
+.card-main { padding: 1.5rem; flex: 1; }
+
+.info-block { margin-bottom: 1rem; }
+.info-block label { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+.info-block h3 { margin: 0; font-size: 1.1rem; color: #1e293b; }
+.info-block p { margin: 0; color: #475569; font-size: 0.95rem; }
+
+.tests-block { margin-top: 1.25rem; }
+.test-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.test-tags span {
+  background: #f1f5f9;
+  color: #475569;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1px solid #e2e8f0;
+}
+
+/* File Preview Section */
+.file-preview {
+  margin: 0 1.5rem 1.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-icon { font-size: 1.5rem; color: #ef4444; /* PDF Color */ }
+.file-info { display: flex; flex-direction: column; overflow: hidden; }
+.file-info .filename { font-size: 0.85rem; font-weight: 600; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-info .filesize { font-size: 0.75rem; color: #94a3b8; }
+
+/* Actions */
+.card-actions {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  gap: 10px;
+  background: white;
+}
+
+.btn-action {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-action.primary {
+  background: #0f172a;
+  color: white;
+  border: 1px solid #0f172a;
+}
+.btn-action.primary:hover { background: #334155; border-color: #334155; }
+
+.btn-action.secondary {
+  background: white;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+.btn-action.secondary:hover { background: #f8fafc; border-color: #94a3b8; color: #1e293b; }
+
+/* Empty State */
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 4rem;
+  background: white;
+  border-radius: 16px;
+  border: 1px dashed #cbd5e1;
+  color: #64748b;
+}
+
+.empty-icon { font-size: 2.5rem; color: #cbd5e1; margin-bottom: 1rem; }
+.empty-state h3 { color: #1e293b; margin: 0 0 8px; }
+.btn-clear { margin-top: 1rem; padding: 8px 16px; background: none; border: 1px solid #cbd5e1; border-radius: 6px; color: #475569; cursor: pointer; }
+.btn-clear:hover { background: #f1f5f9; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .report-header { flex-direction: column; align-items: stretch; gap: 1rem; padding: 1.5rem; }
+  .header-controls { flex-direction: column; }
+  .search-group input { width: 100%; }
+  .date-filter { width: 100%; }
+  .date-filter input { width: 100%; box-sizing: border-box; }
+}

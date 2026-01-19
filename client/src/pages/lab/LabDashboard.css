@@ -1,0 +1,237 @@
+/* client/src/pages/user/Dashboard.css */
+
+.dashboard-page {
+  padding: 2rem;
+  background-color: #f8fafc;
+  min-height: calc(100vh - 80px);
+}
+
+.content-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* --- Header Styles --- */
+.dashboard-header {
+  margin-bottom: 2.5rem;
+}
+
+.header-content h1 {
+  font-size: 2.5rem;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.header-subtext {
+  color: #64748b;
+  font-size: 1.1rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/* --- Grid & Column Layout --- */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 1.5rem;
+}
+
+.dashboard-column {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease;
+  overflow: hidden;
+}
+
+.dashboard-column:hover {
+  transform: translateY(-5px);
+}
+
+.column-header {
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.column-icon {
+  font-size: 1.5rem;
+  width: 50px;
+  height: 50px;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: #2563eb;
+}
+
+.column-header h2 {
+  font-size: 1.25rem;
+  color: #1e293b;
+}
+
+.column-count {
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+/* --- Content & Mini Cards --- */
+.column-content {
+  padding: 1rem 1.5rem;
+  flex-grow: 1;
+}
+
+.dashboard-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dashboard-mini-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.mini-card-info .patient-name {
+  font-weight: 600;
+  color: #334155;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.icon-small {
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.mini-card-info .test-names {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-top: 0.2rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+/* --- Status Indicators --- */
+.status-indicator {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.status-indicator.pending {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.status-indicator.completed {
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+/* --- Footer & Links --- */
+.column-footer {
+  padding: 1.25rem 1.5rem;
+  background: #f8fafc;
+  border-top: 1px solid #f1f5f9;
+}
+
+.view-all-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: color 0.2s;
+}
+
+.view-all-link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+/* --- Empty States & Details --- */
+.empty-state-small {
+  text-align: center;
+  padding: 2rem 0;
+  color: #94a3b8;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.item-details p {
+  margin-bottom: 0.75rem;
+  color: #475569;
+  font-size: 0.95rem;
+}
+
+.status-badge {
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.status-confirmed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+/* --- Animations --- */
+.animate-on-scroll {
+  opacity: 0;
+}
+
+.slide-up {
+  animation: slideUp 0.6s ease forwards;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }

@@ -1,0 +1,721 @@
+/* --- CSS Variables (Matching Home.jsx theme) --- */
+:root {
+  --primary-blue: #0A2647;
+  --primary-teal: #14C38E;
+  --accent-aqua: #00FFAB;
+  --bg-light: #F8F9FD;
+  --white: #FFFFFF;
+  --text-dark: #1E293B;
+  --text-gray: #64748B;
+  
+  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 0 30px rgba(20, 195, 142, 0.2);
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+}
+
+/* Ensure full viewport width */
+html, body {
+  width: 100% !important;
+  max-width: 100vw !important;
+  overflow-x: hidden;
+}
+
+body {
+  display: block !important;
+  place-items: unset !important;
+}
+
+/* --- Pharmacy Page Container --- */
+.pharmacy-page {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  min-width: 100vw !important;
+  min-height: 100vh;
+  background: linear-gradient(180deg, var(--white) 0%, var(--bg-light) 50%, var(--white) 100%);
+  padding: 80px 0 100px;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  margin: 0 !important;
+  position: relative;
+  display: block !important;
+  left: 50% !important;
+  right: 50% !important;
+  margin-left: -50vw !important;
+  margin-right: -50vw !important;
+}
+
+/* --- Content Wrapper --- */
+.pharmacy-page .content-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* --- Header Section --- */
+.pharmacy-header {
+  margin-bottom: 60px;
+  padding-top: 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-gray);
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 500;
+  margin-bottom: 30px;
+  transition: color 0.3s ease;
+}
+
+.back-link:hover {
+  color: var(--primary-teal);
+}
+
+.back-arrow {
+  font-size: 1.2rem;
+}
+
+.header-content {
+  text-align: center;
+}
+
+.badge {
+  display: inline-block;
+  background: rgba(20, 195, 142, 0.1);
+  color: var(--primary-blue);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 20px;
+  letter-spacing: 0.5px;
+}
+
+.pharmacy-header h1 {
+  font-size: 3rem;
+  line-height: 1.2;
+  margin-bottom: 20px;
+  color: var(--text-dark);
+  font-weight: 700;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--primary-blue), var(--primary-teal));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.header-subtext {
+  font-size: 1.125rem;
+  color: var(--text-gray);
+  max-width: 700px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+.user-greeting {
+  font-size: 1rem;
+  color: var(--text-gray);
+  margin-top: 12px;
+  font-style: italic;
+}
+
+.user-greeting strong {
+  color: var(--primary-teal);
+  font-weight: 600;
+}
+
+/* --- Controls Section --- */
+.pharmacy-controls {
+  margin-bottom: 50px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.search-box {
+  position: relative;
+  max-width: 600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.search-icon {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.2rem;
+  color: var(--text-gray);
+}
+
+.search-input {
+  width: 100%;
+  padding: 16px 20px 16px 50px;
+  border: 2px solid #e2e8f0;
+  border-radius: 50px;
+  font-size: 1rem;
+  font-family: inherit;
+  background: var(--white);
+  color: var(--text-dark);
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary-teal);
+  box-shadow: 0 0 0 4px rgba(20, 195, 142, 0.1);
+}
+
+.search-input::placeholder {
+  color: var(--text-gray);
+}
+
+.filter-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: 10px 24px;
+  border: 2px solid #e2e8f0;
+  background: var(--white);
+  color: var(--text-gray);
+  border-radius: 50px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.filter-btn:hover {
+  border-color: var(--primary-teal);
+  color: var(--primary-teal);
+  background: rgba(20, 195, 142, 0.05);
+}
+
+.filter-btn.active {
+  background: linear-gradient(135deg, var(--primary-teal), var(--accent-aqua));
+  color: var(--white);
+  border-color: transparent;
+  box-shadow: var(--shadow-md);
+}
+
+/* --- Orders Grid Section --- */
+.orders-grid-section {
+  margin-bottom: 60px;
+}
+
+.orders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 30px;
+}
+
+/* --- Order Card --- */
+.order-card {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.order-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary-teal);
+}
+
+.order-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 24px;
+  background: linear-gradient(135deg, rgba(20, 195, 142, 0.05), rgba(0, 255, 171, 0.05));
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.order-id {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.id-label {
+  font-size: 0.75rem;
+  color: var(--text-gray);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.id-value {
+  font-size: 1.1rem;
+  color: var(--text-dark);
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+}
+
+.status-badge {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.status-badge.status-delivered {
+  background: rgba(20, 195, 142, 0.1);
+  color: var(--primary-teal);
+}
+
+.status-badge.status-processing {
+  background: rgba(255, 193, 7, 0.1);
+  color: #ff9800;
+}
+
+.status-badge.status-pending {
+  background: rgba(33, 150, 243, 0.1);
+  color: #2196f3;
+}
+
+.status-badge.status-cancelled {
+  background: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+}
+
+/* --- Order Card Body --- */
+.order-card-body {
+  padding: 24px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.order-meta {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.meta-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.meta-item > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meta-label {
+  font-size: 0.8rem;
+  color: var(--text-gray);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.meta-value {
+  font-size: 0.95rem;
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+.meta-value.payment-paid {
+  color: var(--primary-teal);
+}
+
+.meta-value.payment-pending {
+  color: #ff9800;
+}
+
+.meta-value.payment-refunded {
+  color: #f44336;
+}
+
+/* --- Order Items --- */
+.order-items {
+  padding-top: 20px;
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.order-items h4 {
+  font-size: 1rem;
+  color: var(--text-dark);
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: var(--bg-light);
+  border-radius: var(--radius-md);
+}
+
+.item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.item-name {
+  font-size: 0.95rem;
+  color: var(--text-dark);
+  font-weight: 500;
+}
+
+.item-quantity {
+  font-size: 0.85rem;
+  color: var(--text-gray);
+}
+
+.item-price {
+  font-size: 1rem;
+  color: var(--primary-teal);
+  font-weight: 700;
+}
+
+/* --- Delivery Address --- */
+.delivery-address {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(20, 195, 142, 0.05);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--primary-teal);
+}
+
+.address-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.address-text {
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  line-height: 1.5;
+}
+
+/* --- Order Card Footer --- */
+.order-card-footer {
+  padding: 20px 24px;
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
+  background: var(--bg-light);
+  display: flex;
+  gap: 12px;
+}
+
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: inherit;
+  flex: 1;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary-teal), var(--accent-aqua));
+  color: var(--white);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+  background: var(--white);
+  color: var(--primary-teal);
+  border: 2px solid var(--primary-teal);
+}
+
+.btn-secondary:hover {
+  background: var(--primary-teal);
+  color: var(--white);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--white);
+  color: var(--text-gray);
+  border-color: #e2e8f0;
+}
+
+/* --- Card Hover Effect --- */
+.card-hover-effect {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(20, 195, 142, 0.05), rgba(0, 255, 171, 0.05));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  border-radius: var(--radius-lg);
+}
+
+.order-card:hover .card-hover-effect {
+  opacity: 1;
+}
+
+/* --- Empty State --- */
+.no-orders-found {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.empty-icon {
+  font-size: 5rem;
+  opacity: 0.5;
+}
+
+.empty-state h3 {
+  font-size: 1.75rem;
+  color: var(--text-dark);
+  margin: 0;
+  font-weight: 700;
+}
+
+.empty-state p {
+  font-size: 1rem;
+  color: var(--text-gray);
+  line-height: 1.7;
+  margin: 0;
+}
+
+.btn-white {
+  background: var(--white);
+  color: var(--primary-teal);
+  border: 2px solid var(--primary-teal);
+  padding: 12px 32px;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.btn-white:hover {
+  background: var(--primary-teal);
+  color: var(--white);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* --- CTA Section --- */
+.pharmacy-cta {
+  margin-top: 60px;
+  text-align: center;
+}
+
+.cta-card {
+  background: linear-gradient(135deg, var(--primary-blue), var(--primary-teal));
+  color: var(--white);
+  padding: 48px 40px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+}
+
+.cta-card h2 {
+  font-size: 2rem;
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.cta-card p {
+  font-size: 1.1rem;
+  margin-bottom: 24px;
+  opacity: 0.9;
+}
+
+/* --- Loading State --- */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(20, 195, 142, 0.1);
+  border-top-color: var(--primary-teal);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-state p {
+  color: var(--text-gray);
+  font-size: 1.1rem;
+}
+
+/* --- Animation Classes --- */
+.animate-on-scroll {
+  opacity: 0;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.animate-on-scroll.visible {
+  opacity: 1;
+}
+
+.slide-up {
+  transform: translateY(30px);
+}
+
+.slide-up.visible {
+  transform: translateY(0);
+}
+
+.delay-100 {
+  transition-delay: 0.1s;
+}
+
+.delay-200 {
+  transition-delay: 0.2s;
+}
+
+.delay-300 {
+  transition-delay: 0.3s;
+}
+
+.fade-in {
+  transform: scale(0.95);
+}
+
+.fade-in.visible {
+  transform: scale(1);
+}
+
+/* --- Responsive Design --- */
+@media (max-width: 768px) {
+  .pharmacy-header h1 {
+    font-size: 2rem;
+  }
+
+  .orders-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .order-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-buttons {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 10px;
+  }
+
+  .filter-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .pharmacy-page .content-wrapper {
+    padding: 0 16px;
+  }
+
+  .pharmacy-header h1 {
+    font-size: 1.75rem;
+  }
+
+  .order-card-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .order-card-body {
+    padding: 20px;
+  }
+
+  .cta-card {
+    padding: 32px 24px;
+  }
+
+  .cta-card h2 {
+    font-size: 1.5rem;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
