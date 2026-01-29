@@ -1,48 +1,22 @@
 const mongoose = require('mongoose');
 
 const receptionSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: [true, 'Reception name is required']
-  },
-  email: {
-    type: String,
-    required: [true, 'Email is required']
-  },
-  phone: {
-    type: String,
-    default: ''
-  },
-  availability: {
-    monday: { available: Boolean, startTime: String, endTime: String },
-    tuesday: { available: Boolean, startTime: String, endTime: String },
-    wednesday: { available: Boolean, startTime: String, endTime: String },
-    thursday: { available: Boolean, startTime: String, endTime: String },
-    friday: { available: Boolean, startTime: String, endTime: String },
-    saturday: { available: Boolean, startTime: String, endTime: String },
-    sunday: { available: Boolean, startTime: String, endTime: String }
-  },
-  description: {
-    type: String,
-    default: ''
-  },
-  services: [{
-    type: String
-  }]
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+        unique: true
+    },
+    // Specific fields for receptionist staff (not patients)
+    employeeId: { type: String, trim: true },
+    joiningDate: { type: Date },
+    shift: { type: String, enum: ['Morning', 'Evening', 'Night', 'General'], default: 'General' },
+    isActive: { type: Boolean, default: true }
 }, {
-  timestamps: true
+    timestamps: true
 });
 
+// CRITICAL: This must be 'Reception', NOT 'User'
 const Reception = mongoose.model('Reception', receptionSchema);
 
 module.exports = Reception;
-
-
-
-
-
-
-
-
-
-

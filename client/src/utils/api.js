@@ -1,9 +1,13 @@
-// client/src/utils/api.js
-import axios from 'axios';
+﻿import axios from 'axios';
 
-// Create axios instance with base URL from environment variable
+// --- FORCE LOCALHOST HTTP ---
+// We explicitly set this to http://localhost:3000 to solve your local connectivity issues.
+const baseURL = 'http://localhost:3000';
+
+console.log('🔌 API Connected to:', baseURL); 
+
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
+  baseURL: baseURL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -30,14 +34,9 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      try {
-        const { getStoreRef } = require('../store/storeRef');
-        const store = getStoreRef();
-        if (store) {
-          const { logout } = require('../store/slices/authSlice');
-          store.dispatch(logout());
-        }
-      } catch (err) {}
+      if (!window.location.pathname.includes('/login')) {
+          window.location.href = '/login'; 
+      }
     }
     return Promise.reject(error);
   }
@@ -180,6 +179,18 @@ export const receptionAPI = {
   cancelAppointment: async (id) => {
     const response = await apiClient.patch(`/api/reception/appointments/${id}/cancel`);
     return response.data;
+  },
+  registerPatient: async (data) => {
+    const response = await apiClient.post('/api/reception/register', data);
+    return response.data;
+  },
+  searchPatients: async (query) => {
+    const response = await apiClient.get(`/api/reception/search-patients?query=${query}`);
+    return response.data;
+  },
+  updateIntake: async (userId, data) => {
+    const response = await apiClient.put(`/api/reception/intake/${userId}`, data);
+    return response.data;
   }
 };
 
@@ -208,27 +219,6 @@ export const labAPI = {
   }
 };
 
-// NEW: Pharmacy API for user-specific data
-
-
-export const publicAPI = {
-  getServices: async () => {
-    const response = await apiClient.get('/api/public/services');
-    return response.data;
-  },
-  getDoctors: async (serviceId = null) => {
-    const url = serviceId ? `/api/doctor?serviceId=${serviceId}` : '/api/doctor';
-    const response = await apiClient.get(url);
-    return response.data;
-  },
-};
-
-export const uploadAPI = {
-  uploadImages: async (formData) => {
-    const response = await apiClient.post('/api/upload/images', formData);
-    return response.data;
-  },
-};
 export const pharmacyAPI = {
     getInventory: async () => {
         const response = await apiClient.get('/api/pharmacy/inventory');
@@ -253,6 +243,25 @@ export const pharmacyOrderAPI = {
         const response = await apiClient.patch(`/api/pharmacy/orders/${id}/complete`);
         return response.data;
     }
+};
+
+export const publicAPI = {
+  getServices: async () => {
+    const response = await apiClient.get('/api/public/services');
+    return response.data;
+  },
+  getDoctors: async (serviceId = null) => {
+    const url = serviceId ? `/api/doctor?serviceId=${serviceId}` : '/api/doctor';
+    const response = await apiClient.get(url);
+    return response.data;
+  },
+};
+
+export const uploadAPI = {
+  uploadImages: async (formData) => {
+    const response = await apiClient.post('/api/upload/images', formData);
+    return response.data;
+  },
 };
 
 export default apiClient;

@@ -1,0 +1,165 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\Harsh\\Desktop\\crm\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Harsh\\Desktop\\crm\\client\\src\\pages\\reception\\ReceptionDashboard.jsx||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:client\\src\\pages\\reception\\ReceptionDashboard.jsx||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Harsh\\Desktop\\crm\\server\\src\\routes\\reception.routes.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:server\\src\\routes\\reception.routes.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Harsh\\Desktop\\crm\\server\\src\\app.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:server\\src\\app.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Harsh\\Desktop\\crm\\server\\src\\models\\reception.model.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:server\\src\\models\\reception.model.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Harsh\\Desktop\\crm\\client\\src\\pages\\reception\\ReceptionDashboard.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:client\\src\\pages\\reception\\ReceptionDashboard.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Harsh\\Desktop\\crm\\server\\src\\models\\user.model.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:server\\src\\models\\user.model.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Harsh\\Desktop\\crm\\client\\src\\utils\\api.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:client\\src\\utils\\api.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Harsh\\Desktop\\crm\\server\\server.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:server\\server.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 7,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cdd2}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c64b9c2-e352-428e-a56d-0ace190b99a6}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "app.js",
+              "DocumentMoniker": "C:\\Users\\Harsh\\Desktop\\crm\\server\\src\\app.js",
+              "RelativeDocumentMoniker": "server\\src\\app.js",
+              "ToolTip": "C:\\Users\\Harsh\\Desktop\\crm\\server\\src\\app.js",
+              "RelativeToolTip": "server\\src\\app.js",
+              "ViewState": "AgIAADEAAAAAAAAAAAAUwE8AAAAVAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2026-01-23T09:25:24.719Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "ReceptionDashboard.css",
+              "DocumentMoniker": "C:\\Users\\Harsh\\Desktop\\crm\\client\\src\\pages\\reception\\ReceptionDashboard.css",
+              "RelativeDocumentMoniker": "client\\src\\pages\\reception\\ReceptionDashboard.css",
+              "ToolTip": "C:\\Users\\Harsh\\Desktop\\crm\\client\\src\\pages\\reception\\ReceptionDashboard.css",
+              "RelativeToolTip": "client\\src\\pages\\reception\\ReceptionDashboard.css",
+              "ViewState": "AgIAAI4CAAAAAAAAAAAgwK4CAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2026-01-23T08:47:35.294Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "user.model.js",
+              "DocumentMoniker": "C:\\Users\\Harsh\\Desktop\\crm\\server\\src\\models\\user.model.js",
+              "RelativeDocumentMoniker": "server\\src\\models\\user.model.js",
+              "ToolTip": "C:\\Users\\Harsh\\Desktop\\crm\\server\\src\\models\\user.model.js",
+              "RelativeToolTip": "server\\src\\models\\user.model.js",
+              "ViewState": "AgIAAEYAAAAAAAAAAAAUwGQAAAAWAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2026-01-22T10:44:51.991Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "ReceptionDashboard.jsx",
+              "DocumentMoniker": "C:\\Users\\Harsh\\Desktop\\crm\\client\\src\\pages\\reception\\ReceptionDashboard.jsx",
+              "RelativeDocumentMoniker": "client\\src\\pages\\reception\\ReceptionDashboard.jsx",
+              "ToolTip": "C:\\Users\\Harsh\\Desktop\\crm\\client\\src\\pages\\reception\\ReceptionDashboard.jsx",
+              "RelativeToolTip": "client\\src\\pages\\reception\\ReceptionDashboard.jsx",
+              "ViewState": "AgIAAFYCAAAAAAAAAAAIwGwCAAAiAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003663|",
+              "WhenOpened": "2026-01-21T12:32:46.931Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "reception.routes.js",
+              "DocumentMoniker": "C:\\Users\\Harsh\\Desktop\\crm\\server\\src\\routes\\reception.routes.js",
+              "RelativeDocumentMoniker": "server\\src\\routes\\reception.routes.js",
+              "ToolTip": "C:\\Users\\Harsh\\Desktop\\crm\\server\\src\\routes\\reception.routes.js",
+              "RelativeToolTip": "server\\src\\routes\\reception.routes.js",
+              "ViewState": "AgIAAKwAAAAAAAAAAAAUwMoAAAAYAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2026-01-21T12:31:56.357Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "reception.model.js",
+              "DocumentMoniker": "C:\\Users\\Harsh\\Desktop\\crm\\server\\src\\models\\reception.model.js",
+              "RelativeDocumentMoniker": "server\\src\\models\\reception.model.js",
+              "ToolTip": "C:\\Users\\Harsh\\Desktop\\crm\\server\\src\\models\\reception.model.js",
+              "RelativeToolTip": "server\\src\\models\\reception.model.js",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAUwBUAAAAbAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2026-01-21T12:30:18.723Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "server.js",
+              "DocumentMoniker": "C:\\Users\\Harsh\\Desktop\\crm\\server\\server.js",
+              "RelativeDocumentMoniker": "server\\server.js",
+              "ToolTip": "C:\\Users\\Harsh\\Desktop\\crm\\server\\server.js",
+              "RelativeToolTip": "server\\server.js",
+              "ViewState": "AgIAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2026-01-21T12:39:12.722Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "api.js",
+              "DocumentMoniker": "C:\\Users\\Harsh\\Desktop\\crm\\client\\src\\utils\\api.js",
+              "RelativeDocumentMoniker": "client\\src\\utils\\api.js",
+              "ToolTip": "C:\\Users\\Harsh\\Desktop\\crm\\client\\src\\utils\\api.js",
+              "RelativeToolTip": "client\\src\\utils\\api.js",
+              "ViewState": "AgIAAOIAAAAAAAAAAAAAAAkBAAAZAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2026-01-22T10:51:06.893Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,58 +1,74 @@
-// server/src/app.js
-const express = require('express')
-const cors = require('cors')
-const connectDB = require('./db/db')
+const express = require('express');
+const cors = require('cors');
+const morgan = require('morgan');
+const path = require('path');
 
 // Import Routes
-const authRoutes = require('./routes/auth.routes')
-const adminRoutes = require('./routes/admin.routes')
-const appointmentRoutes = require('./routes/appointment.routes')
-const doctorRoutes = require('./routes/doctor.routes')
-const adminEntitiesRoutes = require('./routes/admin-entities.routes')
-const publicRoutes = require('./routes/public.routes')
-const uploadRoutes = require('./routes/upload.routes')
-const labRoutes = require('./routes/lab.routes')
-const receptionRoutes = require('./routes/reception.routes') // <--- 1. IMPORT THIS
-const pharmacyRoutes = require('./routes/pharmacy.routes')
-const pharmacyOrderRoutes = require('./routes/pharmacyOrders.routes')
+const authRoutes = require('./routes/auth.routes');
+const adminRoutes = require('./routes/admin.routes');
+const doctorRoutes = require('./routes/doctor.routes');
+const appointmentRoutes = require('./routes/appointment.routes');
+const publicRoutes = require('./routes/public.routes');
+const adminEntitiesRoutes = require('./routes/admin-entities.routes');
+const labRoutes = require('./routes/lab.routes');
+const uploadRoutes = require('./routes/upload.routes');
+const pharmacyRoutes = require('./routes/pharmacy.routes');
+const pharmacyOrdersRoutes = require('./routes/pharmacyOrders.routes');
+const receptionRoutes = require('./routes/reception.routes');
 
-const app = express()
-
-// Connect to database
-connectDB()
+const app = express();
 
 // Middleware
 app.use(cors({
-    origin: [
-        "http://localhost:5173",
-        "https://crm-ebon-two.vercel.app"
-    ],
+    origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+        const allowedOrigins = [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "https://crm-ebon-two.vercel.app",
+            "https://crm-222i.onrender.com"
+        ];
+        if (allowedOrigins.indexOf(origin) === -1) {
+            // For local dev safety, you can uncomment below line if issues persist
+            // return callback(null, true); 
+
+            var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
     credentials: true
-}))
+}));
+app.use(morgan('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// Mount Routes
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/doctor', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
-app.use('/api/doctor', doctorRoutes); 
-app.use('/api/admin-entities', adminEntitiesRoutes);
 app.use('/api/public', publicRoutes);
-app.use('/api/upload', uploadRoutes);
+app.use('/api/admin-entities', adminEntitiesRoutes);
 app.use('/api/lab', labRoutes);
-app.use('/api/reception', receptionRoutes); // <--- 2. MOUNT THIS (Use exact path)
+app.use('/api/upload', uploadRoutes);
 app.use('/api/pharmacy', pharmacyRoutes);
-app.use('/api/pharmacy/orders', pharmacyOrderRoutes);
-
-// Health check route
-app.get('/api/health', (req, res) => {
-    res.json({ success: true, message: 'Server is running' })
-})
+app.use('/api/pharmacy/orders', pharmacyOrdersRoutes);
+app.use('/api/reception', receptionRoutes);
 
 app.get('/', (req, res) => {
-    res.send('API is running...')
-})
+    res.send('API is running...');
+});
 
-module.exports = app
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+        success: false,
+        message: 'Something went wrong!',
+        error: err.message
+    });
+});
+
+module.exports = app;
