@@ -1,267 +1,205 @@
 ﻿import axios from 'axios';
 
 // --- FORCE LOCALHOST HTTP ---
-// We explicitly set this to http://localhost:3000 to solve your local connectivity issues.
 const baseURL = 'http://localhost:3000';
 
-console.log('🔌 API Connected to:', baseURL); 
-
 const apiClient = axios.create({
-  baseURL: baseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+    baseURL: baseURL,
+    headers: { 'Content-Type': 'application/json' },
 });
 
-// Request interceptor to add auth token if available
+// Request Interceptor
 apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error); 
-  }
+    (config) => {
+        const token = localStorage.getItem('token');
+        if (token) config.headers.Authorization = `Bearer ${token}`;
+        return config;
+    },
+    (error) => Promise.reject(error)
 );
 
-// Response interceptor for error handling
+// Response Interceptor
 apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      if (!window.location.pathname.includes('/login')) {
-          window.location.href = '/login'; 
-      }
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 401) {
+            // CIRCULAR DEPENDENCY FIX:
+            // Instead of dispatching logout action here, we simply clear storage and redirect.
+            // The authSlice will pick up the initial state from localStorage on reload.
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+
+            // Only redirect if not already on the login page to avoid loops
+            if (!window.location.pathname.includes('/login')) {
+                window.location.href = '/login';
+            }
+        }
+        return Promise.reject(error);
     }
-    return Promise.reject(error);
-  }
 );
 
 export const authAPI = {
-  login: async (email, password) => {
-    const response = await apiClient.post('/api/auth/login', { email, password });
-    return response.data;
-  },
-  signup: async (name, email, password, phone = '') => {
-    const response = await apiClient.post('/api/auth/signup', { name, email, password, phone });
-    return response.data;
-  },
+    login: async (email, password) => {
+        const response = await apiClient.post('/api/auth/login', { email, password });
+        return response.data;
+    },
+    signup: async (name, email, password, phone = '') => {
+        const response = await apiClient.post('/api/auth/signup', { name, email, password, phone });
+        return response.data;
+    },
 };
 
-export const adminAPI = {
-  login: async (email, password) => {
-    const response = await apiClient.post('/api/admin/login', { email, password });
-    return response.data;
-  },
-  signup: async (name, email, password, phone = '') => {
-    const response = await apiClient.post('/api/admin/signup', { name, email, password, phone });
-    return response.data;
-  },
-  createUser: async (name, email, password, phone = '', role, services = []) => {
-    const response = await apiClient.post('/api/admin/users', { name, email, password, phone, role, services });
-    return response.data;
-  },
-  getUsers: async () => {
-    const response = await apiClient.get('/api/admin/users');
-    return response.data;
-  },
-  updateUserRole: async (userId, role) => {
-    const response = await apiClient.put(`/api/admin/users/${userId}/role`, { role });
-    return response.data;
-  },
-  deleteUser: async (userId) => {
-    const response = await apiClient.delete(`/api/admin/users/${userId}`);
-    return response.data;
-  },
-};
-
-export const adminEntitiesAPI = {
-  getDoctors: async () => {
-    const response = await apiClient.get('/api/admin-entities/doctors');
-    return response.data;
-  },
-  getDoctor: async (id) => {
-    const response = await apiClient.get(`/api/admin-entities/doctors/${id}`);
-    return response.data;
-  },
-  createDoctor: async (doctorData) => {
-    const response = await apiClient.post('/api/admin-entities/doctors', doctorData);
-    return response.data;
-  },
-  updateDoctor: async (id, doctorData) => {
-    const response = await apiClient.put(`/api/admin-entities/doctors/${id}`, doctorData);
-    return response.data;
-  },
-  deleteDoctor: async (id) => {
-    const response = await apiClient.delete(`/api/admin-entities/doctors/${id}`);
-    return response.data;
-  },
-  getLabs: async () => {
-    const response = await apiClient.get('/api/admin-entities/labs');
-    return response.data;
-  },
-  createLab: async (labData) => {
-    const response = await apiClient.post('/api/admin-entities/labs', labData);
-    return response.data;
-  },
-  updateLab: async (id, labData) => {
-    const response = await apiClient.put(`/api/admin-entities/labs/${id}`, labData);
-    return response.data;
-  },
-  deleteLab: async (id) => {
-    const response = await apiClient.delete(`/api/admin-entities/labs/${id}`);
-    return response.data;
-  },
-  getPharmacies: async () => {
-    const response = await apiClient.get('/api/admin-entities/pharmacies');
-    return response.data;
-  },
-  createPharmacy: async (pharmacyData) => {
-    const response = await apiClient.post('/api/admin-entities/pharmacies', pharmacyData);
-    return response.data;
-  },
-  updatePharmacy: async (id, pharmacyData) => {
-    const response = await apiClient.put(`/api/admin-entities/pharmacies/${id}`, pharmacyData);
-    return response.data;
-  },
-  deletePharmacy: async (id) => {
-    const response = await apiClient.delete(`/api/admin-entities/pharmacies/${id}`);
-    return response.data;
-  },
-  getReceptions: async () => {
-    const response = await apiClient.get('/api/admin-entities/receptions');
-    return response.data;
-  },
-  createReception: async (receptionData) => {
-    const response = await apiClient.post('/api/admin-entities/receptions', receptionData);
-    return response.data;
-  },
-  updateReception: async (id, receptionData) => {
-    const response = await apiClient.put(`/api/admin-entities/receptions/${id}`, receptionData);
-    return response.data;
-  },
-  deleteReception: async (id) => {
-    const response = await apiClient.delete(`/api/admin-entities/receptions/${id}`);
-    return response.data;
-  },
-  getServices: async () => {
-    const response = await apiClient.get('/api/admin-entities/services');
-    return response.data;
-  },
-  createService: async (serviceData) => {
-    const response = await apiClient.post('/api/admin-entities/services', serviceData);
-    return response.data;
-  },
-  updateService: async (id, serviceData) => {
-    const response = await apiClient.put(`/api/admin-entities/services/${id}`, serviceData);
-    return response.data;
-  },
-  deleteService: async (id) => {
-    const response = await apiClient.delete(`/api/admin-entities/services/${id}`);
-    return response.data;
-  },
+export const doctorAPI = {
+    getAppointments: async () => {
+        const response = await apiClient.get('/api/doctor/appointments');
+        return response.data;
+    },
+    getAppointmentDetails: async (id) => {
+        const response = await apiClient.get(`/api/doctor/appointments/${id}`);
+        return response.data;
+    },
+    getPatients: async () => {
+        const response = await apiClient.get('/api/doctor/patients');
+        return response.data;
+    },
+    getPatientHistory: async (patientId) => {
+        const response = await apiClient.get(`/api/doctor/patients/${patientId}/history`);
+        return response.data;
+    },
+    startSession: async (patientId) => {
+        const response = await apiClient.post('/api/doctor/session/start', { patientId });
+        return response.data;
+    },
+    updatePatientProfile: async (patientId, profileData) => {
+        const response = await apiClient.put(`/api/doctor/patients/${patientId}/profile`, profileData);
+        return response.data;
+    },
+    updateSession: async (id, data) => {
+        const formData = new FormData();
+        Object.keys(data).forEach(key => {
+            if (typeof data[key] === 'object' && key !== 'prescriptionFile') {
+                formData.append(key, JSON.stringify(data[key]));
+            } else {
+                formData.append(key, data[key]);
+            }
+        });
+        const response = await apiClient.patch(`/api/doctor/appointments/${id}/prescription`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+    getLabs: async () => {
+        const response = await apiClient.get('/api/doctor/labs-list');
+        return response.data;
+    },
+    getMedicines: async () => {
+        const response = await apiClient.get('/api/doctor/medicines-list');
+        return response.data;
+    },
+    getBookedSlots: async (doctorId, date) => {
+        const response = await apiClient.get(`/api/doctor/${doctorId}/booked-slots?date=${date}`);
+        return response.data;
+    }
 };
 
 export const receptionAPI = {
-  getAllAppointments: async () => {
-    const response = await apiClient.get('/api/reception/appointments');
-    return response.data;
-  },
-  rescheduleAppointment: async (id, date, time) => {
-    const response = await apiClient.patch(`/api/reception/appointments/${id}/reschedule`, { date, time });
-    return response.data;
-  },
-  cancelAppointment: async (id) => {
-    const response = await apiClient.patch(`/api/reception/appointments/${id}/cancel`);
-    return response.data;
-  },
-  registerPatient: async (data) => {
-    const response = await apiClient.post('/api/reception/register', data);
-    return response.data;
-  },
-  searchPatients: async (query) => {
-    const response = await apiClient.get(`/api/reception/search-patients?query=${query}`);
-    return response.data;
-  },
-  updateIntake: async (userId, data) => {
-    const response = await apiClient.put(`/api/reception/intake/${userId}`, data);
-    return response.data;
-  }
-};
-
-export const labAPI = {
-  getStats: async () => {
-    const response = await apiClient.get('/api/lab/stats');
-    return response.data;
-  },
-  getMyReports: async () => {
-    const response = await apiClient.get('/api/lab/my-reports');
-    return response.data;
-  },
-  getRequests: async (status) => {
-    const response = await apiClient.get(`/api/lab/requests?status=${status || ''}`);
-    return response.data;
-  },
-  updatePayment: async (id, paymentData) => {
-    const response = await apiClient.patch(`/api/lab/update-payment/${id}`, paymentData);
-    return response.data;
-  },
-  uploadReport: async (id, formData) => {
-    const response = await apiClient.post(`/api/lab/upload-report/${id}`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    });
-    return response.data;
-  }
-};
-
-export const pharmacyAPI = {
-    getInventory: async () => {
-        const response = await apiClient.get('/api/pharmacy/inventory');
+    getAllAppointments: async () => {
+        const response = await apiClient.get('/api/reception/appointments');
         return response.data;
     },
-    addMedicine: async (data) => {
-        const response = await apiClient.post('/api/pharmacy/inventory', data);
+    registerPatient: async (data) => {
+        const response = await apiClient.post('/api/reception/register', data);
         return response.data;
     },
-    deleteMedicine: async (id) => {
-        const response = await apiClient.delete(`/api/pharmacy/inventory/${id}`);
+    searchPatients: async (query) => {
+        const response = await apiClient.get(`/api/reception/search-patients?query=${query}`);
+        return response.data;
+    },
+    updateIntake: async (userId, data) => {
+        const response = await apiClient.put(`/api/reception/intake/${userId}`, data);
+        return response.data;
+    },
+    bookAppointment: async (data) => {
+        const response = await apiClient.post('/api/reception/book-appointment', data);
+        return response.data;
+    },
+    getBookedSlots: async (doctorId, date) => {
+        const response = await apiClient.get(`/api/doctor/${doctorId}/booked-slots?date=${date}`);
+        return response.data;
+    },
+    rescheduleAppointment: async (id, date, time) => {
+        const response = await apiClient.patch(`/api/reception/appointments/${id}/reschedule`, { date, time });
+        return response.data;
+    },
+    cancelAppointment: async (id) => {
+        const response = await apiClient.patch(`/api/reception/appointments/${id}/cancel`);
         return response.data;
     }
 };
 
-export const pharmacyOrderAPI = {
-    getOrders: async () => {
-        const response = await apiClient.get('/api/pharmacy/orders');
-        return response.data;
-    },
-    completeOrder: async (id) => {
-        const response = await apiClient.patch(`/api/pharmacy/orders/${id}/complete`);
-        return response.data;
-    }
+export const adminAPI = {
+    login: async (email, password) => (await apiClient.post('/api/admin/login', { email, password })).data,
+    signup: async (name, email, password, phone) => (await apiClient.post('/api/admin/signup', { name, email, password, phone })).data,
+    getUsers: async () => (await apiClient.get('/api/admin/users')).data,
+    createUser: async (data) => (await apiClient.post('/api/admin/users', data)).data,
+    deleteUser: async (id) => (await apiClient.delete(`/api/admin/users/${id}`)).data,
+    updateUserRole: async (id, role) => (await apiClient.put(`/api/admin/users/${id}/role`, { role })).data,
+};
+
+export const adminEntitiesAPI = {
+    getDoctors: async () => (await apiClient.get('/api/admin-entities/doctors')).data,
+    createDoctor: async (data) => (await apiClient.post('/api/admin-entities/doctors', data)).data,
+    deleteDoctor: async (id) => (await apiClient.delete(`/api/admin-entities/doctors/${id}`)).data,
+    getLabs: async () => (await apiClient.get('/api/admin-entities/labs')).data,
+    createLab: async (data) => (await apiClient.post('/api/admin-entities/labs', data)).data,
+    deleteLab: async (id) => (await apiClient.delete(`/api/admin-entities/labs/${id}`)).data,
+    getPharmacies: async () => (await apiClient.get('/api/admin-entities/pharmacies')).data,
+    createPharmacy: async (data) => (await apiClient.post('/api/admin-entities/pharmacies', data)).data,
+    deletePharmacy: async (id) => (await apiClient.delete(`/api/admin-entities/pharmacies/${id}`)).data,
+    getReceptions: async () => (await apiClient.get('/api/admin-entities/receptions')).data,
+    createReception: async (data) => (await apiClient.post('/api/admin-entities/receptions', data)).data,
+    deleteReception: async (id) => (await apiClient.delete(`/api/admin-entities/receptions/${id}`)).data,
+    getServices: async () => (await apiClient.get('/api/admin-entities/services')).data,
+    createService: async (data) => (await apiClient.post('/api/admin-entities/services', data)).data,
+    deleteService: async (id) => (await apiClient.delete(`/api/admin-entities/services/${id}`)).data,
 };
 
 export const publicAPI = {
-  getServices: async () => {
-    const response = await apiClient.get('/api/public/services');
-    return response.data;
-  },
-  getDoctors: async (serviceId = null) => {
-    const url = serviceId ? `/api/doctor?serviceId=${serviceId}` : '/api/doctor';
-    const response = await apiClient.get(url);
-    return response.data;
-  },
+    getServices: async () => (await apiClient.get('/api/public/services')).data,
+    getDoctors: async (serviceId = null) => {
+        const url = serviceId ? `/api/doctor?serviceId=${serviceId}` : '/api/doctor';
+        return (await apiClient.get(url)).data;
+    },
 };
 
 export const uploadAPI = {
-  uploadImages: async (formData) => {
-    const response = await apiClient.post('/api/upload/images', formData);
-    return response.data;
-  },
+    uploadImages: async (formData) => {
+        const response = await apiClient.post('/api/upload/images', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+};
+
+export const labAPI = {
+    getStats: async () => (await apiClient.get('/api/lab/stats')).data,
+    getMyReports: async () => (await apiClient.get('/api/lab/my-reports')).data,
+    getRequests: async (status) => (await apiClient.get(`/api/lab/requests?status=${status || ''}`)).data,
+    updatePayment: async (id, paymentData) => (await apiClient.patch(`/api/lab/update-payment/${id}`, paymentData)).data,
+    uploadReport: async (id, formData) => (await apiClient.post(`/api/lab/upload-report/${id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    })).data
+};
+
+export const pharmacyAPI = {
+    getInventory: async () => (await apiClient.get('/api/pharmacy/inventory')).data,
+    addMedicine: async (data) => (await apiClient.post('/api/pharmacy/inventory', data)).data,
+    deleteMedicine: async (id) => (await apiClient.delete(`/api/pharmacy/inventory/${id}`)).data
+};
+
+export const pharmacyOrderAPI = {
+    getOrders: async () => (await apiClient.get('/api/pharmacy/orders')).data,
+    completeOrder: async (id) => (await apiClient.patch(`/api/pharmacy/orders/${id}/complete`)).data
 };
 
 export default apiClient;

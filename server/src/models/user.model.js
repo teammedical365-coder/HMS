@@ -2,153 +2,85 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    phone: { type: String },
-    role: { type: String, enum: ['user', 'admin', 'administrator', 'doctor', 'lab', 'pharmacy', 'reception'], default: 'user' },
-    patientId: { type: String, unique: true, sparse: true },
-
-    address: { type: String, default: '' },
-    city: { type: String, default: '' },
-    state: { type: String, default: '' },
-    zipCode: { type: String, default: '' },
-
-    fertilityProfile: {
-        referredBy: { type: String, default: '' },
-        title: { type: String, default: '' },
-        firstName: { type: String, default: '' },
-        middleName: { type: String, default: '' },
-        lastName: { type: String, default: '' },
-        dob: { type: String, default: '' },
-        age: { type: String, default: '' },
-        gender: { type: String, default: '' },
-        maritalStatus: { type: String, default: '' },
-        occupation: { type: String, default: '' },
-        aadhaar: { type: String, default: '' },
-        altPhone: { type: String, default: '' },
-        patientCategory: { type: String, default: '' },
-        nationality: { type: String, default: '' },
-        isInternational: { type: Boolean, default: false },
-        language: { type: String, default: '' },
-        languagesKnown: { type: String, default: '' },
-        height: { type: String, default: '' },
-        weight: { type: String, default: '' },
-        bmi: { type: String, default: '' },
-        bloodGroup: { type: String, default: '' },
-
-        partnerTitle: { type: String, default: '' },
-        partnerFirstName: { type: String, default: '' },
-        partnerLastName: { type: String, default: '' },
-        partnerDob: { type: String, default: '' },
-        partnerAge: { type: String, default: '' },
-        partnerAadhaar: { type: String, default: '' },
-        partnerMobile: { type: String, default: '' },
-        partnerAltPhone: { type: String, default: '' },
-        partnerEmail: { type: String, default: '' },
-        partnerAddressSame: { type: Boolean, default: false },
-        partnerAddress: { type: String, default: '' },
-        partnerArea: { type: String, default: '' },
-        partnerCity: { type: String, default: '' },
-        partnerState: { type: String, default: '' },
-        partnerCountry: { type: String, default: '' },
-        partnerPinCode: { type: String, default: '' },
-        partnerNationality: { type: String, default: '' },
-        partnerHeight: { type: String, default: '' },
-        partnerWeight: { type: String, default: '' },
-        partnerBmi: { type: String, default: '' },
-        partnerBloodGroup: { type: String, default: '' },
-
-        infertilityType: { type: String, default: '' },
-        chiefComplaint: { type: String, default: '' },
-        infertilityDuration: { type: String, default: '' },
-        marriageDuration: { type: String, default: '' },
-        historyBp: { type: String, default: '' },
-        historyPulse: { type: String, default: '' },
-        generalComments: { type: String, default: '' },
-
-        lmpDate: { type: String, default: '' },
-        menstrualRegularity: { type: String, default: '' },
-        menstrualFlow: { type: String, default: '' },
-        menstrualPain: { type: String, default: '' },
-        cycleDetails: { type: String, default: '' },
-
-        familyHistory: { type: String, default: '' },
-        medicalHistoryDiabetes: { type: Boolean, default: false },
-        medicalHistoryHypertension: { type: Boolean, default: false },
-        medicalHistoryThyroid: { type: Boolean, default: false },
-        medicalHistoryHeart: { type: Boolean, default: false },
-        medicalHistoryAsthma: { type: Boolean, default: false },
-        medicalHistoryTb: { type: Boolean, default: false },
-        medicalHistoryOther: { type: String, default: '' },
-        medicalHistoryPcos: { type: Boolean, default: false },
-
-        para: { type: String, default: '' },
-        abortion: { type: String, default: '' },
-        ectopic: { type: String, default: '' },
-        liveBirth: { type: String, default: '' },
-        recurrentLoss: { type: Boolean, default: false },
-        obstetricComments: { type: String, default: '' },
-
-        pastInvestigations: { type: String, default: '' },
-        partnerBp: { type: String, default: '' },
-        partnerMedicalComments: { type: String, default: '' },
-
-        labResults: { type: String, default: '' },
-        hormonalValues: { type: String, default: '' },
-        usgRemarks: { type: String, default: '' },
-        psychiatricHistory: { type: String, default: '' },
-        sexualHistory: { type: String, default: '' },
-        identificationMarks: { type: String, default: '' },
-        addictionHistory: { type: String, default: '' },
-
-        treatmentHistory: { type: String, default: '' },
-
-        examGeneral: { type: String, default: '' },
-        examSystemic: { type: String, default: '' },
-        examBreast: { type: String, default: '' },
-        examAbdomen: { type: String, default: '' },
-        examSpeculum: { type: String, default: '' },
-        examVaginal: { type: String, default: '' },
-        hirsutism: { type: String, default: '' },
-        galactorrhoea: { type: String, default: '' },
-        papSmear: { type: String, default: '' },
-
-        usgType: { type: String, default: '' },
-        afcRight: { type: String, default: '' },
-        afcLeft: { type: String, default: '' },
-        amh: { type: String, default: '' },
-        uterusSize: { type: String, default: '' },
-        uterusPosition: { type: String, default: '' },
-        ovaryRightSize: { type: String, default: '' },
-        ovaryLeftSize: { type: String, default: '' },
-        endometriumThickness: { type: String, default: '' },
-
-        diagnosisInfertilityType: { type: String, default: '' },
-        maleFactor: { type: String, default: '' },
-        femaleFactor: { type: String, default: '' },
-        diagnosisYears: { type: String, default: '' },
-        diagnosisOthers: { type: String, default: '' },
-
-        doctorNotes: { type: String, default: '' },
-        prescriptionComments: { type: String, default: '' },
-        procedureAdvice: { type: String, default: '' },
-        followUpDate: { type: String, default: '' }
+    name: {
+        type: String,
+        required: [true, 'Name is required']
+    },
+    email: {
+        type: String,
+        required: [true, 'Email is required'],
+        unique: true,
+        lowercase: true,
+        trim: true
+    },
+    password: {
+        type: String,
+        required: [true, 'Password is required']
+    },
+    phone: {
+        type: String,
+        default: '',
+        unique: true, // Crucial for identifying returning patients
+        sparse: true  // Allows multiple users (like admins) to have empty phones if needed
     },
 
-    services: { type: [String], default: [] }
-}, { timestamps: true });
+    // --- NEW DYNAMIC RBAC SYSTEM ---
+    // Instead of a single string, we now link to the dynamic Role model
+    roles: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Role'
+    }],
 
-userSchema.pre('save', async function () {
-    if (!this.isModified('password')) return;
-    try {
-        const salt = await bcrypt.genSalt(10);
-        this.password = await bcrypt.hash(this.password, salt);
-    } catch (error) { throw error; }
+    // Allow per-user permission overrides (e.g., giving Nurse Priya extra access)
+    customPermissions: [{
+        permission: String,
+        granted: Boolean // true = extra access, false = restricted access
+    }],
+
+    // --- LEGACY FIELD (Kept for safety, but primary logic moves to 'roles') ---
+    role: {
+        type: String,
+        default: 'user'
+    },
+
+    // --- PATIENT IDENTIFIERS ---
+    patientId: {
+        type: String,
+        default: '',
+        unique: true,
+        sparse: true
+    },
+
+    // --- STATIC DEMOGRAPHICS ---
+    // These stay in User profile because they don't change often.
+    // Dynamic health data (BP, Weight, Symptoms) has moved to the 'ClinicalVisit' model.
+    dob: { type: String, default: '' },
+    gender: { type: String, default: '' },
+    bloodGroup: { type: String, default: '' },
+    address: { type: String, default: '' },
+    city: { type: String, default: '' },
+
+    services: [{
+        type: String
+    }]
+}, {
+    timestamps: true
 });
-userSchema.methods.comparePassword = async function (candidatePassword) {
-    return await bcrypt.compare(candidatePassword, this.password);
+
+// Encrypt password before saving
+userSchema.pre('save', async function (next) {
+    if (!this.isModified('password')) {
+        next();
+    }
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+});
+
+// Match password
+userSchema.methods.comparePassword = async function (enteredPassword) {
+    return await bcrypt.compare(enteredPassword, this.password);
 };
 
 const User = mongoose.model('User', userSchema);
+
 module.exports = User;

@@ -16,29 +16,36 @@ const pharmacyRoutes = require('./routes/pharmacy.routes');
 const pharmacyOrdersRoutes = require('./routes/pharmacyOrders.routes');
 const receptionRoutes = require('./routes/reception.routes');
 
+// --- NEW IMPORTS FOR CLINICAL WORKFLOW ---
+const patientRoutes = require('./routes/patient.routes');
+const clinicalRoutes = require('./routes/clinical.routes');
+
 const app = express();
 
-// Middleware
+// --- CORS CONFIGURATION ---
 app.use(cors({
     origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
+
         const allowedOrigins = [
             "http://localhost:5173",
             "http://localhost:3000",
             "https://crm-ebon-two.vercel.app",
             "https://crm-222i.onrender.com"
         ];
-        if (allowedOrigins.indexOf(origin) === -1) {
-            // For local dev safety, you can uncomment below line if issues persist
-            // return callback(null, true); 
 
-            var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-            return callback(new Error(msg), false);
+        // DYNAMIC ALLOW: If origin includes "localhost", allow it (Fixes 5174, 5175, etc.)
+        if (origin.includes('localhost') || allowedOrigins.indexOf(origin) !== -1) {
+            return callback(null, true);
         }
-        return callback(null, true);
+
+        var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+        return callback(new Error(msg), false);
     },
     credentials: true
 }));
+
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -57,6 +64,10 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/pharmacy', pharmacyRoutes);
 app.use('/api/pharmacy/orders', pharmacyOrdersRoutes);
 app.use('/api/reception', receptionRoutes);
+
+// --- NEW ROUTES REGISTERED HERE ---
+app.use('/api/patients', patientRoutes); // For searching & identifying patients (e.g. /api/patients/search)
+app.use('/api/clinical', clinicalRoutes); // For visits, vitals & history (e.g. /api/clinical/intake)
 
 app.get('/', (req, res) => {
     res.send('API is running...');

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Components
 import Navbar from '../components/Navbar';
@@ -20,6 +20,7 @@ import Signup from '../pages/user/Signup';
 // Doctor Pages
 import Patient from '../pages/doctors/Patient';
 import DoctorPatientDetails from '../pages/doctors/DoctorPatientDetails';
+import DoctorDashboard from '../pages/doctors/DoctorDashboard'; // Ensure this exists if used
 
 // Admin Pages
 import Admin from '../pages/admin/Admin';
@@ -37,92 +38,116 @@ import Administrator from '../pages/administration/Administrator';
 // Lab Pages
 import LabDashboard from '../pages/lab/LabDashboard';
 import AssignedTests from '../pages/lab/AssignedTests';
-import CompletedReports from '../pages/lab/CompletedReports';
+// import CompletedReports from '../pages/lab/CompletedReports'; // Uncomment if created
 
 // Pharmacy Management Pages
 import PharmacyInventory from '../pages/pharmacy/PharmacyInventory';
 import PharmacyOrders from '../pages/pharmacy/PharmacyOrders';
 
-// Reception Pages (New)
+// Reception Pages
 import ReceptionDashboard from '../pages/reception/ReceptionDashboard';
 
-export const MainRoutes = () => {
-  return (
-    <>
-      <Navbar />
-      
-      <Routes>
-        {/* --- Public/User Routes --- */}
-        <Route path="/" element={<Home />} />
-        <Route path="/services" element={<Services />} />
-        <Route path="/doctors" element={<Doctors />} />
-        <Route path="/services/:serviceId/doctors" element={<Doctors />} />
-        
-        <Route path="/appointment" element={<Appointment />} />
-        <Route path="/appointment/success" element={<AppointmentSuccess />} />
-        <Route path="/lab-reports" element={<LabReports />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/pharmacy" element={<Pharmacy />} />
-        
-        {/* --- Authentication --- */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        
-        {/* --- Doctor Routes --- */}
-        <Route path="/doctor/patients" element={<Patient />} />
-        <Route path="/doctor/patients/:appointmentId" element={<DoctorPatientDetails />} />
+const MainRoutes = () => {
+    return (
+        <>
+            <Navbar />
 
-        {/* --- Admin Routes --- */}
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin/signup" element={<AdminSignup />} />
-        <Route path="/admin/doctors" element={<AdminDoctors />} />
-        <Route path="/admin/labs" element={<AdminLabs />} />
-        <Route path="/admin/pharmacy" element={<AdminPharmacy />} />
-        <Route path="/admin/reception" element={<AdminReception />} />
-        <Route path="/admin/services" element={<AdminServices />} />
+            <Routes>
+                {/* --- Public/User Routes --- */}
+                <Route path="/" element={<Home />} />
+                <Route path="/services" element={<Services />} />
+                <Route path="/doctors" element={<Doctors />} />
+                <Route path="/services/:serviceId/doctors" element={<Doctors />} />
 
-        {/* --- Administrator Routes --- */}
-        <Route path="/administrator/login" element={<AdminLogin />} />
-        <Route path="/administrator/signup" element={<AdminSignup />} />
-        <Route path="/administrator" element={<Administrator />} />
+                <Route path="/appointment" element={<Appointment />} />
+                <Route path="/appointment/success" element={<AppointmentSuccess />} />
+                <Route path="/lab-reports" element={<LabReports />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/pharmacy" element={<Pharmacy />} />
 
-       {/* --- Lab Routes --- */}
-        <Route path="/lab/dashboard" element={
-            <ProtectedRoute allowedRoles={['lab']}>
-                <LabDashboard />
-            </ProtectedRoute>
-        } />
-        <Route path="/lab/assigned-tests" element={
-            <ProtectedRoute allowedRoles={['lab']}>
-                <AssignedTests />
-            </ProtectedRoute>
-        } />
-         <Route path="/lab/completed-reports" element={
-            <ProtectedRoute allowedRoles={['lab']}>
-                <CompletedReports /> 
-            </ProtectedRoute>
-        } />
+                {/* --- Authentication --- */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
 
-        {/* --- Pharmacy Management Routes --- */}
-        <Route path="/pharmacy/inventory" element={
-            <ProtectedRoute allowedRoles={['pharmacy']}>
-                <PharmacyInventory />
-            </ProtectedRoute>
-        } />
-        <Route path="/pharmacy/orders" element={
-            <ProtectedRoute allowedRoles={['pharmacy']}>
-                <PharmacyOrders />
-            </ProtectedRoute>
-        } />
+                {/* --- Doctor Routes --- */}
+                <Route path="/doctor/dashboard" element={
+                    <ProtectedRoute allowedRoles={['doctor']}>
+                        <Patient />
+                    </ProtectedRoute>
+                } />
+                <Route path="/doctor/patients" element={
+                    <ProtectedRoute allowedRoles={['doctor']}>
+                        <Patient />
+                    </ProtectedRoute>
+                } />
 
-        {/* --- Reception Routes --- */}
-        <Route path="/reception/dashboard" element={
-            <ProtectedRoute allowedRoles={['reception']}>
-                <ReceptionDashboard />
-            </ProtectedRoute>
-        } />
-      </Routes>
-    </>
-  );
+                {/* --- CRITICAL FIX HERE: Changed :patientId to :appointmentId --- */}
+                <Route path="/doctor/patient/:appointmentId" element={
+                    <ProtectedRoute allowedRoles={['doctor']}>
+                        <DoctorPatientDetails />
+                    </ProtectedRoute>
+                } />
+
+                {/* --- Admin Routes (Manager) --- */}
+                <Route path="/admin" element={
+                    <ProtectedRoute allowedRoles={['admin', 'administrator']}>
+                        <Admin />
+                    </ProtectedRoute>
+                } />
+                <Route path="/admin/login" element={<AdminLogin />} />
+                <Route path="/admin/signup" element={<AdminSignup />} />
+
+                <Route path="/admin/doctors" element={<ProtectedRoute allowedRoles={['admin', 'administrator']}><AdminDoctors /></ProtectedRoute>} />
+                <Route path="/admin/labs" element={<ProtectedRoute allowedRoles={['admin', 'administrator']}><AdminLabs /></ProtectedRoute>} />
+                <Route path="/admin/pharmacy" element={<ProtectedRoute allowedRoles={['admin', 'administrator']}><AdminPharmacy /></ProtectedRoute>} />
+                <Route path="/admin/reception" element={<ProtectedRoute allowedRoles={['admin', 'administrator']}><AdminReception /></ProtectedRoute>} />
+                <Route path="/admin/services" element={<ProtectedRoute allowedRoles={['admin', 'administrator']}><AdminServices /></ProtectedRoute>} />
+
+                {/* --- Administrator Routes (Super Admin) --- */}
+                <Route path="/administrator/login" element={<AdminLogin />} />
+                <Route path="/administrator/signup" element={<AdminSignup />} />
+                <Route path="/administrator" element={
+                    <ProtectedRoute allowedRoles={['administrator']}>
+                        <Administrator />
+                    </ProtectedRoute>
+                } />
+
+                {/* --- Lab Routes --- */}
+                <Route path="/lab/dashboard" element={
+                    <ProtectedRoute allowedRoles={['lab']}>
+                        <LabDashboard />
+                    </ProtectedRoute>
+                } />
+                <Route path="/lab/tests" element={
+                    <ProtectedRoute allowedRoles={['lab']}>
+                        <AssignedTests />
+                    </ProtectedRoute>
+                } />
+
+                {/* --- Pharmacy Management Routes --- */}
+                <Route path="/pharmacy/inventory" element={
+                    <ProtectedRoute allowedRoles={['pharmacy']}>
+                        <PharmacyInventory />
+                    </ProtectedRoute>
+                } />
+                <Route path="/pharmacy/orders" element={
+                    <ProtectedRoute allowedRoles={['pharmacy']}>
+                        <PharmacyOrders />
+                    </ProtectedRoute>
+                } />
+
+                {/* --- Reception Routes --- */}
+                <Route path="/reception/dashboard" element={
+                    <ProtectedRoute allowedRoles={['reception']}>
+                        <ReceptionDashboard />
+                    </ProtectedRoute>
+                } />
+
+                {/* Fallback */}
+                <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+        </>
+    );
 };
+
+export default MainRoutes;

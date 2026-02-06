@@ -1,245 +1,158 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppDispatch, useAuth, useDoctors } from '../../store/hooks';
-import { fetchDoctorAppointments, cancelAppointment } from '../../store/slices/doctorSlice';
-import { logout } from '../../store/slices/authSlice';
-import apiClient from '../../utils/api';
+import { doctorAPI } from '../../utils/api';
 import './Patient.css';
 
 const Patient = () => {
-  const navigate = useNavigate();
-  const dispatch = useAppDispatch();
-  const { user } = useAuth();
-  const { appointments, loading, error } = useDoctors();
-  
-  const [showAvailability, setShowAvailability] = useState(false);
-  const [activeTab, setActiveTab] = useState('appointments'); // 'appointments' | 'patients'
-  const [patientsList, setPatientsList] = useState([]);
-  const [patientsLoading, setPatientsLoading] = useState(false);
+    const navigate = useNavigate();
+    const [appointments, setAppointments] = useState([]);
+    const [patients, setPatients] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState('appointments'); // 'appointments' or 'patients'
 
-  useEffect(() => {
-    if (!user || user.role !== 'doctor') {
-      navigate('/');
-      return;
-    }
-    dispatch(fetchDoctorAppointments());
-  }, [navigate, user, dispatch]);
+    useEffect(() => {
+        if (activeTab === 'appointments') fetchAppointments();
+        if (activeTab === 'patients') fetchPatients();
+    }, [activeTab]);
 
-  // Fetch Patients when tab changes
-  useEffect(() => {
-    if (activeTab === 'patients') {
-        const fetchPatients = async () => {
-            setPatientsLoading(true);
-            try {
-                const response = await apiClient.get('/api/doctor/patients');
-                if (response.data.success) {
-                    setPatientsList(response.data.patients);
-                }
-            } catch (err) {
-                console.error("Failed to fetch patients", err);
-            } finally {
-                setPatientsLoading(false);
+    const fetchAppointments = async () => {
+        setLoading(true);
+        try {
+            const res = await doctorAPI.getAppointments();
+            if (res.success) setAppointments(res.appointments);
+        } catch (err) { console.error(err); }
+        finally { setLoading(false); }
+    };
+
+    const fetchPatients = async () => {
+        setLoading(true);
+        try {
+            const res = await doctorAPI.getPatients();
+            if (res.success) setPatients(res.patients);
+        } catch (err) { console.error(err); }
+        finally { setLoading(false); }
+    };
+
+    const handleOpenSession = (appointmentId) => {
+        navigate(`/doctor/patient/${appointmentId}`);
+    };
+
+    // --- INSTANT FOLLOW-UP CREATION ---
+    const handleStartSession = async (patient) => {
+        if (!window.confirm(`Start new follow-up session for ${patient.name}?`)) return;
+
+        try {
+            const res = await doctorAPI.startSession(patient._id);
+            if (res.success) {
+                // Navigate to the newly created session
+                navigate(`/doctor/patient/${res.appointment._id}`);
+            } else {
+                alert("Failed to create session: " + res.message);
             }
-        };
-        fetchPatients();
-    }
-  }, [activeTab]);
+        } catch (err) {
+            alert("Error creating session");
+        }
+    };
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/');
-  };
-
-  const handleRowClick = (appointmentId) => {
-    navigate(`/doctor/patients/${appointmentId}`);
-  };
-
-  const handleCancel = (e, id) => {
-    e.stopPropagation(); 
-    if(window.confirm('Are you sure you want to cancel this appointment?')) {
-      dispatch(cancelAppointment(id));
-    }
-  };
-
-  const handleViewPrescription = (e, url) => {
-      e.stopPropagation();
-      window.open(url, '_blank');
-  };
-
-  const sortedAppointments = [...appointments].sort((a, b) => {
-    const dateA = new Date(a.appointmentDate).getTime();
-    const dateB = new Date(b.appointmentDate).getTime();
-    if (dateA !== dateB) return dateA - dateB;
-    return a.appointmentTime.localeCompare(b.appointmentTime);
-  });
-
-  return (
-    <div className="patient-page">
-      <div className="patient-container">
-        <div className="patient-header">
-          <div>
-            <h1>Doctor Dashboard</h1>
-            <p>Manage appointments and patient prescriptions</p>
-          </div>
-          <div className="patient-user-info">
-            <button className="availability-btn" onClick={() => setShowAvailability(!showAvailability)}>
-              {showAvailability ? 'Hide Schedule' : 'Set Availability'}
-            </button>
-            <span style={{margin: '0 10px'}}>Dr. {user?.name}</span>
-            <button onClick={handleLogout} className="logout-btn">Logout</button>
-          </div>
-        </div>
-
-        {showAvailability && (
-          <div className="availability-panel">
-            <h3>Update Working Hours</h3>
-            <p><i>(Feature implementation placeholder)</i></p>
-          </div>
-        )}
-
-        <div className="dashboard-tabs" style={{marginBottom: '20px', borderBottom: '1px solid #ddd'}}>
-            <button 
-                onClick={() => setActiveTab('appointments')}
-                style={{
-                    padding: '10px 20px', 
-                    background: activeTab === 'appointments' ? '#1976d2' : 'transparent',
-                    color: activeTab === 'appointments' ? 'white' : 'black',
-                    border: 'none',
-                    borderRadius: '5px 5px 0 0',
-                    cursor: 'pointer'
-                }}
-            >
-                Appointments
-            </button>
-            <button 
-                onClick={() => setActiveTab('patients')}
-                style={{
-                    padding: '10px 20px', 
-                    background: activeTab === 'patients' ? '#1976d2' : 'transparent',
-                    color: activeTab === 'patients' ? 'white' : 'black',
-                    border: 'none',
-                    borderRadius: '5px 5px 0 0',
-                    cursor: 'pointer',
-                    marginLeft: '10px'
-                }}
-            >
-                My Patients
-            </button>
-        </div>
-
-        {error && <div className="error-message">{error}</div>}
-
-        {activeTab === 'appointments' ? (
-            <div className="appointments-card">
-            <h2>Upcoming Appointments</h2>
-            {loading ? (
-                <div className="loading-message">Loading...</div>
-            ) : sortedAppointments.length === 0 ? (
-                <div className="empty-message">No appointments found</div>
-            ) : (
-                <div className="appointments-table">
-                <table>
-                    <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Time</th>
-                        <th>Patient</th>
-                        <th>Service</th>
-                        <th>Prescription</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {sortedAppointments.map((app) => (
-                        <tr 
-                            key={app._id} 
-                            onClick={() => handleRowClick(app._id)}
-                            className="clickable-row"
-                        >
-                        <td>{new Date(app.appointmentDate).toLocaleDateString()}</td>
-                        <td>{app.appointmentTime}</td>
-                        <td>{app.userId?.name || 'N/A'}</td>
-                        <td>{app.serviceName}</td>
-                        <td>
-                            {app.prescription ? (
-                                <button 
-                                    className="view-btn" 
-                                    style={{padding: '5px 10px', backgroundColor: '#e3f2fd', border: 'none', color: '#1976d2', borderRadius: '4px', cursor: 'pointer'}}
-                                    onClick={(e) => handleViewPrescription(e, app.prescription)}
-                                >
-                                    View
-                                </button>
-                            ) : <span style={{color: '#aaa'}}>-</span>}
-                        </td>
-                        <td>
-                            <span className={`status-badge ${app.status}`}>{app.status}</span>
-                        </td>
-                        <td>
-                            {app.status === 'pending' || app.status === 'confirmed' ? (
-                            <button 
-                                className="cancel-btn"
-                                onClick={(e) => handleCancel(e, app._id)}
-                            >
-                                Cancel
-                            </button>
-                            ) : '-'}
-                        </td>
-                        </tr>
-                    ))}
-                    </tbody>
-                </table>
+    return (
+        <div className="doctor-dashboard">
+            <div className="dashboard-header">
+                <h1>Doctor Dashboard</h1>
+                <div className="tabs">
+                    <button
+                        className={`tab-btn ${activeTab === 'appointments' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('appointments')}
+                    >
+                        📅 Today's Queue
+                    </button>
+                    <button
+                        className={`tab-btn ${activeTab === 'patients' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('patients')}
+                    >
+                        👥 All Patients (History)
+                    </button>
                 </div>
-            )}
             </div>
-        ) : (
-            <div className="patients-list-card">
-                <h2>My Patients List</h2>
-                {patientsLoading ? (
-                    <div className="loading-message">Loading Patients...</div>
-                ) : patientsList.length === 0 ? (
-                    <div className="empty-message">No patients found.</div>
-                ) : (
-                    <div className="appointments-table">
-                         <table>
+
+            {loading && <div className="loading">Loading...</div>}
+
+            {!loading && activeTab === 'appointments' && (
+                <div className="appointments-list">
+                    <h3>Upcoming Sessions</h3>
+                    {appointments.length === 0 ? <p>No appointments today.</p> : (
+                        <table className="doctor-table">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Phone</th>
-                                    <th>Last Visit</th>
-                                    <th>Total Visits</th>
+                                    <th>Time</th>
+                                    <th>Patient Name</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {patientsList.map(p => (
-                                    <tr key={p._id}>
-                                        <td>{p.name}</td>
-                                        <td>{p.email}</td>
-                                        <td>{p.phone || 'N/A'}</td>
-                                        <td>{new Date(p.lastAppointmentDate).toLocaleDateString()}</td>
-                                        <td>{p.totalAppointments}</td>
+                                {appointments.map(apt => (
+                                    <tr key={apt._id}>
                                         <td>
-                                            <button 
-                                                className="view-btn"
-                                                style={{padding: '5px 10px', backgroundColor: '#e3f2fd', border: 'none', color: '#1976d2', borderRadius: '4px', cursor: 'pointer'}}
-                                                onClick={() => handleRowClick(p.lastAppointmentId)}
+                                            {new Date(apt.appointmentDate).toLocaleDateString()} <br />
+                                            <strong>{apt.appointmentTime}</strong>
+                                        </td>
+                                        <td>{apt.userId?.name || 'Walk-in'}</td>
+                                        <td>{apt.serviceName || 'Consultation'}</td>
+                                        <td><span className={`status ${apt.status}`}>{apt.status}</span></td>
+                                        <td>
+                                            <button
+                                                className="btn-view"
+                                                onClick={() => handleOpenSession(apt._id)}
                                             >
-                                                History
+                                                Open Session
                                             </button>
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
-                    </div>
-                )}
-            </div>
-        )}
-      </div>
-    </div>
-  );
+                    )}
+                </div>
+            )}
+
+            {!loading && activeTab === 'patients' && (
+                <div className="appointments-list">
+                    <h3>Patient Records & History</h3>
+                    {patients.length === 0 ? <p>No patients found.</p> : (
+                        <table className="doctor-table">
+                            <thead>
+                                <tr>
+                                    <th>Patient Name</th>
+                                    <th>Phone</th>
+                                    <th>Last Visit</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {patients.map(p => (
+                                    <tr key={p._id}>
+                                        <td><strong>{p.name}</strong><br /><small>{p.patientId}</small></td>
+                                        <td>{p.phone}</td>
+                                        <td>{new Date(p.lastVisit).toLocaleDateString()}</td>
+                                        <td>
+                                            <button
+                                                className="btn-view"
+                                                style={{ background: '#27ae60' }}
+                                                onClick={() => handleStartSession(p)}
+                                            >
+                                                Start Session
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            )}
+        </div>
+    );
 };
 
 export default Patient;

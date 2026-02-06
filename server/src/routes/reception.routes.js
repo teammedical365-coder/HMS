@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Appointment = require('../models/appointment.model');
 const User = require('../models/user.model');
+const Doctor = require('../models/doctor.model'); // Required to fetch doctor details
 const { verifyToken } = require('../middleware/auth.middleware');
 
 const verifyReception = (req, res, next) => {
@@ -125,6 +126,58 @@ router.patch('/appointments/:id/reschedule', verifyToken, verifyReception, async
 router.patch('/appointments/:id/cancel', verifyToken, verifyReception, async (req, res) => {
     await Appointment.findByIdAndUpdate(req.params.id, { status: 'cancelled' });
     res.json({ success: true });
+});
+
+// 6. BOOK APPOINTMENT (NEW: Assign Doctor)
+router.post('/book-appointment', verifyToken, verifyReception, async (req, res) => {
+    try {
+        const { patientId, doctorId, date, time, notes } = req.body;
+
+        if (!patientId || !doctorId || !date || !time) {
+            return res.status(400).json({ success: false, message: 'Missing booking details' });
+        }
+
+        const patient = await User.findById(patientId);
+        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+        const doctor = await Doctor.findById(doctorId);
+        if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
+
+        // Simple Check for Double Booking
+        const existing = await Appointment.findOne({
+            doctorId: doctor._id,
+            appointmentDate: new Date(date),
+            appointmentTime: time,
+            status: { $ne: 'cancelled' }
+        });
+
+        if (existing) {
+            return res.status(400).json({ success: false, message: 'Slot already booked!' });
+        }
+
+        const newAppointment = new Appointment({
+            userId: patient._id,
+            patientId: patient.patientId || 'WALK-IN',
+            doctorId: doctor._id,
+            doctorUserId: doctor.userId, // Links to Doctor's login
+            doctorName: doctor.name,
+            serviceId: doctor.services?.[0] || 'general',
+            serviceName: 'Walk-in Visit',
+            appointmentDate: new Date(date),
+            appointmentTime: time,
+            amount: doctor.consultationFee || 0,
+            status: 'confirmed',
+            paymentStatus: 'pending',
+            notes: notes || 'Walk-in created by reception'
+        });
+
+        await newAppointment.save();
+        res.json({ success: true, message: 'Appointment booked successfully!', appointment: newAppointment });
+
+    } catch (error) {
+        console.error("Reception Booking Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
 });
 
 module.exports = router;

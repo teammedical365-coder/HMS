@@ -3,89 +3,140 @@ const router = express.Router();
 const multer = require('multer');
 const Appointment = require('../models/appointment.model');
 const Doctor = require('../models/doctor.model');
-const Service = require('../models/service.model');
+const User = require('../models/user.model'); // Need User model to update profile
 const Lab = require('../models/lab.model');
 const LabReport = require('../models/labReport.model');
 const Inventory = require('../models/inventory.model');
-const PharmacyOrder = require('../models/pharmacyOrder.model'); // Added for automatic order sync
+const PharmacyOrder = require('../models/pharmacyOrder.model');
 const { verifyToken } = require('../middleware/auth.middleware');
-const imagekit = require('../utils/imagekit');
 
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB limit
-    },
+    limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-// --- ROUTE: Get Available Labs for Dropdown ---
-router.get('/labs-list', verifyToken, async (req, res) => {
+// --- HELPER ---
+const getDoctorQuery = async (userId) => {
     try {
-        if (req.user.role !== 'doctor') return res.status(403).json({ message: 'Access denied' });
-        const labs = await Lab.find({}).select('name _id address');
-        res.json({ success: true, labs });
-    } catch (error) {
-        console.error("Error fetching labs:", error);
-        res.status(500).json({ success: false, message: 'Error fetching labs' });
-    }
-});
-
-// --- ROUTE: Get In-Stock Medicines from Inventory ---
-router.get('/medicines-list', verifyToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'doctor') return res.status(403).json({ message: 'Access denied' });
-
-        // Only fetch medicines that are actually in stock
-        const medicines = await Inventory.find({ stock: { $gt: 0 } })
-            .select('name category stock sellingPrice unit')
-            .sort({ name: 1 });
-
-        res.json({ success: true, medicines });
-    } catch (error) {
-        console.error("Error fetching medicines:", error);
-        res.status(500).json({ success: false, message: 'Error fetching medicines' });
-    }
-});
-
-// GET Public Doctors List
-router.get('/', async (req, res) => {
-    try {
-        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-        const { serviceId } = req.query;
-        let query = {};
-
-        if (serviceId) {
-            const cleanName = serviceId.replace(/-/g, ' ');
-            const serviceDoc = await Service.findOne({
-                $or: [
-                    { id: serviceId },
-                    { title: { $regex: cleanName, $options: 'i' } }
-                ]
-            });
-            if (serviceDoc) {
-                query = { services: { $in: [serviceDoc.id, serviceDoc.title, serviceDoc._id.toString()] } };
-            }
+        const doctorProfile = await Doctor.findOne({ userId });
+        const query = { $or: [{ doctorUserId: userId }] };
+        if (doctorProfile) {
+            query.$or.push({ doctorId: doctorProfile._id });
         }
+        return query;
+    } catch (error) {
+        return { doctorUserId: userId };
+    }
+};
 
-        const doctors = await Doctor.find(query)
-            .populate('userId', 'name email phone role')
-            .sort({ createdAt: -1 })
+// 1. GET Unique Patients
+router.get('/patients', verifyToken, async (req, res) => {
+    try {
+        const doctorUserId = req.user.id || req.user.userId;
+        const query = await getDoctorQuery(doctorUserId);
+
+        const appointments = await Appointment.find(query)
+            .populate('userId', 'name email phone patientId fertilityProfile')
+            .sort({ appointmentDate: -1 })
             .lean();
 
-        res.json({ success: true, doctors });
+        const uniquePatients = {};
+        appointments.forEach(app => {
+            if (app.userId && app.userId._id) {
+                const pid = app.userId._id.toString();
+                if (!uniquePatients[pid]) {
+                    uniquePatients[pid] = {
+                        _id: pid,
+                        patientId: app.userId.patientId,
+                        name: app.userId.name,
+                        phone: app.userId.phone,
+                        lastVisit: app.appointmentDate,
+                        profile: app.userId.fertilityProfile
+                    };
+                }
+            }
+        });
+        res.json({ success: true, patients: Object.values(uniquePatients) });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error fetching doctors' });
+        res.status(500).json({ success: false, message: 'Error fetching patients' });
     }
 });
 
-// GET Doctor Appointments
+// 2. NEW: Update Patient Profile (Intake Data) by Doctor
+router.put('/patients/:patientId/profile', verifyToken, async (req, res) => {
+    try {
+        const { patientId } = req.params;
+        const updates = req.body; // Full profile object
+
+        // We update the User's fertilityProfile field
+        // We use dot notation for nested updates if we want partial, 
+        // but here we likely want to save the form state.
+
+        const user = await User.findById(patientId);
+        if (!user) return res.status(404).json({ message: 'Patient not found' });
+
+        // Merge existing profile with updates
+        user.fertilityProfile = { ...user.fertilityProfile, ...updates };
+        await user.save();
+
+        res.json({ success: true, message: 'Patient history updated successfully', profile: user.fertilityProfile });
+    } catch (error) {
+        console.error("Update Profile Error:", error);
+        res.status(500).json({ success: false, message: 'Failed to update profile' });
+    }
+});
+
+// 3. START SESSION
+router.post('/session/start', verifyToken, async (req, res) => {
+    try {
+        const { patientId } = req.body;
+        const doctorUserId = req.user.id || req.user.userId;
+        const doctor = await Doctor.findOne({ userId: doctorUserId });
+
+        if (!doctor) return res.status(404).json({ message: 'Doctor profile not found' });
+
+        const newSession = new Appointment({
+            userId: patientId,
+            doctorId: doctor._id,
+            doctorUserId: doctorUserId,
+            doctorName: doctor.name,
+            serviceName: 'Counseling / Follow-up',
+            appointmentDate: new Date(),
+            appointmentTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+            status: 'confirmed',
+            amount: doctor.consultationFee,
+            paymentStatus: 'pending'
+        });
+
+        await newSession.save();
+        res.json({ success: true, appointment: newSession });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 4. GET Appointment Details
+router.get('/appointments/:id', verifyToken, async (req, res) => {
+    try {
+        const appointment = await Appointment.findById(req.params.id)
+            .populate('userId')
+            .populate('labId', 'name')
+            .lean();
+
+        if (!appointment) return res.status(404).json({ success: false, message: 'Not found' });
+        res.json({ success: true, appointment });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching details' });
+    }
+});
+
+// 5. GET Appointments List
 router.get('/appointments', verifyToken, async (req, res) => {
     try {
-        if (req.user.role !== 'doctor') return res.status(403).json({ message: 'Access denied' });
         const doctorUserId = req.user.id || req.user.userId;
-        const appointments = await Appointment.find({ doctorUserId })
+        const query = await getDoctorQuery(doctorUserId);
+        const appointments = await Appointment.find(query)
             .populate('userId', 'name email phone patientId')
-            .populate('labId', 'name')
             .sort({ appointmentDate: 1, appointmentTime: 1 })
             .lean();
         res.json({ success: true, appointments });
@@ -94,208 +145,78 @@ router.get('/appointments', verifyToken, async (req, res) => {
     }
 });
 
-// UPDATE Availability
-router.put('/availability', verifyToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'doctor') return res.status(403).json({ message: 'Access denied' });
-        const { availability } = req.body;
-        const userId = req.user.id || req.user.userId;
-        const doctor = await Doctor.findOneAndUpdate({ userId }, { $set: { availability } }, { new: true });
-        res.json({ success: true, availability: doctor.availability });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Update failed' });
-    }
-});
-
-// CANCEL Appointment
-router.patch('/appointments/:id/cancel', verifyToken, async (req, res) => {
-    try {
-        if (req.user.role !== 'doctor') return res.status(403).json({ message: 'Access denied' });
-        const appointment = await Appointment.findById(req.params.id);
-        if (!appointment || appointment.doctorUserId.toString() !== (req.user.id || req.user.userId)) {
-            return res.status(403).json({ message: 'Not authorized' });
-        }
-        appointment.status = 'cancelled';
-        await appointment.save();
-        res.json({ success: true, message: 'Appointment cancelled' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Cancellation failed' });
-    }
-});
-
-// UPLOAD Prescription & Sync Lab/Pharmacy Orders
+// 6. UPDATE Session (Notes)
 router.patch('/appointments/:id/prescription', verifyToken, upload.single('prescriptionFile'), async (req, res) => {
     try {
-        if (req.user.role !== 'doctor') return res.status(403).json({ message: 'Access denied' });
+        const { status, diagnosis, labTests, dietPlan, pharmacy, notes, labId } = req.body;
+        const appointment = await Appointment.findById(req.params.id);
+        if (!appointment) return res.status(404).json({ message: 'Not found' });
 
-        const { status, diagnosis, labTests, dietPlan, pharmacy, labId } = req.body;
-        const appointmentId = req.params.id;
-        const doctorUserId = req.user.id || req.user.userId;
-
-        const appointment = await Appointment.findOne({ _id: appointmentId, doctorUserId })
-            .populate('userId', 'patientId');
-
-        if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
-
-        // 1. Update Lab Selection & File Upload
         if (labId) appointment.labId = labId;
-        if (req.file) {
-            const result = await imagekit.upload({
-                file: req.file.buffer,
-                fileName: `prescription_${appointmentId}_${Date.now()}`,
-                folder: '/crm'
-            });
-            if (!appointment.prescriptions) appointment.prescriptions = [];
-            appointment.prescriptions.push({
-                url: result.url,
-                fileId: result.fileId,
-                name: req.file.originalname,
-                uploadedAt: new Date(),
-                type: 'doctor_prescription'
-            });
-            appointment.prescription = result.url;
-        }
-
-        // 2. Update Basic Clinical Data
         if (status) appointment.status = status;
-        if (diagnosis) { appointment.diagnosis = diagnosis; appointment.notes = diagnosis; }
+        if (diagnosis) appointment.diagnosis = diagnosis;
+        if (notes) appointment.doctorNotes = notes;
 
-        // 3. Parse and Save Medications & Lab Tests
-        let parsedLabTests = [];
-        if (labTests) {
-            parsedLabTests = typeof labTests === 'string' ? JSON.parse(labTests) : labTests;
-            appointment.labTests = parsedLabTests;
-        }
+        if (labTests) appointment.labTests = typeof labTests === 'string' ? JSON.parse(labTests) : labTests;
         if (dietPlan) appointment.dietPlan = typeof dietPlan === 'string' ? JSON.parse(dietPlan) : dietPlan;
 
         if (pharmacy) {
             const p = typeof pharmacy === 'string' ? JSON.parse(pharmacy) : pharmacy;
             if (Array.isArray(p)) {
                 appointment.pharmacy = p.map(item => ({
-                    medicineName: item.name || item.medicineName,
+                    medicineName: item.medicineName || item.name,
                     frequency: item.frequency || '',
                     duration: item.duration || ''
                 }));
             }
         }
 
-        const savedDoc = await appointment.save();
+        await appointment.save();
 
-        // 4. AUTOMATIC LAB REPORT SYNC
-        if (parsedLabTests && parsedLabTests.length > 0) {
+        if (appointment.labTests && appointment.labTests.length > 0) {
             const existingReport = await LabReport.findOne({ appointmentId: appointment._id });
-            if (existingReport) {
-                existingReport.testNames = parsedLabTests;
-                if (labId) existingReport.labId = labId;
-                await existingReport.save();
-            } else {
+            if (!existingReport) {
                 await LabReport.create({
                     appointmentId: appointment._id,
-                    patientId: appointment.userId?.patientId || 'N/A',
-                    userId: appointment.userId?._id,
-                    doctorId: doctorUserId,
+                    patientId: appointment.patientId || 'N/A',
+                    userId: appointment.userId,
+                    doctorId: req.user.id,
                     labId: labId || null,
-                    testNames: parsedLabTests
+                    testNames: appointment.labTests,
+                    status: 'pending'
                 });
             }
         }
-
-        // 5. AUTOMATIC PHARMACY ORDER SYNC (Added Logic)
-        if (appointment.pharmacy && appointment.pharmacy.length > 0) {
-            try {
-                const existingOrder = await PharmacyOrder.findOne({ appointmentId: appointment._id });
-                const orderData = {
-                    appointmentId: appointment._id,
-                    patientId: appointment.userId?.patientId || 'N/A',
-                    userId: appointment.userId?._id,
-                    doctorId: doctorUserId,
-                    items: appointment.pharmacy,
-                    orderStatus: 'Upcoming', // Initially "Upcoming" until payment
-                    paymentStatus: 'Pending'
-                };
-
-                if (existingOrder) {
-                    existingOrder.items = appointment.pharmacy;
-                    await existingOrder.save();
-                } else {
-                    await PharmacyOrder.create(orderData);
-                }
-            } catch (pharmaError) {
-                console.error("[DOCTOR] Pharmacy Sync Error:", pharmaError);
-            }
-        }
-
-        res.json({ success: true, message: 'Treatment plan saved', appointment: savedDoc });
+        res.json({ success: true, message: 'Saved', appointment });
     } catch (error) {
-        console.error('Update error:', error);
-        res.status(500).json({ success: false, message: 'Update failed' });
+        res.status(500).json({ success: false, message: 'Update failed', error: error.message });
     }
 });
 
-// DELETE Prescription
-router.delete('/appointments/:id/prescriptions/:prescriptionId', verifyToken, async (req, res) => {
-    try {
-        const appointment = await Appointment.findOne({ _id: req.params.id, doctorUserId: req.user.id || req.user.userId });
-        if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
-        appointment.prescriptions.pull({ _id: req.params.prescriptionId });
-        await appointment.save();
-        res.json({ success: true, message: 'Removed' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Delete failed' });
-    }
-});
-
-// GET Unique Patients
-router.get('/patients', verifyToken, async (req, res) => {
-    try {
-        const doctorUserId = req.user.id || req.user.userId;
-        const appointments = await Appointment.find({ doctorUserId }).populate('userId', 'name email phone patientId');
-        const uniquePatientsMap = new Map();
-
-        appointments.forEach(app => {
-            if (app.userId) {
-                const id = app.userId.patientId || app.userId._id.toString();
-                if (!uniquePatientsMap.has(id)) {
-                    uniquePatientsMap.set(id, {
-                        _id: app.userId._id,
-                        patientId: id,
-                        name: app.userId.name,
-                        lastAppointmentDate: app.appointmentDate
-                    });
-                }
-            }
-        });
-        res.json({ success: true, patients: Array.from(uniquePatientsMap.values()) });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Error' });
-    }
-});
-
-// GET Patient History
+// 7. GET Patient History
 router.get('/patients/:patientId/history', verifyToken, async (req, res) => {
     try {
-        const { patientId } = req.params;
-        const doctorUserId = req.user.id || req.user.userId;
-        const query = patientId.startsWith('P-') ? { patientId } : { userId: patientId };
-        const history = await Appointment.find({ ...query, doctorUserId }).sort({ appointmentDate: -1 }).populate('labId', 'name');
+        const history = await Appointment.find({ userId: req.params.patientId }).sort({ appointmentDate: -1 });
         res.json({ success: true, history });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Error' });
-    }
+    } catch (error) { res.status(500).json({ success: false }); }
 });
 
-// GET Booked Slots
+// Utils
+router.get('/labs-list', verifyToken, async (req, res) => {
+    const labs = await Lab.find({}).select('name _id');
+    res.json({ success: true, labs });
+});
+router.get('/medicines-list', verifyToken, async (req, res) => {
+    const medicines = await Inventory.find({ stock: { $gt: 0 } }).select('name category stock');
+    res.json({ success: true, medicines });
+});
 router.get('/:doctorId/booked-slots', async (req, res) => {
-    try {
-        const appointments = await Appointment.find({
-            $or: [{ doctorId: req.params.doctorId }, { doctorUserId: req.params.doctorId }],
-            appointmentDate: new Date(req.query.date),
-            status: { $ne: 'cancelled' }
-        });
-        res.json({ success: true, bookedSlots: appointments.map(app => app.appointmentTime) });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Error' });
-    }
+    const appointments = await Appointment.find({
+        $or: [{ doctorId: req.params.doctorId }, { doctorUserId: req.params.doctorId }],
+        appointmentDate: new Date(req.query.date),
+        status: { $ne: 'cancelled' }
+    });
+    res.json({ success: true, bookedSlots: appointments.map(app => app.appointmentTime) });
 });
 
 module.exports = router;

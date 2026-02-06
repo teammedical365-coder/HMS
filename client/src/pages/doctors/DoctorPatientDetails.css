@@ -1,11 +1,12 @@
+/* CONTAINER: Main Split-Screen Layout */
 .doctor-console {
     display: flex;
-    height: 100vh; /* Full screen height */
+    height: 100vh; /* Full viewport height */
     background-color: #f3f4f6;
-    overflow: hidden; /* Prevent body scroll */
+    overflow: hidden; /* Prevent scrolling the whole page */
 }
 
-/* --- PANELS --- */
+/* --- PANELS (Left & Right) --- */
 .panel {
     display: flex;
     flex-direction: column;
@@ -14,12 +15,14 @@
     height: 100%;
 }
 
+/* LEFT SIDE: 35% Width (Reference) */
 .left-panel {
     width: 35%;
     border-right: 1px solid #e5e7eb;
     background-color: #f9fafb;
 }
 
+/* RIGHT SIDE: 65% Width (Action/Notepad) */
 .right-panel {
     width: 65%;
 }
@@ -46,27 +49,28 @@
     margin-top: 4px;
 }
 
-/* --- SCROLLABLE AREAS --- */
+/* --- SCROLLABLE CONTENT AREAS --- */
 .scrollable-content {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: auto; /* Scroll only inside the panel */
     padding: 20px;
 }
 
-/* --- LEFT PANEL STYLES --- */
+/* --- PATIENT CARD (Left Side) --- */
 .patient-card {
-    background: #e0f2fe;
+    background: #e0f2fe; /* Light Blue Background */
     padding: 15px;
     border-radius: 8px;
-    margin: 20px;
+    margin-bottom: 20px;
     border: 1px solid #bae6fd;
 }
 
-.patient-card h3 {
-    color: #0c4a6e;
-    margin: 0;
-}
+    .patient-card h3 {
+        color: #0c4a6e;
+        margin: 0 0 5px 0;
+    }
 
+/* DATA GRID for Medical Profile */
 .data-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -87,6 +91,7 @@
     margin: 2px 0 0 0;
 }
 
+/* HISTORY LIST */
 .history-list {
     list-style: none;
     padding: 0;
@@ -102,7 +107,16 @@
     justify-content: space-between;
 }
 
-/* --- RIGHT PANEL (FORM) STYLES --- */
+.date {
+    font-weight: bold;
+    color: #374151;
+}
+
+.reason {
+    color: #6b7280;
+}
+
+/* --- FORM SECTIONS (Right Side) --- */
 .form-section {
     background: white;
     border: 1px solid #e5e7eb;
@@ -112,22 +126,23 @@
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
-.form-section label {
-    display: block;
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: #374151;
-}
+    .form-section label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #374151;
+    }
 
-.form-section textarea {
-    width: 100%;
-    height: 80px;
-    padding: 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 0.95rem;
-    resize: vertical;
-}
+    .form-section textarea {
+        width: 100%;
+        height: 80px;
+        padding: 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        resize: vertical;
+        font-family: inherit;
+    }
 
 .highlight-input {
     border-color: #3b82f6 !important;
@@ -155,38 +170,46 @@
     align-items: center;
 }
 
-.med-row.header {
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #6b7280;
-    padding-bottom: 5px;
-    border-bottom: 1px solid #e5e7eb;
-}
+    .med-row.header {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #6b7280;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #e5e7eb;
+    }
 
-.med-row input {
-    padding: 8px;
-    border: 1px solid #d1d5db;
-    border-radius: 4px;
-}
+    .med-row input {
+        padding: 8px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+    }
 
 /* --- BUTTONS --- */
+.actions button {
+    margin-left: 10px;
+    font-weight: 500;
+}
+
 .btn-save {
     background: white;
     border: 1px solid #d1d5db;
     padding: 8px 16px;
     border-radius: 6px;
-    margin-right: 10px;
     cursor: pointer;
 }
 
 .btn-finish {
-    background: #059669;
+    background: #059669; /* Green */
     color: white;
     border: none;
     padding: 8px 16px;
     border-radius: 6px;
     cursor: pointer;
 }
+
+    .btn-finish:hover {
+        background-color: #047857;
+    }
 
 .btn-add {
     background: #eff6ff;
@@ -209,4 +232,5 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 1.2rem;
 }

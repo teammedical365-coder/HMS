@@ -1,6 +1,6 @@
 // client/src/App.jsx
 import React, { useEffect } from 'react'
-import { MainRoutes } from './routes/Mainroutes'
+import  MainRoutes  from './routes/Mainroutes'
 import Lenis from 'lenis'
 import './App.css'
 // If you installed lenis via npm, you might need this css import depending on version:
