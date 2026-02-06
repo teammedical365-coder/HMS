@@ -1,0 +1,11 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+*.config
+*.vsidx
+/.vs/crm.slnx/v18/.wsuo
+/.vs/crm.slnx/v18/DocumentLayout.backup.json
+/.vs/crm.slnx/v18/DocumentLayout.json
+/.vs/slnx.sqlite
+/.vs/VSWorkspaceState.json
