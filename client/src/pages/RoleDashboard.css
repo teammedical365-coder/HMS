@@ -1,0 +1,239 @@
+.role-dashboard {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #16213e 100%);
+    padding: 40px 20px;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+.role-dashboard .dashboard-container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+/* Welcome Hero */
+.role-dashboard .welcome-hero {
+    text-align: center;
+    padding: 50px 30px 40px;
+    margin-bottom: 40px;
+    background: linear-gradient(135deg, rgba(108, 99, 255, 0.15), rgba(72, 52, 212, 0.08));
+    border-radius: 24px;
+    border: 1px solid rgba(108, 99, 255, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.role-dashboard .welcome-hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(108, 99, 255, 0.06) 0%, transparent 70%);
+    animation: pulse-glow 4s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.05); opacity: 1; }
+}
+
+.role-dashboard .welcome-emoji {
+    font-size: 56px;
+    margin-bottom: 16px;
+    display: block;
+    animation: wave 2s ease-in-out infinite;
+}
+
+@keyframes wave {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(15deg); }
+    75% { transform: rotate(-10deg); }
+}
+
+.role-dashboard .welcome-hero h1 {
+    color: #fff;
+    font-size: 32px;
+    font-weight: 700;
+    margin: 0 0 10px;
+    position: relative;
+}
+
+.role-dashboard .welcome-hero h1 span {
+    background: linear-gradient(135deg, #6c63ff, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.role-dashboard .welcome-hero .role-badge-large {
+    display: inline-block;
+    padding: 6px 20px;
+    background: linear-gradient(135deg, #6c63ff, #4834d4);
+    color: #fff;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+.role-dashboard .welcome-hero p {
+    color: #aaa;
+    font-size: 16px;
+    margin: 0;
+    position: relative;
+}
+
+/* Quick Access Grid */
+.role-dashboard .section-title {
+    color: #ccc;
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 20px;
+    padding-left: 4px;
+}
+
+.role-dashboard .nav-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.role-dashboard .nav-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 28px 24px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-decoration: none;
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+    position: relative;
+    overflow: hidden;
+}
+
+.role-dashboard .nav-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #6c63ff, #a78bfa);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.role-dashboard .nav-card:hover {
+    background: rgba(108, 99, 255, 0.1);
+    border-color: rgba(108, 99, 255, 0.3);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(108, 99, 255, 0.15);
+}
+
+.role-dashboard .nav-card:hover::before {
+    opacity: 1;
+}
+
+.role-dashboard .nav-card-icon {
+    font-size: 36px;
+    flex-shrink: 0;
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(108, 99, 255, 0.12);
+    border-radius: 14px;
+}
+
+.role-dashboard .nav-card-content h3 {
+    color: #fff;
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 6px;
+}
+
+.role-dashboard .nav-card-content p {
+    color: #888;
+    font-size: 13px;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.role-dashboard .nav-card-arrow {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #555;
+    font-size: 20px;
+    transition: all 0.3s;
+}
+
+.role-dashboard .nav-card:hover .nav-card-arrow {
+    color: #6c63ff;
+    transform: translateY(-50%) translateX(4px);
+}
+
+/* Empty State */
+.role-dashboard .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #888;
+}
+
+.role-dashboard .empty-state .empty-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    display: block;
+}
+
+.role-dashboard .empty-state h3 {
+    color: #ccc;
+    margin: 0 0 8px;
+}
+
+.role-dashboard .empty-state p {
+    margin: 0;
+    font-size: 14px;
+}
+
+/* Permissions list */
+.role-dashboard .permissions-section {
+    margin-top: 40px;
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.role-dashboard .permissions-section h3 {
+    color: #ccc;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0 0 16px;
+}
+
+.role-dashboard .perm-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.role-dashboard .perm-tag {
+    padding: 5px 14px;
+    background: rgba(108, 99, 255, 0.1);
+    border: 1px solid rgba(108, 99, 255, 0.2);
+    border-radius: 20px;
+    color: #a78bfa;
+    font-size: 12px;
+    font-weight: 500;
+}

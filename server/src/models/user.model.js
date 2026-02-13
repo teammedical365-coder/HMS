@@ -2,85 +2,40 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-    name: {
-        type: String,
-        required: [true, 'Name is required']
-    },
-    email: {
-        type: String,
-        required: [true, 'Email is required'],
-        unique: true,
-        lowercase: true,
-        trim: true
-    },
-    password: {
-        type: String,
-        required: [true, 'Password is required']
-    },
-    phone: {
-        type: String,
-        default: '',
-        unique: true, // Crucial for identifying returning patients
-        sparse: true  // Allows multiple users (like admins) to have empty phones if needed
-    },
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    phone: { type: String, default: '' },
 
-    // --- NEW DYNAMIC RBAC SYSTEM ---
-    // Instead of a single string, we now link to the dynamic Role model
-    roles: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Role'
-    }],
-
-    // Allow per-user permission overrides (e.g., giving Nurse Priya extra access)
-    customPermissions: [{
-        permission: String,
-        granted: Boolean // true = extra access, false = restricted access
-    }],
-
-    // --- LEGACY FIELD (Kept for safety, but primary logic moves to 'roles') ---
+    // Dynamic role reference — points to a Role document in the DB
+    // The only exception is 'administrator' which is a bootstrap string
     role: {
-        type: String,
-        default: 'user'
+        type: mongoose.Schema.Types.Mixed, // ObjectId (normal) or String ('administrator')
+        default: null
     },
 
-    // --- PATIENT IDENTIFIERS ---
-    patientId: {
-        type: String,
-        default: '',
-        unique: true,
-        sparse: true
-    },
+    // Patient ID for clinical tracking
+    patientId: { type: String, unique: true, sparse: true },
 
-    // --- STATIC DEMOGRAPHICS ---
-    // These stay in User profile because they don't change often.
-    // Dynamic health data (BP, Weight, Symptoms) has moved to the 'ClinicalVisit' model.
-    dob: { type: String, default: '' },
-    gender: { type: String, default: '' },
-    bloodGroup: { type: String, default: '' },
-    address: { type: String, default: '' },
-    city: { type: String, default: '' },
+    // Static Demographics
+    dob: String,
+    gender: String,
+    bloodGroup: String,
+    address: String,
+    city: String,
 
-    services: [{
-        type: String
-    }]
-}, {
-    timestamps: true
-});
+    services: [String]
+}, { timestamps: true });
 
-// Encrypt password before saving
 userSchema.pre('save', async function (next) {
-    if (!this.isModified('password')) {
-        next();
-    }
+    if (!this.isModified('password')) return next();
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
+    next();
 });
 
-// Match password
-userSchema.methods.comparePassword = async function (enteredPassword) {
-    return await bcrypt.compare(enteredPassword, this.password);
+userSchema.methods.comparePassword = async function (entered) {
+    return await bcrypt.compare(entered, this.password);
 };
 
-const User = mongoose.model('User', userSchema);
-
-module.exports = User;
+module.exports = mongoose.model('User', userSchema);

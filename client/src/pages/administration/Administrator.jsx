@@ -1,452 +1,333 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminAPI } from '../../utils/api';
+import ImageUploader from '../../components/ImageUploader';
 import './Administrator.css';
 
 const Administrator = () => {
-  const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    phone: '',
-    role: 'doctor',
-    services: []
-  });
-  
-  // Available services from Services page
-  const availableServices = [
-    { id: 'ivf', name: 'In Vitro Fertilization (IVF)' },
-    { id: 'iui', name: 'Intrauterine Insemination (IUI)' },
-    { id: 'icsi', name: 'Intracytoplasmic Sperm Injection' },
-    { id: 'egg-freezing', name: 'Egg Freezing & Preservation' },
-    { id: 'genetic-testing', name: 'Genetic Testing & Screening' },
-    { id: 'donor-program', name: 'Egg & Sperm Donor Program' },
-    { id: 'male-fertility', name: 'Male Fertility Treatment' },
-    { id: 'surrogacy', name: 'Surrogacy Services' },
-    { id: 'fertility-surgery', name: 'Fertility Surgery' }
-  ];
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [users, setUsers] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const navigate = useNavigate();
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [users, setUsers] = useState([]);
+    const [loadingUsers, setLoadingUsers] = useState(false);
+    const [roles, setRoles] = useState([]);
 
-  // Check if user is administrator
-  useEffect(() => {
+    const [editingUser, setEditingUser] = useState(null);
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+    // Create Staff Form state
+    const [showCreateForm, setShowCreateForm] = useState(false);
+    const [createForm, setCreateForm] = useState({
+        name: '', email: '', password: '', phone: '', roleId: ''
+    });
+    const [creating, setCreating] = useState(false);
+
+    // Check auth
+    useEffect(() => {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (user.role !== 'administrator') {
+            navigate('/administrator/login');
+        }
+    }, [navigate]);
+
+    useEffect(() => {
+        fetchUsers();
+        fetchRoles();
+    }, []);
+
+    const fetchUsers = async () => {
+        try {
+            setLoadingUsers(true);
+            const response = await adminAPI.getUsers();
+            if (response.success) {
+                setUsers(response.users);
+            }
+        } catch (err) {
+            console.error('Error fetching users:', err);
+            setError('Error fetching users.');
+        } finally {
+            setLoadingUsers(false);
+        }
+    };
+
+    const fetchRoles = async () => {
+        try {
+            const response = await adminAPI.getRoles();
+            if (response.success) {
+                setRoles(response.data);
+            }
+        } catch (err) {
+            console.error('Error fetching roles:', err);
+        }
+    };
+
+    const handleEditRole = (user) => {
+        setEditingUser({ ...user, tempRoleId: user.roleId || '' });
+        setError('');
+        setSuccess('');
+    };
+
+    const handleUpdateRole = async (userId, selectedRoleId) => {
+        try {
+            const response = await adminAPI.updateUserRole(userId, selectedRoleId);
+            if (response.success) {
+                setSuccess('User role updated successfully!');
+                setEditingUser(null);
+                fetchUsers();
+            }
+        } catch (err) {
+            setError(err.response?.data?.message || 'Error updating user role.');
+        }
+    };
+
+    const handleDeleteUser = async (userId) => {
+        try {
+            const response = await adminAPI.deleteUser(userId);
+            if (response.success) {
+                setSuccess('User deleted successfully!');
+                setDeleteConfirm(null);
+                fetchUsers();
+            }
+        } catch (err) {
+            setError('Error deleting user.');
+            setDeleteConfirm(null);
+        }
+    };
+
+    // --- Create Staff Account ---
+    const handleCreateStaff = async (e) => {
+        e.preventDefault();
+        setCreating(true);
+        setError('');
+        setSuccess('');
+
+        if (!createForm.name || !createForm.email || !createForm.password || !createForm.roleId) {
+            setError('Name, email, password, and role are all required.');
+            setCreating(false);
+            return;
+        }
+
+        try {
+            const response = await adminAPI.createUser(createForm);
+            if (response.success) {
+                setSuccess(`✅ ${response.user?.role || 'Staff'} account created! They can now log in with: ${createForm.email}`);
+                setCreateForm({ name: '', email: '', password: '', phone: '', roleId: '' });
+                setShowCreateForm(false);
+                fetchUsers();
+            }
+        } catch (err) {
+            setError(err.response?.data?.message || 'Error creating staff account.');
+        } finally {
+            setCreating(false);
+        }
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/administrator/login');
+    };
+
     const user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (user.role !== 'administrator') {
-      navigate('/');
-    }
-  }, [navigate]);
 
-  // Fetch users on component mount
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+    return (
+        <div className="administrator-page">
+            <div className="administrator-container">
+                <div className="admin-header">
+                    <div>
+                        <h1>Administrator Dashboard</h1>
+                        <p>Manage System Users & Staff Accounts</p>
+                    </div>
+                    <div className="admin-user-info">
+                        <span>Welcome, {user.name}</span>
+                        <button onClick={() => navigate('/admin/roles')} className="btn-edit" style={{ marginRight: '10px', padding: '8px 16px' }}>🔑 Manage Roles</button>
+                        <button onClick={handleLogout} className="logout-btn">Logout</button>
+                    </div>
+                </div>
 
-  const fetchUsers = async () => {
-    try {
-      setLoadingUsers(true);
-      const response = await adminAPI.getUsers();
-      if (response.success) {
-        setUsers(response.users);
-      }
-    } catch (err) {
-      console.error('Error fetching users:', err);
-    } finally {
-      setLoadingUsers(false);
-    }
-  };
+                {error && <div className="error-message">{error}</div>}
+                {success && <div className="success-message">{success}</div>}
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-      // Reset services when role changes from doctor
-      ...(name === 'role' && value !== 'doctor' ? { services: [] } : {})
-    });
-    setError('');
-    setSuccess('');
-  };
+                {/* ==========================================
+                    CREATE STAFF ACCOUNT SECTION
+                   ========================================== */}
+                <div className="admin-card" style={{ marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h2>👤 Create Staff Account</h2>
+                        <button
+                            onClick={() => setShowCreateForm(!showCreateForm)}
+                            className={showCreateForm ? 'btn-cancel' : 'btn-save'}
+                            style={{ padding: '8px 20px', fontSize: '14px' }}
+                        >
+                            {showCreateForm ? 'Cancel' : '+ New Staff'}
+                        </button>
+                    </div>
 
-  const handleServiceChange = (e) => {
-    const selectedServices = Array.from(e.target.selectedOptions, option => option.value);
-    setFormData({
-      ...formData,
-      services: selectedServices
-    });
-  };
+                    {!showCreateForm && (
+                        <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>
+                            Create login credentials for doctors, lab technicians, pharmacists, receptionists, or any custom role.
+                        </p>
+                    )}
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    setLoading(true);
+                    {showCreateForm && (
+                        <form onSubmit={handleCreateStaff} style={{ display: 'grid', gap: '14px' }}>
+                            <style>{`
+                                .staff-input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #444; background: #1a1a2e; color: #fff; font-size: 14px; box-sizing: border-box; }
+                                .staff-input::placeholder { color: #666; }
+                                .staff-input:focus { border-color: #6c63ff; outline: none; }
+                                .staff-label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 13px; color: #ccc; }
+                            `}</style>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                                <div>
+                                    <label className="staff-label">Full Name *</label>
+                                    <input type="text" placeholder="e.g. Dr. Sharma" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} required className="staff-input" />
+                                </div>
+                                <div>
+                                    <label className="staff-label">Email Address *</label>
+                                    <input type="email" placeholder="e.g. dr.sharma@hospital.com" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} required className="staff-input" />
+                                </div>
+                            </div>
 
-    // Validation
-    if (!formData.name || !formData.email || !formData.password || !formData.role) {
-      setError('Please fill in all required fields');
-      setLoading(false);
-      return;
-    }
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                                <div>
+                                    <label className="staff-label">Password *</label>
+                                    <input type="text" placeholder="Set a temporary password" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} required className="staff-input" />
+                                    <small style={{ color: '#888', fontSize: '11px' }}>Share this password with the staff member</small>
+                                </div>
+                                <div>
+                                    <label className="staff-label">Phone Number</label>
+                                    <input type="text" placeholder="e.g. 9876543210" value={createForm.phone} onChange={e => setCreateForm({ ...createForm, phone: e.target.value })} className="staff-input" />
+                                </div>
+                            </div>
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      setLoading(false);
-      return;
-    }
+                            <div>
+                                <label className="staff-label">Assign Role * <span style={{ fontWeight: 400, color: '#888', fontSize: '11px' }}>(Don't see your role? <a href="/admin/roles" style={{ color: '#6c63ff' }}>Create one here</a>)</span></label>
+                                <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
+                                    <option value="">-- Select a Role --</option>
+                                    {roles.map(role => (
+                                        <option key={role._id} value={role._id}>
+                                            {role.name} {role.description ? `— ${role.description}` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                <small style={{ color: '#888', fontSize: '11px' }}>
+                                    The role determines what pages and features this staff member can access.
+                                    {' '}Create new roles in Admin → Roles.
+                                </small>
+                            </div>
 
-    // Validate services for doctor role
-    if (formData.role === 'doctor' && formData.services.length === 0) {
-      setError('Please select at least one service for doctor');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const response = await adminAPI.createUser(
-        formData.name,
-        formData.email,
-        formData.password,
-        formData.phone,
-        formData.role,
-        formData.services
-      );
-
-      if (response.success) {
-        setSuccess(`${formData.role.charAt(0).toUpperCase() + formData.role.slice(1)} user created successfully!`);
-        // Reset form
-        setFormData({
-          name: '',
-          email: '',
-          password: '',
-          phone: '',
-          role: 'doctor',
-          services: []
-        });
-        // Refresh users list
-        fetchUsers();
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Error creating user. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEditRole = (user) => {
-    setEditingUser(user);
-    setError('');
-    setSuccess('');
-  };
-
-  const handleUpdateRole = async (userId, newRole) => {
-    try {
-      const response = await adminAPI.updateUserRole(userId, newRole);
-      if (response.success) {
-        setSuccess('User role updated successfully!');
-        setEditingUser(null);
-        fetchUsers();
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Error updating user role. Please try again.');
-    }
-  };
-
-  const handleDeleteUser = async (userId) => {
-    try {
-      const response = await adminAPI.deleteUser(userId);
-      if (response.success) {
-        setSuccess('User deleted successfully!');
-        setDeleteConfirm(null);
-        fetchUsers();
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Error deleting user. Please try again.');
-      setDeleteConfirm(null);
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/');
-  };
-
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-
-  return (
-    <div className="administrator-page">
-      <div className="administrator-container">
-        {/* Header */}
-        <div className="admin-header">
-          <div>
-            <h1>Administrator Dashboard</h1>
-            <p>Manage users and system settings</p>
-          </div>
-          <div className="admin-user-info">
-            <span>Welcome, {user.name}</span>
-            <button onClick={handleLogout} className="logout-btn">
-              Logout
-            </button>
-          </div>
-        </div>
-
-        {/* Create User Form */}
-        <div className="admin-card">
-          <h2>Create New User</h2>
-          
-          {error && (
-            <div className="error-message">
-              {error}
-            </div>
-          )}
-
-          {success && (
-            <div className="success-message">
-              {success}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="user-form">
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="name">Full Name *</label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Enter full name"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="email">Email Address *</label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="Enter email address"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="password">Password *</label>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="Enter password (min 6 characters)"
-                  required
-                  minLength={6}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="phone">Phone Number</label>
-                <input
-                  type="tel"
-                  id="phone"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  placeholder="Enter phone number (optional)"
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="role">Role *</label>
-              <select
-                id="role"
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                required
-              >
-                <option value="doctor">Doctor</option>
-                <option value="lab">Lab</option>
-                <option value="pharmacy">Pharmacy</option>
-                <option value="reception">Reception</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-
-            {formData.role === 'doctor' && (
-              <div className="form-group">
-                <label htmlFor="services">Services *</label>
-                <select
-                  id="services"
-                  name="services"
-                  multiple
-                  value={formData.services}
-                  onChange={handleServiceChange}
-                  required
-                  className="services-multiselect"
-                  size={5}
-                >
-                  {availableServices.map(service => (
-                    <option key={service.id} value={service.id}>
-                      {service.name}
-                    </option>
-                  ))}
-                </select>
-                <small className="form-hint">Hold Ctrl (Windows) or Cmd (Mac) to select multiple services</small>
-              </div>
-            )}
-
-            <button 
-              type="submit" 
-              className="submit-button"
-              disabled={loading}
-            >
-              {loading ? 'Creating User...' : 'Create User'}
-            </button>
-          </form>
-        </div>
-
-        {/* Users List */}
-        <div className="admin-card">
-          <h2>All Users</h2>
-          {loadingUsers ? (
-            <div className="loading-message">Loading users...</div>
-          ) : users.length === 0 ? (
-            <div className="empty-message">No users found</div>
-          ) : (
-            <div className="users-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Phone</th>
-                    <th>Created At</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((userItem) => {
-                    const isCurrentUser = userItem._id === user.id || userItem.id === user.id;
-                    const canModify = !isCurrentUser;
-
-                    return (
-                      <tr key={userItem._id || userItem.id}>
-                        <td>{userItem.name}</td>
-                        <td>{userItem.email}</td>
-                        <td>
-                          {editingUser && editingUser._id === userItem._id ? (
-                            <select
-                              value={editingUser.role}
-                              onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
-                              className="role-select"
+                            <button
+                                type="submit"
+                                disabled={creating}
+                                className="btn-save"
+                                style={{ padding: '12px 24px', fontSize: '15px', fontWeight: '600', marginTop: '4px' }}
                             >
-                              <option value="user">User</option>
-                              <option value="admin">Admin</option>
-                              <option value="administrator">Administrator</option>
-                              <option value="doctor">Doctor</option>
-                              <option value="lab">Lab</option>
-                              <option value="pharmacy">Pharmacy</option>
-                              <option value="reception">Reception</option>
-                            </select>
-                          ) : (
-                            <span className={`role-badge role-${userItem.role}`}>
-                              {userItem.role.charAt(0).toUpperCase() + userItem.role.slice(1)}
-                            </span>
-                          )}
-                        </td>
-                        <td>{userItem.phone || '-'}</td>
-                        <td>{new Date(userItem.createdAt).toLocaleDateString()}</td>
-                        <td>
-                          <div className="action-buttons">
-                            {editingUser && editingUser._id === userItem._id ? (
-                              <>
-                                <button
-                                  onClick={() => handleUpdateRole(userItem._id || userItem.id, editingUser.role)}
-                                  className="btn-save"
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  onClick={() => setEditingUser(null)}
-                                  className="btn-cancel"
-                                >
-                                  Cancel
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                {canModify && (
-                                  <>
-                                    <button
-                                      onClick={() => handleEditRole(userItem)}
-                                      className="btn-edit"
-                                    >
-                                      Edit Role
-                                    </button>
-                                    <button
-                                      onClick={() => setDeleteConfirm(userItem._id || userItem.id)}
-                                      className="btn-delete"
-                                    >
-                                      Delete
-                                    </button>
-                                  </>
-                                )}
-                                {!canModify && <span className="no-action">-</span>}
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                                {creating ? 'Creating Account...' : '✅ Create Staff Account'}
+                            </button>
+                        </form>
+                    )}
+                </div>
 
-        {/* Delete Confirmation Modal */}
-        {deleteConfirm && (
-          <div className="modal-overlay">
-            <div className="modal-content">
-              <h3>Confirm Delete</h3>
-              <p>Are you sure you want to delete this user? This action cannot be undone.</p>
-              <div className="modal-buttons">
-                <button
-                  onClick={() => handleDeleteUser(deleteConfirm)}
-                  className="btn-confirm-delete"
-                >
-                  Delete
-                </button>
-                <button
-                  onClick={() => setDeleteConfirm(null)}
-                  className="btn-cancel"
-                >
-                  Cancel
-                </button>
-              </div>
+                {/* Image Upload */}
+                <div className="admin-card" style={{ marginBottom: '20px' }}>
+                    <h2>Media Gallery Upload</h2>
+                    <ImageUploader />
+                </div>
+
+                {/* ==========================================
+                    USER TABLE
+                   ========================================== */}
+                <div className="admin-card">
+                    <h2>All Staff & Users</h2>
+                    {loadingUsers ? (
+                        <div className="loading-message">Loading users...</div>
+                    ) : users.length === 0 ? (
+                        <div className="empty-message">No users found</div>
+                    ) : (
+                        <div className="users-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Role</th>
+                                        <th>Phone</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {users.map((userItem) => {
+                                        const isCurrentUser = (userItem.id || userItem._id) === user.id;
+                                        const canModify = !isCurrentUser;
+
+                                        return (
+                                            <tr key={userItem.id || userItem._id}>
+                                                <td>{userItem.name}</td>
+                                                <td>{userItem.email}</td>
+                                                <td>
+                                                    {editingUser && (editingUser.id || editingUser._id) === (userItem.id || userItem._id) ? (
+                                                        <select
+                                                            value={editingUser.tempRoleId}
+                                                            onChange={(e) => setEditingUser({ ...editingUser, tempRoleId: e.target.value })}
+                                                            className="role-select"
+                                                        >
+                                                            <option value="">-- Select Role --</option>
+                                                            {roles.map((role) => (
+                                                                <option key={role._id} value={role._id}>
+                                                                    {role.name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    ) : (
+                                                        <span className={`role-badge role-${(userItem.role || '').toLowerCase()}`}>
+                                                            {(userItem.role || 'No Role').toUpperCase()}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td>{userItem.phone || '-'}</td>
+                                                <td>
+                                                    <div className="action-buttons">
+                                                        {editingUser && (editingUser.id || editingUser._id) === (userItem.id || userItem._id) ? (
+                                                            <>
+                                                                <button onClick={() => handleUpdateRole(userItem.id || userItem._id, editingUser.tempRoleId)} className="btn-save">Save</button>
+                                                                <button onClick={() => setEditingUser(null)} className="btn-cancel">Cancel</button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                {canModify && (
+                                                                    <>
+                                                                        <button onClick={() => handleEditRole(userItem)} className="btn-edit">Edit Role</button>
+                                                                        <button onClick={() => setDeleteConfirm(userItem.id || userItem._id)} className="btn-delete">Delete</button>
+                                                                    </>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+
+                {deleteConfirm && (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h3>Confirm Delete</h3>
+                            <p>Are you sure?</p>
+                            <div className="modal-buttons">
+                                <button onClick={() => handleDeleteUser(deleteConfirm)} className="btn-confirm-delete">Delete</button>
+                                <button onClick={() => setDeleteConfirm(null)} className="btn-cancel">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+        </div>
+    );
 };
 
 export default Administrator;
-

@@ -1,0 +1,405 @@
+/* ============================================================
+   Admin Roles — Dark Theme (Matching Admin Dashboard)
+   ============================================================ */
+
+.roles-page-container {
+    padding: 32px 24px;
+    background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #16213e 100%);
+    min-height: 100vh;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+.roles-header {
+    margin-bottom: 28px;
+}
+
+.roles-header h1 {
+    font-size: 1.8rem;
+    color: #ffffff;
+    margin: 0 0 6px 0;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.roles-header p {
+    color: #888;
+    font-size: 0.95rem;
+}
+
+/* Grid Layout */
+.roles-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+@media (max-width: 900px) {
+    .roles-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Card Style */
+.role-card {
+    background: rgba(255, 255, 255, 0.07);
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    transition: border-color 0.3s;
+    overflow: hidden;
+}
+
+.role-card:hover {
+    border-color: rgba(108, 99, 255, 0.2);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 28px;
+    background: linear-gradient(135deg, rgba(108, 99, 255, 0.2), rgba(72, 52, 212, 0.12));
+    border-bottom: 1px solid rgba(108, 99, 255, 0.2);
+}
+
+.card-header h2 {
+    font-size: 1.2rem;
+    color: #df0d86;
+    margin: 0;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.role-count {
+    background: rgba(108, 99, 255, 0.15);
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    color: #a78bfa;
+    font-weight: 700;
+    border: 1px solid rgba(108, 99, 255, 0.2);
+}
+
+/* Form Styles */
+.roles-page-container .form-group {
+    margin-bottom: 20px;
+    padding: 0 28px;
+}
+
+.roles-page-container .form-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #e2e0ff;
+    font-size: 0.9rem;
+}
+
+.roles-page-container .form-group:first-of-type {
+    padding-top: 24px;
+}
+
+.roles-page-container .form-group input[type="text"] {
+    width: 100%;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    font-size: 0.95rem;
+    transition: all 0.3s;
+    color: #fff;
+    box-sizing: border-box;
+}
+
+.roles-page-container .form-group input[type="text"]::placeholder {
+    color: #666;
+}
+
+.roles-page-container .form-group input[type="text"]:focus {
+    outline: none;
+    border-color: rgba(108, 99, 255, 0.5);
+    box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Permissions Section */
+.permissions-section {
+    margin: 20px 28px 28px;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 18px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.section-label {
+    display: block;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: #e2e0ff;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.permissions-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.permissions-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.permissions-list::-webkit-scrollbar-thumb {
+    background: rgba(108, 99, 255, 0.2);
+    border-radius: 3px;
+}
+
+.perm-category {
+    margin-bottom: 20px;
+}
+
+.category-title {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #888;
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 6px;
+    font-weight: 600;
+}
+
+.perm-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-radius: 8px;
+}
+
+.perm-item:hover {
+    background: rgba(108, 99, 255, 0.06);
+}
+
+.perm-item input {
+    width: 16px;
+    height: 16px;
+    margin-right: 12px;
+    cursor: pointer;
+    accent-color: #6c63ff;
+}
+
+.perm-text {
+    font-size: 0.92rem;
+    color: #ddd;
+}
+
+/* Submit Button */
+.btn-create {
+    width: calc(100% - 56px);
+    margin: 20px 28px 28px;
+    padding: 14px;
+    background: linear-gradient(135deg, #6c63ff 0%, #4834d4 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 16px rgba(108, 99, 255, 0.25);
+}
+
+.btn-create:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(108, 99, 255, 0.4);
+}
+
+.btn-create:active {
+    transform: translateY(0);
+}
+
+.btn-create:disabled {
+    background: rgba(255, 255, 255, 0.08);
+    color: #666;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Roles List Items */
+.role-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 18px 28px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.2s;
+    border-radius: 0;
+    margin-bottom: 4px;
+}
+
+.role-item:last-child {
+    border-bottom: none;
+}
+
+.role-item:hover {
+    background: rgba(108, 99, 255, 0.06);
+}
+
+.role-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.role-item h3 {
+    font-size: 1.1rem;
+    margin: 0;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.perm-badge {
+    font-size: 0.72rem;
+    background: rgba(108, 99, 255, 0.15);
+    color: #a78bfa;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+    border: 1px solid rgba(108, 99, 255, 0.2);
+}
+
+.role-desc {
+    font-size: 0.88rem;
+    color: #888;
+    margin: 0 0 10px 0;
+}
+
+.role-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.tag {
+    font-size: 0.72rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #aaa;
+    padding: 3px 10px;
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.tag.more {
+    background: rgba(108, 99, 255, 0.08);
+    color: #a78bfa;
+    border-color: rgba(108, 99, 255, 0.15);
+}
+
+.btn-icon-delete {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    opacity: 0.3;
+    transition: all 0.2s;
+    padding: 6px;
+    border-radius: 8px;
+    color: #fff;
+}
+
+.btn-icon-delete:hover {
+    opacity: 1;
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* Messages */
+.status-message {
+    padding: 12px 16px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.status-message.success {
+    background: rgba(16, 185, 129, 0.1);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.status-message.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* Auto-generated Nav Links Preview */
+.auto-nav-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.auto-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: rgba(108, 99, 255, 0.08);
+    border: 1px solid rgba(108, 99, 255, 0.15);
+    border-radius: 10px;
+    transition: all 0.2s;
+}
+
+.auto-nav-item:hover {
+    background: rgba(108, 99, 255, 0.14);
+    border-color: rgba(108, 99, 255, 0.3);
+}
+
+.auto-nav-label {
+    font-weight: 600;
+    color: #e2e0ff;
+    font-size: 0.92rem;
+    min-width: 120px;
+}
+
+.auto-nav-path {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.82rem;
+    color: #888;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 3px 8px;
+    border-radius: 6px;
+    flex: 1;
+}
+
+.auto-nav-default {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: linear-gradient(135deg, #6c63ff, #4834d4);
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+.auto-nav-empty {
+    padding: 20px;
+    text-align: center;
+    color: #666;
+    font-size: 0.88rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    font-style: italic;
+}

@@ -1,11 +1,16 @@
+/* ============================================================
+   Doctor Console (Patient View) — Split-Pane Premium Design
+   ============================================================ */
+
 .doctor-console {
     display: flex;
-    height: 100vh; /* Full screen height */
-    background-color: #f3f4f6;
-    overflow: hidden; /* Prevent body scroll */
+    height: 100vh;
+    background-color: #f0f4f8;
+    overflow: hidden;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
 }
 
-/* --- PANELS --- */
+/* --- Panels --- */
 .panel {
     display: flex;
     flex-direction: column;
@@ -16,117 +21,167 @@
 
 .left-panel {
     width: 35%;
-    border-right: 1px solid #e5e7eb;
-    background-color: #f9fafb;
+    border-right: 1px solid #e2e8f0;
+    background: linear-gradient(180deg, #f8fafc, #f1f5f9);
 }
 
 .right-panel {
     width: 65%;
+    background: #ffffff;
 }
 
-/* --- HEADERS --- */
+/* --- Headers --- */
 .panel-header {
-    padding: 20px;
-    border-bottom: 1px solid #e5e7eb;
-    background: white;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #ffffff;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
+.panel-header h2 {
+    font-size: 1.2rem;
+    color: #1e293b;
+    font-weight: 700;
+    margin: 0;
+}
+
 .action-header {
-    background-color: #fff;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    background: #ffffff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
     z-index: 10;
 }
 
 .subtitle {
     font-size: 0.85rem;
-    color: #6b7280;
+    color: #94a3b8;
     margin-top: 4px;
 }
 
-/* --- SCROLLABLE AREAS --- */
+/* --- Scrollable Areas --- */
 .scrollable-content {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
+    padding: 20px 24px;
 }
 
-/* --- LEFT PANEL STYLES --- */
+.scrollable-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.scrollable-content::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 3px;
+}
+
+/* --- Patient Card --- */
 .patient-card {
-    background: #e0f2fe;
-    padding: 15px;
-    border-radius: 8px;
-    margin: 20px;
-    border: 1px solid #bae6fd;
+    background: linear-gradient(135deg, #eff6ff, #dbeafe);
+    padding: 18px 20px;
+    border-radius: 16px;
+    margin: 20px 24px;
+    border: 1px solid rgba(59, 130, 246, 0.15);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08);
 }
 
 .patient-card h3 {
-    color: #0c4a6e;
-    margin: 0;
+    color: #1e40af;
+    margin: 0 0 10px;
+    font-size: 1.1rem;
+    font-weight: 700;
 }
 
 .data-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 15px;
-    margin-top: 10px;
+    gap: 14px;
+    margin-top: 12px;
 }
 
 .data-item label {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     text-transform: uppercase;
-    color: #6b7280;
-    font-weight: 600;
+    color: #64748b;
+    font-weight: 700;
+    letter-spacing: 0.05em;
 }
 
 .data-item p {
-    font-weight: 500;
-    color: #111827;
-    margin: 2px 0 0 0;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 3px 0 0 0;
+    font-size: 0.95rem;
 }
 
+/* History */
 .history-list {
     list-style: none;
     padding: 0;
+    margin: 0;
 }
 
 .history-item {
-    background: white;
-    border: 1px solid #e5e7eb;
-    padding: 10px;
-    margin-bottom: 8px;
-    border-radius: 6px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    border-radius: 12px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s;
+    font-size: 0.9rem;
+    color: #475569;
 }
 
-/* --- RIGHT PANEL (FORM) STYLES --- */
+.history-item:hover {
+    border-color: #93c5fd;
+    background: #eff6ff;
+    transform: translateX(2px);
+}
+
+/* --- Form Sections --- */
 .form-section {
-    background: white;
-    border: 1px solid #e5e7eb;
-    padding: 20px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    padding: 22px 24px;
+    border-radius: 16px;
+    margin-bottom: 18px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    transition: border-color 0.2s;
+}
+
+.form-section:hover {
+    border-color: #cbd5e1;
 }
 
 .form-section label {
     display: block;
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: #374151;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: #334155;
+    font-size: 0.92rem;
 }
 
 .form-section textarea {
     width: 100%;
     height: 80px;
-    padding: 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
+    padding: 14px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
     font-size: 0.95rem;
     resize: vertical;
+    transition: all 0.2s;
+    color: #1e293b;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.form-section textarea:focus {
+    border-color: #3b82f6;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .highlight-input {
@@ -134,12 +189,18 @@
     background-color: #eff6ff;
 }
 
-/* --- MEDICATION TABLE --- */
+/* --- Medication Table --- */
 .section-title {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
+}
+
+.section-title label {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #334155;
 }
 
 .med-table {
@@ -156,57 +217,126 @@
 }
 
 .med-row.header {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     font-weight: 700;
-    color: #6b7280;
-    padding-bottom: 5px;
-    border-bottom: 1px solid #e5e7eb;
+    color: #64748b;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #f1f5f9;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .med-row input {
-    padding: 8px;
-    border: 1px solid #d1d5db;
-    border-radius: 4px;
+    padding: 10px 12px;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+    color: #1e293b;
 }
 
-/* --- BUTTONS --- */
+.med-row input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* --- Buttons --- */
 .btn-save {
-    background: white;
-    border: 1px solid #d1d5db;
-    padding: 8px 16px;
-    border-radius: 6px;
+    background: #ffffff;
+    border: 2px solid #e2e8f0;
+    padding: 10px 20px;
+    border-radius: 10px;
     margin-right: 10px;
     cursor: pointer;
+    font-weight: 600;
+    color: #475569;
+    transition: all 0.2s;
+    font-size: 0.9rem;
+}
+
+.btn-save:hover {
+    border-color: #3b82f6;
+    color: #3b82f6;
+    background: #eff6ff;
 }
 
 .btn-finish {
-    background: #059669;
+    background: linear-gradient(135deg, #059669, #10b981);
     color: white;
     border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
+    padding: 10px 24px;
+    border-radius: 10px;
     cursor: pointer;
+    font-weight: 700;
+    font-size: 0.9rem;
+    transition: all 0.3s;
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.2);
+}
+
+.btn-finish:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(5, 150, 105, 0.35);
 }
 
 .btn-add {
     background: #eff6ff;
     color: #2563eb;
-    border: 1px dashed #2563eb;
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 0.8rem;
+    border: 2px dashed #93c5fd;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 0.82rem;
     cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.btn-add:hover {
+    background: #dbeafe;
+    border-color: #3b82f6;
 }
 
 .btn-remove {
-    background: #fee2e2;
+    background: #fef2f2;
     color: #dc2626;
-    border: none;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
+    border: 1px solid #fee2e2;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.btn-remove:hover {
+    background: #fee2e2;
+    transform: scale(1.1);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .doctor-console {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+    }
+
+    .left-panel,
+    .right-panel {
+        width: 100%;
+        height: auto;
+    }
+
+    .left-panel {
+        border-right: none;
+        border-bottom: 2px solid #e2e8f0;
+        max-height: 40vh;
+    }
+
+    .med-row {
+        grid-template-columns: 1fr;
+    }
 }

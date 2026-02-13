@@ -1,21 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { authAPI, adminAPI } from '../../utils/api';
 
-// Load initial state from localStorage
-const getInitialState = () => {
-  const token = localStorage.getItem('token');
-  const user = localStorage.getItem('user');
-  
-  return {
-    token: token || null,
-    user: user ? JSON.parse(user) : null,
-    isAuthenticated: !!token,
-    loading: false,
-    error: null,
-  };
-};
-
-// Async thunks
+// Async Thunks
 export const loginUser = createAsyncThunk(
   'auth/loginUser',
   async ({ email, password }, { rejectWithValue }) => {
@@ -84,13 +70,38 @@ export const signupAdmin = createAsyncThunk(
   }
 );
 
+// Load initial state from localStorage
+const loadInitialState = () => {
+  try {
+    const token = localStorage.getItem('token');
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : null;
+
+    return {
+      user,
+      token,
+      isAuthenticated: !!(token && user),
+      loading: false,
+      error: null,
+    };
+  } catch {
+    return {
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      loading: false,
+      error: null,
+    };
+  }
+};
+
 const authSlice = createSlice({
   name: 'auth',
-  initialState: getInitialState(),
+  initialState: loadInitialState(),
   reducers: {
     logout: (state) => {
-      state.token = null;
       state.user = null;
+      state.token = null;
       state.isAuthenticated = false;
       state.error = null;
       localStorage.removeItem('token');
@@ -102,89 +113,50 @@ const authSlice = createSlice({
     updateUser: (state, action) => {
       state.user = { ...state.user, ...action.payload };
       localStorage.setItem('user', JSON.stringify(state.user));
-    },
+    }
   },
   extraReducers: (builder) => {
-    builder
-      // Login User
-      .addCase(loginUser.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(loginUser.fulfilled, (state, action) => {
-        state.loading = false;
-        state.token = action.payload.token;
-        state.user = action.payload.user;
-        state.isAuthenticated = true;
-        state.error = null;
-      })
-      .addCase(loginUser.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-        state.isAuthenticated = false;
-      })
-      // Signup User
-      .addCase(signupUser.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(signupUser.fulfilled, (state, action) => {
-        state.loading = false;
-        state.token = action.payload.token;
-        state.user = action.payload.user;
-        state.isAuthenticated = true;
-        state.error = null;
-      })
-      .addCase(signupUser.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-        state.isAuthenticated = false;
-      })
-      // Login Admin
-      .addCase(loginAdmin.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(loginAdmin.fulfilled, (state, action) => {
-        state.loading = false;
-        state.token = action.payload.token;
-        state.user = action.payload.user;
-        state.isAuthenticated = true;
-        state.error = null;
-      })
-      .addCase(loginAdmin.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-        state.isAuthenticated = false;
-      })
-      // Signup Admin
-      .addCase(signupAdmin.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(signupAdmin.fulfilled, (state, action) => {
-        state.loading = false;
-        state.token = action.payload.token;
-        state.user = action.payload.user;
-        state.isAuthenticated = true;
-        state.error = null;
-      })
-      .addCase(signupAdmin.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-        state.isAuthenticated = false;
-      });
+    // Login User
+    builder.addCase(loginUser.pending, (state) => { state.loading = true; state.error = null; });
+    builder.addCase(loginUser.fulfilled, (state, action) => {
+      state.loading = false;
+      state.user = action.payload.user;
+      state.token = action.payload.token;
+      state.isAuthenticated = true;
+    });
+    builder.addCase(loginUser.rejected, (state, action) => { state.loading = false; state.error = action.payload; });
+
+    // Signup User
+    builder.addCase(signupUser.pending, (state) => { state.loading = true; state.error = null; });
+    builder.addCase(signupUser.fulfilled, (state, action) => {
+      state.loading = false;
+      state.user = action.payload.user;
+      state.token = action.payload.token;
+      state.isAuthenticated = true;
+    });
+    builder.addCase(signupUser.rejected, (state, action) => { state.loading = false; state.error = action.payload; });
+
+    // Login Admin
+    builder.addCase(loginAdmin.pending, (state) => { state.loading = true; state.error = null; });
+    builder.addCase(loginAdmin.fulfilled, (state, action) => {
+      state.loading = false;
+      state.user = action.payload.user;
+      state.token = action.payload.token;
+      state.isAuthenticated = true;
+    });
+    builder.addCase(loginAdmin.rejected, (state, action) => { state.loading = false; state.error = action.payload; });
+
+    // Signup Admin
+    builder.addCase(signupAdmin.pending, (state) => { state.loading = true; state.error = null; });
+    builder.addCase(signupAdmin.fulfilled, (state, action) => {
+      state.loading = false;
+      state.user = action.payload.user;
+      state.token = action.payload.token;
+      state.isAuthenticated = true;
+    });
+    builder.addCase(signupAdmin.rejected, (state, action) => { state.loading = false; state.error = action.payload; });
   },
 });
 
 export const { logout, clearError, updateUser } = authSlice.actions;
 export default authSlice.reducer;
-
-
-
-
-
-
-
-
-

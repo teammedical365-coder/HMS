@@ -1,19 +1,38 @@
 const mongoose = require('mongoose');
 
+const navLinkSchema = new mongoose.Schema({
+    label: { type: String, required: true },
+    path: { type: String, required: true }
+}, { _id: false });
+
 const roleSchema = new mongoose.Schema({
-    name: { type: String, required: true, unique: true }, // e.g., "Junior Doctor"
-    description: { type: String },
+    name: {
+        type: String,
+        required: true,
+        unique: true,
+        trim: true
+    },
+    description: {
+        type: String,
+        default: ''
+    },
+    // Dynamic permissions — no enum restriction, admin can define any permission key
     permissions: [{
         type: String,
-        // We define a standard list of permission keys here for documentation
-        enum: [
-            'patient_search', 'patient_create',
-            'visit_intake', // Permission to take vitals/history (Jr Dr/Nurse)
-            'visit_diagnose', // Permission to prescribe/diagnose (Sr Dr)
-            'admin_manage_roles'
-        ]
+        trim: true
     }],
-    isSystemRole: { type: Boolean, default: false } // Protects 'Super Admin' from deletion
+    // Default dashboard path for users with this role (e.g., '/admin', '/doctor/patients')
+    dashboardPath: {
+        type: String,
+        default: '/'
+    },
+    // Navigation links shown in the navbar for this role
+    navLinks: [navLinkSchema],
+    // System roles cannot be deleted (e.g., 'administrator')
+    isSystemRole: {
+        type: Boolean,
+        default: false
+    }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Role', roleSchema);
