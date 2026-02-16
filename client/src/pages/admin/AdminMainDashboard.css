@@ -1,8 +1,13 @@
+/* ============================================================
+   Admin Main Dashboard — Premium Light Theme
+   ============================================================ */
+
 .admin-main-dashboard {
     min-height: 100vh;
-    background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #16213e 100%);
+    background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);
     padding: 40px 24px;
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: #334155;
 }
 
 .admin-main-dashboard .dash-container {
@@ -19,21 +24,22 @@
 }
 
 .admin-main-dashboard .dash-header h1 {
-    color: #fff;
+    color: #1E293B;
     font-size: 28px;
     font-weight: 700;
     margin: 0;
+    letter-spacing: -0.02em;
 }
 
 .admin-main-dashboard .dash-header h1 span {
-    background: linear-gradient(135deg, #6c63ff, #a78bfa);
+    background: linear-gradient(135deg, #4F46E5, #818CF8);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
 
 .admin-main-dashboard .dash-header p {
-    color: #888;
+    color: #64748B;
     margin: 4px 0 0;
     font-size: 14px;
 }
@@ -50,28 +56,30 @@
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
 }
 
 .admin-main-dashboard .btn-primary {
-    background: linear-gradient(135deg, #6c63ff, #4834d4);
+    background: linear-gradient(135deg, #4F46E5, #4338CA);
     color: #fff;
+    box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
 }
 
 .admin-main-dashboard .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 20px rgba(108, 99, 255, 0.4);
+    box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);
 }
 
 .admin-main-dashboard .btn-outline {
-    background: transparent;
-    border: 1px solid #444 !important;
-    color: #ccc;
+    background: #FFFFFF;
+    border: 1px solid #CBD5E1 !important;
+    color: #64748B;
 }
 
 .admin-main-dashboard .btn-outline:hover {
-    border-color: #6c63ff !important;
-    color: #fff;
+    border-color: #4F46E5 !important;
+    color: #4F46E5;
+    background: #EEF2FF;
 }
 
 /* Stats Grid */
@@ -83,38 +91,43 @@
 }
 
 .admin-main-dashboard .stat-card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
     border-radius: 16px;
     padding: 24px;
     position: relative;
     overflow: hidden;
-    transition: all 0.3s;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
 .admin-main-dashboard .stat-card:hover {
-    border-color: rgba(108, 99, 255, 0.3);
-    transform: translateY(-2px);
+    border-color: #C7D2FE;
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+    /* Lift effect */
 }
 
 .admin-main-dashboard .stat-card .stat-icon {
     font-size: 32px;
     margin-bottom: 12px;
     display: block;
+    /* Icon color usually set inline or by parent, assuming good defaults or inherited */
 }
 
 .admin-main-dashboard .stat-card .stat-value {
     font-size: 32px;
     font-weight: 700;
-    color: #fff;
+    color: #1E293B;
     margin: 0;
     line-height: 1;
 }
 
 .admin-main-dashboard .stat-card .stat-label {
-    color: #888;
+    color: #64748B;
     font-size: 13px;
     margin: 6px 0 0;
+    font-weight: 500;
 }
 
 .admin-main-dashboard .stat-card .stat-accent {
@@ -124,16 +137,17 @@
     width: 80px;
     height: 80px;
     border-radius: 0 16px 0 80px;
-    opacity: 0.08;
+    opacity: 0.1;
+    /* Slightly more visible on light bg */
 }
 
 /* Section Title */
 .admin-main-dashboard .section-title {
-    color: #aaa;
+    color: #64748B;
     font-size: 13px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1.8px;
+    letter-spacing: 1.2px;
     margin-bottom: 18px;
 }
 
@@ -146,36 +160,38 @@
 }
 
 .admin-main-dashboard .action-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
     border-radius: 14px;
     padding: 22px 24px;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
     gap: 16px;
     text-decoration: none;
     position: relative;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
 }
 
 .admin-main-dashboard .action-card::after {
     content: '→';
     position: absolute;
     right: 20px;
-    color: #555;
+    color: #94A3B8;
     font-size: 18px;
-    transition: all 0.3s;
+    transition: all 0.2s;
 }
 
 .admin-main-dashboard .action-card:hover {
-    background: rgba(108, 99, 255, 0.08);
-    border-color: rgba(108, 99, 255, 0.25);
+    background: #F8FAFC;
+    border-color: #818CF8;
     transform: translateX(4px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
 .admin-main-dashboard .action-card:hover::after {
-    color: #6c63ff;
+    color: #4F46E5;
     transform: translateX(4px);
 }
 
@@ -188,32 +204,33 @@
     justify-content: center;
     font-size: 24px;
     flex-shrink: 0;
+    /* Background usually set inline, ensuring it works */
 }
 
 .admin-main-dashboard .action-content h3 {
-    color: #fff;
+    color: #1E293B;
     font-size: 15px;
     font-weight: 600;
     margin: 0 0 4px;
 }
 
 .admin-main-dashboard .action-content p {
-    color: #777;
+    color: #64748B;
     font-size: 12px;
     margin: 0;
 }
 
 /* Loading */
 .admin-main-dashboard .loading-pulse {
-    color: #666;
-    animation: pulse 1.5s infinite;
+    color: #64748B;
+    animation: pulse 1.5s infinite ease-in-out;
 }
 
 @keyframes pulse {
 
     0%,
     100% {
-        opacity: 0.4;
+        opacity: 0.5;
     }
 
     50% {

@@ -1,12 +1,13 @@
 /* ============================================================
-   Admin Roles — Dark Theme (Matching Admin Dashboard)
+   Admin Roles — Premium Light Theme
    ============================================================ */
 
 .roles-page-container {
     padding: 32px 24px;
-    background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #16213e 100%);
+    background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);
     min-height: 100vh;
     font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    color: #334155;
 }
 
 .roles-header {
@@ -15,14 +16,14 @@
 
 .roles-header h1 {
     font-size: 1.8rem;
-    color: #ffffff;
+    color: #1E293B;
     margin: 0 0 6px 0;
     font-weight: 700;
     letter-spacing: -0.02em;
 }
 
 .roles-header p {
-    color: #888;
+    color: #64748B;
     font-size: 0.95rem;
 }
 
@@ -41,17 +42,19 @@
 
 /* Card Style */
 .role-card {
-    background: rgba(255, 255, 255, 0.07);
+    background: #FFFFFF;
     border-radius: 20px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
     padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    transition: border-color 0.3s;
+    border: 1px solid #E2E8F0;
+    transition: all 0.3s ease;
     overflow: hidden;
 }
 
 .role-card:hover {
-    border-color: rgba(108, 99, 255, 0.2);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+    /* Slightly elevated on hover */
+    border-color: #C7D2FE;
 }
 
 .card-header {
@@ -59,26 +62,28 @@
     justify-content: space-between;
     align-items: center;
     padding: 20px 28px;
-    background: linear-gradient(135deg, rgba(108, 99, 255, 0.2), rgba(72, 52, 212, 0.12));
-    border-bottom: 1px solid rgba(108, 99, 255, 0.2);
+    background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+    /* Light Indigo */
+    border-bottom: 1px solid #D1D5DB;
 }
 
 .card-header h2 {
     font-size: 1.2rem;
-    color: #df0d86;
+    color: #4338CA;
+    /* Indigo 700 */
     margin: 0;
     font-weight: 700;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    text-shadow: none;
 }
 
 .role-count {
-    background: rgba(108, 99, 255, 0.15);
+    background: #FFFFFF;
     padding: 5px 14px;
     border-radius: 20px;
     font-size: 0.82rem;
-    color: #a78bfa;
+    color: #4F46E5;
     font-weight: 700;
-    border: 1px solid rgba(108, 99, 255, 0.2);
+    border: 1px solid #E0E7FF;
 }
 
 /* Form Styles */
@@ -91,7 +96,7 @@
     display: block;
     font-weight: 600;
     margin-bottom: 8px;
-    color: #e2e0ff;
+    color: #475569;
     font-size: 0.9rem;
 }
 
@@ -102,41 +107,41 @@
 .roles-page-container .form-group input[type="text"] {
     width: 100%;
     padding: 12px 16px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: #FFFFFF;
+    border: 1px solid #CBD5E1;
     border-radius: 12px;
     font-size: 0.95rem;
-    transition: all 0.3s;
-    color: #fff;
+    transition: all 0.2s ease;
+    color: #1E293B;
     box-sizing: border-box;
 }
 
 .roles-page-container .form-group input[type="text"]::placeholder {
-    color: #666;
+    color: #94A3B8;
 }
 
 .roles-page-container .form-group input[type="text"]:focus {
     outline: none;
-    border-color: rgba(108, 99, 255, 0.5);
-    box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.1);
-    background: rgba(255, 255, 255, 0.08);
+    border-color: #6366F1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    background: #FFFFFF;
 }
 
 /* Permissions Section */
 .permissions-section {
     margin: 20px 28px 28px;
-    background: rgba(255, 255, 255, 0.04);
+    background: #F8FAFC;
     padding: 18px;
     border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid #E2E8F0;
 }
 
 .section-label {
     display: block;
     font-weight: 700;
     margin-bottom: 16px;
-    color: #e2e0ff;
-    font-size: 0.9rem;
+    color: #475569;
+    font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -152,7 +157,7 @@
 }
 
 .permissions-list::-webkit-scrollbar-thumb {
-    background: rgba(108, 99, 255, 0.2);
+    background: #CBD5E1;
     border-radius: 3px;
 }
 
@@ -164,9 +169,9 @@
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.8px;
-    color: #888;
+    color: #64748B;
     margin-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid #E2E8F0;
     padding-bottom: 6px;
     font-weight: 600;
 }
@@ -176,12 +181,12 @@
     align-items: center;
     padding: 8px 10px;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: background 0.15s ease;
     border-radius: 8px;
 }
 
 .perm-item:hover {
-    background: rgba(108, 99, 255, 0.06);
+    background: #EEF2FF;
 }
 
 .perm-item input {
@@ -189,12 +194,13 @@
     height: 16px;
     margin-right: 12px;
     cursor: pointer;
-    accent-color: #6c63ff;
+    accent-color: #4F46E5;
 }
 
 .perm-text {
     font-size: 0.92rem;
-    color: #ddd;
+    color: #334155;
+    font-weight: 500;
 }
 
 /* Submit Button */
@@ -202,20 +208,20 @@
     width: calc(100% - 56px);
     margin: 20px 28px 28px;
     padding: 14px;
-    background: linear-gradient(135deg, #6c63ff 0%, #4834d4 100%);
+    background: linear-gradient(135deg, #4F46E5 0%, #4338CA 100%);
     color: white;
     border: none;
     border-radius: 12px;
     font-size: 1rem;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.3s;
-    box-shadow: 0 4px 16px rgba(108, 99, 255, 0.25);
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
 }
 
 .btn-create:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 28px rgba(108, 99, 255, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 12px -2px rgba(79, 70, 229, 0.3);
 }
 
 .btn-create:active {
@@ -223,8 +229,8 @@
 }
 
 .btn-create:disabled {
-    background: rgba(255, 255, 255, 0.08);
-    color: #666;
+    background: #E2E8F0;
+    color: #94A3B8;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
@@ -236,10 +242,10 @@
     justify-content: space-between;
     align-items: flex-start;
     padding: 18px 28px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    transition: all 0.2s;
+    border-bottom: 1px solid #F1F5F9;
+    transition: all 0.2s ease;
     border-radius: 0;
-    margin-bottom: 4px;
+    margin-bottom: 0;
 }
 
 .role-item:last-child {
@@ -247,7 +253,7 @@
 }
 
 .role-item:hover {
-    background: rgba(108, 99, 255, 0.06);
+    background: #F8FAFC;
 }
 
 .role-title-row {
@@ -260,23 +266,23 @@
 .role-item h3 {
     font-size: 1.1rem;
     margin: 0;
-    color: #ffffff;
+    color: #1E293B;
     font-weight: 600;
 }
 
 .perm-badge {
     font-size: 0.72rem;
-    background: rgba(108, 99, 255, 0.15);
-    color: #a78bfa;
+    background: #EEF2FF;
+    color: #4F46E5;
     padding: 3px 10px;
     border-radius: 12px;
     font-weight: 600;
-    border: 1px solid rgba(108, 99, 255, 0.2);
+    border: 1px solid #E0E7FF;
 }
 
 .role-desc {
     font-size: 0.88rem;
-    color: #888;
+    color: #64748B;
     margin: 0 0 10px 0;
 }
 
@@ -288,18 +294,18 @@
 
 .tag {
     font-size: 0.72rem;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #aaa;
+    background: #F1F5F9;
+    border: 1px solid #E2E8F0;
+    color: #64748B;
     padding: 3px 10px;
-    border-radius: 8px;
+    border-radius: 6px;
     font-weight: 500;
 }
 
 .tag.more {
-    background: rgba(108, 99, 255, 0.08);
-    color: #a78bfa;
-    border-color: rgba(108, 99, 255, 0.15);
+    background: #EEF2FF;
+    color: #4338CA;
+    border-color: #E0E7FF;
 }
 
 .btn-icon-delete {
@@ -307,17 +313,17 @@
     border: none;
     font-size: 1.2rem;
     cursor: pointer;
-    opacity: 0.3;
-    transition: all 0.2s;
+    opacity: 0.5;
+    transition: all 0.2s ease;
     padding: 6px;
     border-radius: 8px;
-    color: #fff;
+    color: #94A3B8;
 }
 
 .btn-icon-delete:hover {
     opacity: 1;
-    color: #ef4444;
-    background: rgba(239, 68, 68, 0.1);
+    color: #EF4444;
+    background: #FEF2F2;
 }
 
 /* Messages */
@@ -330,15 +336,15 @@
 }
 
 .status-message.success {
-    background: rgba(16, 185, 129, 0.1);
-    color: #34d399;
-    border: 1px solid rgba(16, 185, 129, 0.2);
+    background: #ECFDF5;
+    color: #059669;
+    border: 1px solid #10B981;
 }
 
 .status-message.error {
-    background: rgba(239, 68, 68, 0.1);
-    color: #f87171;
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: #FEF2F2;
+    color: #DC2626;
+    border: 1px solid #EF4444;
 }
 
 /* Auto-generated Nav Links Preview */
@@ -353,20 +359,20 @@
     align-items: center;
     gap: 12px;
     padding: 10px 14px;
-    background: rgba(108, 99, 255, 0.08);
-    border: 1px solid rgba(108, 99, 255, 0.15);
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
     border-radius: 10px;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
 }
 
 .auto-nav-item:hover {
-    background: rgba(108, 99, 255, 0.14);
-    border-color: rgba(108, 99, 255, 0.3);
+    background: #F1F5F9;
+    border-color: #CBD5E1;
 }
 
 .auto-nav-label {
     font-weight: 600;
-    color: #e2e0ff;
+    color: #334155;
     font-size: 0.92rem;
     min-width: 120px;
 }
@@ -374,8 +380,8 @@
 .auto-nav-path {
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 0.82rem;
-    color: #888;
-    background: rgba(0, 0, 0, 0.2);
+    color: #64748B;
+    background: #E2E8F0;
     padding: 3px 8px;
     border-radius: 6px;
     flex: 1;
@@ -386,7 +392,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    background: linear-gradient(135deg, #6c63ff, #4834d4);
+    background: linear-gradient(135deg, #4F46E5, #4338CA);
     color: #fff;
     padding: 3px 10px;
     border-radius: 10px;
@@ -396,10 +402,10 @@
 .auto-nav-empty {
     padding: 20px;
     text-align: center;
-    color: #666;
+    color: #94A3B8;
     font-size: 0.88rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px dashed rgba(255, 255, 255, 0.12);
+    background: #F8FAFC;
+    border: 1px dashed #CBD5E1;
     border-radius: 10px;
     font-style: italic;
 }
