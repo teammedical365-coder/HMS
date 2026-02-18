@@ -40,9 +40,17 @@ const AdminLogin = () => {
         // Store token in localStorage
         localStorage.setItem('token', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
-        
+
         // Navigate to administrator dashboard
-        navigate('/administrator');
+        // Navigate based on role
+        if (response.user.role === 'administrator') {
+          navigate('/administrator');
+        } else if (response.user.role === 'admin') {
+          navigate('/admin');
+        } else {
+          // Fallback for other roles logging in via admin portal
+          navigate('/my-dashboard');
+        }
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid email or password. Please try again.');
@@ -60,7 +68,7 @@ const AdminLogin = () => {
       <div className="auth-container">
         <div className="auth-card">
           {/* Back Button */}
-          <button 
+          <button
             onClick={handleGoBack}
             className="back-button"
             type="button"
@@ -107,8 +115,8 @@ const AdminLogin = () => {
               />
             </div>
 
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               className="auth-button"
               disabled={loading}
             >

@@ -183,10 +183,33 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
                     doctorId: req.user.id,
                     labId: labId || null,
                     testNames: appointment.labTests,
-                    status: 'pending'
+                    testStatus: 'PENDING',
+                    reportStatus: 'PENDING',
+                    paymentStatus: 'PENDING'
                 });
             }
         }
+
+        // --- NEW: Create Pharmacy Order ---
+        if (appointment.pharmacy && appointment.pharmacy.length > 0) {
+            const existingOrder = await PharmacyOrder.findOne({ appointmentId: appointment._id });
+            if (!existingOrder) {
+                await PharmacyOrder.create({
+                    appointmentId: appointment._id,
+                    patientId: appointment.patientId || 'N/A',
+                    userId: appointment.userId,
+                    doctorId: req.user.id,
+                    items: appointment.pharmacy.map(p => ({
+                        medicineName: p.medicineName,
+                        frequency: p.frequency,
+                        duration: p.duration
+                    })),
+                    orderStatus: 'Upcoming',
+                    paymentStatus: 'Pending'
+                });
+            }
+        }
+
         res.json({ success: true, message: 'Saved', appointment });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Update failed', error: error.message });

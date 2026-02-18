@@ -15,7 +15,7 @@ const Pharmacy = () => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
-    
+
     if (token && userData) {
       try {
         const user = JSON.parse(userData);
@@ -55,7 +55,7 @@ const Pharmacy = () => {
           return;
         }
       }
-      
+
       // If API call fails, use mock data (for development)
       console.log('API not available, using mock data');
       const userData = JSON.parse(localStorage.getItem('user'));
@@ -170,10 +170,10 @@ const Pharmacy = () => {
 
     return allOrders.filter(order => {
       if (userId && order.userId === userId) return true;
-      if (userEmail && order.patientEmail && 
-          order.patientEmail.toLowerCase() === userEmail.toLowerCase()) return true;
-      if (userName && order.patientName && 
-          order.patientName.toLowerCase() === userName.toLowerCase()) return true;
+      if (userEmail && order.patientEmail &&
+        order.patientEmail.toLowerCase() === userEmail.toLowerCase()) return true;
+      if (userName && order.patientName &&
+        order.patientName.toLowerCase() === userName.toLowerCase()) return true;
       return false;
     });
   };
@@ -181,7 +181,7 @@ const Pharmacy = () => {
   // Scroll animation logic
   useEffect(() => {
     window.scrollTo(0, 0);
-    
+
     const observerOptions = {
       root: null,
       rootMargin: '0px',
@@ -255,20 +255,20 @@ const Pharmacy = () => {
   return (
     <div className="pharmacy-page">
       <div className="content-wrapper">
-        
+
         {/* Header Section */}
         <section className="pharmacy-header animate-on-scroll slide-up">
           <Link to="/" className="back-link">
             <span className="back-arrow">←</span> Back to Home
           </Link>
-          
+
           <div className="header-content">
             <span className="badge">Pharmacy Orders</span>
             <h1>
               Your <span className="text-gradient">Pharmacy Orders</span>
             </h1>
             <p className="header-subtext">
-              View and track all your medication orders and purchases. 
+              View and track all your medication orders and purchases.
               Manage your prescriptions and delivery information.
             </p>
             {loggedInUser && (loggedInUser.name || loggedInUser.email) && (
@@ -356,31 +356,25 @@ const Pharmacy = () => {
                         <span className="meta-icon">📅</span>
                         <div>
                           <span className="meta-label">Order Date</span>
-                          <span className="meta-value">{formatDate(order.orderDate)}</span>
+                          <span className="meta-value">{formatDate(order.createdAt || order.orderDate)}</span>
                         </div>
                       </div>
-                      {order.deliveryDate && (
-                        <div className="meta-item">
-                          <span className="meta-icon">🚚</span>
-                          <div>
-                            <span className="meta-label">Delivery Date</span>
-                            <span className="meta-value">{formatDate(order.deliveryDate)}</span>
-                          </div>
-                        </div>
-                      )}
+
                       <div className="meta-item">
                         <span className="meta-icon">💰</span>
                         <div>
                           <span className="meta-label">Total Amount</span>
-                          <span className="meta-value">₹{order.totalAmount}</span>
+                          <span className="meta-value">
+                            {order.totalAmount ? `₹${order.totalAmount}` : 'Calculated at Pharmacy'}
+                          </span>
                         </div>
                       </div>
                       <div className="meta-item">
                         <span className="meta-icon">💳</span>
                         <div>
                           <span className="meta-label">Payment</span>
-                          <span className={`meta-value payment-${order.paymentStatus}`}>
-                            {order.paymentStatus === 'paid' ? '✓ Paid' : order.paymentStatus === 'refunded' ? '↩ Refunded' : '⏳ Pending'}
+                          <span className={`meta-value payment-${(order.paymentStatus || '').toLowerCase()}`}>
+                            {order.paymentStatus}
                           </span>
                         </div>
                       </div>
@@ -393,10 +387,14 @@ const Pharmacy = () => {
                         {order.items.map((item, idx) => (
                           <div key={idx} className="item-row">
                             <div className="item-info">
-                              <span className="item-name">{item.name}</span>
-                              <span className="item-quantity">Qty: {item.quantity}</span>
+                              <span className="item-name">{item.medicineName || item.name}</span>
+                              <span className="item-quantity">
+                                {item.quantity ? `Qty: ${item.quantity}` : `${item.frequency || ''} ${item.duration || ''}`}
+                              </span>
                             </div>
-                            <span className="item-price">₹{item.price}</span>
+                            <span className="item-price">
+                              {item.price ? `₹${item.price}` : ''}
+                            </span>
                           </div>
                         ))}
                       </div>

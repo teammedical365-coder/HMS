@@ -1,13 +1,14 @@
 /* ============================================================
-   Reception Dashboard — Premium Light Theme
+   Reception Dashboard — Premium Soft Theme
    ============================================================ */
 
 .reception-dashboard,
 .intake-full-page {
-    padding: 32px 24px;
-    background: linear-gradient(180deg, #f0fdf4 0%, #f8fafc 50%, #ffffff 100%);
+    padding: 32px;
+    background: #fdfdfe;
+    /* Very subtle warm white */
     min-height: 100vh;
-    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-family: 'Outfit', 'Inter', sans-serif;
 }
 
 /* Header */
@@ -15,13 +16,15 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 28px;
-    padding: 24px 28px;
+    margin-bottom: 32px;
+    padding: 24px 32px;
     background: #ffffff;
-    border-radius: 20px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
-    border: 1px solid rgba(226, 232, 240, 0.5);
+    border-radius: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    border: 1px solid #f1f5f9;
 }
+
+
 
 .reception-dashboard .dashboard-header h1 {
     color: #1e293b;

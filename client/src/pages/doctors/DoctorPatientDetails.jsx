@@ -87,19 +87,79 @@ const DoctorPatientDetails = () => {
     const generateCumulativePDF = (intake, pastHistory, currentData) => {
         const doc = new jsPDF();
         let y = 20;
-        doc.setFontSize(18); doc.text("CLINICAL RECORD", 105, y, { align: 'center' }); y += 15;
+
+        // HEADER
+        doc.setFontSize(22);
+        doc.setTextColor(41, 128, 185);
+        doc.text("PAWAN HARISH IVF CENTER", 105, y, { align: 'center' });
+        y += 10;
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text("Excellence in Fertility Care", 105, y, { align: 'center' });
+        y += 15;
+
+        doc.setLineWidth(0.5);
+        doc.setDrawColor(200);
+        doc.line(10, y, 200, y);
+        y += 10;
+
+        doc.setFontSize(18);
+        doc.setTextColor(0);
+        doc.text("CLINICAL RECORD / PRESCRIPTION", 105, y, { align: 'center' }); y += 15;
 
         // PROFILE SECTION
-        doc.setFillColor(230, 230, 230); doc.rect(14, y, 180, 8, 'F');
-        doc.setFontSize(12); doc.text("PATIENT PROFILE (Updated)", 16, y + 6); y += 12;
+        doc.setFillColor(240, 240, 240); doc.rect(14, y, 182, 35, 'F');
+        doc.setFontSize(11);
 
+        const cardX = 20;
+        let cardY = y + 8;
+
+        // Patient Identifiers
+        doc.setFont("helvetica", "bold");
+        doc.text(`Patient Name:`, cardX, cardY);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${intake.firstName || appointment.userId?.name || ''} ${intake.lastName || ''}`, cardX + 30, cardY);
+
+        doc.setFont("helvetica", "bold");
+        doc.text(`MRN / ID:`, cardX + 100, cardY);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${appointment.userId?.patientId || 'N/A'}`, cardX + 130, cardY);
+
+        cardY += 8;
+
+        doc.setFont("helvetica", "bold");
+        doc.text(`Age / Gender:`, cardX, cardY);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${intake.age || '-'} / ${intake.gender || '-'}`, cardX + 30, cardY);
+
+        doc.setFont("helvetica", "bold");
+        doc.text(`Date:`, cardX + 100, cardY);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${new Date().toLocaleDateString()}`, cardX + 130, cardY);
+
+        cardY += 8;
+
+        doc.setFont("helvetica", "bold");
+        doc.text(`Contact:`, cardX, cardY);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${appointment.userId?.phone || '-'}`, cardX + 30, cardY);
+
+        y += 45;
+
+        // MEDICAL SUMMARY TABLE
         const profileData = [
-            ["Name", `${intake.firstName || ''} ${intake.lastName || ''}`],
-            ["Complaint", intake.chiefComplaint || '-'],
-            ["History", intake.medicalHistory || '-'],
-            ["Obstetric", `G${intake.para || '-'} P${intake.liveBirth || '-'} A${intake.abortion || '-'}`]
+            ["Chief Complaint", intake.chiefComplaint || '-'],
+            ["Medical History", intake.medicalHistory || '-'],
+            ["Obstetric Hx", `G${intake.para || '-'} P${intake.liveBirth || '-'} A${intake.abortion || '-'}`]
         ];
-        autoTable(doc, { startY: y, body: profileData, theme: 'plain' });
+        autoTable(doc, {
+            startY: y,
+            head: [['Clinical Summary', 'Details']],
+            body: profileData,
+            theme: 'grid',
+            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+            columnStyles: { 0: { fontStyle: 'bold', width: 50 } }
+        });
         y = doc.lastAutoTable.finalY + 10;
 
         // PAST SESSIONS
@@ -140,31 +200,124 @@ const DoctorPatientDetails = () => {
 
             {/* LEFT: EDITABLE INTAKE / HISTORY */}
             <div className="left-panel" style={{ flex: 1, background: 'white', padding: '20px', overflowY: 'auto' }}>
-                <div className="tabs">
-                    <button className={`tab-btn ${activeTab === 'clinical' ? 'active' : ''}`} onClick={() => setActiveTab('clinical')}>Clinical Profile</button>
-                    <button className={`tab-btn ${activeTab === 'obstetric' ? 'active' : ''}`} onClick={() => setActiveTab('obstetric')}>Obstetric</button>
-                    <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>Past Visits</button>
+                {/* TAB NAVIGATION */}
+                <div className="tabs" style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '15px' }}>
+                    {['clinical', 'obstetric', 'menstrual', 'sexual', 'treatment', 'history'].map(tab => (
+                        <button
+                            key={tab}
+                            className={`tab-btn ${activeTab === tab ? 'active' : ''}`}
+                            onClick={() => setActiveTab(tab)}
+                            style={{ flex: '1 1 auto', fontSize: '0.9rem', padding: '8px' }}
+                        >
+                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        </button>
+                    ))}
                 </div>
 
+                {/* 1. CLINICAL PROFILE */}
                 {activeTab === 'clinical' && (
-                    <div className="form-section">
-                        <h4>Chief Complaint & History</h4>
-                        <textarea name="chiefComplaint" value={intakeData.chiefComplaint || ''} onChange={handleIntakeChange} placeholder="Chief Complaint" style={{ width: '100%', height: '60px' }} />
-                        <textarea name="medicalHistory" value={intakeData.medicalHistory || ''} onChange={handleIntakeChange} placeholder="Medical History (Diabetes, HTN...)" style={{ width: '100%', height: '60px', marginTop: '10px' }} />
-                        <label>Infertility Duration (Years)</label>
-                        <input name="infertilityDuration" value={intakeData.infertilityDuration || ''} onChange={handleIntakeChange} style={{ width: '100%' }} />
+                    <div className="form-section fade-in">
+                        <h4>📋 Clinical History</h4>
+                        <div className="input-group">
+                            <label>Age of Wife / Husband</label>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <input name="wifeAge" placeholder="Wife Age" value={intakeData.wifeAge || ''} onChange={handleIntakeChange} />
+                                <input name="husbandAge" placeholder="Husband Age" value={intakeData.husbandAge || ''} onChange={handleIntakeChange} />
+                            </div>
+                        </div>
+
+                        <label>Chief Complaint (Duration of Infertility)</label>
+                        <textarea name="chiefComplaint" value={intakeData.chiefComplaint || ''} onChange={handleIntakeChange} placeholder="e.g. Primary Infertility for 3 years..." />
+
+                        <label>Medical History (Diabetes, HTN, TB, Thyroid, Asthma, Epilepsy)</label>
+                        <textarea name="medicalHistory" value={intakeData.medicalHistory || ''} onChange={handleIntakeChange} placeholder="Check relevant history..." />
+
+                        <label>Surgical History (Laparoscopy, Appendectomy, etc.)</label>
+                        <textarea name="surgicalHistory" value={intakeData.surgicalHistory || ''} onChange={handleIntakeChange} />
+
+                        <label>Family History (Premature menopause, Genetic disorders)</label>
+                        <textarea name="familyHistory" value={intakeData.familyHistory || ''} onChange={handleIntakeChange} />
                     </div>
                 )}
 
+                {/* 2. OBSTETRIC HISTORY */}
                 {activeTab === 'obstetric' && (
-                    <div className="form-section">
-                        <h4>Obstetric Score</h4>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <input placeholder="G" name="para" value={intakeData.para || ''} onChange={handleIntakeChange} />
-                            <input placeholder="P" name="liveBirth" value={intakeData.liveBirth || ''} onChange={handleIntakeChange} />
-                            <input placeholder="A" name="abortion" value={intakeData.abortion || ''} onChange={handleIntakeChange} />
-                            <input placeholder="E" name="ectopic" value={intakeData.ectopic || ''} onChange={handleIntakeChange} />
+                    <div className="form-section fade-in">
+                        <h4>🤰 Obstetric History</h4>
+                        <div className="gpa-inputs" style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                            <div style={{ flex: 1 }}><label>Gravida (G)</label><input name="gravida" value={intakeData.gravida || ''} onChange={handleIntakeChange} /></div>
+                            <div style={{ flex: 1 }}><label>Para (P)</label><input name="para" value={intakeData.para || ''} onChange={handleIntakeChange} /></div>
+                            <div style={{ flex: 1 }}><label>Abortion (A)</label><input name="abortion" value={intakeData.abortion || ''} onChange={handleIntakeChange} /></div>
+                            <div style={{ flex: 1 }}><label>Living (L)</label><input name="living" value={intakeData.living || ''} onChange={handleIntakeChange} /></div>
                         </div>
+
+                        <label>Details of Previous Pregnancies (Year, Mode, Outcome, Complications)</label>
+                        <textarea name="obstetricDetails" value={intakeData.obstetricDetails || ''} onChange={handleIntakeChange} placeholder="1. 2018 - FTND - Male - Healthy..." style={{ height: '100px' }} />
+
+                        <label>History of Ectopic Pregnancy?</label>
+                        <input name="ectopicHistory" value={intakeData.ectopicHistory || ''} onChange={handleIntakeChange} placeholder="Details if any..." />
+                    </div>
+                )}
+
+                {/* 3. MENSTRUAL HISTORY */}
+                {activeTab === 'menstrual' && (
+                    <div className="form-section fade-in">
+                        <h4>🩸 Menstrual History</h4>
+                        <div className="input-row" style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                            <div style={{ flex: 1 }}>
+                                <label>Age of Menarche</label>
+                                <input name="menarcheAge" value={intakeData.menarcheAge || ''} onChange={handleIntakeChange} />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <label>LMP (Last Menstrual Period)</label>
+                                <input type="date" name="lmp" value={intakeData.lmp || ''} onChange={handleIntakeChange} />
+                            </div>
+                        </div>
+
+                        <label>Cycle Regularity</label>
+                        <select name="cycleRegularity" value={intakeData.cycleRegularity || ''} onChange={handleIntakeChange} style={{ width: '100%', padding: '8px', marginBottom: '10px' }}>
+                            <option value="">-- Select --</option>
+                            <option value="Regular">Regular (28-30 days)</option>
+                            <option value="Irregular">Irregular</option>
+                            <option value="Oligomenorrhea">Oligomenorrhea (Delayed)</option>
+                            <option value="Polymenorrhea">Polymenorrhea (Frequent)</option>
+                        </select>
+
+                        <label>Flow Duration (Days)</label>
+                        <input name="flowDuration" value={intakeData.flowDuration || ''} onChange={handleIntakeChange} placeholder="e.g. 3-4 days" />
+
+                        <label>Dysmenorrhea (Painful Periods)?</label>
+                        <input name="dysmenorrhea" value={intakeData.dysmenorrhea || ''} onChange={handleIntakeChange} placeholder="Mild / Moderate / Severe" />
+                    </div>
+                )}
+
+                {/* 4. SEXUAL / COITAL HISTORY */}
+                {activeTab === 'sexual' && (
+                    <div className="form-section fade-in">
+                        <h4>👩‍❤️‍👨 Sexual History</h4>
+                        <label>Frequency of Intercourse</label>
+                        <input name="coitalFrequency" value={intakeData.coitalFrequency || ''} onChange={handleIntakeChange} placeholder="e.g. 2-3 times/week" />
+
+                        <label>Dyspareunia (Pain during intercourse)?</label>
+                        <input name="dyspareunia" value={intakeData.dyspareunia || ''} onChange={handleIntakeChange} placeholder="Yes/No, details..." />
+
+                        <label>Use of Lubricants / Contraception?</label>
+                        <input name="contraception" value={intakeData.contraception || ''} onChange={handleIntakeChange} />
+                    </div>
+                )}
+
+                {/* 5. PREVIOUS INVESTIGATIONS & TREATMENTS */}
+                {activeTab === 'treatment' && (
+                    <div className="form-section fade-in">
+                        <h4>💊 Previous Treatments</h4>
+                        <label>Hysterosalpingography (HSG) Status</label>
+                        <input name="hsgStatus" value={intakeData.hsgStatus || ''} onChange={handleIntakeChange} placeholder="Patent / Blocked / Not done" />
+
+                        <label>Previous IUI Cycles</label>
+                        <textarea name="prevIUI" value={intakeData.prevIUI || ''} onChange={handleIntakeChange} placeholder="Number of cycles, stimulation details, outcome..." />
+
+                        <label>Previous IVF/ICSI Cycles</label>
+                        <textarea name="prevIVF" value={intakeData.prevIVF || ''} onChange={handleIntakeChange} placeholder="Date, No. of oocytes, Embryos, ET outcome..." style={{ height: '80px' }} />
                     </div>
                 )}
 
@@ -173,7 +326,14 @@ const DoctorPatientDetails = () => {
                         <h4>Previous Consultations</h4>
                         {history.map(h => (
                             <div key={h._id} style={{ padding: '10px', borderBottom: '1px solid #eee' }}>
-                                <b>{new Date(h.appointmentDate).toLocaleDateString()}</b>: {h.diagnosis || 'No Diagnosis'}
+                                <div><b>{new Date(h.appointmentDate).toLocaleDateString()}</b>: {h.diagnosis || 'No Diagnosis'}</div>
+                                {h.prescriptions && h.prescriptions.filter(p => p.type === 'lab_report').map((file, idx) => (
+                                    <div key={idx} style={{ marginTop: '5px', fontSize: '0.9rem' }}>
+                                        🧪 <a href={file.url} target="_blank" rel="noopener noreferrer" style={{ color: '#007bff' }}>
+                                            View Lab Report
+                                        </a>
+                                    </div>
+                                ))}
                             </div>
                         ))}
                     </div>

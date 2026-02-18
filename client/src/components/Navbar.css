@@ -1,132 +1,132 @@
-/* --- CSS Variables (Matching existing theme) --- */
+/* ============================================================
+   Navbar — Ultra Premium Glass Theme
+   ============================================================ */
 :root {
-  --primary-blue: #0A2647;
-  --primary-teal: #14C38E;
-  --accent-aqua: #00FFAB;
-  --bg-light: #F8F9FD;
-  --white: #FFFFFF;
-  --text-dark: #1E293B;
-  --text-gray: #64748B;
-  
-  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --nav-glass-bg: rgba(255, 255, 255, 0.85);
+  --nav-border: rgba(255, 255, 255, 0.6);
+  --nav-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+  --primary-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  --text-dark: #1e293b;
+  --text-light: #64748b;
+  --accent-color: #3b82f6;
 }
 
 /* --- Navbar Container --- */
 .navbar {
   width: 100%;
-  background: var(--white);
-  box-shadow: var(--shadow-sm);
+  background: var(--nav-glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--nav-shadow);
   position: sticky;
   top: 0;
   z-index: 1000;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  border-bottom: 1px solid var(--nav-border);
+  transition: all 0.3s ease;
 }
 
 .navbar-container {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 70px;
+  height: 80px;
 }
 
 /* --- Brand/Logo --- */
 .navbar-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   text-decoration: none;
-  color: var(--primary-blue);
-  font-size: 1.25rem;
-  font-weight: 700;
-  transition: all 0.3s ease;
+  font-size: 1.5rem;
+  font-weight: 800;
+  transition: transform 0.3s ease;
 }
 
 .navbar-brand:hover {
   transform: translateY(-2px);
 }
 
-/* Styling for the new logo image */
 .navbar-logo {
-  height: 42px; /* Optimized height for the navbar */
+  height: 48px;
   width: auto;
   object-fit: contain;
-  transition: transform 0.3s ease;
-}
-
-.navbar-brand:hover .navbar-logo {
-  transform: scale(1.05);
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
 }
 
 .brand-text {
-  background: linear-gradient(135deg, var(--primary-blue), var(--primary-teal));
+  background: var(--primary-gradient);
   -webkit-background-clip: text;
-  background-clip: text;
   -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
 }
 
 /* --- Navigation Links --- */
 .navbar-links {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .nav-link {
-  padding: 10px 16px;
+  padding: 12px 20px;
   text-decoration: none;
   color: var(--text-dark);
-  font-weight: 500;
-  font-size: 0.95rem;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-  position: relative;
+  font-weight: 600;
+  font-size: 1rem;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
 }
 
 .nav-link:hover {
-  background: rgba(20, 195, 142, 0.1);
-  color: var(--primary-teal);
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--accent-color);
+  transform: translateY(-1px);
 }
 
 .nav-link.active {
-  color: var(--primary-teal);
-  background: rgba(20, 195, 142, 0.1);
-  font-weight: 600;
-}
-
-.nav-link.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60%;
-  height: 2px;
-  background: linear-gradient(90deg, var(--primary-teal), var(--accent-aqua));
-  border-radius: 2px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+  color: var(--accent-color);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.1);
 }
 
 /* --- Settings Dropdown --- */
 .settings-dropdown {
   position: relative;
-  margin-left: 8px;
+  margin-left: 16px;
 }
 
-.settings-link {
+.dropdown-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 30px;
   cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+  transition: all 0.3s ease;
+}
+
+.dropdown-toggle:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
 }
 
 .dropdown-arrow {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
+  color: var(--text-light);
   transition: transform 0.3s ease;
 }
 
@@ -137,17 +137,18 @@
 /* Dropdown Menu */
 .dropdown-menu {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 12px);
   right: 0;
-  background: var(--white);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  min-width: 220px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.1);
+  min-width: 260px;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-10px);
-  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  transform: translateY(-10px) scale(0.95);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid white;
   overflow: hidden;
   z-index: 1001;
 }
@@ -155,120 +156,145 @@
 .settings-dropdown:hover .dropdown-menu {
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
 }
 
 /* Dropdown User Info */
 .dropdown-user-info {
-  padding: 16px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
-  background: var(--bg-light);
+  padding: 20px;
+  background: linear-gradient(to bottom, #f8fafc, #ffffff);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .user-name {
-  font-weight: 600;
-  color: var(--primary-blue);
-  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  font-size: 1.05rem;
 }
 
 .user-email {
-  font-size: 0.8rem;
-  color: var(--text-gray);
+  font-size: 0.85rem;
+  color: var(--text-light);
   word-break: break-all;
 }
 
 .user-role-badge {
-  display: inline-block;
+  display: inline-flex;
   font-size: 0.7rem;
   text-transform: uppercase;
-  background: var(--primary-teal);
+  font-weight: 800;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
   color: white;
-  padding: 2px 8px;
-  border-radius: 10px;
+  padding: 4px 10px;
+  border-radius: 20px;
   width: fit-content;
-  margin-top: 4px;
-  letter-spacing: 0.5px;
+  margin-top: 8px;
+  letter-spacing: 0.05em;
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
 }
 
 /* Dropdown Items */
 .dropdown-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 14px;
+  padding: 14px 20px;
   text-decoration: none;
   color: var(--text-dark);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   transition: all 0.2s ease;
   border: none;
-  background: none;
+  background: transparent;
   width: 100%;
   text-align: left;
   cursor: pointer;
-  font-family: inherit;
+  font-weight: 500;
 }
 
 .dropdown-item:hover {
-  background: rgba(20, 195, 142, 0.1);
-  color: var(--primary-teal);
+  background: #f8fafc;
+  color: var(--accent-color);
+  padding-left: 24px;
 }
 
 .dropdown-icon {
-  font-size: 1.1rem;
-  width: 20px;
-  text-align: center;
+  font-size: 1.2rem;
+  width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-light);
+  transition: color 0.2s;
+}
+
+.dropdown-item:hover .dropdown-icon {
+  color: var(--accent-color);
 }
 
 .logout-btn {
-  color: #EF4444;
-  border-top: 1px solid rgba(226, 232, 240, 0.8) !important;
+  color: #ef4444;
+  border-top: 1px solid rgba(226, 232, 240, 0.6) !important;
+  margin-top: 4px;
 }
 
 .logout-btn:hover {
-  background: rgba(239, 68, 68, 0.05);
-  color: #DC2626;
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.logout-btn .dropdown-icon {
+  color: #ef4444;
+}
+
+.logout-btn:hover .dropdown-icon {
+  color: #dc2626;
 }
 
 /* --- Responsive Design --- */
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .navbar-container {
-    padding: 0 16px;
-    height: 65px;
+    padding: 0 20px;
+    height: 70px;
+  }
+
+  .navbar-brand {
+    font-size: 1.2rem;
+    gap: 8px;
   }
 
   .navbar-logo {
     height: 36px;
   }
 
-  .navbar-brand {
-    font-size: 1.1rem;
-    gap: 8px;
-  }
-
   .nav-link {
     padding: 8px 12px;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
+  }
+
+  .brand-text {
+    display: none;
+  }
+
+  .settings-dropdown {
+    margin-left: 8px;
+  }
+}
+
+@media (max-width: 600px) {
+  .nav-link span {
+    display: none;
+  }
+
+  /* Hide text, verify icons exist */
+  .nav-link {
+    padding: 10px;
+    justify-content: center;
   }
 
   .navbar-links {
     gap: 4px;
-  }
-}
-
-@media (max-width: 640px) {
-  .navbar-links {
-    gap: 2px;
-  }
-
-  .nav-link {
-    padding: 8px;
-    font-size: 0.8rem;
-  }
-
-  .brand-text {
-    display: none; /* Only show logo on very small screens */
   }
 }

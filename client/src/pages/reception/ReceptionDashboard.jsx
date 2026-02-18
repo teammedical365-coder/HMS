@@ -30,7 +30,7 @@ const ReceptionDashboard = () => {
         // Identity
         title: 'Mrs.', firstName: '', middleName: '', lastName: '',
         dob: '', age: '', gender: 'Female', mobile: '', email: '',
-        address: '', aadhaar: '',
+        address: '', aadhaar: '', isAadhaarVerified: false,
 
         // Partner
         partnerTitle: 'Mr.', partnerFirstName: '', partnerLastName: '', partnerMobile: '',
@@ -43,6 +43,8 @@ const ReceptionDashboard = () => {
         doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: '',
         referralType: '', reasonForVisit: ''
     });
+
+    const [verifyingAadhaar, setVerifyingAadhaar] = useState(false);
 
     useEffect(() => {
         fetchAppointments();
@@ -102,7 +104,7 @@ const ReceptionDashboard = () => {
         setIntakeForm({
             title: 'Mrs.', firstName: '', middleName: '', lastName: '',
             dob: '', age: '', gender: 'Female', mobile: '', email: '',
-            address: '', aadhaar: '',
+            address: '', aadhaar: '', isAadhaarVerified: false,
             partnerTitle: 'Mr.', partnerFirstName: '', partnerLastName: '', partnerMobile: '',
             height: '', weight: '', bmi: '', bloodGroup: '',
             paymentStatus: 'Pending', consultationFee: '500',
@@ -123,6 +125,8 @@ const ReceptionDashboard = () => {
             lastName: getVal(patient.name).split(' ').slice(1).join(' '),
             mobile: getVal(patient.phone),
             email: getVal(patient.email),
+            aadhaar: p.aadhaar || '', // Load existing
+            isAadhaarVerified: p.aadhaar ? true : false, // Assume verified if exists for now, or check backend flag
             ...p, // Spread existing profile
             // Reset appointment specific fields for new booking
             doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: ''
@@ -144,6 +148,38 @@ const ReceptionDashboard = () => {
             }
         }
         setIntakeForm(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleAadhaarVerify = async () => {
+        if (!intakeForm.aadhaar || intakeForm.aadhaar.length !== 12) {
+            alert("Please enter a valid 12-digit Aadhaar number.");
+            return;
+        }
+
+        setVerifyingAadhaar(true);
+        try {
+            const res = await receptionAPI.verifyAadhaar(intakeForm.aadhaar);
+            if (res.success && res.data) {
+                const kyc = res.data;
+                alert(`✅ Aadhaar Verified: ${kyc.fullName}`);
+
+                // Auto-populate from KYC Data
+                setIntakeForm(prev => ({
+                    ...prev,
+                    isAadhaarVerified: true,
+                    firstName: kyc.fullName.split(' ')[0],
+                    lastName: kyc.fullName.split(' ').slice(1).join(' '),
+                    dob: kyc.dob,
+                    gender: kyc.gender,
+                    address: kyc.address
+                }));
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || "Verification Failed");
+            setIntakeForm(prev => ({ ...prev, isAadhaarVerified: false }));
+        } finally {
+            setVerifyingAadhaar(false);
+        }
     };
 
     const handleSave = async (e) => {
@@ -171,7 +207,7 @@ const ReceptionDashboard = () => {
                 throw new Error("Registration failed.");
             }
 
-            // 2. Update Profile (Vitals + Basic Info)
+            // 2. Update Profile (Vitals + Basic Info + Aadhaar)
             await receptionAPI.updateIntake(userId, intakeForm);
 
             // 3. Book Appointment
@@ -188,11 +224,18 @@ const ReceptionDashboard = () => {
                     alert("✅ Patient Registered & Assigned to Doctor!");
                     // Generate Simple Receipt
                     const doc = new jsPDF();
+                    doc.setFontSize(18);
                     doc.text("REGISTRATION SLIP", 105, 20, { align: 'center' });
+
+                    doc.setFontSize(12);
                     doc.text(`Patient: ${intakeForm.firstName} ${intakeForm.lastName}`, 20, 40);
-                    doc.text(`Doctor: Dr. ${doctorsList.find(d => d._id === intakeForm.doctor)?.name}`, 20, 50);
-                    doc.text(`Date: ${intakeForm.visitDate} @ ${intakeForm.visitTime}`, 20, 60);
-                    doc.text(`Fee: ${intakeForm.consultationFee}`, 20, 70);
+                    doc.text(`MRN / ID: ${regRes.user?.patientId || 'N/A'}`, 20, 48);
+                    doc.text(`Aadhaar Verified: ${intakeForm.isAadhaarVerified ? 'YES' : 'NO'}`, 120, 48);
+
+                    doc.text(`Doctor: Dr. ${doctorsList.find(d => d._id === intakeForm.doctor)?.name}`, 20, 58);
+                    doc.text(`Date: ${intakeForm.visitDate} @ ${intakeForm.visitTime}`, 20, 66);
+                    doc.text(`Fee: ${intakeForm.consultationFee}`, 20, 74);
+
                     doc.save("Receipt.pdf");
 
                     fetchAppointments();
@@ -220,8 +263,47 @@ const ReceptionDashboard = () => {
                 <div className="intake-container">
                     <form onSubmit={handleSave}>
                         <div className="form-section">
-                            <h4>1. Patient Identity</h4>
-                            <div className="form-row">
+                            <h4>1. Patient Identity & KYC</h4>
+
+                            {/* AADHAAR VERIFICATION ROW */}
+                            <div className="form-row" style={{ alignItems: 'flex-end', backgroundColor: '#f0fdf4', padding: '10px', borderRadius: '6px', border: '1px dashed #22c55e' }}>
+                                <div className="field" style={{ flex: 2 }}>
+                                    <label>Aadhaar Number (12-Digit) {intakeForm.isAadhaarVerified && '✅'}</label>
+                                    <input
+                                        name="aadhaar"
+                                        maxLength="12"
+                                        placeholder="Enter Aadhaar Number"
+                                        value={intakeForm.aadhaar}
+                                        onChange={handleInputChange}
+                                        disabled={intakeForm.isAadhaarVerified}
+                                        style={{ borderColor: intakeForm.isAadhaarVerified ? 'green' : '#ccc' }}
+                                    />
+                                </div>
+                                <div className="field" style={{ flex: 1 }}>
+                                    {!intakeForm.isAadhaarVerified ? (
+                                        <button
+                                            type="button"
+                                            onClick={handleAadhaarVerify}
+                                            className="btn-save"
+                                            style={{ width: '100%', backgroundColor: '#2563eb' }}
+                                            disabled={verifyingAadhaar}
+                                        >
+                                            {verifyingAadhaar ? 'Verifying...' : 'Verify Identity'}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIntakeForm({ ...intakeForm, isAadhaarVerified: false, aadhaar: '' })}
+                                            className="btn-cancel"
+                                            style={{ width: '100%', fontSize: '0.8rem' }}
+                                        >
+                                            Reset KYC
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="form-row" style={{ marginTop: '10px' }}>
                                 <div className="field"><label>First Name</label><input name="firstName" value={intakeForm.firstName} onChange={handleInputChange} /></div>
                                 <div className="field"><label>Last Name</label><input name="lastName" value={intakeForm.lastName} onChange={handleInputChange} /></div>
                                 <div className="field"><label>Mobile</label><input name="mobile" value={intakeForm.mobile} onChange={handleInputChange} /></div>

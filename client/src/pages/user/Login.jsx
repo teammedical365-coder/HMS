@@ -9,7 +9,7 @@ const Login = () => {
   const [searchParams] = useSearchParams();
   const dispatch = useAppDispatch();
   const { loading, error, isAuthenticated, user } = useAuth();
-  
+
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -24,12 +24,18 @@ const Login = () => {
       const userRole = user.role;
       const redirectMap = {
         admin: '/admin',
+        model_admin: '/admin', // In case backend usage varies
+        administrator: '/administrator',
         doctor: '/doctor/patients',
+        nurse: '/my-dashboard', // Routing nurses to the role dashboard
         lab: '/lab/dashboard',
         pharmacy: '/pharmacy/dashboard',
-        reception: '/reception/dashboard'
+        reception: '/reception/dashboard',
+        patient: '/dashboard'
       };
-      navigate(redirectMap[userRole] || searchParams.get('redirect') || '/dashboard');
+
+      const targetPath = redirectMap[userRole] || searchParams.get('redirect') || '/my-dashboard';
+      navigate(targetPath);
     }
   }, [isAuthenticated, user, navigate, searchParams]);
 
@@ -61,7 +67,7 @@ const Login = () => {
           <div id="login-box" className="auth-box show">
             <h2 style={{ marginBottom: '5px' }}>Welcome Back</h2>
             <p style={{ color: '#666', marginBottom: '30px' }}>Access your patient portal securely.</p>
-            
+
             {error && <div className="error-message" style={{ marginBottom: '20px' }}>{error}</div>}
 
             <form onSubmit={handleSubmit}>
@@ -69,13 +75,13 @@ const Login = () => {
                 <label>Email Address</label>
                 <div className="input-wrapper">
                   <i className="fa-regular fa-envelope"></i>
-                  <input 
-                    type="email" 
+                  <input
+                    type="email"
                     name="email"
-                    placeholder="e.g. name@example.com" 
+                    placeholder="e.g. name@example.com"
                     value={formData.email}
                     onChange={handleChange}
-                    required 
+                    required
                   />
                 </div>
               </div>
@@ -84,13 +90,13 @@ const Login = () => {
                 <label>Password</label>
                 <div className="input-wrapper">
                   <i className="fa-solid fa-lock"></i>
-                  <input 
-                    type="password" 
+                  <input
+                    type="password"
                     name="password"
-                    placeholder="••••••••" 
+                    placeholder="••••••••"
                     value={formData.password}
                     onChange={handleChange}
-                    required 
+                    required
                   />
                 </div>
               </div>

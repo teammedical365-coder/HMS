@@ -103,15 +103,7 @@ const Navbar = () => {
                     onClick={(e) => { e.stopPropagation(); }}
                   >
                     <span className="dropdown-icon">🔐</span>
-                    Login
-                  </NavLink>
-                  <NavLink
-                    to="/signup"
-                    className="dropdown-item"
-                    onClick={(e) => { e.stopPropagation(); }}
-                  >
-                    <span className="dropdown-icon">✍️</span>
-                    Sign Up
+                    Staff Login
                   </NavLink>
                 </>
               )}

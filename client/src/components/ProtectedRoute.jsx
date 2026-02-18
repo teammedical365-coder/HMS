@@ -25,14 +25,14 @@ const ProtectedRoute = ({ children, requiredPermissions = [], allowedRoles = [] 
       const hasPermission = requiredPermissions.some(perm => userPermissions.includes(perm));
       if (!hasPermission) {
         // Redirect to the user's own dashboard
-        const dashboardPath = user.dashboardPath || '/';
+        const dashboardPath = user.dashboardPath || '/my-dashboard';
         return <Navigate to={dashboardPath} replace />;
       }
     }
 
     // Legacy support: check role name strings (for backwards compatibility during transition)
     if (allowedRoles.length > 0 && !allowedRoles.includes(userRole.toLowerCase())) {
-      const dashboardPath = user.dashboardPath || '/';
+      const dashboardPath = user.dashboardPath || '/my-dashboard';
       return <Navigate to={dashboardPath} replace />;
     }
   }

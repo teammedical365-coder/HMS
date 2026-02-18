@@ -134,6 +134,10 @@ export const receptionAPI = {
     cancelAppointment: async (id) => {
         const response = await apiClient.patch(`/api/reception/appointments/${id}/cancel`);
         return response.data;
+    },
+    verifyAadhaar: async (aadhaarNumber) => {
+        const response = await apiClient.post('/api/reception/verify-aadhaar', { aadhaarNumber });
+        return response.data;
     }
 };
 
@@ -143,7 +147,7 @@ export const adminAPI = {
     getUsers: async () => (await apiClient.get('/api/admin/users')).data,
     createUser: async (data) => (await apiClient.post('/api/admin/users', data)).data,
     deleteUser: async (id) => (await apiClient.delete(`/api/admin/users/${id}`)).data,
-    updateUserRole: async (id, roleId) => (await apiClient.put(`/api/admin/users/${id}/role`, { roleId })).data,
+    updateUser: async (id, data) => (await apiClient.put(`/api/admin/users/${id}`, data)).data,
     getRoles: async () => (await apiClient.get('/api/admin/roles')).data,
     createRole: async (data) => (await apiClient.post('/api/admin/roles', data)).data,
     updateRole: async (id, data) => (await apiClient.put(`/api/admin/roles/${id}`, data)).data,

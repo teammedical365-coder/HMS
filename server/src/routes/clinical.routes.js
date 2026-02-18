@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const ClinicalVisit = require('../models/clinicalVisit.model');
 const { verifyToken } = require('../middleware/auth.middleware');
+const LabReport = require('../models/labReport.model');
+const PharmacyOrder = require('../models/pharmacyOrder.model');
 
 // 1. JUNIOR DR / NURSE: Create Visit & Add Vitals
 router.post('/intake', verifyToken, async (req, res) => {
@@ -47,7 +49,7 @@ router.get('/history/:patientId', verifyToken, async (req, res) => {
 // 3. SENIOR DOCTOR: Finalize Diagnosis
 router.post('/diagnose/:visitId', verifyToken, async (req, res) => {
     try {
-        const { diagnosis, prescription, notes } = req.body;
+        const { diagnosis, prescription, labTests, notes } = req.body;
 
         const visit = await ClinicalVisit.findByIdAndUpdate(
             req.params.visitId,
@@ -57,14 +59,59 @@ router.post('/diagnose/:visitId', verifyToken, async (req, res) => {
                     timestamp: new Date(),
                     diagnosis,
                     prescription,
+                    labTests, // Store here for history
+                    procedureAdvice: notes,
                     clinicalNotes: notes
                 },
                 status: 'completed'
             },
             { new: true }
         );
+
+        if (!visit) return res.status(404).json({ message: 'Visit not found' });
+
+        // --- AUTOMATIC CREATION OF LINKED RECORDS ---
+
+        // A. CREATE PHARMACY ORDER
+        if (prescription && prescription.length > 0) {
+            const pharmacyOrder = new PharmacyOrder({
+                appointmentId: visit.appointmentId, // Assuming visit has appointmentId
+                patientId: visit.patientId, // ObjectId of User
+                userId: visit.patientId,    // Duplicate for schema compatibility
+                doctorId: req.user.id,
+                items: prescription.map(p => ({
+                    medicineName: p.medicine,
+                    frequency: p.dosage, // Mapping dosage to frequency/dosage
+                    duration: p.duration
+                })),
+                orderStatus: 'Upcoming',
+                paymentStatus: 'Pending'
+            });
+            await pharmacyOrder.save();
+        }
+
+        // B. CREATE LAB REQUEST
+        if (labTests && labTests.length > 0) {
+            // Check if patientId is ObjectId or String in LabReport schema
+            // Schema says patientId: String (required) and userId: ObjectId.
+            // visual check of schema: patientId allows String.
+            const labReport = new LabReport({
+                appointmentId: visit.appointmentId,
+                patientId: visit.patientId.toString(), // Using User ID as string for now
+                userId: visit.patientId,
+                doctorId: req.user.id,
+                testNames: labTests, // Array of strings
+                testStatus: 'PENDING',
+                reportStatus: 'PENDING',
+                paymentStatus: 'PENDING'
+                // labId is left empty, to be assigned or picked up by any lab
+            });
+            await labReport.save();
+        }
+
         res.json({ success: true, data: visit });
     } catch (error) {
+        console.error("Diagnosis Error:", error);
         res.status(500).json({ message: error.message });
     }
 });

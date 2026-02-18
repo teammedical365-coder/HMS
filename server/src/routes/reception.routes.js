@@ -13,32 +13,97 @@ const verifyReception = (req, res, next) => {
     }
 };
 
-// 1. REGISTER
+// 1. REGISTER (WALK-IN)
 router.post('/register', verifyToken, verifyReception, async (req, res) => {
     try {
         const { name, email, phone } = req.body;
-        if (!name || !email || !phone) return res.status(400).json({ success: false, message: 'Required fields missing' });
+        // Phone is required for identification, Email is optional
+        if (!name || !phone) return res.status(400).json({ success: false, message: 'Name and Phone are required' });
 
-        let user = await User.findOne({ $or: [{ email }, { phone }] });
+        // Check if patient exists by Phone (or Email if provided)
+        const query = [{ phone }];
+        if (email) query.push({ email });
+
+        let user = await User.findOne({ $or: query });
 
         if (user) {
             if (name) user.name = name;
+            // Only update email if provided and different
+            if (email && email !== user.email) user.email = email;
+
+            // Ensure Patient ID exists (Backfill for legacy users)
+            if (!user.patientId) {
+                user.patientId = 'MRN-' + Date.now().toString().slice(-6);
+            }
+
             await user.save();
-            return res.status(200).json({ success: true, message: 'Patient found!', user });
+            return res.status(200).json({ success: true, message: 'Patient record updated!', user });
         }
 
+        // Create New Walk-in Patient
         const patientId = 'MRN-' + Date.now().toString().slice(-6);
+
         const newUser = new User({
-            name, email, phone,
-            password: phone.length >= 6 ? phone : phone + '123456',
-            role: 'user', patientId,
+            name,
+            phone,
+            email: email || undefined, // undefined to avoid unique constraint issues if sparse
+            // No password for walk-in patients
+            role: 'patient',
+            patientId,
             fertilityProfile: {}
         });
+
         await newUser.save();
-        res.status(201).json({ success: true, message: 'Registered!', user: newUser });
+        res.status(201).json({ success: true, message: 'Patient registered successfully!', user: newUser });
     } catch (error) {
         console.error("Register Error:", error);
+        // Handle duplicate key error gracefully
+        if (error.code === 11000) {
+            return res.status(400).json({ success: false, message: 'Patient with this email/phone already exists.' });
+        }
         res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 1.5 VERIFY AADHAAR (SIMULATED GOI API)
+router.post('/verify-aadhaar', verifyToken, verifyReception, async (req, res) => {
+    try {
+        const { aadhaarNumber } = req.body;
+
+        // Strict Validation: 12 digits
+        if (!/^\d{12}$/.test(aadhaarNumber)) {
+            return res.status(400).json({ success: false, message: 'Invalid Format. Aadhaar must be 12 digits.' });
+        }
+
+        // --- SIMULATED EXTERNAL API CALL ---
+        // In a real app, this would call UIDAI or a KYC partner API
+
+        // Simulate Check: Reject "9999..." as invalid for testing
+        if (aadhaarNumber.startsWith('9999')) {
+            return res.status(400).json({ success: false, message: 'Verification Failed: Invalid Aadhaar Number (Simulated rejection).' });
+        }
+
+        // Simulate Success Response with Mock Data
+        const mockKYCData = {
+            verified: true,
+            fullName: "Aadhaar Verified User", // In real scenario, this comes from API
+            dob: "01/01/1990",
+            gender: "Female",
+            address: "123, Simulated Street, New Delhi, 110001",
+            photo: "https://via.placeholder.com/150" // Simulated photo
+        };
+
+        // Check if Aadhaar is already linked to another patient
+        const existingUser = await User.findOne({ aadhaarNumber });
+        if (existingUser) {
+            return res.status(409).json({ success: false, message: `Aadhaar already linked to patient: ${existingUser.name} (${existingUser.phone})` });
+        }
+
+        res.json({ success: true, message: 'Aadhaar Verified Successfully', data: mockKYCData });
+
+    } catch (error) {
+        console.error("Aadhaar Verification Error:", error);
+        res.status(500).json({ success: false, message: 'External API Error' });
     }
 });
 
@@ -47,10 +112,17 @@ router.get('/search-patients', verifyToken, verifyReception, async (req, res) =>
     try {
         const { query } = req.query;
         if (!query || query.length < 2) return res.json({ success: true, patients: [] });
+
         const patients = await User.find({
-            role: 'user',
-            $or: [{ name: { $regex: query, $options: 'i' } }, { phone: { $regex: query, $options: 'i' } }, { patientId: { $regex: query, $options: 'i' } }]
+            // Search both legacy 'user' and new 'patient' roles
+            role: { $in: ['user', 'patient'] },
+            $or: [
+                { name: { $regex: query, $options: 'i' } },
+                { phone: { $regex: query, $options: 'i' } },
+                { patientId: { $regex: query, $options: 'i' } }
+            ]
         }).select('name phone email patientId fertilityProfile');
+
         res.json({ success: true, patients });
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 });

@@ -35,7 +35,8 @@ const clinicalVisitSchema = new mongoose.Schema({
             dosage: String,
             duration: String,
             instruction: String
-        }]
+        }],
+        labTests: [{ type: String }]
     },
 
     status: {

@@ -61,7 +61,8 @@ async function buildUserResponse(user) {
         patientId: user.patientId || null,
         permissions: roleData ? roleData.permissions : [],
         dashboardPath: roleData ? roleData.dashboardPath : '/',
-        navLinks: roleData ? roleData.navLinks : []
+        navLinks: roleData ? roleData.navLinks : [],
+        avatar: user.avatar || null
     };
 }
 
@@ -279,94 +280,119 @@ router.get('/users', verifyAdminOrAdministrator, async (req, res) => {
     }
 });
 
-// Update user role — accepts a roleId (ObjectId) from the DB
-router.put('/users/:userId/role', verifyAdminOrAdministrator, async (req, res) => {
+// Update user details (Name, Email, Role, Avatar, etc.)
+router.put('/users/:userId', verifyAdminOrAdministrator, async (req, res) => {
     try {
         const { userId } = req.params;
-        const { roleId } = req.body;
+        const { name, email, phone, roleId, avatar, specialty } = req.body;
 
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-        // Cannot modify administrator accounts unless you are an administrator
+        // Security Checks
         if (user.role === 'administrator' && req.user.role !== 'administrator') {
             return res.status(403).json({ success: false, message: 'Cannot modify administrator accounts' });
         }
-
-        // Cannot change your own role
         if (userId === String(req.user._id)) {
-            return res.status(403).json({ success: false, message: 'Cannot change your own role' });
+            // Self-update is allowed, but restricted (e.g. usually can't change own role)
+            // For simplicity in this admin tool, we'll allow updates but block role change if needed.
+            if (roleId && roleId !== user.role) {
+                return res.status(403).json({ success: false, message: 'Cannot change your own role' });
+            }
         }
 
-        // Validate the roleId exists in DB
-        if (!roleId) {
-            return res.status(400).json({ success: false, message: 'roleId is required' });
-        }
+        // 1. Update Basic Fields
+        if (name) user.name = name;
+        if (email) user.email = email;
+        if (phone) user.phone = phone;
+        if (avatar !== undefined) user.avatar = avatar;
 
-        const roleDoc = await Role.findById(roleId);
-        if (!roleDoc) {
-            return res.status(400).json({ success: false, message: 'Invalid role. Role not found in database.' });
-        }
-
-        // Store old role name for entity profile cleanup
+        // 2. Role Change Logic (if roleId is provided and different)
+        let roleChanged = false;
         let oldRoleName = null;
-        if (user.role && user.role !== 'administrator') {
-            const oldRole = await Role.findById(user.role);
-            oldRoleName = oldRole ? oldRole.name.toLowerCase() : null;
+        let newRoleName = null;
+
+        if (roleId && String(roleId) !== String(user.role)) {
+            const roleDoc = await Role.findById(roleId);
+            if (!roleDoc) return res.status(400).json({ success: false, message: 'Invalid role' });
+
+            // Get old role name
+            if (user.role && user.role !== 'administrator') {
+                const oldRole = await Role.findById(user.role);
+                oldRoleName = oldRole ? oldRole.name.toLowerCase() : null;
+            }
+
+            user.role = roleId;
+            newRoleName = roleDoc.name.toLowerCase();
+            roleChanged = true;
+        } else if (user.role && user.role !== 'administrator') {
+            // Keep track of current role name for profile updates even if role didn't change
+            const roleDoc = await Role.findById(user.role);
+            newRoleName = roleDoc ? roleDoc.name.toLowerCase() : null;
         }
 
-        // Update to new role
-        user.role = roleId;
         await user.save();
 
-        // Auto-create entity profiles based on role name
-        const newRoleName = roleDoc.name.toLowerCase();
+        // 3. Update Linked Entity Profiles
         try {
-            if (newRoleName === 'doctor' && oldRoleName !== 'doctor') {
-                // Check if doctor profile already exists
-                const existingDoctor = await Doctor.findOne({ userId: user._id });
-                if (!existingDoctor) {
+            // If role changed to Doctor, or if it IS a Doctor and name/phone changed
+            if (newRoleName === 'doctor') {
+                let doctorProfile = await Doctor.findOne({ userId: user._id });
+
+                if (!doctorProfile && roleChanged) {
+                    // Create new profile
                     let doctorId = nanoid(10);
                     while (await Doctor.findOne({ doctorId })) doctorId = nanoid(10);
-                    const defaultAvailability = {
-                        monday: { available: false, startTime: '09:00', endTime: '17:00' },
-                        tuesday: { available: false, startTime: '09:00', endTime: '17:00' },
-                        wednesday: { available: false, startTime: '09:00', endTime: '17:00' },
-                        thursday: { available: false, startTime: '09:00', endTime: '17:00' },
-                        friday: { available: false, startTime: '09:00', endTime: '17:00' },
-                        saturday: { available: false, startTime: '09:00', endTime: '17:00' },
-                        sunday: { available: false, startTime: '09:00', endTime: '17:00' }
-                    };
-                    await Doctor.create({
-                        doctorId, userId: user._id, name: user.name,
-                        email: user.email, phone: user.phone, availability: defaultAvailability,
-                        specialty: 'General', consultationFee: 0
+                    doctorProfile = new Doctor({
+                        doctorId, userId: user._id,
+                        availability: {
+                            monday: { available: false, startTime: '09:00', endTime: '17:00' },
+                            tuesday: { available: false, startTime: '09:00', endTime: '17:00' },
+                            wednesday: { available: false, startTime: '09:00', endTime: '17:00' },
+                            thursday: { available: false, startTime: '09:00', endTime: '17:00' },
+                            friday: { available: false, startTime: '09:00', endTime: '17:00' },
+                            saturday: { available: false, startTime: '09:00', endTime: '17:00' },
+                            sunday: { available: false, startTime: '09:00', endTime: '17:00' }
+                        }
                     });
                 }
-            } else if (newRoleName === 'lab' || newRoleName === 'lab technician') {
-                const existingLab = await Lab.findOne({ userId: user._id });
-                if (!existingLab) {
-                    await Lab.create({ name: user.name, email: user.email, phone: user.phone, userId: user._id });
-                }
-            } else if (newRoleName === 'pharmacy' || newRoleName === 'pharmacist') {
-                const existingPharmacy = await Pharmacy.findOne({ email: user.email });
-                if (!existingPharmacy) {
-                    await Pharmacy.create({ name: user.name, email: user.email, phone: user.phone, userId: user._id });
-                }
-            } else if (newRoleName === 'reception' || newRoleName === 'receptionist') {
-                const existingReception = await Reception.findOne({ userId: user._id });
-                if (!existingReception) {
-                    await Reception.create({ userId: user._id });
+
+                if (doctorProfile) {
+                    if (name) doctorProfile.name = name;
+                    if (email) doctorProfile.email = email;
+                    if (phone) doctorProfile.phone = phone;
+                    if (specialty) doctorProfile.specialty = specialty;
+                    await doctorProfile.save();
                 }
             }
+
+            // Lab / Pharmacy / Reception Updates
+            if (['lab', 'lab technician'].includes(newRoleName)) {
+                await Lab.findOneAndUpdate({ userId: user._id }, { name, email, phone }, { upsert: true });
+            }
+            if (['pharmacy', 'pharmacist'].includes(newRoleName)) {
+                await Pharmacy.findOneAndUpdate({ userId: user._id }, { name, email, phone }, { upsert: true });
+            }
+            // Reception usually just needs userId, but if we store name...
+            if (['reception', 'receptionist'].includes(newRoleName)) {
+                // Reception model might be minimal
+                const reception = await Reception.findOne({ userId: user._id });
+                if (!reception && roleChanged) await Reception.create({ userId: user._id });
+            }
+
+            // Cleanup old profiles if role changed drastically? 
+            // (Optional: for now we keep old profiles to prevent data loss, unless explicitly requested)
+
         } catch (profileError) {
-            console.error("Error creating linked profile:", profileError);
+            console.error("Error updating linked profile:", profileError);
         }
 
         const updatedUser = await buildUserResponse(user);
-        res.json({ success: true, message: 'User role updated successfully', user: updatedUser });
+        res.json({ success: true, message: 'User updated successfully', user: updatedUser });
+
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error updating user role', error: error.message });
+        console.error("Update User Error:", error);
+        res.status(500).json({ success: false, message: 'Error updating user', error: error.message });
     }
 });
 
@@ -409,7 +435,7 @@ router.delete('/users/:userId', verifyAdminOrAdministrator, async (req, res) => 
 // Create User (by admin) — uses roleId from the DB
 router.post('/users', verifyAdminOrAdministrator, async (req, res) => {
     try {
-        const { name, email, password, phone, roleId, services } = req.body;
+        const { name, email, password, phone, roleId, services, avatar } = req.body;
 
         if (!name || !email || !password || !roleId) {
             return res.status(400).json({ success: false, message: 'Name, email, password, and roleId are required' });
@@ -431,7 +457,8 @@ router.post('/users', verifyAdminOrAdministrator, async (req, res) => {
             password,
             phone: phone || '',
             role: roleId,
-            services: roleDoc.name.toLowerCase() === 'doctor' ? services : []
+            services: roleDoc.name.toLowerCase() === 'doctor' ? services : [],
+            avatar: avatar || null
         });
 
         await user.save();
