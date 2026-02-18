@@ -21,7 +21,7 @@ const patientRoutes = require('./routes/patient.routes');
 const clinicalRoutes = require('./routes/clinical.routes');
 
 const app = express();
-
+// ughfgh
 // --- CORS CONFIGURATION ---
 app.use(cors({
     origin: function (origin, callback) {
