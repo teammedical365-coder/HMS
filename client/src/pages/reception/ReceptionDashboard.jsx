@@ -45,6 +45,8 @@ const ReceptionDashboard = () => {
     });
 
     const [verifyingAadhaar, setVerifyingAadhaar] = useState(false);
+    const [otpSent, setOtpSent] = useState(false);
+    const [aadhaarOtp, setAadhaarOtp] = useState('');
 
     useEffect(() => {
         fetchAppointments();
@@ -134,6 +136,19 @@ const ReceptionDashboard = () => {
         setViewMode('intake');
     };
 
+    const handleSearch = async (e) => {
+        const query = e.target.value;
+        setSearchQuery(query);
+        if (query.length > 2) {
+            try {
+                const res = await receptionAPI.searchPatients(query);
+                if (res.success) setSearchResults(res.patients);
+            } catch (err) { console.error(err); }
+        } else {
+            setSearchResults([]);
+        }
+    };
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         // BMI Calculation
@@ -150,20 +165,37 @@ const ReceptionDashboard = () => {
         setIntakeForm(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleAadhaarVerify = async () => {
+    const handleSendOTP = async () => {
         if (!intakeForm.aadhaar || intakeForm.aadhaar.length !== 12) {
             alert("Please enter a valid 12-digit Aadhaar number.");
             return;
         }
+        setVerifyingAadhaar(true);
+        try {
+            const res = await receptionAPI.sendAadhaarOTP(intakeForm.aadhaar);
+            if (res.success) {
+                setOtpSent(true);
+                alert(res.message); // "OTP Sent (Use 123456)"
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || "Failed to send OTP");
+            setOtpSent(false);
+        } finally {
+            setVerifyingAadhaar(false);
+        }
+    };
+
+    const handleVerifyOTP = async () => {
+        if (!aadhaarOtp) return alert("Please enter the OTP sent to mobile.");
 
         setVerifyingAadhaar(true);
         try {
-            const res = await receptionAPI.verifyAadhaar(intakeForm.aadhaar);
+            const res = await receptionAPI.verifyAadhaarOTP(intakeForm.aadhaar, aadhaarOtp);
             if (res.success && res.data) {
                 const kyc = res.data;
-                alert(`✅ Aadhaar Verified: ${kyc.fullName}`);
+                alert(`✅ Verification Successful: ${kyc.fullName}`);
 
-                // Auto-populate from KYC Data
+                // Auto-populate
                 setIntakeForm(prev => ({
                     ...prev,
                     isAadhaarVerified: true,
@@ -173,10 +205,12 @@ const ReceptionDashboard = () => {
                     gender: kyc.gender,
                     address: kyc.address
                 }));
+                // Reset OTP UI
+                setOtpSent(false);
+                setAadhaarOtp('');
             }
         } catch (err) {
-            alert(err.response?.data?.message || "Verification Failed");
-            setIntakeForm(prev => ({ ...prev, isAadhaarVerified: false }));
+            alert(err.response?.data?.message || "Invalid OTP");
         } finally {
             setVerifyingAadhaar(false);
         }
@@ -266,38 +300,82 @@ const ReceptionDashboard = () => {
                             <h4>1. Patient Identity & KYC</h4>
 
                             {/* AADHAAR VERIFICATION ROW */}
-                            <div className="form-row" style={{ alignItems: 'flex-end', backgroundColor: '#f0fdf4', padding: '10px', borderRadius: '6px', border: '1px dashed #22c55e' }}>
+                            <div className="form-row" style={{ alignItems: 'flex-end', backgroundColor: '#f0fdf4', padding: '15px', borderRadius: '8px', border: '1px dashed #22c55e', gap: '15px' }}>
+                                {/* AADHAAR INPUT */}
                                 <div className="field" style={{ flex: 2 }}>
-                                    <label>Aadhaar Number (12-Digit) {intakeForm.isAadhaarVerified && '✅'}</label>
+                                    <label>Aadhaar Number {intakeForm.isAadhaarVerified && '✅ Verified'}</label>
                                     <input
                                         name="aadhaar"
                                         maxLength="12"
-                                        placeholder="Enter Aadhaar Number"
+                                        placeholder="Enter 12-digit Aadhaar"
                                         value={intakeForm.aadhaar}
                                         onChange={handleInputChange}
-                                        disabled={intakeForm.isAadhaarVerified}
-                                        style={{ borderColor: intakeForm.isAadhaarVerified ? 'green' : '#ccc' }}
+                                        disabled={intakeForm.isAadhaarVerified || otpSent}
+                                        style={{
+                                            borderColor: intakeForm.isAadhaarVerified ? 'green' : '#ccc',
+                                            backgroundColor: intakeForm.isAadhaarVerified ? '#e6fffa' : 'white',
+                                            fontWeight: 'bold'
+                                        }}
                                     />
                                 </div>
+
+                                {/* OTP INPUT (Conditional) */}
+                                {otpSent && !intakeForm.isAadhaarVerified && (
+                                    <div className="field verified-anim" style={{ flex: 1 }}>
+                                        <label>Enter OTP</label>
+                                        <input
+                                            type="text"
+                                            maxLength="6"
+                                            placeholder="Ex: 123456"
+                                            value={aadhaarOtp}
+                                            onChange={(e) => setAadhaarOtp(e.target.value)}
+                                            style={{ borderColor: '#2563eb' }}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* ACTION BUTTONS */}
                                 <div className="field" style={{ flex: 1 }}>
                                     {!intakeForm.isAadhaarVerified ? (
-                                        <button
-                                            type="button"
-                                            onClick={handleAadhaarVerify}
-                                            className="btn-save"
-                                            style={{ width: '100%', backgroundColor: '#2563eb' }}
-                                            disabled={verifyingAadhaar}
-                                        >
-                                            {verifyingAadhaar ? 'Verifying...' : 'Verify Identity'}
-                                        </button>
+                                        !otpSent ? (
+                                            <button
+                                                type="button"
+                                                onClick={handleSendOTP}
+                                                className="btn-save"
+                                                style={{ width: '100%', backgroundColor: '#2563eb' }}
+                                                disabled={verifyingAadhaar || !intakeForm.aadhaar}
+                                            >
+                                                {verifyingAadhaar ? 'Sending...' : 'Send OTP'}
+                                            </button>
+                                        ) : (
+                                            <div style={{ display: 'flex', gap: '5px' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleVerifyOTP}
+                                                    className="btn-save"
+                                                    style={{ flex: 2, backgroundColor: '#059669' }}
+                                                    disabled={verifyingAadhaar}
+                                                >
+                                                    {verifyingAadhaar ? '...' : 'Verify OTP'}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setOtpSent(false); setAadhaarOtp(''); }}
+                                                    className="btn-cancel"
+                                                    style={{ flex: 1, padding: '0 5px', fontSize: '0.8rem', height: '100%' }}
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        )
                                     ) : (
                                         <button
                                             type="button"
                                             onClick={() => setIntakeForm({ ...intakeForm, isAadhaarVerified: false, aadhaar: '' })}
                                             className="btn-cancel"
-                                            style={{ width: '100%', fontSize: '0.8rem' }}
+                                            style={{ width: '100%' }}
                                         >
-                                            Reset KYC
+                                            Reset / Clear
                                         </button>
                                     )}
                                 </div>
@@ -372,7 +450,45 @@ const ReceptionDashboard = () => {
         <div className="reception-dashboard">
             <div className="dashboard-header">
                 <h1>Reception Desk</h1>
+                <button className="btn-save" onClick={handleNewWalkIn} style={{ padding: '10px 20px', fontSize: '1rem' }}>+ New Patient Registration</button>
             </div>
+
+            {/* SEARCH SECTION */}
+            <div className="search-section card" style={{ padding: '20px', marginBottom: '20px', position: 'relative' }}>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    <input
+                        type="text"
+                        placeholder="🔍 Search Patient by Name, Mobile or MRN..."
+                        value={searchQuery}
+                        onChange={handleSearch}
+                        style={{ flex: 1, padding: '12px', fontSize: '1rem', borderRadius: '6px', border: '1px solid #ddd' }}
+                    />
+                </div>
+                {searchResults.length > 0 && (
+                    <div className="search-results-dropdown" style={{
+                        position: 'absolute', top: '70px', left: '20px', right: '20px',
+                        background: 'white', border: '1px solid #eee', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                        zIndex: 1000, maxHeight: '300px', overflowY: 'auto', borderRadius: '8px'
+                    }}>
+                        {searchResults.map(p => (
+                            <div key={p._id} style={{ padding: '12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>{p.name} <span style={{ color: '#666', fontSize: '0.9rem' }}>({p.patientId || 'N/A'})</span></div>
+                                    <div style={{ fontSize: '0.9rem', color: '#888' }}>📱 {p.phone}</div>
+                                </div>
+                                <button
+                                    onClick={() => handleEditPatient(p)}
+                                    className="btn-save"
+                                    style={{ padding: '6px 15px', fontSize: '0.9rem' }}
+                                >
+                                    Select / Book
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             {/* Widget Area */}
             <div className="availability-widget card">
                 <h3>📅 Quick Check Availability</h3>

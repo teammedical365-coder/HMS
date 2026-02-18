@@ -6,11 +6,35 @@ const Doctor = require('../models/doctor.model'); // Required to fetch doctor de
 const { verifyToken } = require('../middleware/auth.middleware');
 
 const verifyReception = (req, res, next) => {
-    if (req.user && (req.user.role === 'reception' || req.user.role === 'admin' || req.user.role === 'administrator')) {
-        next();
-    } else {
-        return res.status(403).json({ success: false, message: 'Access denied: Reception access only' });
+    if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
+
+    const userRole = req.user.role;
+    const dynamicRoleName = req.user._roleData?.name;
+    const permissions = req.user._roleData?.permissions || [];
+
+    // Normalize
+    const roleStr = typeof userRole === 'string' ? userRole.toLowerCase() : '';
+    const dynRoleStr = dynamicRoleName ? dynamicRoleName.toLowerCase() : '';
+
+    // Expanded Allowed Roles list (Substring Check)
+    const allowed = ['reception', 'admin', 'administrator', 'staff', 'front'];
+
+    const hasAccess = allowed.some(keyword => dynRoleStr.includes(keyword) || roleStr.includes(keyword));
+
+    if (hasAccess) {
+        return next();
     }
+
+    // Also check Permissions if available
+    if (permissions.includes('reception_access') || permissions.includes('*')) {
+        return next();
+    }
+
+    // Expanded debug info in error for troubleshooting
+    return res.status(403).json({
+        success: false,
+        message: `Access denied: Reception access only. Your role: ${dynamicRoleName || userRole}`
+    });
 };
 
 // 1. REGISTER (WALK-IN)
@@ -65,45 +89,52 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
     }
 });
 
-// 1.5 VERIFY AADHAAR (SIMULATED GOI API)
-router.post('/verify-aadhaar', verifyToken, verifyReception, async (req, res) => {
+// 1.5 AADHAAR VERIFICATION (OTP FLOW - SIMULATED)
+router.post('/send-aadhaar-otp', verifyToken, verifyReception, async (req, res) => {
     try {
         const { aadhaarNumber } = req.body;
+        if (!/^\d{12}$/.test(aadhaarNumber)) return res.status(400).json({ success: false, message: 'Invalid Aadhaar Format (12 digits required)' });
 
-        // Strict Validation: 12 digits
-        if (!/^\d{12}$/.test(aadhaarNumber)) {
-            return res.status(400).json({ success: false, message: 'Invalid Format. Aadhaar must be 12 digits.' });
+        // Simulate Check: Reject "9999..."
+        if (aadhaarNumber.startsWith('9999')) return res.status(400).json({ success: false, message: 'Verification Failed: Invalid Aadhaar Number (Simulated).' });
+
+        // Simulate API Delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Simulate Sending OTP
+        res.json({ success: true, message: 'OTP sent to mobile linked with Aadhaar (Simulated: Use 123456)' });
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+router.post('/verify-aadhaar-otp', verifyToken, verifyReception, async (req, res) => {
+    try {
+        const { aadhaarNumber, otp } = req.body;
+
+        // Mock OTP Validation (Use '123456' for success)
+        if (otp !== '123456') {
+            return res.status(400).json({ success: false, message: 'Invalid OTP. Try 123456.' });
         }
 
-        // --- SIMULATED EXTERNAL API CALL ---
-        // In a real app, this would call UIDAI or a KYC partner API
-
-        // Simulate Check: Reject "9999..." as invalid for testing
-        if (aadhaarNumber.startsWith('9999')) {
-            return res.status(400).json({ success: false, message: 'Verification Failed: Invalid Aadhaar Number (Simulated rejection).' });
-        }
-
-        // Simulate Success Response with Mock Data
-        const mockKYCData = {
-            verified: true,
-            fullName: "Aadhaar Verified User", // In real scenario, this comes from API
-            dob: "01/01/1990",
-            gender: "Female",
-            address: "123, Simulated Street, New Delhi, 110001",
-            photo: "https://via.placeholder.com/150" // Simulated photo
-        };
-
-        // Check if Aadhaar is already linked to another patient
+        // Check if Aadhaar is already linked
         const existingUser = await User.findOne({ aadhaarNumber });
         if (existingUser) {
             return res.status(409).json({ success: false, message: `Aadhaar already linked to patient: ${existingUser.name} (${existingUser.phone})` });
         }
 
-        res.json({ success: true, message: 'Aadhaar Verified Successfully', data: mockKYCData });
+        // Mock KYC Data Return
+        const mockKYCData = {
+            verified: true,
+            fullName: "Simulated Aadhaar User",
+            dob: "1995-05-20",
+            gender: "Female",
+            address: "42, Simulated Residency, Connaught Place, New Delhi - 110001",
+            photo: "https://via.placeholder.com/150"
+        };
 
-    } catch (error) {
-        console.error("Aadhaar Verification Error:", error);
-        res.status(500).json({ success: false, message: 'External API Error' });
+        res.json({ success: true, message: 'Aadhaar Verified Successfully', data: mockKYCData });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ message: e.message });
     }
 });
 
@@ -142,6 +173,10 @@ router.put('/intake/:userId', verifyToken, verifyReception, async (req, res) => 
         if (updates.city) updateQuery.city = updates.city;
         if (updates.state) updateQuery.state = updates.state;
         if (updates.zipCode) updateQuery.zipCode = updates.zipCode;
+
+        // Update Root Aadhaar Fields
+        if (updates.aadhaar) updateQuery.aadhaarNumber = updates.aadhaar;
+        if (updates.isAadhaarVerified !== undefined) updateQuery.isAadhaarVerified = updates.isAadhaarVerified;
 
         // Map Fertility Profile fields
         const profileFields = [

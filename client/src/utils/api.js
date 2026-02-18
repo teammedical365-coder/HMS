@@ -135,8 +135,12 @@ export const receptionAPI = {
         const response = await apiClient.patch(`/api/reception/appointments/${id}/cancel`);
         return response.data;
     },
-    verifyAadhaar: async (aadhaarNumber) => {
-        const response = await apiClient.post('/api/reception/verify-aadhaar', { aadhaarNumber });
+    sendAadhaarOTP: async (aadhaarNumber) => {
+        const response = await apiClient.post('/api/reception/send-aadhaar-otp', { aadhaarNumber });
+        return response.data;
+    },
+    verifyAadhaarOTP: async (aadhaarNumber, otp) => {
+        const response = await apiClient.post('/api/reception/verify-aadhaar-otp', { aadhaarNumber, otp });
         return response.data;
     }
 };
