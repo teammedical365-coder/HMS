@@ -32,7 +32,8 @@ app.use(cors({
             "http://localhost:5173",
             "http://localhost:3000",
             "https://crm-ebon-two.vercel.app",
-            "https://crm-222i.onrender.com"
+            "https://crm-222i.onrender.com",
+            "https://crm-virid-chi.vercel.app" // <-- ADD THIS LINE! (Make sure there is no '/' at the very end)
         ];
 
         // DYNAMIC ALLOW: If origin includes "localhost", allow it (Fixes 5174, 5175, etc.)
