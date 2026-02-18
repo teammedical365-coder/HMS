@@ -1,7 +1,7 @@
 ﻿import axios from 'axios';
 
-// --- FORCE LOCALHOST HTTP ---
-const baseURL = 'http://localhost:3000';
+// Base URL from Environment (Vercel / Local)
+const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 const apiClient = axios.create({
     baseURL: baseURL,
