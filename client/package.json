@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "start": "npm run dev",
-    "shivam":"npm run dev",
+    "shivam": "npm run dev",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -15,14 +15,17 @@
     "@reduxjs/toolkit": "^2.11.2",
     "axios": "^1.13.2",
     "framer-motion": "^12.23.26",
+    "jspdf": "^4.1.0",
+    "jspdf-autotable": "^5.0.7",
     "lenis": "^1.3.16",
     "nanoid": "^5.1.6",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "react-hook-form": "^7.68.0",
     "react-icons": "^5.5.0",
-    "react-redux": "^9.2.0",
-    "react-router-dom": "^7.10.1"
+    "react-redux": "^9.0.0-rc.0",
+    "react-router-dom": "^7.10.1",
+    "use-sync-external-store": "^1.6.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
