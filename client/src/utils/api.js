@@ -1,7 +1,7 @@
 ﻿import axios from 'axios';
 
 // Base URL from Environment (Vercel / Local)
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const baseURL = import.meta.env.VITE_API_URL || 'https://crm-222i.onrender.com';
 
 const apiClient = axios.create({
     baseURL: baseURL,

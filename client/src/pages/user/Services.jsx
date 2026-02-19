@@ -15,7 +15,7 @@ const timeSlots = [
 // Helper function for fallback specialty mapping
 const getSpecialtyFromServices = (services) => {
   if (!services || services.length === 0) return 'General Practitioner';
-  
+
   // Fallback map for legacy/static IDs if needed
   const specialtyMap = {
     'ivf': 'IVF Specialist',
@@ -28,7 +28,7 @@ const getSpecialtyFromServices = (services) => {
     'surrogacy': 'Reproductive Endocrinologist',
     'fertility-surgery': 'Fertility Surgeon'
   };
-  
+
   // Return mapped specialty or capitalize the first service
   return specialtyMap[services[0]] || (typeof services[0] === 'string' ? services[0] : 'Specialist');
 };
@@ -36,14 +36,14 @@ const getSpecialtyFromServices = (services) => {
 const Services = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  
+
   // Redux state
   const { services: servicesFromRedux, loading: loadingServices } = useCachedServices();
   const { doctors: allDoctorsData } = useCachedDoctors();
-  
+
   // Ensure we default to an empty array if undefined
   const services = servicesFromRedux || [];
-  
+
   // Booking form state
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -63,7 +63,7 @@ const Services = () => {
     dispatch(fetchServices());
     dispatch(fetchDoctors());
   }, [dispatch]);
-  
+
   // Memoize allDoctors
   const allDoctors = useMemo(() => {
     return allDoctorsData.map((doctor) => ({
@@ -76,13 +76,13 @@ const Services = () => {
       original: doctor
     }));
   }, [allDoctorsData]);
-  
+
   // --- FIXED: Dynamic Doctor Filtering Logic ---
   useEffect(() => {
     if (formData.serviceId && allDoctors.length > 0) {
       // 1. Find the selected service object to get all its possible identifiers
-      const selectedService = services.find(s => 
-        (s.id && s.id.toString() === formData.serviceId) || 
+      const selectedService = services.find(s =>
+        (s.id && s.id.toString() === formData.serviceId) ||
         (s._id && s._id.toString() === formData.serviceId)
       );
 
@@ -98,7 +98,7 @@ const Services = () => {
           selectedService.name   // Fallback name
         ].filter(Boolean);       // Remove null/undefined
       }
-      
+
       // Normalize matchers for case-insensitive comparison
       const normalizedMatchers = matchers.map(m => m.toString().toLowerCase());
 
@@ -108,10 +108,10 @@ const Services = () => {
 
         return doc.services.some(docService => {
           // Handle cases where doctor service might be an object or a string
-          const serviceVal = (typeof docService === 'object') 
-            ? (docService.id || docService._id || docService.name) 
+          const serviceVal = (typeof docService === 'object')
+            ? (docService.id || docService._id || docService.name)
             : docService;
-            
+
           return serviceVal && normalizedMatchers.includes(serviceVal.toString().toLowerCase());
         });
       });
@@ -134,7 +134,7 @@ const Services = () => {
     const selectedDateObj = new Date(selectedDate);
     selectedDateObj.setHours(0, 0, 0, 0);
     const now = new Date();
-    
+
     let times = [...timeSlots];
 
     // If selected date is today, filter out past times
@@ -282,11 +282,11 @@ const Services = () => {
 
     try {
       // Get selected service and doctor details
-      const selectedService = services.find(s => 
-        (s.id && s.id.toString() === formData.serviceId) || 
+      const selectedService = services.find(s =>
+        (s.id && s.id.toString() === formData.serviceId) ||
         (s._id && s._id.toString() === formData.serviceId)
       );
-      
+
       const selectedDoctor = allDoctors.find(d => d.id === formData.doctorId);
 
       if (!selectedDoctor) {
@@ -303,12 +303,12 @@ const Services = () => {
         serviceName: selectedService ? (selectedService.title || selectedService.name) : 'Service',
         appointmentDate: formData.appointmentDate,
         appointmentTime: formData.appointmentTime,
-        amount: selectedService ? (selectedService.price || 0) : 0, 
+        amount: selectedService ? (selectedService.price || 0) : 0,
         notes: ''
       };
 
       const response = await axios.post(
-        `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/appointments/create`,
+        `${import.meta.env.VITE_API_URL || 'https://crm-222i.onrender.com'}/api/appointments/create`,
         appointmentData,
         {
           headers: {
@@ -359,7 +359,7 @@ const Services = () => {
   return (
     <div className="services-page">
       <div className="content-wrapper">
-        
+
         {/* Header Section */}
         <section className="services-header animate-on-scroll slide-up">
           <span className="badge">Our Specialized Services</span>
@@ -367,7 +367,7 @@ const Services = () => {
             Comprehensive <span className="text-gradient">Medical Services</span>
           </h1>
           <p className="header-subtext">
-            World-class treatments with cutting-edge technology and compassionate care. 
+            World-class treatments with cutting-edge technology and compassionate care.
             Choose a service to view our specialized doctors.
           </p>
         </section>
@@ -375,9 +375,9 @@ const Services = () => {
         {/* Services Grid */}
         <section className="services-grid-section">
           {loadingServices ? (
-             <div className="loading-state">Loading services...</div>
+            <div className="loading-state">Loading services...</div>
           ) : services.length === 0 ? (
-             <div className="empty-state">No services currently available.</div>
+            <div className="empty-state">No services currently available.</div>
           ) : (
             <div className="services-grid">
               {services.map((service, index) => (
@@ -399,9 +399,9 @@ const Services = () => {
                     <h3>{service.title || service.name}</h3>
                     <p>{service.description}</p>
                     {service.price > 0 && (
-                        <p className="service-price" style={{marginTop:'0.5rem', fontWeight:'bold', color: '#14C38E'}}>
-                            Starting at ₹{service.price}
-                        </p>
+                      <p className="service-price" style={{ marginTop: '0.5rem', fontWeight: 'bold', color: '#14C38E' }}>
+                        Starting at ₹{service.price}
+                      </p>
                     )}
                   </div>
 
@@ -488,11 +488,11 @@ const Services = () => {
                   className="form-select"
                 >
                   <option value="">
-                    {!formData.serviceId 
-                      ? 'Please select a service first' 
-                      : availableDoctors.length === 0 
-                      ? 'No doctors available for this service'
-                      : 'Select a doctor'}
+                    {!formData.serviceId
+                      ? 'Please select a service first'
+                      : availableDoctors.length === 0
+                        ? 'No doctors available for this service'
+                        : 'Select a doctor'}
                   </option>
                   {availableDoctors.map(doctor => (
                     <option key={doctor.id} value={doctor.id}>
@@ -535,8 +535,8 @@ const Services = () => {
                     {!formData.doctorId || !formData.appointmentDate
                       ? 'Please select doctor and date first'
                       : availableTimes.length === 0
-                      ? 'No available time slots'
-                      : 'Select a time'}
+                        ? 'No available time slots'
+                        : 'Select a time'}
                   </option>
                   {availableTimes.map(time => (
                     <option key={time} value={time}>
@@ -553,16 +553,16 @@ const Services = () => {
 
               {/* Submit Button */}
               <div className="form-actions">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="btn btn-secondary"
                   onClick={handleCloseForm}
                   disabled={isSubmitting}
                 >
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="btn btn-primary"
                   disabled={isSubmitting}
                 >

@@ -30,6 +30,33 @@ const getDoctorQuery = async (userId) => {
 };
 
 // 1. GET Unique Patients
+// (Moved below)
+
+// 0. GET ALL DOCTORS (Public)
+router.get('/', async (req, res) => {
+    try {
+        const { serviceId } = req.query;
+        let query = {};
+
+        // If serviceId filter is provided
+        if (serviceId) {
+            query.services = serviceId;
+        }
+
+        const doctors = await Doctor.find(query)
+            .populate('userId', 'name email phone role')
+            .select('name specialty services availability consultationFee image bio userId')
+            .sort({ name: 1 })
+            .lean();
+
+        res.json({ success: true, doctors });
+    } catch (error) {
+        console.error('Get doctors error:', error);
+        res.status(500).json({ success: false, message: 'Error fetching doctors' });
+    }
+});
+
+// 1. GET Unique Patients
 router.get('/patients', verifyToken, async (req, res) => {
     try {
         const doctorUserId = req.user.id || req.user.userId;
