@@ -250,7 +250,7 @@ const ReceptionDashboard = () => {
             if (regRes.success && regRes.user) {
                 userId = regRes.user._id;
             } else {
-                throw new Error("Registration failed.");
+                throw new Error(regRes.message || "Registration failed.");
             }
 
             // 2. Update Profile (Vitals + Basic Info + Aadhaar)
@@ -293,7 +293,8 @@ const ReceptionDashboard = () => {
                 alert("Please select a Doctor and Time Slot.");
             }
         } catch (err) {
-            alert("Error: " + err.message);
+            const msg = err.response?.data?.message || err.message || 'An unexpected error occurred.';
+            alert("❌ Error: " + msg);
         } finally {
             setSaving(false);
         }

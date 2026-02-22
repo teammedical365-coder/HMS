@@ -40,38 +40,46 @@ const verifyReception = (req, res, next) => {
 // 1. REGISTER (WALK-IN)
 router.post('/register', verifyToken, verifyReception, async (req, res) => {
     try {
-        const { name, email, phone } = req.body;
+        let { name, email, phone } = req.body;
+
+        // Sanitize — trim whitespace and convert empty strings to undefined
+        name = name ? String(name).trim() : undefined;
+        phone = phone ? String(phone).trim() : undefined;
+        email = email ? String(email).trim() : undefined; // crucial: empty string -> undefined
+
         // Phone is required for identification, Email is optional
-        if (!name || !phone) return res.status(400).json({ success: false, message: 'Name and Phone are required' });
+        if (!name || !phone) {
+            return res.status(400).json({ success: false, message: 'Name and Phone are required' });
+        }
 
         // Check if patient exists by Phone (or Email if provided)
-        const query = [{ phone }];
-        if (email) query.push({ email });
+        const orClauses = [{ phone }];
+        if (email) orClauses.push({ email });
 
-        let user = await User.findOne({ $or: query });
+        let user = await User.findOne({ $or: orClauses });
 
         if (user) {
-            if (name) user.name = name;
-            // Only update email if provided and different
+            // Update name if changed
+            user.name = name;
+            // Only update email if provided and different (avoid overwriting with empty)
             if (email && email !== user.email) user.email = email;
 
-            // Ensure Patient ID exists (Backfill for legacy users)
+            // Backfill PatientId for legacy walk-ins that were created without one
             if (!user.patientId) {
-                user.patientId = 'MRN-' + Date.now().toString().slice(-6);
+                user.patientId = 'MRN-' + Date.now() + Math.floor(Math.random() * 1000);
             }
 
             await user.save();
             return res.status(200).json({ success: true, message: 'Patient record updated!', user });
         }
 
-        // Create New Walk-in Patient
-        const patientId = 'MRN-' + Date.now().toString().slice(-6);
+        // Create New Walk-in Patient — use collision-resistant ID
+        const patientId = 'MRN-' + Date.now() + Math.floor(Math.random() * 1000);
 
         const newUser = new User({
             name,
             phone,
-            email: email || undefined, // undefined to avoid unique constraint issues if sparse
-            // No password for walk-in patients
+            email: email || undefined, // Sparse unique: undefined = no index entry (allows multiple)
             role: 'patient',
             patientId,
             fertilityProfile: {}
@@ -81,9 +89,17 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         res.status(201).json({ success: true, message: 'Patient registered successfully!', user: newUser });
     } catch (error) {
         console.error("Register Error:", error);
-        // Handle duplicate key error gracefully
         if (error.code === 11000) {
-            return res.status(400).json({ success: false, message: 'Patient with this email/phone already exists.' });
+            // Tell the user exactly which field is duplicated
+            const field = Object.keys(error.keyPattern || {})[0] || 'field';
+            const friendlyField = field === 'phone' ? 'Phone number'
+                : field === 'email' ? 'Email'
+                    : field === 'patientId' ? 'Patient ID'
+                        : field;
+            return res.status(400).json({
+                success: false,
+                message: `A patient with this ${friendlyField} already exists. Please search for the existing patient instead.`
+            });
         }
         res.status(500).json({ success: false, message: error.message });
     }
