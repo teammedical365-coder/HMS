@@ -89,6 +89,62 @@ router.get('/patients', verifyToken, async (req, res) => {
     }
 });
 
+// 1b. GET Full Patient Profile (comprehensive data)
+router.get('/patients/:patientId/full-profile', verifyToken, async (req, res) => {
+    try {
+        const { patientId } = req.params;
+
+        // Get patient info
+        const patient = await User.findById(patientId).lean();
+        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+        // Get all appointments for this patient
+        const appointments = await Appointment.find({ userId: patientId })
+            .populate('doctorId', 'name specialty')
+            .sort({ appointmentDate: -1 })
+            .lean();
+
+        // Get lab reports
+        const labReports = await LabReport.find({ userId: patientId })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // Get pharmacy orders
+        const pharmacyOrders = await PharmacyOrder.find({
+            $or: [{ userId: patientId }, { patientId: patientId }]
+        })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        res.json({
+            success: true,
+            patient: {
+                _id: patient._id,
+                name: patient.name,
+                email: patient.email,
+                phone: patient.phone,
+                patientId: patient.patientId,
+                dob: patient.dob,
+                gender: patient.gender,
+                bloodGroup: patient.bloodGroup,
+                address: patient.address,
+                city: patient.city,
+                avatar: patient.avatar,
+                aadhaarNumber: patient.aadhaarNumber,
+                isAadhaarVerified: patient.isAadhaarVerified,
+                fertilityProfile: patient.fertilityProfile || {},
+                createdAt: patient.createdAt
+            },
+            appointments,
+            labReports,
+            pharmacyOrders
+        });
+    } catch (error) {
+        console.error('Full profile error:', error);
+        res.status(500).json({ success: false, message: 'Error fetching patient profile' });
+    }
+});
+
 // 2. NEW: Update Patient Profile (Intake Data) by Doctor
 router.put('/patients/:patientId/profile', verifyToken, async (req, res) => {
     try {
@@ -157,13 +213,13 @@ router.get('/appointments/:id', verifyToken, async (req, res) => {
     }
 });
 
-// 5. GET Appointments List
+// 5. GET Appointments List (for this doctor)
 router.get('/appointments', verifyToken, async (req, res) => {
     try {
         const doctorUserId = req.user.id || req.user.userId;
         const query = await getDoctorQuery(doctorUserId);
         const appointments = await Appointment.find(query)
-            .populate('userId', 'name email phone patientId')
+            .populate('userId', 'name email phone patientId fertilityProfile')
             .sort({ appointmentDate: 1, appointmentTime: 1 })
             .lean();
         res.json({ success: true, appointments });
@@ -171,6 +227,30 @@ router.get('/appointments', verifyToken, async (req, res) => {
         res.status(500).json({ success: false, message: 'Error fetching appointments' });
     }
 });
+
+// 5b. GET ALL Appointments (for nurse/staff - all doctors)
+router.get('/all-appointments', verifyToken, async (req, res) => {
+    try {
+        const appointments = await Appointment.find({ status: { $ne: 'cancelled' } })
+            .populate('userId', 'name email phone patientId fertilityProfile')
+            .populate('doctorId', 'name specialty')
+            .populate('doctorUserId', 'name')
+            .sort({ appointmentDate: -1, appointmentTime: 1 })
+            .lean();
+
+        // Attach doctor name from whichever field is available
+        const enriched = appointments.map(a => ({
+            ...a,
+            doctorName: a.doctorId?.name || a.doctorUserId?.name || 'Not Assigned'
+        }));
+
+        res.json({ success: true, appointments: enriched });
+    } catch (error) {
+        console.error('All appointments error:', error);
+        res.status(500).json({ success: false, message: 'Error fetching all appointments' });
+    }
+});
+
 
 // 6. UPDATE Session (Notes)
 router.patch('/appointments/:id/prescription', verifyToken, upload.single('prescriptionFile'), async (req, res) => {

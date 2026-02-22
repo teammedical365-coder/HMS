@@ -83,11 +83,7 @@ const MainRoutes = () => {
                         <Patient />
                     </ProtectedRoute>
                 } />
-                <Route path="/doctor/patients" element={
-                    <ProtectedRoute requiredPermissions={['visit_diagnose']}>
-                        <Patient />
-                    </ProtectedRoute>
-                } />
+                <Route path="/doctor/patients" element={<Patient />} />
                 <Route path="/doctor/patient/:appointmentId" element={
                     <ProtectedRoute requiredPermissions={['visit_diagnose']}>
                         <DoctorPatientDetails />

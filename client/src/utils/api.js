@@ -54,6 +54,10 @@ export const doctorAPI = {
         const response = await apiClient.get('/api/doctor/appointments');
         return response.data;
     },
+    getAllAppointments: async () => {
+        const response = await apiClient.get('/api/doctor/all-appointments');
+        return response.data;
+    },
     getAppointmentDetails: async (id) => {
         const response = await apiClient.get(`/api/doctor/appointments/${id}`);
         return response.data;
@@ -64,6 +68,10 @@ export const doctorAPI = {
     },
     getPatientHistory: async (patientId) => {
         const response = await apiClient.get(`/api/doctor/patients/${patientId}/history`);
+        return response.data;
+    },
+    getFullPatientProfile: async (patientId) => {
+        const response = await apiClient.get(`/api/doctor/patients/${patientId}/full-profile`);
         return response.data;
     },
     startSession: async (patientId) => {
