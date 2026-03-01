@@ -34,7 +34,8 @@ const Login = () => {
         patient: '/dashboard'
       };
 
-      const targetPath = redirectMap[userRole] || searchParams.get('redirect') || '/my-dashboard';
+      const normalizedRole = userRole ? userRole.toLowerCase() : '';
+      const targetPath = redirectMap[normalizedRole] || searchParams.get('redirect') || '/my-dashboard';
       navigate(targetPath);
     }
   }, [isAuthenticated, user, navigate, searchParams]);

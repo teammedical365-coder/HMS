@@ -20,7 +20,9 @@ import Signup from '../pages/user/Signup';
 
 // Doctor Pages
 import Patient from '../pages/doctors/Patient';
+import AdminLabTests from '../pages/admin/AdminLabTests';
 import DoctorPatientDetails from '../pages/doctors/DoctorPatientDetails';
+import UnifiedPatientProfile from '../pages/patient/UnifiedPatientProfile';
 
 // Admin Pages
 import Admin from '../pages/admin/Admin';
@@ -59,6 +61,13 @@ const MainRoutes = () => {
                 <Route path="/services" element={<Services />} />
                 <Route path="/doctors" element={<Doctors />} />
                 <Route path="/services/:serviceId/doctors" element={<Doctors />} />
+
+                {/* --- Unified Shared Patient Profile --- */}
+                <Route path="/patient/:id" element={
+                    <ProtectedRoute requiredPermissions={[]}>
+                        <UnifiedPatientProfile />
+                    </ProtectedRoute>
+                } />
 
                 {/* --- Dynamic Role Dashboard (all authenticated users) --- */}
                 <Route path="/my-dashboard" element={
@@ -106,6 +115,7 @@ const MainRoutes = () => {
 
                 <Route path="/admin/doctors" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminDoctors /></ProtectedRoute>} />
                 <Route path="/admin/labs" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminLabs /></ProtectedRoute>} />
+                <Route path="/admin/lab-tests" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminLabTests /></ProtectedRoute>} />
                 <Route path="/admin/pharmacy" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminPharmacy /></ProtectedRoute>} />
                 <Route path="/admin/reception" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminReception /></ProtectedRoute>} />
                 <Route path="/admin/services" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminServices /></ProtectedRoute>} />

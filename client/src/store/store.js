@@ -6,6 +6,7 @@ import serviceReducer from './slices/serviceSlice';
 import publicDataReducer from './slices/publicDataSlice';
 import adminEntitiesReducer from './slices/adminEntitiesSlice';
 import labReducer from './slices/labSlice'; // Import the new Lab Slice
+import notificationReducer from './slices/notificationSlice';
 import { setStoreRef } from './storeRef';
 
 export const store = configureStore({
@@ -17,6 +18,7 @@ export const store = configureStore({
     publicData: publicDataReducer,
     adminEntities: adminEntitiesReducer,
     lab: labReducer, // Register the Lab Reducer
+    notifications: notificationReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

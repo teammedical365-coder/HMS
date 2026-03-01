@@ -70,13 +70,16 @@ router.post('/diagnose/:visitId', verifyToken, async (req, res) => {
 
         if (!visit) return res.status(404).json({ message: 'Visit not found' });
 
+        const io = req.app.get('io');
+        const Notification = require('../models/notification.model');
+
         // --- AUTOMATIC CREATION OF LINKED RECORDS ---
 
         // A. CREATE PHARMACY ORDER
         if (prescription && prescription.length > 0) {
             const pharmacyOrder = new PharmacyOrder({
-                appointmentId: visit.appointmentId, // Assuming visit has appointmentId
-                patientId: visit.patientId, // ObjectId of User
+                appointmentId: visit.appointmentId || visit._id, // Providing a fallback if null
+                patientId: visit.patientId.toString(), // String
                 userId: visit.patientId,    // Duplicate for schema compatibility
                 doctorId: req.user.id,
                 items: prescription.map(p => ({
@@ -88,25 +91,51 @@ router.post('/diagnose/:visitId', verifyToken, async (req, res) => {
                 paymentStatus: 'Pending'
             });
             await pharmacyOrder.save();
+
+            const notificationItem = new Notification({
+                senderId: req.user.id,
+                recipientRole: 'pharmacy',
+                message: 'New prescription received for dispensing.',
+                referenceType: 'PharmacyOrder',
+                referenceId: pharmacyOrder._id,
+                patientId: visit.patientId.toString()
+            });
+            await notificationItem.save();
+
+            if (io) {
+                // Emit to anyone in the 'pharmacy' room
+                io.to('pharmacy').emit('new_notification', notificationItem);
+            }
         }
 
         // B. CREATE LAB REQUEST
         if (labTests && labTests.length > 0) {
-            // Check if patientId is ObjectId or String in LabReport schema
-            // Schema says patientId: String (required) and userId: ObjectId.
-            // visual check of schema: patientId allows String.
             const labReport = new LabReport({
-                appointmentId: visit.appointmentId,
-                patientId: visit.patientId.toString(), // Using User ID as string for now
+                appointmentId: visit.appointmentId || visit._id,
+                patientId: visit.patientId.toString(),
                 userId: visit.patientId,
                 doctorId: req.user.id,
-                testNames: labTests, // Array of strings
+                testNames: labTests,
                 testStatus: 'PENDING',
                 reportStatus: 'PENDING',
                 paymentStatus: 'PENDING'
-                // labId is left empty, to be assigned or picked up by any lab
             });
             await labReport.save();
+
+            const notificationItem = new Notification({
+                senderId: req.user.id,
+                recipientRole: 'lab',
+                message: 'New lab test requested.',
+                referenceType: 'LabReport',
+                referenceId: labReport._id,
+                patientId: visit.patientId.toString()
+            });
+            await notificationItem.save();
+
+            if (io) {
+                // Emit to anyone in the 'lab' room
+                io.to('lab').emit('new_notification', notificationItem);
+            }
         }
 
         res.json({ success: true, data: visit });

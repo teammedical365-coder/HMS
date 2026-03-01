@@ -39,6 +39,24 @@ router.patch('/:id/complete', verifyToken, async (req, res) => {
         order.orderStatus = 'Completed';
         await order.save();
 
+        const io = req.app.get('io');
+        const Notification = require('../models/notification.model');
+
+        const notificationItem = new Notification({
+            senderId: req.user.id,
+            recipientRole: 'doctor', // Or specific user Id: order.doctorId
+            recipientId: order.doctorId,
+            message: 'Prescription dispensed to patient.',
+            referenceType: 'PharmacyOrder',
+            referenceId: order._id,
+            patientId: order.patientId.toString()
+        });
+        await notificationItem.save();
+
+        if (io) {
+            io.to(order.doctorId.toString()).emit('new_notification', notificationItem);
+        }
+
         res.json({ success: true, message: 'Order completed successfully', order });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

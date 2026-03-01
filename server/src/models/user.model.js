@@ -29,6 +29,8 @@ const userSchema = new mongoose.Schema({
     isAadhaarVerified: { type: Boolean, default: false },
 
     // Clinical Profile
+    patientType: { type: String, enum: ['Primary', 'Partner'], default: 'Primary' },
+    partner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     fertilityProfile: { type: mongoose.Schema.Types.Mixed, default: {} },
 
     services: [String],

@@ -19,6 +19,8 @@ const receptionRoutes = require('./routes/reception.routes');
 // --- NEW IMPORTS FOR CLINICAL WORKFLOW ---
 const patientRoutes = require('./routes/patient.routes');
 const clinicalRoutes = require('./routes/clinical.routes');
+const notificationRoutes = require('./routes/notification.routes');
+const labTestRoutes = require('./routes/labTest.routes');
 
 const app = express();
 // ughfgh
@@ -69,6 +71,8 @@ app.use('/api/reception', receptionRoutes);
 // --- NEW ROUTES REGISTERED HERE ---
 app.use('/api/patients', patientRoutes); // For searching & identifying patients (e.g. /api/patients/search)
 app.use('/api/clinical', clinicalRoutes); // For visits, vitals & history (e.g. /api/clinical/intake)
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/lab-tests', labTestRoutes);
 
 app.get('/', (req, res) => {
     res.send('API is running...');
@@ -84,3 +88,4 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
+// Trigger nodemon restart

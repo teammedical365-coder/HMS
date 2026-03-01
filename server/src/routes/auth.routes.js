@@ -197,6 +197,10 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ success: false, message: 'Your assigned role no longer exists. Contact admin.' });
     }
 
+    if (roleData.name && (roleData.name.toLowerCase() === 'admin' || roleData.name.toLowerCase() === 'administrator')) {
+      return res.status(403).json({ success: false, message: 'Administrators must use the administrator login page' });
+    }
+
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });

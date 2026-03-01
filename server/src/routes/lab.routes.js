@@ -117,6 +117,24 @@ router.post('/upload-report/:reportId', verifyToken, verifyLab, upload.single('r
             }
         }
 
+        const io = req.app.get('io');
+        const Notification = require('../models/notification.model');
+
+        const notificationItem = new Notification({
+            senderId: req.user.id,
+            recipientRole: 'doctor',
+            recipientId: report.doctorId,
+            message: 'Lab results ready.',
+            referenceType: 'LabReport',
+            referenceId: report._id,
+            patientId: report.patientId.toString()
+        });
+        await notificationItem.save();
+
+        if (io) {
+            io.to(report.doctorId.toString()).emit('new_notification', notificationItem);
+        }
+
         res.json({ success: true, message: 'Report uploaded successfully', report });
 
     } catch (error) {

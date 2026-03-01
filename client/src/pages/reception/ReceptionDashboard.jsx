@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { receptionAPI, publicAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -11,6 +12,7 @@ const timeSlots = [
 ];
 
 const ReceptionDashboard = () => {
+    const navigate = useNavigate();
     const [appointments, setAppointments] = useState([]);
     const [doctorsList, setDoctorsList] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -139,13 +141,7 @@ const ReceptionDashboard = () => {
     };
 
     const handleViewProfile = (patient) => {
-        setProfilePatient(patient);
-        setSearchResults([]);
-        setSearchQuery('');
-        // Find appointments for this patient
-        const patientAppts = appointments.filter(a => a.userId?._id === patient._id);
-        setProfileAppointments(patientAppts);
-        setViewMode('profile');
+        navigate(`/patient/${patient._id}`);
     };
 
     const handleSearch = async (e) => {

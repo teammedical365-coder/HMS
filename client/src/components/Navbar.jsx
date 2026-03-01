@@ -1,17 +1,31 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useAppDispatch, useAuth } from '../store/hooks';
+import { useAppDispatch, useAuth, useNotifications } from '../store/hooks';
 import { logout } from '../store/slices/authSlice';
+import { fetchNotifications, markAsRead } from '../store/slices/notificationSlice';
+import { FiBell } from 'react-icons/fi';
 import './Navbar.css';
 
 const Navbar = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { isAuthenticated, user } = useAuth();
+  const { items: notifications, unreadCount } = useNotifications();
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      dispatch(fetchNotifications());
+    }
+  }, [isAuthenticated, user, dispatch]);
 
   const handleLogout = () => {
     dispatch(logout());
     navigate('/');
+  };
+
+  const handleNotificationClick = (id) => {
+    dispatch(markAsRead(id));
   };
 
   // Get dynamic nav links from the user's role data
@@ -59,16 +73,53 @@ const Navbar = () => {
             </>
           )}
 
-          {/* Dynamic nav links from the user's role */}
-          {isAuthenticated && navLinks.map((link, index) => (
+          {/* Dynamic nav links removed from header body to keep UI clean, replaced with central 'Dashboard' link */}
+          {isAuthenticated && user && (
             <NavLink
-              key={`${link.path}-${index}`}
-              to={link.path}
+              to={user.dashboardPath || '/'}
               className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
             >
-              {link.label}
+              Dashboard
             </NavLink>
-          ))}
+          )}
+
+          {isAuthenticated && (
+            <div className="nav-item notification-wrapper" onMouseLeave={() => setShowNotifications(false)}>
+              <button className="notification-btn" onClick={() => setShowNotifications(!showNotifications)}>
+                <FiBell size={20} />
+                {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
+              </button>
+
+              {showNotifications && (
+                <div className="notification-dropdown">
+                  <div className="notification-header">
+                    <h4>Notifications</h4>
+                  </div>
+                  <div className="notification-list">
+                    {notifications.length === 0 ? (
+                      <p className="no-notifications">No new notifications.</p>
+                    ) : (
+                      notifications.slice(0, 5).map(notif => (
+                        <div
+                          key={notif._id}
+                          className={`notification-item ${notif.status === 'Unread' ? 'unread' : ''}`}
+                          onClick={() => handleNotificationClick(notif._id)}
+                        >
+                          <p className="notification-msg">{notif.message}</p>
+                          <small className="notification-time">
+                            {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </small>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="notification-footer">
+                    <button onClick={() => navigate(user?.dashboardPath || '/dashboard')}>View Dashboard</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Settings Dropdown */}
           <div className="settings-dropdown">
