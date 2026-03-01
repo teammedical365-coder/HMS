@@ -1,62 +1,58 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { adminAPI } from '../../utils/api';
+import { useAppDispatch, useAuth } from '../../store/hooks';
+import { loginAdmin, clearError } from '../../store/slices/authSlice';
 import '../user/Login.css';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const dispatch = useAppDispatch();
+  const { loading, error, isAuthenticated, user } = useAuth();
+
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    dispatch(clearError());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const userRole = user.role;
+      const normalizedRole = userRole ? userRole.toLowerCase() : '';
+
+      let targetPath = '/my-dashboard';
+      if (normalizedRole === 'administrator') {
+        targetPath = '/administrator';
+      } else if (normalizedRole === 'admin') {
+        targetPath = '/admin';
+      }
+
+      navigate(targetPath);
+    }
+  }, [isAuthenticated, user, navigate]);
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
-    setError('');
+    dispatch(clearError());
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
+    dispatch(clearError());
 
-    // Validation
-    if (!formData.email || !formData.password) {
-      setError('Please fill in all fields');
-      setLoading(false);
-      return;
-    }
+    if (!formData.email || !formData.password) return;
 
-    try {
-      const response = await adminAPI.login(formData.email, formData.password);
-
-      if (response.success) {
-        // Store token in localStorage
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
-
-        // Navigate to administrator dashboard
-        // Navigate based on role
-        if (response.user.role === 'administrator') {
-          navigate('/administrator');
-        } else if (response.user.role === 'admin') {
-          navigate('/admin');
-        } else {
-          // Fallback for other roles logging in via admin portal
-          navigate('/my-dashboard');
-        }
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || 'Invalid email or password. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+    await dispatch(loginAdmin({
+      email: formData.email,
+      password: formData.password
+    }));
   };
 
   const handleGoBack = () => {

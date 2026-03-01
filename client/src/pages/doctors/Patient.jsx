@@ -193,8 +193,8 @@ const Patient = () => {
                 <div style={S.topLeft}>
                     <div style={S.logo}>🩺</div>
                     <div>
-                        <h1 style={S.title}>Nurse Station</h1>
-                        <p style={S.subtitle}>Patient Intake & Vitals Dashboard</p>
+                        <h1 style={S.title}>Clinical Dashboard</h1>
+                        <p style={S.subtitle}>Patient Intake, Vitals & Consultation Queue</p>
                     </div>
                 </div>
                 <div style={S.dateBadge}>
@@ -334,15 +334,36 @@ const Patient = () => {
                                                     </span>
                                                 </td>
                                                 <td style={S.td}>
-                                                    <button
-                                                        onClick={() => openVitalsForm(apt)}
-                                                        style={{
-                                                            ...S.btn(hasVitals ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #3b82f6, #6366f1)'),
-                                                            display: 'flex', alignItems: 'center', gap: '5px'
-                                                        }}
-                                                    >
-                                                        {hasVitals ? '✏️ Edit Vitals' : '💉 Enter Vitals'}
-                                                    </button>
+                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                        <button
+                                                            onClick={() => navigate(`/patient/${apt.userId?._id || apt.patientId}`)}
+                                                            style={{
+                                                                ...S.btn('rgba(59,130,246,0.1)'),
+                                                                color: '#3b82f6', border: '1px solid #3b82f6',
+                                                                display: 'flex', alignItems: 'center', gap: '5px'
+                                                            }}
+                                                        >
+                                                            👁 Profile
+                                                        </button>
+                                                        <button
+                                                            onClick={() => openVitalsForm(apt)}
+                                                            style={{
+                                                                ...S.btn(hasVitals ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #3b82f6, #6366f1)'),
+                                                                display: 'flex', alignItems: 'center', gap: '5px'
+                                                            }}
+                                                        >
+                                                            {hasVitals ? '✏️ Vitals' : '💉 Vitals'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => navigate(`/doctor/patient/${apt._id}`)}
+                                                            style={{
+                                                                ...S.btn('linear-gradient(135deg, #8b5cf6, #d946ef)'),
+                                                                display: 'flex', alignItems: 'center', gap: '5px'
+                                                            }}
+                                                        >
+                                                            📝 Consult Session
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );
@@ -355,92 +376,94 @@ const Patient = () => {
             </div>
 
             {/* ─── VITALS MODAL ─── */}
-            {vitalsPatient && (
-                <div style={S.overlay} onClick={() => setVitalsPatient(null)}>
-                    <div style={S.modal} onClick={e => e.stopPropagation()}>
-                        {/* Header */}
-                        <div style={S.modalHeader}>
-                            <div>
-                                <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '1.15rem', fontWeight: '800' }}>
-                                    💉 Enter Vitals
-                                </h2>
-                                <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.82rem' }}>
-                                    Patient: <strong style={{ color: '#e2e8f0' }}>{vitalsPatient.userId?.name || 'Unknown'}</strong> •
-                                    MRN: {vitalsPatient.userId?.patientId || 'N/A'} •
-                                    Dr. {vitalsPatient.doctorName}
-                                </p>
-                            </div>
-                            <button onClick={() => setVitalsPatient(null)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1.3rem', cursor: 'pointer' }}>✕</button>
-                        </div>
-
-                        {/* Body */}
-                        <div style={S.modalBody}>
-                            <div style={S.formGrid}>
-                                {[
-                                    { key: 'weight', label: 'Weight (kg)', icon: '⚖️', type: 'number' },
-                                    { key: 'height', label: 'Height (cm)', icon: '📏', type: 'number' },
-                                    { key: 'bmi', label: 'BMI (auto)', icon: '📊', type: 'text', readOnly: true },
-                                    { key: 'bloodPressure', label: 'Blood Pressure', icon: '🩸', type: 'text', placeholder: '120/80' },
-                                    { key: 'pulse', label: 'Pulse (bpm)', icon: '💓', type: 'number' },
-                                    { key: 'temperature', label: 'Temp (°F)', icon: '🌡️', type: 'number' },
-                                    { key: 'spo2', label: 'SpO₂ (%)', icon: '🫁', type: 'number' },
-                                    { key: 'respiratoryRate', label: 'Resp Rate (/min)', icon: '💨', type: 'number' },
-                                ].map(field => (
-                                    <div key={field.key} style={S.formGroup}>
-                                        <label style={S.formLabel}>{field.icon} {field.label}</label>
-                                        <input
-                                            type={field.type}
-                                            value={vitals[field.key]}
-                                            readOnly={field.readOnly}
-                                            placeholder={field.placeholder || ''}
-                                            onChange={e => setVitals({ ...vitals, [field.key]: e.target.value })}
-                                            style={{
-                                                ...S.formInput,
-                                                ...(field.readOnly ? { background: 'rgba(255,255,255,0.02)', color: '#64748b' } : {})
-                                            }}
-                                        />
-                                    </div>
-                                ))}
+            {
+                vitalsPatient && (
+                    <div style={S.overlay} onClick={() => setVitalsPatient(null)}>
+                        <div style={S.modal} onClick={e => e.stopPropagation()}>
+                            {/* Header */}
+                            <div style={S.modalHeader}>
+                                <div>
+                                    <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '1.15rem', fontWeight: '800' }}>
+                                        💉 Enter Vitals
+                                    </h2>
+                                    <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.82rem' }}>
+                                        Patient: <strong style={{ color: '#e2e8f0' }}>{vitalsPatient.userId?.name || 'Unknown'}</strong> •
+                                        MRN: {vitalsPatient.userId?.patientId || 'N/A'} •
+                                        Dr. {vitalsPatient.doctorName}
+                                    </p>
+                                </div>
+                                <button onClick={() => setVitalsPatient(null)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1.3rem', cursor: 'pointer' }}>✕</button>
                             </div>
 
-                            {/* Chief Complaint */}
-                            <div style={{ ...S.formGroup, marginTop: '16px' }}>
-                                <label style={S.formLabel}>📋 Chief Complaint</label>
-                                <textarea
-                                    value={vitals.chiefComplaint}
-                                    onChange={e => setVitals({ ...vitals, chiefComplaint: e.target.value })}
-                                    placeholder="Patient's chief complaint..."
-                                    style={S.formTextarea}
-                                />
+                            {/* Body */}
+                            <div style={S.modalBody}>
+                                <div style={S.formGrid}>
+                                    {[
+                                        { key: 'weight', label: 'Weight (kg)', icon: '⚖️', type: 'number' },
+                                        { key: 'height', label: 'Height (cm)', icon: '📏', type: 'number' },
+                                        { key: 'bmi', label: 'BMI (auto)', icon: '📊', type: 'text', readOnly: true },
+                                        { key: 'bloodPressure', label: 'Blood Pressure', icon: '🩸', type: 'text', placeholder: '120/80' },
+                                        { key: 'pulse', label: 'Pulse (bpm)', icon: '💓', type: 'number' },
+                                        { key: 'temperature', label: 'Temp (°F)', icon: '🌡️', type: 'number' },
+                                        { key: 'spo2', label: 'SpO₂ (%)', icon: '🫁', type: 'number' },
+                                        { key: 'respiratoryRate', label: 'Resp Rate (/min)', icon: '💨', type: 'number' },
+                                    ].map(field => (
+                                        <div key={field.key} style={S.formGroup}>
+                                            <label style={S.formLabel}>{field.icon} {field.label}</label>
+                                            <input
+                                                type={field.type}
+                                                value={vitals[field.key]}
+                                                readOnly={field.readOnly}
+                                                placeholder={field.placeholder || ''}
+                                                onChange={e => setVitals({ ...vitals, [field.key]: e.target.value })}
+                                                style={{
+                                                    ...S.formInput,
+                                                    ...(field.readOnly ? { background: 'rgba(255,255,255,0.02)', color: '#64748b' } : {})
+                                                }}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Chief Complaint */}
+                                <div style={{ ...S.formGroup, marginTop: '16px' }}>
+                                    <label style={S.formLabel}>📋 Chief Complaint</label>
+                                    <textarea
+                                        value={vitals.chiefComplaint}
+                                        onChange={e => setVitals({ ...vitals, chiefComplaint: e.target.value })}
+                                        placeholder="Patient's chief complaint..."
+                                        style={S.formTextarea}
+                                    />
+                                </div>
+
+                                {/* Nurse Notes */}
+                                <div style={{ ...S.formGroup, marginTop: '12px' }}>
+                                    <label style={S.formLabel}>📝 Nurse Notes</label>
+                                    <textarea
+                                        value={vitals.notes}
+                                        onChange={e => setVitals({ ...vitals, notes: e.target.value })}
+                                        placeholder="Any observations or notes..."
+                                        style={S.formTextarea}
+                                    />
+                                </div>
                             </div>
 
-                            {/* Nurse Notes */}
-                            <div style={{ ...S.formGroup, marginTop: '12px' }}>
-                                <label style={S.formLabel}>📝 Nurse Notes</label>
-                                <textarea
-                                    value={vitals.notes}
-                                    onChange={e => setVitals({ ...vitals, notes: e.target.value })}
-                                    placeholder="Any observations or notes..."
-                                    style={S.formTextarea}
-                                />
+                            {/* Footer */}
+                            <div style={S.modalFooter}>
+                                <button onClick={() => setVitalsPatient(null)} style={{ ...S.btn('rgba(255,255,255,0.08)'), color: '#94a3b8' }}>Cancel</button>
+                                <button
+                                    onClick={handleSaveVitals}
+                                    disabled={saving}
+                                    style={{ ...S.btn('linear-gradient(135deg, #10b981, #059669)'), opacity: saving ? 0.6 : 1, minWidth: '140px' }}
+                                >
+                                    {saving ? '⏳ Saving...' : '✅ Save Vitals'}
+                                </button>
                             </div>
-                        </div>
-
-                        {/* Footer */}
-                        <div style={S.modalFooter}>
-                            <button onClick={() => setVitalsPatient(null)} style={{ ...S.btn('rgba(255,255,255,0.08)'), color: '#94a3b8' }}>Cancel</button>
-                            <button
-                                onClick={handleSaveVitals}
-                                disabled={saving}
-                                style={{ ...S.btn('linear-gradient(135deg, #10b981, #059669)'), opacity: saving ? 0.6 : 1, minWidth: '140px' }}
-                            >
-                                {saving ? '⏳ Saving...' : '✅ Save Vitals'}
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

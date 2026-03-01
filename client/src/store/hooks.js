@@ -30,12 +30,16 @@ export const useServices = () => {
   return useAppSelector((state) => state.services);
 };
 
+export const useNotifications = () => {
+  return useAppSelector((state) => state.notifications);
+};
+
 // FIXED: Simplified Data Hooks to prevent "undefined" crashes
 export const useCachedServices = () => {
   const { services, loading, error } = useAppSelector(
     (state) => state.publicData
   );
-  
+
   // Return structure compatible with your components
   return {
     services: services || [],
@@ -49,7 +53,7 @@ export const useCachedDoctors = (serviceId = null) => {
   const { doctors, loading, error } = useAppSelector(
     (state) => state.publicData
   );
-  
+
   // Return structure compatible with your components
   return {
     doctors: doctors || [],

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doctorAPI } from '../../utils/api';
+import { doctorAPI, labTestAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './DoctorPatientDetails.css';
@@ -12,9 +12,13 @@ const DoctorPatientDetails = () => {
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [catalogTests, setCatalogTests] = useState([]);
 
     // Tab State for Left Panel
     const [activeTab, setActiveTab] = useState('overview');
+
+    // Time Machine Feature State
+    const [viewingPastSession, setViewingPastSession] = useState(null);
 
     // Doctor's Session Notepad (Right Panel)
     const [sessionData, setSessionData] = useState({
@@ -23,6 +27,37 @@ const DoctorPatientDetails = () => {
 
     // Patient Intake Profile (Left Panel - Editable by Doctor)
     const [intakeData, setIntakeData] = useState({});
+
+    // Tab Scrolling Reference
+    const tabsRef = useRef(null);
+
+    const handleTabsWheel = (e) => {
+        if (tabsRef.current) {
+            // Only convert pure vertical scrolling to horizontal scrolling (mouse wheels)
+            // Allow native 2-finger horizontal trackpad scrolling to pass through naturally
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                e.preventDefault();
+                tabsRef.current.scrollBy({ left: e.deltaY, behavior: 'auto' });
+            }
+        }
+    };
+
+    const scrollTabs = (dir) => {
+        if (tabsRef.current) {
+            tabsRef.current.scrollBy({ left: dir === 'left' ? -300 : 300, behavior: 'smooth' });
+        }
+    };
+
+    // Add non-passive event listener for proper wheel interception without console errors
+    useEffect(() => {
+        const el = tabsRef.current;
+        if (el) {
+            el.addEventListener('wheel', handleTabsWheel, { passive: false });
+        }
+        return () => {
+            if (el) el.removeEventListener('wheel', handleTabsWheel);
+        };
+    }, []);
 
     useEffect(() => {
         const fetchDetails = async () => {
@@ -45,6 +80,14 @@ const DoctorPatientDetails = () => {
                     });
                 }
             } catch (err) { console.error(err); }
+
+            try {
+                const testRes = await labTestAPI.getLabTests();
+                if (testRes.success) {
+                    setCatalogTests(testRes.data || []);
+                }
+            } catch (err) { console.error("Error fetching lab test catalog", err); }
+
             finally { setLoading(false); }
         };
         fetchDetails();
@@ -290,24 +333,28 @@ const DoctorPatientDetails = () => {
                 </div>
 
                 {/* Tabs Navigation */}
-                <div className="dpd-tabs-nav">
-                    {tabs.map(tab => (
-                        <button
-                            key={tab.id}
-                            className={`dpd-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-                            onClick={() => setActiveTab(tab.id)}
-                        >
-                            <span className="dpd-tab-icon">{tab.icon}</span>
-                            <span className="dpd-tab-label">{tab.label}</span>
-                        </button>
-                    ))}
+                <div className="dpd-tabs-container">
+                    <button className="dpd-tab-scroll-btn" onClick={() => scrollTabs('left')} title="Scroll Left">‹</button>
+                    <div className="dpd-tabs-nav" ref={tabsRef}>
+                        {tabs.map(tab => (
+                            <button
+                                key={tab.id}
+                                className={`dpd-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+                                onClick={() => setActiveTab(tab.id)}
+                            >
+                                <span className="dpd-tab-icon">{tab.icon}</span>
+                                <span className="dpd-tab-label">{tab.label}</span>
+                            </button>
+                        ))}
+                    </div>
+                    <button className="dpd-tab-scroll-btn" onClick={() => scrollTabs('right')} title="Scroll Right">›</button>
                 </div>
 
                 {/* Tab Content */}
                 <div className="dpd-tab-content">
                     {/* OVERVIEW */}
                     {activeTab === 'overview' && (
-                        <div className="dpd-tab-panel fade-in">
+                        <div className="dpd-tab-panel">
                             <h3 className="dpd-panel-title">📋 Patient Overview</h3>
                             <div className="dpd-overview-grid">
                                 <div className="dpd-ov-card">
@@ -389,7 +436,7 @@ const DoctorPatientDetails = () => {
 
                     {/* VITALS */}
                     {activeTab === 'vitals' && (
-                        <div className="dpd-tab-panel fade-in">
+                        <div className="dpd-tab-panel">
                             <h3 className="dpd-panel-title">💓 Vitals & Measurements</h3>
                             <div className="dpd-form-grid">
                                 <div className="dpd-field">
@@ -430,7 +477,7 @@ const DoctorPatientDetails = () => {
 
                     {/* CLINICAL HISTORY */}
                     {activeTab === 'clinical' && (
-                        <div className="dpd-tab-panel fade-in">
+                        <div className="dpd-tab-panel">
                             <h3 className="dpd-panel-title">🏥 Clinical History</h3>
                             <div className="dpd-form-grid">
                                 <div className="dpd-field">
@@ -466,7 +513,7 @@ const DoctorPatientDetails = () => {
 
                     {/* OBSTETRIC */}
                     {activeTab === 'obstetric' && (
-                        <div className="dpd-tab-panel fade-in">
+                        <div className="dpd-tab-panel">
                             <h3 className="dpd-panel-title">🤰 Obstetric History</h3>
                             <div className="dpd-form-grid dpd-grid-4">
                                 <div className="dpd-field">
@@ -502,7 +549,7 @@ const DoctorPatientDetails = () => {
 
                     {/* SPOUSE / PARTNER */}
                     {activeTab === 'spouse' && (
-                        <div className="dpd-tab-panel fade-in">
+                        <div className="dpd-tab-panel">
                             <h3 className="dpd-panel-title">👫 Spouse / Partner Details</h3>
                             <div className="dpd-form-grid">
                                 <div className="dpd-field">
@@ -578,7 +625,7 @@ const DoctorPatientDetails = () => {
 
                     {/* MENSTRUAL */}
                     {activeTab === 'menstrual' && (
-                        <div className="dpd-tab-panel fade-in">
+                        <div className="dpd-tab-panel">
                             <h3 className="dpd-panel-title">📅 Menstrual History</h3>
                             <div className="dpd-form-grid">
                                 <div className="dpd-field">
@@ -616,7 +663,7 @@ const DoctorPatientDetails = () => {
 
                     {/* TREATMENT HISTORY */}
                     {activeTab === 'treatment' && (
-                        <div className="dpd-tab-panel fade-in">
+                        <div className="dpd-tab-panel">
                             <h3 className="dpd-panel-title">💊 Previous Investigations & Treatments</h3>
                             <div className="dpd-field-full">
                                 <label>Hysterosalpingography (HSG) Status</label>
@@ -651,7 +698,20 @@ const DoctorPatientDetails = () => {
                             ) : (
                                 <div className="dpd-history-list">
                                     {history.map(h => (
-                                        <div key={h._id} className={`dpd-history-card ${h._id === appointmentId ? 'current' : ''}`}>
+                                        <div
+                                            key={h._id}
+                                            className={`dpd-history-card ${h._id === appointmentId ? 'current' : ''} ${viewingPastSession && viewingPastSession._id === h._id ? 'viewing-active' : ''}`}
+                                            onClick={() => {
+                                                if (h._id === appointmentId) setViewingPastSession(null);
+                                                else setViewingPastSession(viewingPastSession && viewingPastSession._id === h._id ? null : h);
+                                            }}
+                                            style={{ cursor: 'pointer', transition: 'all 0.2s', border: viewingPastSession && viewingPastSession._id === h._id ? '2px solid #3b82f6' : '' }}
+                                        >
+                                            {viewingPastSession && viewingPastSession._id === h._id && (
+                                                <div style={{ background: '#3b82f6', color: '#fff', padding: '2px 8px', fontSize: '11px', borderRadius: '4px', display: 'inline-block', marginBottom: '8px', fontWeight: 'bold' }}>
+                                                    👁️ Viewing Right Now
+                                                </div>
+                                            )}
                                             <div className="dpd-hist-top">
                                                 <span className="dpd-hist-date">
                                                     {new Date(h.appointmentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -685,70 +745,184 @@ const DoctorPatientDetails = () => {
             </div>
 
             {/* RIGHT PANEL - SESSION NOTEPAD */}
-            <div className="dpd-right">
-                <div className="dpd-right-header">
-                    <div>
-                        <h2>📝 Current Session</h2>
-                        <p className="dpd-right-subtitle">Record diagnosis, notes & prescription</p>
-                    </div>
-                    <span className={`dpd-session-status status-${appointment.status}`}>
-                        {appointment.status}
-                    </span>
-                </div>
+            <div className={`dpd-right ${viewingPastSession ? 'time-machine-active' : ''}`} style={viewingPastSession ? { background: '#f8fafc', borderLeft: '4px solid #3b82f6' } : {}}>
+                {viewingPastSession ? (
+                    <>
+                        <div className="dpd-right-header" style={{ background: '#eff6ff', borderBottom: '1px solid #bfdbfe' }}>
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <h2 style={{ color: '#1e3a8a' }}>🕰️ Past Session</h2>
+                                    <span style={{ fontSize: '12px', background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>Read-only</span>
+                                </div>
+                                <p className="dpd-right-subtitle" style={{ color: '#3b82f6', fontWeight: 600 }}>
+                                    Viewing notes from {new Date(viewingPastSession.appointmentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setViewingPastSession(null)}
+                                style={{ padding: '6px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                                ✕ Exit Time Machine
+                            </button>
+                        </div>
 
-                <div className="dpd-right-content">
-                    <div className="dpd-session-field">
-                        <label>🔍 Diagnosis</label>
-                        <input
-                            name="diagnosis"
-                            value={sessionData.diagnosis}
-                            onChange={handleSessionChange}
-                            placeholder="Enter diagnosis..."
-                            className="dpd-diag-input"
-                        />
-                    </div>
+                        <div className="dpd-right-content">
+                            <div className="dpd-session-field">
+                                <label>🔍 Diagnosis at the time</label>
+                                <div style={{ padding: '12px', background: 'rgba(255,255,255,0.7)', border: '1px dashed #cbd5e1', borderRadius: '8px', color: '#334155' }}>
+                                    {viewingPastSession.diagnosis || <em style={{ color: '#94a3b8' }}>No diagnosis recorded</em>}
+                                </div>
+                            </div>
 
-                    <div className="dpd-session-field dpd-notes-field">
-                        <label>📋 Clinical Notes</label>
-                        <textarea
-                            name="notes"
-                            value={sessionData.notes}
-                            onChange={handleSessionChange}
-                            placeholder="Write detailed clinical notes, observations, examination findings..."
-                            className="dpd-notes-textarea"
-                        />
-                    </div>
+                            <div className="dpd-session-field">
+                                <label>📋 Clinical Notes</label>
+                                <div style={{ padding: '12px', background: 'rgba(255,255,255,0.7)', border: '1px dashed #cbd5e1', borderRadius: '8px', color: '#334155', minHeight: '80px', whiteSpace: 'pre-wrap' }}>
+                                    {viewingPastSession.doctorNotes || <em style={{ color: '#94a3b8' }}>No notes recorded</em>}
+                                </div>
+                            </div>
 
-                    <div className="dpd-session-field">
-                        <label>💊 Prescription (one medicine per line)</label>
-                        <textarea
-                            name="prescription"
-                            value={sessionData.prescription}
-                            onChange={handleSessionChange}
-                            placeholder={"Tab. Folic Acid 5mg - 1 OD\nTab. Progesterone 200mg - 1 BD\nInj. HCG 5000 IU"}
-                            className="dpd-prescription-textarea"
-                        />
-                    </div>
+                            <div className="dpd-session-field">
+                                <label>💊 Prescription Given</label>
+                                <div style={{ padding: '12px', background: 'rgba(255,255,255,0.7)', border: '1px dashed #cbd5e1', borderRadius: '8px', color: '#334155', minHeight: '60px' }}>
+                                    {viewingPastSession.pharmacy?.length > 0 ? (
+                                        <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                                            {viewingPastSession.pharmacy.map((p, i) => (
+                                                <li key={i}><strong>{p.medicineName}</strong></li>
+                                            ))}
+                                        </ul>
+                                    ) : <em style={{ color: '#94a3b8' }}>No prescription recorded</em>}
+                                </div>
+                            </div>
 
-                    <div className="dpd-session-field">
-                        <label>🧪 Lab Tests (comma-separated)</label>
-                        <input
-                            name="labTests"
-                            value={sessionData.labTests}
-                            onChange={handleSessionChange}
-                            placeholder="e.g. CBC, TSH, AMH, Prolactin"
-                        />
-                    </div>
-                </div>
+                            <div className="dpd-session-field">
+                                <label>🧪 Lab Tests Ordered</label>
+                                <div style={{ padding: '12px', background: 'rgba(255,255,255,0.7)', border: '1px dashed #cbd5e1', borderRadius: '8px', color: '#334155' }}>
+                                    {(viewingPastSession.labTests || []).length > 0
+                                        ? (viewingPastSession.labTests || []).join(', ')
+                                        : <em style={{ color: '#94a3b8' }}>No lab tests ordered</em>}
+                                </div>
+                            </div>
+                        </div>
 
-                <div className="dpd-right-footer">
-                    <button className="dpd-btn-save-draft" onClick={handleSaveProfile} disabled={saving}>
-                        💾 Save Profile
-                    </button>
-                    <button className="dpd-btn-finish" onClick={handleSaveAndMerge} disabled={saving}>
-                        {saving ? '⏳ Processing...' : '✅ Complete Session & Generate Report'}
-                    </button>
-                </div>
+                        <div className="dpd-right-footer" style={{ background: '#f1f5f9' }}>
+                            <button
+                                onClick={() => {
+                                    setSessionData({
+                                        diagnosis: viewingPastSession.diagnosis || '',
+                                        notes: viewingPastSession.doctorNotes || '',
+                                        prescription: viewingPastSession.pharmacy?.map(p => p.medicineName).join('\n') || '',
+                                        labTests: (viewingPastSession.labTests || []).join(', ')
+                                    });
+                                    setViewingPastSession(null);
+                                    alert("Historical data copied into your Current Session editor!");
+                                }}
+                                style={{ padding: '10px 18px', background: 'transparent', color: '#3b82f6', border: '1px solid #3b82f6', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                                📋 Copy to Current Session
+                            </button>
+                            <button className="dpd-btn-finish" onClick={() => setViewingPastSession(null)} style={{ background: '#64748b' }}>
+                                Return to Current Editing
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div className="dpd-right-header">
+                            <div>
+                                <h2>📝 Current Session</h2>
+                                <p className="dpd-right-subtitle">Record diagnosis, notes & prescription</p>
+                            </div>
+                            <span className={`dpd-session-status status-${appointment.status}`}>
+                                {appointment.status}
+                            </span>
+                        </div>
+
+                        <div className="dpd-right-content">
+                            <div className="dpd-session-field">
+                                <label>🔍 Diagnosis</label>
+                                <input
+                                    name="diagnosis"
+                                    value={sessionData.diagnosis}
+                                    onChange={handleSessionChange}
+                                    placeholder="Enter diagnosis..."
+                                    className="dpd-diag-input"
+                                />
+                            </div>
+
+                            <div className="dpd-session-field dpd-notes-field">
+                                <label>📋 Clinical Notes</label>
+                                <textarea
+                                    name="notes"
+                                    value={sessionData.notes}
+                                    onChange={handleSessionChange}
+                                    placeholder="Write detailed clinical notes, observations, examination findings..."
+                                    className="dpd-notes-textarea"
+                                />
+                            </div>
+
+                            <div className="dpd-session-field">
+                                <label>💊 Prescription (one medicine per line)</label>
+                                <textarea
+                                    name="prescription"
+                                    value={sessionData.prescription}
+                                    onChange={handleSessionChange}
+                                    placeholder={"Tab. Folic Acid 5mg - 1 OD\nTab. Progesterone 200mg - 1 BD\nInj. HCG 5000 IU"}
+                                    className="dpd-prescription-textarea"
+                                />
+                            </div>
+
+                            <div className="dpd-session-field">
+                                <label>🧪 Prescribe Lab Tests</label>
+                                <div style={{
+                                    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px',
+                                    maxHeight: '200px', overflowY: 'auto', padding: '10px',
+                                    border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc'
+                                }}>
+                                    {catalogTests.length > 0 ? catalogTests.filter(t => t.isActive).map(test => {
+                                        const isChecked = sessionData.labTests.split(', ').includes(test.name);
+                                        return (
+                                            <label key={test._id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={(e) => {
+                                                        let currentTests = sessionData.labTests ? sessionData.labTests.split(', ') : [];
+                                                        if (e.target.checked) {
+                                                            currentTests.push(test.name);
+                                                        } else {
+                                                            currentTests = currentTests.filter(t => t !== test.name);
+                                                        }
+                                                        setSessionData(prev => ({ ...prev, labTests: currentTests.join(', ') }));
+                                                    }}
+                                                />
+                                                {test.name}
+                                            </label>
+                                        );
+                                    }) : (
+                                        <p style={{ color: '#64748b' }}>No lab tests defined by admin.</p>
+                                    )}
+                                </div>
+                                <input
+                                    style={{ marginTop: '10px' }}
+                                    name="labTests"
+                                    value={sessionData.labTests}
+                                    onChange={handleSessionChange}
+                                    placeholder="Or type custom tests (comma-separated)..."
+                                    className="dpd-diag-input"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="dpd-right-footer">
+                            <button className="dpd-btn-save-draft" onClick={handleSaveProfile} disabled={saving}>
+                                💾 Save Profile
+                            </button>
+                            <button className="dpd-btn-finish" onClick={handleSaveAndMerge} disabled={saving}>
+                                {saving ? '⏳ Processing...' : '✅ Complete Session & Generate Report'}
+                            </button>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

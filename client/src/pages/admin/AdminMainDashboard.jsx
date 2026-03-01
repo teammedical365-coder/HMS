@@ -67,8 +67,13 @@ const AdminMainDashboard = () => {
         },
         {
             icon: '🧪', label: 'Labs',
-            desc: 'Configure lab departments and test catalogs',
+            desc: 'Configure lab departments',
             path: '/admin/labs', bg: 'rgba(241,196,15,0.12)'
+        },
+        {
+            icon: '📋', label: 'Lab Tests Catalog',
+            desc: 'Manage predefined lab tests available for prescription',
+            path: '/admin/lab-tests', bg: 'rgba(232,62,140,0.12)'
         },
         {
             icon: '💊', label: 'Pharmacy',

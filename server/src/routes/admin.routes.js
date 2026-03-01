@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const User = require('../models/user.model');
 const Role = require('../models/role.model');
@@ -19,7 +20,6 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
  * Helper: Build user response with full role data
  */
 async function buildUserResponse(user) {
-    const mongoose = require('mongoose');
     let roleData = null;
     let roleName = null;
 
@@ -227,7 +227,17 @@ router.post('/login', async (req, res) => {
         const user = await User.findOne({ email });
         if (!user) return res.status(401).json({ success: false, message: 'Invalid email or password' });
 
-        if (user.role !== 'administrator') {
+        let userRoleObj = null;
+        let roleName = user.role;
+
+        if (mongoose.Types.ObjectId.isValid(user.role)) {
+            userRoleObj = await Role.findById(user.role);
+            if (userRoleObj) roleName = userRoleObj.name.toLowerCase();
+        } else if (typeof user.role === 'string') {
+            roleName = user.role.toLowerCase();
+        }
+
+        if (roleName !== 'administrator' && roleName !== 'admin') {
             return res.status(403).json({ success: false, message: 'Access denied. Administrator only.' });
         }
 
@@ -235,7 +245,7 @@ router.post('/login', async (req, res) => {
         if (!isPasswordValid) return res.status(401).json({ success: false, message: 'Invalid email or password' });
 
         const token = jwt.sign(
-            { userId: user._id, email: user.email, role: 'administrator' },
+            { userId: user._id, email: user.email, roleId: String(user.role) },
             JWT_SECRET,
             { expiresIn: '7d' }
         );
@@ -247,10 +257,10 @@ router.post('/login', async (req, res) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
-                role: 'administrator',
-                permissions: ['*'],
-                dashboardPath: '/administrator',
-                navLinks: []
+                role: roleName,
+                permissions: userRoleObj ? userRoleObj.permissions : ['*'],
+                dashboardPath: userRoleObj ? userRoleObj.dashboardPath : '/administrator',
+                navLinks: userRoleObj ? userRoleObj.navLinks : []
             },
             token
         });

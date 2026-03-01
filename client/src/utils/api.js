@@ -222,4 +222,28 @@ export const pharmacyOrderAPI = {
     completeOrder: async (id) => (await apiClient.patch(`/api/pharmacy/orders/${id}/complete`)).data
 };
 
+export const clinicalAPI = {
+    intake: async (data) => (await apiClient.post('/api/clinical/intake', data)).data,
+    getHistory: async (patientId) => (await apiClient.get(`/api/clinical/history/${patientId}`)).data,
+    diagnose: async (visitId, data) => (await apiClient.post(`/api/clinical/diagnose/${visitId}`, data)).data
+};
+
+export const patientAPI = {
+    search: async (term) => (await apiClient.get(`/api/patients/search?term=${term}`)).data,
+    getFullHistory: async (id) => (await apiClient.get(`/api/patients/${id}/full-history`)).data
+};
+
+export const notificationAPI = {
+    getNotifications: async () => (await apiClient.get('/api/notifications')).data,
+    markAsRead: async (id) => (await apiClient.patch(`/api/notifications/${id}/read`)).data,
+    markAllAsRead: async () => (await apiClient.patch('/api/notifications/read-all')).data
+};
+
+export const labTestAPI = {
+    getLabTests: async () => (await apiClient.get('/api/lab-tests')).data,
+    createLabTest: async (data) => (await apiClient.post('/api/lab-tests', data)).data,
+    updateLabTest: async (id, data) => (await apiClient.put(`/api/lab-tests/${id}`, data)).data,
+    deleteLabTest: async (id) => (await apiClient.delete(`/api/lab-tests/${id}`)).data
+};
+
 export default apiClient;

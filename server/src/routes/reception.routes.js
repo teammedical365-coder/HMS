@@ -76,14 +76,18 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         // Create New Walk-in Patient — use collision-resistant ID
         const patientId = 'MRN-' + Date.now() + Math.floor(Math.random() * 1000);
 
-        const newUser = new User({
+        const userData = {
             name,
             phone,
-            email: email || undefined, // Sparse unique: undefined = no index entry (allows multiple)
             role: 'patient',
             patientId,
             fertilityProfile: {}
-        });
+        };
+
+        // Only attach email if it actually exists, to prevent duplicate sparse index errors
+        if (email) userData.email = email;
+
+        const newUser = new User(userData);
 
         await newUser.save();
         res.status(201).json({ success: true, message: 'Patient registered successfully!', user: newUser });
@@ -299,6 +303,44 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
 
     } catch (error) {
         console.error("Reception Booking Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 7. PATIENT CHECK-IN (Reception to Doctor/Clinic Workflow)
+router.post('/check-in', verifyToken, verifyReception, async (req, res) => {
+    try {
+        const { patientId, appointmentId } = req.body;
+
+        if (!patientId) {
+            return res.status(400).json({ success: false, message: 'Patient ID is required' });
+        }
+
+        const ClinicalVisit = require('../models/clinicalVisit.model');
+        const Notification = require('../models/notification.model');
+        const io = req.app.get('io');
+
+        // Create clinical visit for today
+        const visit = new ClinicalVisit({
+            patientId,
+            appointmentId: appointmentId || null,
+            status: 'check_in'
+        });
+        await visit.save();
+
+        if (appointmentId) {
+            // Update appointment status
+            await Appointment.findByIdAndUpdate(appointmentId, { status: 'completed' }); // Or maybe a new status like 'in_progress'
+        }
+
+        // Emit socket event to update Reception/Doctor grids
+        if (io) {
+            io.emit('patient_status_changed', { visitId: visit._id, patientId, status: 'check_in', appointmentId });
+        }
+
+        res.json({ success: true, message: 'Patient checked in successfully', visit });
+    } catch (error) {
+        console.error("Check-in Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 });
