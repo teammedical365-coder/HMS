@@ -46,6 +46,7 @@ import CentralAdminDashboard from '../pages/centraladmin/CentralAdminDashboard';
 import HospitalAdminLogin from '../pages/hospitaladmin/HospitalAdminLogin';
 import HospitalAdminDashboard from '../pages/hospitaladmin/HospitalAdminDashboard';
 import HospitalLogin from '../pages/hospitaladmin/HospitalLogin';
+import HospitalAdminQuestionLibrary from '../pages/hospitaladmin/HospitalAdminQuestionLibrary';
 
 // Cashier Routing
 import CashierDashboard from '../pages/cashier/CashierDashboard';
@@ -180,6 +181,11 @@ const MainRoutes = () => {
                 <Route path="/hospitaladmin" element={
                     <ProtectedRoute allowedRoles={['hospitaladmin']}>
                         <HospitalAdminDashboard />
+                    </ProtectedRoute>
+                } />
+                <Route path="/hospitaladmin/question-library" element={
+                    <ProtectedRoute allowedRoles={['hospitaladmin']}>
+                        <HospitalAdminQuestionLibrary />
                     </ProtectedRoute>
                 } />
 

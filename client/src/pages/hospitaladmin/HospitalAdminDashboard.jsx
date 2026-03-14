@@ -267,6 +267,7 @@ const HospitalAdminDashboard = () => {
         { icon: '🏥', label: 'Reception', desc: 'Reception & appointments', path: '/admin/reception', bg: '#dcfce7', color: '#16a34a' },
         { icon: '🛠️', label: 'Services', desc: 'Hospital services & pricing', path: '/admin/services', bg: '#fefce8', color: '#ca8a04' },
         { icon: '👥', label: 'Manage Users', desc: 'View and manage all staff', path: '/admin/users', bg: '#f0f9ff', color: '#0284c7' },
+        { icon: '📝', label: 'Question Library', desc: 'Manage diagnostic questions', path: '/hospitaladmin/question-library', bg: '#fdf2f8', color: '#be185d' },
     ];
 
     return (

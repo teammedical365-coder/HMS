@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { questionLibraryAPI } from '../../utils/api';
-import './AdminQuestionLibrary.css'; // Custom built styles based on user's theme
+import '../admin/AdminQuestionLibrary.css'; // Custom built styles based on user's theme
 
-const AdminQuestionLibrary = () => {
+const HospitalAdminQuestionLibrary = () => {
     // State for the overarching JSON structure
     const [libraryData, setLibraryData] = useState({
         "General": {},
@@ -288,8 +288,8 @@ const AdminQuestionLibrary = () => {
         <div className="ql-admin-body">
             <div style={{ padding: '20px 30px', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                    <h1 style={{ margin: 0, color: '#1e293b' }}>Question Library Builder</h1>
-                    <p style={{ margin: 0, color: '#64748b' }}>Construct dynamic diagnostic forms for doctors.</p>
+                    <h1 style={{ margin: 0, color: '#1e293b' }}>🏥 Hospital Diagnostics Library</h1>
+                    <p style={{ margin: 0, color: '#64748b' }}>Customize the global template specifically for your hospital. Your changes won't affect other hospitals.</p>
                 </div>
                 <button className="btn-save" onClick={handleSave} disabled={saving} style={{ padding: '12px 30px', fontSize: '15px' }}>
                     {saving ? '⏳ Syncing Data...' : '💾 Save & Deploy Configuration'}
@@ -313,15 +313,13 @@ const AdminQuestionLibrary = () => {
                     </div>
                 ))}
                 
-                {/* Only super/central admins can add top-level departments */}
-                {allowedDepartments === null && (
-                    <button 
-                        onClick={handleAddDepartment}
-                        style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '20px', padding: '0 15px', cursor: 'pointer', fontWeight: 'bold', whiteSpace: 'nowrap' }}
-                    >
-                        + Add Department
-                    </button>
-                )}
+                {/* Hospital admins cannot add new top-level departments, they must ask Central Admin */}
+                <button 
+                    onClick={() => alert("If you want to add more departments, please contact the central admin team to assign your hospital a new department.")}
+                    style={{ background: '#cbd5e1', color: '#475569', border: 'none', borderRadius: '20px', padding: '0 15px', cursor: 'pointer', fontWeight: 'bold', whiteSpace: 'nowrap' }}
+                >
+                    🔒 Create Dept (Locked)
+                </button>
             </div>
 
             <div className="ql-admin-container">
@@ -429,4 +427,4 @@ const AdminQuestionLibrary = () => {
     );
 };
 
-export default AdminQuestionLibrary;
+export default HospitalAdminQuestionLibrary;

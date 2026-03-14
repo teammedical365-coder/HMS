@@ -8,6 +8,11 @@ const questionLibrarySchema = new mongoose.Schema({
     version: {
         type: Number,
         default: 1
+    },
+    hospitalId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Hospital',
+        default: null
     }
 }, {
     timestamps: true
