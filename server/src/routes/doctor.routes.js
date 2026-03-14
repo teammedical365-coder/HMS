@@ -8,6 +8,7 @@ const Lab = require('../models/lab.model');
 const LabReport = require('../models/labReport.model');
 const Inventory = require('../models/inventory.model');
 const PharmacyOrder = require('../models/pharmacyOrder.model');
+const Notification = require('../models/notification.model');
 const { verifyToken } = require('../middleware/auth.middleware');
 
 const upload = multer({
@@ -207,7 +208,17 @@ router.get('/appointments/:id', verifyToken, async (req, res) => {
             .lean();
 
         if (!appointment) return res.status(404).json({ success: false, message: 'Not found' });
-        res.json({ success: true, appointment });
+        
+        // Fetch doctor's specific departments, fallback to hospital departments
+        const doctorUser = await User.findById(req.user.id || req.user.userId).populate('hospitalId');
+        let departments = [];
+        if (doctorUser && doctorUser.departments && doctorUser.departments.length > 0) {
+            departments = doctorUser.departments;
+        } else if (doctorUser && doctorUser.hospitalId && doctorUser.hospitalId.departments) {
+            departments = doctorUser.hospitalId.departments;
+        }
+
+        res.json({ success: true, appointment, departments });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error fetching details' });
     }
@@ -264,7 +275,18 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
         if (diagnosis) appointment.diagnosis = diagnosis;
         if (notes) appointment.doctorNotes = notes;
 
-        if (labTests) appointment.labTests = typeof labTests === 'string' ? JSON.parse(labTests) : labTests;
+        if (labTests) {
+            if (typeof labTests === 'string') {
+                try {
+                    appointment.labTests = JSON.parse(labTests);
+                } catch (e) {
+                    appointment.labTests = labTests.split(',').map(t => t.trim()).filter(Boolean);
+                }
+            } else {
+                appointment.labTests = labTests;
+            }
+        }
+
         if (dietPlan) appointment.dietPlan = typeof dietPlan === 'string' ? JSON.parse(dietPlan) : dietPlan;
 
         if (pharmacy) {
@@ -282,10 +304,24 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
 
         if (appointment.labTests && appointment.labTests.length > 0) {
             const existingReport = await LabReport.findOne({ appointmentId: appointment._id });
+
+            let pId = appointment.patientId;
+            let pName = 'Patient';
+            if (!pId || !appointment.userId.name) {
+                const pUser = await User.findById(appointment.userId);
+                if (pUser) {
+                    pId = pUser.patientId;
+                    pName = pUser.name;
+                }
+            } else {
+                pName = appointment.userId.name || pName;
+            }
+
+            let reportId;
             if (!existingReport) {
-                await LabReport.create({
+                const newReport = await LabReport.create({
                     appointmentId: appointment._id,
-                    patientId: appointment.patientId || 'N/A',
+                    patientId: pId || 'N/A',
                     userId: appointment.userId,
                     doctorId: req.user.id,
                     labId: labId || null,
@@ -294,7 +330,32 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
                     reportStatus: 'PENDING',
                     paymentStatus: 'PENDING'
                 });
+                reportId = newReport._id;
+            } else {
+                existingReport.testNames = appointment.labTests;
+                existingReport.labId = labId || existingReport.labId;
+                await existingReport.save();
+                reportId = existingReport._id;
             }
+
+            // --- Dispatch Lab Notification ---
+            await Notification.create({
+                senderId: req.user.id,
+                recipientRole: 'lab',
+                message: `New lab tests prescribed for ${pName} (${pId || 'N/A'})`,
+                referenceType: 'LabReport',
+                referenceId: reportId,
+                patientId: pId || 'N/A'
+            });
+
+            const io = req.app.get('io');
+            if (io) {
+                io.to('lab').emit('newNotification', { message: `New lab tests prescribed for ${pName}` });
+            }
+
+        } else {
+            // Remove pending reports if no tests prescribed anymore
+            await LabReport.deleteOne({ appointmentId: appointment._id, testStatus: 'PENDING' });
         }
 
         // --- NEW: Create Pharmacy Order ---

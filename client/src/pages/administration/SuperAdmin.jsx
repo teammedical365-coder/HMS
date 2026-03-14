@@ -1,9 +1,9 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminAPI, uploadAPI } from '../../utils/api';
-import './Administrator.css';
+import './SuperAdmin.css';
 
-const Administrator = () => {
+const SuperAdmin = () => {
     const navigate = useNavigate();
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -29,8 +29,8 @@ const Administrator = () => {
     // Check auth
     useEffect(() => {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
-        if (user.role !== 'administrator') {
-            navigate('/administrator/login');
+        if (user.role !== 'superadmin' && user.role !== 'centraladmin') {
+            navigate('/supremeadmin/login');
         }
     }, [navigate]);
 
@@ -190,17 +190,17 @@ const Administrator = () => {
     const handleLogout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        navigate('/administrator/login');
+        navigate('/supremeadmin/login');
     };
 
     const user = JSON.parse(localStorage.getItem('user') || '{}');
 
     return (
-        <div className="administrator-page">
-            <div className="administrator-container">
+        <div className="superadmin-page">
+            <div className="superadmin-container">
                 <div className="admin-header">
                     <div>
-                        <h1>Administrator Dashboard</h1>
+                        <h1>SuperAdmin Dashboard</h1>
                         <p>Manage System Users & Staff Accounts</p>
                     </div>
                     <div className="admin-user-info">
@@ -212,6 +212,23 @@ const Administrator = () => {
 
                 {error && <div className="error-message">{error}</div>}
                 {success && <div className="success-message">{success}</div>}
+
+                {/* ==========================================
+                    QUICK CONFIGURATIONS SECTION
+                   ========================================== */}
+                <div className="admin-card" style={{ marginBottom: '20px' }}>
+                    <h2>⚙️ Quick Configurations</h2>
+                    <p style={{ color: '#888', fontSize: '14px', margin: '5px 0 15px' }}>
+                        Setup forms, catalogs, and permissions for the hospital system.
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        <button onClick={() => navigate('/admin/roles')} className="btn-primary" style={{ padding: '8px 16px', borderRadius: '4px' }}>🔑 Roles</button>
+                        <button onClick={() => navigate('/admin/question-library')} className="btn-primary" style={{ padding: '8px 16px', borderRadius: '4px', background: '#8e44ad', border: 'none' }}>❓ Questions</button>
+                        <button onClick={() => navigate('/admin/lab-tests')} className="btn-primary" style={{ padding: '8px 16px', borderRadius: '4px', background: '#e83e8c', border: 'none' }}>🧪 Lab Tests</button>
+                        <button onClick={() => navigate('/admin/medicines')} className="btn-primary" style={{ padding: '8px 16px', borderRadius: '4px', background: '#e74c3c', border: 'none' }}>💊 Medicines</button>
+                        <button onClick={() => navigate('/admin/services')} className="btn-primary" style={{ padding: '8px 16px', borderRadius: '4px', background: '#e67e22', border: 'none' }}>🛠️ Services</button>
+                    </div>
+                </div>
 
                 {/* ==========================================
                     CREATE STAFF ACCOUNT SECTION
@@ -441,4 +458,4 @@ const Administrator = () => {
     );
 };
 
-export default Administrator;
+export default SuperAdmin;

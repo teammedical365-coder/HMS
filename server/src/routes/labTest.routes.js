@@ -1,14 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const LabTest = require('../models/labTest.model');
-const { verifyToken, verifyAdminOrAdministrator } = require('../middleware/auth.middleware');
+const { verifyToken, verifyAdminOrSuperAdmin } = require('../middleware/auth.middleware');
 
 // 1. GET ALL LAB TESTS (Accessible to any authenticated staff: Admin, Doctor, Lab Tech, etc.)
 router.get('/', verifyToken, async (req, res) => {
     try {
         const query = {};
         // If not admin, only show active tests
-        if (req.user.role !== 'administrator' && req.user.role !== 'admin') {
+        if (req.user.role !== 'superadmin' && req.user.role !== 'admin') {
             query.isActive = true;
         }
 
@@ -21,7 +21,7 @@ router.get('/', verifyToken, async (req, res) => {
 });
 
 // 2. CREATE A NEW LAB TEST
-router.post('/', verifyAdminOrAdministrator, async (req, res) => {
+router.post('/', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
         const { name, code, description, price, category, isActive } = req.body;
 
@@ -46,7 +46,7 @@ router.post('/', verifyAdminOrAdministrator, async (req, res) => {
 });
 
 // 3. UPDATE A LAB TEST
-router.put('/:id', verifyAdminOrAdministrator, async (req, res) => {
+router.put('/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
         const { name, code, description, price, category, isActive } = req.body;
 
@@ -66,7 +66,7 @@ router.put('/:id', verifyAdminOrAdministrator, async (req, res) => {
 });
 
 // 4. DELETE A LAB TEST
-router.delete('/:id', verifyAdminOrAdministrator, async (req, res) => {
+router.delete('/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
         const test = await LabTest.findByIdAndDelete(req.params.id);
         if (!test) return res.status(404).json({ success: false, message: 'Lab test not found' });

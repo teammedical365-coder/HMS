@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { adminAPI, uploadAPI } from '../../utils/api';
-import '../administration/Administrator.css';
+import { adminAPI, uploadAPI, hospitalAPI } from '../../utils/api';
+import '../administration/SuperAdmin.css';
 
 const Admin = () => {
     const navigate = useNavigate();
@@ -13,7 +13,7 @@ const Admin = () => {
 
     const [editModal, setEditModal] = useState(false);
     const [editForm, setEditForm] = useState({
-        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: ''
+        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: '', departments: []
     });
     const [updating, setUpdating] = useState(false);
 
@@ -22,7 +22,7 @@ const Admin = () => {
     // Create Staff Form state
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [createForm, setCreateForm] = useState({
-        name: '', email: '', password: '', phone: '', roleId: '', file: null
+        name: '', email: '', password: '', phone: '', roleId: '', file: null, departments: []
     });
     const [creating, setCreating] = useState(false);
 
@@ -30,7 +30,7 @@ const Admin = () => {
     useEffect(() => {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         const perms = user.permissions || [];
-        if (user.role !== 'admin' && user.role !== 'administrator' &&
+        if (user.role !== 'admin' && user.role !== 'superadmin' &&
             !perms.includes('*') && !perms.includes('admin_manage_roles') && !perms.includes('admin_view_stats')) {
             navigate('/');
         }
@@ -39,7 +39,19 @@ const Admin = () => {
     useEffect(() => {
         fetchUsers();
         fetchRoles();
+        fetchHospital();
     }, []);
+
+    const fetchHospital = async () => {
+        try {
+            const res = await hospitalAPI.getMyHospital();
+            if (res.success && res.hospital) {
+                setHospital(res.hospital);
+            }
+        } catch(err) {
+            console.error('Error fetching hospital:', err);
+        }
+    };
 
     const fetchRoles = async () => {
         try {
@@ -83,7 +95,8 @@ const Admin = () => {
             roleId: userItem.roleId || userItem.role, // role might be name or ID depending on populate
             currentAvatar: userItem.avatar,
             newAvatarFile: null,
-            specialty: '' // Ideally fetch specific doctor details if needed, but basic update is fine
+            specialty: '', // Ideally fetch specific doctor details if needed, but basic update is fine
+            departments: userItem.departments || []
         });
         setEditModal(true);
         setError('');
@@ -117,7 +130,8 @@ const Admin = () => {
                 phone: editForm.phone,
                 roleId: editForm.roleId,
                 avatar: avatarUrl,
-                specialty: editForm.specialty
+                specialty: editForm.specialty,
+                departments: editForm.departments
             };
 
             const response = await adminAPI.updateUser(editForm.id, updateData);
@@ -184,7 +198,7 @@ const Admin = () => {
             const response = await adminAPI.createUser(userData);
             if (response.success) {
                 setSuccess(`✅ ${response.user?.role || 'Staff'} account created! They can log in with: ${createForm.email}`);
-                setCreateForm({ name: '', email: '', password: '', phone: '', roleId: '', file: null });
+                setCreateForm({ name: '', email: '', password: '', phone: '', roleId: '', file: null, departments: [] });
                 setShowCreateForm(false);
                 fetchUsers();
             }
@@ -205,8 +219,8 @@ const Admin = () => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
 
     return (
-        <div className="administrator-page">
-            <div className="administrator-container">
+        <div className="superadmin-page">
+            <div className="superadmin-container">
                 {/* Header */}
                 <div className="admin-header">
                     <div>
@@ -290,8 +304,37 @@ const Admin = () => {
                                     </select>
                                 </div>
                             </div>
+                            
+                            {hospital && hospital.departments && hospital.departments.length > 0 && (
+                                <div className="form-row" style={{ marginTop: '10px' }}>
+                                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                        <label className="staff-label">Assign Departments (Optional - Leave blank to allow all)</label>
+                                        <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginTop: '8px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                            {hospital.departments.map(dept => (
+                                                <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={createForm.departments.includes(dept)}
+                                                        onChange={(e) => {
+                                                            const checked = e.target.checked;
+                                                            setCreateForm(prev => ({
+                                                                ...prev,
+                                                                departments: checked 
+                                                                    ? [...prev.departments, dept] 
+                                                                    : prev.departments.filter(d => d !== dept)
+                                                            }));
+                                                        }}
+                                                        style={{ width: '16px', height: '16px', accentColor: '#3b82f6' }}
+                                                    />
+                                                    {dept}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
-                            <button type="submit" disabled={creating} className="submit-button">
+                            <button type="submit" disabled={creating} className="submit-button" style={{ marginTop: '20px' }}>
                                 {creating ? 'Creating Account...' : '✅ Create Staff Account'}
                             </button>
                         </form>
@@ -419,6 +462,35 @@ const Admin = () => {
                                     <label className="staff-label">Specialty (Doctors Only)</label>
                                     <input type="text" placeholder="e.g. Cardiologist" value={editForm.specialty} onChange={e => setEditForm({ ...editForm, specialty: e.target.value })} className="staff-input" />
                                 </div>
+                                
+                                {hospital && hospital.departments && hospital.departments.length > 0 && (
+                                    <div className="form-row" style={{ marginTop: '10px' }}>
+                                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                            <label className="staff-label">Assign Departments (Optional - Leave blank to allow all)</label>
+                                            <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginTop: '8px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                {hospital.departments.map(dept => (
+                                                    <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={editForm.departments.includes(dept)}
+                                                            onChange={(e) => {
+                                                                const checked = e.target.checked;
+                                                                setEditForm(prev => ({
+                                                                    ...prev,
+                                                                    departments: checked 
+                                                                        ? [...prev.departments, dept] 
+                                                                        : prev.departments.filter(d => d !== dept)
+                                                                }));
+                                                            }}
+                                                            style={{ width: '16px', height: '16px', accentColor: '#3b82f6' }}
+                                                        />
+                                                        {dept}
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="modal-buttons" style={{ marginTop: '20px' }}>
                                     <button type="submit" disabled={updating} className="btn-save">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminEntitiesAPI } from '../../utils/api';
-import '../administration/Administrator.css';
+import '../administration/SuperAdmin.css';
 
 const AdminServices = () => {
   const navigate = useNavigate();
@@ -141,8 +141,8 @@ const AdminServices = () => {
   };
 
   return (
-    <div className="administrator-page">
-      <div className="administrator-container">
+    <div className="superadmin-page">
+      <div className="superadmin-container">
         <div className="admin-header">
           <div>
             <h1>Manage Services</h1>

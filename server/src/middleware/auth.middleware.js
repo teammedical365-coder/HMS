@@ -20,30 +20,35 @@ exports.verifyToken = async (req, res, next) => {
         const user = await User.findById(decoded.userId);
         if (!user) return res.status(401).json({ success: false, message: 'User not found' });
 
-        // Populate the role data if it's an ObjectId reference
+        // hospitalId: prefer JWT payload (authoritative for hospital admins), fallback to DB
+        if (decoded.hospitalId) {
+            user.hospitalId = decoded.hospitalId;
+        }
+
+        // Populate the role data
         let roleData = null;
-        if (user.role === 'administrator') {
-            // Special bootstrap role — full access
+        const specialRoles = ['superadmin', 'centraladmin', 'hospitaladmin'];
+
+        if (specialRoles.includes(user.role)) {
+            const isCentral = user.role === 'centraladmin' || user.role === 'superadmin';
             roleData = {
-                name: 'administrator',
-                permissions: ['*'], // Wildcard = all permissions
-                dashboardPath: '/administrator',
+                name: user.role,
+                permissions: isCentral ? ['*'] : ['admin_manage_roles', 'admin_view_stats'],
+                dashboardPath: isCentral ? '/supremeadmin' : '/hospitaladmin',
                 navLinks: [],
                 isSystemRole: true
             };
         } else if (user.role) {
             const mongoose = require('mongoose');
             if (mongoose.Types.ObjectId.isValid(user.role)) {
-                // It's a proper ObjectId — fetch directly
                 roleData = await Role.findById(user.role);
             }
 
-            // If not found by ID (or it was a legacy string like 'admin', 'doctor'), try by name
             if (!roleData) {
-                roleData = await Role.findOne({
-                    name: { $regex: new RegExp(`^${user.role}$`, 'i') }
-                });
-                // Auto-migrate: update user's role to the ObjectId for future requests
+                const query = { name: { $regex: new RegExp(`^${user.role}$`, 'i') } };
+                // Scope legacy role lookup to the user's hospital
+                if (user.hospitalId) query.hospitalId = user.hospitalId;
+                roleData = await Role.findOne(query);
                 if (roleData) {
                     user.role = roleData._id;
                     await user.save();
@@ -55,9 +60,8 @@ exports.verifyToken = async (req, res, next) => {
             }
         }
 
-        // Attach to request
         req.user = user;
-        req.user._roleData = roleData; // Full role object
+        req.user._roleData = roleData;
         next();
     } catch (error) {
         return res.status(401).json({ success: false, message: 'Invalid token' });
@@ -68,7 +72,7 @@ exports.verifyToken = async (req, res, next) => {
  * Generic permission-checking middleware factory.
  * Usage: requirePermission('admin_manage_roles', 'admin_view_stats')
  * The user must have AT LEAST ONE of the specified permissions.
- * Administrators (wildcard *) always pass.
+ * SuperAdmins (wildcard *) always pass.
  */
 exports.requirePermission = (...requiredPermissions) => {
     return async (req, res, next) => {
@@ -83,7 +87,7 @@ exports.requirePermission = (...requiredPermissions) => {
                 return res.status(403).json({ success: false, message: 'No role assigned. Contact admin.' });
             }
 
-            // Administrator wildcard — always allowed
+            // SuperAdmin wildcard — always allowed
             if (roleData.permissions && roleData.permissions.includes('*')) {
                 return next();
             }
@@ -107,16 +111,17 @@ exports.requirePermission = (...requiredPermissions) => {
 };
 
 /**
- * Verify user is an administrator (bootstrap super-admin).
+ * Verify user is an superadmin (bootstrap super-admin).
  * Use this only for system-level operations like first-time setup.
  */
-exports.verifyAdministrator = async (req, res, next) => {
+exports.verifySuperAdmin = async (req, res, next) => {
     try {
         await exports.verifyToken(req, res, () => {
-            if (req.user.role === 'administrator') {
+            const role = req.user.role;
+            if (role === 'superadmin' || role === 'centraladmin') {
                 next();
             } else {
-                return res.status(403).json({ success: false, message: 'Administrator access required' });
+                return res.status(403).json({ success: false, message: 'Central Admin access required' });
             }
         });
     } catch (error) {
@@ -125,16 +130,19 @@ exports.verifyAdministrator = async (req, res, next) => {
 };
 
 /**
- * BACKWARDS COMPATIBILITY — verifyAdmin and verifyAdminOrAdministrator
- * Now checks for admin_manage_roles permission OR administrator role.
+ * BACKWARDS COMPATIBILITY — verifyAdmin and verifyAdminOrSuperAdmin
+ * Now checks for admin_manage_roles permission OR superadmin role.
  */
-exports.verifyAdminOrAdministrator = async (req, res, next) => {
+exports.verifyAdminOrSuperAdmin = async (req, res, next) => {
     try {
         await exports.verifyToken(req, res, () => {
             const roleData = req.user._roleData;
 
-            // Administrator always passes
-            if (req.user.role === 'administrator') return next();
+            // Central admin always passes
+            if (req.user.role === 'superadmin' || req.user.role === 'centraladmin') return next();
+
+            // Hospital admin also passes for admin-level routes
+            if (req.user.role === 'hospitaladmin') return next();
 
             // Check for admin-level permissions
             if (roleData && roleData.permissions &&
@@ -151,4 +159,4 @@ exports.verifyAdminOrAdministrator = async (req, res, next) => {
     }
 };
 
-exports.verifyAdmin = exports.verifyAdminOrAdministrator;
+exports.verifyAdmin = exports.verifyAdminOrSuperAdmin;

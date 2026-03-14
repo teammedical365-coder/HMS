@@ -9,30 +9,41 @@ const roleSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
-        unique: true,
         trim: true
+        // NOTE: Not globally unique — name+hospitalId combination is unique
+        // Central admin roles have hospitalId = null
     },
     description: {
         type: String,
         default: ''
+    },
+    // Hospital scoping: null = central/global role, ObjectId = hospital-specific role
+    hospitalId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Hospital',
+        default: null,
+        index: true
     },
     // Dynamic permissions — no enum restriction, admin can define any permission key
     permissions: [{
         type: String,
         trim: true
     }],
-    // Default dashboard path for users with this role (e.g., '/admin', '/doctor/patients')
+    // Default dashboard path for users with this role
     dashboardPath: {
         type: String,
         default: '/'
     },
     // Navigation links shown in the navbar for this role
     navLinks: [navLinkSchema],
-    // System roles cannot be deleted (e.g., 'administrator')
+    // System roles (seeded defaults) — can be copied per-hospital but not mutated globally
     isSystemRole: {
         type: Boolean,
         default: false
     }
 }, { timestamps: true });
+
+// Compound index: name must be unique per hospital (null = global)
+roleSchema.index({ name: 1, hospitalId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Role', roleSchema);

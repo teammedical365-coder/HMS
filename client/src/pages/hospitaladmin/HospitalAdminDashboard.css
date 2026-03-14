@@ -1,0 +1,429 @@
+/* ============================================================
+   Hospital Admin Dashboard — Green-Teal Theme
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
+
+.hospitaladmin-page {
+    min-height: 100vh;
+    padding: 40px;
+    background: radial-gradient(circle at top right, #f0fdf4, #dcfce7, #f1f5f9);
+    font-family: 'Outfit', 'Inter', sans-serif;
+    box-sizing: border-box;
+}
+
+.hospitaladmin-container {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* Header */
+.hospitaladmin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+    padding: 32px 40px;
+    background: linear-gradient(135deg, #065f46, #059669, #10b981);
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 20px 60px rgba(5, 150, 105, 0.3);
+    color: white;
+}
+
+.hospitaladmin-header .admin-user-info span {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.ha-header-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ha-hospital-badge {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: white;
+    width: fit-content;
+    margin-bottom: 4px;
+}
+
+.hospitaladmin-header h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    color: white;
+    margin: 0;
+}
+
+.hospitaladmin-header p {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 1rem;
+    margin: 0;
+}
+
+/* Tab Navigation */
+.ha-tabs {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 28px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    border-radius: 16px;
+    padding: 8px;
+    border: 1px solid rgba(203, 213, 225, 0.5);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.ha-tab {
+    flex: 1;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 12px;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Outfit', sans-serif;
+}
+
+.ha-tab:hover {
+    background: #f0fdf4;
+    color: #065f46;
+}
+
+.ha-tab-active {
+    background: linear-gradient(135deg, #065f46, #10b981);
+    color: white !important;
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+/* Stats Grid */
+.ha-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 28px;
+}
+
+.ha-stat-card {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    border-radius: 20px;
+    padding: 28px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    border: 1px solid rgba(16, 185, 129, 0.15);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    transition: all 0.3s ease;
+}
+
+.ha-stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(5, 150, 105, 0.15);
+}
+
+.ha-stat-icon {
+    font-size: 2.5rem;
+    line-height: 1;
+}
+
+.ha-stat-value {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #065f46;
+    margin: 0;
+    line-height: 1;
+}
+
+.ha-stat-label {
+    font-size: 0.9rem;
+    color: #6b7280;
+    margin: 4px 0 0;
+    font-weight: 500;
+}
+
+/* Operations Grid */
+.ha-ops-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+    margin-top: 8px;
+}
+
+.ha-op-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ha-op-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.ha-op-icon {
+    font-size: 2rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.ha-op-card h4 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.ha-op-card p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
+/* Hospital Info */
+.ha-hospital-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+    padding: 20px;
+    background: #f0fdf4;
+    border-radius: 12px;
+    border: 1px solid #d1fae5;
+}
+
+.ha-hospital-info div {
+    font-size: 0.95rem;
+    color: #374151;
+}
+
+.ha-hospital-info strong {
+    color: #065f46;
+}
+
+/* Restricted Notice */
+.ha-restricted-notice {
+    margin-top: 24px;
+    padding: 16px 20px;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 12px;
+    color: #92400e;
+    font-size: 0.9rem;
+}
+
+/* Role badge extras */
+.role-hospitaladmin {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+/* Loading / empty messages */
+.loading-message,
+.empty-message {
+    text-align: center;
+    padding: 40px;
+    color: #94a3b8;
+    font-size: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .hospitaladmin-page {
+        padding: 16px;
+    }
+
+    .hospitaladmin-header {
+        flex-direction: column;
+        gap: 20px;
+        align-items: flex-start;
+        padding: 24px;
+    }
+
+    .hospitaladmin-header h1 {
+        font-size: 1.5rem;
+    }
+
+    .ha-tabs {
+        flex-direction: column;
+    }
+
+    .ha-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .ha-ops-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ---- DATE FILTER CARD ---- */
+.date-filter-card {
+    padding: 20px 28px;
+    margin-bottom: 20px;
+}
+
+.date-filter-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.preset-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.preset-btn {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.preset-btn:hover {
+    background: #e2e8f0;
+}
+
+.preset-btn.active {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #2563eb;
+}
+
+.custom-date-inputs {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #64748b;
+}
+
+.date-input {
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    color: #1e293b;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.date-input:focus {
+    border-color: #3b82f6;
+}
+
+/* ---- KPI GRID ---- */
+.hospital-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.kpi-card {
+    border-radius: 16px;
+    padding: 22px 24px;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    top: -30px;
+    right: -30px;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.kpi-blue {
+    background: linear-gradient(135deg, #3b82f6, #6366f1);
+}
+
+.kpi-green {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.kpi-purple {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}
+
+.kpi-orange {
+    background: linear-gradient(135deg, #f97316, #ea580c);
+}
+
+.kpi-teal {
+    background: linear-gradient(135deg, #14b8a6, #0d9488);
+}
+
+.kpi-pink {
+    background: linear-gradient(135deg, #ec4899, #db2777);
+}
+
+.kpi-icon {
+    font-size: 28px;
+    margin-bottom: 8px;
+}
+
+.kpi-value {
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.kpi-label {
+    font-size: 13px;
+    font-weight: 700;
+    opacity: 0.9;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.kpi-sub {
+    font-size: 12px;
+    opacity: 0.75;
+}
+
+@media (max-width: 900px) {
+    .hospital-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .hospital-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .date-filter-controls {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

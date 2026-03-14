@@ -95,7 +95,7 @@ const RoleDashboard = () => {
                     <div className="empty-state">
                         <span className="empty-icon">📭</span>
                         <h3>No pages assigned yet</h3>
-                        <p>Contact your administrator to set up navigation links for your role.</p>
+                        <p>Contact your superadmin to set up navigation links for your role.</p>
                     </div>
                 )}
 

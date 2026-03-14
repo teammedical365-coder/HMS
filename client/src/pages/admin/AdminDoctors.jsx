@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAuth, useAdminEntities } from '../../store/hooks';
 import { fetchAdminDoctors, createDoctor, updateDoctor, deleteDoctor } from '../../store/slices/adminEntitiesSlice';
-import '../administration/Administrator.css';
+import '../administration/SuperAdmin.css';
 
 const AdminDoctors = () => {
     const navigate = useNavigate();
@@ -203,8 +203,8 @@ const AdminDoctors = () => {
     };
 
     return (
-        <div className="administrator-page">
-            <div className="administrator-container">
+        <div className="superadmin-page">
+            <div className="superadmin-container">
                 <div className="admin-header">
                     <div>
                         <h1>Manage Doctors</h1>

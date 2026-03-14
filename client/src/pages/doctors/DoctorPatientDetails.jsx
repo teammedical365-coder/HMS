@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doctorAPI, labTestAPI } from '../../utils/api';
+import { doctorAPI, labTestAPI, medicineAPI, questionLibraryAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './DoctorPatientDetails.css';
+import DynamicQuestionForm from '../../components/DynamicQuestionForm';
 
 const DoctorPatientDetails = () => {
     const { appointmentId } = useParams();
@@ -13,6 +14,12 @@ const DoctorPatientDetails = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [catalogTests, setCatalogTests] = useState([]);
+    const [catalogMedicines, setCatalogMedicines] = useState([]);
+    const [dynamicLibrary, setDynamicLibrary] = useState(null);
+    const [hospitalDepartments, setHospitalDepartments] = useState([]);
+
+    // Modal States
+    const [showPrescribeModal, setShowPrescribeModal] = useState(false);
 
     // Tab State for Left Panel
     const [activeTab, setActiveTab] = useState('overview');
@@ -78,6 +85,10 @@ const DoctorPatientDetails = () => {
                         prescription: '',
                         labTests: (res.appointment.labTests || []).join(', ')
                     });
+                    
+                    if (res.departments) {
+                        setHospitalDepartments(res.departments);
+                    }
                 }
             } catch (err) { console.error(err); }
 
@@ -87,6 +98,20 @@ const DoctorPatientDetails = () => {
                     setCatalogTests(testRes.data || []);
                 }
             } catch (err) { console.error("Error fetching lab test catalog", err); }
+
+            try {
+                const medRes = await medicineAPI.getMedicines();
+                if (medRes.success) {
+                    setCatalogMedicines(medRes.data || []);
+                }
+            } catch (err) { console.error("Error fetching medicine catalog", err); }
+
+            try {
+                const libRes = await questionLibraryAPI.getLibrary();
+                if (libRes.success && libRes.data && libRes.data.data) {
+                    setDynamicLibrary(libRes.data.data);
+                }
+            } catch (err) { console.error("Error fetching dynamic question library", err); }
 
             finally { setLoading(false); }
         };
@@ -210,22 +235,23 @@ const DoctorPatientDetails = () => {
 
         y += 45;
 
-        const profileData = [
-            ["Chief Complaint", intake.chiefComplaint || '-'],
-            ["Medical History", intake.medicalHistory || '-'],
-            ["Height / Weight / BMI", `${intake.height || '-'} cm / ${intake.weight || '-'} kg / ${intake.bmi || '-'}`],
-            ["Blood Group", intake.bloodGroup || '-'],
-            ["Obstetric Hx", `G${intake.gravida || '-'} P${intake.para || '-'} A${intake.abortion || '-'} L${intake.living || '-'}`]
-        ];
-        autoTable(doc, {
-            startY: y,
-            head: [['Clinical Summary', 'Details']],
-            body: profileData,
-            theme: 'grid',
-            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-            columnStyles: { 0: { fontStyle: 'bold', width: 50 } }
-        });
-        y = doc.lastAutoTable.finalY + 10;
+        // Iterate over dynamic intake data (excluding internal system keys or deeply nested objects if any)
+        const dynamicEntries = Object.entries(intake).filter(([key, val]) => 
+            key !== '_id' && key !== 'createdAt' && key !== 'updatedAt' && key !== '__v' 
+            && typeof val !== 'object' && val !== ''
+        ).map(([key, val]) => [key, String(val)]);
+
+        if (dynamicEntries.length > 0) {
+            autoTable(doc, {
+                startY: y,
+                head: [['Clinical Questionnaire', 'Response']],
+                body: dynamicEntries,
+                theme: 'grid',
+                headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+                columnStyles: { 0: { fontStyle: 'bold', width: 80 } }
+            });
+            y = doc.lastAutoTable.finalY + 10;
+        }
 
         if (pastHistory.length > 0) {
             doc.setFillColor(220, 240, 255); doc.rect(14, y, 180, 8, 'F');
@@ -279,14 +305,29 @@ const DoctorPatientDetails = () => {
 
     const tabs = [
         { id: 'overview', label: 'Overview', icon: '📋' },
-        { id: 'vitals', label: 'Vitals', icon: '💓' },
-        { id: 'clinical', label: 'Clinical', icon: '🏥' },
-        { id: 'obstetric', label: 'Obstetric', icon: '🤰' },
-        { id: 'spouse', label: 'Spouse/Partner', icon: '👫' },
-        { id: 'menstrual', label: 'Menstrual', icon: '📅' },
-        { id: 'treatment', label: 'Treatment Hx', icon: '💊' },
         { id: 'history', label: 'Past Visits', icon: '📜' },
     ];
+
+    // Dynamic Form Tabs Injection
+    let dynamicTabs = [];
+    if (dynamicLibrary) {
+        let allowedDepts = hospitalDepartments.length > 0 ? hospitalDepartments : Object.keys(dynamicLibrary);
+        
+        allowedDepts.forEach(dept => {
+            if (dynamicLibrary[dept]) {
+                Object.keys(dynamicLibrary[dept]).forEach((catKey, i) => {
+                    dynamicTabs.push({ 
+                        id: `dyn_${dept.replace(/\s/g, '')}_${i}`, 
+                        label: `${dept} - ${catKey}`, 
+                        icon: '📋', 
+                        data: dynamicLibrary[dept][catKey] 
+                    });
+                });
+            }
+        });
+    }
+
+    const allTabs = [...tabs, ...dynamicTabs];
 
     return (
         <div className="dpd-container">
@@ -336,7 +377,7 @@ const DoctorPatientDetails = () => {
                 <div className="dpd-tabs-container">
                     <button className="dpd-tab-scroll-btn" onClick={() => scrollTabs('left')} title="Scroll Left">‹</button>
                     <div className="dpd-tabs-nav" ref={tabsRef}>
-                        {tabs.map(tab => (
+                        {allTabs.map(tab => (
                             <button
                                 key={tab.id}
                                 className={`dpd-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
@@ -434,262 +475,9 @@ const DoctorPatientDetails = () => {
                         </div>
                     )}
 
-                    {/* VITALS */}
-                    {activeTab === 'vitals' && (
-                        <div className="dpd-tab-panel">
-                            <h3 className="dpd-panel-title">💓 Vitals & Measurements</h3>
-                            <div className="dpd-form-grid">
-                                <div className="dpd-field">
-                                    <label>Height (cm)</label>
-                                    <input name="height" type="number" value={intakeData.height || ''} onChange={handleIntakeChange} placeholder="e.g. 165" />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Weight (kg)</label>
-                                    <input name="weight" type="number" value={intakeData.weight || ''} onChange={handleIntakeChange} placeholder="e.g. 65" />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>BMI (Auto)</label>
-                                    <input name="bmi" value={intakeData.bmi || ''} readOnly className="dpd-readonly" />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Blood Group</label>
-                                    <select name="bloodGroup" value={intakeData.bloodGroup || ''} onChange={handleIntakeChange}>
-                                        <option value="">-- Select --</option>
-                                        {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
-                                            <option key={bg} value={bg}>{bg}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Blood Pressure</label>
-                                    <input name="historyBp" value={intakeData.historyBp || ''} onChange={handleIntakeChange} placeholder="e.g. 120/80 mmHg" />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Pulse</label>
-                                    <input name="historyPulse" value={intakeData.historyPulse || ''} onChange={handleIntakeChange} placeholder="e.g. 72 bpm" />
-                                </div>
-                            </div>
-                            <button className="dpd-save-section" onClick={handleSaveProfile} disabled={saving}>
-                                {saving ? 'Saving...' : '💾 Save Vitals'}
-                            </button>
-                        </div>
-                    )}
-
-                    {/* CLINICAL HISTORY */}
-                    {activeTab === 'clinical' && (
-                        <div className="dpd-tab-panel">
-                            <h3 className="dpd-panel-title">🏥 Clinical History</h3>
-                            <div className="dpd-form-grid">
-                                <div className="dpd-field">
-                                    <label>Wife's Age</label>
-                                    <input name="wifeAge" value={intakeData.wifeAge || ''} onChange={handleIntakeChange} placeholder="Wife Age" />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Husband's Age</label>
-                                    <input name="husbandAge" value={intakeData.husbandAge || ''} onChange={handleIntakeChange} placeholder="Husband Age" />
-                                </div>
-                            </div>
-                            <div className="dpd-field-full">
-                                <label>Chief Complaint (Duration of Infertility)</label>
-                                <textarea name="chiefComplaint" value={intakeData.chiefComplaint || ''} onChange={handleIntakeChange} placeholder="e.g. Primary Infertility for 3 years..." />
-                            </div>
-                            <div className="dpd-field-full">
-                                <label>Medical History (Diabetes, HTN, TB, Thyroid, Asthma, Epilepsy)</label>
-                                <textarea name="medicalHistory" value={intakeData.medicalHistory || ''} onChange={handleIntakeChange} placeholder="Check relevant history..." />
-                            </div>
-                            <div className="dpd-field-full">
-                                <label>Surgical History (Laparoscopy, Appendectomy, etc.)</label>
-                                <textarea name="surgicalHistory" value={intakeData.surgicalHistory || ''} onChange={handleIntakeChange} />
-                            </div>
-                            <div className="dpd-field-full">
-                                <label>Family History (Premature menopause, Genetic disorders)</label>
-                                <textarea name="familyHistory" value={intakeData.familyHistory || ''} onChange={handleIntakeChange} />
-                            </div>
-                            <button className="dpd-save-section" onClick={handleSaveProfile} disabled={saving}>
-                                {saving ? 'Saving...' : '💾 Save Clinical Data'}
-                            </button>
-                        </div>
-                    )}
-
-                    {/* OBSTETRIC */}
-                    {activeTab === 'obstetric' && (
-                        <div className="dpd-tab-panel">
-                            <h3 className="dpd-panel-title">🤰 Obstetric History</h3>
-                            <div className="dpd-form-grid dpd-grid-4">
-                                <div className="dpd-field">
-                                    <label>Gravida (G)</label>
-                                    <input name="gravida" value={intakeData.gravida || ''} onChange={handleIntakeChange} />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Para (P)</label>
-                                    <input name="para" value={intakeData.para || ''} onChange={handleIntakeChange} />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Abortion (A)</label>
-                                    <input name="abortion" value={intakeData.abortion || ''} onChange={handleIntakeChange} />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Living (L)</label>
-                                    <input name="living" value={intakeData.living || ''} onChange={handleIntakeChange} />
-                                </div>
-                            </div>
-                            <div className="dpd-field-full">
-                                <label>Details of Previous Pregnancies</label>
-                                <textarea name="obstetricDetails" value={intakeData.obstetricDetails || ''} onChange={handleIntakeChange} placeholder="1. 2018 - FTND - Male - Healthy..." />
-                            </div>
-                            <div className="dpd-field-full">
-                                <label>History of Ectopic Pregnancy?</label>
-                                <input name="ectopicHistory" value={intakeData.ectopicHistory || ''} onChange={handleIntakeChange} placeholder="Details if any..." />
-                            </div>
-                            <button className="dpd-save-section" onClick={handleSaveProfile} disabled={saving}>
-                                {saving ? 'Saving...' : '💾 Save Obstetric Data'}
-                            </button>
-                        </div>
-                    )}
-
-                    {/* SPOUSE / PARTNER */}
-                    {activeTab === 'spouse' && (
-                        <div className="dpd-tab-panel">
-                            <h3 className="dpd-panel-title">👫 Spouse / Partner Details</h3>
-                            <div className="dpd-form-grid">
-                                <div className="dpd-field">
-                                    <label>Partner Title</label>
-                                    <select name="partnerTitle" value={intakeData.partnerTitle || ''} onChange={handleIntakeChange}>
-                                        <option value="">--</option>
-                                        <option value="Mr.">Mr.</option>
-                                        <option value="Mrs.">Mrs.</option>
-                                        <option value="Dr.">Dr.</option>
-                                    </select>
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Partner First Name</label>
-                                    <input name="partnerFirstName" value={intakeData.partnerFirstName || ''} onChange={handleIntakeChange} />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Partner Last Name</label>
-                                    <input name="partnerLastName" value={intakeData.partnerLastName || ''} onChange={handleIntakeChange} />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Partner Age</label>
-                                    <input name="partnerAge" type="number" value={intakeData.partnerAge || ''} onChange={handleIntakeChange} />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Partner DOB</label>
-                                    <input name="partnerDob" type="date" value={intakeData.partnerDob || ''} onChange={handleIntakeChange} />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Partner Mobile</label>
-                                    <input name="partnerMobile" value={intakeData.partnerMobile || ''} onChange={handleIntakeChange} />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Partner Email</label>
-                                    <input name="partnerEmail" value={intakeData.partnerEmail || ''} onChange={handleIntakeChange} />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Partner Blood Group</label>
-                                    <select name="partnerBloodGroup" value={intakeData.partnerBloodGroup || ''} onChange={handleIntakeChange}>
-                                        <option value="">-- Select --</option>
-                                        {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
-                                            <option key={bg} value={bg}>{bg}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <h4 className="dpd-sub-title">📏 Partner Vitals</h4>
-                            <div className="dpd-form-grid">
-                                <div className="dpd-field">
-                                    <label>Partner Height (cm)</label>
-                                    <input name="partnerHeight" type="number" value={intakeData.partnerHeight || ''} onChange={handleIntakeChange} />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Partner Weight (kg)</label>
-                                    <input name="partnerWeight" type="number" value={intakeData.partnerWeight || ''} onChange={handleIntakeChange} />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Partner BP</label>
-                                    <input name="partnerBp" value={intakeData.partnerBp || ''} onChange={handleIntakeChange} placeholder="e.g. 120/80" />
-                                </div>
-                            </div>
-
-                            <div className="dpd-field-full">
-                                <label>Partner Medical Comments</label>
-                                <textarea name="partnerMedicalComments" value={intakeData.partnerMedicalComments || ''} onChange={handleIntakeChange} placeholder="Any medical conditions, allergies, etc." />
-                            </div>
-
-                            <button className="dpd-save-section" onClick={handleSaveProfile} disabled={saving}>
-                                {saving ? 'Saving...' : '💾 Save Partner Details'}
-                            </button>
-                        </div>
-                    )}
-
-                    {/* MENSTRUAL */}
-                    {activeTab === 'menstrual' && (
-                        <div className="dpd-tab-panel">
-                            <h3 className="dpd-panel-title">📅 Menstrual History</h3>
-                            <div className="dpd-form-grid">
-                                <div className="dpd-field">
-                                    <label>Age of Menarche</label>
-                                    <input name="menarcheAge" value={intakeData.menarcheAge || ''} onChange={handleIntakeChange} />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>LMP (Last Menstrual Period)</label>
-                                    <input type="date" name="lmp" value={intakeData.lmp || intakeData.lmpDate || ''} onChange={handleIntakeChange} />
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Cycle Regularity</label>
-                                    <select name="cycleRegularity" value={intakeData.cycleRegularity || intakeData.menstrualRegularity || ''} onChange={handleIntakeChange}>
-                                        <option value="">-- Select --</option>
-                                        <option value="Regular">Regular (28-30 days)</option>
-                                        <option value="Irregular">Irregular</option>
-                                        <option value="Oligomenorrhea">Oligomenorrhea (Delayed)</option>
-                                        <option value="Polymenorrhea">Polymenorrhea (Frequent)</option>
-                                    </select>
-                                </div>
-                                <div className="dpd-field">
-                                    <label>Flow Duration (Days)</label>
-                                    <input name="flowDuration" value={intakeData.flowDuration || intakeData.menstrualFlow || ''} onChange={handleIntakeChange} placeholder="e.g. 3-4 days" />
-                                </div>
-                            </div>
-                            <div className="dpd-field-full">
-                                <label>Dysmenorrhea (Painful Periods)?</label>
-                                <input name="dysmenorrhea" value={intakeData.dysmenorrhea || intakeData.menstrualPain || ''} onChange={handleIntakeChange} placeholder="Mild / Moderate / Severe" />
-                            </div>
-                            <button className="dpd-save-section" onClick={handleSaveProfile} disabled={saving}>
-                                {saving ? 'Saving...' : '💾 Save Menstrual Data'}
-                            </button>
-                        </div>
-                    )}
-
-                    {/* TREATMENT HISTORY */}
-                    {activeTab === 'treatment' && (
-                        <div className="dpd-tab-panel">
-                            <h3 className="dpd-panel-title">💊 Previous Investigations & Treatments</h3>
-                            <div className="dpd-field-full">
-                                <label>Hysterosalpingography (HSG) Status</label>
-                                <input name="hsgStatus" value={intakeData.hsgStatus || ''} onChange={handleIntakeChange} placeholder="Patent / Blocked / Not done" />
-                            </div>
-                            <div className="dpd-field-full">
-                                <label>Previous IUI Cycles</label>
-                                <textarea name="prevIUI" value={intakeData.prevIUI || ''} onChange={handleIntakeChange} placeholder="Number of cycles, stimulation details, outcome..." />
-                            </div>
-                            <div className="dpd-field-full">
-                                <label>Previous IVF/ICSI Cycles</label>
-                                <textarea name="prevIVF" value={intakeData.prevIVF || ''} onChange={handleIntakeChange} placeholder="Date, No. of oocytes, Embryos, ET outcome..." />
-                            </div>
-                            <div className="dpd-field-full">
-                                <label>Treatment History Summary</label>
-                                <textarea name="treatmentHistory" value={intakeData.treatmentHistory || ''} onChange={handleIntakeChange} placeholder="Summary of all previous treatments..." />
-                            </div>
-                            <button className="dpd-save-section" onClick={handleSaveProfile} disabled={saving}>
-                                {saving ? 'Saving...' : '💾 Save Treatment Data'}
-                            </button>
-                        </div>
-                    )}
-
                     {/* PAST VISITS HISTORY */}
                     {activeTab === 'history' && (
-                        <div className="dpd-tab-panel fade-in">
+                        <div className="dpd-tab-panel">
                             <h3 className="dpd-panel-title">📜 Previous Consultations ({history.length})</h3>
                             {history.length === 0 ? (
                                 <div className="dpd-empty-hist">
@@ -741,6 +529,23 @@ const DoctorPatientDetails = () => {
                             )}
                         </div>
                     )}
+
+                    {/* DYNAMIC FORMS RENDERER */}
+                    {dynamicTabs.map(dTab => (
+                        activeTab === dTab.id && (
+                            <div key={dTab.id} style={{ display: 'block' }}>
+                                <DynamicQuestionForm
+                                    categoryName={dTab.label}
+                                    questions={dTab.data}
+                                    intakeData={intakeData}
+                                    setIntakeData={setIntakeData}
+                                />
+                                <button className="dpd-save-section" onClick={handleSaveProfile} disabled={saving} style={{ marginTop: '20px' }}>
+                                    {saving ? 'Saving...' : `💾 Save ${dTab.label} Data`}
+                                </button>
+                            </div>
+                        )
+                    ))}
                 </div>
             </div>
 
@@ -861,55 +666,23 @@ const DoctorPatientDetails = () => {
                             </div>
 
                             <div className="dpd-session-field">
-                                <label>💊 Prescription (one medicine per line)</label>
-                                <textarea
-                                    name="prescription"
-                                    value={sessionData.prescription}
-                                    onChange={handleSessionChange}
-                                    placeholder={"Tab. Folic Acid 5mg - 1 OD\nTab. Progesterone 200mg - 1 BD\nInj. HCG 5000 IU"}
-                                    className="dpd-prescription-textarea"
-                                />
-                            </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPrescribeModal(true)}
+                                    style={{ padding: '14px', fontSize: '15px', background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(79, 70, 229, 0.25)', marginTop: '10px' }}
+                                >
+                                    💊 / 🧪 Prescribe Medicines & Lab Tests
+                                </button>
 
-                            <div className="dpd-session-field">
-                                <label>🧪 Prescribe Lab Tests</label>
-                                <div style={{
-                                    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px',
-                                    maxHeight: '200px', overflowY: 'auto', padding: '10px',
-                                    border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc'
-                                }}>
-                                    {catalogTests.length > 0 ? catalogTests.filter(t => t.isActive).map(test => {
-                                        const isChecked = sessionData.labTests.split(', ').includes(test.name);
-                                        return (
-                                            <label key={test._id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isChecked}
-                                                    onChange={(e) => {
-                                                        let currentTests = sessionData.labTests ? sessionData.labTests.split(', ') : [];
-                                                        if (e.target.checked) {
-                                                            currentTests.push(test.name);
-                                                        } else {
-                                                            currentTests = currentTests.filter(t => t !== test.name);
-                                                        }
-                                                        setSessionData(prev => ({ ...prev, labTests: currentTests.join(', ') }));
-                                                    }}
-                                                />
-                                                {test.name}
-                                            </label>
-                                        );
-                                    }) : (
-                                        <p style={{ color: '#64748b' }}>No lab tests defined by admin.</p>
-                                    )}
-                                </div>
-                                <input
-                                    style={{ marginTop: '10px' }}
-                                    name="labTests"
-                                    value={sessionData.labTests}
-                                    onChange={handleSessionChange}
-                                    placeholder="Or type custom tests (comma-separated)..."
-                                    className="dpd-diag-input"
-                                />
+                                {(sessionData.prescription || sessionData.labTests) && (
+                                    <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '10px', fontSize: '13px', color: '#475569' }}>
+                                        {sessionData.prescription && <div style={{ marginBottom: '4px' }}><b>✅ Medicines included</b></div>}
+                                        {sessionData.labTests && <div><b>✅ Lab Tests included</b></div>}
+                                        <div style={{ marginTop: '8px', fontSize: '12px', color: '#3b82f6', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setShowPrescribeModal(true)}>
+                                            Click above button to view/edit details.
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -924,6 +697,111 @@ const DoctorPatientDetails = () => {
                     </>
                 )}
             </div>
+
+            {/* ====== MODALS ====== */}
+            {showPrescribeModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', width: '850px', maxWidth: '95vw', height: '85vh', maxHeight: '850px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
+                            <h3 style={{ margin: 0, color: '#0f172a', fontSize: '1.4rem', fontWeight: '800' }}>⚕️ Prescribe Medicines & Lab Tests</h3>
+                            <button onClick={() => setShowPrescribeModal(false)} style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569' }}>✕</button>
+                        </div>
+
+                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '30px', paddingRight: '8px' }}>
+
+                            {/* Medicines Section */}
+                            <div>
+                                <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>💊 Select Medicines</h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '10px', marginBottom: '16px' }}>
+                                    {catalogMedicines.length > 0 ? catalogMedicines.map(med => {
+                                        const isIncluded = sessionData.prescription.includes(med.name);
+                                        return (
+                                            <label key={med._id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', cursor: 'pointer', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '10px', background: isIncluded ? '#eff6ff' : '#fafafa', borderColor: isIncluded ? '#93c5fd' : '#e2e8f0', transition: 'all 0.2s' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isIncluded}
+                                                    onChange={(e) => {
+                                                        let lines = sessionData.prescription.split('\n').filter(l => l.trim() !== '');
+                                                        if (e.target.checked) {
+                                                            if (!isIncluded) lines.push(`${med.name} - 1 OD`);
+                                                        } else {
+                                                            lines = lines.filter(l => !l.startsWith(med.name));
+                                                        }
+                                                        setSessionData(prev => ({ ...prev, prescription: lines.join('\n') }));
+                                                    }}
+                                                    style={{ marginTop: '2px', cursor: 'pointer', width: '16px', height: '16px' }}
+                                                />
+                                                <div>
+                                                    <div style={{ fontWeight: '700', color: '#0f172a' }}>{med.name}</div>
+                                                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{med.genericName}</div>
+                                                </div>
+                                            </label>
+                                        );
+                                    }) : <p style={{ color: '#94a3b8', fontSize: '13px', gridColumn: '1 / -1', textAlign: 'center', padding: '20px', background: '#f8fafc', borderRadius: '8px' }}>No medicines catalog defined by Super Admin.</p>}
+                                </div>
+                                <label style={{ fontSize: '13px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '6px' }}>Edit Final Prescription (Manual entry allowed):</label>
+                                <textarea
+                                    name="prescription"
+                                    value={sessionData.prescription}
+                                    onChange={handleSessionChange}
+                                    placeholder={"Tab. Folic Acid 5mg - 1 OD\nTab. Progesterone 200mg - 1 BD"}
+                                    className="dpd-prescription-textarea"
+                                    style={{ minHeight: '100px', width: '100%', boxSizing: 'border-box', background: '#fefce8', borderColor: '#fde68a' }}
+                                />
+                            </div>
+
+                            <hr style={{ border: 'none', borderTop: '2px dashed #e2e8f0', margin: '0' }} />
+
+                            {/* Lab Tests Section */}
+                            <div>
+                                <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>🧪 Select Lab Tests</h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px', marginBottom: '16px' }}>
+                                    {catalogTests.length > 0 ? catalogTests.filter(t => t.isActive).map(test => {
+                                        const isChecked = sessionData.labTests.split(', ').includes(test.name);
+                                        return (
+                                            <label key={test._id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', cursor: 'pointer', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '10px', background: isChecked ? '#eff6ff' : '#fafafa', borderColor: isChecked ? '#93c5fd' : '#e2e8f0', transition: 'all 0.2s' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={(e) => {
+                                                        let currentTests = sessionData.labTests ? sessionData.labTests.split(', ') : [];
+                                                        if (e.target.checked) {
+                                                            currentTests.push(test.name);
+                                                        } else {
+                                                            currentTests = currentTests.filter(t => t !== test.name);
+                                                        }
+                                                        setSessionData(prev => ({ ...prev, labTests: currentTests.join(', ') }));
+                                                    }}
+                                                    style={{ marginTop: '2px', cursor: 'pointer', width: '16px', height: '16px' }}
+                                                />
+                                                <div>
+                                                    <div style={{ fontWeight: '700', color: '#0f172a' }}>{test.name}</div>
+                                                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{test.category}</div>
+                                                </div>
+                                            </label>
+                                        );
+                                    }) : <p style={{ color: '#94a3b8', fontSize: '13px', gridColumn: '1 / -1', textAlign: 'center', padding: '20px', background: '#f8fafc', borderRadius: '8px' }}>No lab tests defined by Super Admin.</p>}
+                                </div>
+                                <label style={{ fontSize: '13px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '6px' }}>Edit Final Lab Tests (Comma separated):</label>
+                                <input
+                                    name="labTests"
+                                    value={sessionData.labTests}
+                                    onChange={handleSessionChange}
+                                    placeholder="CBC, LFT, KFT..."
+                                    className="dpd-diag-input"
+                                    style={{ width: '100%', boxSizing: 'border-box' }}
+                                />
+                            </div>
+
+                        </div>
+
+                        <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                            <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>Close</button>
+                            <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 30px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px', boxShadow: '0 4px 6px rgba(59, 130, 246, 0.3)' }}>Save Selections & Resume Note</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

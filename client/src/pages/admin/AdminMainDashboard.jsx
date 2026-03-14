@@ -76,9 +76,19 @@ const AdminMainDashboard = () => {
             path: '/admin/lab-tests', bg: 'rgba(232,62,140,0.12)'
         },
         {
+            icon: '📦', label: 'Tests & Packages',
+            desc: 'Create test packages and manage individual tests',
+            path: '/admin/test-packages', bg: 'rgba(124,58,237,0.12)'
+        },
+        {
             icon: '💊', label: 'Pharmacy',
             desc: 'Manage pharmacy inventory and suppliers',
             path: '/admin/pharmacy', bg: 'rgba(231,76,60,0.12)'
+        },
+        {
+            icon: '💊', label: 'Medicine Catalog',
+            desc: 'Manage global catalog of medicines',
+            path: '/admin/medicines', bg: 'rgba(231,76,60,0.12)'
         },
         {
             icon: '🏥', label: 'Reception',
@@ -95,12 +105,24 @@ const AdminMainDashboard = () => {
             desc: 'Add a new staff member with login credentials',
             path: '/admin/users', bg: 'rgba(46,204,113,0.12)'
         },
+        {
+            icon: '❓', label: 'Question Library',
+            desc: 'Configure forms and assessment libraries for doctors',
+            path: '/admin/question-library', bg: 'rgba(142,68,173,0.12)'
+        },
     ];
 
     const handleLogout = () => {
+        const role = user?.role?.toLowerCase();
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        navigate('/login');
+        if (role === 'centraladmin' || role === 'superadmin') {
+            navigate('/supremeadmin/login');
+        } else if (role === 'hospitaladmin') {
+            navigate('/hospitaladmin/login');
+        } else {
+            navigate('/login');
+        }
     };
 
     return (

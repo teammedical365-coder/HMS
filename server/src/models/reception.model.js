@@ -7,6 +7,12 @@ const receptionSchema = new mongoose.Schema({
         required: true,
         unique: true
     },
+    hospitalId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Hospital',
+        default: null,
+        index: true
+    },
     // Specific fields for receptionist staff (not patients)
     employeeId: { type: String, trim: true },
     joiningDate: { type: Date },

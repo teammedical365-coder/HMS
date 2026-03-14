@@ -11,7 +11,13 @@ const doctorSchema = new mongoose.Schema({
     ref: 'User',
     required: false,
     unique: true,
-    sparse: true // Allows multiple null values
+    sparse: true
+  },
+  hospitalId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hospital',
+    default: null,
+    index: true
   },
   name: {
     type: String,

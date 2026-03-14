@@ -21,6 +21,12 @@ const patientRoutes = require('./routes/patient.routes');
 const clinicalRoutes = require('./routes/clinical.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const labTestRoutes = require('./routes/labTest.routes');
+const medicineRoutes = require('./routes/medicine.routes');
+const questionLibraryRoutes = require('./routes/questionLibrary.routes');
+const testPackageRoutes = require('./routes/testPackage.routes');
+const hospitalRoutes = require('./routes/hospital.routes');
+const financeRoutes = require('./routes/finance.routes');
+const billingRoutes = require('./routes/billing.routes');
 
 const app = express();
 // ughfgh
@@ -73,6 +79,12 @@ app.use('/api/patients', patientRoutes); // For searching & identifying patients
 app.use('/api/clinical', clinicalRoutes); // For visits, vitals & history (e.g. /api/clinical/intake)
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/lab-tests', labTestRoutes);
+app.use('/api/medicines', medicineRoutes);
+app.use('/api/question-library', questionLibraryRoutes);
+app.use('/api/test-packages', testPackageRoutes);
+app.use('/api/hospitals', hospitalRoutes);
+app.use('/api/finance', financeRoutes);
+app.use('/api/billing', billingRoutes);
 
 app.get('/', (req, res) => {
     res.send('API is running...');

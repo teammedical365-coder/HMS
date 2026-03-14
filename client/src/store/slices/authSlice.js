@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { authAPI, adminAPI } from '../../utils/api';
+import { authAPI, adminAPI, hospitalAdminAPI } from '../../utils/api';
 
 // Async Thunks
 export const loginUser = createAsyncThunk(
@@ -41,6 +41,23 @@ export const loginAdmin = createAsyncThunk(
   async ({ email, password }, { rejectWithValue }) => {
     try {
       const response = await adminAPI.login(email, password);
+      if (response.success) {
+        localStorage.setItem('token', response.token);
+        localStorage.setItem('user', JSON.stringify(response.user));
+        return response;
+      }
+      return rejectWithValue(response.message || 'Login failed');
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Login failed');
+    }
+  }
+);
+
+export const loginHospitalAdmin = createAsyncThunk(
+  'auth/loginHospitalAdmin',
+  async ({ email, password }, { rejectWithValue }) => {
+    try {
+      const response = await hospitalAdminAPI.login(email, password);
       if (response.success) {
         localStorage.setItem('token', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
@@ -155,6 +172,16 @@ const authSlice = createSlice({
       state.isAuthenticated = true;
     });
     builder.addCase(signupAdmin.rejected, (state, action) => { state.loading = false; state.error = action.payload; });
+
+    // Login Hospital Admin
+    builder.addCase(loginHospitalAdmin.pending, (state) => { state.loading = true; state.error = null; });
+    builder.addCase(loginHospitalAdmin.fulfilled, (state, action) => {
+      state.loading = false;
+      state.user = action.payload.user;
+      state.token = action.payload.token;
+      state.isAuthenticated = true;
+    });
+    builder.addCase(loginHospitalAdmin.rejected, (state, action) => { state.loading = false; state.error = action.payload; });
   },
 });
 

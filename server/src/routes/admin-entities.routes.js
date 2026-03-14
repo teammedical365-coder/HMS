@@ -8,11 +8,34 @@ const Pharmacy = require('../models/pharmacy.model');
 const Reception = require('../models/reception.model');
 const Service = require('../models/service.model');
 const User = require('../models/user.model');
-const { verifyAdminOrAdministrator } = require('../middleware/auth.middleware');
+const { verifyAdminOrSuperAdmin } = require('../middleware/auth.middleware');
 const bcrypt = require('bcryptjs');
 
+/**
+ * Returns hospitalId filter for queries.
+ * Central admin: no filter (sees all) unless ?hospitalId= query param
+ * Hospital admin / staff: always scoped to their hospitalId
+ */
+function getHospitalFilter(req) {
+  const role = req.user ? req.user.role : null;
+  const isCentral = role === 'centraladmin' || role === 'superadmin';
+  if (isCentral) {
+    const qhid = req.query.hospitalId;
+    return qhid ? { hospitalId: qhid } : {};
+  }
+  const hid = req.user && req.user.hospitalId;
+  return hid ? { hospitalId: hid } : { hospitalId: null };
+}
+
+function getHospitalId(req) {
+  const role = req.user ? req.user.role : null;
+  const isCentral = role === 'centraladmin' || role === 'superadmin';
+  if (isCentral) return req.body.hospitalId || null;
+  return (req.user && req.user.hospitalId) || null;
+}
+
 // Create doctor
-router.post('/doctors', verifyAdminOrAdministrator, async (req, res) => {
+router.post('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const { name, email, phone, specialty, experience, education, services, availability, successRate, patientsCount, image, bio, consultationFee, password } = req.body;
 
@@ -41,14 +64,15 @@ router.post('/doctors', verifyAdminOrAdministrator, async (req, res) => {
     // Create user account for the doctor
     const defaultPassword = password || nanoid(12); // Generate password if not provided
     // Don't hash password here - User model's pre-save hook will handle it
-    
+
     const user = new User({
       name,
       email: email.toLowerCase(),
-      password: defaultPassword, // Pass plain password, model will hash it
+      password: defaultPassword,
       phone: phone || '',
       role: 'doctor',
-      services: services || []
+      services: services || [],
+      hospitalId: getHospitalId(req)
     });
 
     await user.save();
@@ -80,6 +104,7 @@ router.post('/doctors', verifyAdminOrAdministrator, async (req, res) => {
     const doctor = new Doctor({
       doctorId: doctorId,
       userId: user._id,
+      hospitalId: getHospitalId(req),
       name: name,
       email: email.toLowerCase(),
       phone: phone || '',
@@ -98,36 +123,36 @@ router.post('/doctors', verifyAdminOrAdministrator, async (req, res) => {
     await doctor.save();
     const populatedDoctor = await Doctor.findById(doctor._id).populate('userId', 'name email phone role');
 
-    res.status(201).json({ 
-      success: true, 
-      message: 'Doctor created successfully', 
+    res.status(201).json({
+      success: true,
+      message: 'Doctor created successfully',
       doctor: populatedDoctor,
       generatedPassword: !password ? defaultPassword : undefined // Return generated password if not provided
     });
   } catch (error) {
     console.error('Create doctor error:', error);
-    
+
     // Handle validation errors
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message).join(', ');
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Validation error', 
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
         error: errors
       });
     }
-    
+
     // Handle duplicate key errors
     if (error.code === 11000) {
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         message: 'Doctor profile already exists for this user'
       });
     }
-    
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error creating doctor', 
+
+    res.status(500).json({
+      success: false,
+      message: 'Error creating doctor',
       error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
@@ -135,18 +160,18 @@ router.post('/doctors', verifyAdminOrAdministrator, async (req, res) => {
 });
 
 // Get all doctors
-router.get('/doctors', verifyAdminOrAdministrator, async (req, res) => {
+router.get('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
-    const doctors = await Doctor.find().populate('userId', 'name email phone role').sort({ createdAt: -1 });
+    const filter = getHospitalFilter(req);
+    const doctors = await Doctor.find(filter).populate('userId', 'name email phone role').sort({ createdAt: -1 });
     res.json({ success: true, doctors });
   } catch (error) {
-    console.error('Get doctors error:', error);
     res.status(500).json({ success: false, message: 'Error fetching doctors', error: error.message });
   }
 });
 
 // Get single doctor
-router.get('/doctors/:id', verifyAdminOrAdministrator, async (req, res) => {
+router.get('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const doctor = await Doctor.findById(req.params.id).populate('userId', 'name email phone role');
     if (!doctor) {
@@ -160,7 +185,7 @@ router.get('/doctors/:id', verifyAdminOrAdministrator, async (req, res) => {
 });
 
 // Update doctor
-router.put('/doctors/:id', verifyAdminOrAdministrator, async (req, res) => {
+router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const { name, email, phone, specialty, experience, education, services, availability, successRate, patientsCount, image, bio, consultationFee } = req.body;
 
@@ -230,7 +255,7 @@ router.put('/doctors/:id', verifyAdminOrAdministrator, async (req, res) => {
 });
 
 // Delete doctor
-router.delete('/doctors/:id', verifyAdminOrAdministrator, async (req, res) => {
+router.delete('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const doctor = await Doctor.findById(req.params.id);
     if (!doctor) {
@@ -251,7 +276,7 @@ router.delete('/doctors/:id', verifyAdminOrAdministrator, async (req, res) => {
 });
 
 // Labs routes
-router.post('/labs', verifyAdminOrAdministrator, async (req, res) => {
+router.post('/labs', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const { name, email, phone, address, services, facilities, availability, description, password } = req.body;
 
@@ -274,13 +299,14 @@ router.post('/labs', verifyAdminOrAdministrator, async (req, res) => {
     // Create user account for the lab
     const defaultPassword = password || nanoid(12); // Generate password if not provided
     // Don't hash password here - User model's pre-save hook will handle it
-    
+
     const user = new User({
       name,
       email: email.toLowerCase(),
-      password: defaultPassword, // Pass plain password, model will hash it
+      password: defaultPassword,
       phone: phone || '',
-      role: 'lab'
+      role: 'lab',
+      hospitalId: getHospitalId(req)
     });
 
     await user.save();
@@ -317,13 +343,14 @@ router.post('/labs', verifyAdminOrAdministrator, async (req, res) => {
       services: services || [],
       facilities: facilities || [],
       availability: mergedAvailability,
-      description: description || ''
+      description: description || '',
+      hospitalId: getHospitalId(req)
     });
 
     await lab.save();
-    res.status(201).json({ 
-      success: true, 
-      message: 'Lab created successfully', 
+    res.status(201).json({
+      success: true,
+      message: 'Lab created successfully',
       lab,
       generatedPassword: !password ? defaultPassword : undefined // Return generated password if not provided
     });
@@ -333,17 +360,17 @@ router.post('/labs', verifyAdminOrAdministrator, async (req, res) => {
   }
 });
 
-router.get('/labs', verifyAdminOrAdministrator, async (req, res) => {
+router.get('/labs', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
-    const labs = await Lab.find().sort({ createdAt: -1 });
+    const filter = getHospitalFilter(req);
+    const labs = await Lab.find(filter).sort({ createdAt: -1 });
     res.json({ success: true, labs });
   } catch (error) {
-    console.error('Get labs error:', error);
     res.status(500).json({ success: false, message: 'Error fetching labs', error: error.message });
   }
 });
 
-router.put('/labs/:id', verifyAdminOrAdministrator, async (req, res) => {
+router.put('/labs/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const lab = await Lab.findById(req.params.id);
     if (!lab) {
@@ -359,7 +386,7 @@ router.put('/labs/:id', verifyAdminOrAdministrator, async (req, res) => {
   }
 });
 
-router.delete('/labs/:id', verifyAdminOrAdministrator, async (req, res) => {
+router.delete('/labs/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const lab = await Lab.findById(req.params.id);
     if (!lab) {
@@ -380,7 +407,7 @@ router.delete('/labs/:id', verifyAdminOrAdministrator, async (req, res) => {
 });
 
 // Pharmacy routes
-router.post('/pharmacies', verifyAdminOrAdministrator, async (req, res) => {
+router.post('/pharmacies', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const { name, email, phone, address, medications, availability, description, password } = req.body;
 
@@ -403,13 +430,14 @@ router.post('/pharmacies', verifyAdminOrAdministrator, async (req, res) => {
     // Create user account for the pharmacy
     const defaultPassword = password || nanoid(12); // Generate password if not provided
     // Don't hash password here - User model's pre-save hook will handle it
-    
+
     const user = new User({
       name,
       email: email.toLowerCase(),
-      password: defaultPassword, // Pass plain password, model will hash it
+      password: defaultPassword,
       phone: phone || '',
-      role: 'pharmacy'
+      role: 'pharmacy',
+      hospitalId: getHospitalId(req)
     });
 
     await user.save();
@@ -445,13 +473,14 @@ router.post('/pharmacies', verifyAdminOrAdministrator, async (req, res) => {
       address: address || '',
       medications: medications || [],
       availability: mergedAvailability,
-      description: description || ''
+      description: description || '',
+      hospitalId: getHospitalId(req)
     });
 
     await pharmacy.save();
-    res.status(201).json({ 
-      success: true, 
-      message: 'Pharmacy created successfully', 
+    res.status(201).json({
+      success: true,
+      message: 'Pharmacy created successfully',
       pharmacy,
       generatedPassword: !password ? defaultPassword : undefined // Return generated password if not provided
     });
@@ -461,17 +490,17 @@ router.post('/pharmacies', verifyAdminOrAdministrator, async (req, res) => {
   }
 });
 
-router.get('/pharmacies', verifyAdminOrAdministrator, async (req, res) => {
+router.get('/pharmacies', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
-    const pharmacies = await Pharmacy.find().sort({ createdAt: -1 });
+    const filter = getHospitalFilter(req);
+    const pharmacies = await Pharmacy.find(filter).sort({ createdAt: -1 });
     res.json({ success: true, pharmacies });
   } catch (error) {
-    console.error('Get pharmacies error:', error);
     res.status(500).json({ success: false, message: 'Error fetching pharmacies', error: error.message });
   }
 });
 
-router.put('/pharmacies/:id', verifyAdminOrAdministrator, async (req, res) => {
+router.put('/pharmacies/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const pharmacy = await Pharmacy.findById(req.params.id);
     if (!pharmacy) {
@@ -487,7 +516,7 @@ router.put('/pharmacies/:id', verifyAdminOrAdministrator, async (req, res) => {
   }
 });
 
-router.delete('/pharmacies/:id', verifyAdminOrAdministrator, async (req, res) => {
+router.delete('/pharmacies/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const pharmacy = await Pharmacy.findById(req.params.id);
     if (!pharmacy) {
@@ -508,7 +537,7 @@ router.delete('/pharmacies/:id', verifyAdminOrAdministrator, async (req, res) =>
 });
 
 // Reception routes
-router.post('/receptions', verifyAdminOrAdministrator, async (req, res) => {
+router.post('/receptions', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const { name, email, phone, services, availability, description, password } = req.body;
 
@@ -531,13 +560,14 @@ router.post('/receptions', verifyAdminOrAdministrator, async (req, res) => {
     // Create user account for the reception
     const defaultPassword = password || nanoid(12); // Generate password if not provided
     // Don't hash password here - User model's pre-save hook will handle it
-    
+
     const user = new User({
       name,
       email: email.toLowerCase(),
-      password: defaultPassword, // Pass plain password, model will hash it
+      password: defaultPassword,
       phone: phone || '',
-      role: 'reception'
+      role: 'reception',
+      hospitalId: getHospitalId(req)
     });
 
     await user.save();
@@ -576,9 +606,9 @@ router.post('/receptions', verifyAdminOrAdministrator, async (req, res) => {
     });
 
     await reception.save();
-    res.status(201).json({ 
-      success: true, 
-      message: 'Reception created successfully', 
+    res.status(201).json({
+      success: true,
+      message: 'Reception created successfully',
       reception,
       generatedPassword: !password ? defaultPassword : undefined // Return generated password if not provided
     });
@@ -588,17 +618,17 @@ router.post('/receptions', verifyAdminOrAdministrator, async (req, res) => {
   }
 });
 
-router.get('/receptions', verifyAdminOrAdministrator, async (req, res) => {
+router.get('/receptions', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
-    const receptions = await Reception.find().sort({ createdAt: -1 });
+    const filter = getHospitalFilter(req);
+    const receptions = await Reception.find(filter).populate('userId', 'name email phone').sort({ createdAt: -1 });
     res.json({ success: true, receptions });
   } catch (error) {
-    console.error('Get receptions error:', error);
     res.status(500).json({ success: false, message: 'Error fetching receptions', error: error.message });
   }
 });
 
-router.put('/receptions/:id', verifyAdminOrAdministrator, async (req, res) => {
+router.put('/receptions/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const reception = await Reception.findById(req.params.id);
     if (!reception) {
@@ -614,7 +644,7 @@ router.put('/receptions/:id', verifyAdminOrAdministrator, async (req, res) => {
   }
 });
 
-router.delete('/receptions/:id', verifyAdminOrAdministrator, async (req, res) => {
+router.delete('/receptions/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const reception = await Reception.findById(req.params.id);
     if (!reception) {
@@ -635,7 +665,7 @@ router.delete('/receptions/:id', verifyAdminOrAdministrator, async (req, res) =>
 });
 
 // Services routes
-router.post('/services', verifyAdminOrAdministrator, async (req, res) => {
+router.post('/services', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const { id, title, description, icon, color, price, duration, isActive } = req.body;
 
@@ -667,7 +697,7 @@ router.post('/services', verifyAdminOrAdministrator, async (req, res) => {
   }
 });
 
-router.get('/services', verifyAdminOrAdministrator, async (req, res) => {
+router.get('/services', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const services = await Service.find().sort({ title: 1 });
     res.json({ success: true, services });
@@ -677,7 +707,7 @@ router.get('/services', verifyAdminOrAdministrator, async (req, res) => {
   }
 });
 
-router.put('/services/:id', verifyAdminOrAdministrator, async (req, res) => {
+router.put('/services/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const service = await Service.findOne({ id: req.params.id });
     if (!service) {
@@ -693,7 +723,7 @@ router.put('/services/:id', verifyAdminOrAdministrator, async (req, res) => {
   }
 });
 
-router.delete('/services/:id', verifyAdminOrAdministrator, async (req, res) => {
+router.delete('/services/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const service = await Service.findOneAndDelete({ id: req.params.id });
     if (!service) {

@@ -17,7 +17,7 @@ const verifyReception = (req, res, next) => {
     const dynRoleStr = dynamicRoleName ? dynamicRoleName.toLowerCase() : '';
 
     // Expanded Allowed Roles list (Substring Check)
-    const allowed = ['reception', 'admin', 'administrator', 'staff', 'front'];
+    const allowed = ['reception', 'admin', 'superadmin', 'staff', 'front'];
 
     const hasAccess = allowed.some(keyword => dynRoleStr.includes(keyword) || roleStr.includes(keyword));
 

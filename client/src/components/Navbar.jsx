@@ -36,42 +36,11 @@ const Navbar = () => {
       <div className="navbar-container">
         {/* Logo/Brand */}
         <NavLink to="/" className="navbar-brand">
-          <img src="/nav-logo.png" alt="Krisna IVF Logo" className="navbar-logo" />
+          <span className="navbar-logo-text">HMS</span>
         </NavLink>
 
         {/* Navigation Links */}
         <div className="navbar-links">
-          <NavLink
-            to="/"
-            className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
-            end
-          >
-            Home
-          </NavLink>
-
-          {/* Show public links (Services, Doctors, Appointment) for non-authenticated users */}
-          {!isAuthenticated && (
-            <>
-              <NavLink
-                to="/services"
-                className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
-              >
-                Services
-              </NavLink>
-              <NavLink
-                to="/doctors"
-                className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
-              >
-                Doctors
-              </NavLink>
-              <NavLink
-                to="/appointment"
-                className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
-              >
-                Appointment
-              </NavLink>
-            </>
-          )}
 
           {/* Dynamic nav links removed from header body to keep UI clean, replaced with central 'Dashboard' link */}
           {isAuthenticated && user && (

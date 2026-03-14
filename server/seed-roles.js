@@ -16,7 +16,7 @@ const DB_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://lo
 const defaultRoles = [
     {
         name: 'Admin',
-        description: 'Hospital administrator with full management access',
+        description: 'Hospital superadmin with full management access',
         permissions: [
             'admin_manage_roles', 'admin_view_stats',
             'patient_search', 'patient_create', 'patient_view', 'patient_edit',
@@ -115,20 +115,20 @@ async function seedRoles() {
         console.log('✅ Connected to MongoDB');
 
         for (const roleData of defaultRoles) {
-            const existing = await Role.findOne({ name: roleData.name });
+            // Use compound key: name + hospitalId (null = global role)
+            const existing = await Role.findOne({ name: roleData.name, hospitalId: null });
             if (existing) {
-                // Update existing role with latest config
                 Object.assign(existing, roleData);
                 await existing.save();
                 console.log(`🔄 Updated role: ${roleData.name}`);
             } else {
-                await Role.create(roleData);
+                await Role.create({ ...roleData, hospitalId: null });
                 console.log(`✅ Created role: ${roleData.name}`);
             }
         }
 
         console.log('\n🎉 All default roles seeded successfully!');
-        console.log('You can now assign these roles to users via the Administrator dashboard.');
+        console.log('You can now assign these roles to users via the Central Admin dashboard.');
 
         await mongoose.disconnect();
         process.exit(0);

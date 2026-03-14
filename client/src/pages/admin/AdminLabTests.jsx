@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { labTestAPI } from '../../utils/api';
-import '../administration/Administrator.css';
+import '../administration/SuperAdmin.css';
 
 const AdminLabTests = () => {
     const [tests, setTests] = useState([]);
@@ -104,8 +104,8 @@ const AdminLabTests = () => {
     };
 
     return (
-        <div className="administrator-page">
-            <div className="administrator-container">
+        <div className="superadmin-page">
+            <div className="superadmin-container">
                 <div className="admin-header">
                     <div>
                         <h1>Lab Tests Catalog</h1>

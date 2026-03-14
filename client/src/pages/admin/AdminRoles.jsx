@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { adminAPI } from '../../utils/api';
 import './AdminRoles.css';
 
@@ -40,6 +40,13 @@ const AdminRoles = () => {
             ]
         },
         {
+            category: "Finance & Accounting", items: [
+                { key: 'finance_view', label: 'View Hospital Financials' },
+                { key: 'billing_view', label: 'View Patient Billing' },
+                { key: 'billing_manage', label: 'Manage Patient Billing (Cashier)' }
+            ]
+        },
+        {
             category: "Admin", items: [
                 { key: 'admin_manage_roles', label: 'Manage Roles' },
                 { key: 'admin_view_stats', label: 'View Admin Stats' }
@@ -70,6 +77,10 @@ const AdminRoles = () => {
         // Admin
         admin_manage_roles: { label: 'Manage Users', path: '/admin/users' },
         admin_view_stats: { label: 'Admin Dashboard', path: '/admin' },
+        finance_view: { label: 'Finance & Accounting', path: '/accountant/dashboard' },
+        // Cashier 
+        billing_view: { label: 'Patient Billing', path: '/cashier/billing' },
+        billing_manage: { label: 'Patient Billing', path: '/cashier/billing' }
     };
 
     // Compute nav links from current permissions (one link per permission, de-duped by label)
@@ -106,42 +117,47 @@ const AdminRoles = () => {
     const handlePermissionToggle = (key) => {
         setFormData(prev => {
             const exists = prev.permissions.includes(key);
-            const newPerms = exists
-                ? prev.permissions.filter(p => p !== key)
-                : [...prev.permissions, key];
-            const autoLinks = getAutoNavLinks(newPerms);
             return {
                 ...prev,
-                permissions: newPerms,
-                navLinks: autoLinks,
-                dashboardPath: autoLinks.length > 0 ? autoLinks[0].path : '/'
+                permissions: exists ? prev.permissions.filter(p => p !== key) : [...prev.permissions, key]
             };
         });
     };
 
-    // Manual nav link helpers removed — links are now auto-generated from permissions
+    // --- MANUAL NAV LINKS ---
+    const addNavLink = () => {
+        setFormData(prev => ({ ...prev, navLinks: [...prev.navLinks, { label: '', path: '' }] }));
+    };
+
+    const updateNavLink = (index, field, value) => {
+        const updated = [...formData.navLinks];
+        updated[index][field] = value;
+        setFormData(prev => ({ ...prev, navLinks: updated }));
+    };
+
+    const removeNavLink = (index) => {
+        const updated = formData.navLinks.filter((_, i) => i !== index);
+        setFormData(prev => ({ ...prev, navLinks: updated }));
+    };
 
     const resetForm = () => {
         setFormData({
             name: '', description: '', permissions: [],
-            dashboardPath: '/', navLinks: []
+            dashboardPath: '/', navLinks: [{ label: '', path: '' }]
         });
         setEditingRoleId(null);
     };
 
     const handleEdit = (role) => {
         setEditingRoleId(role._id);
-        const perms = role.permissions || [];
-        const autoLinks = getAutoNavLinks(perms);
         setFormData({
             name: role.name,
             description: role.description || '',
-            permissions: perms,
-            dashboardPath: role.dashboardPath || (autoLinks.length > 0 ? autoLinks[0].path : '/'),
-            navLinks: autoLinks
+            permissions: role.permissions || [],
+            dashboardPath: role.dashboardPath || '/',
+            navLinks: role.navLinks && role.navLinks.length > 0 ? role.navLinks : [{ label: '', path: '' }]
         });
         setMessage({ type: '', text: '' });
-        // Scroll to form
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -150,10 +166,20 @@ const AdminRoles = () => {
         setLoading(true);
         setMessage({ type: '', text: '' });
 
-        // Filter out empty nav links
+        const manualLinks = formData.navLinks.filter(l => l.label.trim() && l.path.trim());
+        const autoLinks = getAutoNavLinks(formData.permissions);
+
+        // Merge manual and auto links
+        const combinedLinks = [...manualLinks];
+        autoLinks.forEach(auto => {
+            if (!combinedLinks.find(c => c.path === auto.path || c.label === auto.label)) {
+                combinedLinks.push(auto);
+            }
+        });
+
         const cleanedData = {
             ...formData,
-            navLinks: formData.navLinks.filter(l => l.label.trim() && l.path.trim())
+            navLinks: combinedLinks
         };
 
         try {
@@ -229,28 +255,47 @@ const AdminRoles = () => {
                                 placeholder="What is this role for?"
                             />
                         </div>
-                        {/* Auto-generated Nav Links Preview */}
                         <div className="form-group">
-                            <label>Auto-Generated Navigation</label>
+                            <label>Default Dashboard Path</label>
+                            <input
+                                type="text"
+                                value={formData.dashboardPath}
+                                onChange={e => setFormData({ ...formData, dashboardPath: e.target.value })}
+                                placeholder="e.g. /reception/dashboard"
+                                required
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label>Navigation Links</label>
                             <small style={{ color: '#888', fontSize: '12px', display: 'block', marginBottom: '10px' }}>
-                                These links are automatically created from the permissions you assign below.
-                                The first link will be used as the default dashboard page.
+                                The tabs user will see in their sidebar menu.
                             </small>
-                            {formData.navLinks.length > 0 ? (
-                                <div className="auto-nav-preview">
-                                    {formData.navLinks.map((link, index) => (
-                                        <div key={link.path} className="auto-nav-item">
-                                            <span className="auto-nav-label">{link.label}</span>
-                                            <span className="auto-nav-path">{link.path}</span>
-                                            {index === 0 && <span className="auto-nav-default">Default</span>}
-                                        </div>
-                                    ))}
+                            {formData.navLinks.map((link, index) => (
+                                <div key={index} className="nav-link-row">
+                                    <input
+                                        type="text"
+                                        placeholder="Label (e.g. Patients)"
+                                        value={link.label}
+                                        onChange={e => updateNavLink(index, 'label', e.target.value)}
+                                        className="nav-input"
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Path (e.g. /patients)"
+                                        value={link.path}
+                                        onChange={e => updateNavLink(index, 'path', e.target.value)}
+                                        className="nav-input"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => removeNavLink(index)}
+                                        className="btn-remove-nav"
+                                        title="Remove Link"
+                                    >✖</button>
                                 </div>
-                            ) : (
-                                <div className="auto-nav-empty">
-                                    Select permissions below to auto-generate navigation links
-                                </div>
-                            )}
+                            ))}
+                            <button type="button" onClick={addNavLink} className="btn-add-nav">+ Add Link</button>
                         </div>
 
                         <div className="permissions-section">

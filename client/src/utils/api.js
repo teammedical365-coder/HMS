@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 
 // Base URL from Environment (Vercel / Local)
 const baseURL = import.meta.env.VITE_API_URL || 'https://crm-222i.onrender.com';
@@ -244,6 +244,67 @@ export const labTestAPI = {
     createLabTest: async (data) => (await apiClient.post('/api/lab-tests', data)).data,
     updateLabTest: async (id, data) => (await apiClient.put(`/api/lab-tests/${id}`, data)).data,
     deleteLabTest: async (id) => (await apiClient.delete(`/api/lab-tests/${id}`)).data
+};
+
+export const medicineAPI = {
+    getMedicines: async () => (await apiClient.get('/api/medicines')).data,
+    createMedicine: async (data) => (await apiClient.post('/api/medicines', data)).data,
+    updateMedicine: async (id, data) => (await apiClient.put(`/api/medicines/${id}`, data)).data,
+    deleteMedicine: async (id) => (await apiClient.delete(`/api/medicines/${id}`)).data
+};
+
+export const questionLibraryAPI = {
+    getLibrary: async () => (await apiClient.get('/api/question-library')).data,
+    updateLibrary: async (data) => (await apiClient.post('/api/question-library', { data })).data
+};
+
+export const testPackageAPI = {
+    getPackages: async () => (await apiClient.get('/api/test-packages')).data,
+    getPackage: async (id) => (await apiClient.get(`/api/test-packages/${id}`)).data,
+    createPackage: async (data) => (await apiClient.post('/api/test-packages', data)).data,
+    updatePackage: async (id, data) => (await apiClient.put(`/api/test-packages/${id}`, data)).data,
+    deletePackage: async (id) => (await apiClient.delete(`/api/test-packages/${id}`)).data,
+};
+
+export const hospitalAPI = {
+    getHospitals: async () => (await apiClient.get('/api/hospitals')).data,
+    createHospital: async (data) => (await apiClient.post('/api/hospitals', data)).data,
+    updateHospital: async (id, data) => (await apiClient.put(`/api/hospitals/${id}`, data)).data,
+    deleteHospital: async (id) => (await apiClient.delete(`/api/hospitals/${id}`)).data,
+    getMyHospital: async () => (await apiClient.get('/api/hospitals/my-hospital')).data,
+    updateFacilities: async (data) => (await apiClient.put('/api/hospitals/my-hospital/facilities', data)).data,
+    getHospitalStats: async (id, startDate, endDate) => {
+        let url = `/api/hospitals/${id}/stats`;
+        const params = new URLSearchParams();
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        const qs = params.toString();
+        if (qs) url += `?${qs}`;
+        return (await apiClient.get(url)).data;
+    },
+};
+
+export const hospitalAdminAPI = {
+    login: async (email, password) => (await apiClient.post('/api/hospitals/admin/login', { email, password })).data,
+    createHospitalAdmin: async (data) => (await apiClient.post('/api/hospitals/admin/signup', data)).data,
+};
+
+export const financeAPI = {
+    getDashboardStats: async (startDate, endDate) => {
+        let url = `/api/finance/dashboard`;
+        const params = new URLSearchParams();
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        const qs = params.toString();
+        if (qs) url += `?${qs}`;
+        return (await apiClient.get(url)).data;
+    }
+};
+
+export const billingAPI = {
+    getPatientBills: async (identifier) => (await apiClient.get(`/api/billing/patient/${identifier}`)).data,
+    addFacilityCharge: async (data) => (await apiClient.post('/api/billing/facility-charge', data)).data,
+    processPayment: async (data) => (await apiClient.put('/api/billing/pay', data)).data,
 };
 
 export default apiClient;

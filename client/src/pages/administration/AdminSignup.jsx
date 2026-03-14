@@ -55,11 +55,11 @@ const AdminSignup = () => {
         localStorage.setItem('token', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
         
-        // Navigate to administrator dashboard
-        navigate('/administrator');
+        // Navigate to superadmin dashboard
+        navigate('/superadmin');
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Error creating administrator account. Please try again.');
+      setError(err.response?.data?.message || 'Error creating Super Admin account. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -84,8 +84,8 @@ const AdminSignup = () => {
           </button>
 
           <div className="auth-header">
-            <h1>Create Administrator Account</h1>
-            <p>Sign up to create an administrator account</p>
+            <h1>Create Super Admin account</h1>
+            <p>Sign up to create an Super Admin account</p>
           </div>
 
           {error && (
@@ -170,8 +170,8 @@ const AdminSignup = () => {
 
           <div className="auth-footer">
             <p>
-              Already have an administrator account?{' '}
-              <Link to="/administrator/login" className="auth-link">
+              Already have an Super Admin account?{' '}
+              <Link to="/superadmin/login" className="auth-link">
                 Sign In
               </Link>
             </p>

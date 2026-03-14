@@ -15,12 +15,15 @@ async function buildUserResponse(user) {
   let roleData = null;
   let roleName = null;
 
-  if (user.role === 'administrator') {
-    roleName = 'administrator';
+  const specialRoles = ['superadmin', 'centraladmin', 'hospitaladmin'];
+
+  if (specialRoles.includes(user.role)) {
+    roleName = user.role;
+    const isCentral = user.role === 'centraladmin' || user.role === 'superadmin';
     roleData = {
-      name: 'administrator',
-      permissions: ['*'],
-      dashboardPath: '/administrator',
+      name: user.role,
+      permissions: isCentral ? ['*'] : ['admin_manage_roles', 'admin_view_stats'],
+      dashboardPath: isCentral ? '/supremeadmin' : '/hospitaladmin',
       navLinks: [],
       isSystemRole: true
     };
@@ -34,8 +37,9 @@ async function buildUserResponse(user) {
     name: user.name,
     email: user.email,
     role: roleName, // String name for display
-    roleId: user.role, // ObjectId or 'administrator'
+    roleId: user.role, // ObjectId or special string
     patientId: user.patientId || null,
+    hospitalId: user.hospitalId || null,
     permissions: roleData ? roleData.permissions : [],
     dashboardPath: roleData ? roleData.dashboardPath : '/',
     navLinks: roleData ? roleData.navLinks : []
@@ -114,9 +118,14 @@ router.post('/signup', async (req, res) => {
 
     await user.save();
 
-    // Generate JWT token
+    // Generate JWT token — include hospitalId for tenant DB routing
     const token = jwt.sign(
-      { userId: user._id, email: user.email, roleId: String(defaultRole._id) },
+      {
+        userId: user._id,
+        email: user.email,
+        roleId: String(defaultRole._id),
+        hospitalId: user.hospitalId ? String(user.hospitalId) : null
+      },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -167,9 +176,12 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
-    // Administrators must use the administrator login page
-    if (user.role === 'administrator') {
-      return res.status(403).json({ success: false, message: 'Administrators must use the administrator login page' });
+    // Central admins and hospital admins must use their dedicated login pages
+    if (user.role === 'superadmin' || user.role === 'centraladmin') {
+      return res.status(403).json({ success: false, message: 'Central Admins must use the /supremeadmin/login page' });
+    }
+    if (user.role === 'hospitaladmin') {
+      return res.status(403).json({ success: false, message: 'Hospital Admins must use the /hospitaladmin/login page' });
     }
 
     // Dynamic validation: user must have a valid role assigned
@@ -197,8 +209,8 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ success: false, message: 'Your assigned role no longer exists. Contact admin.' });
     }
 
-    if (roleData.name && (roleData.name.toLowerCase() === 'admin' || roleData.name.toLowerCase() === 'administrator')) {
-      return res.status(403).json({ success: false, message: 'Administrators must use the administrator login page' });
+    if (roleData.name && ['admin', 'superadmin', 'centraladmin', 'hospitaladmin'].includes(roleData.name.toLowerCase())) {
+      return res.status(403).json({ success: false, message: 'Admin accounts must use the dedicated admin login page' });
     }
 
     const isPasswordValid = await user.comparePassword(password);
@@ -207,7 +219,12 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: user._id, email: user.email, roleId: String(user.role) },
+      {
+        userId: user._id,
+        email: user.email,
+        roleId: String(user.role),
+        hospitalId: user.hospitalId ? String(user.hospitalId) : null
+      },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -221,6 +238,7 @@ router.post('/login', async (req, res) => {
       role: roleData.name,
       roleId: String(user.role),
       patientId: user.patientId || null,
+      hospitalId: user.hospitalId ? String(user.hospitalId) : null,
       permissions: roleData.permissions || [],
       dashboardPath: roleData.dashboardPath || '/',
       navLinks: roleData.navLinks || []

@@ -249,16 +249,18 @@ body:has(.dpd-container) {
     font-size: 1.4rem;
     font-weight: bold;
     cursor: pointer;
-    padding: 0 12px;
+    padding: 0 16px;
     height: 100%;
     z-index: 10;
     transition: all 0.2s;
     user-select: none;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
 }
 
 .dpd-tab-scroll-btn:hover {
     color: #3b82f6;
     background: #f8fafc;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
 }
 
 /* Tabs Navigation */
@@ -285,14 +287,14 @@ body:has(.dpd-container) {
 .dpd-tab-btn {
     display: flex;
     align-items: center;
-    gap: 5px;
-    padding: 8px 14px;
+    gap: 6px;
+    padding: 10px 16px;
     border: none;
     background: #f1f5f9;
     border-radius: 8px;
     cursor: pointer;
     font-weight: 600;
-    font-size: 0.78rem;
+    font-size: 0.85rem;
     color: #64748b;
     transition: all 0.25s;
     white-space: nowrap;
@@ -330,12 +332,21 @@ body:has(.dpd-container) {
 }
 
 .dpd-tab-content::-webkit-scrollbar {
-    width: 6px;
+    width: 8px;
+}
+
+.dpd-tab-content::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
 }
 
 .dpd-tab-content::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1);
-    border-radius: 3px;
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 4px;
+}
+
+.dpd-tab-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.8);
 }
 
 .dpd-tab-panel {
@@ -356,9 +367,11 @@ body:has(.dpd-container) {
 
 .dpd-panel-title {
     margin: 0 0 20px;
-    font-size: 1.1rem;
-    font-weight: 700;
+    font-size: 1.25rem;
+    font-weight: 800;
     color: #0f172a;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 8px;
 }
 
 /* Overview Grid */
@@ -714,18 +727,28 @@ body:has(.dpd-container) {
 }
 
 .dpd-right-content::-webkit-scrollbar {
-    width: 6px;
+    width: 8px;
+}
+
+.dpd-right-content::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
 }
 
 .dpd-right-content::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.08);
-    border-radius: 3px;
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 4px;
+}
+
+.dpd-right-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.8);
 }
 
 .dpd-session-field {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    flex-shrink: 0;
 }
 
 .dpd-session-field label {
@@ -762,9 +785,9 @@ body:has(.dpd-container) {
 }
 
 .dpd-notes-field {
-    flex: 1;
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
 }
 
 .dpd-notes-textarea {
@@ -871,9 +894,6 @@ body:has(.dpd-container) {
 }
 
 /* Animations */
-.fade-in {
-    animation: fadeSlide 0.3s ease-out;
-}
 
 /* ============ RESPONSIVE ============ */
 @media (max-width: 1024px) {

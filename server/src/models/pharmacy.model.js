@@ -1,6 +1,18 @@
 const mongoose = require('mongoose');
 
 const pharmacySchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+    index: true
+  },
+  hospitalId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hospital',
+    default: null,
+    index: true
+  },
   name: {
     type: String,
     required: [true, 'Pharmacy name is required']

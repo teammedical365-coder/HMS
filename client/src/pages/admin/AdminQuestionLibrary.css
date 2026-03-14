@@ -1,0 +1,392 @@
+/* --- ROOT VARIABLES --- */
+:root {
+    --teal: #1e847f;
+    --bg: #f0f4f3;
+    --border: #d1d9d7;
+    --white: #ffffff;
+    --green: #4caf50;
+    --red: #e57373;
+    --dark: #2c3e50;
+}
+
+/* --- BASE STYLES --- */
+.ql-admin-body {
+    background-color: var(--bg);
+    margin: 0;
+    color: #333;
+    min-height: 100vh;
+}
+
+/* --- LAYOUT --- */
+.ql-admin-container {
+    display: flex;
+    padding: 30px;
+    gap: 30px;
+    max-width: 1400px;
+    margin: auto;
+}
+
+/* --- SIDEBAR --- */
+.ql-admin-sidebar {
+    width: 320px;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+.ql-admin-sidebar::-webkit-scrollbar {
+    width: 5px;
+}
+
+.ql-admin-sidebar::-webkit-scrollbar-thumb {
+    background: var(--teal);
+    border-radius: 10px;
+}
+
+.sidebar-item {
+    background: var(--white);
+    padding: 12px 15px;
+    margin-bottom: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+    transition: all 0.2s ease;
+}
+
+.sidebar-item.active {
+    border: 2px solid var(--teal);
+    background-color: #eef7f6;
+    font-weight: bold;
+}
+
+/* --- MAIN CONTENT --- */
+.ql-admin-main {
+    flex: 1;
+    background: var(--white);
+    padding: 35px;
+    border-radius: 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.content-header {
+    border-bottom: 2px solid #f0f0f0;
+    margin-bottom: 25px;
+    padding-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.content-header h2 {
+    color: var(--teal);
+}
+
+.question-row {
+    background: #ffffff;
+    border: 1px solid #e0e6e4;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+}
+
+.question-row:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.question-row strong {
+    display: block;
+    margin-bottom: 12px;
+    color: var(--teal);
+    font-size: 15px;
+}
+
+.btn-delete-q {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: #ffebee;
+    color: #c62828;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.btn-delete-q:hover {
+    background: #ef5350;
+    color: white;
+}
+
+/* --- INPUT GROUPS & FORMS --- */
+.input-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.input-group input:not([type="checkbox"]),
+.input-group select,
+.input-group textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    outline-color: var(--teal);
+    box-sizing: border-box;
+    background: #f9fbfb;
+}
+
+.input-group textarea {
+    resize: vertical;
+}
+
+/* --- CHECKBOX HANDLING --- */
+.checkbox-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.checkbox-box label {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.checkbox-box input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+/* --- COMPLEX ROWS (Checkbox + Date/Text) --- */
+.complex-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+.complex-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f9fbfb;
+    border: 1px solid #e0e6e4;
+    padding: 10px 15px;
+    border-radius: 8px;
+}
+
+.complex-row label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    cursor: pointer;
+}
+
+.complex-row input:not([type="checkbox"]) {
+    width: 160px;
+    min-width: 160px;
+    padding: 8px;
+    margin-left: 15px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.extra-field {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed var(--teal);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.extra-field span {
+    font-weight: bold;
+    font-size: 13px;
+    color: var(--teal);
+}
+
+/* --- BUTTONS & FOOTER --- */
+.footer-section {
+    margin-top: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.input-card {
+    background: var(--white);
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px dashed var(--teal);
+}
+
+.btn-save {
+    background: var(--teal);
+    color: white;
+    padding: 10px 30px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 15px;
+    transition: opacity 0.2s;
+}
+
+.btn-action {
+    padding: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: none;
+    color: white;
+    font-weight: bold;
+}
+
+.btn-save:hover,
+.btn-action:hover {
+    opacity: 0.9;
+}
+
+/* --- UTILITY CLASSES --- */
+.bg-teal {
+    background: var(--teal);
+}
+
+.bg-dark {
+    background: var(--dark);
+}
+
+/* Sidebar Add Box */
+.add-category-box {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+#new-cat-input {
+    width: 100%;
+    padding: 12px;
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.add-category-box .btn-action {
+    width: 100%;
+}
+
+/* Gender Tabs */
+.gender-navbar {
+    display: flex;
+    gap: 10px;
+    background: var(--white);
+    padding: 15px 30px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+}
+
+.gender-tab {
+    padding: 12px 30px;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    font-weight: bold;
+    color: #64748b;
+    background: #f1f5f9;
+    font-size: 15px;
+    transition: all 0.2s;
+}
+
+.gender-tab.active {
+    background: #eef7f6;
+    color: var(--teal);
+    border-color: var(--teal);
+}
+
+/* Modal form */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: #fff;
+    padding: 25px;
+    border-radius: 12px;
+    width: 600px;
+    max-width: 90vw;
+    display: flex;
+    flexDirection: column;
+    gap: 15px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.modal-label {
+    font-weight: 600;
+    font-size: 13px;
+    color: #333;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.modal-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.modal-btn-cancel {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.modal-btn-submit {
+    background: var(--teal);
+    color: white;
+}

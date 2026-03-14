@@ -1,10 +1,16 @@
 const mongoose = require('mongoose');
 
 const labSchema = new mongoose.Schema({
-  userId: { // ADD THIS: Links to the Login User
+  userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: false, // Optional for legacy records, required for new ones
+    required: false,
+    index: true
+  },
+  hospitalId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hospital',
+    default: null,
     index: true
   },
   name: {

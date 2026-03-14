@@ -1,5 +1,5 @@
 /* ============================================================
-   Administrator — Ultra Premium Glass Theme
+   SuperAdmin — Ultra Premium Glass Theme
    ============================================================ */
 :root {
   --admin-bg-gradient: radial-gradient(circle at top right, #f8fafc, #edf2f7, #e2e8f0);
@@ -13,7 +13,7 @@
   --radius-lg: 24px;
 }
 
-.administrator-page {
+.superadmin-page {
   min-height: 100vh;
   padding: 40px;
   background: var(--admin-bg-gradient);
@@ -21,7 +21,7 @@
   box-sizing: border-box;
 }
 
-.administrator-container {
+.superadmin-container {
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -339,7 +339,7 @@
 }
 
 .role-admin,
-.role-administrator {
+.role-superadmin {
   background: #fee2e2;
   color: #dc2626;
   border: 1px solid #fecaca;
@@ -558,7 +558,7 @@
     padding: 12px 16px;
   }
 
-  .administrator-page {
+  .superadmin-page {
     padding: 20px;
   }
 }

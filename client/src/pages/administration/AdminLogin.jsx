@@ -25,8 +25,10 @@ const AdminLogin = () => {
       const normalizedRole = userRole ? userRole.toLowerCase() : '';
 
       let targetPath = '/my-dashboard';
-      if (normalizedRole === 'administrator') {
-        targetPath = '/administrator';
+      if (normalizedRole === 'centraladmin' || normalizedRole === 'superadmin') {
+        targetPath = '/supremeadmin';
+      } else if (normalizedRole === 'hospitaladmin') {
+        targetPath = '/hospitaladmin';
       } else if (normalizedRole === 'admin') {
         targetPath = '/admin';
       }
@@ -74,8 +76,8 @@ const AdminLogin = () => {
           </button>
 
           <div className="auth-header">
-            <h1>Administrator Login</h1>
-            <p>Sign in to your administrator account</p>
+            <h1>Central Admin Login</h1>
+            <p>Sign in to your Central Admin account</p>
           </div>
 
           {error && (
@@ -122,8 +124,8 @@ const AdminLogin = () => {
 
           <div className="auth-footer">
             <p>
-              Don't have an administrator account?{' '}
-              <Link to="/administrator/signup" className="auth-link">
+              Don't have a Central Admin account?{' '}
+              <Link to="/supremeadmin/signup" className="auth-link">
                 Sign Up
               </Link>
             </p>

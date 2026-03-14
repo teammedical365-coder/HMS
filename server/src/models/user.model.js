@@ -8,11 +8,17 @@ const userSchema = new mongoose.Schema({
     phone: { type: String, default: '' },
 
     // Dynamic role reference — points to a Role document in the DB
-    // The only exception is 'administrator' which is a bootstrap string
+    // Special string roles: 'centraladmin' (top-level), 'hospitaladmin' (hospital-level), 'superadmin' (legacy)
     role: {
-        type: mongoose.Schema.Types.Mixed, // ObjectId (normal) or String ('administrator')
+        type: mongoose.Schema.Types.Mixed, // ObjectId (normal) or String ('centraladmin'/'hospitaladmin'/'superadmin')
         default: 'patient'
     },
+
+    // Hospital reference for multi-tenant support
+    // centraladmin: null (manages all hospitals)
+    // hospitaladmin: points to their hospital
+    // staff: points to the hospital they belong to
+    hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', default: null },
 
     // Patient ID for clinical tracking
     patientId: { type: String, unique: true, sparse: true },
@@ -34,6 +40,7 @@ const userSchema = new mongoose.Schema({
     fertilityProfile: { type: mongoose.Schema.Types.Mixed, default: {} },
 
     services: [String],
+    departments: [{ type: String }],
 
     // Profile Image
     avatar: { type: String, default: null }

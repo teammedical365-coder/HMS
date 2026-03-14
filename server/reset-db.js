@@ -31,7 +31,7 @@ const reset = async () => {
             name: 'System Admin',
             email: 'admin@admin.com',
             password: 'admin', // Will be hashed automatically
-            role: 'administrator', // Using 'administrator' to match your auth middleware check
+            role: 'superadmin', // Using 'superadmin' to match your auth middleware check
             phone: '9999999999',
             services: ['Manage Users', 'System Settings']
         });

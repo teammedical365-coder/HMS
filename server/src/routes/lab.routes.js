@@ -14,7 +14,9 @@ const upload = multer({
 
 // MIDDLEWARE: Verify User is a Lab
 const verifyLab = async (req, res, next) => {
-    if (req.user.role !== 'lab' && req.user.role !== 'admin' && req.user.role !== 'administrator') {
+    const roleName = req.user._roleData ? req.user._roleData.name.toLowerCase() : String(req.user.role).toLowerCase();
+
+    if (!roleName.includes('lab') && !roleName.includes('admin')) {
         return res.status(403).json({ message: 'Access denied. Lab personnel only.' });
     }
     next();
@@ -29,10 +31,18 @@ router.get('/stats', verifyToken, verifyLab, async (req, res) => {
             $or: [{ email: req.user.email }, { userId: req.user.id }]
         });
 
-        if (!labProfile) return res.status(404).json({ message: 'Lab profile not found.' });
+        if (!labProfile) {
+            // Give them access to unassigned lab tests if no lab profile is found
+            const pending = await LabReport.countDocuments({ $or: [{ labId: null }, { labId: { $exists: false } }], reportStatus: 'PENDING' });
+            const completed = await LabReport.countDocuments({ $or: [{ labId: null }, { labId: { $exists: false } }], reportStatus: 'UPLOADED' });
+            return res.json({
+                success: true,
+                stats: { pending, completed, revenue: completed * 500, labName: 'Global Lab' }
+            });
+        }
 
-        const pending = await LabReport.countDocuments({ labId: labProfile._id, status: 'pending' });
-        const completed = await LabReport.countDocuments({ labId: labProfile._id, status: 'completed' });
+        const pending = await LabReport.countDocuments({ $or: [{ labId: labProfile._id }, { labId: null }, { labId: { $exists: false } }], reportStatus: 'PENDING' });
+        const completed = await LabReport.countDocuments({ $or: [{ labId: labProfile._id }, { labId: null }, { labId: { $exists: false } }], reportStatus: 'UPLOADED' });
 
         // Revenue calculation (optional, if you track payments)
         const revenue = completed * 500; // Example: 500 per test
@@ -55,11 +65,15 @@ router.get('/requests', verifyToken, verifyLab, async (req, res) => {
             $or: [{ email: req.user.email }, { userId: req.user.id }]
         });
 
-        if (!labProfile) return res.json({ success: true, requests: [] });
+        let query = {};
+        if (labProfile) {
+            query.$or = [{ labId: labProfile._id }, { labId: null }, { labId: { $exists: false } }];
+        } else {
+            query.$or = [{ labId: null }, { labId: { $exists: false } }];
+        }
 
-        let query = { labId: labProfile._id };
         if (status && status !== 'all') {
-            query.status = status;
+            query.reportStatus = status.toUpperCase() === 'PENDING' ? 'PENDING' : 'UPLOADED';
         }
 
         const requests = await LabReport.find(query)
@@ -95,7 +109,8 @@ router.post('/upload-report/:reportId', verifyToken, verifyLab, upload.single('r
         // Update Lab Report Status
         report.reportUrl = fileResult.url;
         report.fileId = fileResult.fileId;
-        report.status = 'completed';
+        report.testStatus = 'DONE';
+        report.reportStatus = 'UPLOADED';
         report.notes = notes || report.notes;
         report.uploadedAt = new Date();
         await report.save();

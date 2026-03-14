@@ -3,9 +3,9 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Components
 import Navbar from '../components/Navbar';
-import Home from '../pages/Home';
 import ProtectedRoute from '../components/ProtectedRoute';
 import RoleDashboard from '../pages/RoleDashboard';
+import { useAuth } from '../store/hooks';
 
 // User Pages
 import Services from '../pages/user/Services';
@@ -24,7 +24,7 @@ import AdminLabTests from '../pages/admin/AdminLabTests';
 import DoctorPatientDetails from '../pages/doctors/DoctorPatientDetails';
 import UnifiedPatientProfile from '../pages/patient/UnifiedPatientProfile';
 
-// Admin Pages
+// Hospital Admin (Tier 2) Pages
 import Admin from '../pages/admin/Admin';
 import AdminDoctors from '../pages/admin/AdminDoctors';
 import AdminLabs from '../pages/admin/AdminLabs';
@@ -33,11 +33,26 @@ import AdminReception from '../pages/admin/AdminReception';
 import AdminServices from '../pages/admin/AdminServices';
 import AdminRoles from '../pages/admin/AdminRoles';
 import AdminMainDashboard from '../pages/admin/AdminMainDashboard';
+import AdminMedicines from '../pages/admin/AdminMedicines';
+import AdminQuestionLibrary from '../pages/admin/AdminQuestionLibrary';
+import AdminTestPackages from '../pages/admin/AdminTestPackages';
 
-// Admin Auth
+// Central Admin (Tier 1) Pages — /supremeadmin
+import CentralAdminLogin from '../pages/centraladmin/CentralAdminLogin';
+import CentralAdminSignup from '../pages/centraladmin/CentralAdminSignup';
+import CentralAdminDashboard from '../pages/centraladmin/CentralAdminDashboard';
+
+// Hospital Admin (Tier 2) Pages — /hospitaladmin
+import HospitalAdminLogin from '../pages/hospitaladmin/HospitalAdminLogin';
+import HospitalAdminDashboard from '../pages/hospitaladmin/HospitalAdminDashboard';
+import HospitalLogin from '../pages/hospitaladmin/HospitalLogin';
+
+// Cashier Routing
+import CashierDashboard from '../pages/cashier/CashierDashboard';
+
+// Legacy Admin Auth (keep for backward-compat)
 import AdminLogin from '../pages/administration/AdminLogin';
 import AdminSignup from '../pages/administration/AdminSignup';
-import Administrator from '../pages/administration/Administrator';
 
 // Lab Pages
 import LabDashboard from '../pages/lab/LabDashboard';
@@ -50,17 +65,22 @@ import PharmacyOrders from '../pages/pharmacy/PharmacyOrders';
 // Reception Pages
 import ReceptionDashboard from '../pages/reception/ReceptionDashboard';
 
+// Accountant / Finance Pages
+import AccountantDashboard from '../pages/accountant/AccountantDashboard';
+
 const MainRoutes = () => {
+    const { isAuthenticated } = useAuth();
+    
     return (
         <>
             <Navbar />
 
             <Routes>
                 {/* --- Public/User Routes --- */}
-                <Route path="/" element={<Home />} />
-                <Route path="/services" element={<Services />} />
-                <Route path="/doctors" element={<Doctors />} />
-                <Route path="/services/:serviceId/doctors" element={<Doctors />} />
+                <Route path="/" element={<Navigate to={isAuthenticated ? "/my-dashboard" : "/login"} replace />} />
+                <Route path="/services" element={<Navigate to="/" replace />} />
+                <Route path="/doctors" element={<Navigate to="/" replace />} />
+                <Route path="/services/:serviceId/doctors" element={<Navigate to="/" replace />} />
 
                 {/* --- Unified Shared Patient Profile --- */}
                 <Route path="/patient/:id" element={
@@ -99,7 +119,7 @@ const MainRoutes = () => {
                     </ProtectedRoute>
                 } />
 
-                {/* --- Admin Routes --- */}
+                {/* --- Hospital Admin Routes (both centraladmin and hospitaladmin can access) --- */}
                 <Route path="/admin" element={
                     <ProtectedRoute requiredPermissions={['admin_view_stats', 'admin_manage_roles']}>
                         <AdminMainDashboard />
@@ -110,7 +130,9 @@ const MainRoutes = () => {
                         <Admin />
                     </ProtectedRoute>
                 } />
-                <Route path="/admin/login" element={<AdminLogin />} />
+
+                {/* Legacy admin login — redirect to hospitaladmin login for backward-compat */}
+                <Route path="/admin/login" element={<HospitalAdminLogin />} />
                 <Route path="/admin/signup" element={<AdminSignup />} />
 
                 <Route path="/admin/doctors" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminDoctors /></ProtectedRoute>} />
@@ -120,13 +142,44 @@ const MainRoutes = () => {
                 <Route path="/admin/reception" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminReception /></ProtectedRoute>} />
                 <Route path="/admin/services" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminServices /></ProtectedRoute>} />
                 <Route path="/admin/roles" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminRoles /></ProtectedRoute>} />
+                <Route path="/admin/medicines" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminMedicines /></ProtectedRoute>} />
+                <Route path="/admin/question-library" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminQuestionLibrary /></ProtectedRoute>} />
+                <Route path="/admin/test-packages" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminTestPackages /></ProtectedRoute>} />
 
-                {/* --- Administrator Routes (Super Admin) --- */}
-                <Route path="/administrator/login" element={<AdminLogin />} />
-                <Route path="/administrator/signup" element={<AdminSignup />} />
-                <Route path="/administrator" element={
-                    <ProtectedRoute allowedRoles={['administrator']}>
-                        <Administrator />
+                {/* =====================================================
+                    CENTRAL ADMIN ROUTES (Tier 1 — Top Level)
+                    Login: /supremeadmin/login
+                    Dashboard: /supremeadmin
+                    ===================================================== */}
+                <Route path="/supremeadmin/login" element={<CentralAdminLogin />} />
+                <Route path="/supremeadmin/signup" element={<CentralAdminSignup />} />
+                <Route path="/supremeadmin" element={
+                    <ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}>
+                        <CentralAdminDashboard />
+                    </ProtectedRoute>
+                } />
+
+                {/* Legacy routes — redirect to new URLs */}
+                <Route path="/superadmin/login" element={<Navigate to="/supremeadmin/login" replace />} />
+                <Route path="/superadmin/signup" element={<Navigate to="/supremeadmin/signup" replace />} />
+                <Route path="/superadmin" element={<Navigate to="/supremeadmin" replace />} />
+
+                {/* =====================================================
+                    HOSPITAL SLUG LOGIN (Path-based multi-tenancy)
+                    URL: /:hospitalSlug/login  e.g. /akg-hospital/login
+                    Staff access their hospital's isolated portal via this URL
+                    ===================================================== */}
+                <Route path="/:hospitalSlug/login" element={<HospitalLogin />} />
+
+                {/* =====================================================
+                    HOSPITAL ADMIN ROUTES (Tier 2 — Hospital Level)
+                    Login: /hospitaladmin/login
+                    Dashboard: /hospitaladmin
+                    ===================================================== */}
+                <Route path="/hospitaladmin/login" element={<HospitalAdminLogin />} />
+                <Route path="/hospitaladmin" element={
+                    <ProtectedRoute allowedRoles={['hospitaladmin']}>
+                        <HospitalAdminDashboard />
                     </ProtectedRoute>
                 } />
 
@@ -158,6 +211,20 @@ const MainRoutes = () => {
                 <Route path="/reception/dashboard" element={
                     <ProtectedRoute requiredPermissions={['appointment_manage']}>
                         <ReceptionDashboard />
+                    </ProtectedRoute>
+                } />
+
+                {/* --- Accountant / Finance Dashboard --- */}
+                <Route path="/accountant/dashboard" element={
+                    <ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}>
+                        <AccountantDashboard />
+                    </ProtectedRoute>
+                } />
+
+                {/* --- Cashier / Billing Dashboard --- */}
+                <Route path="/cashier/billing" element={
+                    <ProtectedRoute requiredPermissions={['billing_view', 'billing_manage']} allowedRoles={['cashier', 'centraladmin', 'superadmin', 'hospitaladmin']}>
+                        <CashierDashboard />
                     </ProtectedRoute>
                 } />
 

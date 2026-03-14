@@ -200,8 +200,10 @@ const PatientProfile = () => {
                 {renderField('Weight', vitals.weight ? `${vitals.weight} kg` : null)}
                 {renderField('Height', vitals.height ? `${vitals.height} cm` : null)}
                 {renderField('BMI', vitals.bmi)}
-                {renderField('Blood Pressure', vitals.bloodPressure)}
-                {renderField('Pulse', vitals.pulse ? `${vitals.pulse} bpm` : null)}
+                {renderField('Blood Pressure', vitals.bloodPressure || fp.historyBp)}
+                {renderField('Pulse', vitals.pulse ? `${vitals.pulse} bpm` : (fp.historyPulse ? `${fp.historyPulse}` : null))}
+                {renderField('Chest Exam', fp.chestExam)}
+                {renderField('CVS Exam', fp.cvsExam)}
                 {renderField('Temperature', vitals.temperature ? `${vitals.temperature} °F` : null)}
                 {renderField('SpO₂', vitals.spo2 ? `${vitals.spo2}%` : null)}
                 {renderField('Resp. Rate', vitals.respiratoryRate ? `${vitals.respiratoryRate}/min` : null)}
@@ -219,11 +221,21 @@ const PatientProfile = () => {
                     <div style={C.grid3}>
                         {renderField('Gravida', h.gravida)}
                         {renderField('Para', h.para)}
-                        {renderField('Abortions', h.abortions)}
-                        {renderField('Living Children', h.livingChildren)}
+                        {renderField('Abortions', h.abortion || h.abortions)}
+                        {renderField('Living Children', h.living || h.livingChildren)}
                         {renderField('Ectopic', h.ectopic)}
                         {renderField('Stillbirth', h.stillbirth)}
                     </div>
+                    {Number(h.abortion) > 0 && (
+                        <div style={{ marginTop: '14px', background: 'rgba(239, 68, 68, 0.05)', padding: '12px', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '10px' }}>
+                            <h5 style={{ margin: '0 0 10px', fontSize: '0.8rem', color: '#fca5a5' }}>📉 Abortion Reasons</h5>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                {Array.from({ length: Number(h.abortion) }).map((_, idx) => (
+                                    h[`abortionReason_${idx}`] && renderField(`Abortion #${idx + 1}`, h[`abortionReason_${idx}`])
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Menstrual History */}
@@ -236,6 +248,8 @@ const PatientProfile = () => {
                         {renderField('Menarche Age', h.menarcheAge)}
                         {renderField('Flow Duration', h.flowDuration)}
                         {renderField('Dysmenorrhea', h.dysmenorrhea)}
+                        {renderField('Inter. Pain', h.intermenstrualPain)}
+                        {renderField('Inter. Bleeding', h.intermenstrualBleeding)}
                     </div>
                 </div>
 
@@ -244,12 +258,24 @@ const PatientProfile = () => {
                     <h4 style={C.cardTitle}>🏥 Past Medical History</h4>
                     <div style={C.grid2}>
                         {renderField('Medical History', h.medicalHistory)}
-                        {renderField('Surgical History', h.surgicalHistory)}
-                        {renderField('Drug Allergies', h.drugAllergies)}
+                        {renderField('Known Allergies', h.allergies || h.drugAllergies)}
                         {renderField('Current Medications', h.currentMedications)}
                         {renderField('Family History', h.familyHistory)}
                         {renderField('Lifestyle / Habits', h.lifestyle)}
+                        {renderField('Old Surgical History', h.surgicalHistory)}
                     </div>
+
+                    {(h.surgeryHysteroscopy || h.surgeryLaparoscopy || h.surgeryAppendectomy || h.surgeryOther) && (
+                        <div style={{ marginTop: '14px', background: 'rgba(59, 130, 246, 0.05)', padding: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '10px' }}>
+                            <h5 style={{ margin: '0 0 10px', fontSize: '0.8rem', color: '#93c5fd' }}>🔪 Specific Surgical History</h5>
+                            <div style={C.grid2}>
+                                {h.surgeryHysteroscopy && renderField('Hysteroscopy', h.surgeryHysteroscopyDetails || 'Checked (No details)')}
+                                {h.surgeryLaparoscopy && renderField('Laparoscopy', h.surgeryLaparoscopyDetails || 'Checked (No details)')}
+                                {h.surgeryAppendectomy && renderField('Appendectomy', h.surgeryAppendectomyDetails || 'Checked (No details)')}
+                                {h.surgeryOther && renderField('Other Surgery', h.surgeryOtherDetails || 'Checked (No details)')}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Spouse/Partner */}

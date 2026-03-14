@@ -25,12 +25,13 @@ const Login = () => {
       const redirectMap = {
         admin: '/admin',
         model_admin: '/admin', // In case backend usage varies
-        administrator: '/administrator',
+        superadmin: '/superadmin',
         doctor: '/doctor/patients',
         nurse: '/my-dashboard', // Routing nurses to the role dashboard
         lab: '/lab/dashboard',
         pharmacy: '/pharmacy/dashboard',
         reception: '/reception/dashboard',
+        accountant: '/accountant/dashboard',
         patient: '/dashboard'
       };
 
@@ -66,8 +67,8 @@ const Login = () => {
         {/* Left Side: Form Area */}
         <div className="auth-form-container">
           <div id="login-box" className="auth-box show">
-            <h2 style={{ marginBottom: '5px' }}>Welcome Back</h2>
-            <p style={{ color: '#666', marginBottom: '30px' }}>Access your patient portal securely.</p>
+            <h2 style={{ marginBottom: '5px' }}>Welcome to HMS</h2>
+            <p style={{ color: '#666', marginBottom: '30px' }}>Sign in to your secure hospital workspace.</p>
 
             {error && <div className="error-message" style={{ marginBottom: '20px' }}>{error}</div>}
 
@@ -122,17 +123,17 @@ const Login = () => {
             </div>
 
             <p className="switch-text">
-              New to Krisna IVF? <Link to="/signup" className="switch-link">Create Account</Link>
+              New to HMS? <Link to="/signup" className="switch-link">Create Account</Link>
             </p>
           </div>
         </div>
 
         {/* Right Side: Visual Content */}
         <div className="auth-visual">
-          <img src="https://images.unsplash.com/photo-1519689680058-324335c77eba?q=80&w=1000&auto=format&fit=crop" alt="Happy Family" />
+          <img src="https://images.unsplash.com/photo-1538108149393-ceefbce54471?q=80&w=1000&auto=format&fit=crop" alt="Hospital Management" />
           <div className="auth-content auth-box show">
-            <h2>Your Trust, <br /> Our Commitment.</h2>
-            <p>Login to view your treatment plans, test reports, and upcoming schedules with complete privacy.</p>
+            <h2>Streamline Your <br /> Healthcare Operations.</h2>
+            <p>Our Hospital Management System (HMS) empowers your staff to focus on patient care with seamlessly integrated digital workflows.</p>
           </div>
         </div>
       </div>

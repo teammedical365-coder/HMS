@@ -50,11 +50,17 @@
   transform: translateY(-2px);
 }
 
-.navbar-logo {
+.navbar-logo-text {
+  font-size: 2.2rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: flex;
+  align-items: center;
   height: 48px;
-  width: auto;
-  object-fit: contain;
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
 }
 
 .brand-text {
@@ -265,7 +271,8 @@
     gap: 8px;
   }
 
-  .navbar-logo {
+  .navbar-logo-text {
+    font-size: 1.6rem;
     height: 36px;
   }
 

@@ -27,6 +27,14 @@ const pharmacyOrderSchema = new mongoose.Schema({
         enum: ['Pending', 'Paid'],
         default: 'Pending'
     },
+    totalAmount: {
+        type: Number,
+        default: 0
+    },
+    totalCost: {
+        type: Number,
+        default: 0
+    },
     orderStatus: {
         type: String,
         enum: ['Upcoming', 'Completed', 'Cancelled'],
