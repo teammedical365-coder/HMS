@@ -209,8 +209,8 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ success: false, message: 'Your assigned role no longer exists. Contact admin.' });
     }
 
-    if (roleData.name && ['admin', 'superadmin', 'centraladmin', 'hospitaladmin'].includes(roleData.name.toLowerCase())) {
-      return res.status(403).json({ success: false, message: 'Admin accounts must use the dedicated admin login page' });
+    if (roleData.name && ['superadmin', 'centraladmin'].includes(roleData.name.toLowerCase())) {
+      return res.status(403).json({ success: false, message: 'Global Admin accounts must use the dedicated central admin login page' });
     }
 
     const isPasswordValid = await user.comparePassword(password);
@@ -219,21 +219,26 @@ router.post('/login', async (req, res) => {
     }
 
     // STRICT HOSPITAL ROW-LEVEL SECURITY CHECK
-    const systemRoles = ['superadmin', 'centraladmin', 'hospitaladmin', 'admin'];
+    const globalAdminRoles = ['superadmin', 'centraladmin'];
     const userRoleStr = roleData.name ? roleData.name.toLowerCase() : '';
-    const isSystemRole = systemRoles.includes(userRoleStr);
+    const isGlobalAdmin = globalAdminRoles.includes(userRoleStr);
 
-    if (!isSystemRole) {
+    if (!isGlobalAdmin) {
         if (hospitalId) {
-            // Staff attempting to log in via a specific slug portal
+            // Staff/HospitalAdmin attempting to log in via a specific slug portal
             if (!user.hospitalId || String(user.hospitalId) !== String(hospitalId)) {
-                return res.status(403).json({ success: false, message: 'Access denied: You are not registered at this clinic. Check the URL.' });
+                return res.status(403).json({ success: false, message: 'Access denied: You are not authorized for this clinic. Check the URL.' });
             }
         } else {
-            // Staff attempting to log in via the general /login page
+            // Staff/HospitalAdmin attempting to log in via the general /login page
             if (user.hospitalId) {
                 return res.status(403).json({ success: false, message: 'Access denied: Please log in using your specific clinic portal URL.' });
             }
+        }
+    } else {
+        // Global Admins should not be logging in via a specific hospital portal URL (they don't have one)
+        if (hospitalId) {
+            return res.status(403).json({ success: false, message: 'Global Admins must use the Central Admin login, not a clinic portal.' });
         }
     }
 

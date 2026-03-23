@@ -47,61 +47,24 @@ const HospitalAdminLogin = () => {
                 {/* Left: Form */}
                 <div className="auth-form-container">
                     <div className="auth-box">
-                        <button onClick={() => navigate('/')} className="back-button" type="button" style={{ marginBottom: '24px', position: 'static' }}>
-                            <span className="back-icon">←</span> Go Back
-                        </button>
-
-                        <div className="auth-brand">
+                        <div className="auth-brand" style={{ marginBottom: '16px' }}>
                             <div className="auth-brand-icon">🏥</div>
                             <span className="auth-brand-name">Hospital Admin Login</span>
                         </div>
 
-                        <h2>Welcome back</h2>
-                        <p>Sign in to your Hospital Administration Portal.</p>
+                        <h2>Access Restricted</h2>
+                        <p style={{ color: '#666', fontSize: '0.95rem', lineHeight: '1.5' }}>
+                            For enhanced security and strict row-level environment segregation, the generic admin login is deactivated. <br/><br/>
+                            <strong>Hospital Administrators MUST log in via their dedicated clinic portal URL.</strong>
+                        </p>
 
-                        {error && (
-                            <div className="error-message">⚠️ {error}</div>
-                        )}
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', margin: '24px 0', fontSize: '0.9rem', color: '#475569' }}>
+                            <strong>Example:</strong><br />
+                            <code>https://your-hospital.com/<b>your-clinic-name</b>/login</code>
+                        </div>
 
-                        <form onSubmit={handleSubmit}>
-                            <div className="input-group">
-                                <label>Email Address</label>
-                                <div className="input-wrapper">
-                                    <input
-                                        type="email" name="email"
-                                        placeholder="admin@hospital.com"
-                                        value={formData.email} onChange={handleChange} required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="input-group">
-                                <label>Password</label>
-                                <div className="input-wrapper">
-                                    <input
-                                        type="password" name="password"
-                                        placeholder="Enter your password"
-                                        value={formData.password} onChange={handleChange} required
-                                    />
-                                </div>
-                            </div>
-
-                            <button className="btn-primary btn-block" disabled={loading} style={{ marginTop: '24px' }}>
-                                {loading ? (
-                                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                        <span style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
-                                        Signing In...
-                                    </span>
-                                ) : 'Sign In →'}
-                            </button>
-                        </form>
-
-                        <div className="divider"><span>other portals</span></div>
-
-                        <p className="switch-text" style={{ textAlign: 'center' }}>
-                            <Link to="/supremeadmin/login" className="switch-link">Central Admin?</Link>
-                            {' | '}
-                            <Link to="/login" className="switch-link">Regular User?</Link>
+                        <p className="switch-text" style={{ textAlign: 'center', marginTop: '30px' }}>
+                            <Link to="/supremeadmin/login" className="switch-link">To Supreme Admin Login →</Link>
                         </p>
                     </div>
                 </div>
