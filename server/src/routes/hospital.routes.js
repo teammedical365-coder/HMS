@@ -81,7 +81,7 @@ router.get('/resolve/:slug', async (req, res) => {
 // Create a new hospital
 router.post('/', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, address, city, state, phone, email, website, logo, departments, slug: customSlug } = req.body;
+        const { name, address, city, state, phone, email, website, logo, departments, appointmentFee, slug: customSlug } = req.body;
         if (!name) return res.status(400).json({ success: false, message: 'Hospital name is required' });
 
         // Auto-generate URL slug from hospital name: "AKG Hospital" -> "akg-hospital"
@@ -99,7 +99,7 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             slug = `${baseSlug}-${counter++}`;
         }
 
-        const hospital = new Hospital({ name, slug, address, city, state, phone, email, website, logo, departments: departments || [] });
+        const hospital = new Hospital({ name, slug, address, city, state, phone, email, website, logo, departments: departments || [], appointmentFee: appointmentFee || 500 });
         await hospital.save();
 
 
@@ -181,7 +181,7 @@ router.get('/tenant-status', verifyCentralAdmin, async (req, res) => {
 // Update a hospital
 router.put('/:id', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, address, city, state, phone, email, website, logo, isActive, departments } = req.body;
+        const { name, address, city, state, phone, email, website, logo, isActive, departments, appointmentFee } = req.body;
         const hospital = await Hospital.findById(req.params.id);
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
@@ -195,6 +195,7 @@ router.put('/:id', verifyCentralAdmin, async (req, res) => {
         if (logo !== undefined) hospital.logo = logo;
         if (isActive !== undefined) hospital.isActive = isActive;
         if (departments !== undefined) hospital.departments = departments;
+        if (appointmentFee !== undefined) hospital.appointmentFee = appointmentFee;
 
         await hospital.save();
         res.json({ success: true, message: 'Hospital updated successfully', hospital });
@@ -621,6 +622,81 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
     }
 });
 
+
+// ==========================================
+// WHITE-LABEL BRANDING (Central Admin)
+// ==========================================
+
+/**
+ * GET /api/hospitals/:id/branding — PUBLIC (no auth)
+ * Returns the branding config for a hospital (for theming login pages)
+ */
+router.get('/:id/branding', async (req, res) => {
+    try {
+        const hospital = await Hospital.findById(req.params.id, 'name branding logo slug city').lean();
+        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+        res.json({ success: true, branding: hospital.branding || {}, hospitalName: hospital.name, logo: hospital.logo });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+/**
+ * PUT /api/hospitals/:id/branding — Central Admin only
+ * Save / update the white-label branding config for a hospital
+ */
+router.put('/:id/branding', verifyCentralAdmin, async (req, res) => {
+    try {
+        const {
+            appName, tagline, logoUrl, faviconUrl,
+            primaryColor, secondaryColor, accentColor, successColor,
+            backgroundColor, textColor,
+            supportEmail, supportPhone, address,
+            websiteUrl, instagramUrl, facebookUrl, twitterUrl,
+            footerText
+        } = req.body;
+
+        const hospital = await Hospital.findById(req.params.id);
+        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+
+        // Merge branding fields (only update what is provided)
+        const branding = hospital.branding || {};
+        if (appName    !== undefined) branding.appName    = appName;
+        if (tagline    !== undefined) branding.tagline    = tagline;
+        if (logoUrl    !== undefined) branding.logoUrl    = logoUrl;
+        if (faviconUrl !== undefined) branding.faviconUrl = faviconUrl;
+        if (primaryColor    !== undefined) branding.primaryColor    = primaryColor;
+        if (secondaryColor  !== undefined) branding.secondaryColor  = secondaryColor;
+        if (accentColor     !== undefined) branding.accentColor     = accentColor;
+        if (successColor    !== undefined) branding.successColor    = successColor;
+        if (backgroundColor !== undefined) branding.backgroundColor = backgroundColor;
+        if (textColor       !== undefined) branding.textColor       = textColor;
+        if (supportEmail !== undefined) branding.supportEmail = supportEmail;
+        if (supportPhone !== undefined) branding.supportPhone = supportPhone;
+        if (address      !== undefined) branding.address      = address;
+        if (websiteUrl   !== undefined) branding.websiteUrl   = websiteUrl;
+        if (instagramUrl !== undefined) branding.instagramUrl = instagramUrl;
+        if (facebookUrl  !== undefined) branding.facebookUrl  = facebookUrl;
+        if (twitterUrl   !== undefined) branding.twitterUrl   = twitterUrl;
+        if (footerText   !== undefined) branding.footerText   = footerText;
+
+        hospital.branding = branding;
+        hospital.markModified('branding');
+        await hospital.save();
+
+        // Emit socket event for real-time UI updates
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('branding_update', { hospitalId: hospital._id, branding: hospital.branding });
+        }
+
+        res.json({ success: true, message: 'Branding updated successfully', branding: hospital.branding });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 module.exports = router;
 module.exports.verifyCentralAdmin = verifyCentralAdmin;
 module.exports.verifyHospitalAdmin = verifyHospitalAdmin;
+

@@ -15,11 +15,13 @@ const MasterFacilityCharge = require('../models/facilityCharge.model');
 const verifyBillingAccess = async (req, res, next) => {
     try {
         await verifyToken(req, res, async () => {
-            const role = (req.user.role || '').toLowerCase();
+            const roleIdStr = String(req.user.role || '').toLowerCase();
             const roleData = req.user._roleData;
+            const roleName = (roleData?.name || '').toLowerCase();
             const perms = roleData?.permissions || [];
 
-            if (['cashier', 'accountant', 'centraladmin', 'superadmin', 'hospitaladmin'].includes(role) ||
+            if (['cashier', 'accountant', 'centraladmin', 'superadmin', 'hospitaladmin'].includes(roleIdStr) ||
+                ['cashier', 'accountant', 'centraladmin', 'superadmin', 'hospitaladmin'].includes(roleName) ||
                 perms.includes('billing_view') || perms.includes('billing_manage') || perms.includes('*')) {
                 // Resolve tenant DB after auth
                 await resolveTenant(req, res, next);

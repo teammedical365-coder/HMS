@@ -25,6 +25,10 @@ const AdminQuestionLibrary = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [editIndex, setEditIndex] = useState(null);
 
+    // Preview state
+    const [showPreview, setShowPreview] = useState(false);
+    const [previewIntake, setPreviewIntake] = useState({});
+
     // Form fields for new Question
     const [newQ, setNewQ] = useState({
         q: '',
@@ -103,6 +107,38 @@ const AdminQuestionLibrary = () => {
         setLibraryData(newLib);
         setActiveCategory(cat);
         setNewCatName('');
+    };
+
+    const handleEditCategory = (oldName) => {
+        const newName = window.prompt("Enter new name for category:", oldName);
+        if (!newName || !newName.trim() || newName === oldName) return;
+        const cleanName = newName.trim();
+
+        if (libraryData[departmentTab][cleanName]) {
+            alert("Category with this name already exists!");
+            return;
+        }
+
+        const newLib = { ...libraryData };
+        const questions = newLib[departmentTab][oldName];
+        delete newLib[departmentTab][oldName];
+        newLib[departmentTab][cleanName] = questions;
+
+        setLibraryData(newLib);
+        if (activeCategory === oldName) setActiveCategory(cleanName);
+    };
+
+    const handleDeleteCategory = (catName) => {
+        if (!window.confirm(`Are you sure you want to delete the entire category "${catName}" and all its questions?`)) return;
+        
+        const newLib = { ...libraryData };
+        delete newLib[departmentTab][catName];
+
+        setLibraryData(newLib);
+        if (activeCategory === catName) {
+            const keys = Object.keys(newLib[departmentTab] || {});
+            setActiveCategory(keys.length > 0 ? keys[0] : '');
+        }
     };
 
     const handleAddDepartment = () => {
@@ -291,9 +327,18 @@ const AdminQuestionLibrary = () => {
                     <h1 style={{ margin: 0, color: '#1e293b' }}>Question Library Builder</h1>
                     <p style={{ margin: 0, color: '#64748b' }}>Construct dynamic diagnostic forms for doctors.</p>
                 </div>
-                <button className="btn-save" onClick={handleSave} disabled={saving} style={{ padding: '12px 30px', fontSize: '15px' }}>
-                    {saving ? '⏳ Syncing Data...' : '💾 Save & Deploy Configuration'}
-                </button>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                    <button 
+                        className="btn-action" 
+                        onClick={() => { setPreviewIntake({}); setShowPreview(true); }}
+                        style={{ padding: '12px 24px', fontSize: '15px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                        👁️ Preview Dr Dashboard
+                    </button>
+                    <button className="btn-save" onClick={handleSave} disabled={saving} style={{ padding: '12px 30px', fontSize: '15px' }}>
+                        {saving ? '⏳ Syncing Data...' : '💾 Save & Deploy Configuration'}
+                    </button>
+                </div>
             </div>
 
             {/* Department Navbar */}
@@ -335,6 +380,10 @@ const AdminQuestionLibrary = () => {
                         {Object.keys(currentCategories).map(cat => (
                             <div key={cat} className={`sidebar-item ${cat === activeCategory ? 'active' : ''}`} onClick={() => setActiveCategory(cat)}>
                                 <span>{cat}</span>
+                                <div className="cat-actions" style={{ display: 'flex', gap: '8px' }}>
+                                    <button onClick={(e) => { e.stopPropagation(); handleEditCategory(cat); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '2px' }} title="Rename">✏️</button>
+                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '2px' }} title="Delete">🗑️</button>
+                                </div>
                             </div>
                         ))}
                         {Object.keys(currentCategories).length === 0 && <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center' }}>No categories added yet.</p>}
@@ -421,6 +470,163 @@ const AdminQuestionLibrary = () => {
                         <div className="modal-actions" style={{ marginTop: '25px', paddingTop: '15px', borderTop: '1px solid #e2e8f0' }}>
                             <button className="modal-btn modal-btn-cancel" onClick={resetModalState}>Discard</button>
                             <button className="modal-btn modal-btn-submit" onClick={handleAddQuestion}>{editIndex !== null ? 'Update Question' : 'Save Question to Logic Tree'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Preview Modal */}
+            {showPreview && (
+                <div className="modal-overlay" style={{ zIndex: 10000 }}>
+                    <div className="modal-content" style={{ maxWidth: '1000px', width: '95vw', background: '#f1f5f9', padding: '0', overflow: 'hidden', height: '90vh', display: 'flex', flexDirection: 'column' }}>
+                        {/* Fake Header */}
+                        <div style={{ background: '#1e293b', padding: '15px 25px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <div style={{ fontSize: '10px', textTransform: 'uppercase', opacity: 0.7, fontWeight: 800, letterSpacing: '0.05em' }}>Doctor Desktop View Preview</div>
+                                <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Consultation Page: <span style={{ color: '#38bdf8' }}>{departmentTab} Department</span></h3>
+                            </div>
+                            <button onClick={() => setShowPreview(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer' }}>✕</button>
+                        </div>
+
+                        {/* Preview Body */}
+                        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                            {/* Fake Doctor Sidebar */}
+                            <div style={{ width: '280px', background: 'white', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ padding: '25px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' }}>
+                                        <div style={{ width: '40px', height: '40px', background: '#3b82f6', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>P</div>
+                                        <div>
+                                            <div style={{ fontWeight: 'bold', fontSize: '14px' }}>Demo Patient</div>
+                                            <div style={{ fontSize: '11px', color: '#64748b' }}>MRN-102938 / Male, 34</div>
+                                        </div>
+                                    </div>
+                                    <div style={{ fontSize: '11px', background: '#f8fafc', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0', color: '#475569' }}>
+                                        📍 Viewing Live Preview of <b>{departmentTab}</b> workflows.
+                                    </div>
+                                </div>
+                                
+                                <div style={{ flex: 1, overflowY: 'auto' }}>
+                                    <div style={{ padding: '15px 20px', fontSize: '10px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Forms & Categories</div>
+                                    {Object.keys(currentCategories).map(cat => (
+                                        <div 
+                                            key={cat} 
+                                            onClick={() => setActiveCategory(cat)}
+                                            style={{ 
+                                                padding: '12px 20px', 
+                                                fontSize: '13px', 
+                                                cursor: 'pointer',
+                                                background: cat === activeCategory ? '#eff6ff' : 'transparent',
+                                                color: cat === activeCategory ? '#2563eb' : '#475569',
+                                                borderRight: cat === activeCategory ? '3px solid #3b82f6' : 'none',
+                                                fontWeight: cat === activeCategory ? 700 : 500
+                                            }}
+                                        >
+                                            📋 {cat}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Main Preview Content */}
+                            <div style={{ flex: 1, background: '#fff', overflowY: 'auto' }}>
+                                <div style={{ padding: '30px' }}>
+                                    {activeCategory ? (
+                                        <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+                                            <div style={{ marginBottom: '25px', paddingBottom: '15px', borderBottom: '2px solid #3b82f633' }}>
+                                                <h2 style={{ margin: 0, color: '#1e293b' }}>{activeCategory}</h2>
+                                                <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: '14px' }}>Please complete all diagnostic questions below.</p>
+                                            </div>
+                                            
+                                            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '25px' }}>
+                                                {/* Reuse the real Dynamic Form Component */}
+                                                <div className="dynamic-question-form-preview">
+                                                    {questionsInActiveCategory.map((item, idx) => {
+                                                        if (item.condition && previewIntake[item.parentQ] !== item.condition) return null;
+                                                        
+                                                        const handleAnswer = (q, val) => setPreviewIntake(prev => ({ ...prev, [q]: val }));
+                                                        const handleCheckbox = (q, opt, isChecked) => {
+                                                            setPreviewIntake(prev => {
+                                                                let current = prev[q] || [];
+                                                                if (!Array.isArray(current)) current = [];
+                                                                return { ...prev, [q]: isChecked ? [...current, opt] : current.filter(i => i !== opt) };
+                                                            });
+                                                        };
+
+                                                        // Manual render logic since we can't easily import DynamicQuestionForm without issues sometimes in nested structures OR we just want direct control
+                                                        return (
+                                                            <div key={idx} style={{ marginBottom: '20px' }}>
+                                                                <label style={{ fontWeight: '700', fontSize: '14px', display: 'block', marginBottom: '8px', color: '#334155' }}>{item.q}</label>
+                                                                
+                                                                {item.type === 'text' && <input type="text" placeholder="Free text input" value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }} />}
+                                                                {item.type === 'number' && <input type="number" placeholder="Enter value" value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }} />}
+                                                                {item.type === 'date' && <input type="date" value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }} />}
+                                                                
+                                                                {item.type === 'select' && (
+                                                                    <select value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
+                                                                        <option value="">Select option...</option>
+                                                                        {(item.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+                                                                    </select>
+                                                                )}
+
+                                                                {item.type === 'yes-no' && (
+                                                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                                                        <button onClick={() => handleAnswer(item.q, 'Yes')} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: previewIntake[item.q] === 'Yes' ? '#3b82f6' : '#fff', color: previewIntake[item.q] === 'Yes' ? '#fff' : '#475569', fontWeight: 600 }}>Yes</button>
+                                                                        <button onClick={() => handleAnswer(item.q, 'No')} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: previewIntake[item.q] === 'No' ? '#ef4444' : '#fff', color: previewIntake[item.q] === 'No' ? '#fff' : '#475569', fontWeight: 600 }}>No</button>
+                                                                    </div>
+                                                                )}
+
+                                                                {item.type === 'checkbox-group' && (
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                                                        {(item.options || []).map(opt => (
+                                                                            <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                                                                                <input type="checkbox" checked={(previewIntake[item.q] || []).includes(opt)} onChange={e => handleCheckbox(item.q, opt, e.target.checked)} /> {opt}
+                                                                            </label>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+
+                                                                {(item.type === 'checkbox-date-group' || item.type === 'checkbox-text-group') && (
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                        {(item.options || []).map(opt => {
+                                                                            const checked = (previewIntake[item.q] || []).includes(opt);
+                                                                            return (
+                                                                                <div key={opt} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', flex: 1 }}>
+                                                                                        <input type="checkbox" checked={checked} onChange={e => handleCheckbox(item.q, opt, e.target.checked)} /> {opt}
+                                                                                    </label>
+                                                                                    {checked && opt !== 'None' && (
+                                                                                        <input 
+                                                                                            type={item.type === 'checkbox-date-group' ? 'date' : 'text'} 
+                                                                                            placeholder={item.type === 'checkbox-text-group' ? 'Enter details' : ''}
+                                                                                            style={{ padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', width: '200px' }}
+                                                                                        />
+                                                                                    )}
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
+
+                                                                {item.type === 'textarea' && <textarea rows={4} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }} placeholder="Clinical notes here..." />}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            <button 
+                                                style={{ width: '100%', padding: '15px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: 'white', border: 'none', borderRadius: '12px', marginTop: '30px', fontWeight: 'bold', fontSize: '16px', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}
+                                            >
+                                                💾 Save & Continue to Next Step (Demo)
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div style={{ textAlign: 'center', padding: '100px 0', color: '#94a3b8' }}>
+                                            <div style={{ fontSize: '40px', marginBottom: '15px' }}>📋</div>
+                                            <p>Select a category to see its clinical form preview.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -6,8 +6,8 @@
 .hospitaladmin-page {
     min-height: 100vh;
     padding: 40px;
-    background: radial-gradient(circle at top right, #f0fdf4, #dcfce7, #f1f5f9);
-    font-family: 'Outfit', 'Inter', sans-serif;
+    background: radial-gradient(circle at top right, var(--brand-50), var(--brand-100), var(--surface-1));
+    font-family: var(--font-primary);
     box-sizing: border-box;
 }
 
@@ -23,10 +23,10 @@
     align-items: center;
     margin-bottom: 32px;
     padding: 32px 40px;
-    background: linear-gradient(135deg, #065f46, #059669, #10b981);
+    background: var(--gradient-brand);
     border-radius: 24px;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 20px 60px rgba(5, 150, 105, 0.3);
+    box-shadow: var(--shadow-brand);
     color: white;
 }
 
@@ -94,14 +94,14 @@
 }
 
 .ha-tab:hover {
-    background: #f0fdf4;
-    color: #065f46;
+    background: var(--brand-50);
+    color: var(--brand-700);
 }
 
 .ha-tab-active {
-    background: linear-gradient(135deg, #065f46, #10b981);
+    background: var(--gradient-brand);
     color: white !important;
-    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+    box-shadow: var(--shadow-brand);
 }
 
 /* Stats Grid */
@@ -138,7 +138,7 @@
 .ha-stat-value {
     font-size: 2.2rem;
     font-weight: 800;
-    color: #065f46;
+    color: var(--brand-600);
     margin: 0;
     line-height: 1;
 }
@@ -209,7 +209,7 @@
 }
 
 .ha-hospital-info strong {
-    color: #065f46;
+    color: var(--brand-700);
 }
 
 /* Restricted Notice */
@@ -225,9 +225,9 @@
 
 /* Role badge extras */
 .role-hospitaladmin {
-    background: #d1fae5;
-    color: #065f46;
-    border: 1px solid #a7f3d0;
+    background: var(--brand-50);
+    color: var(--brand-700);
+    border: 1px solid var(--brand-200);
 }
 
 /* Loading / empty messages */

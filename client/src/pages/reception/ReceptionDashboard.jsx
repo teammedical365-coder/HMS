@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { receptionAPI, publicAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
@@ -23,6 +23,7 @@ const ReceptionDashboard = () => {
     const [searchResults, setSearchResults] = useState([]);
     const [profilePatient, setProfilePatient] = useState(null);
     const [profileAppointments, setProfileAppointments] = useState([]);
+    const [transactions, setTransactions] = useState([]);
 
     // Availability
     const [availabilityCheck, setAvailabilityCheck] = useState({
@@ -44,8 +45,8 @@ const ReceptionDashboard = () => {
         paymentStatus: 'Pending', consultationFee: '',
 
         // Assignment
-        doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: '',
-        referralType: '', reasonForVisit: ''
+        department: '', doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: '',
+        referralType: '', reasonForVisit: '', paymentMethod: 'Cash'
     });
 
     const [verifyingAadhaar, setVerifyingAadhaar] = useState(false);
@@ -82,6 +83,13 @@ const ReceptionDashboard = () => {
         } catch (err) { console.error(err); } finally { setLoading(false); }
     };
 
+    const fetchTransactions = async () => {
+        try {
+            const res = await receptionAPI.getTransactions();
+            if (res.success) setTransactions(res.transactions);
+        } catch (err) { console.error(err); }
+    };
+
     const fetchDoctors = async () => {
         try {
             const response = await publicAPI.getDoctors();
@@ -115,7 +123,7 @@ const ReceptionDashboard = () => {
             height: '', weight: '', bmi: '', bloodGroup: '',
             paymentStatus: 'Pending', consultationFee: '500',
             doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: '',
-            referralType: '', reasonForVisit: ''
+            referralType: '', reasonForVisit: '', paymentMethod: 'Cash'
         });
         setViewMode('intake');
     };
@@ -259,7 +267,9 @@ const ReceptionDashboard = () => {
                     doctorId: intakeForm.doctor,
                     date: intakeForm.visitDate,
                     time: intakeForm.visitTime,
-                    notes: `Walk-in. Vitals: ${intakeForm.height}cm/${intakeForm.weight}kg. Reason: ${intakeForm.reasonForVisit}`
+                    notes: `Walk-in. Vitals: ${intakeForm.height}cm/${intakeForm.weight}kg. Reason: ${intakeForm.reasonForVisit}`,
+                    paymentMethod: intakeForm.paymentMethod,
+                    paymentStatus: intakeForm.paymentStatus
                 });
 
                 if (bookingRes.success) {
@@ -410,36 +420,67 @@ const ReceptionDashboard = () => {
                                 <div className="field"><label>BMI</label><input name="bmi" value={intakeForm.bmi} readOnly /></div>
                                 <div className="field"><label>Consultation Fee</label><input name="consultationFee" value={intakeForm.consultationFee} onChange={handleInputChange} /></div>
                             </div>
+                            <div className="form-row">
+                                <div className="field">
+                                    <label>Payment Method</label>
+                                    <select name="paymentMethod" value={intakeForm.paymentMethod} onChange={handleInputChange}>
+                                        <option value="Cash">Cash</option>
+                                        <option value="UPI">UPI</option>
+                                        <option value="Cheque">Cheque</option>
+                                    </select>
+                                </div>
+                                <div className="field">
+                                    <label>Payment Status</label>
+                                    <select name="paymentStatus" value={intakeForm.paymentStatus} onChange={handleInputChange}>
+                                        <option value="Pending">Pending</option>
+                                        <option value="Paid">Paid</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="form-section" style={{ backgroundColor: '#e3f2fd' }}>
                             <h4>3. Assign to Doctor/Counselor</h4>
                             <div className="form-row">
                                 <div className="field">
+                                    <label>Department</label>
+                                    <select name="department" value={intakeForm.department} onChange={handleInputChange}>
+                                        <option value="">-- All Departments --</option>
+                                        {[...new Set(doctorsList.map(d => d.specialty).filter(Boolean))].map(dept => (
+                                            <option key={dept} value={dept}>{dept}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="field">
                                     <label>Select Specialist</label>
                                     <select name="doctor" value={intakeForm.doctor} onChange={handleInputChange}>
                                         <option value="">-- Choose --</option>
-                                        {doctorsList.map(doc => (
+                                        {doctorsList.filter(doc => !intakeForm.department || doc.specialty === intakeForm.department).map(doc => (
                                             <option key={doc._id} value={doc._id}>{doc.name} ({doc.specialty})</option>
                                         ))}
                                     </select>
                                 </div>
                                 <div className="field">
                                     <label>Date</label>
-                                    <input type="date" name="visitDate" value={intakeForm.visitDate} onChange={handleInputChange} min={new Date().toISOString().split('T')[0]} />
+                                    <input type="date" name="visitDate" value={intakeForm.visitDate} onChange={handleInputChange} />
                                 </div>
                             </div>
                             {intakeForm.doctor && (
                                 <div className="slot-grid">
-                                    {timeSlots.map(time => (
-                                        <button
-                                            key={time} type="button"
-                                            className={`slot-btn ${availabilityCheck.bookedSlots.includes(time) ? 'booked' : ''} ${intakeForm.visitTime === time ? 'selected' : ''}`}
-                                            onClick={() => !availabilityCheck.bookedSlots.includes(time) && setIntakeForm({ ...intakeForm, visitTime: time })}
-                                        >
-                                            {time}
-                                        </button>
-                                    ))}
+                                    {timeSlots.map(time => {
+                                        const isBooked = availabilityCheck.bookedSlots.includes(time);
+
+                                        return (
+                                            <button
+                                                key={time} type="button"
+                                                className={`slot-btn ${isBooked ? 'booked' : ''} ${intakeForm.visitTime === time ? 'selected' : ''}`}
+                                                onClick={() => !isBooked && setIntakeForm({ ...intakeForm, visitTime: time })}
+                                                disabled={isBooked}
+                                            >
+                                                {time}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -562,11 +603,72 @@ const ReceptionDashboard = () => {
         );
     }
 
+    if (viewMode === 'transactions') {
+        const totalCollected = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+        return (
+            <div className="reception-dashboard" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+                <div className="dashboard-header">
+                    <button onClick={() => setViewMode('dashboard')} style={{ padding: '8px 20px', background: '#f1f5f9', border: '2px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>← Back to Dashboard</button>
+                    <h2>Transaction History</h2>
+                </div>
+
+                <div className="card" style={{ padding: '20px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#e0f2fe', border: '1px solid #bae6fd' }}>
+                    <div>
+                        <h3 style={{ margin: 0, color: '#0369a1' }}>Total Collected</h3>
+                        <p style={{ margin: '5px 0 0', fontSize: '1.5rem', fontWeight: 'bold', color: '#0284c7' }}>₹{totalCollected.toLocaleString('en-IN')}</p>
+                    </div>
+                </div>
+
+                <div className="card" style={{ padding: '20px' }}>
+                    <table className="reception-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Patient</th>
+                                <th>Doctor</th>
+                                <th>Method</th>
+                                <th>Status</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {transactions.length === 0 ? (
+                                <tr><td colSpan="6" style={{ textAlign: 'center', color: '#888' }}>No transactions found.</td></tr>
+                            ) : (
+                                transactions.map(t => (
+                                    <tr key={t._id}>
+                                        <td>{new Date(t.createdAt).toLocaleDateString()}</td>
+                                        <td>{t.userId?.name || 'Walk-in'}</td>
+                                        <td>{t.doctorName || '-'}</td>
+                                        <td>{t.paymentMethod || 'Cash'}</td>
+                                        <td>
+                                            <span style={{
+                                                padding: '4px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold',
+                                                background: (t.paymentStatus || '').toLowerCase() === 'paid' ? '#dcfce7' : '#fef3c7',
+                                                color: (t.paymentStatus || '').toLowerCase() === 'paid' ? '#166534' : '#92400e'
+                                            }}>
+                                                {t.paymentStatus || 'Pending'}
+                                            </span>
+                                        </td>
+                                        <td style={{ fontWeight: 'bold', color: '#16a34a' }}>₹{t.amount}</td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="reception-dashboard">
             <div className="dashboard-header">
                 <h1>Reception Desk</h1>
-                <button className="btn-save" onClick={handleNewWalkIn} style={{ padding: '10px 20px', fontSize: '1rem' }}>+ New Patient Registration</button>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    <button className="btn-cancel" onClick={() => { fetchTransactions(); setViewMode('transactions'); }} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1' }}>💰 Transactions</button>
+                    <button className="btn-save" onClick={handleNewWalkIn} style={{ padding: '10px 20px', fontSize: '1rem' }}>+ New Registration</button>
+                </div>
             </div>
 
             {/* SEARCH SECTION */}
@@ -634,19 +736,21 @@ const ReceptionDashboard = () => {
 
             <div className="appointments-list">
                 <h3>Today's Queue</h3>
-                <table className="reception-table">
-                    <thead><tr><th>Patient</th><th>Assigned To</th><th>Time</th><th>Status</th></tr></thead>
-                    <tbody>
-                        {appointments.map(apt => (
-                            <tr key={apt._id}>
-                                <td>{apt.userId?.name}<br /><small>{apt.userId?.phone}</small></td>
-                                <td>{apt.doctorName}</td>
-                                <td>{apt.appointmentTime}</td>
-                                <td><span className={`status ${apt.status}`}>{apt.status}</span></td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div className="table-responsive">
+                    <table className="reception-table">
+                        <thead><tr><th>Patient</th><th>Assigned To</th><th>Time</th><th>Status</th></tr></thead>
+                        <tbody>
+                            {appointments.map(apt => (
+                                <tr key={apt._id}>
+                                    <td>{apt.userId?.name}<br /><small>{apt.userId?.phone}</small></td>
+                                    <td>{apt.doctorName}</td>
+                                    <td>{apt.appointmentTime}</td>
+                                    <td><span className={`status ${apt.status}`}>{apt.status}</span></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );

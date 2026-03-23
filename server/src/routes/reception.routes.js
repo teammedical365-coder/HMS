@@ -56,7 +56,12 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         const orClauses = [{ phone }];
         if (email) orClauses.push({ email });
 
-        let user = await User.findOne({ $or: orClauses });
+        let userQuery = { $or: orClauses };
+        if (req.user.hospitalId) {
+            userQuery.hospitalId = req.user.hospitalId;
+        }
+
+        let user = await User.findOne(userQuery);
 
         if (user) {
             // Update name if changed
@@ -81,7 +86,8 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
             phone,
             role: 'patient',
             patientId,
-            fertilityProfile: {}
+            fertilityProfile: {},
+            hospitalId: req.user.hospitalId || undefined
         };
 
         // Only attach email if it actually exists, to prevent duplicate sparse index errors
@@ -164,15 +170,20 @@ router.get('/search-patients', verifyToken, verifyReception, async (req, res) =>
         const { query } = req.query;
         if (!query || query.length < 2) return res.json({ success: true, patients: [] });
 
-        const patients = await User.find({
-            // Search both legacy 'user' and new 'patient' roles
+        const queryFilter = {
             role: { $in: ['user', 'patient'] },
             $or: [
                 { name: { $regex: query, $options: 'i' } },
                 { phone: { $regex: query, $options: 'i' } },
                 { patientId: { $regex: query, $options: 'i' } }
             ]
-        }).select('name phone email patientId fertilityProfile');
+        };
+
+        if (req.user.hospitalId) {
+            queryFilter.hospitalId = req.user.hospitalId;
+        }
+
+        const patients = await User.find(queryFilter).select('name phone email patientId fertilityProfile');
 
         res.json({ success: true, patients });
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
@@ -239,7 +250,11 @@ router.put('/intake/:userId', verifyToken, verifyReception, async (req, res) => 
 // 4. APPOINTMENTS
 router.get('/appointments', verifyToken, verifyReception, async (req, res) => {
     try {
-        const appointments = await Appointment.find({}).populate('userId', 'name email phone patientId').populate('doctorId', 'name').sort({ appointmentDate: -1 }).lean();
+        let queryFilter = {};
+        if (req.user.hospitalId) {
+            queryFilter.hospitalId = req.user.hospitalId;
+        }
+        const appointments = await Appointment.find(queryFilter).populate('userId', 'name email phone patientId').populate('doctorId', 'name').sort({ appointmentDate: -1 }).lean();
         res.json({ success: true, appointments });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
@@ -284,6 +299,7 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
 
         const newAppointment = new Appointment({
             userId: patient._id,
+            hospitalId: req.user.hospitalId || patient.hospitalId || undefined,
             patientId: patient.patientId || 'WALK-IN',
             doctorId: doctor._id,
             doctorUserId: doctor.userId, // Links to Doctor's login
@@ -343,6 +359,23 @@ router.post('/check-in', verifyToken, verifyReception, async (req, res) => {
         console.error("Check-in Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
+});
+
+// 8. TRANSACTIONS
+router.get('/transactions', verifyToken, verifyReception, async (req, res) => {
+    try {
+        let queryFilter = { amount: { $gt: 0 } };
+        if (req.user.hospitalId) {
+            queryFilter.hospitalId = req.user.hospitalId;
+        }
+        const transactions = await Appointment.find(queryFilter)
+            .populate('userId', 'name phone patientId email')
+            .populate('doctorId', 'name')
+            .sort({ createdAt: -1 })
+            .limit(100)
+            .lean();
+        res.json({ success: true, transactions });
+    } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
 module.exports = router;

@@ -17,6 +17,7 @@ const DoctorPatientDetails = () => {
     const [catalogMedicines, setCatalogMedicines] = useState([]);
     const [dynamicLibrary, setDynamicLibrary] = useState(null);
     const [hospitalDepartments, setHospitalDepartments] = useState([]);
+    const [isLocked, setIsLocked] = useState(false);
 
     // Modal States
     const [showPrescribeModal, setShowPrescribeModal] = useState(false);
@@ -73,6 +74,11 @@ const DoctorPatientDetails = () => {
                 if (res.success) {
                     setAppointment(res.appointment);
                     setIntakeData(res.appointment.userId?.fertilityProfile || {});
+                    
+                    // Lock if completed
+                    if (res.appointment.status === 'completed') {
+                        setIsLocked(true);
+                    }
 
                     if (res.appointment.userId?._id) {
                         const histRes = await doctorAPI.getPatientHistory(res.appointment.userId._id);
@@ -135,6 +141,7 @@ const DoctorPatientDetails = () => {
     };
 
     const handleSessionChange = (e) => {
+        if (isLocked) return;
         setSessionData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
 
@@ -364,7 +371,9 @@ const DoctorPatientDetails = () => {
                         </div>
                         <div className="dpd-appt-item">
                             <span className="dpd-appt-label">Status</span>
-                            <span className={`dpd-appt-status status-${appointment.status}`}>{appointment.status}</span>
+                            <span className={`dpd-appt-status status-${appointment.status}`}>
+                                {appointment.status} {isLocked && '🔒 Locked'}
+                            </span>
                         </div>
                         <div className="dpd-appt-item">
                             <span className="dpd-appt-label">Service</span>
@@ -539,10 +548,13 @@ const DoctorPatientDetails = () => {
                                     questions={dTab.data}
                                     intakeData={intakeData}
                                     setIntakeData={setIntakeData}
+                                    readOnly={isLocked}
                                 />
-                                <button className="dpd-save-section" onClick={handleSaveProfile} disabled={saving} style={{ marginTop: '20px' }}>
-                                    {saving ? 'Saving...' : `💾 Save ${dTab.label} Data`}
-                                </button>
+                                {!isLocked && (
+                                    <button className="dpd-save-section" onClick={handleSaveProfile} disabled={saving} style={{ marginTop: '20px' }}>
+                                        {saving ? 'Saving...' : `💾 Save ${dTab.label} Data`}
+                                    </button>
+                                )}
                             </div>
                         )
                     ))}
@@ -642,6 +654,16 @@ const DoctorPatientDetails = () => {
                             </span>
                         </div>
 
+                        {isLocked && (
+                            <div style={{ padding: '15px', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontSize: '20px' }}>⚠️</span>
+                                <div style={{ fontSize: '13px', color: '#92400e' }}>
+                                    <b>Session Locked.</b> This clinical record has been marked as complete and is now immutable. 
+                                    Contact administrator for any corrections.
+                                </div>
+                            </div>
+                        )}
+
                         <div className="dpd-right-content">
                             <div className="dpd-session-field">
                                 <label>🔍 Diagnosis</label>
@@ -651,6 +673,7 @@ const DoctorPatientDetails = () => {
                                     onChange={handleSessionChange}
                                     placeholder="Enter diagnosis..."
                                     className="dpd-diag-input"
+                                    disabled={isLocked}
                                 />
                             </div>
 
@@ -662,37 +685,55 @@ const DoctorPatientDetails = () => {
                                     onChange={handleSessionChange}
                                     placeholder="Write detailed clinical notes, observations, examination findings..."
                                     className="dpd-notes-textarea"
+                                    disabled={isLocked}
                                 />
                             </div>
 
                             <div className="dpd-session-field">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPrescribeModal(true)}
-                                    style={{ padding: '14px', fontSize: '15px', background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(79, 70, 229, 0.25)', marginTop: '10px' }}
-                                >
-                                    💊 / 🧪 Prescribe Medicines & Lab Tests
-                                </button>
+                                {!isLocked && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPrescribeModal(true)}
+                                        style={{ padding: '14px', fontSize: '15px', background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(79, 70, 229, 0.25)', marginTop: '10px' }}
+                                    >
+                                        💊 / 🧪 Prescribe Medicines & Lab Tests
+                                    </button>
+                                )}
 
-                                {(sessionData.prescription || sessionData.labTests) && (
+                                {(sessionData.prescription || sessionData.labTests || (isLocked && appointment.pharmacy?.length > 0)) && (
                                     <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '10px', fontSize: '13px', color: '#475569' }}>
-                                        {sessionData.prescription && <div style={{ marginBottom: '4px' }}><b>✅ Medicines included</b></div>}
-                                        {sessionData.labTests && <div><b>✅ Lab Tests included</b></div>}
-                                        <div style={{ marginTop: '8px', fontSize: '12px', color: '#3b82f6', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setShowPrescribeModal(true)}>
-                                            Click above button to view/edit details.
-                                        </div>
+                                        {(sessionData.prescription || (isLocked && appointment.pharmacy?.length > 0)) && <div style={{ marginBottom: '4px' }}><b>✅ Medicines included</b></div>}
+                                        {(sessionData.labTests || (isLocked && appointment.labTests?.length > 0)) && <div><b>✅ Lab Tests included</b></div>}
+                                        {!isLocked && (
+                                            <div style={{ marginTop: '8px', fontSize: '12px', color: '#3b82f6', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setShowPrescribeModal(true)}>
+                                                Click above button to view/edit details.
+                                            </div>
+                                        )}
+                                        {isLocked && (
+                                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0', fontSize: '12px' }}>
+                                                Check the Consultation Report (PDF) for full history.
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
                         </div>
 
                         <div className="dpd-right-footer">
-                            <button className="dpd-btn-save-draft" onClick={handleSaveProfile} disabled={saving}>
-                                💾 Save Profile
-                            </button>
-                            <button className="dpd-btn-finish" onClick={handleSaveAndMerge} disabled={saving}>
-                                {saving ? '⏳ Processing...' : '✅ Complete Session & Generate Report'}
-                            </button>
+                            {!isLocked ? (
+                                <>
+                                    <button className="dpd-btn-save-draft" onClick={handleSaveProfile} disabled={saving}>
+                                        💾 Save Profile
+                                    </button>
+                                    <button className="dpd-btn-finish" onClick={handleSaveAndMerge} disabled={saving}>
+                                        {saving ? '⏳ Processing...' : '✅ Complete Session & Generate Report'}
+                                    </button>
+                                </>
+                            ) : (
+                                <button className="dpd-btn-finish" onClick={() => navigate('/doctor/patients')} style={{ background: '#64748b', width: '100%' }}>
+                                    ← Back to Patient Queue
+                                </button>
+                            )}
                         </div>
                     </>
                 )}

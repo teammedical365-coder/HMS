@@ -10,34 +10,19 @@ const Login = () => {
   const dispatch = useAppDispatch();
   const { loading, error, isAuthenticated, user } = useAuth();
 
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
-  });
+  const [formData, setFormData] = useState({ email: '', password: '' });
 
-  useEffect(() => {
-    dispatch(clearError());
-  }, [dispatch]);
+  useEffect(() => { dispatch(clearError()); }, [dispatch]);
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      const userRole = user.role;
       const redirectMap = {
-        admin: '/admin',
-        model_admin: '/admin', // In case backend usage varies
-        superadmin: '/superadmin',
-        doctor: '/doctor/patients',
-        nurse: '/my-dashboard', // Routing nurses to the role dashboard
-        lab: '/lab/dashboard',
-        pharmacy: '/pharmacy/dashboard',
-        reception: '/reception/dashboard',
-        accountant: '/accountant/dashboard',
-        patient: '/dashboard'
+        admin: '/admin', superadmin: '/superadmin', doctor: '/doctor/patients',
+        nurse: '/doctor/patients', lab: '/lab/dashboard', pharmacy: '/pharmacy/dashboard',
+        reception: '/reception/dashboard', accountant: '/accountant/dashboard', patient: '/dashboard'
       };
-
-      const normalizedRole = userRole ? userRole.toLowerCase() : '';
-      const targetPath = redirectMap[normalizedRole] || searchParams.get('redirect') || '/my-dashboard';
-      navigate(targetPath);
+      const role = (user.role || '').toLowerCase();
+      navigate(redirectMap[role] || searchParams.get('redirect') || '/my-dashboard');
     }
   }, [isAuthenticated, user, navigate, searchParams]);
 
@@ -50,37 +35,40 @@ const Login = () => {
     e.preventDefault();
     dispatch(clearError());
     if (!formData.email || !formData.password) return;
-
-    await dispatch(loginUser({
-      email: formData.email,
-      password: formData.password
-    }));
+    await dispatch(loginUser({ email: formData.email, password: formData.password }));
   };
 
   return (
     <section className="auth-section">
-      {/* Decorative Blobs */}
-      <div className="auth-blob blob-1"></div>
-      <div className="auth-blob blob-2"></div>
+      <div className="auth-blob blob-1" />
+      <div className="auth-blob blob-2" />
 
       <div className="auth-card">
-        {/* Left Side: Form Area */}
+        {/* Left: Form */}
         <div className="auth-form-container">
-          <div id="login-box" className="auth-box show">
-            <h2 style={{ marginBottom: '5px' }}>Welcome to HMS</h2>
-            <p style={{ color: '#666', marginBottom: '30px' }}>Sign in to your secure hospital workspace.</p>
+          <div className="auth-box">
+            <div className="auth-brand">
+              <div className="auth-brand-icon">🏥</div>
+              <span className="auth-brand-name">MediCRM HMS</span>
+            </div>
 
-            {error && <div className="error-message" style={{ marginBottom: '20px' }}>{error}</div>}
+            <h2>Welcome back</h2>
+            <p>Sign in to your secure hospital workspace.</p>
+
+            {error && (
+              <div className="error-message">
+                ⚠️ {error}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit}>
               <div className="input-group">
                 <label>Email Address</label>
                 <div className="input-wrapper">
-                  <i className="fa-regular fa-envelope"></i>
                   <input
                     type="email"
                     name="email"
-                    placeholder="e.g. name@example.com"
+                    placeholder="name@hospital.com"
                     value={formData.email}
                     onChange={handleChange}
                     required
@@ -91,11 +79,10 @@ const Login = () => {
               <div className="input-group">
                 <label>Password</label>
                 <div className="input-wrapper">
-                  <i className="fa-solid fa-lock"></i>
                   <input
                     type="password"
                     name="password"
-                    placeholder="••••••••"
+                    placeholder="Enter your password"
                     value={formData.password}
                     onChange={handleChange}
                     required
@@ -103,37 +90,52 @@ const Login = () => {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', fontSize: '0.9rem' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#666', fontWeight: '400' }}>
-                  <input type="checkbox" /> Remember me
+              <div className="auth-row">
+                <label>
+                  <input type="checkbox" style={{ accentColor: 'var(--brand-600)' }} />
+                  &nbsp;Remember me
                 </label>
-                <a href="#" style={{ color: 'var(--brand-pink)' }}>Forgot Password?</a>
+                <a href="#">Forgot Password?</a>
               </div>
 
               <button className="btn-primary btn-block" disabled={loading}>
-                {loading ? 'Signing In...' : 'Sign In'}
+                {loading ? (
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <span style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+                    Signing In...
+                  </span>
+                ) : 'Sign In →'}
               </button>
             </form>
 
-            <div className="divider"><span>Or continue with</span></div>
+            <div className="divider"><span>or continue with</span></div>
+
             <div className="social-login">
-              <div className="social-btn" title="Login with Google"><i className="fa-brands fa-google"></i></div>
-              <div className="social-btn" title="Login with Facebook"><i className="fa-brands fa-facebook-f"></i></div>
-              <div className="social-btn" title="Login with Apple"><i className="fa-brands fa-apple"></i></div>
+              <div className="social-btn" title="Google">G</div>
+              <div className="social-btn" title="Microsoft">M</div>
+              <div className="social-btn" title="SSO">🔒</div>
             </div>
 
             <p className="switch-text">
-              New to HMS? <Link to="/signup" className="switch-link">Create Account</Link>
+              New here? <Link to="/signup" className="switch-link">Create Account</Link>
             </p>
           </div>
         </div>
 
-        {/* Right Side: Visual Content */}
+        {/* Right: Visual */}
         <div className="auth-visual">
-          <img src="https://images.unsplash.com/photo-1538108149393-ceefbce54471?q=80&w=1000&auto=format&fit=crop" alt="Hospital Management" />
-          <div className="auth-content auth-box show">
+          <img
+            src="https://images.unsplash.com/photo-1538108149393-ceefbce54471?q=80&w=1000&auto=format&fit=crop"
+            alt="Hospital Management"
+          />
+          <div className="auth-features">
+            <div className="auth-feature-chip">✅ Secure & HIPAA Compliant</div>
+            <div className="auth-feature-chip">🔒 End-to-End Encrypted</div>
+            <div className="auth-feature-chip">⚡ Real-time Updates</div>
+          </div>
+          <div className="auth-content">
             <h2>Streamline Your <br /> Healthcare Operations.</h2>
-            <p>Our Hospital Management System (HMS) empowers your staff to focus on patient care with seamlessly integrated digital workflows.</p>
+            <p>Empowering your staff to focus on patient care with seamlessly integrated digital workflows.</p>
           </div>
         </div>
       </div>

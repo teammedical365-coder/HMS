@@ -63,6 +63,22 @@
     font-weight: bold;
 }
 
+.sidebar-item .cat-actions {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.sidebar-item:hover .cat-actions {
+    opacity: 1;
+}
+
+.sidebar-item span {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* --- MAIN CONTENT --- */
 .ql-admin-main {
     flex: 1;

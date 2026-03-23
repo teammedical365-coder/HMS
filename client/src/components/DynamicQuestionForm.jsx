@@ -1,11 +1,13 @@
 import React from 'react';
 
-const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeData }) => {
+const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeData, readOnly = false }) => {
     const handleAnswer = (q, val) => {
+        if (readOnly) return;
         setIntakeData(prev => ({ ...prev, [q]: val }));
     };
 
     const handleCheckbox = (q, opt, isChecked) => {
+        if (readOnly) return;
         setIntakeData(prev => {
             let current = prev[q] || [];
             if (!Array.isArray(current)) current = [];
@@ -40,7 +42,8 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                     type={item.type}
                                     value={savedVal}
                                     onChange={(e) => handleAnswer(item.q, e.target.value)}
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                                    disabled={readOnly}
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', background: readOnly ? '#f8fafc' : '#fff' }}
                                 />
                             )}
 
@@ -49,7 +52,8 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                 <select
                                     value={savedVal}
                                     onChange={(e) => handleAnswer(item.q, e.target.value)}
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                                    disabled={readOnly}
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', background: readOnly ? '#f8fafc' : '#fff' }}
                                 >
                                     <option value="">Select...</option>
                                     {(item.options || []).map(o => (
@@ -63,7 +67,8 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                 <select
                                     value={savedVal}
                                     onChange={(e) => handleAnswer(item.q, e.target.value)}
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                                    disabled={readOnly}
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', background: readOnly ? '#f8fafc' : '#fff' }}
                                 >
                                     <option value="">Select...</option>
                                     <option value="Yes">Yes</option>
@@ -77,7 +82,8 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                     value={savedVal}
                                     rows={4}
                                     onChange={(e) => handleAnswer(item.q, e.target.value)}
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', resize: 'vertical' }}
+                                    disabled={readOnly}
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', resize: 'vertical', background: readOnly ? '#f8fafc' : '#fff' }}
                                 />
                             )}
 
@@ -87,10 +93,11 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                     {(item.options || []).map(opt => {
                                         const isChecked = (intakeData[item.q] || []).includes(opt);
                                         return (
-                                            <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                            <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: readOnly ? 'default' : 'pointer' }}>
                                                 <input
                                                     type="checkbox"
                                                     checked={isChecked}
+                                                    disabled={readOnly}
                                                     onChange={(e) => handleCheckbox(item.q, opt, e.target.checked)}
                                                 /> {opt}
                                             </label>
@@ -134,8 +141,9 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                                 type="text"
                                                 value={intakeData[`${item.q}_extra`] || ""}
                                                 onChange={(e) => handleAnswer(`${item.q}_extra`, e.target.value)}
+                                                disabled={readOnly}
                                                 placeholder="Enter details..."
-                                                style={{ flex: 1, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                                                style={{ flex: 1, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', background: readOnly ? '#f8fafc' : '#fff' }}
                                             />
                                         </div>
                                     )}
@@ -154,7 +162,8 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                                     type={field.type || 'text'}
                                                     value={val}
                                                     onChange={(e) => handleAnswer(field.q, e.target.value)}
-                                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                                                    disabled={readOnly}
+                                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', background: readOnly ? '#f8fafc' : '#fff' }}
                                                 />
                                             </div>
                                         );

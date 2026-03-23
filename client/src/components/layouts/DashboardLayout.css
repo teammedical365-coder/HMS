@@ -1,0 +1,317 @@
+/* DashboardLayout.css — Professional ERP Design System */
+:root {
+  --sidebar-width: 270px;
+  --sidebar-collapsed: 85px;
+  --topbar-height: 72px;
+  --bg-erp: #f8fafc;
+  --surface-erp: #ffffff;
+  --brand-erp: #1e847f; /* Use branding teal by default */
+  --brand-light: rgba(30, 132, 127, 0.1);
+  --text-dark: #1e293b;
+  --text-muted: #64748b;
+  --border-erp: rgba(226, 232, 240, 0.8);
+  --shadow-erp: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-profile: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+.erp-layout {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--bg-erp);
+  font-family: 'Inter', -apple-system, sans-serif;
+}
+
+/* Sidebar Styling */
+.erp-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background-color: #ffffff;
+  border-right: 1px solid var(--border-erp);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+.erp-sidebar.open { width: var(--sidebar-width); }
+.erp-sidebar.collapsed { width: var(--sidebar-collapsed); }
+
+.sidebar-brand {
+  height: var(--topbar-height);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 12px;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--text-dark);
+  border-bottom: 1px solid var(--border-erp);
+}
+
+.brand-dot {
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(135deg, #1e847f, #3b82f6);
+  border-radius: 4px;
+  transform: rotate(45deg);
+  flex-shrink: 0;
+}
+
+.sidebar-nav {
+  padding: 24px 12px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  text-decoration: none;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.925rem;
+  border-radius: 12px;
+  margin-bottom: 4px;
+  transition: all 0.2s;
+}
+
+.sidebar-link:hover {
+  background-color: var(--bg-erp);
+  color: var(--text-dark);
+}
+
+.sidebar-link.active {
+  background-color: var(--brand-light);
+  color: var(--brand-erp);
+}
+
+.sidebar-link-icon {
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+}
+
+.collapsed .sidebar-link-text,
+.collapsed .sidebar-brand span {
+  display: none;
+}
+
+.collapsed .sidebar-link {
+  justify-content: center;
+  padding: 14px;
+}
+
+/* Topbar Styling */
+.erp-topbar {
+  height: var(--topbar-height);
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border-erp);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  position: sticky;
+  top: 0;
+  z-index: 999;
+}
+
+.erp-main-area {
+  flex: 1;
+  transition: padding-left 0.3s;
+}
+
+.erp-main-area.shifted { padding-left: var(--sidebar-width); }
+.erp-main-area.full { padding-left: var(--sidebar-collapsed); }
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.sidebar-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.sidebar-toggle:hover { background: var(--bg-erp); }
+
+.breadcrumb-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.curr-page-name {
+  font-weight: 700;
+  color: var(--text-dark);
+  text-transform: capitalize;
+}
+
+.path-slash { color: var(--text-muted); }
+.path-user-role {
+  color: var(--brand-erp);
+  font-weight: 600;
+  background: var(--brand-light);
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+/* User Profile Widget */
+.user-profile-widget {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  position: relative;
+}
+
+.profile-text-info {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+}
+
+.user-disp-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+.user-disp-role {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.profile-avatar-wrap {
+  position: relative;
+}
+
+.profile-avatar {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, #1e847f, #3b82f6);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.95rem;
+  border: 4px solid var(--surface-erp);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.online-indicator {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  background-color: #10b981;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+}
+
+.profile-avatar-wrap:hover .profile-dropdown-content {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(12px);
+}
+
+.profile-dropdown-content {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: 280px;
+  background-color: #ffffff;
+  border-radius: 16px;
+  box-shadow: var(--shadow-profile);
+  border: 1px solid var(--border-erp);
+  padding: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(20px);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1001;
+}
+
+.p-header {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-erp);
+  margin-bottom: 8px;
+}
+
+.p-header strong { font-size: 1rem; color: var(--text-dark); }
+.p-header span { font-size: 0.825rem; color: var(--text-muted); }
+
+.p-role-badge {
+  background: var(--brand-light);
+  color: var(--brand-erp);
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin-top: 8px;
+  width: fit-content;
+}
+
+.p-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  color: var(--text-dark);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.p-item:hover { background: var(--bg-erp); }
+
+.btn-p-logout {
+  width: 100%;
+  padding: 12px;
+  background-color: #fef2f2;
+  color: #dc2626;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-p-logout:hover { background-color: #fee2e2; }
+
+/* Content Area */
+.erp-page-content {
+  padding: 32px;
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

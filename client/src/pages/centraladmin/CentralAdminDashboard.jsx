@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI } from '../../utils/api';
+import HospitalBrandingEditor from '../../components/HospitalBrandingEditor';
 import '../administration/SuperAdmin.css';
 import './CentralAdminDashboard.css';
 
@@ -17,10 +18,12 @@ const CentralAdminDashboard = () => {
     const [hospitals, setHospitals] = useState([]);
     const [loadingHospitals, setLoadingHospitals] = useState(false);
     const [showHospitalForm, setShowHospitalForm] = useState(false);
-    const [hospitalForm, setHospitalForm] = useState({ name: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] });
+    const [hospitalForm, setHospitalForm] = useState({ name: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 });
     const [editHospital, setEditHospital] = useState(null);
     const [savingHospital, setSavingHospital] = useState(false);
     const [deleteHospitalConfirm, setDeleteHospitalConfirm] = useState(null);
+    // Branding Editor
+    const [brandingHospital, setBrandingHospital] = useState(null);
 
     // Hospital Admin creation
     const [showHospitalAdminForm, setShowHospitalAdminForm] = useState(false);
@@ -164,7 +167,7 @@ const CentralAdminDashboard = () => {
                 if (res.success) { setSuccess('Hospital updated!'); setEditHospital(null); setShowHospitalForm(false); fetchHospitals(); }
             } else {
                 const res = await hospitalAPI.createHospital(hospitalForm);
-                if (res.success) { setSuccess('Hospital created!'); setShowHospitalForm(false); setHospitalForm({ name: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] }); fetchHospitals(); }
+                if (res.success) { setSuccess('Hospital created!'); setShowHospitalForm(false); setHospitalForm({ name: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 }); fetchHospitals(); }
             }
         } catch (err) { setError(err.response?.data?.message || 'Error saving hospital.'); }
         finally { setSavingHospital(false); }
@@ -179,7 +182,7 @@ const CentralAdminDashboard = () => {
 
     const openEditHospital = (h) => {
         setEditHospital(h);
-        setHospitalForm({ name: h.name, address: h.address || '', city: h.city || '', state: h.state || '', phone: h.phone || '', email: h.email || '', website: h.website || '', departments: h.departments || [] });
+        setHospitalForm({ name: h.name, address: h.address || '', city: h.city || '', state: h.state || '', phone: h.phone || '', email: h.email || '', website: h.website || '', departments: h.departments || [], appointmentFee: h.appointmentFee || 500 });
         setShowHospitalForm(true);
     };
 
@@ -223,7 +226,6 @@ const CentralAdminDashboard = () => {
         finally { setCreatingStaff(false); }
     };
 
-    const handleLogout = () => { localStorage.removeItem('token'); localStorage.removeItem('user'); navigate('/supremeadmin/login'); };
 
     const formatCurrency = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
     const getHospitalName = (hid) => hospitals.find(h => h._id === hid)?.name || 'Unknown';
@@ -248,18 +250,17 @@ const CentralAdminDashboard = () => {
             <div className="centraladmin-page">
                 <div className="centraladmin-container">
                     {/* Back Header */}
-                    <div className="centraladmin-header">
+                    {/* Back Header (Customized for Detail View) */}
+                    <div className="centraladmin-header" style={{ marginBottom: '24px', background: 'white', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
                         <div className="header-brand">
-                            <button onClick={closeHospitalDetail} className="back-btn">← Back to Hospitals</button>
-                            <div className="brand-badge">HOSPITAL DETAIL</div>
-                            <h1>🏥 {h.name}</h1>
-                            <p>{h.city && `${h.city}, `}{h.state} {h.phone && `· 📞 ${h.phone}`}</p>
+                            <button onClick={closeHospitalDetail} className="back-btn" style={{ marginBottom: '12px' }}>← Back to All Hospitals</button>
+                            <h1 style={{ fontSize: '1.6rem', fontWeight: 800 }}>🏥 {h.name}</h1>
+                            <p style={{ color: '#64748b' }}>{h.city && `${h.city}, `}{h.state} {h.phone && `· 📞 ${h.phone}`}</p>
                         </div>
                         <div className="admin-user-info">
-                            <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`}>
-                                {h.isActive ? '● Active' : '● Inactive'}
+                            <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`} style={{ padding: '6px 14px' }}>
+                                {h.isActive ? '● ACTIVE UNIT' : '● INACTIVE UNIT'}
                             </span>
-                            <button onClick={handleLogout} className="logout-btn">Logout</button>
                         </div>
                     </div>
 
@@ -361,6 +362,7 @@ const CentralAdminDashboard = () => {
                                             { label: 'Address', value: h.address },
                                             { label: 'Admin', value: h.adminName || 'Not assigned' },
                                             { label: 'Admin Email', value: h.adminEmail },
+                                            { label: 'Appointment Fee', value: h.appointmentFee !== undefined && h.appointmentFee !== null ? formatCurrency(h.appointmentFee) : formatCurrency(500) },
                                         ].map((item, i) => item.value && (
                                             <div key={i} style={{ display: 'flex', gap: '12px', marginBottom: '8px', fontSize: '14px' }}>
                                                 <span style={{ color: '#888', minWidth: '90px' }}>{item.label}</span>
@@ -468,18 +470,14 @@ const CentralAdminDashboard = () => {
     // ==========================================
     return (
         <div className="centraladmin-page">
-            <div className="centraladmin-container">
-                {/* Header */}
-                <div className="centraladmin-header">
-                    <div className="header-brand">
-                        <div className="brand-badge">CENTRAL ADMIN</div>
-                        <h1>🏛️ Central Administration Dashboard</h1>
-                        <p>Manage all hospitals, staff, and system configurations</p>
+            <div className={`centraladmin-container ${selectedHospital ? 'has-sidebar-padding' : ''}`}>
+                {/* Redundant Header Removed (now in TopBar) */}
+                <div style={{ marginBottom: '32px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 800, background: 'var(--brand-50, #f0fdfa)', color: 'var(--brand-600, #14b8a6)', padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.05em' }}>CENTRAL ADMIN</span>
                     </div>
-                    <div className="admin-user-info">
-                        <span>👋 Welcome, {currentUser.name}</span>
-                        <button onClick={handleLogout} className="logout-btn">Logout</button>
-                    </div>
+                    <h1 style={{ fontSize: '1.8rem', fontWeight: 850, margin: '8px 0 4px', color: '#1e293b' }}>🏛️ Central Administration Dashboard</h1>
+                    <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Manage all hospitals, staff, and system configurations</p>
                 </div>
 
                 {error && <div className="error-message">⚠️ {error}</div>}
@@ -509,7 +507,7 @@ const CentralAdminDashboard = () => {
                                         {showHospitalAdminForm ? 'Cancel' : '👤 Add Hospital Admin'}
                                     </button>
                                     <button className={showHospitalForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '10px 18px' }}
-                                        onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] }); }}>
+                                        onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 }); }}>
                                         {showHospitalForm ? 'Cancel' : '+ Add Hospital'}
                                     </button>
                                 </div>
@@ -598,6 +596,10 @@ const CentralAdminDashboard = () => {
                                             <label className="staff-label">Address</label>
                                             <input type="text" className="staff-input" value={hospitalForm.address} onChange={e => setHospitalForm({ ...hospitalForm, address: e.target.value })} />
                                         </div>
+                                        <div className="form-group">
+                                            <label className="staff-label">Standard Appointment Fee (₹)</label>
+                                            <input type="number" className="staff-input" value={hospitalForm.appointmentFee} onChange={e => setHospitalForm({ ...hospitalForm, appointmentFee: Number(e.target.value) })} min="0" />
+                                        </div>
                                         <div className="form-group" style={{ marginBottom: '16px' }}>
                                             <label className="staff-label">Departments Provided</label>
                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '5px' }}>
@@ -634,10 +636,21 @@ const CentralAdminDashboard = () => {
                                     {hospitals.map(h => (
                                         <div key={h._id} className={`hospital-card clickable-card ${!h.isActive ? 'hospital-inactive' : ''}`} onClick={() => openHospitalDetail(h)}>
                                             <div className="hospital-card-header">
-                                                <div className="hospital-icon">🏥</div>
-                                                <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`}>{h.isActive ? 'Active' : 'Inactive'}</span>
+                                                <div className="hospital-icon">
+                                                    {h.branding?.logoUrl
+                                                        ? <img src={h.branding.logoUrl} alt={h.name} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 6 }} />
+                                                        : <span>🏥</span>
+                                                    }
+                                                </div>
+                                                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                                    {h.branding?.primaryColor && (
+                                                        <span title="Custom branding" style={{ width: 12, height: 12, borderRadius: '50%', background: h.branding.primaryColor, border: '1.5px solid rgba(0,0,0,0.1)', flexShrink: 0 }} />
+                                                    )}
+                                                    <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`}>{h.isActive ? 'Active' : 'Inactive'}</span>
+                                                </div>
                                             </div>
-                                            <h3 className="hospital-name">{h.name}</h3>
+                                            <h3 className="hospital-name">{h.branding?.appName || h.name}</h3>
+                                            {h.branding?.tagline && <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 6px', fontStyle: 'italic' }}>{h.branding.tagline}</p>}
                                             <div className="hospital-meta">
                                                 {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
                                                 {h.phone && <span>📞 {h.phone}</span>}
@@ -650,6 +663,11 @@ const CentralAdminDashboard = () => {
                                             </div>
                                             <div className="hospital-click-hint">📊 Click to view full analytics →</div>
                                             <div className="hospital-actions" onClick={e => e.stopPropagation()}>
+                                                <button
+                                                    className="btn-edit"
+                                                    style={{ background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', color: '#15803d', border: '1.5px solid #86efac' }}
+                                                    onClick={() => setBrandingHospital(h)}
+                                                >🎨 Branding</button>
                                                 <button className="btn-edit" onClick={() => openEditHospital(h)}>Edit</button>
                                                 <button className="btn-delete" onClick={() => setDeleteHospitalConfirm(h._id)}>Delete</button>
                                             </div>
@@ -815,6 +833,14 @@ const CentralAdminDashboard = () => {
                     </div>
                 )}
             </div>
+
+            {/* 🎨 Branding Editor Modal */}
+            {brandingHospital && (
+                <HospitalBrandingEditor
+                    hospital={brandingHospital}
+                    onClose={() => { setBrandingHospital(null); fetchHospitals(); }}
+                />
+            )}
         </div>
     );
 };

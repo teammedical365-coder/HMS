@@ -37,8 +37,12 @@ router.get('/:id/full-history', verifyToken, resolveTenant, async (req, res) => 
         const userId = req.params.id;
         const roleData = req.user._roleData;
 
-        const allowedRoles = ['doctor', 'superadmin', 'admin', 'reception', 'lab', 'pharmacy', 'centraladmin', 'hospitaladmin'];
-        if (!roleData || (!allowedRoles.includes((roleData.name || '').toLowerCase()) && req.user.role !== 'superadmin')) {
+        const allowedRoles = ['doctor', 'nurse', 'superadmin', 'admin', 'reception', 'lab', 'pharmacy', 'centraladmin', 'hospitaladmin'];
+        const userRole = (req.user.role || '').toLowerCase();
+        const dynRole = (roleData?.name || '').toLowerCase();
+        const hasAccess = allowedRoles.includes(userRole) || allowedRoles.includes(dynRole);
+
+        if (!hasAccess && userRole !== 'superadmin') {
             return res.status(403).json({ success: false, message: 'Unauthorized access to patient history' });
         }
 
@@ -63,17 +67,27 @@ router.get('/:id/full-history', verifyToken, resolveTenant, async (req, res) => 
         // ClinicalVisit is always from master for now (complex schema)
         if (!ClinicalVisit) ClinicalVisit = require('../models/clinicalVisit.model');
 
-        const [visits, labs, pharmacies, appointments, user] = await Promise.all([
-            ClinicalVisit.find({ patientId: userId }).lean(),
-            LabReport.find({ userId: userId }).lean(),
-            PharmacyOrder.find({ userId: userId }).lean(),
-            Appointment.find({ userId: userId }).lean(),
-            User.findById(userId).lean()
-        ]);
+        // Determine if ID is ObjectId or patientId string
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId);
+        
+        // Find the user first to get their actual ObjectId for relations
+        const userQuery = isObjectId ? { _id: userId } : { patientId: userId };
+        const user = await User.findOne(userQuery).lean();
 
         if (!user) {
             return res.status(404).json({ success: false, message: 'Patient not found' });
         }
+
+        const realUserId = user._id;
+        const patientIdStr = user.patientId || userId;
+
+        const [visits, labs, pharmacies, appointments] = await Promise.all([
+            ClinicalVisit.find({ $or: [{ patientId: realUserId }, { patientId: patientIdStr }] }).lean(),
+            LabReport.find({ userId: realUserId }).lean(),
+            PharmacyOrder.find({ userId: realUserId }).lean(),
+            Appointment.find({ $or: [{ userId: realUserId }, { patientId: patientIdStr }] }).lean()
+        ]);
 
         let timeline = [];
 

@@ -119,6 +119,10 @@ export const receptionAPI = {
         const response = await apiClient.post('/api/reception/register', data);
         return response.data;
     },
+    getTransactions: async () => {
+        const response = await apiClient.get('/api/reception/transactions');
+        return response.data;
+    },
     searchPatients: async (query) => {
         const response = await apiClient.get(`/api/reception/search-patients?query=${query}`);
         return response.data;
@@ -282,6 +286,9 @@ export const hospitalAPI = {
         if (qs) url += `?${qs}`;
         return (await apiClient.get(url)).data;
     },
+    // White-label branding
+    getBranding: async (id) => (await apiClient.get(`/api/hospitals/${id}/branding`)).data,
+    updateBranding: async (id, data) => (await apiClient.put(`/api/hospitals/${id}/branding`, data)).data,
 };
 
 export const hospitalAdminAPI = {

@@ -10,6 +10,7 @@ const Admin = () => {
     const [users, setUsers] = useState([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [roles, setRoles] = useState([]);
+    const [hospital, setHospital] = useState(null);
 
     const [editModal, setEditModal] = useState(false);
     const [editForm, setEditForm] = useState({

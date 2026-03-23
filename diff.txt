@@ -1,0 +1,953 @@
+﻿diff --git a/client/src/pages/user/Login.css b/client/src/pages/user/Login.css
+index e77589f..40eeb86 100644
+--- a/client/src/pages/user/Login.css
++++ b/client/src/pages/user/Login.css
+@@ -1,706 +1,411 @@
+ /* ============================================================
+-   1. PREMIUM THEME VARIABLES
++   Login / Auth Pages ΓÇö Premium Design v2.0
+    ============================================================ */
+-:root {
+-  --primary-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+-  --secondary-gradient: linear-gradient(135deg, #3b82f6 0%, #2dd4bf 100%);
+-  --glass-bg: rgba(255, 255, 255, 0.85);
+-  --glass-border: rgba(255, 255, 255, 0.5);
+-  --text-main: #1e293b;
+-  --text-muted: #64748b;
+-  --bg-color: #f8fafc;
+-  --error-red: #ef4444;
+-  --radius-xl: 24px;
+-  --radius-lg: 16px;
+-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+-}
+ 
+-/* ============================================================
+-   2. AUTH PAGE CONTAINERS (Shared by User & Admin)
+-   ============================================================ */
+-.auth-section,
+-.auth-page {
++.auth-section {
+   min-height: 100vh;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+-  padding: 40px 20px;
+-  background:
+-    radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+-    radial-gradient(circle at 90% 80%, rgba(168, 85, 247, 0.1) 0%, transparent 50%),
+-    linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
++  background: linear-gradient(135deg, #f0fdfa 0%, #f0f4ff 50%, #fff0fa 100%);
++  padding: 28px 16px;
+   position: relative;
+   overflow: hidden;
+-  font-family: 'Outfit', 'Inter', sans-serif;
+-}
+-
+-.auth-container {
+-  width: 100%;
+-  max-width: 500px;
+-  /* Default for single columns like Admin Login */
+-  z-index: 10;
++  font-family: var(--font-primary);
+ }
+ 
+-/* Decorative Blobs */
++/* Decorative animated blobs */
+ .auth-blob {
+   position: absolute;
+   border-radius: 50%;
+-  filter: blur(80px);
+-  z-index: 0;
+-  opacity: 0.6;
++  pointer-events: none;
++  filter: blur(60px);
++  animation: float-y 12s ease-in-out infinite;
+ }
+ 
+ .blob-1 {
+-  width: 400px;
+-  height: 400px;
+-  background: rgba(99, 102, 241, 0.3);
+-  top: -100px;
+-  left: -100px;
+-  animation: float 10s infinite alternate;
++  width: 42vw;
++  height: 42vw;
++  background: radial-gradient(circle, rgba(20, 184, 166, 0.14), transparent 70%);
++  top: -10%;
++  left: -8%;
++  animation-delay: 0s;
+ }
+ 
+ .blob-2 {
+-  width: 350px;
+-  height: 350px;
+-  background: rgba(168, 85, 247, 0.3);
+-  bottom: -50px;
+-  right: -50px;
+-  animation: float 12s infinite alternate-reverse;
+-}
+-
+-@keyframes float {
+-  0% {
+-    transform: translate(0, 0);
+-  }
+-
+-  100% {
+-    transform: translate(30px, 30px);
+-  }
++  width: 36vw;
++  height: 36vw;
++  background: radial-gradient(circle, rgba(99, 102, 241, 0.12), transparent 70%);
++  bottom: -10%;
++  right: -6%;
++  animation-delay: -5s;
+ }
+ 
+-/* ============================================================
+-   3. AUTH CARD DESIGN
+-   ============================================================ */
++/* Main Card */
+ .auth-card {
+-  background: var(--glass-bg);
+-  backdrop-filter: blur(20px);
+-  -webkit-backdrop-filter: blur(20px);
+-  border: 1px solid var(--glass-border);
+-  border-radius: var(--radius-xl);
+-  box-shadow: var(--shadow-xl);
++  width: 100%;
++  max-width: 980px;
++  min-height: 560px;
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  background: var(--surface-0);
++  border-radius: var(--radius-2xl);
++  box-shadow: var(--shadow-xl), 0 0 0 1px rgba(255,255,255,0.6);
+   overflow: hidden;
+-  display: flex;
+-  /* Flex is used for the split user login page */
+   position: relative;
+-  width: 100%;
+-}
+-
+-/* Admin pages usually just wrap a single form, but inherit .auth-card */
+-.auth-page .auth-card {
+-  flex-direction: column;
+-  padding: 40px;
+-  display: block;
+-  /* Admin pages are simpler blocks */
++  z-index: 1;
++  animation: scaleIn 0.4s ease-out;
+ }
+ 
+-/* User Login Specifics */
++/* Left: Form */
+ .auth-form-container {
+-  flex: 1;
+-  padding: 50px;
++  padding: 52px 44px;
+   display: flex;
+   flex-direction: column;
+   justify-content: center;
+ }
+ 
+-.auth-visual {
+-  flex: 1;
+-  background: var(--primary-gradient);
+-  position: relative;
+-  display: flex;
+-  align-items: center;
+-  justify-content: center;
+-  overflow: hidden;
+-  padding: 40px;
+-  color: white;
+-  text-align: center;
++.auth-box {
++  width: 100%;
+ }
+ 
+-.auth-visual img {
+-  position: absolute;
+-  top: 0;
+-  left: 0;
+-  width: 100%;
+-  height: 100%;
+-  object-fit: cover;
+-  opacity: 0.2;
+-  mix-blend-mode: overlay;
++.auth-box h2 {
++  font-size: 1.75rem;
++  font-weight: 900;
++  color: var(--gray-900);
++  margin-bottom: 6px;
++  letter-spacing: -0.04em;
++  line-height: 1.1;
+ }
+ 
+-.auth-content {
+-  position: relative;
+-  z-index: 2;
+-  max-width: 400px;
++.auth-box > p {
++  font-size: 0.9rem;
++  color: var(--gray-500);
++  margin-bottom: 32px;
++  font-weight: 400;
+ }
+ 
+-.auth-content h2 {
+-  font-size: 2.5rem;
+-  margin-bottom: 16px;
+-  font-weight: 800;
+-  line-height: 1.1;
++/* Logo area in form */
++.auth-brand {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  margin-bottom: 36px;
+ }
+ 
+-/* ============================================================
+-   4. FORM ELEMENTS
+-   ============================================================ */
+-.auth-header {
+-  text-align: center;
+-  margin-bottom: 30px;
++.auth-brand-icon {
++  width: 36px;
++  height: 36px;
++  background: var(--gradient-brand);
++  border-radius: 9px;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  font-size: 1rem;
++  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
+ }
+ 
+-.auth-header h1 {
+-  font-size: 1.8rem;
+-  color: var(--text-main);
+-  margin: 0 0 8px;
++.auth-brand-name {
++  font-size: 1.05rem;
+   font-weight: 800;
++  color: var(--gray-900);
++  letter-spacing: -0.02em;
+ }
+ 
+-.auth-header p {
+-  color: var(--text-muted);
+-  font-size: 0.95rem;
+-  margin: 0;
++/* Error message */
++.error-message {
++  background: var(--danger-bg);
++  border: 1px solid rgba(239, 68, 68, 0.2);
++  color: var(--danger);
++  padding: 12px 16px;
++  border-radius: var(--radius-md);
++  font-size: 0.875rem;
++  font-weight: 600;
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  margin-bottom: 20px;
++  animation: fadeIn 0.3s ease-out;
+ }
+ 
++/* Input groups */
+ .input-group {
+-  margin-bottom: 20px;
++  margin-bottom: 18px;
++  display: flex;
++  flex-direction: column;
+ }
+ 
+-.input-group label,
+-.form-group label {
++.input-group label {
+   display: block;
+-  font-size: 0.9rem;
+-  font-weight: 600;
+-  margin-bottom: 8px;
+-  color: var(--text-main);
++  font-size: 0.8rem;
++  font-weight: 700;
++  color: var(--gray-700);
++  margin-bottom: 7px;
++  letter-spacing: 0.01em;
+ }
+ 
+-.input-wrapper,
+-.form-group {
++.input-wrapper {
+   position: relative;
+-}
+-
+-.form-group {
+-  margin-bottom: 20px;
++  width: 100%;
+ }
+ 
+ .input-wrapper i {
+   position: absolute;
+-  left: 16px;
++  left: 14px;
+   top: 50%;
+   transform: translateY(-50%);
+-  color: #94a3b8;
+-  font-size: 1rem;
+-  z-index: 2;
++  color: var(--gray-400);
++  font-size: 0.875rem;
++  transition: var(--transition-fast);
++  pointer-events: none;
++  z-index: 1;
+ }
+ 
+-.input-wrapper input,
+-.form-group input {
++.input-wrapper input {
+   width: 100%;
+-  padding: 14px 16px;
+-  padding-left: 48px;
+-  /* For icons */
+-  font-size: 1rem;
+-  border: 2px solid #e2e8f0;
+-  border-radius: 12px;
+-  background: #f8fafc;
+-  color: var(--text-main);
+-  transition: var(--transition);
+-  box-sizing: border-box;
++  padding: 12px 14px 12px 40px;
++  border: 1.5px solid var(--gray-200);
++  border-radius: var(--radius-md);
++  font-size: 0.9rem;
++  font-family: var(--font-primary);
++  color: var(--gray-800);
++  background: var(--surface-1);
++  transition: var(--transition-fast);
++  outline: none;
+ }
+ 
+-.form-group input {
+-  padding-left: 16px;
+-  /* No icon by default for some admin forms */
++.input-wrapper input:focus {
++  border-color: var(--brand-500);
++  background: var(--surface-0);
++  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.1);
+ }
+ 
+-.input-wrapper input:focus,
+-.form-group input:focus {
+-  outline: none;
+-  background: #ffffff;
+-  border-color: #6366f1;
+-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
++.input-wrapper input:focus + i,
++.input-wrapper input:focus ~ i {
++  color: var(--brand-600);
+ }
+ 
+-/* ============================================================
+-   5. BUTTONS & ACTIONS
+-   ============================================================ */
+-.btn-primary,
+-.auth-button {
+-  background: var(--primary-gradient);
++.input-wrapper input::placeholder {
++  color: var(--gray-400);
++}
++
++/* Primary button */
++.btn-primary.btn-block {
++  width: 100%;
++  padding: 13px 20px;
++  background: var(--gradient-brand);
+   color: white;
+   border: none;
+-  padding: 14px 28px;
+-  border-radius: 12px;
+-  font-size: 1rem;
+-  font-weight: 600;
++  border-radius: var(--radius-md);
++  font-size: 0.95rem;
++  font-weight: 700;
++  font-family: var(--font-primary);
+   cursor: pointer;
+-  width: 100%;
+-  transition: var(--transition);
+-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+-  margin-top: 10px;
++  transition: var(--transition-base);
++  box-shadow: var(--shadow-brand);
++  letter-spacing: -0.01em;
+ }
+ 
+-.btn-primary:hover,
+-.auth-button:hover {
++.btn-primary.btn-block:hover:not(:disabled) {
+   transform: translateY(-2px);
+-  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
++  box-shadow: 0 12px 32px rgba(20, 184, 166, 0.35);
+ }
+ 
+-.btn-primary:disabled,
+-.auth-button:disabled {
+-  opacity: 0.7;
++.btn-primary.btn-block:disabled {
++  opacity: 0.65;
+   cursor: not-allowed;
+   transform: none;
+ }
+ 
+-/* Back Button */
+-.back-button {
+-  background: transparent;
+-  border: none;
+-  color: var(--text-muted);
+-  font-weight: 600;
++/* Divider */
++.divider {
+   display: flex;
+   align-items: center;
+-  gap: 8px;
+-  cursor: pointer;
+-  margin-bottom: 20px;
+-  padding: 0;
+-  transition: color 0.2s;
+-}
+-
+-.back-button:hover {
+-  color: var(--text-main);
+-}
+-
+-/* ============================================================
+-   6. UTILITIES (Social, Errors, Links)
+-   ============================================================ */
+-.divider {
+-  text-align: center;
+-  margin: 24px 0;
+-  position: relative;
++  gap: 12px;
++  margin: 22px 0;
++  color: var(--gray-400);
++  font-size: 0.8rem;
++  font-weight: 500;
+ }
+ 
+-.divider::before {
++.divider::before,
++.divider::after {
+   content: '';
+-  position: absolute;
+-  top: 50%;
+-  left: 0;
+-  width: 100%;
++  flex: 1;
+   height: 1px;
+-  background: #e2e8f0;
++  background: var(--gray-200);
+ }
+ 
+ .divider span {
+-  position: relative;
+-  background: #fff;
+-  padding: 0 16px;
+-  color: #94a3b8;
+-  font-size: 0.85rem;
+-  font-weight: 500;
++  white-space: nowrap;
+ }
+ 
++/* Social login buttons */
+ .social-login {
+   display: flex;
+-  justify-content: center;
+-  gap: 16px;
++  gap: 10px;
+   margin-bottom: 24px;
+ }
+ 
+ .social-btn {
+-  width: 48px;
+-  height: 48px;
+-  border-radius: 12px;
+-  border: 1px solid #e2e8f0;
++  flex: 1;
++  height: 44px;
++  border-radius: var(--radius-md);
++  border: 1.5px solid var(--gray-200);
+   display: flex;
+   align-items: center;
+   justify-content: center;
+-  color: #64748b;
+-  font-size: 20px;
+-  transition: 0.2s;
++  font-size: 1rem;
+   cursor: pointer;
+-  background: white;
++  transition: var(--transition-fast);
++  color: var(--gray-600);
++  background: var(--surface-0);
+ }
+ 
+ .social-btn:hover {
+-  border-color: #6366f1;
+-  color: #6366f1;
+-  background: #eef2ff;
++  border-color: var(--gray-300);
++  background: var(--gray-50);
+   transform: translateY(-2px);
++  box-shadow: var(--shadow-sm);
+ }
+ 
++/* Switch text */
+ .switch-text {
+   text-align: center;
+-  color: var(--text-muted);
+-  margin-top: 24px;
+-  font-size: 0.95rem;
++  font-size: 0.875rem;
++  color: var(--gray-500);
++  margin: 0;
+ }
+ 
+-.switch-link,
+-.auth-link {
+-  color: #6366f1;
++.switch-link {
++  color: var(--brand-600);
+   font-weight: 700;
+-  cursor: pointer;
+   text-decoration: none;
+ }
+ 
+-.switch-link:hover,
+-.auth-link:hover {
++.switch-link:hover {
++  color: var(--brand-700);
+   text-decoration: underline;
+ }
+ 
+-.error-message {
+-  background: #fef2f2;
+-  color: var(--error-red);
+-  padding: 12px 16px;
+-  border-radius: 10px;
+-  margin-bottom: 24px;
+-  font-size: 0.9rem;
+-  border: 1px solid #fee2e2;
+-  display: flex;
+-  align-items: center;
+-  gap: 8px;
+-}
+-
+-.auth-footer {
+-  margin-top: 24px;
+-  text-align: center;
+-  border-top: 1px solid #f1f5f9;
+-  padding-top: 20px;
+-}
+-
+-/* ============================================================
+-   7. RESPONSIVE
+-   ============================================================ */
+-@media (max-width: 900px) {
+-  .auth-visual {
+-    display: none;
+-  }
+-
+-  .auth-form-container {
+-    padding: 40px 24px;
+-  }
+-
+-  .auth-card {
+-    width: 100%;
+-    max-width: 500px;
+-    margin: 0 auto;
+-    display: block;
+-  }
+-}
+-
+-/* Decorative Blobs */
+-.auth-blob {
+-  position: absolute;
+-  border-radius: 50%;
+-  z-index: 0;
+-  opacity: 0.6;
+-  animation: authFloat 10s infinite alternate;
+-}
+-
+-.blob-1 {
+-  width: 300px;
+-  height: 300px;
+-  background: var(--brand-pink-soft);
+-  top: -50px;
+-  left: -50px;
+-}
+-
+-.blob-2 {
+-  width: 250px;
+-  height: 250px;
+-  background: #e0f7fa;
+-  bottom: 50px;
+-  right: -50px;
+-}
+-
+-@keyframes authFloat {
+-  0% {
+-    transform: translateY(0);
+-  }
+-
+-  100% {
+-    transform: translateY(20px);
+-  }
+-}
+-
+-/* ============================================================
+-   3. THE MAIN CARD & LAYOUT
+-   ============================================================ */
+-.auth-card {
+-  background: #fff;
+-  width: 100%;
+-  max-width: 1100px;
+-  min-height: 600px;
+-  border-radius: 24px;
+-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+-  display: flex;
+-  overflow: hidden;
+-  position: relative;
+-  z-index: 1;
+-  animation: slideIn 0.5s ease-out;
+-}
+-
+-@keyframes slideIn {
+-  from {
+-    opacity: 0;
+-    transform: translateY(20px);
+-  }
+-
+-  to {
+-    opacity: 1;
+-    transform: translateY(0);
+-  }
+-}
+-
+-/* Left Side: Form Area */
+-.auth-form-container {
+-  flex: 1;
+-  padding: 50px;
+-  display: flex;
+-  flex-direction: column;
+-  justify-content: center;
+-  position: relative;
+-}
+-
+-/* Right Side: Visual/Branding Area */
++/* Right Visual Panel */
+ .auth-visual {
+-  flex: 1;
+-  background: linear-gradient(135deg, var(--brand-teal), var(--brand-teal-dark));
+   position: relative;
+-  display: flex;
+-  align-items: center;
+-  justify-content: center;
+-  color: #fff;
+-  text-align: center;
+-  padding: 40px;
+   overflow: hidden;
++  display: flex;
++  flex-direction: column;
++  align-items: flex-start;
++  justify-content: flex-end;
++  background: linear-gradient(160deg, #0f2b5b 0%, #0a2647 60%, #0d3b6e 100%);
++  min-height: 500px;
+ }
+ 
+ .auth-visual img {
+   position: absolute;
+-  top: 0;
+-  left: 0;
++  inset: 0;
+   width: 100%;
+   height: 100%;
+   object-fit: cover;
+-  opacity: 0.35;
+-  mix-blend-mode: overlay;
++  opacity: 0.25;
++  filter: saturate(0.5);
+ }
+ 
+ .auth-content {
+   position: relative;
+-  z-index: 2;
+-  max-width: 380px;
++  z-index: 1;
++  padding: 40px 36px;
++  color: white;
+ }
+ 
+ .auth-content h2 {
+-  color: #fff;
+-  font-size: 2.5rem;
+-  margin-bottom: 15px;
+-  font-family: 'Playfair Display', serif;
+-}
+-
+-/* ============================================================
+-   4. FORM ELEMENTS
+-   ============================================================ */
+-.auth-box {
+-  transition: all 0.5s ease-in-out;
+-}
+-
+-.auth-box.hide {
+-  display: none;
+-  opacity: 0;
+-}
+-
+-.auth-box.show {
+-  display: block;
+-  opacity: 1;
+-}
+-
+-.input-group {
+-  margin-bottom: 20px;
++  font-size: 1.8rem;
++  font-weight: 900;
++  color: white;
++  margin-bottom: 14px;
++  letter-spacing: -0.04em;
++  line-height: 1.15;
+ }
+ 
+-.input-group label {
+-  display: block;
++.auth-content p {
+   font-size: 0.9rem;
+-  font-weight: 600;
+-  margin-bottom: 8px;
+-  color: var(--text-heading);
++  color: rgba(255, 255, 255, 0.7);
++  line-height: 1.65;
++  max-width: 340px;
+ }
+ 
+-.input-wrapper {
+-  position: relative;
+-}
+-
+-.input-wrapper i {
++/* Feature highlights on visual panel */
++.auth-features {
+   position: absolute;
+-  left: 15px;
+-  top: 50%;
+-  transform: translateY(-50%);
+-  color: #aaa;
+-}
+-
+-.input-wrapper input {
+-  width: 100%;
+-  padding: 14px 15px 14px 45px;
+-  border: 1px solid #eee;
+-  border-radius: 12px;
+-  background: #f9f9f9;
+-  font-size: 1rem;
+-  transition: var(--transition);
+-  box-sizing: border-box;
+-  color: black;
+-}
+-
+-.input-wrapper input:focus {
+-  background: #fff;
+-  border-color: var(--brand-pink);
+-  outline: none;
+-  box-shadow: 0 0 0 4px rgba(217, 26, 138, 0.1);
+-}
+-
+-/* ============================================================
+-   5. BUTTONS & ACTIONS
+-   ============================================================ */
+-.btn-primary {
+-  background: linear-gradient(135deg, var(--brand-pink), #b0126e);
+-  color: #fff !important;
+-  padding: 12px 30px;
+-  border-radius: 50px;
+-  display: inline-block;
+-  font-weight: 500;
+-  border: none;
+-  cursor: pointer;
+-  box-shadow: 0 10px 20px rgba(217, 26, 138, 0.25);
+-  transition: var(--transition);
+-}
+-
+-.btn-primary:hover {
+-  transform: translateY(-3px);
+-  box-shadow: 0 15px 30px rgba(217, 26, 138, 0.4);
+-}
+-
+-.btn-primary:disabled {
+-  opacity: 0.7;
+-  cursor: not-allowed;
+-  transform: none;
+-}
+-
+-.btn-block {
+-  width: 100%;
+-  padding: 15px;
+-  font-size: 1.05rem;
+-  margin-top: 10px;
+-}
+-
+-/* ============================================================
+-   6. EXTRAS (DIVIDER, SOCIALS, ERROR)
+-   ============================================================ */
+-.divider {
+-  text-align: center;
+-  margin: 25px 0;
+-  position: relative;
+-}
+-
+-.divider::before {
+-  content: '';
+-  position: absolute;
+-  top: 50%;
+-  left: 0;
+-  width: 100%;
+-  height: 1px;
+-  background: #eee;
++  top: 28px;
++  right: 28px;
++  display: flex;
++  flex-direction: column;
++  gap: 10px;
++  z-index: 1;
+ }
+ 
+-.divider span {
+-  position: relative;
+-  background: #fff;
+-  padding: 0 15px;
+-  color: #999;
+-  font-size: 0.85rem;
++.auth-feature-chip {
++  background: rgba(255, 255, 255, 0.12);
++  backdrop-filter: blur(10px);
++  border: 1px solid rgba(255, 255, 255, 0.15);
++  border-radius: var(--radius-pill);
++  padding: 6px 14px;
++  font-size: 0.78rem;
++  font-weight: 600;
++  color: rgba(255, 255, 255, 0.9);
++  display: flex;
++  align-items: center;
++  gap: 6px;
++  white-space: nowrap;
+ }
+ 
+-.social-login {
++/* Remember me row */
++.auth-row {
+   display: flex;
+-  justify-content: center;
+-  gap: 15px;
+-  margin-bottom: 25px;
++  justify-content: space-between;
++  align-items: center;
++  margin-bottom: 20px;
++  font-size: 0.85rem;
+ }
+ 
+-.social-btn {
+-  width: 50px;
+-  height: 50px;
+-  border-radius: 50%;
+-  border: 1px solid #eee;
++.auth-row label {
+   display: flex;
+   align-items: center;
+-  justify-content: center;
+-  color: #555;
+-  font-size: 20px;
+-  transition: 0.3s;
++  gap: 6px;
++  color: var(--gray-500);
++  font-weight: 400;
+   cursor: pointer;
+ }
+ 
+-.social-btn:hover {
+-  border-color: var(--brand-pink);
+-  color: var(--brand-pink);
+-  background: var(--brand-pink-soft);
+-}
+-
+-.switch-text {
+-  text-align: center;
+-  color: #666;
+-  margin-top: 15px;
++.auth-row a {
++  color: var(--brand-600);
++  font-weight: 600;
++  text-decoration: none;
+ }
+ 
+-.switch-link {
+-  color: var(--brand-pink);
+-  font-weight: 700;
+-  cursor: pointer;
++.auth-row a:hover {
+   text-decoration: underline;
+ }
+ 
+-.error-message {
+-  background: rgba(239, 68, 68, 0.1);
+-  color: var(--error-red);
+-  padding: 12px 16px;
+-  border-radius: 8px;
+-  margin-bottom: 24px;
+-  font-size: 0.9rem;
+-  border-left: 3px solid var(--error-red);
+-}
+-
+-/* ============================================================
+-   7. RESPONSIVE DESIGN
+-   ============================================================ */
+-@media (max-width: 900px) {
++/* Responsive */
++@media (max-width: 768px) {
++  .auth-card {
++    grid-template-columns: 1fr;
++    max-width: 480px;
++  }
+   .auth-visual {
+     display: none;
+   }
+-
+   .auth-form-container {
+-    padding: 40px 20px;
+-  }
+-
+-  .auth-card {
+-    min-height: auto;
++    padding: 40px 28px;
+   }
+ }
+ 
+-@media (max-width: 640px) {
+-  .auth-form-container h2 {
++@media (max-width: 420px) {
++  .auth-form-container {
++    padding: 32px 22px;
++  }
++  .auth-box h2 {
+     font-size: 1.5rem;
+   }
+ }
+\ No newline at end of file

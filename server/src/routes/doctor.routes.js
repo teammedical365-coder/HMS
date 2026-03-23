@@ -242,7 +242,12 @@ router.get('/appointments', verifyToken, async (req, res) => {
 // 5b. GET ALL Appointments (for nurse/staff - all doctors)
 router.get('/all-appointments', verifyToken, async (req, res) => {
     try {
-        const appointments = await Appointment.find({ status: { $ne: 'cancelled' } })
+        let query = {};
+        if (req.user.hospitalId) {
+            query.hospitalId = req.user.hospitalId;
+        }
+
+        const appointments = await Appointment.find(query)
             .populate('userId', 'name email phone patientId fertilityProfile')
             .populate('doctorId', 'name specialty')
             .populate('doctorUserId', 'name')

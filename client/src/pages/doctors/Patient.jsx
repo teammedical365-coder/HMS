@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doctorAPI } from '../../utils/api';
 
@@ -25,7 +25,14 @@ const Patient = () => {
         setLoading(true);
         setError(null);
         try {
-            const res = await doctorAPI.getAllAppointments();
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            const role = (user.role || '').toLowerCase();
+            const isAdminOrStaff = ['nurse', 'admin', 'superadmin', 'hospitaladmin', 'reception', 'receptionist'].includes(role);
+
+            const res = isAdminOrStaff
+                ? await doctorAPI.getAllAppointments()
+                : await doctorAPI.getAppointments();
+
             if (res.success) {
                 setAppointments(res.appointments || []);
             } else {
@@ -121,14 +128,24 @@ const Patient = () => {
     const todayAppts = filtered.filter(a =>
         new Date(a.appointmentDate).toDateString() === todayStr
     );
-    const allActive = filtered.filter(a => a.status !== 'cancelled');
+    const allAppts = filtered;
 
-    const displayList = activeTab === 'today' ? todayAppts : allActive;
+    const displayList = activeTab === 'today' ? todayAppts : allAppts;
 
     // Stat counts
     const todayTotal = appointments.filter(a => new Date(a.appointmentDate).toDateString() === todayStr).length;
-    const pendingCount = appointments.filter(a => (a.status === 'pending' || a.status === 'confirmed') && new Date(a.appointmentDate).toDateString() === todayStr).length;
-    const completedCount = appointments.filter(a => a.status === 'completed' && new Date(a.appointmentDate).toDateString() === todayStr).length;
+    const pendingToday = appointments.filter(a => (a.status === 'pending' || a.status === 'confirmed') && new Date(a.appointmentDate).toDateString() === todayStr).length;
+    
+    // User requested specifically: Total Number of Patient and Upcoming Appointment
+    const totalPatientsUnique = new Set(appointments.map(a => a.userId?._id || a.patientId)).size;
+    const upcomingAppointments = appointments.filter(a => {
+        const d = new Date(a.appointmentDate);
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        return d >= today && (a.status === 'pending' || a.status === 'confirmed');
+    }).length;
+
+    const completedToday = appointments.filter(a => a.status === 'completed' && new Date(a.appointmentDate).toDateString() === todayStr).length;
 
     const getStatusStyle = (status) => {
         const map = {
@@ -187,30 +204,18 @@ const Patient = () => {
     };
 
     return (
-        <div style={S.page}>
-            {/* ─── TOP BAR ─── */}
-            <div style={S.topbar}>
-                <div style={S.topLeft}>
-                    <div style={S.logo}>🩺</div>
-                    <div>
-                        <h1 style={S.title}>Clinical Dashboard</h1>
-                        <p style={S.subtitle}>Patient Intake, Vitals & Consultation Queue</p>
-                    </div>
-                </div>
-                <div style={S.dateBadge}>
-                    📅 {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                </div>
-            </div>
+        <div style={{ ...S.page, background: 'transparent', minHeight: 'auto' }}>
+            {/* Redundant Topbar Removed as it's now in DashboardLayout */}
 
             {/* Error */}
             {error && <div style={S.errorBanner}>⚠️ {error}</div>}
 
             {/* ─── STATS ─── */}
-            <div style={S.statsRow}>
+            <div style={{ ...S.statsRow, padding: '0 0 20px' }}>
                 {[
-                    { label: "Today's Patients", value: todayTotal, icon: '👥', g: 'linear-gradient(135deg, #3b82f6, #6366f1)' },
-                    { label: 'Pending / In-Queue', value: pendingCount, icon: '⏳', g: 'linear-gradient(135deg, #f59e0b, #ef4444)' },
-                    { label: 'Completed Today', value: completedCount, icon: '✅', g: 'linear-gradient(135deg, #10b981, #059669)' },
+                    { label: "Total Patients (Unique)", value: totalPatientsUnique, icon: '👥', g: 'linear-gradient(135deg, #3b82f6, #6366f1)' },
+                    { label: 'Upcoming Appointments', value: upcomingAppointments, icon: '📅', g: 'linear-gradient(135deg, #f59e0b, #ef4444)' },
+                    { label: 'Completed Today', value: completedToday, icon: '✅', g: 'linear-gradient(135deg, #10b981, #059669)' },
                 ].map((s, i) => (
                     <div key={i} style={S.statCard(s.g)}>
                         <div style={S.statIcon(s.g)}>{s.icon}</div>
@@ -223,7 +228,7 @@ const Patient = () => {
             </div>
 
             {/* ─── SEARCH + TABS ─── */}
-            <div style={S.controls}>
+            <div style={{ ...S.controls, padding: '0 0 20px' }}>
                 <div style={S.searchWrap}>
                     <span style={S.searchIcon}>🔍</span>
                     <input
@@ -242,13 +247,13 @@ const Patient = () => {
                         Today's Queue {todayAppts.length > 0 && <span style={{ marginLeft: '6px', background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px', fontSize: '0.72rem' }}>{todayAppts.length}</span>}
                     </button>
                     <button style={S.tab(activeTab === 'all')} onClick={() => setActiveTab('all')}>
-                        All Active
+                        All Appointments
                     </button>
                 </div>
             </div>
 
             {/* ─── CONTENT ─── */}
-            <div style={S.content}>
+            <div style={{ ...S.content, padding: 0 }}>
                 {loading ? (
                     <div style={S.loadingWrap}>
                         <div style={{ width: '38px', height: '38px', border: '3px solid rgba(255,255,255,0.08)', borderTop: '3px solid #3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 14px' }} />
@@ -269,7 +274,7 @@ const Patient = () => {
                     <>
                         <div style={S.sectionHeader}>
                             <h3 style={S.sectionTitle}>
-                                {activeTab === 'today' ? '🏥 Today\'s Patient Queue' : '📁 All Active Appointments'}
+                                {activeTab === 'today' ? '🏥 Today\'s Patient Queue' : '📁 All Appointments'}
                             </h3>
                             <span style={S.sectionCount}>{displayList.length} patients</span>
                         </div>

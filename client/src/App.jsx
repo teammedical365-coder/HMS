@@ -4,45 +4,50 @@ import Lenis from 'lenis'
 import './App.css'
 import socket from './utils/socket'
 import { useAuth, useAppDispatch } from './store/hooks'
-// If you installed lenis via npm, you might need this css import depending on version:
-// import 'lenis/dist/lenis.css' 
+import { useBranding } from './context/BrandingContext'
 
 const App = () => {
   const { user, isAuthenticated } = useAuth();
   const dispatch = useAppDispatch();
+  const { loadBranding, resetBranding } = useBranding();
+
+  // Auto-load hospital branding when user logs in
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const hospitalId = user.hospitalId;
+      const role = (user.role || '').toLowerCase();
+      // Apply branding only for hospital-scoped users (not central admins)
+      if (hospitalId && !['centraladmin', 'superadmin'].includes(role)) {
+        loadBranding(hospitalId);
+      }
+    } else {
+      resetBranding();
+    }
+  }, [isAuthenticated, user]);
 
   // Socket Connection Management
   useEffect(() => {
     if (isAuthenticated && user) {
       socket.connect();
-      // Join user-specific room
       socket.emit('join', user._id || user.id);
 
-      // Join role-specific room (if applicable)
       const roleStr = typeof user.role === 'string'
         ? user.role.toLowerCase()
         : user._roleData?.name?.toLowerCase();
 
-      if (roleStr) {
-        socket.emit('join', roleStr);
-      }
+      if (roleStr) socket.emit('join', roleStr);
 
-      // Dispatch action on new notification
       socket.on('new_notification', (notification) => {
         dispatch({ type: 'notifications/addNotification', payload: notification });
-        // Optionally, show a toast here
       });
-
     } else {
       socket.disconnect();
     }
 
-    return () => {
-      socket.disconnect();
-    };
+    return () => { socket.disconnect(); };
   }, [isAuthenticated, user]);
 
-  // This useEffect handles smooth scrolling and does NOT interfere with routing
+  // Smooth scrolling
   useEffect(() => {
     const lenis = new Lenis({
       duration: 1.2,
@@ -57,10 +62,7 @@ const App = () => {
     }
 
     requestAnimationFrame(raf);
-
-    return () => {
-      lenis.destroy();
-    };
+    return () => { lenis.destroy(); };
   }, []);
 
   return (

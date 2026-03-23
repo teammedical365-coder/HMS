@@ -244,11 +244,6 @@ const HospitalAdminDashboard = () => {
         setSuccess('');
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        navigate('/hospitaladmin/login');
-    };
 
     const formatCurrency = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
 
@@ -274,22 +269,15 @@ const HospitalAdminDashboard = () => {
         <div className="hospitaladmin-page">
             <div className="hospitaladmin-container">
                 {/* Header */}
-                <div className="hospitaladmin-header">
-                    <div className="ha-header-content">
-                        <div className="ha-hospital-badge">
-                            {hospitalInfo ? (
-                                <span>🏥 {hospitalInfo.name}</span>
-                            ) : (
-                                <span>🏥 Hospital Admin Panel</span>
-                            )}
-                        </div>
-                        <h1>Hospital Administration Dashboard</h1>
-                        <p>Manage staff, departments, and hospital operations</p>
+                {/* Redundant Header Removed (now in TopBar) */}
+                <div style={{ marginBottom: '32px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                         <span style={{ fontSize: '0.75rem', fontWeight: 800, background: 'var(--brand-50, #f0fdfa)', color: 'var(--brand-600, #14b8a6)', padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.05em' }}>
+                            {hospitalInfo ? `🏥 ${hospitalInfo.name.toUpperCase()}` : 'HOSPITAL ADMIN'}
+                         </span>
                     </div>
-                    <div className="admin-user-info">
-                        <span>👋 {currentUser.name}</span>
-                        <button onClick={handleLogout} className="logout-btn">Logout</button>
-                    </div>
+                    <h1 style={{ fontSize: '1.8rem', fontWeight: 850, margin: '8px 0 4px', color: '#1e293b' }}>Hospital Administration Dashboard</h1>
+                    <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Manage staff, departments, and hospital operations</p>
                 </div>
 
                 {error && <div className="error-message">⚠️ {error}</div>}
@@ -411,6 +399,7 @@ const HospitalAdminDashboard = () => {
                                     {hospitalInfo.phone && <div><strong>Phone:</strong> {hospitalInfo.phone}</div>}
                                     {hospitalInfo.email && <div><strong>Email:</strong> {hospitalInfo.email}</div>}
                                     {hospitalInfo.address && <div><strong>Address:</strong> {hospitalInfo.address}</div>}
+                                    <div><strong>Appointment Fee:</strong> {formatCurrency(hospitalInfo.appointmentFee ?? 500)}</div>
                                 </div>
                             </div>
                         )}

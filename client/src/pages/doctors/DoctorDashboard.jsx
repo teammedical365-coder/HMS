@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doctorAPI } from '../../utils/api';
 import './DoctorDashboard.css'; // We will create this CSS below
@@ -50,9 +50,9 @@ const DoctorDashboard = () => {
         }
     };
 
-    const handlePatientClick = (patientId) => {
+    const handlePatientClick = (appointmentId) => {
         // Navigate to the detailed view we created
-        navigate(`/doctor/patient/${patientId}`);
+        navigate(`/doctor/patient/${appointmentId}`);
     };
 
     if (loading) return <div className="loading-screen">Loading Dashboard...</div>;
@@ -122,7 +122,7 @@ const DoctorDashboard = () => {
                                     <td>
                                         <button
                                             className="btn-view"
-                                            onClick={() => handlePatientClick(apt.userId?._id || apt.userId)}
+                                            onClick={() => handlePatientClick(apt._id)}
                                         >
                                             View Details
                                         </button>

@@ -22,15 +22,12 @@ const AdminMainDashboard = () => {
     const fetchStats = async () => {
         try {
             setLoading(true);
-            // Fetch users and roles in parallel
             const [usersRes, rolesRes] = await Promise.all([
                 adminAPI.getUsers().catch(() => ({ success: false, users: [] })),
                 adminAPI.getRoles().catch(() => ({ success: false, data: [] }))
             ]);
-
             const users = usersRes.success ? usersRes.users : [];
             const roles = rolesRes.success ? rolesRes.data : [];
-
             setStats({
                 totalUsers: users.length,
                 totalRoles: roles.length,
@@ -46,130 +43,78 @@ const AdminMainDashboard = () => {
 
     const hour = new Date().getHours();
     let greeting = 'Good morning';
-    if (hour >= 12 && hour < 17) greeting = 'Good afternoon';
-    else if (hour >= 17) greeting = 'Good evening';
+    let greetingEmoji = '☀️';
+    if (hour >= 12 && hour < 17) { greeting = 'Good afternoon'; greetingEmoji = '🌤️'; }
+    else if (hour >= 17) { greeting = 'Good evening'; greetingEmoji = '🌙'; }
 
-    const quickActions = [
-        {
-            icon: '👥', label: 'Manage Users',
-            desc: 'View all staff & patients, edit roles, create accounts',
-            path: '/admin/users', bg: 'rgba(108,99,255,0.12)'
-        },
-        {
-            icon: '🔑', label: 'Roles & Permissions',
-            desc: 'Create custom roles and assign permissions',
-            path: '/admin/roles', bg: 'rgba(72,199,142,0.12)'
-        },
-        {
-            icon: '👨‍⚕️', label: 'Doctors',
-            desc: 'Manage doctor profiles, specializations & schedules',
-            path: '/admin/doctors', bg: 'rgba(52,152,219,0.12)'
-        },
-        {
-            icon: '🧪', label: 'Labs',
-            desc: 'Configure lab departments',
-            path: '/admin/labs', bg: 'rgba(241,196,15,0.12)'
-        },
-        {
-            icon: '📋', label: 'Lab Tests Catalog',
-            desc: 'Manage predefined lab tests available for prescription',
-            path: '/admin/lab-tests', bg: 'rgba(232,62,140,0.12)'
-        },
-        {
-            icon: '📦', label: 'Tests & Packages',
-            desc: 'Create test packages and manage individual tests',
-            path: '/admin/test-packages', bg: 'rgba(124,58,237,0.12)'
-        },
-        {
-            icon: '💊', label: 'Pharmacy',
-            desc: 'Manage pharmacy inventory and suppliers',
-            path: '/admin/pharmacy', bg: 'rgba(231,76,60,0.12)'
-        },
-        {
-            icon: '💊', label: 'Medicine Catalog',
-            desc: 'Manage global catalog of medicines',
-            path: '/admin/medicines', bg: 'rgba(231,76,60,0.12)'
-        },
-        {
-            icon: '🏥', label: 'Reception',
-            desc: 'Set up reception desk and appointment workflows',
-            path: '/admin/reception', bg: 'rgba(155,89,182,0.12)'
-        },
-        {
-            icon: '🛠️', label: 'Services',
-            desc: 'Hospital services, pricing, and categories',
-            path: '/admin/services', bg: 'rgba(230,126,34,0.12)'
-        },
-        {
-            icon: '👤', label: 'Create Staff Account',
-            desc: 'Add a new staff member with login credentials',
-            path: '/admin/users', bg: 'rgba(46,204,113,0.12)'
-        },
-        {
-            icon: '❓', label: 'Question Library',
-            desc: 'Configure forms and assessment libraries for doctors',
-            path: '/admin/question-library', bg: 'rgba(142,68,173,0.12)'
-        },
+    const dateString = new Date().toLocaleDateString('en-IN', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+
+
+    const statCards = [
+        { icon: '👥', label: 'Total Users',   value: stats.totalUsers,   accent: '#14b8a6', bg: 'rgba(20,184,166,0.1)',   trend: '+12%' },
+        { icon: '🔑', label: 'Active Roles',  value: stats.totalRoles,   accent: '#6366f1', bg: 'rgba(99,102,241,0.1)',   trend: null },
+        { icon: '👨‍⚕️', label: 'Doctors',      value: stats.totalDoctors, accent: '#3b82f6', bg: 'rgba(59,130,246,0.1)',   trend: null },
+        { icon: '🩺', label: 'Patients',      value: stats.totalPatients,accent: '#f59e0b', bg: 'rgba(245,158,11,0.1)',   trend: '+8%' },
     ];
 
-    const handleLogout = () => {
-        const role = user?.role?.toLowerCase();
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        if (role === 'centraladmin' || role === 'superadmin') {
-            navigate('/supremeadmin/login');
-        } else if (role === 'hospitaladmin') {
-            navigate('/hospitaladmin/login');
-        } else {
-            navigate('/login');
-        }
-    };
+    const quickActions = [
+        { icon: '👥', label: 'Manage Users',         desc: 'View all staff & patients, edit roles, create accounts', path: '/admin/users',            bg: 'rgba(20,184,166,0.12)' },
+        { icon: '🔑', label: 'Roles & Permissions',  desc: 'Create custom roles and assign granular permissions',    path: '/admin/roles',            bg: 'rgba(99,102,241,0.12)' },
+        { icon: '👨‍⚕️', label: 'Doctors',             desc: 'Manage doctor profiles, specializations & schedules',  path: '/admin/doctors',          bg: 'rgba(59,130,246,0.12)' },
+        { icon: '🧪', label: 'Labs',                 desc: 'Configure lab departments and lab workflows',            path: '/admin/labs',             bg: 'rgba(245,158,11,0.12)' },
+        { icon: '📋', label: 'Lab Tests Catalog',    desc: 'Manage predefined lab tests for prescription',           path: '/admin/lab-tests',        bg: 'rgba(236,72,153,0.12)' },
+        { icon: '📦', label: 'Tests & Packages',     desc: 'Create test packages and manage individual tests',       path: '/admin/test-packages',    bg: 'rgba(124,58,237,0.12)' },
+        { icon: '💊', label: 'Pharmacy',             desc: 'Manage pharmacy inventory and suppliers',                path: '/admin/pharmacy',         bg: 'rgba(239,68,68,0.12)'  },
+        { icon: '💉', label: 'Medicine Catalog',     desc: 'Manage global catalog of available medicines',           path: '/admin/medicines',        bg: 'rgba(239,68,68,0.1)'   },
+        { icon: '🏥', label: 'Reception',            desc: 'Set up reception desk and appointment workflows',        path: '/admin/reception',        bg: 'rgba(16,185,129,0.12)' },
+        { icon: '🛠️', label: 'Services',             desc: 'Hospital services, pricing, and categories',             path: '/admin/services',         bg: 'rgba(245,158,11,0.12)' },
+        { icon: '👤', label: 'Create Staff Account', desc: 'Add a new staff member with login credentials',          path: '/admin/users',            bg: 'rgba(94,234,212,0.15)' },
+        { icon: '❓', label: 'Question Library',     desc: 'Configure forms and assessment libraries for doctors',   path: '/admin/question-library', bg: 'rgba(167,139,250,0.15)' },
+    ];
 
     return (
         <div className="admin-main-dashboard">
             <div className="dash-container">
-                {/* Header */}
-                <div className="dash-header">
-                    <div>
-                        <h1>{greeting}, <span>{user.name || 'Admin'}</span></h1>
-                        <p>Here's what's happening in your hospital today.</p>
-                    </div>
-                    <div className="dash-header-actions">
-                        <button className="btn-primary" onClick={() => navigate('/admin/roles')}>🔑 Manage Roles</button>
-                        <button className="btn-outline" onClick={handleLogout}>Logout</button>
+
+                {/* Header (Greeting only, actions moved to TopBar) */}
+                <div className="dash-header" style={{ marginBottom: '20px', borderBottom: 'none', paddingBottom: 0 }}>
+                    <div className="dash-header-left">
+                        <h1 style={{ fontSize: '1.5rem', fontWeight: 800 }}>
+                            {greetingEmoji} {greeting},{' '}
+                            <span style={{ color: 'var(--brand-600)' }}>{user.name || 'Admin'}</span>
+                        </h1>
+                        <p style={{ color: '#64748b', fontSize: '0.9rem' }}>{dateString} · Here's a snapshot of your hospital.</p>
                     </div>
                 </div>
 
                 {/* Stats */}
                 <div className="stats-grid">
-                    <div className="stat-card">
-                        <span className="stat-icon">👥</span>
-                        <p className="stat-value">{loading ? <span className="loading-pulse">...</span> : stats.totalUsers}</p>
-                        <p className="stat-label">Total Users</p>
-                        <div className="stat-accent" style={{ background: '#6c63ff' }} />
-                    </div>
-                    <div className="stat-card">
-                        <span className="stat-icon">🔑</span>
-                        <p className="stat-value">{loading ? <span className="loading-pulse">...</span> : stats.totalRoles}</p>
-                        <p className="stat-label">Active Roles</p>
-                        <div className="stat-accent" style={{ background: '#48c78e' }} />
-                    </div>
-                    <div className="stat-card">
-                        <span className="stat-icon">👨‍⚕️</span>
-                        <p className="stat-value">{loading ? <span className="loading-pulse">...</span> : stats.totalDoctors}</p>
-                        <p className="stat-label">Doctors</p>
-                        <div className="stat-accent" style={{ background: '#3498db' }} />
-                    </div>
-                    <div className="stat-card">
-                        <span className="stat-icon">🩺</span>
-                        <p className="stat-value">{loading ? <span className="loading-pulse">...</span> : stats.totalPatients}</p>
-                        <p className="stat-label">Patients</p>
-                        <div className="stat-accent" style={{ background: '#e74c3c' }} />
-                    </div>
+                    {statCards.map((stat, idx) => (
+                        <div key={idx} className="stat-card">
+                            <div className="stat-card-top">
+                                <div className="stat-icon" style={{ background: stat.bg }}>
+                                    {stat.icon}
+                                </div>
+                                {stat.trend && (
+                                    <span className="stat-trend">↑ {stat.trend}</span>
+                                )}
+                            </div>
+                            <p className="stat-value">
+                                {loading
+                                    ? <span className="loading-pulse" />
+                                    : stat.value
+                                }
+                            </p>
+                            <p className="stat-label">{stat.label}</p>
+                            <div className="stat-accent" style={{ background: stat.accent }} />
+                        </div>
+                    ))}
                 </div>
 
                 {/* Quick Actions */}
-                <div className="section-title">⚡ Quick Actions</div>
+                <div className="section-label">⚡ Quick Actions</div>
                 <div className="actions-grid">
                     {quickActions.map((action, idx) => (
                         <div key={idx} className="action-card" onClick={() => navigate(action.path)}>
@@ -180,9 +125,11 @@ const AdminMainDashboard = () => {
                                 <h3>{action.label}</h3>
                                 <p>{action.desc}</p>
                             </div>
+                            <span className="action-card-arrow">→</span>
                         </div>
                     ))}
                 </div>
+
             </div>
         </div>
     );

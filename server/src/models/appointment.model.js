@@ -13,6 +13,7 @@ const appointmentSchema = new mongoose.Schema({
         required: [true, 'User ID is required']
     },
     patientId: { type: String, required: false, index: true },
+    hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', index: true },
 
     // --- FIX: Strict Type for Doctor ID ---
     doctorId: {

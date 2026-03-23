@@ -3,8 +3,17 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAuth, useNotifications } from '../store/hooks';
 import { logout } from '../store/slices/authSlice';
 import { fetchNotifications, markAsRead } from '../store/slices/notificationSlice';
-import { FiBell } from 'react-icons/fi';
+import { FiBell, FiChevronDown, FiLogOut, FiLogIn, FiHome, FiSettings } from 'react-icons/fi';
+import { useBranding } from '../context/BrandingContext';
 import './Navbar.css';
+
+/* ---- Brand SVG icon ---- */
+const HMSIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 2L3 7v10l9 5 9-5V7L12 2z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
+    <path d="M12 8v8M8 12h8" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -12,6 +21,7 @@ const Navbar = () => {
   const { isAuthenticated, user } = useAuth();
   const { items: notifications, unreadCount } = useNotifications();
   const [showNotifications, setShowNotifications] = useState(false);
+  const { branding } = useBranding();
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -28,47 +38,65 @@ const Navbar = () => {
     dispatch(markAsRead(id));
   };
 
-  // Get dynamic nav links from the user's role data
-  const navLinks = user?.navLinks || [];
-
   return (
     <nav className="navbar">
       <div className="navbar-container">
+
         {/* Logo/Brand */}
         <NavLink to="/" className="navbar-brand">
-          <span className="navbar-logo-text">HMS</span>
+          <div className="navbar-logo-icon">
+            {branding.logoUrl ? (
+              <img src={branding.logoUrl} alt={branding.appName || 'Logo'} className="navbar-custom-logo" />
+            ) : (
+              <HMSIcon />
+            )}
+          </div>
+          <div className="navbar-logo-text">
+            <span className="navbar-logo-main">{branding.appName || 'MediCRM'}</span>
+            <span className="navbar-logo-sub">{branding.tagline || 'Healthcare Suite'}</span>
+          </div>
         </NavLink>
 
         {/* Navigation Links */}
         <div className="navbar-links">
 
-          {/* Dynamic nav links removed from header body to keep UI clean, replaced with central 'Dashboard' link */}
           {isAuthenticated && user && (
             <NavLink
               to={user.dashboardPath || '/'}
               className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
             >
+              <FiHome size={15} />
               Dashboard
             </NavLink>
           )}
 
+          <div className="nav-divider" />
+
+          {/* Notifications */}
           {isAuthenticated && (
             <div className="nav-item notification-wrapper" onMouseLeave={() => setShowNotifications(false)}>
-              <button className="notification-btn" onClick={() => setShowNotifications(!showNotifications)}>
-                <FiBell size={20} />
-                {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
+              <button
+                className="notification-btn"
+                onClick={() => setShowNotifications(!showNotifications)}
+                aria-label="Notifications"
+              >
+                <FiBell size={18} />
+                {unreadCount > 0 && (
+                  <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+                )}
               </button>
 
               {showNotifications && (
                 <div className="notification-dropdown">
                   <div className="notification-header">
                     <h4>Notifications</h4>
+                    {unreadCount > 0 && <span className="badge badge-danger">{unreadCount} new</span>}
                   </div>
                   <div className="notification-list">
                     {notifications.length === 0 ? (
-                      <p className="no-notifications">No new notifications.</p>
+                      <p className="no-notifications">🔔 You're all caught up!</p>
                     ) : (
-                      notifications.slice(0, 5).map(notif => (
+                      notifications.slice(0, 6).map(notif => (
                         <div
                           key={notif._id}
                           className={`notification-item ${notif.status === 'Unread' ? 'unread' : ''}`}
@@ -83,18 +111,26 @@ const Navbar = () => {
                     )}
                   </div>
                   <div className="notification-footer">
-                    <button onClick={() => navigate(user?.dashboardPath || '/dashboard')}>View Dashboard</button>
+                    <button onClick={() => navigate(user?.dashboardPath || '/')}>
+                      View all notifications →
+                    </button>
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Settings Dropdown */}
+          {/* Settings / User Dropdown */}
           <div className="settings-dropdown">
             <div className="nav-link settings-link">
-              Settings
-              <span className="dropdown-arrow">▼</span>
+              {isAuthenticated && user ? (
+                <span style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--brand-600)' }}>
+                  {(user.name || 'User').split(' ')[0]}
+                </span>
+              ) : (
+                <FiSettings size={15} />
+              )}
+              <FiChevronDown size={12} className="dropdown-arrow" />
             </div>
 
             <div className="dropdown-menu">
@@ -107,28 +143,22 @@ const Navbar = () => {
                       {user.role && <span className="user-role-badge">{user.role}</span>}
                     </div>
                   )}
-                  <button
-                    className="dropdown-item logout-btn"
-                    onClick={handleLogout}
-                  >
-                    <span className="dropdown-icon">🚪</span>
+                  <button className="dropdown-item logout-btn" onClick={handleLogout}>
+                    <span className="dropdown-icon"><FiLogOut size={15} /></span>
                     Logout
                   </button>
                 </>
               ) : (
                 <>
-                  <NavLink
-                    to="/login"
-                    className="dropdown-item"
-                    onClick={(e) => { e.stopPropagation(); }}
-                  >
-                    <span className="dropdown-icon">🔐</span>
+                  <NavLink to="/login" className="dropdown-item">
+                    <span className="dropdown-icon"><FiLogIn size={15} /></span>
                     Staff Login
                   </NavLink>
                 </>
               )}
             </div>
           </div>
+
         </div>
       </div>
     </nav>

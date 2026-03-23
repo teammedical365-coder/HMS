@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAuth } from '../../store/hooks';
 import { loginUser, clearError } from '../../store/slices/authSlice';
+import { useBranding } from '../../context/BrandingContext';
 import api from '../../utils/api';
 import '../user/Login.css';
 import './HospitalLogin.css';
@@ -20,6 +21,7 @@ const HospitalLogin = () => {
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
     const { loading, error, isAuthenticated, user } = useAuth();
+    const { loadBranding } = useBranding();
 
     const [hospital, setHospital] = useState(null);
     const [hospitalLoading, setHospitalLoading] = useState(true);
@@ -34,6 +36,11 @@ const HospitalLogin = () => {
                 const res = await api.get(`/hospitals/resolve/${hospitalSlug}`);
                 if (res.data.success) {
                     setHospital(res.data.hospital);
+                    // 🎨 Apply this hospital's specific branding (colors, logo, title) 
+                    // to the login page *before* the user even signs in.
+                    if (res.data.hospital._id) {
+                        loadBranding(res.data.hospital._id);
+                    }
                 } else {
                     setHospitalError('Hospital not found.');
                 }
@@ -51,8 +58,10 @@ const HospitalLogin = () => {
     // Redirect after successful login
     useEffect(() => {
         if (isAuthenticated && user) {
+            const role = (user.role || '').toLowerCase();
+            const redirectMap = { nurse: '/doctor/patients' };
             const path = user.dashboardPath || '/my-dashboard';
-            navigate(path, { replace: true });
+            navigate(redirectMap[role] || path, { replace: true });
         }
     }, [isAuthenticated, user, navigate]);
 

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Components
 import Navbar from '../components/Navbar';
+import DashboardLayout from '../components/layouts/DashboardLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
 import RoleDashboard from '../pages/RoleDashboard';
 import { useAuth } from '../store/hooks';
@@ -74,169 +75,72 @@ const MainRoutes = () => {
     
     return (
         <>
-            <Navbar />
+            {!isAuthenticated && <Navbar />}
 
-            <Routes>
-                {/* --- Public/User Routes --- */}
-                <Route path="/" element={<Navigate to={isAuthenticated ? "/my-dashboard" : "/login"} replace />} />
-                <Route path="/services" element={<Navigate to="/" replace />} />
-                <Route path="/doctors" element={<Navigate to="/" replace />} />
-                <Route path="/services/:serviceId/doctors" element={<Navigate to="/" replace />} />
+            {isAuthenticated ? (
+                <DashboardLayout>
+                    <Routes>
+                        <Route path="/" element={<Navigate to="/my-dashboard" replace />} />
+                        <Route path="/services" element={<Navigate to="/" replace />} />
+                        <Route path="/doctors" element={<Navigate to="/" replace />} />
+                        <Route path="/services/:serviceId/doctors" element={<Navigate to="/" replace />} />
 
-                {/* --- Unified Shared Patient Profile --- */}
-                <Route path="/patient/:id" element={
-                    <ProtectedRoute requiredPermissions={[]}>
-                        <UnifiedPatientProfile />
-                    </ProtectedRoute>
-                } />
+                        <Route path="/patient/:id" element={<ProtectedRoute requiredPermissions={[]}><UnifiedPatientProfile /></ProtectedRoute>} />
+                        <Route path="/my-dashboard" element={<ProtectedRoute requiredPermissions={[]}><RoleDashboard /></ProtectedRoute>} />
+                        <Route path="/appointment" element={<Appointment />} />
+                        <Route path="/appointment/success" element={<AppointmentSuccess />} />
+                        <Route path="/lab-reports" element={<LabReports />} />
+                        <Route path="/dashboard" element={<Dashboard />} />
+                        <Route path="/pharmacy" element={<Pharmacy />} />
 
-                {/* --- Dynamic Role Dashboard (all authenticated users) --- */}
-                <Route path="/my-dashboard" element={
-                    <ProtectedRoute requiredPermissions={[]}>
-                        <RoleDashboard />
-                    </ProtectedRoute>
-                } />
+                        {/* Transitions between roles/admin */}
+                        <Route path="/doctor/dashboard" element={<ProtectedRoute requiredPermissions={['visit_diagnose']}><Patient /></ProtectedRoute>} />
+                        <Route path="/doctor/patients" element={<Patient />} />
+                        <Route path="/doctor/patient/:appointmentId" element={<ProtectedRoute requiredPermissions={['visit_diagnose']}><DoctorPatientDetails /></ProtectedRoute>} />
 
-                <Route path="/appointment" element={<Appointment />} />
-                <Route path="/appointment/success" element={<AppointmentSuccess />} />
-                <Route path="/lab-reports" element={<LabReports />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/pharmacy" element={<Pharmacy />} />
+                        <Route path="/admin" element={<ProtectedRoute requiredPermissions={['admin_view_stats', 'admin_manage_roles']}><AdminMainDashboard /></ProtectedRoute>} />
+                        <Route path="/admin/users" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><Admin /></ProtectedRoute>} />
+                        <Route path="/admin/doctors" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminDoctors /></ProtectedRoute>} />
+                        <Route path="/admin/labs" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminLabs /></ProtectedRoute>} />
+                        <Route path="/admin/lab-tests" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminLabTests /></ProtectedRoute>} />
+                        <Route path="/admin/pharmacy" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminPharmacy /></ProtectedRoute>} />
+                        <Route path="/admin/reception" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminReception /></ProtectedRoute>} />
+                        <Route path="/admin/services" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminServices /></ProtectedRoute>} />
+                        <Route path="/admin/roles" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminRoles /></ProtectedRoute>} />
+                        <Route path="/admin/medicines" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminMedicines /></ProtectedRoute>} />
+                        <Route path="/admin/question-library" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminQuestionLibrary /></ProtectedRoute>} />
+                        <Route path="/admin/test-packages" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminTestPackages /></ProtectedRoute>} />
 
-                {/* --- Authentication --- */}
-                <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<Signup />} />
+                        <Route path="/supremeadmin" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><CentralAdminDashboard /></ProtectedRoute>} />
+                        <Route path="/hospitaladmin" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><HospitalAdminDashboard /></ProtectedRoute>} />
+                        <Route path="/hospitaladmin/question-library" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><HospitalAdminQuestionLibrary /></ProtectedRoute>} />
 
-                {/* --- Doctor Routes (permission: visit_diagnose) --- */}
-                <Route path="/doctor/dashboard" element={
-                    <ProtectedRoute requiredPermissions={['visit_diagnose']}>
-                        <Patient />
-                    </ProtectedRoute>
-                } />
-                <Route path="/doctor/patients" element={<Patient />} />
-                <Route path="/doctor/patient/:appointmentId" element={
-                    <ProtectedRoute requiredPermissions={['visit_diagnose']}>
-                        <DoctorPatientDetails />
-                    </ProtectedRoute>
-                } />
+                        <Route path="/lab/dashboard" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><LabDashboard /></ProtectedRoute>} />
+                        <Route path="/lab/tests" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><AssignedTests /></ProtectedRoute>} />
 
-                {/* --- Hospital Admin Routes (both centraladmin and hospitaladmin can access) --- */}
-                <Route path="/admin" element={
-                    <ProtectedRoute requiredPermissions={['admin_view_stats', 'admin_manage_roles']}>
-                        <AdminMainDashboard />
-                    </ProtectedRoute>
-                } />
-                <Route path="/admin/users" element={
-                    <ProtectedRoute requiredPermissions={['admin_manage_roles']}>
-                        <Admin />
-                    </ProtectedRoute>
-                } />
+                        <Route path="/pharmacy/inventory" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyInventory /></ProtectedRoute>} />
+                        <Route path="/pharmacy/orders" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyOrders /></ProtectedRoute>} />
 
-                {/* Legacy admin login — redirect to hospitaladmin login for backward-compat */}
-                <Route path="/admin/login" element={<HospitalAdminLogin />} />
-                <Route path="/admin/signup" element={<AdminSignup />} />
+                        <Route path="/reception/dashboard" element={<ProtectedRoute requiredPermissions={['appointment_manage']}><ReceptionDashboard /></ProtectedRoute>} />
+                        <Route path="/accountant/dashboard" element={<ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}><AccountantDashboard /></ProtectedRoute>} />
+                        <Route path="/cashier/billing" element={<ProtectedRoute requiredPermissions={['billing_view', 'billing_manage']} allowedRoles={['cashier', 'centraladmin', 'superadmin', 'hospitaladmin']}><CashierDashboard /></ProtectedRoute>} />
 
-                <Route path="/admin/doctors" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminDoctors /></ProtectedRoute>} />
-                <Route path="/admin/labs" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminLabs /></ProtectedRoute>} />
-                <Route path="/admin/lab-tests" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminLabTests /></ProtectedRoute>} />
-                <Route path="/admin/pharmacy" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminPharmacy /></ProtectedRoute>} />
-                <Route path="/admin/reception" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminReception /></ProtectedRoute>} />
-                <Route path="/admin/services" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminServices /></ProtectedRoute>} />
-                <Route path="/admin/roles" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminRoles /></ProtectedRoute>} />
-                <Route path="/admin/medicines" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminMedicines /></ProtectedRoute>} />
-                <Route path="/admin/question-library" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminQuestionLibrary /></ProtectedRoute>} />
-                <Route path="/admin/test-packages" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminTestPackages /></ProtectedRoute>} />
-
-                {/* =====================================================
-                    CENTRAL ADMIN ROUTES (Tier 1 — Top Level)
-                    Login: /supremeadmin/login
-                    Dashboard: /supremeadmin
-                    ===================================================== */}
-                <Route path="/supremeadmin/login" element={<CentralAdminLogin />} />
-                <Route path="/supremeadmin/signup" element={<CentralAdminSignup />} />
-                <Route path="/supremeadmin" element={
-                    <ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}>
-                        <CentralAdminDashboard />
-                    </ProtectedRoute>
-                } />
-
-                {/* Legacy routes — redirect to new URLs */}
-                <Route path="/superadmin/login" element={<Navigate to="/supremeadmin/login" replace />} />
-                <Route path="/superadmin/signup" element={<Navigate to="/supremeadmin/signup" replace />} />
-                <Route path="/superadmin" element={<Navigate to="/supremeadmin" replace />} />
-
-                {/* =====================================================
-                    HOSPITAL SLUG LOGIN (Path-based multi-tenancy)
-                    URL: /:hospitalSlug/login  e.g. /akg-hospital/login
-                    Staff access their hospital's isolated portal via this URL
-                    ===================================================== */}
-                <Route path="/:hospitalSlug/login" element={<HospitalLogin />} />
-
-                {/* =====================================================
-                    HOSPITAL ADMIN ROUTES (Tier 2 — Hospital Level)
-                    Login: /hospitaladmin/login
-                    Dashboard: /hospitaladmin
-                    ===================================================== */}
-                <Route path="/hospitaladmin/login" element={<HospitalAdminLogin />} />
-                <Route path="/hospitaladmin" element={
-                    <ProtectedRoute allowedRoles={['hospitaladmin']}>
-                        <HospitalAdminDashboard />
-                    </ProtectedRoute>
-                } />
-                <Route path="/hospitaladmin/question-library" element={
-                    <ProtectedRoute allowedRoles={['hospitaladmin']}>
-                        <HospitalAdminQuestionLibrary />
-                    </ProtectedRoute>
-                } />
-
-                {/* --- Lab Routes (permission: lab_view, lab_manage) --- */}
-                <Route path="/lab/dashboard" element={
-                    <ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}>
-                        <LabDashboard />
-                    </ProtectedRoute>
-                } />
-                <Route path="/lab/tests" element={
-                    <ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}>
-                        <AssignedTests />
-                    </ProtectedRoute>
-                } />
-
-                {/* --- Pharmacy Management Routes (permission: pharmacy_view, pharmacy_manage) --- */}
-                <Route path="/pharmacy/inventory" element={
-                    <ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}>
-                        <PharmacyInventory />
-                    </ProtectedRoute>
-                } />
-                <Route path="/pharmacy/orders" element={
-                    <ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}>
-                        <PharmacyOrders />
-                    </ProtectedRoute>
-                } />
-
-                {/* --- Reception Routes (permission: appointment_manage) --- */}
-                <Route path="/reception/dashboard" element={
-                    <ProtectedRoute requiredPermissions={['appointment_manage']}>
-                        <ReceptionDashboard />
-                    </ProtectedRoute>
-                } />
-
-                {/* --- Accountant / Finance Dashboard --- */}
-                <Route path="/accountant/dashboard" element={
-                    <ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}>
-                        <AccountantDashboard />
-                    </ProtectedRoute>
-                } />
-
-                {/* --- Cashier / Billing Dashboard --- */}
-                <Route path="/cashier/billing" element={
-                    <ProtectedRoute requiredPermissions={['billing_view', 'billing_manage']} allowedRoles={['cashier', 'centraladmin', 'superadmin', 'hospitaladmin']}>
-                        <CashierDashboard />
-                    </ProtectedRoute>
-                } />
-
-                {/* Fallback */}
-                <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
+                        <Route path="*" element={<Navigate to="/my-dashboard" />} />
+                    </Routes>
+                </DashboardLayout>
+            ) : (
+                <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/signup" element={<Signup />} />
+                    <Route path="/supremeadmin/login" element={<CentralAdminLogin />} />
+                    <Route path="/supremeadmin/signup" element={<CentralAdminSignup />} />
+                    <Route path="/hospitaladmin/login" element={<HospitalAdminLogin />} />
+                    <Route path="/:hospitalSlug/login" element={<HospitalLogin />} />
+                    <Route path="/admin/login" element={<HospitalAdminLogin />} />
+                    <Route path="/admin/signup" element={<AdminSignup />} />
+                    <Route path="*" element={<Navigate to="/login" />} />
+                </Routes>
+            )}
         </>
     );
 };
