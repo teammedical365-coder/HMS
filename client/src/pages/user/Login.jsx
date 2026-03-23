@@ -47,95 +47,46 @@ const Login = () => {
         {/* Left: Form */}
         <div className="auth-form-container">
           <div className="auth-box">
-            <div className="auth-brand">
+            <div className="auth-brand" style={{ marginBottom: '16px' }}>
               <div className="auth-brand-icon">🏥</div>
               <span className="auth-brand-name">MediCRM HMS</span>
             </div>
 
-            <h2>Welcome back</h2>
-            <p>Sign in to your secure hospital workspace.</p>
+            <h2>Access Restricted</h2>
+            <p style={{ color: '#666', fontSize: '0.95rem', lineHeight: '1.5' }}>
+              For enhanced security and data isolation, general login has been disabled. 
+              <strong> You must access the system through your specific hospital's portal URL.</strong>
+            </p>
 
-            {error && (
-              <div className="error-message">
-                ⚠️ {error}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit}>
-              <div className="input-group">
-                <label>Email Address</label>
-                <div className="input-wrapper">
-                  <input
-                    type="email"
-                    name="email"
-                    placeholder="name@hospital.com"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="input-group">
-                <label>Password</label>
-                <div className="input-wrapper">
-                  <input
-                    type="password"
-                    name="password"
-                    placeholder="Enter your password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="auth-row">
-                <label>
-                  <input type="checkbox" style={{ accentColor: 'var(--brand-600)' }} />
-                  &nbsp;Remember me
-                </label>
-                <a href="#">Forgot Password?</a>
-              </div>
-
-              <button className="btn-primary btn-block" disabled={loading}>
-                {loading ? (
-                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                    <span style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
-                    Signing In...
-                  </span>
-                ) : 'Sign In →'}
-              </button>
-            </form>
-
-            <div className="divider"><span>or continue with</span></div>
-
-            <div className="social-login">
-              <div className="social-btn" title="Google">G</div>
-              <div className="social-btn" title="Microsoft">M</div>
-              <div className="social-btn" title="SSO">🔒</div>
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', margin: '24px 0', fontSize: '0.9rem', color: '#475569' }}>
+              <strong>Example:</strong><br />
+              <code>https://your-hospital.com/<b>your-clinic-name</b>/login</code>
             </div>
 
-            <p className="switch-text">
-              New here? <Link to="/signup" className="switch-link">Create Account</Link>
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+              If you do not know your hospital's portal link, please contact your Central Administrator.
             </p>
+
+            <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid #f1f5f9', fontSize: '0.85rem' }}>
+              <strong>Admin Access:</strong> <br />
+              <Link to="/hospitaladmin/login" style={{ color: 'var(--brand-pink)', marginRight: '16px' }}>Hospital Admin</Link>
+              <Link to="/supremeadmin/login" style={{ color: '#6c63ff' }}>Central Admin</Link>
+            </div>
           </div>
         </div>
 
         {/* Right: Visual */}
         <div className="auth-visual">
           <img
-            src="https://images.unsplash.com/photo-1538108149393-ceefbce54471?q=80&w=1000&auto=format&fit=crop"
-            alt="Hospital Management"
+            src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?q=80&w=1000&auto=format&fit=crop"
+            alt="Hospital Network"
+            style={{ filter: 'brightness(0.9)' }}
           />
-          <div className="auth-features">
-            <div className="auth-feature-chip">✅ Secure & HIPAA Compliant</div>
-            <div className="auth-feature-chip">🔒 End-to-End Encrypted</div>
-            <div className="auth-feature-chip">⚡ Real-time Updates</div>
-          </div>
-          <div className="auth-content">
-            <h2>Streamline Your <br /> Healthcare Operations.</h2>
-            <p>Empowering your staff to focus on patient care with seamlessly integrated digital workflows.</p>
+          <div className="auth-content auth-box">
+            <h2>Dedicated Private Portals</h2>
+            <p>
+              Each hospital operates within its own completely isolated environment, ensuring maximum security and row-level data segregation.
+            </p>
           </div>
         </div>
       </div>
