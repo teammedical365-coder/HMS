@@ -39,8 +39,10 @@ apiClient.interceptors.response.use(
 );
 
 export const authAPI = {
-    login: async (email, password) => {
-        const response = await apiClient.post('/api/auth/login', { email, password });
+    login: async (email, password, hospitalId) => {
+        const payload = { email, password };
+        if (hospitalId) payload.hospitalId = hospitalId;
+        const response = await apiClient.post('/api/auth/login', payload);
         return response.data;
     },
     signup: async (name, email, password, phone = '') => {

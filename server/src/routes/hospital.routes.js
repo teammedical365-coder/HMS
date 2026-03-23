@@ -473,30 +473,39 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
         });
         const totalPatients = uniquePatientIds.length;
 
-        // 6. Appointments stats
+        // 6. Appointments stats (query by hospitalId OR doctors linked to the hospital)
+        const appointmentMatch = {
+            $or: [
+                { hospitalId: new mongoose.Types.ObjectId(hospitalId) },
+                { doctorId: { $in: doctorObjectIds } }
+            ]
+        };
+
         const totalAppointments = await Appointment.countDocuments({
-            doctorId: { $in: doctorObjectIds },
+            ...appointmentMatch,
             ...dateFilter
         });
 
         const completedAppointments = await Appointment.countDocuments({
-            doctorId: { $in: doctorObjectIds },
+            ...appointmentMatch,
             status: 'completed',
             ...dateFilter
         });
 
         const pendingAppointments = await Appointment.countDocuments({
-            doctorId: { $in: doctorObjectIds },
+            ...appointmentMatch,
             status: { $in: ['pending', 'confirmed'] },
             ...dateFilter
         });
 
         // 7. Revenue — from paid appointments
+        // Case insensitive match for 'paid' and include 'Pending' if amount is collected, or just verify amount > 0.
+        // Receptionist might just set paymentStatus to 'Paid' or 'paid'
         const revenueData = await Appointment.aggregate([
             {
                 $match: {
-                    doctorId: { $in: doctorObjectIds },
-                    paymentStatus: 'paid',
+                    ...appointmentMatch,
+                    paymentStatus: { $in: ['paid', 'Paid'] },
                     ...(startDate || endDate ? { appointmentDate: dateFilter.appointmentDate } : {})
                 }
             },
@@ -516,8 +525,8 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
         const monthlyRevenue = await Appointment.aggregate([
             {
                 $match: {
-                    doctorId: { $in: doctorObjectIds },
-                    paymentStatus: 'paid',
+                    ...appointmentMatch,
+                    paymentStatus: { $in: ['paid', 'Paid'] },
                     appointmentDate: { $gte: sixMonthsAgo }
                 }
             },

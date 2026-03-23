@@ -163,7 +163,7 @@ router.post('/signup', async (req, res) => {
 // Login Route
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, hospitalId } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ success: false, message: 'Email and password are required' });
@@ -216,6 +216,25 @@ router.post('/login', async (req, res) => {
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
+    }
+
+    // STRICT HOSPITAL ROW-LEVEL SECURITY CHECK
+    const systemRoles = ['superadmin', 'centraladmin', 'hospitaladmin', 'admin'];
+    const userRoleStr = roleData.name ? roleData.name.toLowerCase() : '';
+    const isSystemRole = systemRoles.includes(userRoleStr);
+
+    if (!isSystemRole) {
+        if (hospitalId) {
+            // Staff attempting to log in via a specific slug portal
+            if (!user.hospitalId || String(user.hospitalId) !== String(hospitalId)) {
+                return res.status(403).json({ success: false, message: 'Access denied: You are not registered at this clinic. Check the URL.' });
+            }
+        } else {
+            // Staff attempting to log in via the general /login page
+            if (user.hospitalId) {
+                return res.status(403).json({ success: false, message: 'Access denied: Please log in using your specific clinic portal URL.' });
+            }
+        }
     }
 
     const token = jwt.sign(

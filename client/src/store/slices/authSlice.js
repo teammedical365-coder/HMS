@@ -4,9 +4,9 @@ import { authAPI, adminAPI, hospitalAdminAPI } from '../../utils/api';
 // Async Thunks
 export const loginUser = createAsyncThunk(
   'auth/loginUser',
-  async ({ email, password }, { rejectWithValue }) => {
+  async ({ email, password, hospitalId }, { rejectWithValue }) => {
     try {
-      const response = await authAPI.login(email, password);
+      const response = await authAPI.login(email, password, hospitalId);
       if (response.success) {
         localStorage.setItem('token', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
