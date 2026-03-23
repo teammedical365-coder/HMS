@@ -60,10 +60,13 @@ const HospitalLogin = () => {
         if (isAuthenticated && user) {
             const role = (user.role || '').toLowerCase();
             const redirectMap = { nurse: '/doctor/patients' };
-            const path = user.dashboardPath || '/my-dashboard';
-            navigate(redirectMap[role] || path, { replace: true });
+            const rawPath = redirectMap[role] || user.dashboardPath || '/my-dashboard';
+            
+            // Re-mount the software entirely inside the hospital slug prefix!
+            const path = `/${hospitalSlug}${rawPath}`;
+            navigate(path, { replace: true });
         }
-    }, [isAuthenticated, user, navigate]);
+    }, [isAuthenticated, user, navigate, hospitalSlug]);
 
     useEffect(() => {
         dispatch(clearError());

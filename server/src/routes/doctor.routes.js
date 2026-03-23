@@ -44,6 +44,28 @@ router.get('/', async (req, res) => {
             query.services = serviceId;
         }
 
+        let hospitalIdFilter = req.query.hospitalId || null;
+
+        // If no explicit query param, check if they sent a valid token (e.g. Receptionist fetching doctors)
+        if (!hospitalIdFilter && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+            try {
+                const token = req.headers.authorization.split(' ')[1];
+                const jwt = require('jsonwebtoken');
+                const decoded = jwt.verify(token, process.env.JWT_SECRET || 'a7ad54f3356c02e5256a7a148afecede');
+                if (decoded.hospitalId) {
+                    hospitalIdFilter = decoded.hospitalId;
+                }
+            } catch (err) {
+                // Ignore gracefully for public guests
+            }
+        }
+
+        // Apply absolute hospital isolation filter if requested or inferred
+        if (hospitalIdFilter) {
+            // Need mongoose to cast toObjectId sometimes, but usually string match works if schema defines it as ObjectId
+            query.hospitalId = hospitalIdFilter;
+        }
+
         const doctors = await Doctor.find(query)
             .populate('userId', 'name email phone role')
             .select('name specialty services availability consultationFee image bio userId')
