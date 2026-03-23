@@ -33,7 +33,7 @@ const HospitalLogin = () => {
         const resolveHospital = async () => {
             try {
                 setHospitalLoading(true);
-                const res = await api.get(`/hospitals/resolve/${hospitalSlug}`);
+                const res = await api.get(`/api/hospitals/resolve/${hospitalSlug}`);
                 if (res.data.success) {
                     setHospital(res.data.hospital);
                     // 🎨 Apply this hospital's specific branding (colors, logo, title) 
