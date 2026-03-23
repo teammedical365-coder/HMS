@@ -447,7 +447,7 @@ const ReceptionDashboard = () => {
                                     <label>Department</label>
                                     <select name="department" value={intakeForm.department} onChange={handleInputChange}>
                                         <option value="">-- All Departments --</option>
-                                        {[...new Set(doctorsList.map(d => d.specialty).filter(Boolean))].map(dept => (
+                                        {[...new Set(doctorsList.flatMap(d => d.departments || []).filter(Boolean))].map(dept => (
                                             <option key={dept} value={dept}>{dept}</option>
                                         ))}
                                     </select>
@@ -456,8 +456,8 @@ const ReceptionDashboard = () => {
                                     <label>Select Specialist</label>
                                     <select name="doctor" value={intakeForm.doctor} onChange={handleInputChange}>
                                         <option value="">-- Choose --</option>
-                                        {doctorsList.filter(doc => !intakeForm.department || doc.specialty === intakeForm.department).map(doc => (
-                                            <option key={doc._id} value={doc._id}>{doc.name} ({doc.specialty})</option>
+                                        {doctorsList.filter(doc => !intakeForm.department || (doc.departments || []).includes(intakeForm.department)).map(doc => (
+                                            <option key={doc._id} value={doc._id}>{doc.name} {doc.departments?.length > 0 ? `(${doc.departments.join(', ')})` : ''}</option>
                                         ))}
                                     </select>
                                 </div>

@@ -46,6 +46,9 @@ const doctorSchema = new mongoose.Schema({
   services: [{
     type: String
   }],
+  departments: [{
+    type: String
+  }],
   availability: {
     monday: { available: Boolean, startTime: String, endTime: String },
     tuesday: { available: Boolean, startTime: String, endTime: String },

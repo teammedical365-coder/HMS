@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI } from '../../utils/api';
+import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI } from '../../utils/api';
 import HospitalBrandingEditor from '../../components/HospitalBrandingEditor';
 import '../administration/SuperAdmin.css';
 import './CentralAdminDashboard.css';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const AVAILABLE_DEPARTMENTS = ['Orthopedics', 'ENT', 'Neurology', 'Cardiology', 'IVF', 'General', 'Pediatrics', 'Gynecology', 'Dermatology', 'Oncology'];
 
 const CentralAdminDashboard = () => {
     const navigate = useNavigate();
@@ -49,6 +48,9 @@ const CentralAdminDashboard = () => {
     const [allStaff, setAllStaff] = useState([]);
     const [loadingStaff, setLoadingStaff] = useState(false);
 
+    // Dynamic Departments (derived from Master Question Library keys)
+    const [availableDepartments, setAvailableDepartments] = useState([]);
+
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
     useEffect(() => {
@@ -60,7 +62,18 @@ const CentralAdminDashboard = () => {
         fetchHospitals();
         fetchRoles();
         fetchAllStaff();
+        fetchDepartments();
     }, []);
+
+    const fetchDepartments = async () => {
+        try {
+            const res = await questionLibraryAPI.getLibrary();
+            if (res.success && res.data && res.data.data) {
+                // The root keys of the question library JSON are the department names
+                setAvailableDepartments(Object.keys(res.data.data));
+            }
+        } catch (err) { console.error('Failed to load global question libraries:', err); }
+    };
 
     const fetchHospitals = async () => {
         try {
@@ -610,9 +623,11 @@ const CentralAdminDashboard = () => {
                                             <input type="number" className="staff-input" value={hospitalForm.appointmentFee} onChange={e => setHospitalForm({ ...hospitalForm, appointmentFee: Number(e.target.value) })} min="0" />
                                         </div>
                                         <div className="form-group" style={{ marginBottom: '16px' }}>
-                                            <label className="staff-label">Departments Provided</label>
+                                            <label className="staff-label">Departments Provided (Linked to Question Library)</label>
                                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '5px' }}>
-                                                {AVAILABLE_DEPARTMENTS.map(dept => (
+                                                {availableDepartments.length === 0 ? (
+                                                    <span style={{ fontSize: '13px', color: '#888' }}>No departments found in Global Question Library.</span>
+                                                ) : availableDepartments.map(dept => (
                                                     <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '14px', cursor: 'pointer', background: '#f8fafc', padding: '6px 12px', border: '1px solid #e2e8f0', borderRadius: '4px' }}>
                                                         <input 
                                                             type="checkbox" 

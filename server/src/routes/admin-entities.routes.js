@@ -112,6 +112,7 @@ router.post('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
       experience: experience || '',
       education: education || '',
       services: services || [],
+      departments: req.body.departments || [],
       availability: mergedAvailability,
       successRate: successRate || '90%',
       patientsCount: patientsCount || '100+',

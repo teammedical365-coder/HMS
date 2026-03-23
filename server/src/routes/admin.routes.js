@@ -428,6 +428,7 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
                     email: user.email, phone: user.phone,
                     hospitalId: assignedHospitalId,
                     services: user.services, availability: defaultAvailability,
+                    departments: user.departments,
                     specialty: 'General', consultationFee: 0
                 });
             } else if (roleName === 'lab' || roleName === 'lab technician') {
