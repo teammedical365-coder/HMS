@@ -269,7 +269,8 @@ const ReceptionDashboard = () => {
                     time: intakeForm.visitTime,
                     notes: `Walk-in. Vitals: ${intakeForm.height}cm/${intakeForm.weight}kg. Reason: ${intakeForm.reasonForVisit}`,
                     paymentMethod: intakeForm.paymentMethod,
-                    paymentStatus: intakeForm.paymentStatus
+                    paymentStatus: intakeForm.paymentStatus,
+                    amount: intakeForm.consultationFee
                 });
 
                 if (bookingRes.success) {

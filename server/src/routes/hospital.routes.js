@@ -505,7 +505,10 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
             {
                 $match: {
                     ...appointmentMatch,
-                    paymentStatus: { $in: ['paid', 'Paid'] },
+                    $or: [
+                        { paymentStatus: { $regex: /^paid$/i } },
+                        { amount: { $gt: 0 } }
+                    ],
                     ...(startDate || endDate ? { appointmentDate: dateFilter.appointmentDate } : {})
                 }
             },
@@ -526,7 +529,10 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
             {
                 $match: {
                     ...appointmentMatch,
-                    paymentStatus: { $in: ['paid', 'Paid'] },
+                    $or: [
+                        { paymentStatus: { $regex: /^paid$/i } },
+                        { amount: { $gt: 0 } }
+                    ],
                     appointmentDate: { $gte: sixMonthsAgo }
                 }
             },

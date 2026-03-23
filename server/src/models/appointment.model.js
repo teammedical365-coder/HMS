@@ -36,7 +36,8 @@ const appointmentSchema = new mongoose.Schema({
         default: 'pending',
         index: true
     },
-    paymentStatus: { type: String, enum: ['pending', 'paid', 'refunded'], default: 'pending' },
+    paymentStatus: { type: String, enum: ['pending', 'paid', 'refunded', 'Paid', 'Pending'], default: 'pending' },
+    paymentMethod: { type: String, default: 'Cash' },
     amount: { type: Number, default: 0 },
 
     // Clinical Data

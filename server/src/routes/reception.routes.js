@@ -273,10 +273,18 @@ router.patch('/appointments/:id/cancel', verifyToken, verifyReception, async (re
 // 6. BOOK APPOINTMENT (NEW: Assign Doctor)
 router.post('/book-appointment', verifyToken, verifyReception, async (req, res) => {
     try {
-        const { patientId, doctorId, date, time, notes } = req.body;
+        const { patientId, doctorId, date, time, notes, paymentMethod, paymentStatus, amount } = req.body;
 
         if (!patientId || !doctorId || !date || !time) {
             return res.status(400).json({ success: false, message: 'Missing booking details' });
+        }
+
+        // --- Prevent Backdating ---
+        // Ensure date (YYYY-MM-DD or ISO) isn't chronologically behind today (ignoring the exact hours)
+        const reqDateMatch = String(date).split('T')[0];
+        const todayMatch = new Date().toISOString().split('T')[0];
+        if (reqDateMatch < todayMatch) {
+            return res.status(400).json({ success: false, message: 'Cannot book appointments in the past' });
         }
 
         const patient = await User.findById(patientId);
@@ -285,16 +293,20 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
         const doctor = await Doctor.findById(doctorId);
         if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
 
-        // Simple Check for Double Booking
+        // Safe Double Booking Check independent of exact Date zero-padding
+        const searchDate = new Date(date);
+        const startOfDay = new Date(searchDate.setUTCHours(0, 0, 0, 0));
+        const endOfDay = new Date(searchDate.setUTCHours(23, 59, 59, 999));
+
         const existing = await Appointment.findOne({
             doctorId: doctor._id,
-            appointmentDate: new Date(date),
+            appointmentDate: { $gte: startOfDay, $lte: endOfDay },
             appointmentTime: time,
             status: { $ne: 'cancelled' }
         });
 
         if (existing) {
-            return res.status(400).json({ success: false, message: 'Slot already booked!' });
+            return res.status(400).json({ success: false, message: 'Slot already booked for this doctor at this time!' });
         }
 
         const newAppointment = new Appointment({
@@ -308,9 +320,10 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             serviceName: 'Walk-in Visit',
             appointmentDate: new Date(date),
             appointmentTime: time,
-            amount: doctor.consultationFee || 0,
+            amount: Number(amount) || doctor.consultationFee || 0,
             status: 'confirmed',
-            paymentStatus: 'pending',
+            paymentStatus: paymentStatus || 'Paid',
+            paymentMethod: paymentMethod || 'Cash',
             notes: notes || 'Walk-in created by reception'
         });
 
