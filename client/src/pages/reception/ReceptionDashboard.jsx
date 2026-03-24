@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { receptionAPI, publicAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -13,6 +13,7 @@ const timeSlots = [
 
 const ReceptionDashboard = () => {
     const navigate = useNavigate();
+    const { hospitalSlug } = useParams();
     const [appointments, setAppointments] = useState([]);
     const [doctorsList, setDoctorsList] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -149,7 +150,7 @@ const ReceptionDashboard = () => {
     };
 
     const handleViewProfile = (patient) => {
-        navigate(`/patient/${patient._id}`);
+        navigate(hospitalSlug ? `/${hospitalSlug}/patient/${patient._id}` : `/patient/${patient._id}`);
     };
 
     const handleSearch = async (e) => {

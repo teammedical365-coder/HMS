@@ -8,7 +8,7 @@ const PERMISSION_NAV_MAP = {
     patient_view: { label: 'Patient Records', path: '/doctor/patients' },
     patient_edit: { label: 'Edit Patients', path: '/doctor/patients' },
     // Clinical & Medical
-    visit_intake: { label: 'Nurse Intake', path: '/reception/dashboard' },
+    visit_intake: { label: 'Nurse Intake', path: '/doctor/patients' },
     visit_diagnose: { label: 'Consultations', path: '/doctor/patients' },
     clinical_history_view: { label: 'Medical History', path: '/doctor/patients' },
     // Operations

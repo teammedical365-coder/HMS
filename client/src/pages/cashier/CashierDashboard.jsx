@@ -30,7 +30,7 @@ const CashierDashboard = () => {
     useEffect(() => {
         const role = (currentUser?.role || '').toLowerCase();
         const perms = currentUser?.permissions || [];
-        if (!['cashier', 'accountant', 'centraladmin', 'superadmin', 'hospitaladmin'].includes(role) && 
+        if (!['billing', 'cashier', 'accountant', 'centraladmin', 'superadmin', 'hospitaladmin'].includes(role) && 
             !perms.includes('billing_view') && !perms.includes('billing_manage') && !perms.includes('*')) {
             navigate('/');
         }
@@ -279,7 +279,7 @@ const CashierDashboard = () => {
                                         {billingData.labReports.map((cur) => (
                                             <tr key={cur._id}>
                                                 <td>{new Date(cur.createdAt).toLocaleDateString()}</td>
-                                                <td>{cur.tests?.map((t) => t.testName).join(', ')}</td>
+                                                <td>{cur.tests?.length} Test(s) Ordered</td>
                                                 <td style={{ fontWeight: '500' }}>{formatCurrency(cur.amount)}</td>
                                             </tr>
                                         ))}
@@ -298,7 +298,7 @@ const CashierDashboard = () => {
                                         {billingData.pharmacyOrders.map((cur) => (
                                             <tr key={cur._id}>
                                                 <td>{new Date(cur.createdAt).toLocaleDateString()}</td>
-                                                <td>{cur.items?.map((i) => i.medicineName).join(', ')}</td>
+                                                <td>{cur.items?.length} Medicine(s) Dispensed</td>
                                                 <td style={{ fontWeight: '500' }}>{formatCurrency(cur.totalAmount)}</td>
                                             </tr>
                                         ))}

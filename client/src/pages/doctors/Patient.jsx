@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { doctorAPI } from '../../utils/api';
+import { useNavigate, useParams } from 'react-router-dom';
+import { doctorAPI, uploadAPI } from '../../utils/api';
 
 const Patient = () => {
     const navigate = useNavigate();
+    const { hospitalSlug } = useParams();
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('today');
     const [vitalsPatient, setVitalsPatient] = useState(null);
+    const [uploadPatient, setUploadPatient] = useState(null);
+    const [uploadFile, setUploadFile] = useState(null);
+    const [uploading, setUploading] = useState(false);
     const [vitals, setVitals] = useState({
         weight: '', height: '', bmi: '', bloodPressure: '',
         pulse: '', temperature: '', spo2: '', respiratoryRate: '',
@@ -54,6 +58,48 @@ const Patient = () => {
             setVitals(v => ({ ...v, bmi: (w / (h * h)).toFixed(1) }));
         }
     }, [vitals.weight, vitals.height]);
+
+    const handleUploadReport = async (e) => {
+        e.preventDefault();
+        if (!uploadFile) return;
+        setUploading(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('images', uploadFile);
+            
+            const res = await uploadAPI.uploadImages(formData);
+            if (res.success && res.files && res.files.length > 0) {
+                const uploadedFile = res.files[0];
+                const patientId = uploadPatient.userId?._id || uploadPatient.patientId;
+                
+                const existingProfile = uploadPatient.userId?.fertilityProfile || {};
+                const existingReports = existingProfile.previousReports || [];
+                
+                const newReport = {
+                    fileName: uploadFile.name,
+                    url: uploadedFile.url,
+                    date: new Date().toISOString()
+                };
+
+                await doctorAPI.updatePatientProfile(patientId, {
+                    previousReports: [...existingReports, newReport]
+                });
+
+                alert("Report uploaded successfully!");
+                setUploadPatient(null);
+                setUploadFile(null);
+                fetchPatients();
+            } else {
+                throw new Error("Upload failed");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Error uploading report: " + (err.message || ''));
+        } finally {
+            setUploading(false);
+        }
+    };
 
     const handleSaveVitals = async () => {
         if (!vitalsPatient) return;
@@ -341,7 +387,7 @@ const Patient = () => {
                                                 <td style={S.td}>
                                                     <div style={{ display: 'flex', gap: '8px' }}>
                                                         <button
-                                                            onClick={() => navigate(`/patient/${apt.userId?._id || apt.patientId}`)}
+                                                            onClick={() => navigate(hospitalSlug ? `/${hospitalSlug}/patient/${apt.userId?._id || apt.patientId}` : `/patient/${apt.userId?._id || apt.patientId}`)}
                                                             style={{
                                                                 ...S.btn('rgba(59,130,246,0.1)'),
                                                                 color: '#3b82f6', border: '1px solid #3b82f6',
@@ -360,7 +406,17 @@ const Patient = () => {
                                                             {hasVitals ? '✏️ Vitals' : '💉 Vitals'}
                                                         </button>
                                                         <button
-                                                            onClick={() => navigate(`/doctor/patient/${apt._id}`)}
+                                                            onClick={() => setUploadPatient(apt)}
+                                                            style={{
+                                                                ...S.btn('rgba(168, 85, 247, 0.1)'),
+                                                                color: '#a855f7', border: '1px solid #a855f7',
+                                                                display: 'flex', alignItems: 'center', gap: '5px'
+                                                            }}
+                                                        >
+                                                            📁 Upload Report
+                                                        </button>
+                                                        <button
+                                                            onClick={() => navigate(hospitalSlug ? `/${hospitalSlug}/doctor/patient/${apt._id}` : `/doctor/patient/${apt._id}`)}
                                                             style={{
                                                                 ...S.btn('linear-gradient(135deg, #8b5cf6, #d946ef)'),
                                                                 display: 'flex', alignItems: 'center', gap: '5px'
@@ -469,6 +525,42 @@ const Patient = () => {
                 )
             }
         </div >
+            )}
+
+            {/* UPload Report Modal */}
+            {uploadPatient && (
+                <div style={S.modalOverlay}>
+                    <div style={{ ...S.modalContent, maxWidth: '400px' }}>
+                        <div style={S.modalHeader}>
+                            <h2 style={{ margin: 0, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                📁 Upload Master Record
+                            </h2>
+                            <button onClick={() => setUploadPatient(null)} style={S.closeBtn}>&times;</button>
+                        </div>
+                        <form onSubmit={handleUploadReport} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
+                                Upload previous medical reports, prescriptions, or scans for <b>{uploadPatient.userId?.name || 'Patient'}</b>.
+                            </p>
+                            
+                            <input 
+                                type="file" 
+                                accept="application/pdf,image/*"
+                                onChange={(e) => setUploadFile(e.target.files[0])}
+                                required
+                                style={{ padding: '10px', border: '1px dashed #cbd5e1', borderRadius: '8px' }}
+                            />
+
+                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
+                                <button type="button" onClick={() => setUploadPatient(null)} style={S.btn('#e2e8f0', '#475569')}>Cancel</button>
+                                <button type="submit" disabled={uploading || !uploadFile} style={S.btn('#3b82f6', '#fff')}>
+                                    {uploading ? 'Uploading...' : 'Save Report'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 };
 
