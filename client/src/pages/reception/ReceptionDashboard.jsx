@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { receptionAPI, publicAPI } from '../../utils/api';
+import { receptionAPI, publicAPI, hospitalAPI } from '../../utils/api';
+import { getSubdomain } from '../../utils/subdomain';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './ReceptionDashboard.css';
@@ -52,8 +53,17 @@ const ReceptionDashboard = () => {
     const [verifyingAadhaar, setVerifyingAadhaar] = useState(false);
     const [otpSent, setOtpSent] = useState(false);
     const [aadhaarOtp, setAadhaarOtp] = useState('');
+    const [hospitalContext, setHospitalContext] = useState(null);
 
     useEffect(() => {
+        const fetchHospital = async () => {
+            try {
+                const sub = getSubdomain();
+                const res = await hospitalAPI.resolveHospital(sub);
+                if (res.success) setHospitalContext(res.hospital);
+            } catch (err) { console.error('Error fetching hospital context:', err); }
+        };
+        fetchHospital();
         fetchAppointments();
         fetchDoctors();
     }, []);
@@ -121,7 +131,7 @@ const ReceptionDashboard = () => {
             address: '', aadhaar: '', isAadhaarVerified: false,
             partnerTitle: 'Mr.', partnerFirstName: '', partnerLastName: '', partnerMobile: '',
             height: '', weight: '', bmi: '', bloodGroup: '',
-            paymentStatus: 'Pending', consultationFee: '500',
+            paymentStatus: 'Pending', consultationFee: hospitalContext?.appointmentFee ?? '500',
             doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: '',
             referralType: '', reasonForVisit: '', paymentMethod: 'Cash'
         });
@@ -142,6 +152,7 @@ const ReceptionDashboard = () => {
             aadhaar: p.aadhaar || '', // Load existing
             isAadhaarVerified: p.aadhaar ? true : false, // Assume verified if exists for now, or check backend flag
             ...p, // Spread existing profile
+            consultationFee: hospitalContext?.appointmentFee ?? '500',
             // Reset appointment specific fields for new booking
             doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: ''
         }));
@@ -168,6 +179,15 @@ const ReceptionDashboard = () => {
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
+
+        if (name === 'department' && hospitalContext) {
+            const defaultFee = hospitalContext.departmentFees?.[value] ?? hospitalContext.appointmentFee ?? 500;
+            setIntakeForm(prev => ({
+                ...prev, [name]: value, consultationFee: defaultFee
+            }));
+            return;
+        }
+
         // BMI Calculation
         if (name === 'height' || name === 'weight') {
             const h = name === 'height' ? value : intakeForm.height;
@@ -420,7 +440,7 @@ const ReceptionDashboard = () => {
                                 <div className="field"><label>Height (cm)</label><input name="height" value={intakeForm.height} onChange={handleInputChange} /></div>
                                 <div className="field"><label>Weight (kg)</label><input name="weight" value={intakeForm.weight} onChange={handleInputChange} /></div>
                                 <div className="field"><label>BMI</label><input name="bmi" value={intakeForm.bmi} readOnly /></div>
-                                <div className="field"><label>Consultation Fee</label><input name="consultationFee" value={intakeForm.consultationFee} onChange={handleInputChange} /></div>
+                                <div className="field"><label>Consultation Fee</label><input name="consultationFee" value={intakeForm.consultationFee} readOnly style={{ backgroundColor: '#f1f5f9', color: '#475569', cursor: 'not-allowed' }} /></div>
                             </div>
                             <div className="form-row">
                                 <div className="field">

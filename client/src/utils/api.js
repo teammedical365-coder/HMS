@@ -273,12 +273,14 @@ export const testPackageAPI = {
 };
 
 export const hospitalAPI = {
+    resolveHospital: async (slug) => (await apiClient.get(`/api/hospitals/resolve/${slug}`)).data,
     getHospitals: async () => (await apiClient.get('/api/hospitals')).data,
     createHospital: async (data) => (await apiClient.post('/api/hospitals', data)).data,
     updateHospital: async (id, data) => (await apiClient.put(`/api/hospitals/${id}`, data)).data,
     deleteHospital: async (id) => (await apiClient.delete(`/api/hospitals/${id}`)).data,
     getMyHospital: async () => (await apiClient.get('/api/hospitals/my-hospital')).data,
     updateFacilities: async (data) => (await apiClient.put('/api/hospitals/my-hospital/facilities', data)).data,
+    updateDepartmentFees: async (data) => (await apiClient.put('/api/hospitals/my-hospital/department-fees', data)).data,
     getHospitalStats: async (id, startDate, endDate) => {
         let url = `/api/hospitals/${id}/stats`;
         const params = new URLSearchParams();

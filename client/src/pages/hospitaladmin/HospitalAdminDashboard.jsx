@@ -583,6 +583,66 @@ const HospitalAdminDashboard = () => {
                         <div className="ha-restricted-notice">
                             <p>🔒 <strong>Restricted by Central Admin:</strong> Question Library, Test Packages, and Global Medicine Catalog are managed by the Central Admin only.</p>
                         </div>
+
+                        {/* DEPARTMENT FEES */}
+                        <div className="admin-card" style={{ marginTop: '24px', border: '1px solid #e2e8f0', boxShadow: 'none' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <h2>💵 Department Consultation Fees</h2>
+                            </div>
+                            <p style={{ color: '#888', fontSize: '14px', margin: '0 0 20px' }}>
+                                Configure the exact consultation fee for each department. Receptionists cannot alter these fees during booking.
+                            </p>
+
+                            <div className="users-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Department</th>
+                                            <th>Consultation Fee (₹)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(hospitalInfo?.departments || []).length === 0 ? (
+                                            <tr><td colSpan="2" style={{ textAlign: 'center', color: '#666' }}>No departments assigned yet. Contact Central Admin.</td></tr>
+                                        ) : (
+                                            hospitalInfo.departments.map(dept => (
+                                                <tr key={dept}>
+                                                    <td style={{ fontWeight: '500' }}>{dept}</td>
+                                                    <td>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <span style={{ color: '#64748b' }}>₹</span>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                className="staff-input"
+                                                                style={{ width: '140px', padding: '8px 12px' }}
+                                                                value={hospitalInfo?.departmentFees?.[dept] ?? hospitalInfo?.appointmentFee ?? 500}
+                                                                onChange={(e) => {
+                                                                    const newFee = Number(e.target.value);
+                                                                    setHospitalInfo(prev => ({
+                                                                        ...prev,
+                                                                        departmentFees: { ...(prev.departmentFees || {}), [dept]: newFee }
+                                                                    }));
+                                                                }}
+                                                                onBlur={async () => {
+                                                                    try {
+                                                                        await hospitalAPI.updateDepartmentFees({ departmentFees: hospitalInfo.departmentFees });
+                                                                        setSuccess(`Fee for ${dept} updated!`);
+                                                                        setTimeout(() => setSuccess(''), 3000);
+                                                                    } catch (err) {
+                                                                        setError('Error updating fees');
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 )}
 

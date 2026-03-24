@@ -189,18 +189,28 @@ router.post('/login', async (req, res) => {
 
     // Verify the role exists in the DB (handle both ObjectId and legacy string)
     let roleData = null;
-    if (mongoose.Types.ObjectId.isValid(user.role)) {
-      roleData = await Role.findById(user.role);
-    }
-    // Fallback: legacy string like 'admin', 'doctor' — look up by name
-    if (!roleData) {
-      roleData = await Role.findOne({
-        name: { $regex: new RegExp(`^${user.role}$`, 'i') }
-      });
-      // Auto-migrate to ObjectId
-      if (roleData) {
-        user.role = roleData._id;
-        await user.save();
+    if (user.role === 'hospitaladmin') {
+      roleData = {
+          name: 'hospitaladmin',
+          permissions: ['admin_manage_roles', 'admin_view_stats'],
+          dashboardPath: '/hospitaladmin',
+          navLinks: [],
+          isSystemRole: true
+      };
+    } else {
+      if (mongoose.Types.ObjectId.isValid(user.role)) {
+        roleData = await Role.findById(user.role);
+      }
+      // Fallback: legacy string like 'admin', 'doctor' — look up by name
+      if (!roleData) {
+        roleData = await Role.findOne({
+          name: { $regex: new RegExp(`^${user.role}$`, 'i') }
+        });
+        // Auto-migrate to ObjectId
+        if (roleData) {
+          user.role = roleData._id;
+          await user.save();
+        }
       }
     }
     if (!roleData) {

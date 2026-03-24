@@ -40,6 +40,7 @@ const hospitalSchema = new mongoose.Schema({
     logo: { type: String, default: null },
     isActive: { type: Boolean, default: true },
     departments: [{ type: String }],
+    departmentFees: { type: Map, of: Number, default: {} },
     appointmentFee: { type: Number, default: 500 },
     facilities: [{
         name: { type: String, required: true },

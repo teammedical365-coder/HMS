@@ -67,7 +67,7 @@ router.get('/resolve/:slug', async (req, res) => {
     try {
         const hospital = await Hospital.findOne(
             { slug: req.params.slug.toLowerCase(), isActive: true },
-            'name slug city logo departments isActive _id'
+            'name slug city logo departments departmentFees appointmentFee isActive _id'
         );
         if (!hospital) {
             return res.status(404).json({ success: false, message: 'Hospital not found. Check the URL and try again.' });
@@ -374,6 +374,30 @@ router.put('/my-hospital/facilities', verifyHospitalAdmin, async (req, res) => {
         await hospital.save();
 
         res.json({ success: true, message: 'Facilities updated successfully', hospital });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// Update department fees (Hospital admin specific feature)
+router.put('/my-hospital/department-fees', verifyHospitalAdmin, async (req, res) => {
+    try {
+        if (req.user.role === 'centraladmin' || req.user.role === 'superadmin') {
+            return res.status(403).json({ success: false, message: 'Only hospital admins manage their department fees this way' });
+        }
+        
+        const { departmentFees } = req.body;
+        if (!departmentFees || typeof departmentFees !== 'object') {
+            return res.status(400).json({ success: false, message: 'Department fees data required' });
+        }
+
+        const hospital = await Hospital.findById(req.user.hospitalId);
+        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+
+        hospital.departmentFees = departmentFees;
+        await hospital.save();
+
+        res.json({ success: true, message: 'Department fees updated successfully', hospital });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
