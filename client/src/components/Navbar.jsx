@@ -10,8 +10,8 @@ import './Navbar.css';
 /* ---- Brand SVG icon ---- */
 const HMSIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 2L3 7v10l9 5 9-5V7L12 2z" stroke="white" strokeWidth="1.5" strokeLinejoin="round"/>
-    <path d="M12 8v8M8 12h8" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+    <path d="M12 2L3 7v10l9 5 9-5V7L12 2z" stroke="white" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M12 8v8M8 12h8" stroke="white" strokeWidth="2" strokeLinecap="round" />
   </svg>
 );
 
@@ -52,7 +52,7 @@ const Navbar = () => {
             )}
           </div>
           <div className="navbar-logo-text">
-            <span className="navbar-logo-main">{branding.appName || 'MediCRM'}</span>
+            <span className="navbar-logo-main">{branding.appName || 'Medical365'}</span>
             <span className="navbar-logo-sub">{branding.tagline || 'Healthcare Suite'}</span>
           </div>
         </NavLink>

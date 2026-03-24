@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, useAppDispatch } from '../../store/hooks';
 import { logout } from '../../store/slices/authSlice';
 import { 
@@ -11,7 +11,6 @@ import './DashboardLayout.css';
 
 const DashboardSidebar = ({ isOpen, setOpen }) => {
     const { user } = useAuth();
-    const { hospitalSlug } = useParams();
     const role = (user?.role || '').toLowerCase();
     
     // Categorized Menus
@@ -73,15 +72,7 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
         ];
     };
 
-    const rawMenuItems = getMenu();
-    const menuItems = rawMenuItems.map(item => {
-        // Automatically inject the current hospital's slug into the sidebar nav links!
-        // (Unless they are supremeadmin global paths that bypass slugs)
-        if (hospitalSlug && !item.path.startsWith('/supremeadmin')) {
-             return { ...item, path: `/${hospitalSlug}${item.path}` };
-        }
-        return item;
-    });
+    const menuItems = getMenu();
 
     return (
         <aside className={`erp-sidebar ${isOpen ? 'open' : 'collapsed'}`}>
@@ -118,16 +109,10 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const location = useLocation();
-    const { hospitalSlug } = useParams();
 
     const handleLogout = () => {
         dispatch(logout());
-        // Direct them to their specific hospital's logout page cleanly
-        if (hospitalSlug) {
-            navigate(`/${hospitalSlug}/login`);
-        } else {
-            navigate('/login');
-        }
+        navigate('/login');
     };
 
     // Helper to get initials

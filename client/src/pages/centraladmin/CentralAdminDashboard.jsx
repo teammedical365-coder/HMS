@@ -17,7 +17,7 @@ const CentralAdminDashboard = () => {
     const [hospitals, setHospitals] = useState([]);
     const [loadingHospitals, setLoadingHospitals] = useState(false);
     const [showHospitalForm, setShowHospitalForm] = useState(false);
-    const [hospitalForm, setHospitalForm] = useState({ name: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 });
+    const [hospitalForm, setHospitalForm] = useState({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 });
     const [editHospital, setEditHospital] = useState(null);
     const [savingHospital, setSavingHospital] = useState(false);
     const [deleteHospitalConfirm, setDeleteHospitalConfirm] = useState(null);
@@ -180,7 +180,7 @@ const CentralAdminDashboard = () => {
                 if (res.success) { setSuccess('Hospital updated!'); setEditHospital(null); setShowHospitalForm(false); fetchHospitals(); }
             } else {
                 const res = await hospitalAPI.createHospital(hospitalForm);
-                if (res.success) { setSuccess('Hospital created!'); setShowHospitalForm(false); setHospitalForm({ name: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 }); fetchHospitals(); }
+                if (res.success) { setSuccess('Hospital created!'); setShowHospitalForm(false); setHospitalForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 }); fetchHospitals(); }
             }
         } catch (err) { setError(err.response?.data?.message || 'Error saving hospital.'); }
         finally { setSavingHospital(false); }
@@ -195,7 +195,7 @@ const CentralAdminDashboard = () => {
 
     const openEditHospital = (h) => {
         setEditHospital(h);
-        setHospitalForm({ name: h.name, address: h.address || '', city: h.city || '', state: h.state || '', phone: h.phone || '', email: h.email || '', website: h.website || '', departments: h.departments || [], appointmentFee: h.appointmentFee || 500 });
+        setHospitalForm({ name: h.name, slug: h.slug || '', address: h.address || '', city: h.city || '', state: h.state || '', phone: h.phone || '', email: h.email || '', website: h.website || '', departments: h.departments || [], appointmentFee: h.appointmentFee || 500 });
         setShowHospitalForm(true);
     };
 
@@ -529,7 +529,7 @@ const CentralAdminDashboard = () => {
                                         {showHospitalAdminForm ? 'Cancel' : '👤 Add Hospital Admin'}
                                     </button>
                                     <button className={showHospitalForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '10px 18px' }}
-                                        onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 }); }}>
+                                        onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 }); }}>
                                         {showHospitalForm ? 'Cancel' : '+ Add Hospital'}
                                     </button>
                                 </div>
@@ -589,6 +589,12 @@ const CentralAdminDashboard = () => {
                                                 <label className="staff-label">Hospital Name *</label>
                                                 <input type="text" className="staff-input" placeholder="e.g. City General Hospital" value={hospitalForm.name} onChange={e => setHospitalForm({ ...hospitalForm, name: e.target.value })} required />
                                             </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Subdomain Prefix *</label>
+                                                <input type="text" className="staff-input" placeholder="e.g. citycare (maps to citycare.myurl.com)" value={hospitalForm.slug} onChange={e => setHospitalForm({ ...hospitalForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} required />
+                                            </div>
+                                        </div>
+                                        <div className="form-row">
                                             <div className="form-group">
                                                 <label className="staff-label">City</label>
                                                 <input type="text" className="staff-input" placeholder="e.g. Mumbai" value={hospitalForm.city} onChange={e => setHospitalForm({ ...hospitalForm, city: e.target.value })} />
@@ -679,6 +685,7 @@ const CentralAdminDashboard = () => {
                                                 {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
                                                 {h.phone && <span>📞 {h.phone}</span>}
                                                 {h.email && <span>✉️ {h.email}</span>}
+                                                {h.slug && <span style={{display: 'inline-block', marginTop: '6px', background: 'var(--brand-pink)', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px'}}>🌐 {h.slug}.localhost:5173</span>}
                                                 {(h.departments && h.departments.length > 0) && (
                                                     <div style={{ marginTop: '8px', fontSize: '11px', color: '#64748b' }}>
                                                         <strong>Depts:</strong> {h.departments.join(', ')}

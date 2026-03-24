@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { doctorAPI, uploadAPI } from '../../utils/api';
 
 const Patient = () => {
     const navigate = useNavigate();
-    const { hospitalSlug } = useParams();
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -387,7 +386,7 @@ const Patient = () => {
                                                 <td style={S.td}>
                                                     <div style={{ display: 'flex', gap: '8px' }}>
                                                         <button
-                                                            onClick={() => navigate(hospitalSlug ? `/${hospitalSlug}/patient/${apt.userId?._id || apt.patientId}` : `/patient/${apt.userId?._id || apt.patientId}`)}
+                                                            onClick={() => navigate(`/patient/${apt.userId?._id || apt.patientId}`)}
                                                             style={{
                                                                 ...S.btn('rgba(59,130,246,0.1)'),
                                                                 color: '#3b82f6', border: '1px solid #3b82f6',
@@ -416,7 +415,7 @@ const Patient = () => {
                                                             📁 Upload Report
                                                         </button>
                                                         <button
-                                                            onClick={() => navigate(hospitalSlug ? `/${hospitalSlug}/doctor/patient/${apt._id}` : `/doctor/patient/${apt._id}`)}
+                                                            onClick={() => navigate(`/doctor/patient/${apt._id}`)}
                                                             style={{
                                                                 ...S.btn('linear-gradient(135deg, #8b5cf6, #d946ef)'),
                                                                 display: 'flex', alignItems: 'center', gap: '5px'
@@ -524,18 +523,16 @@ const Patient = () => {
                     </div>
                 )
             }
-        </div >
-            )}
 
             {/* UPload Report Modal */}
             {uploadPatient && (
-                <div style={S.modalOverlay}>
-                    <div style={{ ...S.modalContent, maxWidth: '400px' }}>
+                <div style={S.overlay}>
+                    <div style={{ ...S.modal, maxWidth: '400px' }}>
                         <div style={S.modalHeader}>
                             <h2 style={{ margin: 0, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 📁 Upload Master Record
                             </h2>
-                            <button onClick={() => setUploadPatient(null)} style={S.closeBtn}>&times;</button>
+                            <button onClick={() => setUploadPatient(null)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1.3rem', cursor: 'pointer' }}>&times;</button>
                         </div>
                         <form onSubmit={handleUploadReport} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                             <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>

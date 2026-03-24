@@ -7,6 +7,7 @@ import DashboardLayout from '../components/layouts/DashboardLayout';
 import ProtectedRoute from '../components/ProtectedRoute';
 import RoleDashboard from '../pages/RoleDashboard';
 import { useAuth } from '../store/hooks';
+import { getSubdomain } from '../utils/subdomain';
 
 // User Pages
 import Services from '../pages/user/Services';
@@ -70,6 +71,18 @@ import ReceptionDashboard from '../pages/reception/ReceptionDashboard';
 // Accountant / Finance Pages
 import AccountantDashboard from '../pages/accountant/AccountantDashboard';
 
+const SmartLogin = () => {
+    const subdomain = getSubdomain();
+    if (subdomain) return <HospitalLogin />;
+    return <CentralAdminLogin />;
+};
+
+const SmartDashboardRedirector = () => {
+    const subdomain = getSubdomain();
+    if (subdomain) return <Navigate to="/my-dashboard" replace />;
+    return <Navigate to="/supremeadmin" replace />;
+};
+
 const MainRoutes = () => {
     const { isAuthenticated } = useAuth();
     
@@ -80,14 +93,13 @@ const MainRoutes = () => {
             {isAuthenticated ? (
                 <DashboardLayout>
                     <Routes>
-                        <Route path="/" element={<Navigate to="/my-dashboard" replace />} />
+                        <Route path="/" element={<SmartDashboardRedirector />} />
                         <Route path="/services" element={<Navigate to="/" replace />} />
                         <Route path="/doctors" element={<Navigate to="/" replace />} />
                         <Route path="/services/:serviceId/doctors" element={<Navigate to="/" replace />} />
 
-                        {/* We add an optional :hospitalSlug param to ALL protected routes to fulfill the "work from that destined url" requirement */}
-                        <Route path="/:hospitalSlug?">
-                            <Route path="patient/:id" element={<ProtectedRoute requiredPermissions={[]}><UnifiedPatientProfile /></ProtectedRoute>} />
+                        {/* Flat Architecture - Handled by Subdomains */}
+                        <Route path="patient/:id" element={<ProtectedRoute requiredPermissions={[]}><UnifiedPatientProfile /></ProtectedRoute>} />
                             <Route path="my-dashboard" element={<ProtectedRoute requiredPermissions={[]}><RoleDashboard /></ProtectedRoute>} />
                             <Route path="appointment" element={<Appointment />} />
                             <Route path="appointment/success" element={<AppointmentSuccess />} />
@@ -129,8 +141,8 @@ const MainRoutes = () => {
 
                             {/* Accountant / Finance Pages */}
                             <Route path="accountant/dashboard" element={<ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}><AccountantDashboard /></ProtectedRoute>} />
-                            <Route path="cashier/billing" element={<ProtectedRoute requiredPermissions={['billing_view', 'billing_manage']} allowedRoles={['billing', 'cashier', 'centraladmin', 'superadmin', 'hospitaladmin']}><CashierDashboard /></ProtectedRoute>} />
-                        </Route>
+                        {/* Cashier / Billing */}
+                        <Route path="cashier/billing" element={<ProtectedRoute requiredPermissions={['billing_view', 'billing_manage']} allowedRoles={['billing', 'cashier', 'centraladmin', 'superadmin', 'hospitaladmin']}><CashierDashboard /></ProtectedRoute>} />
 
                         {/* Supreme Admin remains outside of hospital slugs */}
                         <Route path="/supremeadmin" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><CentralAdminDashboard /></ProtectedRoute>} />
@@ -141,13 +153,12 @@ const MainRoutes = () => {
                 </DashboardLayout>
             ) : (
                 <Routes>
-                    <Route path="/login" element={<Login />} />
+                    {/* Unified Smart Login URL - Reads current domain/subdomain natively */}
+                    <Route path="/login" element={<SmartLogin />} />
+                    
+                    {/* Legacy/Signups routing */}
                     <Route path="/signup" element={<Signup />} />
-                    <Route path="/supremeadmin/login" element={<CentralAdminLogin />} />
                     <Route path="/supremeadmin/signup" element={<CentralAdminSignup />} />
-                    <Route path="/hospitaladmin/login" element={<HospitalAdminLogin />} />
-                    <Route path="/:hospitalSlug/login" element={<HospitalLogin />} />
-                    <Route path="/admin/login" element={<HospitalAdminLogin />} />
                     <Route path="/admin/signup" element={<AdminSignup />} />
                     <Route path="*" element={<Navigate to="/login" />} />
                 </Routes>

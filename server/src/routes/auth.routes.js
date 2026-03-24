@@ -176,13 +176,11 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
-    // Central admins and hospital admins must use their dedicated login pages
+    // Central admins must use their dedicated login pages
     if (user.role === 'superadmin' || user.role === 'centraladmin') {
       return res.status(403).json({ success: false, message: 'Central Admins must use the /supremeadmin/login page' });
     }
-    if (user.role === 'hospitaladmin') {
-      return res.status(403).json({ success: false, message: 'Hospital Admins must use the /hospitaladmin/login page' });
-    }
+
 
     // Dynamic validation: user must have a valid role assigned
     if (!user.role) {

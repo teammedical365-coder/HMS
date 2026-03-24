@@ -3,21 +3,22 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAuth } from '../../store/hooks';
 import { loginUser, clearError } from '../../store/slices/authSlice';
 import { useBranding } from '../../context/BrandingContext';
+import { getSubdomain } from '../../utils/subdomain';
 import api from '../../utils/api';
 import '../user/Login.css';
 import './HospitalLogin.css';
 
 /**
- * HospitalLogin — Slug-based hospital login page
- * URL: /:hospitalSlug/login  (e.g. /akg-hospital/login)
+ * HospitalLogin — Subdomain-based hospital login page
+ * URL: [subdomain].myurl.com/login  (e.g. akg-hospital.myurl.com/login)
  *
- * 1. Reads :hospitalSlug from URL
+ * 1. Reads subdomain from window location
  * 2. Fetches hospital info (name, logo) from /api/hospitals/resolve/:slug
  * 3. Embeds hospitalId in the login dispatch so JWT gets the hospitalId
  * 4. After login, automatically redirects to the user's role dashboard
  */
 const HospitalLogin = () => {
-    const { hospitalSlug } = useParams();
+    const hospitalSlug = getSubdomain();
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
     const { loading, error, isAuthenticated, user } = useAuth();
@@ -60,11 +61,11 @@ const HospitalLogin = () => {
         if (isAuthenticated && user) {
             const role = (user.role || '').toLowerCase();
             const redirectMap = { nurse: '/doctor/patients' };
-            const rawPath = redirectMap[role] || user.dashboardPath || '/my-dashboard';
+            const rawPath = redirectMap[role] || user.dashboardPath || 'my-dashboard';
+            const cleanPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
             
-            // Re-mount the software entirely inside the hospital slug prefix!
-            const path = `/${hospitalSlug}${rawPath}`;
-            navigate(path, { replace: true });
+            // Re-mount the software onto the flat authenticated path
+            navigate(cleanPath, { replace: true });
         }
     }, [isAuthenticated, user, navigate, hospitalSlug]);
 

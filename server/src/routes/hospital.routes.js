@@ -181,11 +181,12 @@ router.get('/tenant-status', verifyCentralAdmin, async (req, res) => {
 // Update a hospital
 router.put('/:id', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, address, city, state, phone, email, website, logo, isActive, departments, appointmentFee } = req.body;
+        const { name, address, city, state, phone, email, website, logo, isActive, departments, appointmentFee, slug } = req.body;
         const hospital = await Hospital.findById(req.params.id);
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
         if (name !== undefined) hospital.name = name;
+        if (slug !== undefined) hospital.slug = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
         if (address !== undefined) hospital.address = address;
         if (city !== undefined) hospital.city = city;
         if (state !== undefined) hospital.state = state;
@@ -504,10 +505,14 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
         const revenueData = await Appointment.aggregate([
             {
                 $match: {
-                    ...appointmentMatch,
-                    $or: [
-                        { paymentStatus: { $regex: /^paid$/i } },
-                        { amount: { $gt: 0 } }
+                    $and: [
+                        appointmentMatch,
+                        {
+                            $or: [
+                                { paymentStatus: { $regex: /^paid$/i } },
+                                { amount: { $gt: 0 } }
+                            ]
+                        }
                     ],
                     ...(startDate || endDate ? { appointmentDate: dateFilter.appointmentDate } : {})
                 }
@@ -528,10 +533,14 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
         const monthlyRevenue = await Appointment.aggregate([
             {
                 $match: {
-                    ...appointmentMatch,
-                    $or: [
-                        { paymentStatus: { $regex: /^paid$/i } },
-                        { amount: { $gt: 0 } }
+                    $and: [
+                        appointmentMatch,
+                        {
+                            $or: [
+                                { paymentStatus: { $regex: /^paid$/i } },
+                                { amount: { $gt: 0 } }
+                            ]
+                        }
                     ],
                     appointmentDate: { $gte: sixMonthsAgo }
                 }
