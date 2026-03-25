@@ -15,7 +15,7 @@ connectDB();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: ["http://localhost:5173", "http://localhost:3000", "https://crm-ebon-two.vercel.app", "https://crm-222i.onrender.com", "https://crm-arkw.vercel.app"],
+        origin: ["http://localhost:5173", "http://localhost:3000", "https://crm-ebon-two.vercel.app", "https://crm-222i.onrender.com", "https://crm-arkw.vercel.app", "https://www.boonkies.com", "https://boonkies.com"],
         methods: ["GET", "POST"]
     }
 });
