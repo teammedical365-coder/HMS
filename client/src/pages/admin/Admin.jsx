@@ -448,12 +448,6 @@ const Admin = () => {
                                     </div>
                                 </div>
 
-                                {/* Special fields for Doctor if selected */}
-                                {/* You could check role name here if you had it, for now we show specialty input if it looks like a doctor or user wants to add it */}
-                                <div className="form-group">
-                                    <label className="staff-label">Specialty (Doctors Only)</label>
-                                    <input type="text" placeholder="e.g. Cardiologist" value={editForm.specialty} onChange={e => setEditForm({ ...editForm, specialty: e.target.value })} className="staff-input" />
-                                </div>
                                 
                                 {hospital && hospital.departments && hospital.departments.length > 0 && (
                                     <div className="form-row" style={{ marginTop: '10px' }}>

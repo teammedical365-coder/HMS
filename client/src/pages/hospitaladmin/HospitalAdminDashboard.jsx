@@ -752,11 +752,7 @@ const HospitalAdminDashboard = () => {
                                         </select>
                                     </div>
                                 </div>
-                                <div className="form-group">
-                                    <label className="staff-label">Specialty (Doctors Only)</label>
-                                    <input type="text" placeholder="e.g. Cardiologist" value={editForm.specialty} onChange={e => setEditForm({ ...editForm, specialty: e.target.value })} className="staff-input" />
-                                </div>
-                                
+
                                 {hospitalInfo && hospitalInfo.departments && hospitalInfo.departments.length > 0 && (
                                     <div className="form-row" style={{ marginTop: '10px' }}>
                                         <div className="form-group" style={{ gridColumn: '1 / -1' }}>

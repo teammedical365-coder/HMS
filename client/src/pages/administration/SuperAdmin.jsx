@@ -424,10 +424,6 @@ const SuperAdmin = () => {
                                     </div>
                                 </div>
 
-                                <div className="form-group">
-                                    <label className="staff-label">Specialty (Doctors Only)</label>
-                                    <input type="text" placeholder="e.g. Cardiologist" value={editForm.specialty} onChange={e => setEditForm({ ...editForm, specialty: e.target.value })} className="staff-input" />
-                                </div>
 
                                 <div className="modal-buttons" style={{ marginTop: '20px' }}>
                                     <button type="submit" disabled={updating} className="btn-save">
