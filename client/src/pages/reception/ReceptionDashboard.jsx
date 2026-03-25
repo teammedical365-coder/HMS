@@ -183,7 +183,7 @@ const ReceptionDashboard = () => {
         if (name === 'department' && hospitalContext) {
             const defaultFee = hospitalContext.departmentFees?.[value] ?? hospitalContext.appointmentFee ?? 500;
             setIntakeForm(prev => ({
-                ...prev, [name]: value, consultationFee: defaultFee
+                ...prev, [name]: value, consultationFee: defaultFee, doctor: ''
             }));
             return;
         }
@@ -467,24 +467,36 @@ const ReceptionDashboard = () => {
                                 <div className="field">
                                     <label>Department</label>
                                     <select name="department" value={intakeForm.department} onChange={handleInputChange}>
-                                        <option value="">-- All Departments --</option>
-                                        {hospitalContext?.departments?.map(dept => (
+                                        <option value="">-- Choose Department --</option>
+                                        {[...new Set([...(hospitalContext?.departments || []), ...doctorsList.flatMap(d => d.departments || [])])].filter(Boolean).map(dept => (
                                             <option key={dept} value={dept}>{dept}</option>
-                                        )) || <option disabled>No departments allocated</option>}
-                                    </select>
-                                </div>
-                                <div className="field">
-                                    <label>Select Specialist</label>
-                                    <select name="doctor" value={intakeForm.doctor} onChange={handleInputChange}>
-                                        <option value="">-- Choose --</option>
-                                        {doctorsList.filter(doc => !intakeForm.department || (doc.departments || []).includes(intakeForm.department)).map(doc => (
-                                            <option key={doc._id} value={doc._id}>{doc.name} {doc.departments?.length > 0 ? `(${doc.departments.join(', ')})` : ''}</option>
                                         ))}
                                     </select>
                                 </div>
                                 <div className="field">
+                                    <label>Select Specialist</label>
+                                    <select 
+                                        name="doctor" 
+                                        value={intakeForm.doctor} 
+                                        onChange={handleInputChange}
+                                        disabled={!intakeForm.department}
+                                        style={!intakeForm.department ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
+                                    >
+                                        {!intakeForm.department ? (
+                                            <option value="">-- Select Department First --</option>
+                                        ) : (
+                                            <>
+                                                <option value="">-- Choose Specialist --</option>
+                                                {doctorsList.filter(doc => (doc.departments || []).includes(intakeForm.department)).map(doc => (
+                                                    <option key={doc._id} value={doc._id}>{doc.name} {doc.departments?.length > 0 ? `(${doc.departments.join(', ')})` : ''}</option>
+                                                ))}
+                                            </>
+                                        )}
+                                    </select>
+                                </div>
+                                <div className="field">
                                     <label>Date</label>
-                                    <input type="date" name="visitDate" value={intakeForm.visitDate} onChange={handleInputChange} />
+                                    <input type="date" name="visitDate" value={intakeForm.visitDate} onChange={handleInputChange} disabled={!intakeForm.doctor} style={!intakeForm.doctor ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}} />
                                 </div>
                             </div>
                             {intakeForm.doctor && (
