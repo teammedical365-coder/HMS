@@ -7,7 +7,7 @@ import { FiBell, FiChevronDown, FiLogOut, FiLogIn, FiHome, FiSettings } from 're
 import { useBranding } from '../context/BrandingContext';
 import './Navbar.css';
 
-/* ---- Brand SVG icon ---- */
+/* ---- Brand SVG ijhjiuuicon ---- */
 const HMSIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M12 2L3 7v10l9 5 9-5V7L12 2z" stroke="white" strokeWidth="1.5" strokeLinejoin="round" />
