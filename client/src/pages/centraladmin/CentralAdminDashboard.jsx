@@ -53,6 +53,19 @@ const CentralAdminDashboard = () => {
 
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
+    const getBaseHost = () => {
+        let host = window.location.host;
+        if (host.startsWith('www.')) host = host.replace('www.', '');
+        const parts = host.split('.');
+        if (parts.length > 2 && !host.includes('localhost')) {
+            host = parts.slice(-2).join('.');
+        } else if (host.includes('localhost')) {
+             const port = window.location.port ? `:${window.location.port}` : '';
+             host = `localhost${port}`;
+        }
+        return host;
+    };
+
     useEffect(() => {
         const role = currentUser?.role;
         if (role !== 'centraladmin' && role !== 'superadmin') navigate('/supremeadmin/login');
@@ -375,7 +388,7 @@ const CentralAdminDashboard = () => {
                                             { label: 'Address', value: h.address },
                                             { label: 'Admin', value: h.adminName || 'Not assigned' },
                                             { label: 'Admin Email', value: h.adminEmail },
-                                            { label: 'Staff Login URL', value: h.slug && `/${h.slug}/login`, isLink: true },
+                                            { label: 'Staff Login URL', value: h.slug && `${window.location.protocol}//${h.slug}.${getBaseHost()}/login`, isLink: true },
                                             { label: 'Appointment Fee', value: h.appointmentFee !== undefined && h.appointmentFee !== null ? formatCurrency(h.appointmentFee) : formatCurrency(500) },
                                         ].map((item, i) => item.value && (
                                             <div key={i} style={{ display: 'flex', gap: '12px', marginBottom: '8px', fontSize: '14px' }}>
@@ -383,7 +396,7 @@ const CentralAdminDashboard = () => {
                                                 <span style={{ color: '#333', fontWeight: '500' }}>
                                                     {item.isLink ? (
                                                         <a href={item.value} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-pink)', textDecoration: 'none' }}>
-                                                            {window.location.origin}{item.value}
+                                                            {item.value}
                                                         </a>
                                                     ) : (
                                                         item.value
@@ -685,7 +698,7 @@ const CentralAdminDashboard = () => {
                                                 {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
                                                 {h.phone && <span>📞 {h.phone}</span>}
                                                 {h.email && <span>✉️ {h.email}</span>}
-                                                {h.slug && <span style={{display: 'inline-block', marginTop: '6px', background: 'var(--brand-pink)', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px'}}>🌐 {h.slug}.localhost:5173</span>}
+                                                {h.slug && <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" style={{display: 'inline-block', marginTop: '6px', background: 'var(--brand-pink)', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none'}}>🌐 {h.slug}.{getBaseHost()}</a>}
                                                 {(h.departments && h.departments.length > 0) && (
                                                     <div style={{ marginTop: '8px', fontSize: '11px', color: '#64748b' }}>
                                                         <strong>Depts:</strong> {h.departments.join(', ')}
