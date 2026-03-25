@@ -14,7 +14,7 @@ const Admin = () => {
 
     const [editModal, setEditModal] = useState(false);
     const [editForm, setEditForm] = useState({
-        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: '', departments: []
+        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: '', department: ''
     });
     const [updating, setUpdating] = useState(false);
 
@@ -23,7 +23,7 @@ const Admin = () => {
     // Create Staff Form state
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [createForm, setCreateForm] = useState({
-        name: '', email: '', password: '', phone: '', roleId: '', file: null, departments: []
+        name: '', email: '', password: '', phone: '', roleId: '', file: null, department: ''
     });
     const [creating, setCreating] = useState(false);
 
@@ -97,7 +97,7 @@ const Admin = () => {
             currentAvatar: userItem.avatar,
             newAvatarFile: null,
             specialty: '', // Ideally fetch specific doctor details if needed, but basic update is fine
-            departments: userItem.departments || []
+            department: (userItem.departments && userItem.departments.length > 0) ? userItem.departments[0] : ''
         });
         setEditModal(true);
         setError('');
@@ -132,7 +132,7 @@ const Admin = () => {
                 roleId: editForm.roleId,
                 avatar: avatarUrl,
                 specialty: editForm.specialty,
-                departments: editForm.departments
+                departments: editForm.department ? [editForm.department] : []
             };
 
             const response = await adminAPI.updateUser(editForm.id, updateData);
@@ -193,13 +193,14 @@ const Admin = () => {
             // 2. Create User with avatar URL
             const userData = {
                 ...createForm,
+                departments: createForm.department ? [createForm.department] : [],
                 avatar: avatarUrl
             };
 
             const response = await adminAPI.createUser(userData);
             if (response.success) {
                 setSuccess(`✅ ${response.user?.role || 'Staff'} account created! They can log in with: ${createForm.email}`);
-                setCreateForm({ name: '', email: '', password: '', phone: '', roleId: '', file: null, departments: [] });
+                setCreateForm({ name: '', email: '', password: '', phone: '', roleId: '', file: null, department: '' });
                 setShowCreateForm(false);
                 fetchUsers();
             }
@@ -309,28 +310,18 @@ const Admin = () => {
                             {hospital && hospital.departments && hospital.departments.length > 0 && (
                                 <div className="form-row" style={{ marginTop: '10px' }}>
                                     <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                        <label className="staff-label">Assign Departments (Optional - Leave blank to allow all)</label>
-                                        <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginTop: '8px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <label className="staff-label">Assign Department (Optional - Leave blank to allow all)</label>
+                                        <select
+                                            value={createForm.department}
+                                            onChange={(e) => setCreateForm(prev => ({ ...prev, department: e.target.value }))}
+                                            className="staff-input"
+                                            style={{ marginTop: '8px' }}
+                                        >
+                                            <option value="">-- Select Department --</option>
                                             {hospital.departments.map(dept => (
-                                                <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={createForm.departments.includes(dept)}
-                                                        onChange={(e) => {
-                                                            const checked = e.target.checked;
-                                                            setCreateForm(prev => ({
-                                                                ...prev,
-                                                                departments: checked 
-                                                                    ? [...prev.departments, dept] 
-                                                                    : prev.departments.filter(d => d !== dept)
-                                                            }));
-                                                        }}
-                                                        style={{ width: '16px', height: '16px', accentColor: '#3b82f6' }}
-                                                    />
-                                                    {dept}
-                                                </label>
+                                                <option key={dept} value={dept}>{dept}</option>
                                             ))}
-                                        </div>
+                                        </select>
                                     </div>
                                 </div>
                             )}
@@ -467,28 +458,18 @@ const Admin = () => {
                                 {hospital && hospital.departments && hospital.departments.length > 0 && (
                                     <div className="form-row" style={{ marginTop: '10px' }}>
                                         <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                            <label className="staff-label">Assign Departments (Optional - Leave blank to allow all)</label>
-                                            <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginTop: '8px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                            <label className="staff-label">Assign Department (Optional - Leave blank to allow all)</label>
+                                            <select
+                                                value={editForm.department}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, department: e.target.value }))}
+                                                className="staff-input"
+                                                style={{ marginTop: '8px' }}
+                                            >
+                                                <option value="">-- Select Department --</option>
                                                 {hospital.departments.map(dept => (
-                                                    <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={editForm.departments.includes(dept)}
-                                                            onChange={(e) => {
-                                                                const checked = e.target.checked;
-                                                                setEditForm(prev => ({
-                                                                    ...prev,
-                                                                    departments: checked 
-                                                                        ? [...prev.departments, dept] 
-                                                                        : prev.departments.filter(d => d !== dept)
-                                                                }));
-                                                            }}
-                                                            style={{ width: '16px', height: '16px', accentColor: '#3b82f6' }}
-                                                        />
-                                                        {dept}
-                                                    </label>
+                                                    <option key={dept} value={dept}>{dept}</option>
                                                 ))}
-                                            </div>
+                                            </select>
                                         </div>
                                     </div>
                                 )}
