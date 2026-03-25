@@ -48,7 +48,7 @@ app.use(cors({
         ];
 
         // DYNAMIC ALLOW: If origin includes "localhost", allow it (Fixes 5174, 5175, etc.)
-        if (origin.includes('localhost') || allowedOrigins.indexOf(origin) !== -1) {
+        if (origin.includes('localhost') || allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.boonkies.com')) {
             return callback(null, true);
         }
 
