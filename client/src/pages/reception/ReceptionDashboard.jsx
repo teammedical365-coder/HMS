@@ -468,9 +468,9 @@ const ReceptionDashboard = () => {
                                     <label>Department</label>
                                     <select name="department" value={intakeForm.department} onChange={handleInputChange}>
                                         <option value="">-- All Departments --</option>
-                                        {[...new Set(doctorsList.flatMap(d => d.departments || []).filter(Boolean))].map(dept => (
+                                        {hospitalContext?.departments?.map(dept => (
                                             <option key={dept} value={dept}>{dept}</option>
-                                        ))}
+                                        )) || <option disabled>No departments allocated</option>}
                                     </select>
                                 </div>
                                 <div className="field">

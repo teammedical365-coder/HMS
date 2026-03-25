@@ -19,12 +19,12 @@ const HospitalAdminDashboard = () => {
     const [roles, setRoles] = useState([]);
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [createForm, setCreateForm] = useState({
-        name: '', email: '', password: '', phone: '', roleId: '', file: null, departments: []
+        name: '', email: '', password: '', phone: '', roleId: '', file: null, department: ''
     });
     const [creating, setCreating] = useState(false);
     const [editModal, setEditModal] = useState(false);
     const [editForm, setEditForm] = useState({
-        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: '', departments: []
+        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: '', department: ''
     });
     const [updating, setUpdating] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -171,11 +171,11 @@ const HospitalAdminDashboard = () => {
                 if (uploadRes.success && uploadRes.files.length > 0) avatarUrl = uploadRes.files[0].url;
             }
 
-            const userData = { ...createForm, avatar: avatarUrl };
+            const userData = { ...createForm, avatar: avatarUrl, departments: createForm.department ? [createForm.department] : [] };
             const res = await adminAPI.createUser(userData);
             if (res.success) {
                 setSuccess(`✅ ${res.user?.role || 'Staff'} account created! Login: ${createForm.email}`);
-                setCreateForm({ name: '', email: '', password: '', phone: '', roleId: '', file: null, departments: [] });
+                setCreateForm({ name: '', email: '', password: '', phone: '', roleId: '', file: null, department: '' });
                 setShowCreateForm(false);
                 fetchUsers();
             }
@@ -202,7 +202,7 @@ const HospitalAdminDashboard = () => {
             const updateData = {
                 name: editForm.name, email: editForm.email, phone: editForm.phone,
                 roleId: editForm.roleId, avatar: avatarUrl, specialty: editForm.specialty,
-                departments: editForm.departments
+                departments: editForm.department ? [editForm.department] : []
             };
             const res = await adminAPI.updateUser(editForm.id, updateData);
             if (res.success) {
@@ -237,7 +237,7 @@ const HospitalAdminDashboard = () => {
             name: userItem.name, email: userItem.email, phone: userItem.phone || '',
             roleId: userItem.roleId || userItem.role,
             currentAvatar: userItem.avatar, newAvatarFile: null, specialty: userItem.specialty || '',
-            departments: userItem.departments || []
+            department: (userItem.departments && userItem.departments.length > 0) ? userItem.departments[0] : ''
         });
         setEditModal(true);
         setError('');
@@ -459,28 +459,18 @@ const HospitalAdminDashboard = () => {
                                     {hospitalInfo && hospitalInfo.departments && hospitalInfo.departments.length > 0 && (
                                         <div className="form-row" style={{ marginTop: '10px' }}>
                                             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                                <label className="staff-label">Assign Departments (Optional - Leave blank to allow all)</label>
-                                                <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginTop: '8px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                <label className="staff-label">Assign Department (Optional - Leave blank to allow all)</label>
+                                                <select
+                                                    value={createForm.department}
+                                                    onChange={(e) => setCreateForm(prev => ({ ...prev, department: e.target.value }))}
+                                                    className="staff-input"
+                                                    style={{ marginTop: '8px' }}
+                                                >
+                                                    <option value="">-- Select Department --</option>
                                                     {hospitalInfo.departments.map(dept => (
-                                                        <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={createForm.departments.includes(dept)}
-                                                                onChange={(e) => {
-                                                                    const checked = e.target.checked;
-                                                                    setCreateForm(prev => ({
-                                                                        ...prev,
-                                                                        departments: checked 
-                                                                            ? [...prev.departments, dept] 
-                                                                            : prev.departments.filter(d => d !== dept)
-                                                                    }));
-                                                                }}
-                                                                style={{ width: '16px', height: '16px', accentColor: '#3b82f6' }}
-                                                            />
-                                                            {dept}
-                                                        </label>
+                                                        <option key={dept} value={dept}>{dept}</option>
                                                     ))}
-                                                </div>
+                                                </select>
                                             </div>
                                         </div>
                                     )}
@@ -770,28 +760,18 @@ const HospitalAdminDashboard = () => {
                                 {hospitalInfo && hospitalInfo.departments && hospitalInfo.departments.length > 0 && (
                                     <div className="form-row" style={{ marginTop: '10px' }}>
                                         <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                            <label className="staff-label">Assign Departments (Optional - Leave blank to allow all)</label>
-                                            <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginTop: '8px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                            <label className="staff-label">Assign Department (Optional - Leave blank to allow all)</label>
+                                            <select
+                                                value={editForm.department}
+                                                onChange={(e) => setEditForm(prev => ({ ...prev, department: e.target.value }))}
+                                                className="staff-input"
+                                                style={{ marginTop: '8px' }}
+                                            >
+                                                <option value="">-- Select Department --</option>
                                                 {hospitalInfo.departments.map(dept => (
-                                                    <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={editForm.departments.includes(dept)}
-                                                            onChange={(e) => {
-                                                                const checked = e.target.checked;
-                                                                setEditForm(prev => ({
-                                                                    ...prev,
-                                                                    departments: checked 
-                                                                        ? [...prev.departments, dept] 
-                                                                        : prev.departments.filter(d => d !== dept)
-                                                                }));
-                                                            }}
-                                                            style={{ width: '16px', height: '16px', accentColor: '#3b82f6' }}
-                                                        />
-                                                        {dept}
-                                                    </label>
+                                                    <option key={dept} value={dept}>{dept}</option>
                                                 ))}
-                                            </div>
+                                            </select>
                                         </div>
                                     </div>
                                 )}

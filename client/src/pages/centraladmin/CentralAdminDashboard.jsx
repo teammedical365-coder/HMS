@@ -42,7 +42,7 @@ const CentralAdminDashboard = () => {
     // Staff
     const [roles, setRoles] = useState([]);
     const [showCreateStaffForm, setShowCreateStaffForm] = useState(false);
-    const [createStaffForm, setCreateStaffForm] = useState({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', file: null });
+    const [createStaffForm, setCreateStaffForm] = useState({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', department: '', file: null });
     const [creatingStaff, setCreatingStaff] = useState(false);
     const [staffHospitalFilter, setStaffHospitalFilter] = useState('');
     const [allStaff, setAllStaff] = useState([]);
@@ -241,7 +241,12 @@ const CentralAdminDashboard = () => {
                 const uploadRes = await uploadAPI.uploadImages(formData);
                 if (uploadRes.success && uploadRes.files.length > 0) avatarUrl = uploadRes.files[0].url;
             }
-            const res = await adminAPI.createUser({ ...createStaffForm, avatar: avatarUrl, hospitalId: createStaffForm.hospitalId });
+            const res = await adminAPI.createUser({ 
+                ...createStaffForm, 
+                avatar: avatarUrl, 
+                hospitalId: createStaffForm.hospitalId,
+                departments: createStaffForm.department ? [createStaffForm.department] : [] 
+            });
             if (res.success) {
                 setSuccess(`✅ Staff account created! Login: ${createStaffForm.email}`);
                 setCreateStaffForm({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', file: null });
@@ -758,6 +763,17 @@ const CentralAdminDashboard = () => {
                                                 {roles.map(role => <option key={role._id} value={role._id}>{role.name}{role.description ? ` — ${role.description}` : ''}</option>)}
                                             </select>
                                         </div>
+                                        {createStaffForm.hospitalId && (
+                                            <div className="form-group">
+                                                <label className="staff-label">Assign Department</label>
+                                                <select value={createStaffForm.department} onChange={e => setCreateStaffForm({ ...createStaffForm, department: e.target.value })} className="staff-input">
+                                                    <option value="">-- No Department --</option>
+                                                    {hospitals.find(h => h._id === createStaffForm.hospitalId)?.departments?.map(dept => (
+                                                        <option key={dept} value={dept}>{dept}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="form-row">
                                         <div className="form-group">

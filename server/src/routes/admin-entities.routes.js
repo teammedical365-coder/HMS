@@ -188,7 +188,7 @@ router.get('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
 // Update doctor
 router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
-    const { name, email, phone, specialty, experience, education, services, availability, successRate, patientsCount, image, bio, consultationFee } = req.body;
+    const { name, email, phone, specialty, experience, education, services, availability, successRate, patientsCount, image, bio, consultationFee, departments } = req.body;
 
     const doctor = await Doctor.findById(req.params.id);
     if (!doctor) {
@@ -203,6 +203,7 @@ router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     if (experience !== undefined) doctor.experience = experience;
     if (education !== undefined) doctor.education = education;
     if (services !== undefined) doctor.services = services;
+    if (departments !== undefined) doctor.departments = departments;
     if (availability !== undefined) {
       const defaultAvailability = {
         monday: { available: false, startTime: '09:00', endTime: '17:00' },

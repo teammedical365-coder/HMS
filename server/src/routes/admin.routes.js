@@ -530,6 +530,7 @@ router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
                     if (email) doctorProfile.email = email;
                     if (phone) doctorProfile.phone = phone;
                     if (specialty) doctorProfile.specialty = specialty;
+                    if (departments !== undefined) doctorProfile.departments = departments;
                     doctorProfile.hospitalId = hospitalId;
                     await doctorProfile.save();
                 }
