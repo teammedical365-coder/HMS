@@ -20,7 +20,8 @@ const pharmacyOrderSchema = new mongoose.Schema({
     items: [{
         medicineName: String,
         frequency: String,
-        duration: String
+        duration: String,
+        purchased: { type: Boolean, default: false }
     }],
     paymentStatus: {
         type: String,

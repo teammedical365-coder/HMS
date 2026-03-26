@@ -40,7 +40,14 @@ router.get('/:id/full-history', verifyToken, resolveTenant, async (req, res) => 
         const allowedRoles = ['doctor', 'nurse', 'superadmin', 'admin', 'reception', 'lab', 'pharmacy', 'centraladmin', 'hospitaladmin'];
         const userRole = (req.user.role || '').toLowerCase();
         const dynRole = (roleData?.name || '').toLowerCase();
-        const hasAccess = allowedRoles.includes(userRole) || allowedRoles.includes(dynRole);
+        
+        // Ensure that explicit permissions are checked instead of just strictly hardcoded names
+        const hasPermission = (req.user.permissions || []).includes('patient_view') || 
+                              (req.user.permissions || []).includes('visit_diagnose') ||
+                              (req.user._roleData?.permissions || []).includes('patient_view') ||
+                              (req.user._roleData?.permissions || []).includes('visit_diagnose');
+
+        const hasAccess = allowedRoles.includes(userRole) || allowedRoles.includes(dynRole) || hasPermission;
 
         if (!hasAccess && userRole !== 'superadmin') {
             return res.status(403).json({ success: false, message: 'Unauthorized access to patient history' });

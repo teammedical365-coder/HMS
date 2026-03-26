@@ -60,6 +60,7 @@ import AdminSignup from '../pages/administration/AdminSignup';
 // Lab Pages
 import LabDashboard from '../pages/lab/LabDashboard';
 import AssignedTests from '../pages/lab/AssignedTests';
+import CompletedReports from '../pages/lab/CompletedReports';
 
 // Pharmacy Management Pages
 import PharmacyInventory from '../pages/pharmacy/PharmacyInventory';
@@ -131,6 +132,7 @@ const MainRoutes = () => {
 
                             <Route path="lab/dashboard" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><LabDashboard /></ProtectedRoute>} />
                             <Route path="lab/tests" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><AssignedTests /></ProtectedRoute>} />
+                            <Route path="lab/completed" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><CompletedReports /></ProtectedRoute>} />
 
                             {/* Pharmacy Management Pages */}
                             <Route path="pharmacy/inventory" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyInventory /></ProtectedRoute>} />

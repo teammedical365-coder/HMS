@@ -227,7 +227,7 @@ export const pharmacyAPI = {
 
 export const pharmacyOrderAPI = {
     getOrders: async () => (await apiClient.get('/api/pharmacy/orders')).data,
-    completeOrder: async (id) => (await apiClient.patch(`/api/pharmacy/orders/${id}/complete`)).data
+    completeOrder: async (id, purchasedIndices = null) => (await apiClient.patch(`/api/pharmacy/orders/${id}/complete`, { purchasedIndices })).data
 };
 
 export const clinicalAPI = {

@@ -5,6 +5,7 @@ import './PharmacyInventory.css';
 const PharmacyOrders = () => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [checkedItems, setCheckedItems] = useState({});
 
     useEffect(() => {
         fetchOrders();
@@ -22,10 +23,39 @@ const PharmacyOrders = () => {
         }
     };
 
-    const handleCompleteOrder = async (orderId) => {
-        if (!window.confirm("Mark this order as Paid and Completed?")) return;
+    const isChecked = (orderId, idx) => {
+        if (!checkedItems[orderId]) return true;
+        if (checkedItems[orderId][idx] === undefined) return true;
+        return checkedItems[orderId][idx];
+    };
+
+    const toggleCheck = (orderId, idx) => {
+        setCheckedItems(prev => {
+            const current = (prev[orderId] && prev[orderId][idx] !== undefined) ? prev[orderId][idx] : true;
+            return {
+                ...prev,
+                [orderId]: {
+                    ...(prev[orderId] || {}),
+                    [idx]: !current
+                }
+            };
+        });
+    };
+
+    const handleCompleteOrder = async (orderId, orderItemsLength) => {
+        const purchasedIndices = [];
+        for (let i = 0; i < orderItemsLength; i++) {
+            if (isChecked(orderId, i)) purchasedIndices.push(i);
+        }
+
+        if (purchasedIndices.length === 0) {
+            if (!window.confirm("No medicines selected! Are you sure you want to proceed and mark order complete but strictly skip dispensing?")) return;
+        } else {
+            if (!window.confirm("Mark this order as Dispensed / Paid?")) return;
+        }
+
         try {
-            const res = await pharmacyOrderAPI.completeOrder(orderId);
+            const res = await pharmacyOrderAPI.completeOrder(orderId, purchasedIndices);
             if (res.success) {
                 alert("Order completed!");
                 fetchOrders();
@@ -66,7 +96,23 @@ const PharmacyOrders = () => {
                                     <td>
                                         <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.9rem' }}>
                                             {order.items.map((item, idx) => (
-                                                <li key={idx}>• {item.medicineName} ({item.frequency})</li>
+                                                <li key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                                    {order.orderStatus === 'Upcoming' ? (
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={isChecked(order._id, idx)} 
+                                                            onChange={() => toggleCheck(order._id, idx)} 
+                                                            style={{ cursor: 'pointer' }}
+                                                        />
+                                                    ) : (
+                                                        <span style={{ color: item.purchased ? '#16a34a' : '#ef4444' }}>
+                                                            {item.purchased ? '✓' : '✗'}
+                                                        </span>
+                                                    )}
+                                                    <span style={{ textDecoration: order.orderStatus !== 'Upcoming' && !item.purchased ? 'line-through' : 'none', color: order.orderStatus !== 'Upcoming' && !item.purchased ? '#999' : '#000' }}>
+                                                        {item.medicineName} ({item.frequency})
+                                                    </span>
+                                                </li>
                                             ))}
                                         </ul>
                                     </td>
@@ -89,9 +135,9 @@ const PharmacyOrders = () => {
                                             <button
                                                 className="btn-add"
                                                 style={{ padding: '8px 16px', fontSize: '0.8rem' }}
-                                                onClick={() => handleCompleteOrder(order._id)}
+                                                onClick={() => handleCompleteOrder(order._id, order.items.length)}
                                             >
-                                                Complete & Paid
+                                                Complete Selected & Paid
                                             </button>
                                         )}
                                     </td>

@@ -30,9 +30,12 @@ const Patient = () => {
         try {
             const user = JSON.parse(localStorage.getItem('user') || '{}');
             const role = (user.role || '').toLowerCase();
+            const permissions = user.permissions || [];
+            
             const isAdminOrStaff = ['nurse', 'admin', 'superadmin', 'hospitaladmin', 'reception', 'receptionist'].includes(role);
+            const hasViewAllAccess = isAdminOrStaff || permissions.includes('patient_view') || permissions.includes('appointment_view_all');
 
-            const res = isAdminOrStaff
+            const res = hasViewAllAccess
                 ? await doctorAPI.getAllAppointments()
                 : await doctorAPI.getAppointments();
 

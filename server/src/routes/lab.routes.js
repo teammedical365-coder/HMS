@@ -107,12 +107,15 @@ router.post('/upload-report/:reportId', verifyToken, verifyLab, upload.single('r
         });
 
         // Update Lab Report Status
-        report.reportUrl = fileResult.url;
-        report.fileId = fileResult.fileId;
+        report.reportFile = {
+            url: fileResult.url,
+            fileId: fileResult.fileId,
+            name: req.file.originalname,
+            uploadedAt: new Date()
+        };
         report.testStatus = 'DONE';
         report.reportStatus = 'UPLOADED';
         report.notes = notes || report.notes;
-        report.uploadedAt = new Date();
         await report.save();
 
         // OPTIONAL: Update Appointment to reflect report availability

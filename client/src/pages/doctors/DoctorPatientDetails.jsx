@@ -1,14 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doctorAPI, labTestAPI, medicineAPI, questionLibraryAPI } from '../../utils/api';
+import { doctorAPI, labTestAPI, medicineAPI, pharmacyAPI, questionLibraryAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './DoctorPatientDetails.css';
 import DynamicQuestionForm from '../../components/DynamicQuestionForm';
+import { useAuth } from '../../store/hooks';
 
 const DoctorPatientDetails = () => {
     const { appointmentId } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
+    
+    // Check if the current user is a Junior Doctor
+    const roleName = user?._roleData?.name?.toLowerCase() || (typeof user?.role === 'string' ? user.role.toLowerCase() : '');
+    const isJrDoctor = roleName.includes('jr') && roleName.includes('doctor');
+
     const [appointment, setAppointment] = useState(null);
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -106,11 +113,11 @@ const DoctorPatientDetails = () => {
             } catch (err) { console.error("Error fetching lab test catalog", err); }
 
             try {
-                const medRes = await medicineAPI.getMedicines();
+                const medRes = await pharmacyAPI.getInventory();
                 if (medRes.success) {
                     setCatalogMedicines(medRes.data || []);
                 }
-            } catch (err) { console.error("Error fetching medicine catalog", err); }
+            } catch (err) { console.error("Error fetching pharmacy inventory", err); }
 
             try {
                 const libRes = await questionLibraryAPI.getLibrary();
@@ -344,7 +351,7 @@ const DoctorPatientDetails = () => {
     const allTabs = [...tabs, ...dynamicTabs];
 
     return (
-        <div className="dpd-container">
+        <div className="dpd-container" style={isJrDoctor ? { gridTemplateColumns: '1fr' } : {}}>
             {/* LEFT PANEL */}
             <div className="dpd-left">
                 {/* Patient Header Card */}
@@ -569,8 +576,9 @@ const DoctorPatientDetails = () => {
             </div>
 
             {/* RIGHT PANEL - SESSION NOTEPAD */}
-            <div className={`dpd-right ${viewingPastSession ? 'time-machine-active' : ''}`} style={viewingPastSession ? { background: '#f8fafc', borderLeft: '4px solid #3b82f6' } : {}}>
-                {viewingPastSession ? (
+            {!isJrDoctor && (
+                <div className={`dpd-right ${viewingPastSession ? 'time-machine-active' : ''}`} style={viewingPastSession ? { background: '#f8fafc', borderLeft: '4px solid #3b82f6' } : {}}>
+                    {viewingPastSession ? (
                     <>
                         <div className="dpd-right-header" style={{ background: '#eff6ff', borderBottom: '1px solid #bfdbfe' }}>
                             <div>
@@ -745,9 +753,10 @@ const DoctorPatientDetails = () => {
                     </>
                 )}
             </div>
+            )}
 
             {/* ====== MODALS ====== */}
-            {showPrescribeModal && (
+            {!isJrDoctor && showPrescribeModal && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', width: '850px', maxWidth: '95vw', height: '85vh', maxHeight: '850px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
