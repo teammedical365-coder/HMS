@@ -4,16 +4,22 @@ const inventorySchema = new mongoose.Schema({
     pharmacyId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        default: null
+    },
+    hospitalId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Hospital',
+        index: true
     },
     name: { type: String, required: true, trim: true },
+    salt: { type: String, default: '', trim: true },
     category: { type: String, required: true },
     stock: { type: Number, required: true, default: 0 },
     unit: { type: String, default: 'Tablets' },
     buyingPrice: { type: Number, required: true },
     sellingPrice: { type: Number, required: true },
-    vendor: { type: String, required: true },
-    batchNumber: { type: String, required: true },
+    vendor: { type: String, default: '' },
+    batchNumber: { type: String, default: '' },
     expiryDate: { type: Date, required: true },
     purchaseDate: { type: Date, default: Date.now },
     status: {

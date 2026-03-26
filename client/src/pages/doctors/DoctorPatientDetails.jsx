@@ -285,6 +285,13 @@ const DoctorPatientDetails = () => {
         doc.text("Prescription:", 16, y); y += 6;
         const rx = (currentData.pharmacy || []).map(p => p.medicineName).join('\n');
         doc.text(rx || '-', 16, y);
+        
+        y += (rx ? rx.split('\n').length * 5 : 5) + 10;
+        
+        doc.text("Lab Tests Ordered:", 16, y); y += 6;
+        const labs = (currentData.labTests || []).join(', ');
+        const wrappedLabs = doc.splitTextToSize(labs || '-', 170);
+        doc.text(wrappedLabs, 16, y);
 
         doc.save("Patient_Record.pdf");
     };

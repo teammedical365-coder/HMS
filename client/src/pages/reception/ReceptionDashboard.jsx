@@ -109,9 +109,21 @@ const ReceptionDashboard = () => {
 
     const fetchBookedSlots = async (doctorId, date) => {
         try {
-            const response = await receptionAPI.getBookedSlots(doctorId, date);
+            const hospitalId = hospitalContext?._id || '';
+            const response = await receptionAPI.getBookedSlots(doctorId, date, hospitalId);
             if (response.success) setAvailabilityCheck(prev => ({ ...prev, bookedSlots: response.bookedSlots || [] }));
         } catch (err) { console.error(err); }
+    };
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const isSlotInPast = (time) => {
+        if (intakeForm.visitDate !== todayStr) return false;
+        const now = new Date();
+        const [h, m] = time.split(':').map(Number);
+        const slotTime = new Date();
+        slotTime.setHours(h, m, 0, 0);
+        return slotTime <= now;
     };
 
     const handleSlotClick = (time) => {
@@ -183,8 +195,17 @@ const ReceptionDashboard = () => {
         if (name === 'department' && hospitalContext) {
             const defaultFee = hospitalContext.departmentFees?.[value] ?? hospitalContext.appointmentFee ?? 500;
             setIntakeForm(prev => ({
-                ...prev, [name]: value, consultationFee: defaultFee, doctor: ''
+                ...prev, [name]: value, consultationFee: defaultFee, doctor: '', visitTime: ''
             }));
+            setAvailabilityCheck(prev => ({ ...prev, doctorId: '', bookedSlots: [] }));
+            return;
+        }
+
+        if (name === 'visitDate') {
+            // Prevent past dates
+            if (value < todayStr) return;
+            // Reset time slot when date changes (past slot may no longer be valid)
+            setIntakeForm(prev => ({ ...prev, visitDate: value, visitTime: '' }));
             return;
         }
 
@@ -496,20 +517,22 @@ const ReceptionDashboard = () => {
                                 </div>
                                 <div className="field">
                                     <label>Date</label>
-                                    <input type="date" name="visitDate" value={intakeForm.visitDate} onChange={handleInputChange} disabled={!intakeForm.doctor} style={!intakeForm.doctor ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}} />
+                                    <input type="date" name="visitDate" value={intakeForm.visitDate} min={todayStr} onChange={handleInputChange} disabled={!intakeForm.doctor} style={!intakeForm.doctor ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}} />
                                 </div>
                             </div>
                             {intakeForm.doctor && (
                                 <div className="slot-grid">
                                     {timeSlots.map(time => {
                                         const isBooked = availabilityCheck.bookedSlots.includes(time);
+                                        const isPast = isSlotInPast(time);
+                                        const isDisabled = isBooked || isPast;
 
                                         return (
                                             <button
                                                 key={time} type="button"
-                                                className={`slot-btn ${isBooked ? 'booked' : ''} ${intakeForm.visitTime === time ? 'selected' : ''}`}
-                                                onClick={() => !isBooked && setIntakeForm({ ...intakeForm, visitTime: time })}
-                                                disabled={isBooked}
+                                                className={`slot-btn ${isBooked ? 'booked' : ''} ${isPast ? 'booked' : ''} ${intakeForm.visitTime === time ? 'selected' : ''}`}
+                                                onClick={() => !isDisabled && setIntakeForm({ ...intakeForm, visitTime: time })}
+                                                disabled={isDisabled}
                                             >
                                                 {time}
                                             </button>

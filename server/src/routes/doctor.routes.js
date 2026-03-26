@@ -68,7 +68,7 @@ router.get('/', async (req, res) => {
 
         const doctors = await Doctor.find(query)
             .populate('userId', 'name email phone role')
-            .select('name specialty services availability consultationFee image bio userId')
+            .select('name specialty services availability consultationFee image bio userId departments')
             .sort({ name: 1 })
             .lean();
 
@@ -429,11 +429,16 @@ router.get('/medicines-list', verifyToken, async (req, res) => {
     res.json({ success: true, medicines });
 });
 router.get('/:doctorId/booked-slots', async (req, res) => {
-    const appointments = await Appointment.find({
+    const query = {
         $or: [{ doctorId: req.params.doctorId }, { doctorUserId: req.params.doctorId }],
         appointmentDate: new Date(req.query.date),
         status: { $ne: 'cancelled' }
-    });
+    };
+    // Hospital isolation: only show slots for this hospital's doctor
+    if (req.query.hospitalId) {
+        query.hospitalId = req.query.hospitalId;
+    }
+    const appointments = await Appointment.find(query);
     res.json({ success: true, bookedSlots: appointments.map(app => app.appointmentTime) });
 });
 

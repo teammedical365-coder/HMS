@@ -15,8 +15,8 @@ const ProtectedRoute = ({ children, requiredPermissions = [], allowedRoles = [] 
     const userPermissions = user.permissions || [];
     const userRole = user.role || '';
 
-    // SuperAdmin / CentralAdmin wildcard — always allowed
-    if (userPermissions.includes('*') || userRole === 'superadmin' || userRole === 'centraladmin') {
+    // Admin-level roles — always allowed for admin routes
+    if (userPermissions.includes('*') || userRole === 'superadmin' || userRole === 'centraladmin' || userRole === 'hospitaladmin') {
       return children;
     }
 

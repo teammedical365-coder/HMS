@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI } from '../../utils/api';
 import HospitalBrandingEditor from '../../components/HospitalBrandingEditor';
@@ -23,6 +23,7 @@ const CentralAdminDashboard = () => {
     const [deleteHospitalConfirm, setDeleteHospitalConfirm] = useState(null);
     // Branding Editor
     const [brandingHospital, setBrandingHospital] = useState(null);
+    const hospitalFormRef = useRef(null);
 
     // Hospital Admin creation
     const [showHospitalAdminForm, setShowHospitalAdminForm] = useState(false);
@@ -209,7 +210,9 @@ const CentralAdminDashboard = () => {
     const openEditHospital = (h) => {
         setEditHospital(h);
         setHospitalForm({ name: h.name, slug: h.slug || '', address: h.address || '', city: h.city || '', state: h.state || '', phone: h.phone || '', email: h.email || '', website: h.website || '', departments: h.departments || [], appointmentFee: h.appointmentFee || 500 });
+        setShowHospitalAdminForm(false);
         setShowHospitalForm(true);
+        setTimeout(() => hospitalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     };
 
     // --- Hospital Admin Creation ---
@@ -597,7 +600,7 @@ const CentralAdminDashboard = () => {
 
                             {/* Hospital Add/Edit Form */}
                             {showHospitalForm && (
-                                <div className="ca-form-box" style={{ marginBottom: '24px' }}>
+                                <div ref={hospitalFormRef} className="ca-form-box" style={{ marginBottom: '24px' }}>
                                     <h3>{editHospital ? '✏️ Edit Hospital' : '🏥 Add New Hospital'}</h3>
                                     {error && <div className="error-message">{error}</div>}
                                     {success && <div className="success-message">{success}</div>}

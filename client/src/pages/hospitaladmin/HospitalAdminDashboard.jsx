@@ -40,6 +40,23 @@ const HospitalAdminDashboard = () => {
     const [hospitalStats, setHospitalStats] = useState(null);
     const [loadingStats, setLoadingStats] = useState(false);
 
+    // --- Inventory State ---
+    const [inventory, setInventory] = useState([]);
+    const [loadingInventory, setLoadingInventory] = useState(false);
+    const [showInventoryForm, setShowInventoryForm] = useState(false);
+    const [editingInventoryId, setEditingInventoryId] = useState(null);
+    const [inventoryForm, setInventoryForm] = useState({
+        name: '', salt: '', category: 'General', stock: '', unit: 'Tablets',
+        buyingPrice: '', sellingPrice: '', vendor: '', batchNumber: '', expiryDate: ''
+    });
+    const [savingInventory, setSavingInventory] = useState(false);
+
+    // --- Lab Test Pricing State ---
+    const [labTests, setLabTests] = useState([]);
+    const [loadingLabTests, setLoadingLabTests] = useState(false);
+    const [savingLabPrice, setSavingLabPrice] = useState(null);
+    const [labPriceInputs, setLabPriceInputs] = useState({});
+
     // Auth check
     useEffect(() => {
         const role = currentUser?.role;
@@ -53,6 +70,12 @@ const HospitalAdminDashboard = () => {
         fetchUsers();
         fetchRoles();
     }, []);
+
+    // Fetch data when switching to inventory or lab pricing tabs
+    useEffect(() => {
+        if (activeTab === 'inventory' && inventory.length === 0) fetchInventory();
+        if (activeTab === 'labpricing' && labTests.length === 0) fetchLabTests();
+    }, [activeTab]);
 
     const fetchMyHospital = async () => {
         try {
@@ -245,6 +268,84 @@ const HospitalAdminDashboard = () => {
     };
 
 
+    // --- Inventory Functions ---
+    const fetchInventory = async () => {
+        setLoadingInventory(true);
+        try {
+            const res = await hospitalAPI.getInventory();
+            if (res.success) setInventory(res.data);
+        } catch (err) { console.error(err); } finally { setLoadingInventory(false); }
+    };
+
+    const resetInventoryForm = () => {
+        setInventoryForm({ name: '', salt: '', category: 'General', stock: '', unit: 'Tablets', buyingPrice: '', sellingPrice: '', vendor: '', batchNumber: '', expiryDate: '' });
+        setEditingInventoryId(null);
+        setShowInventoryForm(false);
+    };
+
+    const handleInventorySubmit = async (e) => {
+        e.preventDefault();
+        setSavingInventory(true); setError(''); setSuccess('');
+        try {
+            const data = { ...inventoryForm, stock: Number(inventoryForm.stock), buyingPrice: Number(inventoryForm.buyingPrice), sellingPrice: Number(inventoryForm.sellingPrice) };
+            if (editingInventoryId) {
+                await hospitalAPI.updateInventory(editingInventoryId, data);
+                setSuccess('Item updated!');
+            } else {
+                await hospitalAPI.addInventory(data);
+                setSuccess('Item added!');
+            }
+            resetInventoryForm();
+            fetchInventory();
+        } catch (err) { setError(err.response?.data?.message || 'Error saving item.'); }
+        finally { setSavingInventory(false); }
+    };
+
+    const handleEditInventory = (item) => {
+        setInventoryForm({
+            name: item.name, salt: item.salt || '', category: item.category, stock: item.stock,
+            unit: item.unit, buyingPrice: item.buyingPrice, sellingPrice: item.sellingPrice,
+            vendor: item.vendor || '', batchNumber: item.batchNumber || '',
+            expiryDate: item.expiryDate ? item.expiryDate.split('T')[0] : ''
+        });
+        setEditingInventoryId(item._id);
+        setShowInventoryForm(true);
+    };
+
+    const handleDeleteInventory = async (id) => {
+        if (!window.confirm('Delete this inventory item?')) return;
+        try {
+            await hospitalAPI.deleteInventory(id);
+            setSuccess('Item deleted.');
+            fetchInventory();
+        } catch (err) { setError('Error deleting item.'); }
+    };
+
+    // --- Lab Test Pricing Functions ---
+    const fetchLabTests = async () => {
+        setLoadingLabTests(true);
+        try {
+            const res = await hospitalAPI.getHospitalLabTests();
+            if (res.success) {
+                setLabTests(res.data);
+                const inputs = {};
+                res.data.forEach(t => { inputs[t._id] = t.hospitalPrice !== null ? String(t.hospitalPrice) : ''; });
+                setLabPriceInputs(inputs);
+            }
+        } catch (err) { console.error(err); } finally { setLoadingLabTests(false); }
+    };
+
+    const handleSaveLabPrice = async (testId) => {
+        setSavingLabPrice(testId); setError('');
+        try {
+            const val = labPriceInputs[testId];
+            await hospitalAPI.setLabTestPrice(testId, val === '' ? null : Number(val));
+            setSuccess('Lab test price updated!');
+            fetchLabTests();
+        } catch (err) { setError('Error saving price.'); }
+        finally { setSavingLabPrice(null); }
+    };
+
     const formatCurrency = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
 
     const tabs = [
@@ -252,6 +353,8 @@ const HospitalAdminDashboard = () => {
         { id: 'staff', label: '👤 Staff' },
         { id: 'departments', label: '🏢 Departments' },
         { id: 'facilities', label: '🛏️ Facilities' },
+        { id: 'inventory', label: '💊 Inventory' },
+        { id: 'labpricing', label: '🧪 Lab Pricing' },
     ];
 
     // Hospital Admin can navigate to operations but NOT to question library / test packages / medicines
@@ -549,89 +652,70 @@ const HospitalAdminDashboard = () => {
                 {/* ===================== DEPARTMENTS TAB ===================== */}
                 {activeTab === 'departments' && (
                     <div className="admin-card">
-                        <h2>🏢 Departments & Operations</h2>
-                        <p style={{ color: '#888', fontSize: '14px', margin: '0 0 20px' }}>
-                            Manage your hospital's operational departments. For global configurations (question libraries, test packages, medicines), contact your Central Admin.
-                        </p>
-                        <div className="ha-ops-grid">
-                            {operationLinks.map((item, i) => (
-                                <div
-                                    key={i}
-                                    className="ha-op-card"
-                                    onClick={() => navigate(item.path)}
-                                    style={{ background: item.bg, borderColor: item.color + '30' }}
-                                >
-                                    <span className="ha-op-icon" style={{ color: item.color }}>{item.icon}</span>
-                                    <div>
-                                        <h4 style={{ color: item.color }}>{item.label}</h4>
-                                        <p>{item.desc}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="ha-restricted-notice">
-                            <p>🔒 <strong>Restricted by Central Admin:</strong> Question Library, Test Packages, and Global Medicine Catalog are managed by the Central Admin only.</p>
-                        </div>
-
-                        {/* DEPARTMENT FEES */}
-                        <div className="admin-card" style={{ marginTop: '24px', border: '1px solid #e2e8f0', boxShadow: 'none' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <div>
                                 <h2>💵 Department Consultation Fees</h2>
+                                <p style={{ color: '#888', fontSize: '14px', margin: '4px 0 0' }}>
+                                    Configure the consultation fee for each department. Receptionists cannot alter these fees during booking.
+                                </p>
                             </div>
-                            <p style={{ color: '#888', fontSize: '14px', margin: '0 0 20px' }}>
-                                Configure the exact consultation fee for each department. Receptionists cannot alter these fees during booking.
-                            </p>
+                            <button
+                                className="btn-save"
+                                style={{ padding: '8px 20px', whiteSpace: 'nowrap' }}
+                                onClick={async () => {
+                                    try {
+                                        setError('');
+                                        await hospitalAPI.updateDepartmentFees({ departmentFees: hospitalInfo.departmentFees });
+                                        setSuccess('All department fees saved!');
+                                        setTimeout(() => setSuccess(''), 3000);
+                                    } catch (err) {
+                                        setError('Error saving fees');
+                                    }
+                                }}
+                            >
+                                Save All Fees
+                            </button>
+                        </div>
 
-                            <div className="users-table">
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Department</th>
-                                            <th>Consultation Fee (₹)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {(hospitalInfo?.departments || []).length === 0 ? (
-                                            <tr><td colSpan="2" style={{ textAlign: 'center', color: '#666' }}>No departments assigned yet. Contact Central Admin.</td></tr>
-                                        ) : (
-                                            hospitalInfo.departments.map(dept => (
-                                                <tr key={dept}>
-                                                    <td style={{ fontWeight: '500' }}>{dept}</td>
-                                                    <td>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <span style={{ color: '#64748b' }}>₹</span>
-                                                            <input
-                                                                type="number"
-                                                                min="0"
-                                                                className="staff-input"
-                                                                style={{ width: '140px', padding: '8px 12px' }}
-                                                                value={hospitalInfo?.departmentFees?.[dept] ?? hospitalInfo?.appointmentFee ?? 500}
-                                                                onChange={(e) => {
-                                                                    const newFee = Number(e.target.value);
-                                                                    setHospitalInfo(prev => ({
-                                                                        ...prev,
-                                                                        departmentFees: { ...(prev.departmentFees || {}), [dept]: newFee }
-                                                                    }));
-                                                                }}
-                                                                onBlur={async () => {
-                                                                    try {
-                                                                        await hospitalAPI.updateDepartmentFees({ departmentFees: hospitalInfo.departmentFees });
-                                                                        setSuccess(`Fee for ${dept} updated!`);
-                                                                        setTimeout(() => setSuccess(''), 3000);
-                                                                    } catch (err) {
-                                                                        setError('Error updating fees');
-                                                                    }
-                                                                }}
-                                                            />
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div className="users-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Department</th>
+                                        <th>Consultation Fee (₹)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(hospitalInfo?.departments || []).length === 0 ? (
+                                        <tr><td colSpan="2" style={{ textAlign: 'center', color: '#666' }}>No departments assigned yet. Contact Central Admin.</td></tr>
+                                    ) : (
+                                        hospitalInfo.departments.map(dept => (
+                                            <tr key={dept}>
+                                                <td style={{ fontWeight: '500' }}>{dept}</td>
+                                                <td>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span style={{ color: '#64748b' }}>₹</span>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            className="staff-input"
+                                                            style={{ width: '140px', padding: '8px 12px' }}
+                                                            value={hospitalInfo?.departmentFees?.[dept] ?? hospitalInfo?.appointmentFee ?? 500}
+                                                            onChange={(e) => {
+                                                                const newFee = Number(e.target.value);
+                                                                setHospitalInfo(prev => ({
+                                                                    ...prev,
+                                                                    departmentFees: { ...(prev.departmentFees || {}), [dept]: newFee }
+                                                                }));
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 )}
@@ -704,6 +788,246 @@ const HospitalAdminDashboard = () => {
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                )}
+
+                {/* ===================== INVENTORY TAB ===================== */}
+                {activeTab === 'inventory' && (
+                    <div>
+                        <div className="admin-card" style={{ marginBottom: '20px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <div>
+                                    <h2>💊 Medicine Inventory</h2>
+                                    <p style={{ color: '#888', fontSize: '14px', margin: '4px 0 0' }}>Manage your hospital's medicine stock, pricing, and expiry tracking</p>
+                                </div>
+                                <button
+                                    onClick={() => { if (showInventoryForm && !editingInventoryId) { resetInventoryForm(); } else { resetInventoryForm(); setShowInventoryForm(true); } }}
+                                    className={showInventoryForm ? 'btn-cancel' : 'btn-save'}
+                                    style={{ padding: '8px 20px' }}
+                                >
+                                    {showInventoryForm ? 'Cancel' : '+ Add Medicine'}
+                                </button>
+                            </div>
+
+                            {showInventoryForm && (
+                                <form onSubmit={handleInventorySubmit} className="user-form" style={{ background: '#f8fafc', padding: '20px', borderRadius: '10px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
+                                    <h3 style={{ margin: '0 0 16px', fontSize: '15px', color: '#334155' }}>{editingInventoryId ? 'Edit Medicine' : 'Add New Medicine'}</h3>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label className="staff-label">Medicine Name *</label>
+                                            <input type="text" className="staff-input" placeholder="e.g. Paracetamol 500mg" value={inventoryForm.name} onChange={e => setInventoryForm({ ...inventoryForm, name: e.target.value })} required />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="staff-label">Salt / Composition</label>
+                                            <input type="text" className="staff-input" placeholder="e.g. Acetaminophen" value={inventoryForm.salt} onChange={e => setInventoryForm({ ...inventoryForm, salt: e.target.value })} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="staff-label">Category *</label>
+                                            <input type="text" className="staff-input" placeholder="e.g. Analgesic" value={inventoryForm.category} onChange={e => setInventoryForm({ ...inventoryForm, category: e.target.value })} required />
+                                        </div>
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label className="staff-label">Stock Qty *</label>
+                                            <input type="number" className="staff-input" placeholder="e.g. 500" min="0" value={inventoryForm.stock} onChange={e => setInventoryForm({ ...inventoryForm, stock: e.target.value })} required />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="staff-label">Unit</label>
+                                            <select className="staff-input" value={inventoryForm.unit} onChange={e => setInventoryForm({ ...inventoryForm, unit: e.target.value })}>
+                                                {['Tablets', 'Capsules', 'Bottles', 'Vials', 'Strips', 'Packs', 'Tubes', 'Sachets', 'ml', 'mg'].map(u => <option key={u} value={u}>{u}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="staff-label">Batch Number</label>
+                                            <input type="text" className="staff-input" placeholder="e.g. BT-2026-001" value={inventoryForm.batchNumber} onChange={e => setInventoryForm({ ...inventoryForm, batchNumber: e.target.value })} />
+                                        </div>
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label className="staff-label">Cost Price (₹) *</label>
+                                            <input type="number" className="staff-input" placeholder="e.g. 30" min="0" step="0.01" value={inventoryForm.buyingPrice} onChange={e => setInventoryForm({ ...inventoryForm, buyingPrice: e.target.value })} required />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="staff-label">Selling Price (₹) *</label>
+                                            <input type="number" className="staff-input" placeholder="e.g. 50" min="0" step="0.01" value={inventoryForm.sellingPrice} onChange={e => setInventoryForm({ ...inventoryForm, sellingPrice: e.target.value })} required />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="staff-label">Profit Margin</label>
+                                            <input type="text" className="staff-input" readOnly
+                                                style={{ background: '#f1f5f9', fontWeight: 700, color: Number(inventoryForm.sellingPrice) > Number(inventoryForm.buyingPrice) ? '#059669' : '#dc2626' }}
+                                                value={inventoryForm.buyingPrice && inventoryForm.sellingPrice ? `₹${(Number(inventoryForm.sellingPrice) - Number(inventoryForm.buyingPrice)).toFixed(2)} (${((Number(inventoryForm.sellingPrice) - Number(inventoryForm.buyingPrice)) / (Number(inventoryForm.buyingPrice) || 1) * 100).toFixed(1)}%)` : '--'}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label className="staff-label">Expiry Date *</label>
+                                            <input type="date" className="staff-input" value={inventoryForm.expiryDate} onChange={e => setInventoryForm({ ...inventoryForm, expiryDate: e.target.value })} required />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="staff-label">Vendor / Supplier</label>
+                                            <input type="text" className="staff-input" placeholder="e.g. MedSupply Co." value={inventoryForm.vendor} onChange={e => setInventoryForm({ ...inventoryForm, vendor: e.target.value })} />
+                                        </div>
+                                    </div>
+                                    <button type="submit" disabled={savingInventory} className="submit-button" style={{ marginTop: '16px', maxWidth: '220px' }}>
+                                        {savingInventory ? 'Saving...' : editingInventoryId ? 'Update Medicine' : 'Add Medicine'}
+                                    </button>
+                                </form>
+                            )}
+                        </div>
+
+                        {/* Inventory Table */}
+                        <div className="admin-card">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <h2>Current Stock ({inventory.length} items)</h2>
+                                {!inventory.length && !loadingInventory && (
+                                    <button onClick={fetchInventory} className="btn-edit" style={{ padding: '6px 14px', fontSize: '13px' }}>Load Inventory</button>
+                                )}
+                            </div>
+                            {loadingInventory ? (
+                                <div className="loading-message">Loading inventory...</div>
+                            ) : (
+                                <div className="users-table" style={{ overflowX: 'auto' }}>
+                                    <table style={{ minWidth: '1100px' }}>
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Salt / Composition</th>
+                                                <th>Category</th>
+                                                <th>Stock</th>
+                                                <th>Cost (₹)</th>
+                                                <th>Sell (₹)</th>
+                                                <th>Margin</th>
+                                                <th>Batch</th>
+                                                <th>Expiry</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {inventory.length === 0 ? (
+                                                <tr><td colSpan="11" style={{ textAlign: 'center', color: '#94a3b8', padding: '30px' }}>No inventory items yet. Click "+ Add Medicine" to start.</td></tr>
+                                            ) : inventory.map(item => {
+                                                const margin = item.sellingPrice - item.buyingPrice;
+                                                const marginPct = item.buyingPrice ? ((margin / item.buyingPrice) * 100).toFixed(1) : '0';
+                                                const isExpired = new Date(item.expiryDate) < new Date();
+                                                const isExpiringSoon = !isExpired && new Date(item.expiryDate) < new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+                                                return (
+                                                    <tr key={item._id} style={isExpired ? { background: '#fef2f2' } : isExpiringSoon ? { background: '#fffbeb' } : {}}>
+                                                        <td style={{ fontWeight: 600 }}>{item.name}</td>
+                                                        <td style={{ color: '#64748b', fontSize: '13px' }}>{item.salt || '-'}</td>
+                                                        <td>{item.category}</td>
+                                                        <td><strong>{item.stock}</strong> <span style={{ color: '#94a3b8', fontSize: '11px' }}>{item.unit}</span></td>
+                                                        <td>₹{item.buyingPrice}</td>
+                                                        <td>₹{item.sellingPrice}</td>
+                                                        <td style={{ fontWeight: 600, color: margin >= 0 ? '#059669' : '#dc2626' }}>
+                                                            ₹{margin.toFixed(2)} <span style={{ fontSize: '11px', fontWeight: 400 }}>({marginPct}%)</span>
+                                                        </td>
+                                                        <td style={{ fontSize: '12px', color: '#64748b' }}>{item.batchNumber || '-'}</td>
+                                                        <td>
+                                                            <span style={{
+                                                                fontSize: '12px', fontWeight: 600, padding: '2px 8px', borderRadius: '10px',
+                                                                background: isExpired ? '#fee2e2' : isExpiringSoon ? '#fef3c7' : '#f1f5f9',
+                                                                color: isExpired ? '#b91c1c' : isExpiringSoon ? '#92400e' : '#334155'
+                                                            }}>
+                                                                {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString('en-IN') : '-'}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <span style={{
+                                                                padding: '3px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 700,
+                                                                background: item.status === 'In Stock' ? '#dcfce7' : item.status === 'Low Stock' ? '#fef3c7' : '#fee2e2',
+                                                                color: item.status === 'In Stock' ? '#166534' : item.status === 'Low Stock' ? '#92400e' : '#b91c1c'
+                                                            }}>
+                                                                {item.status}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <div className="action-buttons" style={{ gap: '4px' }}>
+                                                                <button onClick={() => handleEditInventory(item)} className="btn-edit" style={{ padding: '3px 10px', fontSize: '12px' }}>Edit</button>
+                                                                <button onClick={() => handleDeleteInventory(item._id)} className="btn-delete" style={{ padding: '3px 10px', fontSize: '12px' }}>Del</button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* ===================== LAB PRICING TAB ===================== */}
+                {activeTab === 'labpricing' && (
+                    <div className="admin-card">
+                        <div style={{ marginBottom: '20px' }}>
+                            <h2>🧪 Lab Test Pricing</h2>
+                            <p style={{ color: '#888', fontSize: '14px', margin: '4px 0 0' }}>
+                                Set custom prices for your hospital. Leave blank to use the default base price.
+                            </p>
+                        </div>
+                        {loadingLabTests ? (
+                            <div className="loading-message">Loading lab tests...</div>
+                        ) : labTests.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
+                                <p>No lab tests available. Contact Central Admin to add tests to the catalog.</p>
+                                <button onClick={fetchLabTests} className="btn-edit" style={{ marginTop: '10px', padding: '6px 14px', fontSize: '13px' }}>Reload</button>
+                            </div>
+                        ) : (
+                            <div className="users-table" style={{ overflowX: 'auto' }}>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Test Name</th>
+                                            <th>Code</th>
+                                            <th>Category</th>
+                                            <th>Base Price (₹)</th>
+                                            <th>Your Hospital Price (₹)</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {labTests.map(test => (
+                                            <tr key={test._id}>
+                                                <td style={{ fontWeight: 600 }}>{test.name}</td>
+                                                <td style={{ color: '#64748b' }}>{test.code || '-'}</td>
+                                                <td>{test.category}</td>
+                                                <td>₹{test.price}</td>
+                                                <td>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ color: '#64748b' }}>₹</span>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            className="staff-input"
+                                                            style={{ width: '120px', padding: '6px 10px' }}
+                                                            placeholder={String(test.price)}
+                                                            value={labPriceInputs[test._id] || ''}
+                                                            onChange={e => setLabPriceInputs(prev => ({ ...prev, [test._id]: e.target.value }))}
+                                                        />
+                                                        {test.hospitalPrice !== null && (
+                                                            <span style={{ fontSize: '11px', color: '#059669', fontWeight: 600 }}>Custom</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <button
+                                                        onClick={() => handleSaveLabPrice(test._id)}
+                                                        disabled={savingLabPrice === test._id}
+                                                        className="btn-save"
+                                                        style={{ padding: '5px 14px', fontSize: '12px' }}
+                                                    >
+                                                        {savingLabPrice === test._id ? '...' : 'Save'}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
                 )}
 

@@ -4,6 +4,8 @@ const mongoose = require('mongoose');
 const Hospital = require('../models/hospital.model');
 const User = require('../models/user.model');
 const Role = require('../models/role.model');
+const Inventory = require('../models/inventory.model');
+const LabTest = require('../models/labTest.model');
 const jwt = require('jsonwebtoken');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { getTenantConnection, getTenantDbName } = require('../db/tenantDb');
@@ -404,6 +406,114 @@ router.put('/my-hospital/department-fees', verifyHospitalAdmin, async (req, res)
 });
 
 // ==========================================
+// HOSPITAL INVENTORY MANAGEMENT
+// Hospital admins manage their own medicine inventory
+// ==========================================
+
+// GET hospital inventory
+router.get('/my-hospital/inventory', verifyHospitalAdmin, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital linked to this account' });
+
+        const items = await Inventory.find({ hospitalId }).sort({ createdAt: -1 }).lean();
+        res.json({ success: true, data: items });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ADD inventory item
+router.post('/my-hospital/inventory', verifyHospitalAdmin, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital linked to this account' });
+
+        const item = new Inventory({ ...req.body, hospitalId });
+        await item.save();
+        res.status(201).json({ success: true, data: item });
+    } catch (err) {
+        res.status(400).json({ success: false, message: err.message });
+    }
+});
+
+// UPDATE inventory item
+router.put('/my-hospital/inventory/:id', verifyHospitalAdmin, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        const item = await Inventory.findOne({ _id: req.params.id, hospitalId });
+        if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+
+        const allowed = ['name', 'salt', 'category', 'stock', 'unit', 'buyingPrice', 'sellingPrice', 'vendor', 'batchNumber', 'expiryDate'];
+        allowed.forEach(field => {
+            if (req.body[field] !== undefined) item[field] = req.body[field];
+        });
+
+        await item.save(); // triggers status hook
+        res.json({ success: true, data: item });
+    } catch (err) {
+        res.status(400).json({ success: false, message: err.message });
+    }
+});
+
+// DELETE inventory item
+router.delete('/my-hospital/inventory/:id', verifyHospitalAdmin, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        const deleted = await Inventory.findOneAndDelete({ _id: req.params.id, hospitalId });
+        if (!deleted) return res.status(404).json({ success: false, message: 'Item not found' });
+        res.json({ success: true, message: 'Item deleted' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ==========================================
+// HOSPITAL LAB TEST PRICING
+// Hospital admins set their own lab test prices
+// ==========================================
+
+// GET lab tests with hospital prices
+router.get('/my-hospital/lab-tests', verifyHospitalAdmin, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital linked' });
+
+        const tests = await LabTest.find({ isActive: true }).sort({ name: 1 }).lean();
+        const hid = hospitalId.toString();
+        tests.forEach(t => {
+            const hp = t.hospitalPrices && t.hospitalPrices[hid];
+            t.hospitalPrice = hp !== undefined ? hp : null;
+            t.effectivePrice = hp !== undefined ? hp : t.price;
+        });
+        res.json({ success: true, data: tests });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// SET hospital-specific lab test price
+router.put('/my-hospital/lab-tests/:testId/price', verifyHospitalAdmin, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital linked' });
+
+        const { price } = req.body;
+        const test = await LabTest.findById(req.params.testId);
+        if (!test) return res.status(404).json({ success: false, message: 'Lab test not found' });
+
+        if (price === null || price === undefined || price === '') {
+            test.hospitalPrices.delete(hospitalId.toString());
+        } else {
+            test.hospitalPrices.set(hospitalId.toString(), Number(price));
+        }
+        await test.save();
+        res.json({ success: true, message: 'Price updated', data: test });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 // ==========================================
 // HOSPITAL STATS (Central & Hospital Admins)
 // Full hospital analytics dashboard

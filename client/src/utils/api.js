@@ -137,8 +137,10 @@ export const receptionAPI = {
         const response = await apiClient.post('/api/reception/book-appointment', data);
         return response.data;
     },
-    getBookedSlots: async (doctorId, date) => {
-        const response = await apiClient.get(`/api/doctor/${doctorId}/booked-slots?date=${date}`);
+    getBookedSlots: async (doctorId, date, hospitalId = '') => {
+        let url = `/api/doctor/${doctorId}/booked-slots?date=${date}`;
+        if (hospitalId) url += `&hospitalId=${hospitalId}`;
+        const response = await apiClient.get(url);
         return response.data;
     },
     rescheduleAppointment: async (id, date, time) => {
@@ -246,9 +248,13 @@ export const notificationAPI = {
 };
 
 export const labTestAPI = {
-    getLabTests: async () => (await apiClient.get('/api/lab-tests')).data,
+    getLabTests: async (hospitalId = '') => {
+        const url = hospitalId ? `/api/lab-tests?hospitalId=${hospitalId}` : '/api/lab-tests';
+        return (await apiClient.get(url)).data;
+    },
     createLabTest: async (data) => (await apiClient.post('/api/lab-tests', data)).data,
     updateLabTest: async (id, data) => (await apiClient.put(`/api/lab-tests/${id}`, data)).data,
+    setHospitalPrice: async (id, hospitalId, price) => (await apiClient.put(`/api/lab-tests/${id}/hospital-price`, { hospitalId, price })).data,
     deleteLabTest: async (id) => (await apiClient.delete(`/api/lab-tests/${id}`)).data
 };
 
@@ -281,6 +287,14 @@ export const hospitalAPI = {
     getMyHospital: async () => (await apiClient.get('/api/hospitals/my-hospital')).data,
     updateFacilities: async (data) => (await apiClient.put('/api/hospitals/my-hospital/facilities', data)).data,
     updateDepartmentFees: async (data) => (await apiClient.put('/api/hospitals/my-hospital/department-fees', data)).data,
+    // Hospital inventory
+    getInventory: async () => (await apiClient.get('/api/hospitals/my-hospital/inventory')).data,
+    addInventory: async (data) => (await apiClient.post('/api/hospitals/my-hospital/inventory', data)).data,
+    updateInventory: async (id, data) => (await apiClient.put(`/api/hospitals/my-hospital/inventory/${id}`, data)).data,
+    deleteInventory: async (id) => (await apiClient.delete(`/api/hospitals/my-hospital/inventory/${id}`)).data,
+    // Hospital lab test pricing
+    getHospitalLabTests: async () => (await apiClient.get('/api/hospitals/my-hospital/lab-tests')).data,
+    setLabTestPrice: async (testId, price) => (await apiClient.put(`/api/hospitals/my-hospital/lab-tests/${testId}/price`, { price })).data,
     getHospitalStats: async (id, startDate, endDate) => {
         let url = `/api/hospitals/${id}/stats`;
         const params = new URLSearchParams();

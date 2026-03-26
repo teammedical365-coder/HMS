@@ -27,6 +27,11 @@ const labTestSchema = new mongoose.Schema({
     isActive: {
         type: Boolean,
         default: true
+    },
+    hospitalPrices: {
+        type: Map,
+        of: Number,
+        default: {}
     }
 }, {
     timestamps: true
