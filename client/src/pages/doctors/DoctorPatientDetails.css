@@ -4,12 +4,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 /* --- Container --- */
-body:has(.dpd-container) {
-    overflow: hidden !important;
-}
+/* Removed aggressive body overflow:hidden — it was blocking mouse wheel scrolling globally */
 
 .dpd-container {
-    display: flex;
+    display: grid;
+    grid-template-columns: 45% 55%;
     height: calc(100vh - 74px);
     /* Adjusted for Navbar height to prevent bottom cutoff */
     background: #f0f4ff;
@@ -62,15 +61,12 @@ body:has(.dpd-container) {
 
 /* ============ LEFT PANEL ============ */
 .dpd-left {
-    width: 45%;
     display: flex;
     flex-direction: column;
     border-right: 1px solid #e2e8f0;
     background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
     overflow: hidden;
-    /* Ensure it doesn't leak its own scroll */
     min-height: 0;
-    /* Important for flex-child scrolling */
     height: 100%;
 }
 
@@ -673,7 +669,6 @@ body:has(.dpd-container) {
 
 /* ============ RIGHT PANEL ============ */
 .dpd-right {
-    width: 55%;
     display: flex;
     flex-direction: column;
     background: white;
@@ -898,6 +893,7 @@ body:has(.dpd-container) {
 /* ============ RESPONSIVE ============ */
 @media (max-width: 1024px) {
     .dpd-container {
+        display: flex;
         flex-direction: column;
         height: auto;
         min-height: 100vh;

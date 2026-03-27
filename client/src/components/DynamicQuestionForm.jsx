@@ -21,11 +21,65 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
         });
     };
 
+    const fieldStyle = {
+        marginBottom: '18px',
+        padding: '16px',
+        background: '#fff',
+        borderRadius: '12px',
+        border: '1px solid #e2e8f0',
+    };
+
+    const labelStyle = {
+        fontWeight: '700',
+        display: 'block',
+        marginBottom: '10px',
+        fontSize: '0.9rem',
+        color: '#1e293b',
+    };
+
+    const inputStyle = {
+        width: '100%',
+        padding: '10px 14px',
+        border: '2px solid #e2e8f0',
+        borderRadius: '10px',
+        fontSize: '0.9rem',
+        fontFamily: 'inherit',
+        color: '#1e293b',
+        background: readOnly ? '#f8fafc' : '#fff',
+        boxSizing: 'border-box',
+        transition: 'border-color 0.2s',
+        outline: 'none',
+    };
+
+    const checkboxCardStyle = (isChecked) => ({
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '10px 14px',
+        border: `2px solid ${isChecked ? '#3b82f6' : '#e2e8f0'}`,
+        borderRadius: '10px',
+        background: isChecked ? '#eff6ff' : '#fafafa',
+        cursor: readOnly ? 'default' : 'pointer',
+        transition: 'all 0.2s',
+        fontSize: '0.88rem',
+        fontWeight: isChecked ? '600' : '400',
+        color: isChecked ? '#1e40af' : '#334155',
+        userSelect: 'none',
+    });
+
+    const checkboxInputStyle = {
+        width: '18px',
+        height: '18px',
+        accentColor: '#3b82f6',
+        cursor: readOnly ? 'default' : 'pointer',
+        flexShrink: 0,
+    };
+
     return (
         <div className="dpd-tab-panel">
             <h3 className="dpd-panel-title">📋 {categoryName}</h3>
 
-            <div className="dynamic-form-container">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {questions.map((item, idx) => {
                     // Logic check: only show if parent question condition is met
                     if (item.condition && intakeData[item.parentQ] !== item.condition) return null;
@@ -33,8 +87,8 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                     const savedVal = intakeData[item.q] || "";
 
                     return (
-                        <div key={idx} className="dpd-field-full" style={{ marginBottom: '15px' }}>
-                            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '8px' }}>{item.q}</label>
+                        <div key={idx} style={fieldStyle}>
+                            <label style={labelStyle}>{item.q}</label>
 
                             {/* Simple Input */}
                             {(item.type === 'text' || item.type === 'number' || item.type === 'date') && (
@@ -43,7 +97,7 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                     value={savedVal}
                                     onChange={(e) => handleAnswer(item.q, e.target.value)}
                                     disabled={readOnly}
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', background: readOnly ? '#f8fafc' : '#fff' }}
+                                    style={inputStyle}
                                 />
                             )}
 
@@ -53,7 +107,7 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                     value={savedVal}
                                     onChange={(e) => handleAnswer(item.q, e.target.value)}
                                     disabled={readOnly}
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', background: readOnly ? '#f8fafc' : '#fff' }}
+                                    style={inputStyle}
                                 >
                                     <option value="">Select...</option>
                                     {(item.options || []).map(o => (
@@ -68,7 +122,7 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                     value={savedVal}
                                     onChange={(e) => handleAnswer(item.q, e.target.value)}
                                     disabled={readOnly}
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', background: readOnly ? '#f8fafc' : '#fff' }}
+                                    style={inputStyle}
                                 >
                                     <option value="">Select...</option>
                                     <option value="Yes">Yes</option>
@@ -83,23 +137,25 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                     rows={4}
                                     onChange={(e) => handleAnswer(item.q, e.target.value)}
                                     disabled={readOnly}
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', resize: 'vertical', background: readOnly ? '#f8fafc' : '#fff' }}
+                                    style={{ ...inputStyle, resize: 'vertical', minHeight: '80px' }}
                                 />
                             )}
 
                             {/* Checkbox Group */}
                             {item.type === 'checkbox-group' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '8px' }}>
                                     {(item.options || []).map(opt => {
-                                        const isChecked = (intakeData[item.q] || []).includes(opt);
+                                        const isChecked = Array.isArray(intakeData[item.q]) && intakeData[item.q].includes(opt);
                                         return (
-                                            <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: readOnly ? 'default' : 'pointer' }}>
+                                            <label key={opt} style={checkboxCardStyle(isChecked)}>
                                                 <input
                                                     type="checkbox"
                                                     checked={isChecked}
                                                     disabled={readOnly}
                                                     onChange={(e) => handleCheckbox(item.q, opt, e.target.checked)}
-                                                /> {opt}
+                                                    style={checkboxInputStyle}
+                                                />
+                                                <span>{opt}</span>
                                             </label>
                                         );
                                     })}
@@ -108,42 +164,46 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
 
                             {/* Complex Checkbox Group (Date/Text) */}
                             {(item.type === 'checkbox-date-group' || item.type === 'checkbox-text-group') && (
-                                <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
-                                    {(item.options || []).map(opt => {
-                                        const isChecked = (intakeData[item.q] || []).includes(opt);
-                                        const dateVal = intakeData[`${item.q}_date_${opt}`] || "";
+                                <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
+                                        {(item.options || []).map(opt => {
+                                            const isChecked = Array.isArray(intakeData[item.q]) && intakeData[item.q].includes(opt);
+                                            const dateVal = intakeData[`${item.q}_date_${opt}`] || "";
 
-                                        return (
-                                            <div key={opt} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flex: 1 }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isChecked}
-                                                        onChange={(e) => handleCheckbox(item.q, opt, e.target.checked)}
-                                                    /> {opt}
-                                                </label>
-                                                {opt !== 'None' && isChecked && (
-                                                    <input
-                                                        type={item.type === 'checkbox-date-group' ? 'date' : 'text'}
-                                                        value={dateVal}
-                                                        onChange={(e) => handleAnswer(`${item.q}_date_${opt}`, e.target.value)}
-                                                        placeholder={item.type === 'checkbox-text-group' ? 'Details...' : ''}
-                                                        style={{ padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-                                                    />
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+                                            return (
+                                                <div key={opt} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                    <label style={checkboxCardStyle(isChecked)}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isChecked}
+                                                            onChange={(e) => handleCheckbox(item.q, opt, e.target.checked)}
+                                                            style={checkboxInputStyle}
+                                                        />
+                                                        <span>{opt}</span>
+                                                    </label>
+                                                    {opt !== 'None' && isChecked && (
+                                                        <input
+                                                            type={item.type === 'checkbox-date-group' ? 'date' : 'text'}
+                                                            value={dateVal}
+                                                            onChange={(e) => handleAnswer(`${item.q}_date_${opt}`, e.target.value)}
+                                                            placeholder={item.type === 'checkbox-text-group' ? 'Details...' : ''}
+                                                            style={{ ...inputStyle, padding: '6px 10px', fontSize: '0.85rem' }}
+                                                        />
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                     {item.extra && (
-                                        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            <span style={{ fontSize: '13px', color: '#64748b' }}>{item.extra}:</span>
+                                        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap' }}>{item.extra}:</span>
                                             <input
                                                 type="text"
                                                 value={intakeData[`${item.q}_extra`] || ""}
                                                 onChange={(e) => handleAnswer(`${item.q}_extra`, e.target.value)}
                                                 disabled={readOnly}
                                                 placeholder="Enter details..."
-                                                style={{ flex: 1, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', background: readOnly ? '#f8fafc' : '#fff' }}
+                                                style={{ ...inputStyle, flex: 1 }}
                                             />
                                         </div>
                                     )}
@@ -152,18 +212,18 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
 
                             {/* Row Type */}
                             {item.type === 'row' && (
-                                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                                     {(item.fields || []).map(field => {
                                         const val = intakeData[field.q] || "";
                                         return (
                                             <div key={field.q} style={{ flex: 1, minWidth: '150px' }}>
-                                                <label style={{ fontSize: '12px', color: '#666', display: 'block', marginBottom: '4px' }}>{field.q}</label>
+                                                <label style={{ fontSize: '0.78rem', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: '600' }}>{field.q}</label>
                                                 <input
                                                     type={field.type || 'text'}
                                                     value={val}
                                                     onChange={(e) => handleAnswer(field.q, e.target.value)}
                                                     disabled={readOnly}
-                                                    style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', background: readOnly ? '#f8fafc' : '#fff' }}
+                                                    style={inputStyle}
                                                 />
                                             </div>
                                         );

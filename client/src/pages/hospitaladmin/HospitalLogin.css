@@ -6,16 +6,16 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: var(--bg-dark, #0f1117);
-    color: #94a3b8;
+    background: #f8fafc;
+    color: #64748b;
     gap: 16px;
 }
 
 .hospital-login-spinner {
     width: 42px;
     height: 42px;
-    border: 3px solid rgba(108, 99, 255, 0.2);
-    border-top-color: #6c63ff;
+    border: 3px solid rgba(20, 184, 166, 0.2);
+    border-top-color: #14b8a6;
     border-radius: 50%;
     animation: spin 0.9s linear infinite;
 }
@@ -27,66 +27,42 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--bg-dark, #0f1117);
+    background: #f1f5f9;
     padding: 24px;
 }
 
 .hospital-login-error-card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 20px;
+    background: white;
+    border-radius: 24px;
     padding: 48px 40px;
     max-width: 440px;
     text-align: center;
-    color: #e2e8f0;
+    color: #1e293b;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
 }
 
 .hospital-login-error-card .error-icon {
     font-size: 3rem;
     display: block;
-    margin-bottom: 16px;
+    margin-bottom: 24px;
 }
 
 .hospital-login-error-card h2 {
     font-size: 1.5rem;
     font-weight: 700;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
+}
+
+.hospital-login-error-card p {
+    color: #64748b;
+    margin-bottom: 24px;
 }
 
 .hospital-login-error-card code {
-    background: rgba(255,255,255,0.08);
-    padding: 2px 8px;
+    background: #f1f5f9;
+    padding: 4px 10px;
     border-radius: 6px;
-    font-size: 0.8rem;
-}
-
-/* Hospital Branding in the form */
-.hospital-brand {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 20px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid rgba(0,0,0,0.08);
-}
-
-.hospital-logo {
-    width: 52px;
-    height: 52px;
-    border-radius: 12px;
-    object-fit: cover;
-    border: 2px solid rgba(108, 99, 255, 0.2);
-}
-
-.hospital-logo-placeholder {
-    width: 52px;
-    height: 52px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, rgba(108,99,255,0.15), rgba(232,62,140,0.1));
-    border: 2px solid rgba(108, 99, 255, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.6rem;
-    flex-shrink: 0;
+    font-size: 0.85rem;
+    color: #0f172a;
+    font-weight: 600;
 }

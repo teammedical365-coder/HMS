@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppDispatch, useAuth } from '../../store/hooks';
 import { loginAdmin, clearError } from '../../store/slices/authSlice';
+import { motion, AnimatePresence } from 'framer-motion';
+import { HiOutlineMail, HiOutlineLockClosed } from 'react-icons/hi';
+import { RiShieldUserLine, RiArrowLeftLine } from 'react-icons/ri';
 import '../user/Login.css';
 
 const CentralAdminLogin = () => {
@@ -38,91 +41,115 @@ const CentralAdminLogin = () => {
 
     return (
         <section className="auth-section">
-            <div className="auth-blob blob-1" />
-            <div className="auth-blob blob-2" />
+            <AnimatePresence>
+                <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="auth-container"
+                >
+                    <div className="auth-blob blob-1" />
+                    <div className="auth-blob blob-2" />
 
-            <div className="auth-card">
-                {/* Left: Form */}
-                <div className="auth-form-container">
-                    <div className="auth-box">
-                        <button onClick={() => navigate('/')} className="back-button" type="button" style={{ marginBottom: '24px', position: 'static' }}>
-                            <span className="back-icon">←</span> Go Back
-                        </button>
+                    <motion.div 
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ delay: 0.1 }}
+                        className="auth-card"
+                    >
+                        {/* Left: Form */}
+                        <div className="auth-form-container">
+                            <div className="auth-box">
+                                <button onClick={() => navigate('/')} className="back-button-new" type="button">
+                                    <RiArrowLeftLine /> <span>Go Back</span>
+                                </button>
 
-                        <div className="auth-brand">
-                            <div className="auth-brand-icon">🏛️</div>
-                            <span className="auth-brand-name">Central Admin Login</span>
+                                <div className="hospital-brand">
+                                    <div className="hospital-logo-placeholder" style={{ background: '#0f172a', color: 'white' }}>
+                                        <RiShieldUserLine />
+                                    </div>
+                                    <div className="hospital-brand-text">
+                                        <h2>Medical365</h2>
+                                        <p>Global Controller</p>
+                                    </div>
+                                </div>
+
+                                <div className="auth-header">
+                                    <h3>Supreme Portal</h3>
+                                    <p>Sign in to the system administration dashboard.</p>
+                                </div>
+
+                                {error && (
+                                    <motion.div 
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        className="error-message"
+                                    >
+                                        {error}
+                                    </motion.div>
+                                )}
+
+                                <form onSubmit={handleSubmit} className="modern-form">
+                                    <div className="auth-input-group">
+                                        <label>Admin Email</label>
+                                        <div className="input-field-wrapper">
+                                            <HiOutlineMail className="input-icon" />
+                                            <input
+                                                type="email" 
+                                                name="email"
+                                                placeholder="admin@medical365.com"
+                                                value={formData.email} 
+                                                onChange={handleChange} 
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="auth-input-group">
+                                        <label>Secret Password</label>
+                                        <div className="input-field-wrapper">
+                                            <HiOutlineLockClosed className="input-icon" />
+                                            <input
+                                                type="password" 
+                                                name="password"
+                                                placeholder="••••••••"
+                                                value={formData.password} 
+                                                onChange={handleChange} 
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <button className="btn-primary btn-block" disabled={loading} style={{ marginTop: '1rem' }}>
+                                        {loading ? <span className="loader-dots">Authenticating...</span> : 'Access System Control →'}
+                                    </button>
+                                </form>
+
+                                <div className="auth-footer-note">
+                                    Enterprise Internal Control Node
+                                </div>
+                            </div>
                         </div>
 
-                        <h2>System Access</h2>
-                        <p>Sign in to the Supreme Administration Portal.</p>
-
-                        {error && (
-                            <div className="error-message">⚠️ {error}</div>
-                        )}
-
-                        <form onSubmit={handleSubmit}>
-                            <div className="input-group">
-                                <label>Email Address</label>
-                                <div className="input-wrapper">
-                                    <input
-                                        type="email" name="email"
-                                        placeholder="system@admin.com"
-                                        value={formData.email} onChange={handleChange} required
-                                    />
+                        {/* Right: Visual */}
+                        <div className="auth-visual" style={{ background: '#020617' }}>
+                            <img
+                                src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1000&auto=format&fit=crop"
+                                alt="Central Control"
+                                className="auth-hero-img"
+                                style={{ opacity: 0.3 }}
+                            />
+                            <div className="auth-visual-overlay"></div>
+                            <div className="auth-content">
+                                <div className="visual-badge" style={{ color: '#6366f1', background: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.3)' }}>
+                                    System Core
                                 </div>
+                                <h2>Global Oversight.</h2>
+                                <p>Manage all clinical instances, audit logs, and provider performance from the unified central command.</p>
                             </div>
-
-                            <div className="input-group">
-                                <label>Password</label>
-                                <div className="input-wrapper">
-                                    <input
-                                        type="password" name="password"
-                                        placeholder="Enter your password"
-                                        value={formData.password} onChange={handleChange} required
-                                    />
-                                </div>
-                            </div>
-
-                            <button className="btn-primary btn-block" disabled={loading} style={{ marginTop: '24px' }}>
-                                {loading ? (
-                                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                                        <span style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
-                                        Authenticating...
-                                    </span>
-                                ) : 'Secure Login →'}
-                            </button>
-                        </form>
-
-                        <div className="divider"><span>options</span></div>
-
-                        <p className="switch-text" style={{ textAlign: 'center' }}>
-                            <Link to="/supremeadmin/signup" className="switch-link">Create Central Admin</Link>
-                            <br/><br/>
-                            <Link to="/hospitaladmin/login" className="switch-link">Hospital Admin?</Link>
-                            {' | '}
-                            <Link to="/login" className="switch-link">Regular User?</Link>
-                        </p>
-                    </div>
-                </div>
-
-                {/* Right: Visual */}
-                <div className="auth-visual">
-                    <img
-                        src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1000&auto=format&fit=crop"
-                        alt="Central Admin"
-                    />
-                    <div className="auth-features">
-                        <div className="auth-feature-chip">🌍 Multi-Tenant Control</div>
-                        <div className="auth-feature-chip">🎨 White-labeling</div>
-                        <div className="auth-feature-chip">🔒 System Security</div>
-                    </div>
-                    <div className="auth-content">
-                        <h2>Supreme Control <br /> Center.</h2>
-                        <p>Oversee all registered hospitals, manage client databases, and configure software branding from one secure portal.</p>
-                    </div>
-                </div>
-            </div>
+                        </div>
+                    </motion.div>
+                </motion.div>
+            </AnimatePresence>
         </section>
     );
 };

@@ -4,8 +4,12 @@ const labTestSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
-        unique: true,
         trim: true
+    },
+    hospitalId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Hospital',
+        default: null
     },
     code: {
         type: String,

@@ -5,6 +5,9 @@ import { loginUser, clearError } from '../../store/slices/authSlice';
 import { useBranding } from '../../context/BrandingContext';
 import { getSubdomain } from '../../utils/subdomain';
 import api from '../../utils/api';
+import { motion, AnimatePresence } from 'framer-motion';
+import { HiOutlineMail, HiOutlineLockClosed } from 'react-icons/hi';
+import { RiHospitalLine } from 'react-icons/ri';
 import '../user/Login.css';
 import './HospitalLogin.css';
 
@@ -120,89 +123,121 @@ const HospitalLogin = () => {
 
     return (
         <section className="auth-section">
-            {/* Decorative Blobs */}
-            <div className="auth-blob blob-1"></div>
-            <div className="auth-blob blob-2"></div>
+            <AnimatePresence>
+                <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="auth-container"
+                >
+                    <div className="auth-blob blob-1"></div>
+                    <div className="auth-blob blob-2"></div>
 
-            <div className="auth-card">
-                {/* Left Side: Form */}
-                <div className="auth-form-container">
-                    <div className="auth-box show">
-                        {/* Hospital Branding */}
-                        <div className="hospital-brand">
-                            {hospital?.logo ? (
-                                <img src={hospital.logo} alt={hospital.name} className="hospital-logo" />
-                            ) : (
-                                <div className="hospital-logo-placeholder">🏥</div>
-                            )}
-                            <div>
-                                <h2 style={{ marginBottom: '2px' }}>{hospital?.name}</h2>
-                                <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>
-                                    {hospital?.city ? `${hospital.city} • ` : ''}Staff Portal
-                                </p>
+                    <motion.div 
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ delay: 0.1 }}
+                        className="auth-card"
+                    >
+                        {/* Left Side: Form */}
+                        <div className="auth-form-container">
+                            <div className="auth-box show">
+                                {/* Hospital Branding */}
+                                <div className="hospital-brand">
+                                    {hospital?.logo ? (
+                                        <img src={hospital.logo} alt={hospital.name} className="hospital-logo" />
+                                    ) : (
+                                        <div className="hospital-logo-placeholder"><RiHospitalLine /></div>
+                                    )}
+                                    <div className="hospital-brand-text">
+                                        <h2>{hospital?.name}</h2>
+                                        <p>{hospital?.city ? `${hospital.city} • ` : ''}Staff Portal</p>
+                                    </div>
+                                </div>
+
+                                <div className="auth-header">
+                                    <h3>Welcome Back</h3>
+                                    <p>Sign in with your hospital-issued credentials.</p>
+                                </div>
+
+                                {error && (
+                                    <motion.div 
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        className="error-message"
+                                    >
+                                        {error}
+                                    </motion.div>
+                                )}
+
+                                <form onSubmit={handleSubmit} className="modern-form">
+                                    <div className="auth-input-group">
+                                        <label>Email Address</label>
+                                        <div className="input-field-wrapper">
+                                            <HiOutlineMail className="input-icon" />
+                                            <input
+                                                type="email" 
+                                                name="email"
+                                                placeholder="name@hospital.com"
+                                                value={formData.email}
+                                                onChange={handleChange} 
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="auth-input-group">
+                                        <label>Password</label>
+                                        <div className="input-field-wrapper">
+                                            <HiOutlineLockClosed className="input-icon" />
+                                            <input
+                                                type="password" 
+                                                name="password"
+                                                placeholder="••••••••"
+                                                value={formData.password}
+                                                onChange={handleChange} 
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="form-options">
+                                        <label className="checkbox-label">
+                                            <input type="checkbox" />
+                                            <span>Remember me</span>
+                                        </label>
+                                        <a href="#" className="forgot-link">Forgot password?</a>
+                                    </div>
+
+                                    <button className="btn-primary btn-block" type="submit" disabled={loading}>
+                                        {loading ? <span className="loader-dots">Authenticating...</span> : 'Sign In to Portal'}
+                                    </button>
+                                </form>
+
+                                <div className="auth-footer-note">
+                                    Safe & Secure Industrial-Grade Clinical System
+                                </div>
                             </div>
                         </div>
 
-                        <p style={{ color: '#666', marginBottom: '24px', fontSize: '0.9rem' }}>
-                            Sign in with your hospital-issued credentials.
-                        </p>
-
-                        {error && <div className="error-message" style={{ marginBottom: '16px' }}>{error}</div>}
-
-                        <form onSubmit={handleSubmit}>
-                            <div className="input-group">
-                                <label>Email Address</label>
-                                <div className="input-wrapper">
-                                    <i className="fa-regular fa-envelope"></i>
-                                    <input
-                                        type="email" name="email"
-                                        placeholder="staff@hospital.com"
-                                        value={formData.email}
-                                        onChange={handleChange} required
-                                    />
-                                </div>
+                        {/* Right Side: Visual */}
+                        <div className="auth-visual">
+                            <img
+                                src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?q=80&w=1000&auto=format&fit=crop"
+                                alt="Modern Healthcare"
+                                className="auth-hero-img"
+                            />
+                            <div className="auth-visual-overlay"></div>
+                            <div className="auth-content show">
+                                <div className="visual-badge">Secure Access</div>
+                                <h2>Isolated <br /> Medical Ecosystem.</h2>
+                                <p>
+                                    Your data resides in a dedicated instance for {hospital?.name}.
+                                    Powered by Medical365 Enterprise Security.
+                                </p>
                             </div>
-                            <div className="input-group">
-                                <label>Password</label>
-                                <div className="input-wrapper">
-                                    <i className="fa-solid fa-lock"></i>
-                                    <input
-                                        type="password" name="password"
-                                        placeholder="••••••••"
-                                        value={formData.password}
-                                        onChange={handleChange} required
-                                    />
-                                </div>
-                            </div>
-                            <button className="btn-primary btn-block" type="submit" disabled={loading}>
-                                {loading ? 'Signing In...' : 'Sign In to Portal'}
-                            </button>
-                        </form>
-
-                        <p style={{ marginTop: '20px', fontSize: '0.82rem', color: '#94a3b8', textAlign: 'center' }}>
-                            Hospital Admin?{' '}
-                            <a href="/hospitaladmin/login" style={{ color: 'var(--brand-pink)' }}>Admin Login</a>
-                            {' '}·{' '}
-                            <a href="/supremeadmin/login" style={{ color: '#6c63ff' }}>Central Admin</a>
-                        </p>
-                    </div>
-                </div>
-
-                {/* Right Side: Visual */}
-                <div className="auth-visual">
-                    <img
-                        src="https://images.unsplash.com/photo-1538108149393-ceefbce54471?q=80&w=1000&auto=format&fit=crop"
-                        alt="Hospital"
-                    />
-                    <div className="auth-content auth-box show">
-                        <h2>Dedicated Portal <br /> for {hospital?.name}.</h2>
-                        <p>
-                            All your patient records, appointments, and workflows are isolated
-                            and secure within your hospital's private system.
-                        </p>
-                    </div>
-                </div>
-            </div>
+                        </div>
+                    </motion.div>
+                </motion.div>
+            </AnimatePresence>
         </section>
     );
 };

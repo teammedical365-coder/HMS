@@ -136,7 +136,9 @@ const ReceptionDashboard = () => {
 
     const handleNewWalkIn = () => {
         setSelectedPatientId(null);
-        // Reset to default
+        setOtpSent(false);
+        setAadhaarOtp('');
+        setVerifyingAadhaar(false);
         setIntakeForm({
             title: 'Mrs.', firstName: '', middleName: '', lastName: '',
             dob: '', age: '', gender: 'Female', mobile: '', email: '',
@@ -144,7 +146,7 @@ const ReceptionDashboard = () => {
             partnerTitle: 'Mr.', partnerFirstName: '', partnerLastName: '', partnerMobile: '',
             height: '', weight: '', bmi: '', bloodGroup: '',
             paymentStatus: 'Pending', consultationFee: hospitalContext?.appointmentFee ?? '500',
-            doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: '',
+            department: '', doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: '',
             referralType: '', reasonForVisit: '', paymentMethod: 'Cash'
         });
         setViewMode('intake');
@@ -152,6 +154,9 @@ const ReceptionDashboard = () => {
 
     const handleEditPatient = (patient) => {
         setSelectedPatientId(patient._id);
+        setOtpSent(false);
+        setAadhaarOtp('');
+        setVerifyingAadhaar(false);
         const p = patient.fertilityProfile || {};
         const getVal = (val) => val || '';
 
@@ -161,19 +166,27 @@ const ReceptionDashboard = () => {
             lastName: getVal(patient.name).split(' ').slice(1).join(' '),
             mobile: getVal(patient.phone),
             email: getVal(patient.email),
-            aadhaar: p.aadhaar || '', // Load existing
-            isAadhaarVerified: p.aadhaar ? true : false, // Assume verified if exists for now, or check backend flag
-            ...p, // Spread existing profile
+            aadhaar: p.aadhaar || '',
+            isAadhaarVerified: p.aadhaar ? true : false,
+            ...p,
             consultationFee: hospitalContext?.appointmentFee ?? '500',
-            // Reset appointment specific fields for new booking
-            doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: ''
+            department: '', doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: ''
         }));
         setViewMode('intake');
     };
 
     const handleViewProfile = (patient) => {
-        // Flattened routing schema handles subdomains transparently
         navigate(`/patient/${patient._id}`);
+    };
+
+    const handleCancelAppointment = async (appointmentId) => {
+        if (!window.confirm('Cancel this appointment?')) return;
+        try {
+            const res = await receptionAPI.cancelAppointment(appointmentId);
+            if (res.success) fetchAppointments();
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to cancel appointment.');
+        }
     };
 
     const handleSearch = async (e) => {
@@ -302,7 +315,7 @@ const ReceptionDashboard = () => {
             // 2. Update Profile (Vitals + Basic Info + Aadhaar)
             await receptionAPI.updateIntake(userId, intakeForm);
 
-            // 3. Book Appointment
+            // 3. Book Appointment (optional when editing existing patient)
             if (intakeForm.doctor && intakeForm.visitDate && intakeForm.visitTime) {
                 const bookingRes = await receptionAPI.bookAppointment({
                     patientId: userId,
@@ -317,29 +330,55 @@ const ReceptionDashboard = () => {
 
                 if (bookingRes.success) {
                     alert("✅ Patient Registered & Assigned to Doctor!");
-                    // Generate Simple Receipt
+                    // Generate Receipt PDF
                     const doc = new jsPDF();
+                    let y = 18;
                     doc.setFontSize(18);
-                    doc.text("REGISTRATION SLIP", 105, 20, { align: 'center' });
-
-                    doc.setFontSize(12);
-                    doc.text(`Patient: ${intakeForm.firstName} ${intakeForm.lastName}`, 20, 40);
-                    doc.text(`MRN / ID: ${regRes.user?.patientId || 'N/A'}`, 20, 48);
-                    doc.text(`Aadhaar Verified: ${intakeForm.isAadhaarVerified ? 'YES' : 'NO'}`, 120, 48);
-
-                    doc.text(`Doctor: Dr. ${doctorsList.find(d => d._id === intakeForm.doctor)?.name}`, 20, 58);
-                    doc.text(`Date: ${intakeForm.visitDate} @ ${intakeForm.visitTime}`, 20, 66);
-                    doc.text(`Fee: ${intakeForm.consultationFee}`, 20, 74);
-
+                    doc.setFont("helvetica", "bold");
+                    doc.text(hospitalContext?.name || "HOSPITAL", 105, y, { align: 'center' });
+                    y += 8;
+                    doc.setFontSize(10);
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(100);
+                    doc.text("Registration Slip / Receipt", 105, y, { align: 'center' });
+                    y += 8;
+                    doc.setDrawColor(200); doc.line(14, y, 196, y); y += 10;
+                    doc.setTextColor(0);
+                    const selectedDoc = doctorsList.find(d => d._id === intakeForm.doctor);
+                    autoTable(doc, {
+                        startY: y,
+                        body: [
+                            ['Patient Name', `${intakeForm.firstName} ${intakeForm.lastName}`],
+                            ['MRN / ID', regRes.user?.patientId || 'N/A'],
+                            ['Phone', intakeForm.mobile || '-'],
+                            ['Aadhaar Verified', intakeForm.isAadhaarVerified ? 'YES ✅' : 'NO'],
+                            ['Department', intakeForm.department || '-'],
+                            ['Doctor', `Dr. ${selectedDoc?.name || '-'}`],
+                            ['Date & Time', `${intakeForm.visitDate} @ ${intakeForm.visitTime}`],
+                            ['Consultation Fee', `₹${intakeForm.consultationFee || '0'}`],
+                            ['Payment Method', intakeForm.paymentMethod || 'Cash'],
+                            ['Payment Status', intakeForm.paymentStatus || 'Pending'],
+                        ],
+                        theme: 'grid',
+                        headStyles: { fillColor: [41, 128, 185] },
+                        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 } },
+                    });
+                    y = doc.lastAutoTable.finalY + 12;
+                    doc.setFontSize(9); doc.setTextColor(120);
+                    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, y);
+                    doc.text(hospitalContext?.name || '', 196, y, { align: 'right' });
                     doc.save("Receipt.pdf");
-
                     fetchAppointments();
                     setViewMode('dashboard');
                 } else {
                     alert("Booking Failed: " + bookingRes.message);
                 }
+            } else if (selectedPatientId) {
+                // Editing existing patient — profile saved, no appointment needed
+                alert("✅ Patient details updated successfully!");
+                setViewMode('dashboard');
             } else {
-                alert("Please select a Doctor and Time Slot.");
+                alert("Please select a Doctor and Time Slot to complete the registration.");
             }
         } catch (err) {
             const msg = err.response?.data?.message || err.message || 'An unexpected error occurred.';
@@ -353,7 +392,7 @@ const ReceptionDashboard = () => {
         return (
             <div className="intake-full-page">
                 <div className="context-bar">
-                    <h3>New Registration</h3>
+                    <h3>{selectedPatientId ? 'Edit Patient Details' : 'New Registration'}</h3>
                     <button className="btn-cancel" onClick={() => setViewMode('dashboard')}>Close ✖</button>
                 </div>
                 <div className="intake-container">
@@ -544,7 +583,11 @@ const ReceptionDashboard = () => {
 
                         <div className="form-footer">
                             <button type="submit" className="btn-save" disabled={saving}>
-                                {saving ? 'Assigning...' : 'Confirm Assignment'}
+                                {saving
+                                    ? 'Saving...'
+                                    : selectedPatientId
+                                        ? (intakeForm.doctor && intakeForm.visitTime ? 'Save & Book Appointment' : 'Save Patient Details')
+                                        : 'Confirm Assignment'}
                             </button>
                         </div>
                     </form>
@@ -795,7 +838,7 @@ const ReceptionDashboard = () => {
                 <h3>Today's Queue</h3>
                 <div className="table-responsive">
                     <table className="reception-table">
-                        <thead><tr><th>Patient</th><th>Assigned To</th><th>Time</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Patient</th><th>Assigned To</th><th>Time</th><th>Status</th><th>Action</th></tr></thead>
                         <tbody>
                             {appointments.map(apt => (
                                 <tr key={apt._id}>
@@ -803,6 +846,16 @@ const ReceptionDashboard = () => {
                                     <td>{apt.doctorName}</td>
                                     <td>{apt.appointmentTime}</td>
                                     <td><span className={`status ${apt.status}`}>{apt.status}</span></td>
+                                    <td>
+                                        {apt.status !== 'cancelled' && apt.status !== 'completed' && (
+                                            <button
+                                                onClick={() => handleCancelAppointment(apt._id)}
+                                                style={{ padding: '4px 10px', fontSize: '12px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
+                                            >
+                                                Cancel
+                                            </button>
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

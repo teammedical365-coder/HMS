@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppDispatch, useAuth } from '../../store/hooks';
 import { loginHospitalAdmin, clearError } from '../../store/slices/authSlice';
+import { motion } from 'framer-motion';
+import { RiShieldUserLine, RiInformationLine } from 'react-icons/ri';
 import '../user/Login.css';
 
 const HospitalAdminLogin = () => {
@@ -40,51 +42,72 @@ const HospitalAdminLogin = () => {
 
     return (
         <section className="auth-section">
-            <div className="auth-blob blob-1" />
-            <div className="auth-blob blob-2" />
+            <div className="auth-container">
+                <div className="auth-blob blob-1" />
+                <div className="auth-blob blob-2" />
 
-            <div className="auth-card">
-                {/* Left: Form */}
-                <div className="auth-form-container">
-                    <div className="auth-box">
-                        <div className="auth-brand" style={{ marginBottom: '16px' }}>
-                            <div className="auth-brand-icon">🏥</div>
-                            <span className="auth-brand-name">Hospital Admin Login</span>
+                <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="auth-card"
+                >
+                    {/* Left: Form */}
+                    <div className="auth-form-container">
+                        <div className="auth-box">
+                            <div className="hospital-brand">
+                                <div className="hospital-logo-placeholder">
+                                    <RiShieldUserLine />
+                                </div>
+                                <div className="hospital-brand-text">
+                                    <h2>Medical365</h2>
+                                    <p>Hospital Administration Node</p>
+                                </div>
+                            </div>
+
+                            <div className="auth-header">
+                                <h3>Portal Restriction</h3>
+                                <p>Environment-specific access only.</p>
+                            </div>
+
+                            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.5rem', marginBottom: '1rem' }}>
+                                <div style={{ display: 'flex', gap: '12px', color: '#0f172a', fontWeight: '700', marginBottom: '8px', alignItems: 'center' }}>
+                                    <RiInformationLine style={{ color: '#14b8a6', fontSize: '1.2rem' }} />
+                                    Access Protocol
+                                </div>
+                                <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.6' }}>
+                                    For strict environment segregation, administrators <strong>MUST</strong> log in through their dedicated clinic instance URL.
+                                </p>
+                            </div>
+
+                            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1rem', color: '#64748b' }}>
+                                <div style={{ fontSize: '0.82rem', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '700' }}>Protocol Example:</div>
+                                <code style={{ color: '#0f172a', fontSize: '0.9rem', wordBreak: 'break-all' }}>https://your-hospital.com/<b>hospital-name</b>/login</code>
+                            </div>
+
+                            <div className="auth-footer-note" style={{ marginTop: '4rem' }}>
+                                Node isolation enforced
+                            </div>
                         </div>
+                    </div>
 
-                        <h2>Access Restricted</h2>
-                        <p style={{ color: '#666', fontSize: '0.95rem', lineHeight: '1.5' }}>
-                            For enhanced security and strict row-level environment segregation, the generic admin login is deactivated. <br/><br/>
-                            <strong>Hospital Administrators MUST log in via their dedicated clinic portal URL.</strong>
-                        </p>
-
-                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', margin: '24px 0', fontSize: '0.9rem', color: '#475569' }}>
-                            <strong>Example:</strong><br />
-                            <code>https://your-hospital.com/<b>your-clinic-name</b>/login</code>
+                    {/* Right: Visual */}
+                    <div className="auth-visual" style={{ background: '#0a192f' }}>
+                        <img
+                            src="https://images.unsplash.com/photo-1576091160550-217359f4268e?q=80&w=1000&auto=format&fit=crop"
+                            alt="Hospital Network"
+                            className="auth-hero-img"
+                            style={{ opacity: 0.3 }}
+                        />
+                        <div className="auth-visual-overlay"></div>
+                        <div className="auth-content">
+                            <div className="visual-badge">Protocol Enabled</div>
+                            <h2>Management <br /> Isolation.</h2>
+                            <p>
+                                Admin dashboards are only accessible via authenticated clinical endpoints to prevent cross-tenant data leaks.
+                            </p>
                         </div>
-
-                        <p className="switch-text" style={{ textAlign: 'center', marginTop: '30px' }}>
-                            <Link to="/supremeadmin/login" className="switch-link">To Supreme Admin Login →</Link>
-                        </p>
                     </div>
-                </div>
-
-                {/* Right: Visual */}
-                <div className="auth-visual">
-                    <img
-                        src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?q=80&w=1000&auto=format&fit=crop"
-                        alt="Hospital Admin"
-                    />
-                    <div className="auth-features">
-                        <div className="auth-feature-chip">📈 Real-time Analytics</div>
-                        <div className="auth-feature-chip">👨‍⚕️ Staff Management</div>
-                        <div className="auth-feature-chip">⚙️ Configuration</div>
-                    </div>
-                    <div className="auth-content">
-                        <h2>Manage Your <br /> Hospital Seamlessly.</h2>
-                        <p>Access your hospital's departments, doctors, and patient analytics in one centralized dashboard.</p>
-                    </div>
-                </div>
+                </motion.div>
             </div>
         </section>
     );

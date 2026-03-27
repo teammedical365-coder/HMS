@@ -272,6 +272,8 @@ router.get('/appointments', verifyToken, async (req, res) => {
 });
 
 // 5b. GET ALL Appointments (for nurse/staff - all doctors)
+// DEPARTMENT ISOLATION: If the requesting user has departments assigned,
+// only show appointments where the doctor belongs to one of those departments.
 router.get('/all-appointments', verifyToken, async (req, res) => {
     try {
         let query = {};
@@ -279,9 +281,30 @@ router.get('/all-appointments', verifyToken, async (req, res) => {
             query.hospitalId = req.user.hospitalId;
         }
 
+        // Check if the requesting user has department restrictions
+        const requestingUser = await User.findById(req.user.id || req.user.userId).lean();
+        const userDepts = requestingUser?.departments || [];
+
+        let departmentDoctorIds = null;
+        if (userDepts.length > 0) {
+            // Find all doctors in those departments within this hospital
+            const deptFilter = { departments: { $in: userDepts } };
+            if (req.user.hospitalId) deptFilter.hospitalId = req.user.hospitalId;
+            const deptDoctors = await Doctor.find(deptFilter).select('_id userId').lean();
+            departmentDoctorIds = {
+                docIds: deptDoctors.map(d => d._id),
+                userIds: deptDoctors.filter(d => d.userId).map(d => d.userId)
+            };
+            // Scope appointments to only those doctors
+            query.$or = [
+                { doctorId: { $in: departmentDoctorIds.docIds } },
+                { doctorUserId: { $in: departmentDoctorIds.userIds } }
+            ];
+        }
+
         const appointments = await Appointment.find(query)
             .populate('userId', 'name email phone patientId fertilityProfile')
-            .populate('doctorId', 'name specialty')
+            .populate('doctorId', 'name specialty departments')
             .populate('doctorUserId', 'name')
             .sort({ appointmentDate: -1, appointmentTime: 1 })
             .lean();
@@ -289,7 +312,7 @@ router.get('/all-appointments', verifyToken, async (req, res) => {
         // Attach doctor name from whichever field is available
         const enriched = appointments.map(a => ({
             ...a,
-            doctorName: a.doctorId?.name || a.doctorUserId?.name || 'Not Assigned'
+            doctorName: a.doctorId?.name || a.doctorUserId?.name || a.doctorName || 'Not Assigned'
         }));
 
         res.json({ success: true, appointments: enriched });

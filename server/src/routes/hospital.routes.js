@@ -509,18 +509,23 @@ router.delete('/my-hospital/inventory/:id', verifyHospitalAdmin, async (req, res
 // Hospital admins set their own lab test prices
 // ==========================================
 
-// GET lab tests with hospital prices
+// GET lab tests with hospital prices (global + hospital-specific)
 router.get('/my-hospital/lab-tests', verifyHospitalAdmin, async (req, res) => {
     try {
         const hospitalId = req.user.hospitalId;
         if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital linked' });
 
-        const tests = await LabTest.find({ isActive: true }).sort({ name: 1 }).lean();
         const hid = hospitalId.toString();
+        const tests = await LabTest.find({
+            isActive: true,
+            $or: [{ hospitalId: null }, { hospitalId: hospitalId }]
+        }).sort({ name: 1 }).lean();
+
         tests.forEach(t => {
             const hp = t.hospitalPrices && t.hospitalPrices[hid];
             t.hospitalPrice = hp !== undefined ? hp : null;
             t.effectivePrice = hp !== undefined ? hp : t.price;
+            t.isOwnTest = t.hospitalId ? t.hospitalId.toString() === hid : false;
         });
         res.json({ success: true, data: tests });
     } catch (err) {

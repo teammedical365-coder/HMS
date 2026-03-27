@@ -6,16 +6,23 @@ const { verifyToken, verifyAdminOrSuperAdmin } = require('../middleware/auth.mid
 // 1. GET ALL LAB TESTS (Accessible to any authenticated staff: Admin, Doctor, Lab Tech, etc.)
 router.get('/', verifyToken, async (req, res) => {
     try {
-        const query = {};
-        // If not admin, only show active tests
-        if (req.user.role !== 'superadmin' && req.user.role !== 'admin' && req.user.role !== 'centraladmin' && req.user.role !== 'hospitaladmin') {
-            query.isActive = true;
+        const isAdmin = ['superadmin', 'admin', 'centraladmin', 'hospitaladmin'].includes(req.user.role);
+        const hospitalId = req.query.hospitalId || (req.user.hospitalId ? req.user.hospitalId.toString() : null);
+
+        // Build query: always include global tests; also include hospital-specific tests if hospitalId is known
+        let query = {};
+        if (hospitalId) {
+            query = { $or: [{ hospitalId: null }, { hospitalId: hospitalId }] };
+        } else {
+            query = { hospitalId: null };
         }
+
+        // Non-admins only see active tests
+        if (!isAdmin) query.isActive = true;
 
         const labTests = await LabTest.find(query).sort({ name: 1 }).lean();
 
-        // If hospitalId is provided (or from token), resolve hospital-specific prices
-        const hospitalId = req.query.hospitalId || req.user.hospitalId;
+        // Resolve hospital-specific prices
         if (hospitalId) {
             const hid = hospitalId.toString();
             labTests.forEach(test => {
@@ -44,13 +51,18 @@ router.post('/', verifyAdminOrSuperAdmin, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Test name is required' });
         }
 
-        const testExists = await LabTest.findOne({ name });
+        // Hospital admins create hospital-specific tests; central/super admins create global tests
+        const isCentral = req.user.role === 'superadmin' || req.user.role === 'centraladmin';
+        const hospitalId = isCentral ? null : (req.user.hospitalId || null);
+
+        // Check uniqueness within the same scope (global or hospital-specific)
+        const testExists = await LabTest.findOne({ name, hospitalId });
         if (testExists) {
             return res.status(400).json({ success: false, message: 'Lab test with this name already exists' });
         }
 
         const newTest = await LabTest.create({
-            name, code, description, price, category, isActive
+            name, code, description, price, category, isActive, hospitalId
         });
 
         res.status(201).json({ success: true, message: 'Lab test created', data: newTest });
@@ -64,6 +76,19 @@ router.post('/', verifyAdminOrSuperAdmin, async (req, res) => {
 router.put('/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
         const { name, code, description, price, category, isActive, hospitalPrices } = req.body;
+
+        const test = await LabTest.findById(req.params.id);
+        if (!test) return res.status(404).json({ success: false, message: 'Lab test not found' });
+
+        // Hospital admin can only edit their own hospital's tests
+        const isCentral = req.user.role === 'superadmin' || req.user.role === 'centraladmin';
+        if (!isCentral) {
+            const testHid = test.hospitalId ? test.hospitalId.toString() : null;
+            const userHid = req.user.hospitalId ? req.user.hospitalId.toString() : null;
+            if (testHid !== userHid) {
+                return res.status(403).json({ success: false, message: 'You can only edit tests created by your hospital' });
+            }
+        }
 
         const updateData = {};
         if (name !== undefined) updateData.name = name;
@@ -79,8 +104,6 @@ router.put('/:id', verifyAdminOrSuperAdmin, async (req, res) => {
             updateData,
             { new: true, runValidators: true }
         );
-
-        if (!updatedTest) return res.status(404).json({ success: false, message: 'Lab test not found' });
 
         res.json({ success: true, message: 'Lab test updated', data: updatedTest });
     } catch (error) {
@@ -116,9 +139,20 @@ router.put('/:id/hospital-price', verifyAdminOrSuperAdmin, async (req, res) => {
 // 4. DELETE A LAB TEST
 router.delete('/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
-        const test = await LabTest.findByIdAndDelete(req.params.id);
+        const test = await LabTest.findById(req.params.id);
         if (!test) return res.status(404).json({ success: false, message: 'Lab test not found' });
 
+        // Hospital admin can only delete their own hospital's tests
+        const isCentral = req.user.role === 'superadmin' || req.user.role === 'centraladmin';
+        if (!isCentral) {
+            const testHid = test.hospitalId ? test.hospitalId.toString() : null;
+            const userHid = req.user.hospitalId ? req.user.hospitalId.toString() : null;
+            if (testHid !== userHid) {
+                return res.status(403).json({ success: false, message: 'You can only delete tests created by your hospital' });
+            }
+        }
+
+        await test.deleteOne();
         res.json({ success: true, message: 'Lab test deleted successfully' });
     } catch (error) {
         console.error('Delete Lab Test Error:', error);

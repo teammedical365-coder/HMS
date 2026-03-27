@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAuth } from '../../store/hooks';
 import { loginUser, clearError } from '../../store/slices/authSlice';
+import { motion } from 'framer-motion';
+import { RiShieldLine, RiInformationLine } from 'react-icons/ri';
 import './Login.css';
 
 const Login = () => {
@@ -40,55 +42,73 @@ const Login = () => {
 
   return (
     <section className="auth-section">
-      <div className="auth-blob blob-1" />
-      <div className="auth-blob blob-2" />
+      <div className="auth-container">
+        <div className="auth-blob blob-1" />
+        <div className="auth-blob blob-2" />
 
-      <div className="auth-card">
-        {/* Left: Form */}
-        <div className="auth-form-container">
-          <div className="auth-box">
-            <div className="auth-brand" style={{ marginBottom: '16px' }}>
-              <div className="auth-brand-icon">🏥</div>
-              <span className="auth-brand-name">MediCRM HMS</span>
-            </div>
+        <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="auth-card"
+        >
+          {/* Left: Form */}
+          <div className="auth-form-container">
+            <div className="auth-box">
+              <div className="hospital-brand">
+                  <div className="hospital-logo-placeholder">
+                      <RiShieldLine />
+                  </div>
+                  <div className="hospital-brand-text">
+                      <h2>Medical365</h2>
+                      <p>HMS Enterprise Control</p>
+                  </div>
+              </div>
 
-            <h2>Access Restricted</h2>
-            <p style={{ color: '#666', fontSize: '0.95rem', lineHeight: '1.5' }}>
-              For enhanced security and data isolation, general login has been disabled. 
-              <strong> You must access the system through your specific hospital's portal URL.</strong>
-            </p>
+              <div className="auth-header">
+                <h3>Global Instance Login</h3>
+                <p>Access management for distributed medical nodes.</p>
+              </div>
 
-            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', margin: '24px 0', fontSize: '0.9rem', color: '#475569' }}>
-              <strong>Example:</strong><br />
-              <code>https://your-hospital.com/<b>your-clinic-name</b>/login</code>
-            </div>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.5rem', marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', gap: '12px', color: '#0f172a', fontWeight: '700', marginBottom: '8px', alignItems: 'center' }}>
+                    <RiInformationLine style={{ color: '#14b8a6', fontSize: '1.2rem' }} />
+                    Secure Access Only
+                </div>
+                <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.6' }}>
+                  For enhanced data isolation, you must sign in through your <strong>private hospital portal link</strong>.
+                </p>
+              </div>
 
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
-              If you do not know your hospital's portal link, please contact your Central Administrator.
-            </p>
+              <div style={{ background: '#fefce8', border: '1px solid #fef08a', borderRadius: '12px', padding: '1rem', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <div style={{ fontSize: '0.9rem', color: '#854d0e' }}>
+                    <strong>Access Tip:</strong> Check your institution's registration email for your unique login URL.
+                </div>
+              </div>
 
-            <div style={{ marginTop: '30px', paddingTop: '20px', borderTop: '1px solid #f1f5f9', fontSize: '0.85rem' }}>
-              <strong>Admin Access:</strong> <br />
-              <Link to="/hospitaladmin/login" style={{ color: 'var(--brand-pink)', marginRight: '16px' }}>Hospital Admin</Link>
-              <Link to="/supremeadmin/login" style={{ color: '#6c63ff' }}>Central Admin</Link>
+              <div className="auth-footer-note" style={{ marginTop: '3rem' }}>
+                System-wide isolation enabled
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Right: Visual */}
-        <div className="auth-visual">
-          <img
-            src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?q=80&w=1000&auto=format&fit=crop"
-            alt="Hospital Network"
-            style={{ filter: 'brightness(0.9)' }}
-          />
-          <div className="auth-content auth-box">
-            <h2>Dedicated Private Portals</h2>
-            <p>
-              Each hospital operates within its own completely isolated environment, ensuring maximum security and row-level data segregation.
-            </p>
+          {/* Right: Visual */}
+          <div className="auth-visual">
+            <img
+              src="https://images.unsplash.com/photo-1576091160550-217359f4268e?q=80&w=1000&auto=format&fit=crop"
+              alt="Medical Data Center"
+              className="auth-hero-img"
+              style={{ opacity: 0.3 }}
+            />
+            <div className="auth-visual-overlay"></div>
+            <div className="auth-content">
+              <div className="visual-badge">Security Node</div>
+              <h2>Enterprise Grade <br /> Isolation.</h2>
+              <p>
+                Each hospital operates on an independent logical partition. This global login gate is closed for public access.
+              </p>
+            </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );

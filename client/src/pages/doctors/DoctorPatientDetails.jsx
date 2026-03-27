@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doctorAPI, labTestAPI, medicineAPI, pharmacyAPI, questionLibraryAPI } from '../../utils/api';
+import { doctorAPI, labTestAPI, questionLibraryAPI, hospitalAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './DoctorPatientDetails.css';
@@ -25,6 +25,7 @@ const DoctorPatientDetails = () => {
     const [dynamicLibrary, setDynamicLibrary] = useState(null);
     const [hospitalDepartments, setHospitalDepartments] = useState([]);
     const [isLocked, setIsLocked] = useState(false);
+    const [hospitalContext, setHospitalContext] = useState(null);
 
     // Modal States
     const [showPrescribeModal, setShowPrescribeModal] = useState(false);
@@ -113,9 +114,9 @@ const DoctorPatientDetails = () => {
             } catch (err) { console.error("Error fetching lab test catalog", err); }
 
             try {
-                const medRes = await pharmacyAPI.getInventory();
+                const medRes = await doctorAPI.getMedicines();
                 if (medRes.success) {
-                    setCatalogMedicines(medRes.data || []);
+                    setCatalogMedicines(medRes.medicines || []);
                 }
             } catch (err) { console.error("Error fetching pharmacy inventory", err); }
 
@@ -129,6 +130,15 @@ const DoctorPatientDetails = () => {
             finally { setLoading(false); }
         };
         fetchDetails();
+
+        // Fetch hospital context for PDF branding
+        const fetchHospital = async () => {
+            try {
+                const res = await hospitalAPI.getMyHospital();
+                if (res.success) setHospitalContext(res.hospital);
+            } catch (err) { /* ignore */ }
+        };
+        fetchHospital();
     }, [appointmentId]);
 
     const handleIntakeChange = (e) => {
@@ -198,11 +208,11 @@ const DoctorPatientDetails = () => {
 
         doc.setFontSize(22);
         doc.setTextColor(41, 128, 185);
-        doc.text("PAWAN HARISH IVF CENTER", 105, y, { align: 'center' });
+        doc.text(hospitalContext?.name || "HOSPITAL", 105, y, { align: 'center' });
         y += 10;
         doc.setFontSize(10);
         doc.setTextColor(100);
-        doc.text("Excellence in Fertility Care", 105, y, { align: 'center' });
+        doc.text(hospitalContext?.tagline || "Excellence in Healthcare", 105, y, { align: 'center' });
         y += 15;
 
         doc.setLineWidth(0.5);
@@ -214,7 +224,7 @@ const DoctorPatientDetails = () => {
         doc.setTextColor(0);
         doc.text("CLINICAL RECORD / PRESCRIPTION", 105, y, { align: 'center' }); y += 15;
 
-        doc.setFillColor(240, 240, 240); doc.rect(14, y, 182, 35, 'F');
+        doc.setFillColor(240, 240, 240); doc.rect(14, y, 182, 42, 'F');
         doc.setFontSize(11);
 
         const cardX = 20;
@@ -247,9 +257,15 @@ const DoctorPatientDetails = () => {
         doc.setFont("helvetica", "normal");
         doc.text(`${appointment.userId?.phone || '-'}`, cardX + 30, cardY);
 
-        y += 45;
+        // Doctor Name
+        doc.setFont("helvetica", "bold");
+        doc.text(`Doctor:`, cardX + 100, cardY);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Dr. ${appointment.doctorName || user?.name || '-'}`, cardX + 130, cardY);
 
-        // Iterate over dynamic intake data (excluding internal system keys or deeply nested objects if any)
+        y += 50;
+
+        // Iterate over dynamic intake data
         const dynamicEntries = Object.entries(intake).filter(([key, val]) => 
             key !== '_id' && key !== 'createdAt' && key !== 'updatedAt' && key !== '__v' 
             && typeof val !== 'object' && val !== ''
@@ -289,16 +305,50 @@ const DoctorPatientDetails = () => {
         const notes = doc.splitTextToSize(currentData.notes, 170);
         doc.text(notes, 16, y); y += (notes.length * 5) + 10;
 
-        doc.text("Prescription:", 16, y); y += 6;
-        const rx = (currentData.pharmacy || []).map(p => p.medicineName).join('\n');
-        doc.text(rx || '-', 16, y);
-        
-        y += (rx ? rx.split('\n').length * 5 : 5) + 10;
-        
-        doc.text("Lab Tests Ordered:", 16, y); y += 6;
-        const labs = (currentData.labTests || []).join(', ');
-        const wrappedLabs = doc.splitTextToSize(labs || '-', 170);
-        doc.text(wrappedLabs, 16, y);
+        // Medicines
+        if (y > 250) { doc.addPage(); y = 20; }
+        doc.setFontSize(11); doc.setFont("helvetica", "bold");
+        doc.text("💊 Prescription / Medicines:", 16, y); y += 8;
+        doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+        const rxItems = (currentData.pharmacy || []);
+        if (rxItems.length > 0) {
+            autoTable(doc, {
+                startY: y,
+                head: [['#', 'Medicine', 'Frequency', 'Duration']],
+                body: rxItems.map((p, i) => [i + 1, p.medicineName, p.frequency || '-', p.duration || '-']),
+                theme: 'striped',
+                headStyles: { fillColor: [76, 175, 80], textColor: 255 },
+            });
+            y = doc.lastAutoTable.finalY + 10;
+        } else {
+            doc.text('No medicines prescribed.', 16, y); y += 8;
+        }
+
+        // Lab Tests
+        if (y > 250) { doc.addPage(); y = 20; }
+        doc.setFontSize(11); doc.setFont("helvetica", "bold");
+        doc.text("🧪 Lab Tests Ordered:", 16, y); y += 8;
+        doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+        const labItems = (currentData.labTests || []);
+        if (labItems.length > 0) {
+            autoTable(doc, {
+                startY: y,
+                head: [['#', 'Test Name']],
+                body: labItems.map((t, i) => [i + 1, t]),
+                theme: 'striped',
+                headStyles: { fillColor: [33, 150, 243], textColor: 255 },
+            });
+            y = doc.lastAutoTable.finalY + 10;
+        } else {
+            doc.text('No lab tests ordered.', 16, y); y += 8;
+        }
+
+        // Footer
+        if (y > 260) { doc.addPage(); y = 20; }
+        doc.setDrawColor(200); doc.line(14, y, 196, y); y += 10;
+        doc.setFontSize(9); doc.setTextColor(120);
+        doc.text(`Doctor: Dr. ${appointment.doctorName || user?.name || 'N/A'}`, 16, y);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, 130, y);
 
         doc.save("Patient_Record.pdf");
     };
@@ -790,11 +840,11 @@ const DoctorPatientDetails = () => {
                                                 />
                                                 <div>
                                                     <div style={{ fontWeight: '700', color: '#0f172a' }}>{med.name}</div>
-                                                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{med.genericName}</div>
+                                                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{med.salt || med.category}</div>
                                                 </div>
                                             </label>
                                         );
-                                    }) : <p style={{ color: '#94a3b8', fontSize: '13px', gridColumn: '1 / -1', textAlign: 'center', padding: '20px', background: '#f8fafc', borderRadius: '8px' }}>No medicines catalog defined by Super Admin.</p>}
+                                    }) : <p style={{ color: '#94a3b8', fontSize: '13px', gridColumn: '1 / -1', textAlign: 'center', padding: '20px', background: '#f8fafc', borderRadius: '8px' }}>No medicines in pharmacy inventory. Ask pharmacist to add medicines.</p>}
                                 </div>
                                 <label style={{ fontSize: '13px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '6px' }}>Edit Final Prescription (Manual entry allowed):</label>
                                 <textarea

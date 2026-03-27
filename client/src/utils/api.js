@@ -295,6 +295,9 @@ export const hospitalAPI = {
     // Hospital lab test pricing
     getHospitalLabTests: async () => (await apiClient.get('/api/hospitals/my-hospital/lab-tests')).data,
     setLabTestPrice: async (testId, price) => (await apiClient.put(`/api/hospitals/my-hospital/lab-tests/${testId}/price`, { price })).data,
+    // Hospital-specific lab tests (create/delete)
+    createLabTest: async (data) => (await apiClient.post('/api/lab-tests', data)).data,
+    deleteLabTest: async (id) => (await apiClient.delete(`/api/lab-tests/${id}`)).data,
     getHospitalStats: async (id, startDate, endDate) => {
         let url = `/api/hospitals/${id}/stats`;
         const params = new URLSearchParams();

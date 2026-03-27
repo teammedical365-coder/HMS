@@ -50,10 +50,10 @@ const HospitalAdminQuestionLibrary = () => {
             }
 
             setLibraryData(data);
-            setAllowedDepartments(res.data?.allowedDepartments || null);
+            setAllowedDepartments(res.allowedDepartments || null);
 
             // Determine visible departments based on restrictions
-            const visibleDepts = res.data?.allowedDepartments ? Object.keys(data).filter(d => res.data.allowedDepartments.includes(d)) : Object.keys(data);
+            const visibleDepts = res.allowedDepartments ? Object.keys(data).filter(d => res.allowedDepartments.includes(d)) : Object.keys(data);
             let defaultDept = 'General';
             
             if (visibleDepts.length > 0) {
@@ -195,21 +195,21 @@ const HospitalAdminQuestionLibrary = () => {
 
         if (item.type === "gender-toggle") {
             inputHtml = (
-                <select disabled className="modal-input" style={{ width: '200px' }}>
+                <select disabled className="modal-input" style={{ width: '160px' }}>
                     <option>Female</option>
                     <option>Male</option>
                 </select>
             );
         } else if (item.type === "select") {
             inputHtml = (
-                <select disabled className="modal-input" style={{ width: '200px' }}>
+                <select disabled className="modal-input" style={{ width: '160px' }}>
                     <option>Select...</option>
                     {(item.options || []).map(o => <option key={o}>{o}</option>)}
                 </select>
             );
         } else if (item.type === "yes-no") {
             inputHtml = (
-                <select disabled className="modal-input" style={{ width: '200px' }}>
+                <select disabled className="modal-input" style={{ width: '160px' }}>
                     <option>Select...</option>
                     <option>Yes</option>
                     <option>No</option>
@@ -226,43 +226,43 @@ const HospitalAdminQuestionLibrary = () => {
                 </div>
             );
         } else if (item.type === "textarea") {
-            inputHtml = <textarea disabled rows="5" placeholder="Doctors will enter long text here..." style={{ width: '100%' }} />;
+            inputHtml = <textarea disabled rows="3" placeholder="Long text area..." className="modal-input" style={{ width: '100%', resize: 'vertical' }} />;
         } else if (item.type === "checkbox-date-group" || item.type === "checkbox-text-group") {
             inputHtml = (
                 <div className='complex-group'>
                     {(item.options || []).map(opt => (
                         <div className="complex-row" key={opt}>
                             <label><input type='checkbox' disabled /> {opt}</label>
-                            {opt !== 'None' && <input type={item.type === 'checkbox-date-group' ? 'date' : 'text'} disabled placeholder="Input..." className="row-date-picker" style={{ width: '160px', padding: '8px', marginLeft: '15px' }} />}
+                            {opt !== 'None' && <input type={item.type === 'checkbox-date-group' ? 'date' : 'text'} disabled placeholder="Input..." className="row-date-picker" style={{ width: '120px', padding: '4px 6px', marginLeft: '10px', fontSize: '0.75rem' }} />}
                         </div>
                     ))}
                     <div className="extra-field">
                         <span>{item.extra || 'Remarks'}:</span>
-                        <input type="text" disabled placeholder="Details..." style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }} />
+                        <input type="text" disabled placeholder="Details..." style={{ width: '100%', padding: '4px 6px', boxSizing: 'border-box', fontSize: '0.75rem' }} />
                     </div>
                 </div>
             );
         } else if (item.type === "row") {
             inputHtml = (
-                <div style={{ display: 'flex', gap: '20px', width: '100%' }}>
+                <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
                     {(item.fields || []).map(field => (
                         <div style={{ flex: 1 }} key={field.q}>
-                            <label style={{ fontSize: '13px', color: '#666', marginBottom: '5px', display: 'block' }}>{field.q}</label>
-                            <input type={field.type || 'text'} disabled style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }} />
+                            <label style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '3px', display: 'block' }}>{field.q}</label>
+                            <input type={field.type || 'text'} disabled style={{ width: '100%', padding: '6px', boxSizing: 'border-box', fontSize: '0.75rem' }} />
                         </div>
                     ))}
                 </div>
             );
         } else {
             // text or number
-            inputHtml = <input type={item.type || 'text'} disabled placeholder="Input area..." style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }} />;
+            inputHtml = <input type={item.type || 'text'} disabled placeholder="Input" style={{ width: '100%', padding: '6px', boxSizing: 'border-box', fontSize: '0.75rem' }} />;
         }
 
         return (
             <div className="question-row" key={index}>
-                <div style={{ position: 'absolute', top: '15px', right: '15px', display: 'flex', gap: '8px', zIndex: 10 }}>
-                    <button className="btn-edit-q" style={{ background: '#e0f2fe', color: '#0284c7', border: '1px solid #7dd3fc', borderRadius: '4px', padding: '4px 10px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => handleEditQuestion(index)}>✏️ Edit</button>
-                    <button className="btn-delete-q" style={{ position: 'relative', top: '0', right: '0' }} onClick={() => handleDeleteQuestion(cat, index)}>🗑 Delete</button>
+                <div style={{ position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px', zIndex: 10 }}>
+                    <button className="btn-edit-q" onClick={() => handleEditQuestion(index)}>✏️ Edit</button>
+                    <button className="btn-delete-q" style={{ position: 'relative', top: '0', right: '0' }} onClick={() => handleDeleteQuestion(cat, index)}>🗑 Del</button>
                 </div>
                 <strong>{item.q}</strong>
                 {item.parentQ && (
@@ -286,18 +286,18 @@ const HospitalAdminQuestionLibrary = () => {
 
     return (
         <div className="ql-admin-body">
-            <div style={{ padding: '20px 30px', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '10px 16px', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                    <h1 style={{ margin: 0, color: '#1e293b' }}>🏥 Hospital Diagnostics Library</h1>
-                    <p style={{ margin: 0, color: '#64748b' }}>Customize the global template specifically for your hospital. Your changes won't affect other hospitals.</p>
+                    <h1 style={{ margin: 0, color: '#1e293b', fontSize: '0.95rem' }}>🏥 Hospital Diagnostics Library</h1>
+                    <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.7rem' }}>Customize the global template specifically for your hospital.</p>
                 </div>
-                <button className="btn-save" onClick={handleSave} disabled={saving} style={{ padding: '12px 30px', fontSize: '15px' }}>
-                    {saving ? '⏳ Syncing Data...' : '💾 Save & Deploy Configuration'}
+                <button className="btn-save" onClick={handleSave} disabled={saving}>
+                    {saving ? '⏳ Syncing...' : '💾 Save & Deploy'}
                 </button>
             </div>
 
             {/* Department Navbar */}
-            <div className="gender-navbar" style={{ display: 'flex', overflowX: 'auto', gap: '10px', padding: '10px 30px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+            <div className="gender-navbar" style={{ display: 'flex', overflowX: 'auto', gap: '4px', padding: '6px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                 {visibleDepartments.map(dept => (
                     <div
                         key={dept}
@@ -307,18 +307,16 @@ const HospitalAdminQuestionLibrary = () => {
                             const cats = Object.keys(libraryData[dept] || {});
                             setActiveCategory(cats.length > 0 ? cats[0] : '');
                         }}
-                        style={{ whiteSpace: 'nowrap' }}
                     >
-                        {dept} Workflows
+                        {dept}
                     </div>
                 ))}
                 
-                {/* Hospital admins cannot add new top-level departments, they must ask Central Admin */}
                 <button 
-                    onClick={() => alert("If you want to add more departments, please contact the central admin team to assign your hospital a new department.")}
-                    style={{ background: '#cbd5e1', color: '#475569', border: 'none', borderRadius: '20px', padding: '0 15px', cursor: 'pointer', fontWeight: 'bold', whiteSpace: 'nowrap' }}
+                    onClick={() => alert("Contact the central admin team to assign your hospital a new department.")}
+                    style={{ background: '#e2e8f0', color: '#64748b', border: 'none', borderRadius: '5px', padding: '0 10px', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap', fontSize: '0.7rem' }}
                 >
-                    🔒 Create Dept (Locked)
+                    🔒 Locked
                 </button>
             </div>
 
@@ -345,23 +343,23 @@ const HospitalAdminQuestionLibrary = () => {
                             <div className="content-header">
                                 <h2 id="display-title">{activeCategory.toUpperCase()}</h2>
 
-                                <button className="btn-action bg-dark" onClick={() => { setEditIndex(null); setNewQ({ q: '', type: 'text', options: '', extra: '', parentQ: '', condition: '' }); setShowAddModal(true); }} style={{ padding: '10px 20px', fontSize: '14px', background: '#334155' }}>
-                                    + Add New Question
+                                <button className="btn-action bg-dark" onClick={() => { setEditIndex(null); setNewQ({ q: '', type: 'text', options: '', extra: '', parentQ: '', condition: '' }); setShowAddModal(true); }}>
+                                    + Add Question
                                 </button>
                             </div>
 
                             <div id="question-wrapper">
                                 {questionsInActiveCategory.map((q, idx) => renderQuestionBuilder(q, idx, activeCategory))}
                                 {questionsInActiveCategory.length === 0 && (
-                                    <div style={{ padding: '40px', textAlign: 'center', border: '2px dashed #e2e8f0', borderRadius: '10px', color: '#94a3b8' }}>
-                                        No questions in this category. Click "+ Add New Question" to begin constructing.
+                         <div style={{ padding: '30px', textAlign: 'center', border: '1px dashed #e2e8f0', borderRadius: '8px', color: '#94a3b8', fontSize: '0.78rem' }}>
+                                        No questions yet. Click "+ Add Question" above.
                                     </div>
                                 )}
                             </div>
                         </>
                     ) : (
-                        <div style={{ padding: '40px', textAlign: 'center', background: '#f8fafc', borderRadius: '10px', color: '#64748b' }}>
-                            Please select or create a category in the sidebar to view questions.
+                        <div style={{ padding: '30px', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', color: '#64748b', fontSize: '0.78rem' }}>
+                            Select or create a category to view questions.
                         </div>
                     )}
                 </main>

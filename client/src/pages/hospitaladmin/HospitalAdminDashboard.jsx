@@ -56,6 +56,9 @@ const HospitalAdminDashboard = () => {
     const [loadingLabTests, setLoadingLabTests] = useState(false);
     const [savingLabPrice, setSavingLabPrice] = useState(null);
     const [labPriceInputs, setLabPriceInputs] = useState({});
+    const [showLabTestForm, setShowLabTestForm] = useState(false);
+    const [savingLabTest, setSavingLabTest] = useState(false);
+    const [labTestForm, setLabTestForm] = useState({ name: '', code: '', description: '', price: '', category: 'General' });
 
     // Auth check
     useEffect(() => {
@@ -344,6 +347,40 @@ const HospitalAdminDashboard = () => {
             fetchLabTests();
         } catch (err) { setError('Error saving price.'); }
         finally { setSavingLabPrice(null); }
+    };
+
+    const handleCreateLabTest = async (e) => {
+        e.preventDefault();
+        if (!labTestForm.name.trim()) return setError('Test name is required.');
+        setSavingLabTest(true); setError('');
+        try {
+            const res = await hospitalAPI.createLabTest({
+                ...labTestForm,
+                price: Number(labTestForm.price) || 0
+            });
+            if (res.success) {
+                setSuccess('Lab test added successfully!');
+                setShowLabTestForm(false);
+                setLabTestForm({ name: '', code: '', description: '', price: '', category: 'General' });
+                fetchLabTests();
+            }
+        } catch (err) {
+            setError(err.response?.data?.message || 'Error creating lab test.');
+        } finally { setSavingLabTest(false); }
+    };
+
+    const handleDeleteLabTest = async (testId) => {
+        if (!window.confirm('Delete this lab test? This cannot be undone.')) return;
+        setError('');
+        try {
+            const res = await hospitalAPI.deleteLabTest(testId);
+            if (res.success) {
+                setSuccess('Lab test deleted.');
+                fetchLabTests();
+            }
+        } catch (err) {
+            setError(err.response?.data?.message || 'Error deleting lab test.');
+        }
     };
 
     const formatCurrency = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
@@ -962,17 +999,67 @@ const HospitalAdminDashboard = () => {
                 {/* ===================== LAB PRICING TAB ===================== */}
                 {activeTab === 'labpricing' && (
                     <div className="admin-card">
-                        <div style={{ marginBottom: '20px' }}>
-                            <h2>🧪 Lab Test Pricing</h2>
-                            <p style={{ color: '#888', fontSize: '14px', margin: '4px 0 0' }}>
-                                Set custom prices for your hospital. Leave blank to use the default base price.
-                            </p>
+                        <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div>
+                                <h2>🧪 Lab Tests & Pricing</h2>
+                                <p style={{ color: '#888', fontSize: '14px', margin: '4px 0 0' }}>
+                                    Add your own hospital tests or set custom prices for global tests.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => { setShowLabTestForm(v => !v); setError(''); }}
+                                className="btn btn-primary"
+                                style={{ padding: '8px 16px', whiteSpace: 'nowrap' }}
+                            >
+                                {showLabTestForm ? 'Cancel' : '+ Add Lab Test'}
+                            </button>
                         </div>
+
+                        {showLabTestForm && (
+                            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '20px', marginBottom: '20px' }}>
+                                <h3 style={{ margin: '0 0 16px', fontSize: '15px', color: '#1e293b' }}>New Hospital-Specific Lab Test</h3>
+                                <form onSubmit={handleCreateLabTest} className="user-form">
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label className="staff-label">Test Name *</label>
+                                            <input type="text" className="staff-input" placeholder="e.g. Vitamin D3 Test" required
+                                                value={labTestForm.name} onChange={e => setLabTestForm(p => ({ ...p, name: e.target.value }))} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="staff-label">Test Code</label>
+                                            <input type="text" className="staff-input" placeholder="e.g. VD3"
+                                                value={labTestForm.code} onChange={e => setLabTestForm(p => ({ ...p, code: e.target.value }))} />
+                                        </div>
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label className="staff-label">Category</label>
+                                            <input type="text" className="staff-input" placeholder="e.g. Endocrinology"
+                                                value={labTestForm.category} onChange={e => setLabTestForm(p => ({ ...p, category: e.target.value }))} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="staff-label">Price (₹)</label>
+                                            <input type="number" className="staff-input" placeholder="e.g. 800" min="0"
+                                                value={labTestForm.price} onChange={e => setLabTestForm(p => ({ ...p, price: e.target.value }))} />
+                                        </div>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Description</label>
+                                        <textarea className="staff-input" rows="2" placeholder="Optional instructions or notes"
+                                            value={labTestForm.description} onChange={e => setLabTestForm(p => ({ ...p, description: e.target.value }))} />
+                                    </div>
+                                    <button type="submit" disabled={savingLabTest} className="submit-button" style={{ maxWidth: '180px' }}>
+                                        {savingLabTest ? 'Saving...' : 'Save Lab Test'}
+                                    </button>
+                                </form>
+                            </div>
+                        )}
+
                         {loadingLabTests ? (
                             <div className="loading-message">Loading lab tests...</div>
                         ) : labTests.length === 0 ? (
                             <div style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                                <p>No lab tests available. Contact Central Admin to add tests to the catalog.</p>
+                                <p>No lab tests yet. Add your first hospital-specific test above.</p>
                                 <button onClick={fetchLabTests} className="btn-edit" style={{ marginTop: '10px', padding: '6px 14px', fontSize: '13px' }}>Reload</button>
                             </div>
                         ) : (
@@ -984,43 +1071,66 @@ const HospitalAdminDashboard = () => {
                                             <th>Code</th>
                                             <th>Category</th>
                                             <th>Base Price (₹)</th>
-                                            <th>Your Hospital Price (₹)</th>
+                                            <th>Your Price (₹)</th>
                                             <th>Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {labTests.map(test => (
-                                            <tr key={test._id}>
-                                                <td style={{ fontWeight: 600 }}>{test.name}</td>
+                                            <tr key={test._id} style={{ background: test.isOwnTest ? '#f0fdf4' : 'white' }}>
+                                                <td style={{ fontWeight: 600 }}>
+                                                    {test.name}
+                                                    {test.isOwnTest && (
+                                                        <span style={{ marginLeft: '6px', fontSize: '10px', background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: '10px', fontWeight: 700 }}>
+                                                            Your Hospital
+                                                        </span>
+                                                    )}
+                                                </td>
                                                 <td style={{ color: '#64748b' }}>{test.code || '-'}</td>
                                                 <td>{test.category}</td>
                                                 <td>₹{test.price}</td>
                                                 <td>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <span style={{ color: '#64748b' }}>₹</span>
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            className="staff-input"
-                                                            style={{ width: '120px', padding: '6px 10px' }}
-                                                            placeholder={String(test.price)}
-                                                            value={labPriceInputs[test._id] || ''}
-                                                            onChange={e => setLabPriceInputs(prev => ({ ...prev, [test._id]: e.target.value }))}
-                                                        />
-                                                        {test.hospitalPrice !== null && (
-                                                            <span style={{ fontSize: '11px', color: '#059669', fontWeight: 600 }}>Custom</span>
-                                                        )}
-                                                    </div>
+                                                    {test.isOwnTest ? (
+                                                        <span style={{ fontSize: '13px', color: '#64748b' }}>— (your test)</span>
+                                                    ) : (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <span style={{ color: '#64748b' }}>₹</span>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                className="staff-input"
+                                                                style={{ width: '110px', padding: '6px 10px' }}
+                                                                placeholder={String(test.price)}
+                                                                value={labPriceInputs[test._id] || ''}
+                                                                onChange={e => setLabPriceInputs(prev => ({ ...prev, [test._id]: e.target.value }))}
+                                                            />
+                                                            {test.hospitalPrice !== null && (
+                                                                <span style={{ fontSize: '11px', color: '#059669', fontWeight: 600 }}>Custom</span>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td>
-                                                    <button
-                                                        onClick={() => handleSaveLabPrice(test._id)}
-                                                        disabled={savingLabPrice === test._id}
-                                                        className="btn-save"
-                                                        style={{ padding: '5px 14px', fontSize: '12px' }}
-                                                    >
-                                                        {savingLabPrice === test._id ? '...' : 'Save'}
-                                                    </button>
+                                                    <div className="action-buttons" style={{ gap: '6px' }}>
+                                                        {test.isOwnTest ? (
+                                                            <button
+                                                                onClick={() => handleDeleteLabTest(test._id)}
+                                                                className="btn-delete"
+                                                                style={{ padding: '5px 12px', fontSize: '12px' }}
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => handleSaveLabPrice(test._id)}
+                                                                disabled={savingLabPrice === test._id}
+                                                                className="btn-save"
+                                                                style={{ padding: '5px 14px', fontSize: '12px' }}
+                                                            >
+                                                                {savingLabPrice === test._id ? '...' : 'Set Price'}
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
