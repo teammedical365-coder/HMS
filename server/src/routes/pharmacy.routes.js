@@ -60,10 +60,9 @@ router.post('/inventory', verifyToken, async (req, res) => {
 // DELETE medicine
 router.delete('/inventory/:id', verifyToken, async (req, res) => {
     try {
-        const deletedItem = await Inventory.findOneAndDelete({
-            _id: req.params.id,
-            pharmacyId: req.user.id
-        });
+        const deleteQuery = { _id: req.params.id, pharmacyId: req.user.id };
+        if (req.user.hospitalId) deleteQuery.hospitalId = req.user.hospitalId;
+        const deletedItem = await Inventory.findOneAndDelete(deleteQuery);
 
         if (!deletedItem) {
             return res.status(404).json({ success: false, message: "Item not found or unauthorized" });

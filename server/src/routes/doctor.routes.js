@@ -17,16 +17,22 @@ const upload = multer({
 });
 
 // --- HELPER ---
-const getDoctorQuery = async (userId) => {
+const getDoctorQuery = async (userId, hospitalId) => {
     try {
         const doctorProfile = await Doctor.findOne({ userId });
         const query = { $or: [{ doctorUserId: userId }] };
         if (doctorProfile) {
             query.$or.push({ doctorId: doctorProfile._id });
         }
+        // HARD ISOLATION: always scope to hospital
+        if (hospitalId) {
+            query.hospitalId = hospitalId;
+        }
         return query;
     } catch (error) {
-        return { doctorUserId: userId };
+        const q = { doctorUserId: userId };
+        if (hospitalId) q.hospitalId = hospitalId;
+        return q;
     }
 };
 
@@ -83,7 +89,7 @@ router.get('/', async (req, res) => {
 router.get('/patients', verifyToken, async (req, res) => {
     try {
         const doctorUserId = req.user.id || req.user.userId;
-        const query = await getDoctorQuery(doctorUserId);
+        const query = await getDoctorQuery(doctorUserId, req.user.hospitalId);
 
         const appointments = await Appointment.find(query)
             .populate('userId', 'name email phone patientId fertilityProfile')
@@ -116,28 +122,29 @@ router.get('/patients', verifyToken, async (req, res) => {
 router.get('/patients/:patientId/full-profile', verifyToken, async (req, res) => {
     try {
         const { patientId } = req.params;
+        const hid = req.user.hospitalId;
 
-        // Get patient info
-        const patient = await User.findById(patientId).lean();
+        // Get patient info — scope to hospital
+        const patientQuery = { _id: patientId };
+        if (hid) patientQuery.hospitalId = hid;
+        const patient = await User.findOne(patientQuery).lean();
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
-        // Get all appointments for this patient
-        const appointments = await Appointment.find({ userId: patientId })
-            .populate('doctorId', 'name specialty')
-            .sort({ appointmentDate: -1 })
-            .lean();
+        // Scope all sub-queries to hospital
+        const apptQ = { userId: patientId };
+        const labQ = { userId: patientId };
+        const rxQ = { $or: [{ userId: patientId }, { patientId: patientId }] };
+        if (hid) {
+            apptQ.hospitalId = hid;
+            labQ.hospitalId = hid;
+            rxQ.hospitalId = hid;
+        }
 
-        // Get lab reports
-        const labReports = await LabReport.find({ userId: patientId })
-            .sort({ createdAt: -1 })
-            .lean();
-
-        // Get pharmacy orders
-        const pharmacyOrders = await PharmacyOrder.find({
-            $or: [{ userId: patientId }, { patientId: patientId }]
-        })
-            .sort({ createdAt: -1 })
-            .lean();
+        const [appointments, labReports, pharmacyOrders] = await Promise.all([
+            Appointment.find(apptQ).populate('doctorId', 'name specialty').sort({ appointmentDate: -1 }).lean(),
+            LabReport.find(labQ).sort({ createdAt: -1 }).lean(),
+            PharmacyOrder.find(rxQ).sort({ createdAt: -1 }).lean()
+        ]);
 
         res.json({
             success: true,
@@ -172,13 +179,13 @@ router.get('/patients/:patientId/full-profile', verifyToken, async (req, res) =>
 router.put('/patients/:patientId/profile', verifyToken, async (req, res) => {
     try {
         const { patientId } = req.params;
-        const updates = req.body; // Full profile object
+        const updates = req.body;
+        const hospitalId = req.user.hospitalId;
 
-        // We update the User's fertilityProfile field
-        // We use dot notation for nested updates if we want partial, 
-        // but here we likely want to save the form state.
-
-        const user = await User.findById(patientId);
+        // Verify patient belongs to same hospital
+        const findQuery = { _id: patientId };
+        if (hospitalId) findQuery.hospitalId = hospitalId;
+        const user = await User.findOne(findQuery);
         if (!user) return res.status(404).json({ message: 'Patient not found' });
 
         // Merge existing profile with updates
@@ -203,6 +210,7 @@ router.post('/session/start', verifyToken, async (req, res) => {
 
         const newSession = new Appointment({
             userId: patientId,
+            hospitalId: req.user.hospitalId || doctor.hospitalId,
             doctorId: doctor._id,
             doctorUserId: doctorUserId,
             doctorName: doctor.name,
@@ -224,12 +232,14 @@ router.post('/session/start', verifyToken, async (req, res) => {
 // 4. GET Appointment Details
 router.get('/appointments/:id', verifyToken, async (req, res) => {
     try {
-        const appointment = await Appointment.findById(req.params.id)
+        const apptQuery = { _id: req.params.id };
+        if (req.user.hospitalId) apptQuery.hospitalId = req.user.hospitalId;
+        const appointment = await Appointment.findOne(apptQuery)
             .populate('userId')
             .populate('labId', 'name')
             .lean();
 
-        if (!appointment) return res.status(404).json({ success: false, message: 'Not found' });
+        if (!appointment) return res.status(404).json({ success: false, message: 'Not found or unauthorized' });
         
         // Fetch doctor's specific departments, fallback to hospital departments
         const doctorUser = await User.findById(req.user.id || req.user.userId).populate('hospitalId');
@@ -250,7 +260,7 @@ router.get('/appointments/:id', verifyToken, async (req, res) => {
 router.get('/appointments', verifyToken, async (req, res) => {
     try {
         const doctorUserId = req.user.id || req.user.userId;
-        const query = await getDoctorQuery(doctorUserId);
+        const query = await getDoctorQuery(doctorUserId, req.user.hospitalId);
         const appointments = await Appointment.find(query)
             .populate('userId', 'name email phone patientId fertilityProfile')
             .sort({ appointmentDate: 1, appointmentTime: 1 })
@@ -294,7 +304,9 @@ router.get('/all-appointments', verifyToken, async (req, res) => {
 router.patch('/appointments/:id/prescription', verifyToken, upload.single('prescriptionFile'), async (req, res) => {
     try {
         const { status, diagnosis, labTests, dietPlan, pharmacy, notes, labId } = req.body;
-        const appointment = await Appointment.findById(req.params.id);
+        const findQuery = { _id: req.params.id };
+        if (req.user.hospitalId) findQuery.hospitalId = req.user.hospitalId;
+        const appointment = await Appointment.findOne(findQuery);
         if (!appointment) return res.status(404).json({ message: 'Not found' });
 
         if (labId) appointment.labId = labId;
@@ -351,6 +363,7 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
                     patientId: pId || 'N/A',
                     userId: appointment.userId,
                     doctorId: req.user.id,
+                    hospitalId: req.user.hospitalId || appointment.hospitalId,
                     labId: labId || null,
                     testNames: appointment.labTests,
                     testStatus: 'PENDING',
@@ -394,6 +407,7 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
                     patientId: appointment.patientId || 'N/A',
                     userId: appointment.userId,
                     doctorId: req.user.id,
+                    hospitalId: req.user.hospitalId || appointment.hospitalId,
                     items: appointment.pharmacy.map(p => ({
                         medicineName: p.medicineName,
                         frequency: p.frequency,
@@ -414,18 +428,24 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
 // 7. GET Patient History
 router.get('/patients/:patientId/history', verifyToken, async (req, res) => {
     try {
-        const history = await Appointment.find({ userId: req.params.patientId }).sort({ appointmentDate: -1 });
+        const histQuery = { userId: req.params.patientId };
+        if (req.user.hospitalId) histQuery.hospitalId = req.user.hospitalId;
+        const history = await Appointment.find(histQuery).sort({ appointmentDate: -1 });
         res.json({ success: true, history });
     } catch (error) { res.status(500).json({ success: false }); }
 });
 
 // Utils
 router.get('/labs-list', verifyToken, async (req, res) => {
-    const labs = await Lab.find({}).select('name _id');
+    const labQuery = {};
+    if (req.user.hospitalId) labQuery.hospitalId = req.user.hospitalId;
+    const labs = await Lab.find(labQuery).select('name _id');
     res.json({ success: true, labs });
 });
 router.get('/medicines-list', verifyToken, async (req, res) => {
-    const medicines = await Inventory.find({ stock: { $gt: 0 } }).select('name category stock');
+    const medQuery = { stock: { $gt: 0 } };
+    if (req.user.hospitalId) medQuery.hospitalId = req.user.hospitalId;
+    const medicines = await Inventory.find(medQuery).select('name category stock');
     res.json({ success: true, medicines });
 });
 router.get('/:doctorId/booked-slots', async (req, res) => {

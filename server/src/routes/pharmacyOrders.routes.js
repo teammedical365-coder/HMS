@@ -10,10 +10,9 @@ const User = require('../models/user.model');
 router.get('/', verifyToken, async (req, res) => {
     try {
         let query = {};
+        // HARD ISOLATION: Use hospitalId directly on the order document
         if (req.user.hospitalId) {
-            const doctors = await User.find({ hospitalId: req.user.hospitalId });
-            const doctorIds = doctors.map(d => d._id);
-            query = { doctorId: { $in: doctorIds } };
+            query.hospitalId = req.user.hospitalId;
         }
 
         const orders = await PharmacyOrder.find(query)
@@ -42,8 +41,11 @@ router.get('/my-orders', verifyToken, async (req, res) => {
 router.patch('/:id/complete', verifyToken, async (req, res) => {
     try {
         const { purchasedIndices } = req.body;
-        const order = await PharmacyOrder.findById(req.params.id);
-        if (!order) return res.status(404).json({ success: false, message: "Order not found" });
+        // HARD ISOLATION: Only allow completing orders from your hospital
+        const findQuery = { _id: req.params.id };
+        if (req.user.hospitalId) findQuery.hospitalId = req.user.hospitalId;
+        const order = await PharmacyOrder.findOne(findQuery);
+        if (!order) return res.status(404).json({ success: false, message: "Order not found or unauthorized" });
 
         if (purchasedIndices && Array.isArray(purchasedIndices)) {
             order.items.forEach((item, idx) => {

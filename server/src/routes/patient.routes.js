@@ -89,11 +89,15 @@ router.get('/:id/full-history', verifyToken, resolveTenant, async (req, res) => 
         const realUserId = user._id;
         const patientIdStr = user.patientId || userId;
 
+        // HARD ISOLATION: Scope all data to the staff's hospital
+        const hid = req.user.hospitalId;
+        const hFilter = hid ? { hospitalId: hid } : {};
+
         const [visits, labs, pharmacies, appointments] = await Promise.all([
-            ClinicalVisit.find({ $or: [{ patientId: realUserId }, { patientId: patientIdStr }] }).lean(),
-            LabReport.find({ userId: realUserId }).lean(),
-            PharmacyOrder.find({ userId: realUserId }).lean(),
-            Appointment.find({ $or: [{ userId: realUserId }, { patientId: patientIdStr }] }).lean()
+            ClinicalVisit.find({ $or: [{ patientId: realUserId }, { patientId: patientIdStr }], ...hFilter }).lean(),
+            LabReport.find({ userId: realUserId, ...hFilter }).lean(),
+            PharmacyOrder.find({ userId: realUserId, ...hFilter }).lean(),
+            Appointment.find({ $or: [{ userId: realUserId }, { patientId: patientIdStr }], ...hFilter }).lean()
         ]);
 
         let timeline = [];

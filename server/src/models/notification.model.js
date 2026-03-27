@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const notificationSchema = new mongoose.Schema({
     senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', index: true },
     recipientRole: { type: String, required: true }, // e.g., 'lab', 'pharmacy', 'doctor'
     recipientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Optional, if directed to specific user
     message: { type: String, required: true },

@@ -25,31 +25,27 @@ const verifyLab = async (req, res, next) => {
 // 1. GET LAB DASHBOARD STATS
 router.get('/stats', verifyToken, verifyLab, async (req, res) => {
     try {
-        // Find the Lab Profile associated with this user
-        // Assuming Lab User has the same email as Lab Profile or linked userId
+        const hid = req.user.hospitalId;
+        const hospitalFilter = hid ? { hospitalId: hid } : {};
+
         const labProfile = await Lab.findOne({
             $or: [{ email: req.user.email }, { userId: req.user.id }]
         });
 
-        if (!labProfile) {
-            // Give them access to unassigned lab tests if no lab profile is found
-            const pending = await LabReport.countDocuments({ $or: [{ labId: null }, { labId: { $exists: false } }], reportStatus: 'PENDING' });
-            const completed = await LabReport.countDocuments({ $or: [{ labId: null }, { labId: { $exists: false } }], reportStatus: 'UPLOADED' });
-            return res.json({
-                success: true,
-                stats: { pending, completed, revenue: completed * 500, labName: 'Global Lab' }
-            });
+        let labFilter = { ...hospitalFilter };
+        if (labProfile) {
+            labFilter = { ...hospitalFilter, $or: [{ labId: labProfile._id }, { labId: null }, { labId: { $exists: false } }] };
+        } else {
+            labFilter = { ...hospitalFilter, $or: [{ labId: null }, { labId: { $exists: false } }] };
         }
 
-        const pending = await LabReport.countDocuments({ $or: [{ labId: labProfile._id }, { labId: null }, { labId: { $exists: false } }], reportStatus: 'PENDING' });
-        const completed = await LabReport.countDocuments({ $or: [{ labId: labProfile._id }, { labId: null }, { labId: { $exists: false } }], reportStatus: 'UPLOADED' });
-
-        // Revenue calculation (optional, if you track payments)
-        const revenue = completed * 500; // Example: 500 per test
+        const pending = await LabReport.countDocuments({ ...labFilter, reportStatus: 'PENDING' });
+        const completed = await LabReport.countDocuments({ ...labFilter, reportStatus: 'UPLOADED' });
+        const revenue = completed * 500;
 
         res.json({
             success: true,
-            stats: { pending, completed, revenue, labName: labProfile.name }
+            stats: { pending, completed, revenue, labName: labProfile?.name || 'Lab' }
         });
     } catch (error) {
         console.error("Lab Stats Error:", error);
@@ -61,11 +57,14 @@ router.get('/stats', verifyToken, verifyLab, async (req, res) => {
 router.get('/requests', verifyToken, verifyLab, async (req, res) => {
     try {
         const { status } = req.query;
+        const hid = req.user.hospitalId;
+        const hospitalFilter = hid ? { hospitalId: hid } : {};
+
         const labProfile = await Lab.findOne({
             $or: [{ email: req.user.email }, { userId: req.user.id }]
         });
 
-        let query = {};
+        let query = { ...hospitalFilter };
         if (labProfile) {
             query.$or = [{ labId: labProfile._id }, { labId: null }, { labId: { $exists: false } }];
         } else {
@@ -77,8 +76,8 @@ router.get('/requests', verifyToken, verifyLab, async (req, res) => {
         }
 
         const requests = await LabReport.find(query)
-            .populate('userId', 'name email phone patientId') // Patient Details
-            .populate('doctorId', 'name') // Doctor Name
+            .populate('userId', 'name email phone patientId')
+            .populate('doctorId', 'name')
             .sort({ createdAt: -1 });
 
         res.json({ success: true, requests });

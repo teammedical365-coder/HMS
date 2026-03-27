@@ -262,11 +262,21 @@ router.get('/appointments', verifyToken, verifyReception, async (req, res) => {
 // 5. RESCHEDULE & CANCEL
 router.patch('/appointments/:id/reschedule', verifyToken, verifyReception, async (req, res) => {
     const { id } = req.params; const { date, time } = req.body;
-    await Appointment.findByIdAndUpdate(id, { appointmentDate: date, appointmentTime: time, status: 'confirmed' });
+    const reschQuery = { _id: id };
+    if (req.user.hospitalId) reschQuery.hospitalId = req.user.hospitalId;
+    const appt = await Appointment.findOne(reschQuery);
+    if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found or unauthorized' });
+    appt.appointmentDate = date;
+    appt.appointmentTime = time;
+    appt.status = 'confirmed';
+    await appt.save();
     res.json({ success: true });
 });
 router.patch('/appointments/:id/cancel', verifyToken, verifyReception, async (req, res) => {
-    await Appointment.findByIdAndUpdate(req.params.id, { status: 'cancelled' });
+    const cancelQuery = { _id: req.params.id };
+    if (req.user.hospitalId) cancelQuery.hospitalId = req.user.hospitalId;
+    const appt = await Appointment.findOneAndUpdate(cancelQuery, { status: 'cancelled' });
+    if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found or unauthorized' });
     res.json({ success: true });
 });
 

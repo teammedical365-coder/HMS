@@ -17,6 +17,11 @@ const pharmacyOrderSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
+    hospitalId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Hospital',
+        index: true
+    },
     items: [{
         medicineName: String,
         frequency: String,

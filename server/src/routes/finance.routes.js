@@ -66,40 +66,17 @@ router.get('/dashboard', verifyFinanceAccess, async (req, res) => {
             if (endDate) appointmentDateFilter.appointmentDate.$lte = new Date(endDate);
         }
 
-        // Hospital filtering via Doctors
-        let doctorFilterList = {};
+        // HARD ISOLATION: Direct hospitalId filter — no doctor lookup needed
+        let hospitalFilter = {};
         if (targetHospitalId) {
-            const Doctor = require('../models/doctor.model');
-            const hospitalDoctors = await Doctor.find({ hospitalId: targetHospitalId });
-            if (hospitalDoctors.length === 0) {
-                // If there are no doctors in this hospital, it shouldn't show any records.
-                return res.json({
-                    success: true,
-                    data: {
-                        totalRevenue: 0, totalProfit: 0,
-                        consultations: { count: 0, revenue: 0 },
-                        labTests: { count: 0, revenue: 0 },
-                        medicines: { count: 0, revenue: 0, cost: 0, profit: 0 }
-                    }
-                });
-            }
-            const docIds = hospitalDoctors.map(d => d._id);
-            const docUserIds = hospitalDoctors.filter(d => d.userId).map(d => d.userId);
-
-            doctorFilterList = {
-                $or: [
-                    { doctorId: { $in: docIds } },
-                    { doctorId: { $in: docUserIds } },
-                    { doctorUserId: { $in: docUserIds } }
-                ]
-            };
+            hospitalFilter = { hospitalId: targetHospitalId };
         }
 
         // 1. Consultations Revenue
         const consultations = await Appointment.find({
             paymentStatus: { $in: ['paid', 'Paid', 'PAID'] },
             ...appointmentDateFilter,
-            ...doctorFilterList
+            ...hospitalFilter
         });
         const totalConsultationRevenue = consultations.reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
@@ -107,7 +84,7 @@ router.get('/dashboard', verifyFinanceAccess, async (req, res) => {
         const labReports = await LabReport.find({
             paymentStatus: { $in: ['PAID', 'paid', 'Paid'] },
             ...dateFilter,
-            ...doctorFilterList
+            ...hospitalFilter
         });
         const totalLabRevenue = labReports.reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
@@ -115,7 +92,7 @@ router.get('/dashboard', verifyFinanceAccess, async (req, res) => {
         const pharmacyOrders = await PharmacyOrder.find({
             paymentStatus: { $in: ['Paid', 'paid', 'PAID'] },
             ...dateFilter,
-            ...doctorFilterList
+            ...hospitalFilter
         });
 
         let totalMedicineRevenue = 0;

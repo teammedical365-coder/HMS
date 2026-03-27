@@ -21,6 +21,11 @@ const labReportSchema = new mongoose.Schema({
     ref: 'User', // Linking to the Doctor's User ID for notifications/queries
     required: true
   },
+  hospitalId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hospital',
+    index: true
+  },
   labId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Lab' // Optional: If you want to assign to a specific lab later

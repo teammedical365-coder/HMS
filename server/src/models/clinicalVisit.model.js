@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const clinicalVisitSchema = new mongoose.Schema({
     patientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment' },
+    hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', index: true },
     visitDate: { type: Date, default: Date.now },
     visitType: { type: String, enum: ['primary', 'partner', 'joint'], default: 'primary' },
 
