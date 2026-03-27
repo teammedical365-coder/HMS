@@ -640,8 +640,9 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
         const pharmacyCount = await Pharmacy.countDocuments({ hospitalId });
 
         // 5. Patients - unique patients seen by doctors in this hospital (filtered by date if applicable)
-        const doctorIds = await Doctor.find({ hospitalId }).select('_id doctorId');
-        const doctorObjectIds = doctorIds.map(d => d._id);
+        const doctorIds = await Doctor.find({ hospitalId }).select('_id doctorId userId');
+        const doctorObjectIds = doctorIds.map(d => d._id); // Doctor model _ids (used in Appointment.doctorId)
+        const doctorUserIds = doctorIds.map(d => d.userId).filter(Boolean); // User model _ids (used in LabReport.doctorId, PharmacyOrder.doctorId)
 
         const uniquePatientIds = await Appointment.distinct('userId', {
             doctorId: { $in: doctorObjectIds },
@@ -733,20 +734,20 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
             { $sort: { '_id.year': 1, '_id.month': 1 } }
         ]);
 
-        // 8. Lab reports
+        // 8. Lab reports (doctorId on LabReport is User._id, not Doctor._id)
         const labReportCount = await LabReport.countDocuments({
-            doctorId: { $in: doctorObjectIds },
+            doctorId: { $in: doctorUserIds },
             ...createdDateFilter
         });
         const pendingLabReports = await LabReport.countDocuments({
-            doctorId: { $in: doctorObjectIds },
+            doctorId: { $in: doctorUserIds },
             reportStatus: 'PENDING',
             ...createdDateFilter
         });
 
-        // 9. Pharmacy orders
+        // 9. Pharmacy orders (doctorId on PharmacyOrder is User._id, not Doctor._id)
         const pharmacyOrderCount = await PharmacyOrder.countDocuments({
-            doctorId: { $in: doctorObjectIds },
+            doctorId: { $in: doctorUserIds },
             ...createdDateFilter
         });
 

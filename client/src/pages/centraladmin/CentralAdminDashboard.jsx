@@ -370,6 +370,33 @@ const CentralAdminDashboard = () => {
                                 </div>
                             </div>
 
+                            {/* ---- FEATURE QUICK ACTIONS ---- */}
+                            <div className="admin-card" style={{ marginBottom: '24px' }}>
+                                <h3 style={{ marginBottom: '8px' }}>⚡ Quick Feature Management</h3>
+                                <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>Jump to manage specific features for this hospital.</p>
+                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                    {[
+                                        { icon: '👨‍⚕️', label: 'Doctors', path: '/admin/doctors', bg: '#dbeafe', color: '#2563eb', border: '#bfdbfe' },
+                                        { icon: '👥', label: 'Staff', path: '/admin/users', bg: '#f0f9ff', color: '#0284c7', border: '#bae6fd' },
+                                        { icon: '🔑', label: 'Roles', path: '/admin/roles', bg: '#f3e8ff', color: '#9333ea', border: '#e9d5ff' },
+                                        { icon: '🧪', label: 'Labs', path: '/admin/labs', bg: '#faf5ff', color: '#7c3aed', border: '#ddd6fe' },
+                                        { icon: '📋', label: 'Lab Tests', path: '/admin/lab-tests', bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' },
+                                        { icon: '💊', label: 'Pharmacy', path: '/admin/pharmacy', bg: '#ffedd5', color: '#ea580c', border: '#fed7aa' },
+                                        { icon: '🏥', label: 'Reception', path: '/admin/reception', bg: '#dcfce7', color: '#16a34a', border: '#bbf7d0' },
+                                        { icon: '🛠️', label: 'Services', path: '/admin/services', bg: '#fefce8', color: '#ca8a04', border: '#fef08a' },
+                                        { icon: '💉', label: 'Medicines', path: '/admin/medicines', bg: '#fdf2f8', color: '#be185d', border: '#fbcfe8' },
+                                    ].map((item, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => navigate(item.path)}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: item.bg, color: item.color, border: `1px solid ${item.border}`, borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}
+                                        >
+                                            {item.icon} {item.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             {/* ---- TWO COLUMN: Staff Breakdown + Revenue Chart ---- */}
                             <div className="detail-two-col">
                                 {/* Staff breakdown */}

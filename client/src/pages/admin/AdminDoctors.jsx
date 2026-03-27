@@ -63,8 +63,10 @@ const AdminDoctors = () => {
 
     const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
+    const isHospitalAdmin = user?.role === 'hospitaladmin';
+
     useEffect(() => {
-        if (!user || user.role !== 'admin') {
+        if (!user || !['admin', 'hospitaladmin'].includes(user.role)) {
             navigate('/');
             return;
         }
@@ -207,6 +209,12 @@ const AdminDoctors = () => {
             <div className="superadmin-container">
                 <div className="admin-header">
                     <div>
+                        <button
+                            onClick={() => navigate(isHospitalAdmin ? '/hospitaladmin' : '/admin')}
+                            style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '14px', padding: '0 0 8px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                            ← Back to {isHospitalAdmin ? 'Hospital Admin' : 'Dashboard'}
+                        </button>
                         <h1>Manage Doctors</h1>
                         <p>Add and manage doctor profiles for the user platform.</p>
                     </div>
@@ -336,6 +344,30 @@ const AdminDoctors = () => {
                     </div>
                 )}
 
+                {/* Department Breakdown */}
+                {doctors.length > 0 && (() => {
+                    const deptMap = {};
+                    doctors.forEach(doc => {
+                        const depts = doc.departments?.length ? doc.departments : [doc.specialty || 'Unassigned'];
+                        depts.forEach(dept => {
+                            deptMap[dept] = (deptMap[dept] || 0) + 1;
+                        });
+                    });
+                    return (
+                        <div className="admin-card" style={{ marginBottom: '20px' }}>
+                            <h2 style={{ marginBottom: '14px' }}>Doctors by Department</h2>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                                {Object.entries(deptMap).sort((a, b) => b[1] - a[1]).map(([dept, count]) => (
+                                    <div key={dept} style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 18px', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '120px' }}>
+                                        <span style={{ fontSize: '1.4rem', fontWeight: '800', color: '#1d4ed8' }}>{count}</span>
+                                        <span style={{ fontSize: '0.78rem', color: '#475569', fontWeight: '600', textAlign: 'center', marginTop: '2px' }}>{dept}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })()}
+
                 {/* Doctor List */}
                 <div className="users-table">
                     <h2>All Doctors</h2>
@@ -350,6 +382,7 @@ const AdminDoctors = () => {
                                     <th>Name</th>
                                     <th>Email</th>
                                     <th>Specialty</th>
+                                    <th>Departments</th>
                                     <th>Services</th>
                                     <th>Actions</th>
                                 </tr>
@@ -366,6 +399,13 @@ const AdminDoctors = () => {
                                         </td>
                                         <td>{doctor.email}</td>
                                         <td>{doctor.specialty || '-'}</td>
+                                        <td>
+                                            {doctor.departments?.length
+                                                ? doctor.departments.map((d, i) => (
+                                                    <span key={i} style={{ display: 'inline-block', background: '#eff6ff', color: '#1d4ed8', borderRadius: '4px', padding: '2px 7px', fontSize: '11px', fontWeight: '600', marginRight: '4px', marginBottom: '2px' }}>{d}</span>
+                                                ))
+                                                : <span style={{ color: '#94a3b8' }}>—</span>}
+                                        </td>
                                         <td>{doctor.services?.length || 0}</td>
                                         <td>
                                             <div className="action-buttons" style={{ display: 'flex', gap: '8px' }}>

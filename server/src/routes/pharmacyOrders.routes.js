@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const PharmacyOrder = require('../models/pharmacyOrder.model');
+const Inventory = require('../models/inventory.model');
 const { verifyToken } = require('../middleware/auth.middleware');
 
 const User = require('../models/user.model');
@@ -47,18 +48,42 @@ router.patch('/:id/complete', verifyToken, async (req, res) => {
         const order = await PharmacyOrder.findOne(findQuery);
         if (!order) return res.status(404).json({ success: false, message: "Order not found or unauthorized" });
 
-        if (purchasedIndices && Array.isArray(purchasedIndices)) {
-            order.items.forEach((item, idx) => {
-                item.purchased = purchasedIndices.includes(idx);
-            });
-            order.markModified('items');
-        } else {
-            // Default: All purchased if none specified
-            order.items.forEach(item => { item.purchased = true; });
-            order.markModified('items');
-        }
+        // Determine which items are purchased
+        const purchasedSet = new Set(
+            purchasedIndices && Array.isArray(purchasedIndices)
+                ? purchasedIndices
+                : order.items.map((_, i) => i) // default: all
+        );
 
-        order.paymentStatus = 'Paid';
+        // Look up prices from inventory and decrement stock for purchased items
+        let totalAmount = 0;
+        for (let idx = 0; idx < order.items.length; idx++) {
+            const item = order.items[idx];
+            const wasPurchased = purchasedSet.has(idx);
+            item.purchased = wasPurchased;
+
+            if (wasPurchased) {
+                // Find inventory item by name (hospital-scoped if possible)
+                const invQuery = { name: { $regex: new RegExp(`^${item.medicineName}$`, 'i') } };
+                if (req.user.hospitalId) invQuery.hospitalId = req.user.hospitalId;
+                const invItem = await Inventory.findOne(invQuery);
+
+                if (invItem) {
+                    item.price = invItem.sellingPrice || 0;
+                    totalAmount += invItem.sellingPrice || 0;
+                    // Decrement stock
+                    if (invItem.stock > 0) {
+                        invItem.stock = Math.max(0, invItem.stock - 1);
+                        await invItem.save();
+                    }
+                }
+            }
+        }
+        order.markModified('items');
+        order.totalAmount = totalAmount;
+
+        // Only mark Paid if at least one item was dispensed
+        order.paymentStatus = purchasedSet.size > 0 ? 'Paid' : 'Pending';
         order.orderStatus = 'Completed';
         await order.save();
 

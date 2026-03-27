@@ -80,6 +80,7 @@ const PharmacyOrders = () => {
                                 <th>Patient Details</th>
                                 <th>Doctor</th>
                                 <th>Prescribed Items</th>
+                                <th>Total</th>
                                 <th>Status</th>
                                 <th>Payment</th>
                                 <th>Actions</th>
@@ -111,14 +112,21 @@ const PharmacyOrders = () => {
                                                     )}
                                                     <span style={{ textDecoration: order.orderStatus !== 'Upcoming' && !item.purchased ? 'line-through' : 'none', color: order.orderStatus !== 'Upcoming' && !item.purchased ? '#999' : '#000' }}>
                                                         {item.medicineName} ({item.frequency})
+                                                        {item.price > 0 && (
+                                                            <span style={{ marginLeft: '6px', color: '#059669', fontWeight: '600', fontSize: '0.8rem' }}>₹{item.price}</span>
+                                                        )}
                                                     </span>
                                                 </li>
                                             ))}
                                         </ul>
                                     </td>
+                                    <td style={{ fontWeight: '700', color: '#0f172a' }}>
+                                        {order.totalAmount > 0
+                                            ? `₹${order.totalAmount}`
+                                            : order.orderStatus === 'Upcoming' ? '—' : '₹0'}
+                                    </td>
                                     <td>
-                                        <span className={`status-badge ${order.orderStatus === 'Completed' ? 'status-active' : 'status-low'
-                                            }`}>
+                                        <span className={`status-badge ${order.orderStatus === 'Completed' ? 'status-active' : 'status-low'}`}>
                                             {order.orderStatus}
                                         </span>
                                     </td>

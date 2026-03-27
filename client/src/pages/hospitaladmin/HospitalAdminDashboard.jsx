@@ -549,6 +549,26 @@ const HospitalAdminDashboard = () => {
                 {/* ===================== STAFF TAB ===================== */}
                 {activeTab === 'staff' && (
                     <div>
+                        {/* Staff Management Quick Actions */}
+                        <div className="admin-card" style={{ marginBottom: '20px' }}>
+                            <h2 style={{ marginBottom: '12px' }}>⚡ Staff Management</h2>
+                            <p style={{ color: '#888', fontSize: '14px', margin: '0 0 16px' }}>Manage your hospital's staff and doctors from here.</p>
+                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                                <button
+                                    onClick={() => navigate('/admin/doctors')}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', background: '#dbeafe', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}
+                                >
+                                    👨‍⚕️ Manage Doctors
+                                </button>
+                                <button
+                                    onClick={() => navigate('/admin/roles')}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', background: '#f3e8ff', color: '#9333ea', border: '1px solid #e9d5ff', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}
+                                >
+                                    🔑 Manage Roles
+                                </button>
+                            </div>
+                        </div>
+
                         {/* Create Staff Form */}
                         <div className="admin-card" style={{ marginBottom: '20px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
