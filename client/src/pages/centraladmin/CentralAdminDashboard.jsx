@@ -203,7 +203,13 @@ const CentralAdminDashboard = () => {
     const handleDeleteHospital = async (id) => {
         try {
             const res = await hospitalAPI.deleteHospital(id);
-            if (res.success) { setSuccess('Hospital deleted.'); setDeleteHospitalConfirm(null); fetchHospitals(); }
+            if (res.success) {
+                const log = res.deletionLog || {};
+                const total = (log.users || 0) + (log.doctors || 0) + (log.appointments || 0) + (log.labs || 0) + (log.pharmacies || 0) + (log.receptions || 0) + (log.inventory || 0) + (log.roles || 0);
+                setSuccess(`Hospital deleted successfully. ${total} related records removed.`);
+                setDeleteHospitalConfirm(null);
+                fetchHospitals();
+            }
         } catch (err) { setError(err.response?.data?.message || 'Error deleting hospital.'); setDeleteHospitalConfirm(null); }
     };
 
@@ -887,7 +893,7 @@ const CentralAdminDashboard = () => {
                     <div className="modal-overlay">
                         <div className="modal-content">
                             <h3>Delete Hospital?</h3>
-                            <p>Are you sure? All links to this hospital will be removed. This cannot be undone.</p>
+                            <p style={{ color: '#dc2626', fontWeight: '600' }}>WARNING: This will permanently delete the hospital and ALL related data including doctors, staff, patients, appointments, lab records, pharmacy records, inventory, and the entire hospital database. This action CANNOT be undone.</p>
                             <div className="modal-buttons">
                                 <button onClick={() => handleDeleteHospital(deleteHospitalConfirm)} className="btn-confirm-delete">Delete</button>
                                 <button onClick={() => setDeleteHospitalConfirm(null)} className="btn-cancel">Cancel</button>

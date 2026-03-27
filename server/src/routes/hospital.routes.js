@@ -6,9 +6,16 @@ const User = require('../models/user.model');
 const Role = require('../models/role.model');
 const Inventory = require('../models/inventory.model');
 const LabTest = require('../models/labTest.model');
+const Doctor = require('../models/doctor.model');
+const Lab = require('../models/lab.model');
+const Pharmacy = require('../models/pharmacy.model');
+const Reception = require('../models/reception.model');
+const Appointment = require('../models/appointment.model');
+const FacilityCharge = require('../models/facilityCharge.model');
+const QuestionLibrary = require('../models/questionLibrary.model');
 const jwt = require('jsonwebtoken');
 const { verifyToken } = require('../middleware/auth.middleware');
-const { getTenantConnection, getTenantDbName } = require('../db/tenantDb');
+const { getTenantConnection, getTenantDbName, getActiveConnections, removeTenantConnection } = require('../db/tenantDb');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
@@ -207,24 +214,53 @@ router.put('/:id', verifyCentralAdmin, async (req, res) => {
     }
 });
 
-// Delete a hospital
+// Delete a hospital and ALL related data (cascade delete)
 router.delete('/:id', verifyCentralAdmin, async (req, res) => {
     try {
-        const hospital = await Hospital.findById(req.params.id);
+        const hospitalId = req.params.id;
+        const hospital = await Hospital.findById(hospitalId);
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
-        // Check if there are hospital admins linked to this hospital
-        const adminCount = await User.countDocuments({ hospitalId: req.params.id, role: 'hospitaladmin' });
-        if (adminCount > 0) {
-            return res.status(400).json({
-                success: false,
-                message: `Cannot delete hospital. ${adminCount} hospital admin(s) are still linked. Unlink them first.`
-            });
+        const deletionLog = {};
+
+        // 1. Delete all related data from master DB (all collections with hospitalId)
+        const masterDeletions = await Promise.all([
+            Appointment.deleteMany({ hospitalId }).then(r => deletionLog.appointments = r.deletedCount),
+            Doctor.deleteMany({ hospitalId }).then(r => deletionLog.doctors = r.deletedCount),
+            Lab.deleteMany({ hospitalId }).then(r => deletionLog.labs = r.deletedCount),
+            Pharmacy.deleteMany({ hospitalId }).then(r => deletionLog.pharmacies = r.deletedCount),
+            Reception.deleteMany({ hospitalId }).then(r => deletionLog.receptions = r.deletedCount),
+            Inventory.deleteMany({ hospitalId }).then(r => deletionLog.inventory = r.deletedCount),
+            Role.deleteMany({ hospitalId }).then(r => deletionLog.roles = r.deletedCount),
+            FacilityCharge.deleteMany({ hospitalId }).then(r => deletionLog.facilityCharges = r.deletedCount),
+            QuestionLibrary.deleteMany({ hospitalId }).then(r => deletionLog.questionLibraries = r.deletedCount),
+            User.deleteMany({ hospitalId }).then(r => deletionLog.users = r.deletedCount),
+        ]);
+
+        // 2. Drop the tenant database entirely and clean up connection cache
+        try {
+            const tenantConn = await getTenantConnection(String(hospitalId));
+            await tenantConn.db.dropDatabase();
+            console.log(`🗑️  Dropped tenant DB for hospital: ${hospital.name}`);
+            await removeTenantConnection(String(hospitalId));
+            deletionLog.tenantDbDropped = true;
+        } catch (dbErr) {
+            console.warn(`⚠️  Could not drop tenant DB for ${hospital.name}:`, dbErr.message);
+            deletionLog.tenantDbDropped = false;
         }
 
-        await Hospital.findByIdAndDelete(req.params.id);
-        res.json({ success: true, message: 'Hospital deleted successfully' });
+        // 3. Delete the hospital record itself
+        await Hospital.findByIdAndDelete(hospitalId);
+
+        console.log(`🏥 Hospital "${hospital.name}" fully deleted. Summary:`, deletionLog);
+
+        res.json({
+            success: true,
+            message: `Hospital "${hospital.name}" and all related data deleted successfully.`,
+            deletionLog
+        });
     } catch (err) {
+        console.error('Delete hospital error:', err);
         res.status(500).json({ success: false, message: err.message });
     }
 });

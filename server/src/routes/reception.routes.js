@@ -324,7 +324,8 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             status: 'confirmed',
             paymentStatus: paymentStatus || 'Paid',
             paymentMethod: paymentMethod || 'Cash',
-            notes: notes || 'Walk-in created by reception'
+            notes: notes || 'Walk-in created by reception',
+            bookedBy: req.user._id
         });
 
         await newAppointment.save();
@@ -377,7 +378,7 @@ router.post('/check-in', verifyToken, verifyReception, async (req, res) => {
 // 8. TRANSACTIONS
 router.get('/transactions', verifyToken, verifyReception, async (req, res) => {
     try {
-        let queryFilter = { amount: { $gt: 0 } };
+        let queryFilter = { amount: { $gt: 0 }, bookedBy: req.user._id };
         if (req.user.hospitalId) {
             queryFilter.hospitalId = req.user.hospitalId;
         }

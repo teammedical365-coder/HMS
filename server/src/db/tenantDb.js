@@ -99,6 +99,20 @@ function getTenantDbName(hospitalId) {
 }
 
 /**
+ * Close and remove a tenant connection from cache.
+ * Used when deleting a hospital to clean up resources.
+ */
+async function removeTenantConnection(hospitalId) {
+    const dbName = sanitizeDbName(hospitalId);
+    if (connectionCache.has(dbName)) {
+        const conn = connectionCache.get(dbName);
+        try { await conn.close(); } catch (e) { /* ignore */ }
+        connectionCache.delete(dbName);
+        console.log(`🗑️  Removed tenant connection from cache: ${dbName}`);
+    }
+}
+
+/**
  * List all currently cached (open) tenant connections.
  * Useful for the Supreme Admin's monitoring dashboard.
  */
@@ -119,4 +133,5 @@ module.exports = {
     getMasterConnection,
     getTenantDbName,
     getActiveConnections,
+    removeTenantConnection,
 };

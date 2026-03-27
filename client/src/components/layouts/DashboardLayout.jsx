@@ -142,7 +142,7 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
             <div className="topbar-right">
                 <div className="user-profile-widget">
                     <div className="profile-text-info">
-                        <span className="user-disp-name">DR. {user?.name || 'User'}</span>
+                        <span className="user-disp-name">{user?.role === 'doctor' ? 'DR. ' : ''}{user?.name || 'User'}</span>
                         <span className="user-disp-role">{user?.email}</span>
                     </div>
                     <div className="profile-avatar-wrap">
