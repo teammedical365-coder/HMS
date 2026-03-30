@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { receptionAPI, publicAPI, hospitalAPI } from '../../utils/api';
+import { receptionAPI, publicAPI, hospitalAPI, uploadAPI } from '../../utils/api';
+import { useAuth } from '../../store/hooks';
 import { getSubdomain } from '../../utils/subdomain';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -14,6 +15,7 @@ const timeSlots = [
 
 const ReceptionDashboard = () => {
     const navigate = useNavigate();
+    const { user: currentUser } = useAuth();
     const [appointments, setAppointments] = useState([]);
     const [doctorsList, setDoctorsList] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -43,13 +45,14 @@ const ReceptionDashboard = () => {
 
         // Vitals / Payment (Reception Duties)
         height: '', weight: '', bmi: '', bloodGroup: '',
-        paymentStatus: 'Pending', consultationFee: '',
+        consultationFee: '',
 
         // Assignment
         department: '', doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: '',
         referralType: '', reasonForVisit: '', paymentMethod: 'Cash'
     });
 
+    const [paymentScreenshot, setPaymentScreenshot] = useState(null);
     const [verifyingAadhaar, setVerifyingAadhaar] = useState(false);
     const [otpSent, setOtpSent] = useState(false);
     const [aadhaarOtp, setAadhaarOtp] = useState('');
@@ -296,6 +299,11 @@ const ReceptionDashboard = () => {
             setSaving(false); return;
         }
 
+        if (intakeForm.doctor && intakeForm.visitTime && intakeForm.paymentMethod !== 'Cash' && !paymentScreenshot) {
+            alert(`Please upload a payment screenshot/proof for ${intakeForm.paymentMethod} payment before booking.`);
+            setSaving(false); return;
+        }
+
         try {
             let userId = selectedPatientId;
 
@@ -317,57 +325,91 @@ const ReceptionDashboard = () => {
 
             // 3. Book Appointment (optional when editing existing patient)
             if (intakeForm.doctor && intakeForm.visitDate && intakeForm.visitTime) {
+                // Upload payment screenshot if non-cash and screenshot provided
+                let screenshotNote = '';
+                if (intakeForm.paymentMethod !== 'Cash' && paymentScreenshot) {
+                    try {
+                        const fd = new FormData();
+                        fd.append('images', paymentScreenshot);
+                        const upRes = await uploadAPI.uploadImages(fd);
+                        if (upRes.success && upRes.files?.length > 0) {
+                            screenshotNote = ` | Screenshot: ${upRes.files[0].url}`;
+                        }
+                    } catch { /* non-fatal */ }
+                }
+
                 const bookingRes = await receptionAPI.bookAppointment({
                     patientId: userId,
                     doctorId: intakeForm.doctor,
                     date: intakeForm.visitDate,
                     time: intakeForm.visitTime,
-                    notes: `Walk-in. Vitals: ${intakeForm.height}cm/${intakeForm.weight}kg. Reason: ${intakeForm.reasonForVisit}`,
+                    notes: `Walk-in. Vitals: ${intakeForm.height}cm/${intakeForm.weight}kg. Reason: ${intakeForm.reasonForVisit}${screenshotNote}`,
                     paymentMethod: intakeForm.paymentMethod,
-                    paymentStatus: intakeForm.paymentStatus,
+                    paymentStatus: 'Paid',
                     amount: intakeForm.consultationFee
                 });
 
                 if (bookingRes.success) {
-                    alert("✅ Patient Registered & Assigned to Doctor!");
-                    // Generate Receipt PDF
+                    alert("Patient Registered & Assigned to Doctor!");
+                    // --- Dynamic Receipt PDF ---
                     const doc = new jsPDF();
-                    let y = 18;
-                    doc.setFontSize(18);
-                    doc.setFont("helvetica", "bold");
-                    doc.text(hospitalContext?.name || "HOSPITAL", 105, y, { align: 'center' });
-                    y += 8;
-                    doc.setFontSize(10);
-                    doc.setFont("helvetica", "normal");
-                    doc.setTextColor(100);
-                    doc.text("Registration Slip / Receipt", 105, y, { align: 'center' });
-                    y += 8;
-                    doc.setDrawColor(200); doc.line(14, y, 196, y); y += 10;
-                    doc.setTextColor(0);
+                    const hName = hospitalContext?.name || 'HOSPITAL';
+                    const hAddr = [hospitalContext?.address, hospitalContext?.city, hospitalContext?.state].filter(Boolean).join(', ');
+                    const hPhone = hospitalContext?.phone || '';
+                    const hEmail = hospitalContext?.email || '';
+                    const issuedBy = currentUser?.name || 'Reception Staff';
                     const selectedDoc = doctorsList.find(d => d._id === intakeForm.doctor);
+                    let y = 18;
+
+                    // Hospital header
+                    doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+                    doc.text(hName, 105, y, { align: 'center' }); y += 7;
+                    if (hAddr) {
+                        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
+                        doc.text(hAddr, 105, y, { align: 'center' }); y += 5;
+                    }
+                    if (hPhone || hEmail) {
+                        const contact = [hPhone && `Ph: ${hPhone}`, hEmail && `Email: ${hEmail}`].filter(Boolean).join('  |  ');
+                        doc.setFontSize(9); doc.setTextColor(100);
+                        doc.text(contact, 105, y, { align: 'center' }); y += 5;
+                    }
+                    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(41, 128, 185);
+                    doc.text('Registration Slip / Receipt', 105, y, { align: 'center' }); y += 5;
+                    doc.setDrawColor(41, 128, 185); doc.setLineWidth(0.5);
+                    doc.line(14, y, 196, y); y += 8;
+                    doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+
                     autoTable(doc, {
                         startY: y,
                         body: [
                             ['Patient Name', `${intakeForm.firstName} ${intakeForm.lastName}`],
                             ['MRN / ID', regRes.user?.patientId || 'N/A'],
                             ['Phone', intakeForm.mobile || '-'],
-                            ['Aadhaar Verified', intakeForm.isAadhaarVerified ? 'YES ✅' : 'NO'],
+                            ['Aadhaar Verified', intakeForm.isAadhaarVerified ? 'YES - Verified' : 'NO'],
                             ['Department', intakeForm.department || '-'],
                             ['Doctor', `Dr. ${selectedDoc?.name || '-'}`],
                             ['Date & Time', `${intakeForm.visitDate} @ ${intakeForm.visitTime}`],
-                            ['Consultation Fee', `₹${intakeForm.consultationFee || '0'}`],
+                            ['Consultation Fee', `Rs. ${Number(intakeForm.consultationFee || 0).toLocaleString('en-IN')}`],
                             ['Payment Method', intakeForm.paymentMethod || 'Cash'],
-                            ['Payment Status', intakeForm.paymentStatus || 'Pending'],
+                            ['Payment Status', 'PAID'],
                         ],
                         theme: 'grid',
                         headStyles: { fillColor: [41, 128, 185] },
-                        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 } },
+                        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 52 } },
+                        bodyStyles: { fontSize: 10 },
+                        alternateRowStyles: { fillColor: [245, 249, 255] },
                     });
-                    y = doc.lastAutoTable.finalY + 12;
-                    doc.setFontSize(9); doc.setTextColor(120);
-                    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, y);
-                    doc.text(hospitalContext?.name || '', 196, y, { align: 'right' });
-                    doc.save("Receipt.pdf");
+
+                    y = doc.lastAutoTable.finalY + 10;
+                    doc.setDrawColor(200); doc.line(14, y, 196, y); y += 6;
+                    doc.setFontSize(8); doc.setTextColor(120);
+                    doc.text(`Issued by: ${issuedBy}`, 14, y);
+                    doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 196, y, { align: 'right' });
+                    y += 5;
+                    doc.text('Thank you for choosing ' + hName, 105, y, { align: 'center' });
+                    doc.save(`Receipt_${regRes.user?.patientId || 'Patient'}.pdf`);
+
+                    setPaymentScreenshot(null);
                     fetchAppointments();
                     setViewMode('dashboard');
                 } else {
@@ -508,17 +550,34 @@ const ReceptionDashboard = () => {
                                     <select name="paymentMethod" value={intakeForm.paymentMethod} onChange={handleInputChange}>
                                         <option value="Cash">Cash</option>
                                         <option value="UPI">UPI</option>
+                                        <option value="Card">Card</option>
                                         <option value="Cheque">Cheque</option>
+                                        <option value="NEFT/RTGS">NEFT / RTGS</option>
                                     </select>
                                 </div>
-                                <div className="field">
-                                    <label>Payment Status</label>
-                                    <select name="paymentStatus" value={intakeForm.paymentStatus} onChange={handleInputChange}>
-                                        <option value="Pending">Pending</option>
-                                        <option value="Paid">Paid</option>
-                                    </select>
+                                <div className="field" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', marginTop: '22px' }}>
+                                    <span style={{ fontSize: '18px' }}>✅</span>
+                                    <span style={{ fontWeight: 600, color: '#15803d', fontSize: '14px' }}>Payment Confirmed — Paid</span>
                                 </div>
                             </div>
+                            {intakeForm.paymentMethod !== 'Cash' && (
+                                <div className="form-row" style={{ marginTop: '6px' }}>
+                                    <div className="field" style={{ flex: 1 }}>
+                                        <label>Payment Screenshot / Proof <span style={{ color: '#ef4444', fontSize: '12px' }}>*Required for {intakeForm.paymentMethod}</span></label>
+                                        <input
+                                            type="file"
+                                            accept="image/*,application/pdf"
+                                            onChange={e => setPaymentScreenshot(e.target.files[0])}
+                                            style={{ padding: '8px', border: '2px dashed #6366f1', borderRadius: '8px', background: '#f5f3ff', width: '100%' }}
+                                        />
+                                        {paymentScreenshot && (
+                                            <span style={{ fontSize: '12px', color: '#059669', marginTop: '4px', display: 'block' }}>
+                                                ✅ {paymentScreenshot.name}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="form-section" style={{ backgroundColor: '#e3f2fd' }}>

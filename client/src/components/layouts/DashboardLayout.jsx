@@ -2,15 +2,17 @@ import React, { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, useAppDispatch } from '../../store/hooks';
 import { logout } from '../../store/slices/authSlice';
-import { 
-    FiHome, FiUsers, FiCalendar, FiActivity, FiPackage, 
-    FiSettings, FiLogOut, FiPieChart, FiClipboard, 
-    FiFileText, FiPlusSquare, FiDatabase, FiGrid, FiShield 
+import { useBranding } from '../../context/BrandingContext';
+import {
+    FiHome, FiUsers, FiCalendar, FiActivity, FiPackage,
+    FiSettings, FiLogOut, FiPieChart, FiClipboard,
+    FiFileText, FiPlusSquare, FiDatabase, FiGrid, FiShield
 } from 'react-icons/fi';
 import './DashboardLayout.css';
 
 const DashboardSidebar = ({ isOpen, setOpen }) => {
     const { user } = useAuth();
+    const { branding, hospitalName } = useBranding();
     const role = (user?.role || '').toLowerCase();
     
     // Categorized Menus
@@ -77,8 +79,18 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
     return (
         <aside className={`erp-sidebar ${isOpen ? 'open' : 'collapsed'}`}>
             <div className="sidebar-brand">
-                <div className="brand-dot" />
-                <span>MediCRM ERP</span>
+                {branding.logoUrl ? (
+                    <img
+                        src={branding.logoUrl}
+                        alt={hospitalName}
+                        style={{ height: '32px', maxWidth: '120px', objectFit: 'contain', borderRadius: '4px' }}
+                    />
+                ) : (
+                    <>
+                        <div className="brand-dot" />
+                        <span>{hospitalName !== 'MediCRM' ? hospitalName : 'MediCRM ERP'}</span>
+                    </>
+                )}
             </div>
             
             <nav className="sidebar-nav">
@@ -106,6 +118,7 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
 
 const TopBar = ({ toggleSidebar, sidebarOpen }) => {
     const { user } = useAuth();
+    const { branding, hospitalName } = useBranding();
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const location = useLocation();
@@ -130,6 +143,13 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                         <span />
                     </div>
                 </button>
+                {branding.logoUrl && (
+                    <img
+                        src={branding.logoUrl}
+                        alt={hospitalName}
+                        style={{ height: '28px', maxWidth: '100px', objectFit: 'contain', borderRadius: '3px', marginRight: '8px' }}
+                    />
+                )}
                 <div className="breadcrumb-wrap">
                     <span className="curr-page-name">
                         {location.pathname.split('/').pop().replace(/-/g, ' ') || 'Dashboard'}
@@ -146,8 +166,11 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                         <span className="user-disp-role">{user?.email}</span>
                     </div>
                     <div className="profile-avatar-wrap">
-                        <div className="profile-avatar">
-                            {getInitials(user?.name)}
+                        <div className="profile-avatar" style={{ overflow: 'hidden', padding: 0 }}>
+                            {user?.avatar
+                                ? <img src={user.avatar} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
+                                : getInitials(user?.name)
+                            }
                         </div>
                         <div className="online-indicator" />
                         

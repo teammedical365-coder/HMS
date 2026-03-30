@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAppDispatch } from '../../store/hooks';
+import { updateUser as updateUserAction } from '../../store/slices/authSlice';
 import { adminAPI, uploadAPI, hospitalAPI } from '../../utils/api';
 import '../administration/SuperAdmin.css';
 import './HospitalAdminDashboard.css';
 
 const HospitalAdminDashboard = () => {
     const navigate = useNavigate();
+    const dispatch = useAppDispatch();
     const [activeTab, setActiveTab] = useState('overview');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+
+    // My Profile state
+    const [profileFile, setProfileFile] = useState(null);
+    const [savingProfile, setSavingProfile] = useState(false);
 
     // Hospital info
     const [hospitalInfo, setHospitalInfo] = useState(null);
@@ -385,6 +392,29 @@ const HospitalAdminDashboard = () => {
 
     const formatCurrency = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
 
+    const handleSaveProfilePhoto = async () => {
+        if (!profileFile) return;
+        setSavingProfile(true);
+        setError(''); setSuccess('');
+        try {
+            const formData = new FormData();
+            formData.append('images', profileFile);
+            const uploadRes = await uploadAPI.uploadImages(formData);
+            if (uploadRes.success && uploadRes.files?.length > 0) {
+                const avatarUrl = uploadRes.files[0].url;
+                await adminAPI.updateUser(currentUser.id || currentUser._id, { avatar: avatarUrl });
+                dispatch(updateUserAction({ avatar: avatarUrl }));
+                setSuccess('Profile photo updated successfully!');
+                setProfileFile(null);
+                setTimeout(() => setSuccess(''), 3000);
+            }
+        } catch (err) {
+            setError('Failed to update profile photo.');
+        } finally {
+            setSavingProfile(false);
+        }
+    };
+
     const tabs = [
         { id: 'overview', label: '📊 Overview' },
         { id: 'staff', label: '👤 Staff' },
@@ -526,6 +556,40 @@ const HospitalAdminDashboard = () => {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        </div>
+
+                        {/* My Profile Card */}
+                        <div className="admin-card" style={{ marginTop: '24px' }}>
+                            <h2>👤 My Profile</h2>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                                <div style={{ flexShrink: 0 }}>
+                                    {profileFile ? (
+                                        <img src={URL.createObjectURL(profileFile)} alt="Preview" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--brand-500, #14b8a6)' }} />
+                                    ) : currentUser?.avatar ? (
+                                        <img src={currentUser.avatar} alt={currentUser.name} style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--brand-500, #14b8a6)' }} />
+                                    ) : (
+                                        <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 700, color: '#6366f1', border: '3px solid #c7d2fe' }}>
+                                            {(currentUser?.name || 'A').charAt(0).toUpperCase()}
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <p style={{ margin: '0 0 4px', fontWeight: 600, fontSize: '16px', color: '#1e293b' }}>{currentUser?.name}</p>
+                                    <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#64748b' }}>{currentUser?.email}</p>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                        <input type="file" accept="image/*" id="profilePhotoInput" style={{ display: 'none' }}
+                                            onChange={e => setProfileFile(e.target.files[0])} />
+                                        <label htmlFor="profilePhotoInput" style={{ padding: '8px 16px', background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                                            📷 Choose Photo
+                                        </label>
+                                        {profileFile && (
+                                            <button onClick={handleSaveProfilePhoto} disabled={savingProfile} className="btn-save" style={{ padding: '8px 16px', fontSize: '13px' }}>
+                                                {savingProfile ? 'Saving...' : 'Save Photo'}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

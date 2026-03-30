@@ -2,8 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/auth.middleware');
 const { resolveTenant } = require('../middleware/tenantMiddleware');
-const { getTenantModels } = require('../db/tenantModels');
-// Master models (used as fallback when no tenant context)
 const MasterUser = require('../models/user.model');
 
 // SEARCH API: Identifies patient by Phone or Name — scoped to hospital tenant
@@ -11,12 +9,7 @@ router.get('/search', verifyToken, resolveTenant, async (req, res) => {
     try {
         const { term } = req.query;
 
-        let User = MasterUser;
-        if (req.tenantDb) {
-            ({ User } = getTenantModels(req.tenantDb));
-        }
-
-        const patients = await User.find({
+        const patients = await MasterUser.find({
             $or: [
                 { phone: term },
                 { patientId: term },
@@ -53,34 +46,22 @@ router.get('/:id/full-history', verifyToken, resolveTenant, async (req, res) => 
             return res.status(403).json({ success: false, message: 'Unauthorized access to patient history' });
         }
 
-        const isRestrictedRole = ['pharmacy', 'lab'].includes((roleData.name || '').toLowerCase());
+        const isRestrictedRole = ['pharmacy', 'lab'].includes((roleData?.name || '').toLowerCase());
 
-        // Use tenant models if available, fallback to master
-        let User = MasterUser;
-        let ClinicalVisit, LabReport, PharmacyOrder, Appointment;
-
-        if (req.tenantDb) {
-            const models = getTenantModels(req.tenantDb);
-            User = models.User;
-            Appointment = models.Appointment;
-            LabReport = models.LabReport;
-            PharmacyOrder = models.PharmacyOrder;
-        } else {
-            ClinicalVisit = require('../models/clinicalVisit.model');
-            LabReport = require('../models/labReport.model');
-            PharmacyOrder = require('../models/pharmacyOrder.model');
-            Appointment = require('../models/appointment.model');
-        }
-        // ClinicalVisit is always from master for now (complex schema)
-        if (!ClinicalVisit) ClinicalVisit = require('../models/clinicalVisit.model');
+        // All clinical data is stored in master DB — hospitalId filter provides hospital isolation
+        const ClinicalVisit = require('../models/clinicalVisit.model');
+        const LabReport = require('../models/labReport.model');
+        const PharmacyOrder = require('../models/pharmacyOrder.model');
+        const Appointment = require('../models/appointment.model');
 
         // Determine if ID is ObjectId or patientId string
         const mongoose = require('mongoose');
         const isObjectId = mongoose.Types.ObjectId.isValid(userId);
         
         // Find the user first to get their actual ObjectId for relations
+        // Always use MasterUser — patients are registered in master DB
         const userQuery = isObjectId ? { _id: userId } : { patientId: userId };
-        const user = await User.findOne(userQuery).lean();
+        const user = await MasterUser.findOne(userQuery).lean();
 
         if (!user) {
             return res.status(404).json({ success: false, message: 'Patient not found' });

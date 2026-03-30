@@ -27,7 +27,7 @@ const CentralAdminDashboard = () => {
 
     // Hospital Admin creation
     const [showHospitalAdminForm, setShowHospitalAdminForm] = useState(false);
-    const [hospitalAdminForm, setHospitalAdminForm] = useState({ name: '', email: '', password: '', phone: '', hospitalId: '' });
+    const [hospitalAdminForm, setHospitalAdminForm] = useState({ name: '', email: '', password: '', phone: '', hospitalId: '', file: null });
     const [creatingHospitalAdmin, setCreatingHospitalAdmin] = useState(false);
 
     // Hospital Detail View
@@ -228,8 +228,19 @@ const CentralAdminDashboard = () => {
         try {
             const res = await hospitalAdminAPI.createHospitalAdmin(hospitalAdminForm);
             if (res.success) {
+                // If a photo was selected, upload it and update the new admin's avatar
+                if (hospitalAdminForm.file && res.user?.id) {
+                    try {
+                        const formData = new FormData();
+                        formData.append('images', hospitalAdminForm.file);
+                        const uploadRes = await uploadAPI.uploadImages(formData);
+                        if (uploadRes.success && uploadRes.files?.length > 0) {
+                            await adminAPI.updateUser(res.user.id, { avatar: uploadRes.files[0].url });
+                        }
+                    } catch { /* avatar upload failure is non-fatal */ }
+                }
                 setSuccess(`✅ Hospital Admin created! Login: ${hospitalAdminForm.email}`);
-                setHospitalAdminForm({ name: '', email: '', password: '', phone: '', hospitalId: '' });
+                setHospitalAdminForm({ name: '', email: '', password: '', phone: '', hospitalId: '', file: null });
                 setShowHospitalAdminForm(false);
                 fetchHospitals();
             }
@@ -619,12 +630,19 @@ const CentralAdminDashboard = () => {
                                                 <input type="text" className="staff-input" placeholder="Phone number" value={hospitalAdminForm.phone} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, phone: e.target.value })} />
                                             </div>
                                         </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Assign Hospital *</label>
-                                            <select className="staff-input" value={hospitalAdminForm.hospitalId} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, hospitalId: e.target.value })} required>
-                                                <option value="">-- Select Hospital --</option>
-                                                {hospitals.map(h => <option key={h._id} value={h._id}>{h.name}{h.city ? ` — ${h.city}` : ''}</option>)}
-                                            </select>
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label className="staff-label">Profile Photo</label>
+                                                <input type="file" accept="image/*" className="staff-input" style={{ padding: '8px' }}
+                                                    onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, file: e.target.files[0] })} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Assign Hospital *</label>
+                                                <select className="staff-input" value={hospitalAdminForm.hospitalId} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, hospitalId: e.target.value })} required>
+                                                    <option value="">-- Select Hospital --</option>
+                                                    {hospitals.map(h => <option key={h._id} value={h._id}>{h.name}{h.city ? ` — ${h.city}` : ''}</option>)}
+                                                </select>
+                                            </div>
                                         </div>
                                         <button type="submit" disabled={creatingHospitalAdmin} className="submit-button">{creatingHospitalAdmin ? 'Creating...' : '✅ Create Hospital Admin'}</button>
                                     </form>

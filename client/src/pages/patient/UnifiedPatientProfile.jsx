@@ -155,8 +155,18 @@ const UnifiedPatientProfile = () => {
     };
 
     if (loading) return <div style={{ padding: '40px', textAlign: 'center' }}>Loading unified profile...</div>;
-    if (error) return <div style={{ padding: '40px', color: 'red', textAlign: 'center' }}>{error}</div>;
-    if (!patientData) return null;
+    if (error) return (
+        <div style={{ padding: '40px', textAlign: 'center' }}>
+            <p style={{ color: 'red' }}>{error}</p>
+            <button onClick={() => navigate(-1)} style={{ marginTop: '12px', padding: '8px 16px', cursor: 'pointer' }}>← Go Back</button>
+        </div>
+    );
+    if (!patientData) return (
+        <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+            <p>Patient not found or no data available.</p>
+            <button onClick={() => navigate(-1)} style={{ marginTop: '12px', padding: '8px 16px', cursor: 'pointer' }}>← Go Back</button>
+        </div>
+    );
 
     const metrics = calculateMetrics();
     const profile = patientData.fertilityProfile || {};

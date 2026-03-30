@@ -91,7 +91,7 @@ const Patient = () => {
                 alert("Report uploaded successfully!");
                 setUploadPatient(null);
                 setUploadFile(null);
-                fetchPatients();
+                fetchAllAppointments();
             } else {
                 throw new Error("Upload failed");
             }
