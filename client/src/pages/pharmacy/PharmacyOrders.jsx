@@ -132,10 +132,10 @@ const PharmacyOrders = () => {
                                     </td>
                                     <td>
                                         <span style={{
-                                            color: order.paymentStatus === 'Paid' ? '#166534' : '#991b1b',
+                                            color: order.paymentStatus === 'Paid' ? '#166534' : (order.orderStatus === 'Completed' && order.paymentStatus === 'Pending' ? '#000' : '#991b1b'),
                                             fontWeight: 'bold'
                                         }}>
-                                            {order.paymentStatus}
+                                            {order.orderStatus === 'Completed' && order.paymentStatus === 'Pending' ? '-' : order.paymentStatus}
                                         </span>
                                     </td>
                                     <td>

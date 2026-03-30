@@ -308,7 +308,7 @@ const DoctorPatientDetails = () => {
         // Medicines
         if (y > 250) { doc.addPage(); y = 20; }
         doc.setFontSize(11); doc.setFont("helvetica", "bold");
-        doc.text("💊 Prescription / Medicines:", 16, y); y += 8;
+        doc.text("Prescription / Medicines:", 16, y); y += 8;
         doc.setFont("helvetica", "normal"); doc.setFontSize(10);
         const rxItems = (currentData.pharmacy || []);
         if (rxItems.length > 0) {
@@ -327,7 +327,7 @@ const DoctorPatientDetails = () => {
         // Lab Tests
         if (y > 250) { doc.addPage(); y = 20; }
         doc.setFontSize(11); doc.setFont("helvetica", "bold");
-        doc.text("🧪 Lab Tests Ordered:", 16, y); y += 8;
+        doc.text("Lab Tests Ordered:", 16, y); y += 8;
         doc.setFont("helvetica", "normal"); doc.setFontSize(10);
         const labItems = (currentData.labTests || []);
         if (labItems.length > 0) {

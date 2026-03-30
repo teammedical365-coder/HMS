@@ -380,6 +380,25 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
             }
 
             let reportId;
+            
+            // Dynamically calculate total amount for these lab tests
+            const LabTest = require('../models/labTest.model');
+            const allTests = await LabTest.find();
+            let totalAmount = 0;
+            const hidStr = (req.user.hospitalId || appointment.hospitalId || '').toString();
+            (appointment.labTests || []).forEach(testName => {
+                const testObj = allTests.find(t => t.name.trim().toLowerCase() === testName.trim().toLowerCase());
+                if (testObj) {
+                    if (hidStr && testObj.hospitalPrices && testObj.hospitalPrices.has && testObj.hospitalPrices.has(hidStr)) {
+                        totalAmount += testObj.hospitalPrices.get(hidStr) || 0;
+                    } else if (hidStr && testObj.hospitalPrices && typeof testObj.hospitalPrices === 'object' && testObj.hospitalPrices[hidStr]) {
+                        totalAmount += testObj.hospitalPrices[hidStr];
+                    } else {
+                        totalAmount += testObj.price || 0;
+                    }
+                }
+            });
+
             if (!existingReport) {
                 const newReport = await LabReport.create({
                     appointmentId: appointment._id,
@@ -391,12 +410,14 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
                     testNames: appointment.labTests,
                     testStatus: 'PENDING',
                     reportStatus: 'PENDING',
-                    paymentStatus: 'PENDING'
+                    paymentStatus: 'PENDING',
+                    amount: totalAmount
                 });
                 reportId = newReport._id;
             } else {
                 existingReport.testNames = appointment.labTests;
                 existingReport.labId = labId || existingReport.labId;
+                existingReport.amount = totalAmount; // Update price in case tests were added/removed
                 await existingReport.save();
                 reportId = existingReport._id;
             }

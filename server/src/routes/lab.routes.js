@@ -40,8 +40,36 @@ router.get('/stats', verifyToken, verifyLab, async (req, res) => {
         }
 
         const pending = await LabReport.countDocuments({ ...labFilter, reportStatus: 'PENDING' });
-        const completed = await LabReport.countDocuments({ ...labFilter, reportStatus: 'UPLOADED' });
-        const revenue = completed * 500;
+        
+        // Dynamically calculate revenue by fetching individual test prices
+        const completedReports = await LabReport.find({ ...labFilter, reportStatus: 'UPLOADED' });
+        const completed = completedReports.length;
+        
+        const LabTest = require('../models/labTest.model');
+        const allTests = await LabTest.find();
+        
+        let revenue = 0;
+        completedReports.forEach(report => {
+            if (report.amount && report.amount > 0) {
+                revenue += report.amount; // Use pre-calculated amount if available
+            } else {
+                (report.testNames || []).forEach(testName => {
+                    const testObj = allTests.find(t => t.name.trim().toLowerCase() === testName.trim().toLowerCase());
+                    if (testObj) {
+                        const hospitalStrId = hid ? hid.toString() : null;
+                        if (hospitalStrId && testObj.hospitalPrices && testObj.hospitalPrices.has && testObj.hospitalPrices.has(hospitalStrId)) {
+                            revenue += testObj.hospitalPrices.get(hospitalStrId) || 0;
+                        } else if (hospitalStrId && testObj.hospitalPrices && typeof testObj.hospitalPrices === 'object' && testObj.hospitalPrices[hospitalStrId]) {
+                            revenue += testObj.hospitalPrices[hospitalStrId];
+                        } else {
+                            revenue += testObj.price || 0;
+                        }
+                    } else {
+                        revenue += 500; // Fallback if test no longer exists
+                    }
+                });
+            }
+        });
 
         res.json({
             success: true,

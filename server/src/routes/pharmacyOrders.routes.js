@@ -64,9 +64,21 @@ router.patch('/:id/complete', verifyToken, async (req, res) => {
 
             if (wasPurchased) {
                 // Find inventory item by name (hospital-scoped if possible)
-                const invQuery = { name: { $regex: new RegExp(`^${item.medicineName}$`, 'i') } };
+                // Extract actual medicine name by removing frequency if it was appended with " - "
+                let rawName = item.medicineName.trim();
+                let actualName = rawName.includes(' - ') ? rawName.substring(0, rawName.lastIndexOf(' - ')).trim() : rawName;
+
+                const escapedName = actualName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const invQuery = { name: { $regex: new RegExp(`^${escapedName}$`, 'i') } };
                 if (req.user.hospitalId) invQuery.hospitalId = req.user.hospitalId;
-                const invItem = await Inventory.findOne(invQuery);
+                let invItem = await Inventory.findOne(invQuery);
+
+                // Fallback: partial/contains match if exact fails (handles minor name differences)
+                if (!invItem) {
+                    const fallbackQuery = { name: { $regex: actualName, $options: 'i' } };
+                    if (req.user.hospitalId) fallbackQuery.hospitalId = req.user.hospitalId;
+                    invItem = await Inventory.findOne(fallbackQuery);
+                }
 
                 if (invItem) {
                     item.price = invItem.sellingPrice || 0;
@@ -82,8 +94,8 @@ router.patch('/:id/complete', verifyToken, async (req, res) => {
         order.markModified('items');
         order.totalAmount = totalAmount;
 
-        // Only mark Paid if at least one item was dispensed
-        order.paymentStatus = purchasedSet.size > 0 ? 'Paid' : 'Pending';
+        // Only mark Paid if at least one item was dispensed; otherwise keep Pending
+        order.paymentStatus = totalAmount > 0 ? 'Paid' : 'Pending';
         order.orderStatus = 'Completed';
         await order.save();
 
