@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const User = require('../models/user.model');
 const Role = require('../models/role.model');
+const Hospital = require('../models/hospital.model');
 const jwt = require('jsonwebtoken');
 
 // JWT Secret
@@ -238,8 +239,9 @@ router.post('/login', async (req, res) => {
                 return res.status(403).json({ success: false, message: 'Access denied: You are not authorized for this clinic. Check the URL.' });
             }
         } else {
-            // Staff/HospitalAdmin attempting to log in via the general /login page
-            if (user.hospitalId) {
+            // hospitaladmin can always log in via /login (simple clinic admins have no subdomain portal)
+            // Only block non-admin staff who must use their clinic's subdomain portal
+            if (user.hospitalId && userRoleStr !== 'hospitaladmin') {
                 return res.status(403).json({ success: false, message: 'Access denied: Please log in using your specific clinic portal URL.' });
             }
         }
@@ -262,6 +264,14 @@ router.post('/login', async (req, res) => {
     );
 
     // Build user response with role data (roleData is already fetched above)
+    let clinicType = null;
+    if (user.hospitalId) {
+      try {
+        const hosp = await Hospital.findById(user.hospitalId).select('clinicType');
+        clinicType = hosp?.clinicType || 'hospital';
+      } catch (_) {}
+    }
+
     const userData = {
       id: user._id,
       name: user.name,
@@ -271,6 +281,7 @@ router.post('/login', async (req, res) => {
       roleId: String(user.role),
       patientId: user.patientId || null,
       hospitalId: user.hospitalId ? String(user.hospitalId) : null,
+      clinicType,
       permissions: roleData.permissions || [],
       dashboardPath: roleData.dashboardPath || '/',
       navLinks: roleData.navLinks || []

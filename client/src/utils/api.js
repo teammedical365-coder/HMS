@@ -346,4 +346,24 @@ export const admissionAPI = {
     markAdmissionPaid: async (id) => (await apiClient.put(`/api/admissions/${id}/pay`, {})).data,
 };
 
+export const simpleClinicAPI = {
+    getClinics: async () => (await apiClient.get('/api/simple-clinics')).data,
+    createClinic: async (data) => (await apiClient.post('/api/simple-clinics', data)).data,
+    updateClinic: async (id, data) => (await apiClient.put(`/api/simple-clinics/${id}`, data)).data,
+    deleteClinic: async (id) => (await apiClient.delete(`/api/simple-clinics/${id}`)).data,
+    getStats: async (id, startDate, endDate) => {
+        let url = `/api/simple-clinics/${id}/stats`;
+        const params = new URLSearchParams();
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        const qs = params.toString();
+        if (qs) url += `?${qs}`;
+        return (await apiClient.get(url)).data;
+    },
+    createManager: async (id, data) => (await apiClient.post(`/api/simple-clinics/${id}/manager`, data)).data,
+    getStaff: async (id) => (await apiClient.get(`/api/simple-clinics/${id}/staff`)).data,
+    createStaff: async (id, data) => (await apiClient.post(`/api/simple-clinics/${id}/staff`, data)).data,
+    deleteStaff: async (clinicId, userId) => (await apiClient.delete(`/api/simple-clinics/${clinicId}/staff/${userId}`)).data,
+};
+
 export default apiClient;

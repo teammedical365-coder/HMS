@@ -55,6 +55,9 @@ const hospitalSchema = new mongoose.Schema({
 
     // Hospital admin user reference
     adminUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+
+    // Entity type — 'hospital' for full hospitals, 'clinic' for small simple clinics
+    clinicType: { type: String, enum: ['hospital', 'clinic'], default: 'hospital' },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Hospital', hospitalSchema);

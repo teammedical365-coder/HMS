@@ -47,6 +47,7 @@ import CentralAdminDashboard from '../pages/centraladmin/CentralAdminDashboard';
 // Hospital Admin (Tier 2) Pages — /hospitaladmin
 import HospitalAdminLogin from '../pages/hospitaladmin/HospitalAdminLogin';
 import HospitalAdminDashboard from '../pages/hospitaladmin/HospitalAdminDashboard';
+import ClinicDashboard from '../pages/hospitaladmin/ClinicDashboard';
 import HospitalLogin from '../pages/hospitaladmin/HospitalLogin';
 import HospitalAdminQuestionLibrary from '../pages/hospitaladmin/HospitalAdminQuestionLibrary';
 
@@ -129,8 +130,15 @@ const MainRoutes = () => {
                             <Route path="admin/question-library" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminQuestionLibrary /></ProtectedRoute>} />
                             <Route path="admin/test-packages" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminTestPackages /></ProtectedRoute>} />
                             
-                            {/* Dashboard routes */}
-                            <Route path="hospitaladmin" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><HospitalAdminDashboard /></ProtectedRoute>} />
+                            {/* Dashboard routes — clinic vs full hospital */}
+                            <Route path="hospitaladmin" element={
+                                <ProtectedRoute allowedRoles={['hospitaladmin']}>
+                                    {(() => {
+                                        const u = JSON.parse(localStorage.getItem('user') || '{}');
+                                        return u.clinicType === 'clinic' ? <ClinicDashboard /> : <HospitalAdminDashboard />;
+                                    })()}
+                                </ProtectedRoute>
+                            } />
                             <Route path="hospitaladmin/question-library" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><HospitalAdminQuestionLibrary /></ProtectedRoute>} />
 
                             <Route path="lab/dashboard" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><LabDashboard /></ProtectedRoute>} />

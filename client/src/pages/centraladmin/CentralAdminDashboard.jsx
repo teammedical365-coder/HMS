@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI } from '../../utils/api';
+import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI, simpleClinicAPI } from '../../utils/api';
 import HospitalBrandingEditor from '../../components/HospitalBrandingEditor';
 import '../administration/SuperAdmin.css';
 import './CentralAdminDashboard.css';
@@ -56,6 +56,24 @@ const CentralAdminDashboard = () => {
     // Dynamic Departments (derived from Master Question Library keys)
     const [availableDepartments, setAvailableDepartments] = useState([]);
 
+    // Simple Clinics
+    const [clinics, setClinics] = useState([]);
+    const [loadingClinics, setLoadingClinics] = useState(false);
+    const [showClinicForm, setShowClinicForm] = useState(false);
+    const [clinicForm, setClinicForm] = useState({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', appointmentFee: 300 });
+    const [editClinic, setEditClinic] = useState(null);
+    const [savingClinic, setSavingClinic] = useState(false);
+    const [deleteClinicConfirm, setDeleteClinicConfirm] = useState(null);
+    const [selectedClinic, setSelectedClinic] = useState(null);
+    const [clinicStats, setClinicStats] = useState(null);
+    const [loadingClinicStats, setLoadingClinicStats] = useState(false);
+    const [showClinicManagerForm, setShowClinicManagerForm] = useState(false);
+    const [clinicManagerForm, setClinicManagerForm] = useState({ name: '', email: '', password: '', phone: '' });
+    const [savingClinicManager, setSavingClinicManager] = useState(false);
+    const [showClinicStaffForm, setShowClinicStaffForm] = useState(false);
+    const [clinicStaffForm, setClinicStaffForm] = useState({ name: '', email: '', password: '', phone: '', roleId: '' });
+    const [savingClinicStaff, setSavingClinicStaff] = useState(false);
+
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
     const getBaseHost = () => {
@@ -81,6 +99,7 @@ const CentralAdminDashboard = () => {
         fetchRoles();
         fetchAllStaff();
         fetchDepartments();
+        fetchClinics();
     }, []);
 
     const fetchDepartments = async () => {
@@ -91,6 +110,104 @@ const CentralAdminDashboard = () => {
                 setAvailableDepartments(Object.keys(res.data.data));
             }
         } catch (err) { console.error('Failed to load global question libraries:', err); }
+    };
+
+    // ==========================================
+    // SIMPLE CLINIC HANDLERS
+    // ==========================================
+    const fetchClinics = async () => {
+        try {
+            setLoadingClinics(true);
+            const res = await simpleClinicAPI.getClinics();
+            if (res.success) setClinics(res.clinics);
+        } catch (err) { console.error('Failed to load clinics:', err); }
+        finally { setLoadingClinics(false); }
+    };
+
+    const openClinicDetail = async (clinic) => {
+        setSelectedClinic(clinic);
+        setLoadingClinicStats(true);
+        setClinicStats(null);
+        try {
+            const res = await simpleClinicAPI.getStats(clinic._id);
+            if (res.success) setClinicStats(res);
+        } catch (err) { console.error('Failed to load clinic stats:', err); }
+        finally { setLoadingClinicStats(false); }
+    };
+
+    const closeClinicDetail = () => { setSelectedClinic(null); setClinicStats(null); setShowClinicManagerForm(false); setShowClinicStaffForm(false); };
+
+    const handleSaveClinic = async (e) => {
+        e.preventDefault();
+        setSavingClinic(true);
+        setError(''); setSuccess('');
+        try {
+            if (editClinic) {
+                const res = await simpleClinicAPI.updateClinic(editClinic._id, clinicForm);
+                if (res.success) { setSuccess('Clinic updated.'); fetchClinics(); setEditClinic(null); setShowClinicForm(false); }
+                else setError(res.message || 'Failed to update clinic');
+            } else {
+                const res = await simpleClinicAPI.createClinic(clinicForm);
+                if (res.success) { setSuccess('Clinic created successfully!'); fetchClinics(); setShowClinicForm(false); setClinicForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', appointmentFee: 300 }); }
+                else setError(res.message || 'Failed to create clinic');
+            }
+        } catch (err) { setError(err.response?.data?.message || err.message); }
+        finally { setSavingClinic(false); }
+    };
+
+    const handleDeleteClinic = async (id) => {
+        try {
+            const res = await simpleClinicAPI.deleteClinic(id);
+            if (res.success) { setSuccess('Clinic deleted.'); fetchClinics(); setDeleteClinicConfirm(null); }
+            else setError(res.message);
+        } catch (err) { setError(err.response?.data?.message || err.message); }
+    };
+
+    const handleCreateClinicManager = async (e) => {
+        e.preventDefault();
+        setSavingClinicManager(true);
+        setError(''); setSuccess('');
+        try {
+            const res = await simpleClinicAPI.createManager(selectedClinic._id, clinicManagerForm);
+            if (res.success) {
+                setSuccess(`Admin created! ${res.manager.name} can now login at /login with email: ${res.manager.email}`);
+                setShowClinicManagerForm(false);
+                setClinicManagerForm({ name: '', email: '', password: '', phone: '' });
+                // Refresh clinic list and re-open detail with fresh data
+                await fetchClinics();
+                // Re-fetch stats so adminUserId populates
+                setLoadingClinicStats(true);
+                const statsRes = await simpleClinicAPI.getStats(selectedClinic._id);
+                if (statsRes.success) setClinicStats(statsRes);
+                setLoadingClinicStats(false);
+            } else setError(res.message);
+        } catch (err) { setError(err.response?.data?.message || err.message); }
+        finally { setSavingClinicManager(false); }
+    };
+
+    const handleCreateClinicStaff = async (e) => {
+        e.preventDefault();
+        setSavingClinicStaff(true);
+        setError(''); setSuccess('');
+        try {
+            const res = await simpleClinicAPI.createStaff(selectedClinic._id, clinicStaffForm);
+            if (res.success) {
+                setSuccess('Staff member added!');
+                setShowClinicStaffForm(false);
+                setClinicStaffForm({ name: '', email: '', password: '', phone: '', roleId: '' });
+                openClinicDetail(selectedClinic);
+            } else setError(res.message);
+        } catch (err) { setError(err.response?.data?.message || err.message); }
+        finally { setSavingClinicStaff(false); }
+    };
+
+    const handleDeleteClinicStaff = async (userId) => {
+        if (!window.confirm('Remove this staff member?')) return;
+        try {
+            const res = await simpleClinicAPI.deleteStaff(selectedClinic._id, userId);
+            if (res.success) { setSuccess('Staff removed.'); openClinicDetail(selectedClinic); }
+            else setError(res.message);
+        } catch (err) { setError(err.response?.data?.message || err.message); }
     };
 
     const fetchHospitals = async () => {
@@ -309,6 +426,7 @@ const CentralAdminDashboard = () => {
 
     const tabs = [
         { id: 'hospitals', label: '🏥 Hospitals', desc: 'Manage hospitals' },
+        { id: 'simple-clinics', label: '🏪 Simple Clinics', desc: 'Small clinic management' },
         { id: 'staff', label: '👥 All Staff', desc: 'Global staff management' },
         { id: 'configurations', label: '⚙️ Configurations', desc: 'Roles, tests, questions' },
     ];
@@ -709,7 +827,7 @@ const CentralAdminDashboard = () => {
                                 <div className="ca-form-box" style={{ marginBottom: '24px' }}>
                                     <h3>👤 Create Hospital Admin Account</h3>
                                     <p style={{ color: '#888', fontSize: '13px', marginBottom: '16px' }}>
-                                        This admin will login at <strong>/hospitaladmin/login</strong> and see only their hospital's data.
+                                        This admin will login at <strong>/login</strong> and see only their hospital's data.
                                     </p>
                                     {error && <div className="error-message">{error}</div>}
                                     {success && <div className="success-message">{success}</div>}
@@ -1003,6 +1121,426 @@ const CentralAdminDashboard = () => {
                                     </table>
                                 </div>
                             )}
+                        </div>
+                    </div>
+                )}
+
+                {/* ========== SIMPLE CLINICS TAB ========== */}
+                {activeTab === 'simple-clinics' && !selectedClinic && (
+                    <div>
+                        <div className="admin-card">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <div>
+                                    <h2>🏪 Simple Clinics</h2>
+                                    <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>Small clinics managed by 1–4 staff. All features included: patients, doctor, billing, analytics.</p>
+                                </div>
+                                <button className={showClinicForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '10px 18px' }}
+                                    onClick={() => { setShowClinicForm(!showClinicForm); setEditClinic(null); setClinicForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', appointmentFee: 300 }); }}>
+                                    {showClinicForm ? 'Cancel' : '+ Add Simple Clinic'}
+                                </button>
+                            </div>
+
+                            {/* Add / Edit Clinic Form */}
+                            {showClinicForm && (
+                                <div className="ca-form-box" style={{ marginBottom: '24px' }}>
+                                    <h3>{editClinic ? '✏️ Edit Clinic' : '🏪 Add New Simple Clinic'}</h3>
+                                    {error && <div className="error-message">{error}</div>}
+                                    {success && <div className="success-message">{success}</div>}
+                                    <form onSubmit={handleSaveClinic} className="user-form">
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label className="staff-label">Clinic Name *</label>
+                                                <input type="text" className="staff-input" placeholder="e.g. Sharma Family Clinic" value={clinicForm.name}
+                                                    onChange={e => setClinicForm({ ...clinicForm, name: e.target.value })} required />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Subdomain / Slug *</label>
+                                                <input type="text" className="staff-input" placeholder="e.g. sharma-clinic" value={clinicForm.slug}
+                                                    onChange={e => setClinicForm({ ...clinicForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} />
+                                                <small style={{ color: '#888' }}>Leave blank to auto-generate from name</small>
+                                            </div>
+                                        </div>
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label className="staff-label">Address</label>
+                                                <input type="text" className="staff-input" placeholder="Street address" value={clinicForm.address}
+                                                    onChange={e => setClinicForm({ ...clinicForm, address: e.target.value })} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">City</label>
+                                                <input type="text" className="staff-input" placeholder="e.g. Delhi" value={clinicForm.city}
+                                                    onChange={e => setClinicForm({ ...clinicForm, city: e.target.value })} />
+                                            </div>
+                                        </div>
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label className="staff-label">State</label>
+                                                <input type="text" className="staff-input" placeholder="e.g. Delhi" value={clinicForm.state}
+                                                    onChange={e => setClinicForm({ ...clinicForm, state: e.target.value })} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Phone</label>
+                                                <input type="text" className="staff-input" placeholder="Clinic contact number" value={clinicForm.phone}
+                                                    onChange={e => setClinicForm({ ...clinicForm, phone: e.target.value })} />
+                                            </div>
+                                        </div>
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label className="staff-label">Email</label>
+                                                <input type="email" className="staff-input" placeholder="clinic@email.com" value={clinicForm.email}
+                                                    onChange={e => setClinicForm({ ...clinicForm, email: e.target.value })} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Consultation Fee (₹)</label>
+                                                <input type="number" className="staff-input" placeholder="300" value={clinicForm.appointmentFee}
+                                                    onChange={e => setClinicForm({ ...clinicForm, appointmentFee: Number(e.target.value) })} />
+                                            </div>
+                                        </div>
+                                        <button type="submit" disabled={savingClinic} className="submit-button">
+                                            {savingClinic ? 'Saving...' : editClinic ? '✅ Update Clinic' : '✅ Create Clinic'}
+                                        </button>
+                                    </form>
+                                </div>
+                            )}
+
+                            {/* Clinics List */}
+                            {loadingClinics ? (
+                                <div className="loading-message">Loading clinics...</div>
+                            ) : clinics.length === 0 ? (
+                                <div className="ca-empty">
+                                    <p>No simple clinics yet. Click <strong>+ Add Simple Clinic</strong> to get started.</p>
+                                </div>
+                            ) : (
+                                <div className="hospital-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                                    {clinics.map(clinic => (
+                                        <div key={clinic._id} className="hospital-card" style={{ cursor: 'pointer', border: '2px solid #e2e8f0', borderRadius: '12px', padding: '20px', background: '#fff', transition: 'box-shadow 0.2s' }}
+                                            onClick={() => openClinicDetail(clinic)}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                                                <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>🏪</div>
+                                                <div>
+                                                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{clinic.name}</h3>
+                                                    <span style={{ fontSize: '12px', color: '#64748b' }}>{clinic.city}{clinic.state ? `, ${clinic.state}` : ''}</span>
+                                                </div>
+                                                <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '4px', background: clinic.isActive ? '#dcfce7' : '#fee2e2', color: clinic.isActive ? '#16a34a' : '#dc2626' }}>
+                                                    {clinic.isActive ? 'Active' : 'Inactive'}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '12px' }}>
+                                                {clinic.phone && <div>📞 {clinic.phone}</div>}
+                                                {clinic.email && <div>✉️ {clinic.email}</div>}
+                                                <div style={{ marginTop: '6px' }}>💰 Fee: {formatCurrency(clinic.appointmentFee)}</div>
+                                                {clinic.slug && <div style={{ marginTop: '4px', fontFamily: 'monospace', fontSize: '11px', color: '#94a3b8' }}>🔗 /{clinic.slug}</div>}
+                                                <div style={{ marginTop: '8px', padding: '6px 10px', borderRadius: '6px', background: clinic.adminUserId ? '#f0fdf4' : '#fff7ed', border: `1px solid ${clinic.adminUserId ? '#bbf7d0' : '#fed7aa'}` }}>
+                                                    {clinic.adminUserId
+                                                        ? <span style={{ color: '#16a34a', fontSize: '12px', fontWeight: 600 }}>👤 Admin: {clinic.adminUserId.name}</span>
+                                                        : <span style={{ color: '#d97706', fontSize: '12px', fontWeight: 600 }}>⚠️ No admin assigned</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }} onClick={e => e.stopPropagation()}>
+                                                <button className="btn-edit" style={{ flex: 1, fontSize: '12px', padding: '6px' }}
+                                                    onClick={() => { setEditClinic(clinic); setClinicForm({ name: clinic.name, slug: clinic.slug || '', address: clinic.address || '', city: clinic.city || '', state: clinic.state || '', phone: clinic.phone || '', email: clinic.email || '', website: clinic.website || '', appointmentFee: clinic.appointmentFee || 300 }); setShowClinicForm(true); }}>
+                                                    ✏️ Edit
+                                                </button>
+                                                <button className="btn-confirm-delete" style={{ flex: 1, fontSize: '12px', padding: '6px' }}
+                                                    onClick={() => setDeleteClinicConfirm(clinic._id)}>
+                                                    🗑️ Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* ========== SIMPLE CLINIC DETAIL VIEW ========== */}
+                {activeTab === 'simple-clinics' && selectedClinic && (
+                    <div>
+                        {/* Header */}
+                        <div className="admin-card" style={{ marginBottom: '16px' }}>
+                            <button onClick={closeClinicDetail} className="back-btn" style={{ marginBottom: '12px' }}>← Back to All Clinics</button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                <div style={{ fontSize: '40px' }}>🏪</div>
+                                <div>
+                                    <h2 style={{ margin: 0 }}>{selectedClinic.name}</h2>
+                                    <p style={{ color: '#64748b', margin: '4px 0 0' }}>
+                                        {selectedClinic.city}{selectedClinic.state ? `, ${selectedClinic.state}` : ''}
+                                        {selectedClinic.phone ? ` · 📞 ${selectedClinic.phone}` : ''}
+                                        {selectedClinic.slug ? ` · 🔗 /${selectedClinic.slug}` : ''}
+                                    </p>
+                                </div>
+                                <span style={{ marginLeft: 'auto', padding: '4px 12px', borderRadius: '6px', fontWeight: 600, fontSize: '13px', background: selectedClinic.isActive ? '#dcfce7' : '#fee2e2', color: selectedClinic.isActive ? '#16a34a' : '#dc2626' }}>
+                                    {selectedClinic.isActive ? 'Active' : 'Inactive'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {error && <div className="error-message" style={{ marginBottom: '16px' }}>⚠️ {error}</div>}
+                        {success && <div className="success-message" style={{ marginBottom: '16px' }}>✅ {success}</div>}
+
+                        {loadingClinicStats ? (
+                            <div className="loading-message">Loading analytics...</div>
+                        ) : clinicStats ? (
+                            <>
+                                {/* KPI Stats */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+                                    {[
+                                        { label: 'Total Patients', value: clinicStats.stats.totalPatients, icon: '👤', color: '#0ea5e9', bg: '#f0f9ff' },
+                                        { label: 'Total Appointments', value: clinicStats.stats.totalAppointments, icon: '📅', color: '#8b5cf6', bg: '#f5f3ff' },
+                                        { label: 'Completed', value: clinicStats.stats.completedAppointments, icon: '✅', color: '#10b981', bg: '#f0fdf4' },
+                                        { label: 'Revenue', value: formatCurrency(clinicStats.stats.revenue), icon: '💰', color: '#f59e0b', bg: '#fffbeb' },
+                                        { label: 'Staff Members', value: clinicStats.stats.staff?.length || 0, icon: '👥', color: '#6366f1', bg: '#eef2ff' },
+                                    ].map((kpi, i) => (
+                                        <div key={i} className="admin-card" style={{ background: kpi.bg, border: `1px solid ${kpi.color}22`, textAlign: 'center', padding: '18px' }}>
+                                            <div style={{ fontSize: '28px', marginBottom: '6px' }}>{kpi.icon}</div>
+                                            <div style={{ fontSize: '22px', fontWeight: 800, color: kpi.color }}>{kpi.value}</div>
+                                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{kpi.label}</div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Clinic Admin Section */}
+                                <div className="admin-card" style={{ marginBottom: '20px', border: '2px solid #e0e7ff' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                        <div>
+                                            <h3 style={{ margin: 0 }}>👤 Clinic Admin Account</h3>
+                                            <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
+                                                The admin has full access to this clinic. Login at <strong>/login</strong>
+                                            </p>
+                                        </div>
+                                        <button className={showClinicManagerForm ? 'btn-cancel' : 'btn-save'} style={{ fontSize: '13px', padding: '8px 16px' }}
+                                            onClick={() => { setShowClinicManagerForm(!showClinicManagerForm); setShowClinicStaffForm(false); setClinicManagerForm({ name: '', email: '', password: '', phone: '' }); }}>
+                                            {showClinicManagerForm ? 'Cancel' : clinicStats.clinic?.adminUserId ? '🔄 Add Another Admin' : '+ Add Clinic Admin'}
+                                        </button>
+                                    </div>
+
+                                    {/* Current admin info */}
+                                    {clinicStats.clinic?.adminUserId && !showClinicManagerForm && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px 18px' }}>
+                                            <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 700, color: '#16a34a' }}>
+                                                {clinicStats.clinic.adminUserId.name?.charAt(0)?.toUpperCase() || '?'}
+                                            </div>
+                                            <div>
+                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '15px' }}>{clinicStats.clinic.adminUserId.name}</div>
+                                                <div style={{ color: '#64748b', fontSize: '13px' }}>{clinicStats.clinic.adminUserId.email}</div>
+                                                {clinicStats.clinic.adminUserId.phone && <div style={{ color: '#64748b', fontSize: '13px' }}>📞 {clinicStats.clinic.adminUserId.phone}</div>}
+                                            </div>
+                                            <span style={{ marginLeft: 'auto', background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700 }}>CLINIC ADMIN</span>
+                                        </div>
+                                    )}
+
+                                    {!clinicStats.clinic?.adminUserId && !showClinicManagerForm && (
+                                        <div style={{ textAlign: 'center', padding: '24px', background: '#fff7ed', borderRadius: '10px', border: '1px dashed #fed7aa' }}>
+                                            <div style={{ fontSize: '32px', marginBottom: '8px' }}>⚠️</div>
+                                            <p style={{ color: '#92400e', fontWeight: 600, margin: '0 0 4px' }}>No admin assigned yet</p>
+                                            <p style={{ color: '#b45309', fontSize: '13px', margin: 0 }}>Click <strong>+ Add Clinic Admin</strong> to create login credentials for this clinic.</p>
+                                        </div>
+                                    )}
+
+                                    {/* Add Admin Form */}
+                                    {showClinicManagerForm && (
+                                        <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '20px', border: '1px solid #e2e8f0' }}>
+                                            <h4 style={{ margin: '0 0 4px', color: '#1e293b' }}>Create Clinic Admin Account</h4>
+                                            <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 16px' }}>This person will have full access — patients, appointments, billing, pharmacy, analytics.</p>
+                                            {error && <div className="error-message">{error}</div>}
+                                            <form onSubmit={handleCreateClinicManager} className="user-form">
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Full Name *</label>
+                                                        <input type="text" className="staff-input" placeholder="e.g. Dr. Ramesh Sharma" value={clinicManagerForm.name}
+                                                            onChange={e => setClinicManagerForm({ ...clinicManagerForm, name: e.target.value })} required />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Email Address *</label>
+                                                        <input type="email" className="staff-input" placeholder="admin@clinic.com" value={clinicManagerForm.email}
+                                                            onChange={e => setClinicManagerForm({ ...clinicManagerForm, email: e.target.value })} required />
+                                                    </div>
+                                                </div>
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Password *</label>
+                                                        <input type="text" className="staff-input" placeholder="Set a temporary password" value={clinicManagerForm.password}
+                                                            onChange={e => setClinicManagerForm({ ...clinicManagerForm, password: e.target.value })} required />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Phone</label>
+                                                        <input type="text" className="staff-input" placeholder="Phone number" value={clinicManagerForm.phone}
+                                                            onChange={e => setClinicManagerForm({ ...clinicManagerForm, phone: e.target.value })} />
+                                                    </div>
+                                                </div>
+                                                <button type="submit" disabled={savingClinicManager} className="submit-button" style={{ marginTop: '4px' }}>
+                                                    {savingClinicManager ? 'Creating...' : '✅ Create Clinic Admin'}
+                                                </button>
+                                            </form>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Staff Management */}
+                                <div className="admin-card" style={{ marginBottom: '20px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                        <div>
+                                            <h3 style={{ margin: 0 }}>👥 Additional Staff</h3>
+                                            <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
+                                                {clinicStats.stats.staff?.length || 0}/4 staff slots used · All staff login at <strong>/login</strong>
+                                            </p>
+                                        </div>
+                                        <button className="btn-edit" style={{ fontSize: '13px', padding: '8px 14px' }}
+                                            onClick={() => { setShowClinicStaffForm(!showClinicStaffForm); setShowClinicManagerForm(false); }}>
+                                            {showClinicStaffForm ? 'Cancel' : '+ Add Staff'}
+                                        </button>
+                                    </div>
+
+                                    {/* Staff Form */}
+                                    {showClinicStaffForm && (
+                                        <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+                                            <h4 style={{ margin: '0 0 12px', color: '#1e293b' }}>Add Staff Member</h4>
+                                            <form onSubmit={handleCreateClinicStaff} className="user-form">
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Full Name *</label>
+                                                        <input type="text" className="staff-input" placeholder="Staff name" value={clinicStaffForm.name}
+                                                            onChange={e => setClinicStaffForm({ ...clinicStaffForm, name: e.target.value })} required />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Email *</label>
+                                                        <input type="email" className="staff-input" placeholder="staff@clinic.com" value={clinicStaffForm.email}
+                                                            onChange={e => setClinicStaffForm({ ...clinicStaffForm, email: e.target.value })} required />
+                                                    </div>
+                                                </div>
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Password *</label>
+                                                        <input type="text" className="staff-input" placeholder="Temporary password" value={clinicStaffForm.password}
+                                                            onChange={e => setClinicStaffForm({ ...clinicStaffForm, password: e.target.value })} required />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Phone</label>
+                                                        <input type="text" className="staff-input" placeholder="Phone number" value={clinicStaffForm.phone}
+                                                            onChange={e => setClinicStaffForm({ ...clinicStaffForm, phone: e.target.value })} />
+                                                    </div>
+                                                </div>
+                                                <div className="form-group">
+                                                    <label className="staff-label">Role</label>
+                                                    <select className="staff-input" value={clinicStaffForm.roleId}
+                                                        onChange={e => setClinicStaffForm({ ...clinicStaffForm, roleId: e.target.value })}>
+                                                        <option value="">-- Hospital Admin (full access) --</option>
+                                                        {roles.map(r => <option key={r._id} value={r._id}>{r.name}</option>)}
+                                                    </select>
+                                                </div>
+                                                <button type="submit" disabled={savingClinicStaff} className="submit-button">
+                                                    {savingClinicStaff ? 'Adding...' : '✅ Add Staff'}
+                                                </button>
+                                            </form>
+                                        </div>
+                                    )}
+
+                                    {/* Staff Table */}
+                                    {clinicStats.stats.staff?.length > 0 ? (
+                                        <div className="users-table">
+                                            <table>
+                                                <thead>
+                                                    <tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Added</th><th></th></tr>
+                                                </thead>
+                                                <tbody>
+                                                    {clinicStats.stats.staff.map(s => (
+                                                        <tr key={s._id}>
+                                                            <td style={{ fontWeight: 600 }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#6366f1', fontSize: '13px' }}>
+                                                                        {s.name?.charAt(0)?.toUpperCase()}
+                                                                    </div>
+                                                                    {s.name}
+                                                                </div>
+                                                            </td>
+                                                            <td>{s.email}</td>
+                                                            <td>{s.phone || '—'}</td>
+                                                            <td>
+                                                                <span className="role-badge">{String(s.role).toUpperCase()}</span>
+                                                            </td>
+                                                            <td style={{ color: '#94a3b8', fontSize: '12px' }}>{s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN') : '—'}</td>
+                                                            <td>
+                                                                <button className="btn-confirm-delete" style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                    onClick={() => handleDeleteClinicStaff(s._id)}>Remove</button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <p style={{ color: '#94a3b8', textAlign: 'center', padding: '20px 0' }}>No staff added yet. Add a manager or staff member above.</p>
+                                    )}
+                                </div>
+
+                                {/* Recent Appointments */}
+                                {clinicStats.stats.recentAppointments?.length > 0 && (
+                                    <div className="admin-card">
+                                        <h3>📅 Recent Appointments</h3>
+                                        <div className="users-table">
+                                            <table>
+                                                <thead>
+                                                    <tr><th>Patient ID</th><th>Doctor</th><th>Date</th><th>Status</th><th>Amount</th><th>Payment</th></tr>
+                                                </thead>
+                                                <tbody>
+                                                    {clinicStats.stats.recentAppointments.map((a, i) => (
+                                                        <tr key={i}>
+                                                            <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{a.patientId || '—'}</td>
+                                                            <td>{a.doctorName || '—'}</td>
+                                                            <td>{a.appointmentDate ? new Date(a.appointmentDate).toLocaleDateString('en-IN') : '—'}</td>
+                                                            <td><span className={`status-badge status-${a.status}`}>{a.status}</span></td>
+                                                            <td>{formatCurrency(a.amount)}</td>
+                                                            <td><span style={{ color: a.paymentStatus === 'paid' ? '#16a34a' : '#dc2626', fontWeight: 600, fontSize: '12px' }}>{a.paymentStatus}</span></td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Quick Access Links */}
+                                <div className="admin-card" style={{ marginTop: '20px' }}>
+                                    <h3>🚀 Clinic Features</h3>
+                                    <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>Staff can access these modules after logging in at <strong>/login</strong></p>
+                                    <div className="config-grid">
+                                        {[
+                                            { icon: '👤', label: 'Patient Registration', desc: 'Register & search patients', bg: '#f0f9ff', color: '#0ea5e9' },
+                                            { icon: '🩺', label: 'Doctor Consultation', desc: 'Appointments & prescriptions', bg: '#f5f3ff', color: '#8b5cf6' },
+                                            { icon: '💊', label: 'Pharmacy', desc: 'Medicine orders & inventory', bg: '#fff7ed', color: '#f97316' },
+                                            { icon: '🧾', label: 'Billing & Payments', desc: 'Invoice & collect payments', bg: '#fefce8', color: '#eab308' },
+                                            { icon: '🧪', label: 'Lab Reports', desc: 'Upload & share lab results', bg: '#fdf4ff', color: '#d946ef' },
+                                            { icon: '📊', label: 'Analytics', desc: 'Revenue, patients & reports', bg: '#f0fdf4', color: '#22c55e' },
+                                        ].map((item, i) => (
+                                            <div key={i} className="config-card" style={{ background: item.bg, cursor: 'default' }}>
+                                                <div className="config-icon" style={{ color: item.color }}>{item.icon}</div>
+                                                <div>
+                                                    <h4 style={{ color: item.color, margin: '0 0 4px' }}>{item.label}</h4>
+                                                    <p style={{ color: '#888', margin: 0, fontSize: '13px' }}>{item.desc}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="ca-empty"><p>⚠️ Could not load clinic analytics. The clinic may have no data yet.</p></div>
+                        )}
+                    </div>
+                )}
+
+                {/* Delete Clinic Confirm Modal */}
+                {deleteClinicConfirm && (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <h3>Delete Simple Clinic?</h3>
+                            <p style={{ color: '#dc2626', fontWeight: '600' }}>This will permanently delete the clinic, all staff accounts, and all clinic data. This action CANNOT be undone.</p>
+                            <div className="modal-buttons">
+                                <button onClick={() => handleDeleteClinic(deleteClinicConfirm)} className="btn-confirm-delete">Delete</button>
+                                <button onClick={() => setDeleteClinicConfirm(null)} className="btn-cancel">Cancel</button>
+                            </div>
                         </div>
                     </div>
                 )}

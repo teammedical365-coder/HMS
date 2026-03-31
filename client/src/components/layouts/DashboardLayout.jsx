@@ -26,6 +26,13 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
             ];
         }
         if (role === 'hospitaladmin') {
+            const u = JSON.parse(localStorage.getItem('user') || '{}');
+            if (u.clinicType === 'clinic') {
+                // Simple clinic — single hub page with built-in role switcher
+                return [
+                    { label: 'Clinic Hub', path: '/hospitaladmin', icon: <FiHome /> },
+                ];
+            }
             return [
                 { label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiPieChart /> },
                 { label: 'Clinical Questions', path: '/hospitaladmin/question-library', icon: <FiFileText /> },
