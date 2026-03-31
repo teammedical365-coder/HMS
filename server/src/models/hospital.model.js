@@ -48,6 +48,11 @@ const hospitalSchema = new mongoose.Schema({
     }],
     // White-label branding config (per hospital)
     branding: { type: brandingSchema, default: () => ({}) },
+    // Appointment system mode — set by Supreme Admin per hospital
+    // 'slot'  : patients/reception pick a specific time slot (09:00, 09:30, …)
+    // 'token' : sequential daily token; resets to 1 at midnight; no time selection
+    appointmentMode: { type: String, enum: ['slot', 'token'], default: 'slot' },
+
     // Hospital admin user reference
     adminUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 }, { timestamps: true });

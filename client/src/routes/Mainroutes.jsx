@@ -72,6 +72,9 @@ import ReceptionDashboard from '../pages/reception/ReceptionDashboard';
 // Accountant / Finance Pages
 import AccountantDashboard from '../pages/accountant/AccountantDashboard';
 
+// Billing Pages
+import PatientBillingProfile from '../pages/billing/PatientBillingProfile';
+
 const SmartLogin = () => {
     const subdomain = getSubdomain();
     if (subdomain) return <HospitalLogin />;
@@ -143,6 +146,9 @@ const MainRoutes = () => {
 
                             {/* Accountant / Finance Pages */}
                             <Route path="accountant/dashboard" element={<ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}><AccountantDashboard /></ProtectedRoute>} />
+
+                            {/* Patient Billing Profile — receptionist + accountant + admin */}
+                            <Route path="billing/patient" element={<ProtectedRoute requiredPermissions={['billing_view', 'billing_manage', 'appointment_manage']} allowedRoles={['accountant', 'cashier', 'reception', 'centraladmin', 'superadmin', 'hospitaladmin']}><PatientBillingProfile /></ProtectedRoute>} />
                         {/* Cashier / Billing */}
                         <Route path="cashier/billing" element={<ProtectedRoute requiredPermissions={['billing_view', 'billing_manage']} allowedRoles={['billing', 'cashier', 'centraladmin', 'superadmin', 'hospitaladmin']}><CashierDashboard /></ProtectedRoute>} />
 

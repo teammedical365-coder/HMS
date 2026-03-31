@@ -310,6 +310,9 @@ export const hospitalAPI = {
     // White-label branding
     getBranding: async (id) => (await apiClient.get(`/api/hospitals/${id}/branding`)).data,
     updateBranding: async (id, data) => (await apiClient.put(`/api/hospitals/${id}/branding`, data)).data,
+    // Appointment mode (Supreme Admin)
+    updateAppointmentMode: async (id, appointmentMode) => (await apiClient.put(`/api/hospitals/${id}`, { appointmentMode })).data,
+    getNextToken: async (hospitalId, doctorId, date) => (await apiClient.get(`/api/hospitals/${hospitalId}/next-token?doctorId=${doctorId}&date=${date}`)).data,
 };
 
 export const hospitalAdminAPI = {
@@ -333,6 +336,14 @@ export const billingAPI = {
     getPatientBills: async (identifier) => (await apiClient.get(`/api/billing/patient/${identifier}`)).data,
     addFacilityCharge: async (data) => (await apiClient.post('/api/billing/facility-charge', data)).data,
     processPayment: async (data) => (await apiClient.put('/api/billing/pay', data)).data,
+};
+
+export const admissionAPI = {
+    createAdmission: async (data) => (await apiClient.post('/api/admissions', data)).data,
+    getActiveAdmissions: async () => (await apiClient.get('/api/admissions/active')).data,
+    getPatientAdmissions: async (patientId) => (await apiClient.get(`/api/admissions/patient/${patientId}`)).data,
+    dischargePatient: async (id, data = {}) => (await apiClient.put(`/api/admissions/${id}/discharge`, data)).data,
+    markAdmissionPaid: async (id) => (await apiClient.put(`/api/admissions/${id}/pay`, {})).data,
 };
 
 export default apiClient;

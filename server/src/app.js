@@ -27,6 +27,7 @@ const testPackageRoutes = require('./routes/testPackage.routes');
 const hospitalRoutes = require('./routes/hospital.routes');
 const financeRoutes = require('./routes/finance.routes');
 const billingRoutes = require('./routes/billing.routes');
+const admissionRoutes = require('./routes/admission.routes');
 
 const app = express();
 // ughfgh
@@ -88,6 +89,7 @@ app.use('/api/test-packages', testPackageRoutes);
 app.use('/api/hospitals', hospitalRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/billing', billingRoutes);
+app.use('/api/admissions', admissionRoutes);
 
 app.get('/', (req, res) => {
     res.send('API is running...');

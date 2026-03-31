@@ -35,6 +35,10 @@ const CentralAdminDashboard = () => {
     const [hospitalStats, setHospitalStats] = useState(null);
     const [loadingStats, setLoadingStats] = useState(false);
 
+    // Appointment Mode customization (per hospital, Supreme Admin only)
+    const [apptMode, setApptMode] = useState('slot'); // 'slot' | 'token'
+    const [savingApptMode, setSavingApptMode] = useState(false);
+
     // Date Filters
     const [datePreset, setDatePreset] = useState('all'); // all, today, 30, 60, 90, custom
     const [customStartDate, setCustomStartDate] = useState('');
@@ -173,10 +177,28 @@ const CentralAdminDashboard = () => {
 
     const openHospitalDetail = (h) => {
         setSelectedHospital(h);
+        setApptMode(h.appointmentMode || 'slot');
         setDatePreset('all');
         setCustomStartDate('');
         setCustomEndDate('');
         fetchHospitalStats(h._id, 'all', '', '');
+    };
+
+    const handleSaveApptMode = async () => {
+        setSavingApptMode(true);
+        setError(''); setSuccess('');
+        try {
+            const res = await hospitalAPI.updateAppointmentMode(selectedHospital._id, apptMode);
+            if (res.success) {
+                setSuccess(`Appointment mode set to "${apptMode === 'token' ? 'Token Queue' : 'Time Slot'}" for ${selectedHospital.name}`);
+                setSelectedHospital(prev => ({ ...prev, appointmentMode: apptMode }));
+                fetchHospitals();
+            }
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to update appointment mode');
+        } finally {
+            setSavingApptMode(false);
+        }
     };
 
     const closeHospitalDetail = () => {
@@ -405,6 +427,88 @@ const CentralAdminDashboard = () => {
                                             {item.icon} {item.label}
                                         </button>
                                     ))}
+                                </div>
+                            </div>
+
+                            {/* ---- APPOINTMENT MODE CUSTOMIZATION ---- */}
+                            <div className="admin-card" style={{ marginBottom: '24px', border: '2px solid #e0f2fe' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                                    <h3 style={{ margin: 0 }}>🎟️ Appointment System Mode</h3>
+                                    <span style={{ fontSize: '0.75rem', background: h.appointmentMode === 'token' ? '#fef3c7' : '#dbeafe', color: h.appointmentMode === 'token' ? '#92400e' : '#1d4ed8', padding: '2px 10px', borderRadius: '20px', fontWeight: 700 }}>
+                                        Current: {h.appointmentMode === 'token' ? 'Token Queue' : 'Time Slots'}
+                                    </span>
+                                </div>
+                                <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 18px' }}>
+                                    Choose how patients and reception staff book appointments for this hospital.
+                                </p>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '18px' }}>
+                                    {/* Slot Mode Card */}
+                                    <label style={{
+                                        display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
+                                        border: apptMode === 'slot' ? '2px solid #3b82f6' : '2px solid #e2e8f0',
+                                        background: apptMode === 'slot' ? '#eff6ff' : '#f8fafc',
+                                        transition: 'all 0.15s'
+                                    }}>
+                                        <input type="radio" name="apptMode" value="slot" checked={apptMode === 'slot'} onChange={() => setApptMode('slot')} style={{ display: 'none' }} />
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                            <span style={{ fontSize: '2rem', lineHeight: 1 }}>🕐</span>
+                                            <div>
+                                                <div style={{ fontWeight: 700, fontSize: '1rem', color: apptMode === 'slot' ? '#1d4ed8' : '#1e293b', marginBottom: '4px' }}>
+                                                    Time Slot Booking
+                                                    {apptMode === 'slot' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#3b82f6', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
+                                                </div>
+                                                <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
+                                                    Patients pick a specific time (09:00, 09:30…). Doctor slots are fixed. Standard OPD scheduling.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </label>
+
+                                    {/* Token Mode Card */}
+                                    <label style={{
+                                        display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
+                                        border: apptMode === 'token' ? '2px solid #f59e0b' : '2px solid #e2e8f0',
+                                        background: apptMode === 'token' ? '#fffbeb' : '#f8fafc',
+                                        transition: 'all 0.15s'
+                                    }}>
+                                        <input type="radio" name="apptMode" value="token" checked={apptMode === 'token'} onChange={() => setApptMode('token')} style={{ display: 'none' }} />
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                            <span style={{ fontSize: '2rem', lineHeight: 1 }}>🎟️</span>
+                                            <div>
+                                                <div style={{ fontWeight: 700, fontSize: '1rem', color: apptMode === 'token' ? '#92400e' : '#1e293b', marginBottom: '4px' }}>
+                                                    Token Queue System
+                                                    {apptMode === 'token' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#f59e0b', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
+                                                </div>
+                                                <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
+                                                    Sequential tokens (1, 2, 3…) per doctor per day. Auto-resets to 1 at midnight. No time-slot picking needed.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                {apptMode !== (h.appointmentMode || 'slot') && (
+                                    <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: '8px', padding: '10px 14px', fontSize: '0.85rem', color: '#713f12', marginBottom: '14px' }}>
+                                        ⚠️ You are changing the appointment mode. Existing appointments will not be affected — only new bookings will follow the new mode.
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <button
+                                        onClick={handleSaveApptMode}
+                                        disabled={savingApptMode || apptMode === (h.appointmentMode || 'slot')}
+                                        style={{
+                                            padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none',
+                                            borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem',
+                                            opacity: (savingApptMode || apptMode === (h.appointmentMode || 'slot')) ? 0.5 : 1
+                                        }}
+                                    >
+                                        {savingApptMode ? 'Saving…' : 'Save Mode'}
+                                    </button>
+                                    {apptMode === (h.appointmentMode || 'slot') && (
+                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>No changes to save</span>
+                                    )}
                                 </div>
                             </div>
 

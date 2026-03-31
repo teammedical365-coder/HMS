@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { receptionAPI, publicAPI, hospitalAPI, uploadAPI } from '../../utils/api';
+import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI } from '../../utils/api';
 import { useAuth } from '../../store/hooks';
 import { getSubdomain } from '../../utils/subdomain';
 import jsPDF from 'jspdf';
@@ -27,6 +27,14 @@ const ReceptionDashboard = () => {
     const [profilePatient, setProfilePatient] = useState(null);
     const [profileAppointments, setProfileAppointments] = useState([]);
     const [transactions, setTransactions] = useState([]);
+
+    // Token mode — next token preview
+    const [nextToken, setNextToken] = useState(null);
+
+    // Hospitalization modal
+    const [hospitalizeModal, setHospitalizeModal] = useState({ open: false, appointment: null });
+    const [hospitalizeForm, setHospitalizeForm] = useState({ ward: '', bedNumber: '', admissionDate: new Date().toISOString().split('T')[0], notes: '', facilityDays: {} });
+    const [hospitalizingSaving, setHospitalizingSaving] = useState(false);
 
     // Availability
     const [availabilityCheck, setAvailabilityCheck] = useState({
@@ -87,6 +95,18 @@ const ReceptionDashboard = () => {
             }
         }
     }, [intakeForm.doctor, intakeForm.visitDate]);
+
+    // Fetch next token number when doctor + date selected and hospital is in token mode
+    useEffect(() => {
+        const isTokenMode = hospitalContext?.appointmentMode === 'token';
+        if (!isTokenMode || !intakeForm.doctor || !intakeForm.visitDate || !hospitalContext?._id) {
+            setNextToken(null);
+            return;
+        }
+        hospitalAPI.getNextToken(hospitalContext._id, intakeForm.doctor, intakeForm.visitDate)
+            .then(res => { if (res.success) setNextToken(res.nextToken); })
+            .catch(() => setNextToken(null));
+    }, [intakeForm.doctor, intakeForm.visitDate, hospitalContext]);
 
     const fetchAppointments = async () => {
         setLoading(true);
@@ -180,6 +200,43 @@ const ReceptionDashboard = () => {
 
     const handleViewProfile = (patient) => {
         navigate(`/patient/${patient._id}`);
+    };
+
+    const openHospitalizeModal = (apt) => {
+        setHospitalizeForm({ ward: '', bedNumber: '', admissionDate: new Date().toISOString().split('T')[0], notes: '', facilityDays: {} });
+        setHospitalizeModal({ open: true, appointment: apt });
+    };
+
+    const handleHospitalize = async () => {
+        const { appointment } = hospitalizeModal;
+        const facilities = hospitalContext?.facilities || [];
+        const selectedFacilities = facilities
+            .filter(f => hospitalizeForm.facilityDays[f.name] > 0)
+            .map(f => ({
+                facilityName: f.name,
+                pricePerDay: f.pricePerDay,
+                days: Number(hospitalizeForm.facilityDays[f.name]),
+                totalAmount: f.pricePerDay * Number(hospitalizeForm.facilityDays[f.name]),
+            }));
+
+        setHospitalizingSaving(true);
+        try {
+            await admissionAPI.createAdmission({
+                patientId: appointment.userId?._id || appointment.patientId,
+                appointmentId: appointment._id,
+                ward: hospitalizeForm.ward,
+                bedNumber: hospitalizeForm.bedNumber,
+                admissionDate: hospitalizeForm.admissionDate,
+                notes: hospitalizeForm.notes,
+                selectedFacilities,
+            });
+            alert(`Patient admitted successfully!`);
+            setHospitalizeModal({ open: false, appointment: null });
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to admit patient');
+        } finally {
+            setHospitalizingSaving(false);
+        }
     };
 
     const handleCancelAppointment = async (appointmentId) => {
@@ -324,7 +381,8 @@ const ReceptionDashboard = () => {
             await receptionAPI.updateIntake(userId, intakeForm);
 
             // 3. Book Appointment (optional when editing existing patient)
-            if (intakeForm.doctor && intakeForm.visitDate && intakeForm.visitTime) {
+            const isTokenMode = hospitalContext?.appointmentMode === 'token';
+            if (intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode)) {
                 // Upload payment screenshot if non-cash and screenshot provided
                 let screenshotNote = '';
                 if (intakeForm.paymentMethod !== 'Cash' && paymentScreenshot) {
@@ -342,7 +400,7 @@ const ReceptionDashboard = () => {
                     patientId: userId,
                     doctorId: intakeForm.doctor,
                     date: intakeForm.visitDate,
-                    time: intakeForm.visitTime,
+                    time: isTokenMode ? undefined : intakeForm.visitTime,
                     notes: `Walk-in. Vitals: ${intakeForm.height}cm/${intakeForm.weight}kg. Reason: ${intakeForm.reasonForVisit}${screenshotNote}`,
                     paymentMethod: intakeForm.paymentMethod,
                     paymentStatus: 'Paid',
@@ -350,7 +408,9 @@ const ReceptionDashboard = () => {
                 });
 
                 if (bookingRes.success) {
-                    alert("Patient Registered & Assigned to Doctor!");
+                    const tokenMsg = bookingRes.appointment?.tokenNumber
+                        ? ` Token #${bookingRes.appointment.tokenNumber} assigned.` : '';
+                    alert(`Patient Registered & Assigned to Doctor!${tokenMsg}`);
                     // --- Dynamic Receipt PDF ---
                     const doc = new jsPDF();
                     const hName = hospitalContext?.name || 'HOSPITAL';
@@ -388,7 +448,9 @@ const ReceptionDashboard = () => {
                             ['Aadhaar Verified', intakeForm.isAadhaarVerified ? 'YES - Verified' : 'NO'],
                             ['Department', intakeForm.department || '-'],
                             ['Doctor', `Dr. ${selectedDoc?.name || '-'}`],
-                            ['Date & Time', `${intakeForm.visitDate} @ ${intakeForm.visitTime}`],
+                            isTokenMode
+                                ? ['Date / Token', `${intakeForm.visitDate}  —  Token #${bookingRes.appointment?.tokenNumber || '?'}`]
+                                : ['Date & Time', `${intakeForm.visitDate} @ ${intakeForm.visitTime}`],
                             ['Consultation Fee', `Rs. ${Number(intakeForm.consultationFee || 0).toLocaleString('en-IN')}`],
                             ['Payment Method', intakeForm.paymentMethod || 'Cash'],
                             ['Payment Status', 'PAID'],
@@ -619,24 +681,42 @@ const ReceptionDashboard = () => {
                                 </div>
                             </div>
                             {intakeForm.doctor && (
-                                <div className="slot-grid">
-                                    {timeSlots.map(time => {
-                                        const isBooked = availabilityCheck.bookedSlots.includes(time);
-                                        const isPast = isSlotInPast(time);
-                                        const isDisabled = isBooked || isPast;
-
-                                        return (
-                                            <button
-                                                key={time} type="button"
-                                                className={`slot-btn ${isBooked ? 'booked' : ''} ${isPast ? 'booked' : ''} ${intakeForm.visitTime === time ? 'selected' : ''}`}
-                                                onClick={() => !isDisabled && setIntakeForm({ ...intakeForm, visitTime: time })}
-                                                disabled={isDisabled}
-                                            >
-                                                {time}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                                hospitalContext?.appointmentMode === 'token' ? (
+                                    /* Token mode: show next token number */
+                                    <div style={{ margin: '14px 0', padding: '18px 24px', background: 'linear-gradient(135deg, #fef3c7, #fde68a)', borderRadius: '12px', border: '2px solid #f59e0b', display: 'flex', alignItems: 'center', gap: '18px' }}>
+                                        <span style={{ fontSize: '2.5rem' }}>🎟️</span>
+                                        <div>
+                                            <div style={{ fontWeight: 700, fontSize: '1rem', color: '#78350f', marginBottom: '2px' }}>Token Queue Mode Active</div>
+                                            {nextToken !== null ? (
+                                                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#92400e' }}>
+                                                    Next Token: <span style={{ fontSize: '2rem', color: '#d97706' }}>#{nextToken}</span>
+                                                </div>
+                                            ) : (
+                                                <div style={{ color: '#92400e', fontSize: '0.9rem' }}>Select doctor and date to see next token</div>
+                                            )}
+                                            <div style={{ fontSize: '0.8rem', color: '#92400e', marginTop: '4px', opacity: 0.8 }}>Tokens reset daily at midnight</div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    /* Slot mode: existing time slot grid */
+                                    <div className="slot-grid">
+                                        {timeSlots.map(time => {
+                                            const isBooked = availabilityCheck.bookedSlots.includes(time);
+                                            const isPast = isSlotInPast(time);
+                                            const isDisabled = isBooked || isPast;
+                                            return (
+                                                <button
+                                                    key={time} type="button"
+                                                    className={`slot-btn ${isBooked ? 'booked' : ''} ${isPast ? 'booked' : ''} ${intakeForm.visitTime === time ? 'selected' : ''}`}
+                                                    onClick={() => !isDisabled && setIntakeForm({ ...intakeForm, visitTime: time })}
+                                                    disabled={isDisabled}
+                                                >
+                                                    {time}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )
                             )}
                         </div>
 
@@ -644,9 +724,13 @@ const ReceptionDashboard = () => {
                             <button type="submit" className="btn-save" disabled={saving}>
                                 {saving
                                     ? 'Saving...'
-                                    : selectedPatientId
-                                        ? (intakeForm.doctor && intakeForm.visitTime ? 'Save & Book Appointment' : 'Save Patient Details')
-                                        : 'Confirm Assignment'}
+                                    : (() => {
+                                        const isTokenMode = hospitalContext?.appointmentMode === 'token';
+                                        const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
+                                        if (selectedPatientId) return canBook ? (isTokenMode ? 'Save & Issue Token' : 'Save & Book Appointment') : 'Save Patient Details';
+                                        return canBook ? (isTokenMode ? 'Register & Issue Token' : 'Confirm Assignment') : 'Save Patient Details';
+                                    })()
+                                }
                             </button>
                         </div>
                     </form>
@@ -821,11 +905,13 @@ const ReceptionDashboard = () => {
     }
 
     return (
+        <>
         <div className="reception-dashboard">
             <div className="dashboard-header">
                 <h1>Reception Desk</h1>
                 <div style={{ display: 'flex', gap: '10px' }}>
                     <button className="btn-cancel" onClick={() => { fetchTransactions(); setViewMode('transactions'); }} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1' }}>💰 Transactions</button>
+                    <button className="btn-cancel" onClick={() => navigate('/billing/patient')} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac' }}>🧾 Patient Billing</button>
                     <button className="btn-save" onClick={handleNewWalkIn} style={{ padding: '10px 20px', fontSize: '1rem' }}>+ New Registration</button>
                 </div>
             </div>
@@ -894,25 +980,54 @@ const ReceptionDashboard = () => {
             </div>
 
             <div className="appointments-list">
-                <h3>Today's Queue</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+                    <h3 style={{ margin: 0 }}>Today's Queue</h3>
+                    {hospitalContext?.appointmentMode === 'token' && (
+                        <span style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '3px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>
+                            🎟️ Token Queue Mode
+                        </span>
+                    )}
+                </div>
                 <div className="table-responsive">
                     <table className="reception-table">
-                        <thead><tr><th>Patient</th><th>Assigned To</th><th>Time</th><th>Status</th><th>Action</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th>Patient</th>
+                                <th>Assigned To</th>
+                                <th>{hospitalContext?.appointmentMode === 'token' ? 'Token #' : 'Time'}</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             {appointments.map(apt => (
                                 <tr key={apt._id}>
                                     <td>{apt.userId?.name}<br /><small>{apt.userId?.phone}</small></td>
                                     <td>{apt.doctorName}</td>
-                                    <td>{apt.appointmentTime}</td>
-                                    <td><span className={`status ${apt.status}`}>{apt.status}</span></td>
                                     <td>
+                                        {apt.tokenNumber != null
+                                            ? <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#d97706' }}>#{apt.tokenNumber}</span>
+                                            : apt.appointmentTime?.startsWith('token-')
+                                                ? <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#d97706' }}>#{apt.appointmentTime.replace('token-', '')}</span>
+                                                : apt.appointmentTime}
+                                    </td>
+                                    <td><span className={`status ${apt.status}`}>{apt.status}</span></td>
+                                    <td style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                         {apt.status !== 'cancelled' && apt.status !== 'completed' && (
-                                            <button
-                                                onClick={() => handleCancelAppointment(apt._id)}
-                                                style={{ padding: '4px 10px', fontSize: '12px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
-                                            >
-                                                Cancel
-                                            </button>
+                                            <>
+                                                <button
+                                                    onClick={() => openHospitalizeModal(apt)}
+                                                    style={{ padding: '4px 10px', fontSize: '12px', background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
+                                                >
+                                                    Hospitalize
+                                                </button>
+                                                <button
+                                                    onClick={() => handleCancelAppointment(apt._id)}
+                                                    style={{ padding: '4px 10px', fontSize: '12px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </>
                                         )}
                                     </td>
                                 </tr>
@@ -922,6 +1037,130 @@ const ReceptionDashboard = () => {
                 </div>
             </div>
         </div>
+
+        {/* Hospitalize Modal */}
+        {hospitalizeModal.open && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700 }}>Hospitalize Patient</h2>
+                            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>
+                                {hospitalizeModal.appointment?.userId?.name} — {hospitalizeModal.appointment?.doctorName}
+                            </p>
+                        </div>
+                        <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+                    </div>
+
+                    {/* Bed & Ward */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Ward / Room</label>
+                            <input
+                                type="text"
+                                placeholder="e.g. General Ward, ICU"
+                                value={hospitalizeForm.ward}
+                                onChange={e => setHospitalizeForm(p => ({ ...p, ward: e.target.value }))}
+                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Bed Number</label>
+                            <input
+                                type="text"
+                                placeholder="e.g. B-12"
+                                value={hospitalizeForm.bedNumber}
+                                onChange={e => setHospitalizeForm(p => ({ ...p, bedNumber: e.target.value }))}
+                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                            />
+                        </div>
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Admission Date</label>
+                        <input
+                            type="date"
+                            value={hospitalizeForm.admissionDate}
+                            onChange={e => setHospitalizeForm(p => ({ ...p, admissionDate: e.target.value }))}
+                            style={{ padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
+                        />
+                    </div>
+
+                    {/* Facilities */}
+                    {(hospitalContext?.facilities?.length > 0) ? (
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>
+                                Select Facilities &amp; Days
+                            </label>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {hospitalContext.facilities.map(f => (
+                                    <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{f.name}</div>
+                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>₹{f.pricePerDay}/day</div>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <label style={{ fontSize: '0.82rem', color: '#475569' }}>Days:</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                placeholder="0"
+                                                value={hospitalizeForm.facilityDays[f.name] || ''}
+                                                onChange={e => setHospitalizeForm(p => ({ ...p, facilityDays: { ...p.facilityDays, [f.name]: e.target.value } }))}
+                                                style={{ width: '70px', padding: '6px 10px', border: '1.5px solid #e2e8f0', borderRadius: '7px', fontSize: '0.9rem', textAlign: 'center' }}
+                                            />
+                                        </div>
+                                        {hospitalizeForm.facilityDays[f.name] > 0 && (
+                                            <div style={{ fontWeight: 700, color: '#1d4ed8', fontSize: '0.9rem', minWidth: '70px', textAlign: 'right' }}>
+                                                ₹{(f.pricePerDay * Number(hospitalizeForm.facilityDays[f.name])).toLocaleString('en-IN')}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            {/* Total */}
+                            {Object.values(hospitalizeForm.facilityDays).some(d => d > 0) && (
+                                <div style={{ marginTop: '12px', padding: '10px 14px', background: '#eff6ff', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                                    <span>Total Facility Cost:</span>
+                                    <span style={{ color: '#1d4ed8' }}>
+                                        ₹{(hospitalContext.facilities.reduce((sum, f) => sum + (f.pricePerDay * (Number(hospitalizeForm.facilityDays[f.name]) || 0)), 0)).toLocaleString('en-IN')}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div style={{ padding: '12px 14px', background: '#fef9c3', borderRadius: '8px', fontSize: '0.88rem', color: '#92400e', marginBottom: '16px' }}>
+                            No facilities configured. Hospital admin can add facilities from the Hospital Admin Dashboard.
+                        </div>
+                    )}
+
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Notes (optional)</label>
+                        <textarea
+                            placeholder="Any notes for admission..."
+                            value={hospitalizeForm.notes}
+                            onChange={e => setHospitalizeForm(p => ({ ...p, notes: e.target.value }))}
+                            rows={2}
+                            style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
+                        />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                        <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleHospitalize}
+                            disabled={hospitalizingSaving}
+                            style={{ padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: hospitalizingSaving ? 0.6 : 1 }}
+                        >
+                            {hospitalizingSaving ? 'Admitting...' : 'Admit Patient'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 };
 

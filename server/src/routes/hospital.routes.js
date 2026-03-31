@@ -76,7 +76,7 @@ router.get('/resolve/:slug', async (req, res) => {
     try {
         const hospital = await Hospital.findOne(
             { slug: req.params.slug.toLowerCase(), isActive: true },
-            'name slug city logo departments departmentFees appointmentFee isActive _id'
+            'name slug city logo departments departmentFees appointmentFee appointmentMode facilities isActive _id'
         );
         if (!hospital) {
             return res.status(404).json({ success: false, message: 'Hospital not found. Check the URL and try again.' });
@@ -190,7 +190,7 @@ router.get('/tenant-status', verifyCentralAdmin, async (req, res) => {
 // Update a hospital
 router.put('/:id', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, address, city, state, phone, email, website, logo, isActive, departments, appointmentFee, slug } = req.body;
+        const { name, address, city, state, phone, email, website, logo, isActive, departments, appointmentFee, slug, appointmentMode } = req.body;
         const hospital = await Hospital.findById(req.params.id);
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
@@ -206,9 +206,47 @@ router.put('/:id', verifyCentralAdmin, async (req, res) => {
         if (isActive !== undefined) hospital.isActive = isActive;
         if (departments !== undefined) hospital.departments = departments;
         if (appointmentFee !== undefined) hospital.appointmentFee = appointmentFee;
+        if (appointmentMode !== undefined && ['slot', 'token'].includes(appointmentMode)) hospital.appointmentMode = appointmentMode;
 
         await hospital.save();
         res.json({ success: true, message: 'Hospital updated successfully', hospital });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ==========================================
+// APPOINTMENT MODE — Supreme Admin sets per hospital
+// GET /api/hospitals/:id/next-token?doctorId=X&date=YYYY-MM-DD
+// Returns the next available token number for a doctor on a given date
+// ==========================================
+router.get('/:id/next-token', verifyToken, async (req, res) => {
+    try {
+        const { doctorId, date } = req.query;
+        if (!doctorId || !date) {
+            return res.status(400).json({ success: false, message: 'doctorId and date are required' });
+        }
+
+        const hospital = await Hospital.findById(req.params.id);
+        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+        if (hospital.appointmentMode !== 'token') {
+            return res.json({ success: true, mode: 'slot', nextToken: null });
+        }
+
+        // Count non-cancelled appointments for this doctor on this date
+        const startOfDay = new Date(date);
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const endOfDay = new Date(date);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+
+        const count = await Appointment.countDocuments({
+            doctorId,
+            hospitalId: req.params.id,
+            appointmentDate: { $gte: startOfDay, $lte: endOfDay },
+            status: { $ne: 'cancelled' }
+        });
+
+        res.json({ success: true, mode: 'token', nextToken: count + 1 });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { financeAPI } from '../../utils/api';
+import { financeAPI, billingAPI } from '../../utils/api';
 import './AccountantDashboard.css';
 
 const AccountantDashboard = () => {
@@ -10,6 +10,11 @@ const AccountantDashboard = () => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    // Quick billing search
+    const [billingSearch, setBillingSearch] = useState('');
+    const [billingSearching, setBillingSearching] = useState(false);
+    const [billingError, setBillingError] = useState('');
 
     // Filters
     const [datePreset, setDatePreset] = useState('all');
@@ -83,6 +88,23 @@ const AccountantDashboard = () => {
         fetchStats('custom', customStartDate, customEndDate);
     };
 
+    const handleBillingSearch = async (e) => {
+        e.preventDefault();
+        if (!billingSearch.trim()) return;
+        setBillingSearching(true);
+        setBillingError('');
+        try {
+            const res = await billingAPI.getPatientBills(billingSearch.trim());
+            if (res.success) {
+                navigate(`/billing/patient?q=${encodeURIComponent(billingSearch.trim())}`);
+            }
+        } catch (err) {
+            setBillingError(err.response?.data?.message || 'Patient not found');
+        } finally {
+            setBillingSearching(false);
+        }
+    };
+
     const handleLogout = () => {
         localStorage.removeItem('user');
         localStorage.removeItem('token');
@@ -109,6 +131,27 @@ const AccountantDashboard = () => {
                     <button className="logout-btn" onClick={handleLogout}>Logout</button>
                 </div>
             </header>
+
+            {/* Patient Billing Quick Access */}
+            <div className="admin-card" style={{ marginBottom: '20px', padding: '20px' }}>
+                <h3 style={{ margin: '0 0 14px', fontSize: '1rem', fontWeight: 700 }}>🧾 Patient Billing Profile</h3>
+                <form onSubmit={handleBillingSearch} style={{ display: 'flex', gap: '10px' }}>
+                    <input
+                        type="text"
+                        placeholder="Search by Phone / MRN / Patient ID..."
+                        value={billingSearch}
+                        onChange={e => { setBillingSearch(e.target.value); setBillingError(''); }}
+                        style={{ flex: 1, padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', outline: 'none' }}
+                    />
+                    <button type="submit" disabled={billingSearching} style={{ padding: '10px 22px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '0.95rem' }}>
+                        {billingSearching ? 'Searching...' : 'View Bills'}
+                    </button>
+                    <button type="button" onClick={() => navigate('/billing/patient')} style={{ padding: '10px 18px', background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '0.95rem' }}>
+                        Open Billing
+                    </button>
+                </form>
+                {billingError && <p style={{ color: '#dc2626', marginTop: '8px', fontSize: '0.88rem' }}>{billingError}</p>}
+            </div>
 
             <div className="admin-card date-filter-card">
                 <h3>📅 Analytics Timeframe</h3>

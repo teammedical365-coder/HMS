@@ -7,6 +7,7 @@ const { getTenantModels } = require('../db/tenantModels');
 const MasterAppointment = require('../models/appointment.model');
 const MasterUser = require('../models/user.model');
 const Doctor = require('../models/doctor.model');
+const Hospital = require('../models/hospital.model');
 
 // Permission helper
 const checkAccess = (user, legacyRoles = [], requiredPermission = '') => {
@@ -136,8 +137,8 @@ router.post('/create', verifyToken, resolveTenant, async (req, res) => {
         } = req.body;
 
         const userId = req.user._id || req.user.userId;
-        if (!doctorId || !appointmentDate || !appointmentTime) {
-            return res.status(400).json({ success: false, message: 'Missing required fields (doctorId, date, or time)' });
+        if (!doctorId || !appointmentDate) {
+            return res.status(400).json({ success: false, message: 'Missing required fields (doctorId or date)' });
         }
 
         const { User, Appointment } = getModels(req);
@@ -162,27 +163,55 @@ router.post('/create', verifyToken, resolveTenant, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Cannot book appointments in the past.' });
         }
 
-        // Check double booking
-        const existingAppointment = await Appointment.findOne({
-            doctorId: doctorDoc._id,
-            appointmentDate: new Date(reqDateStr),
-            appointmentTime,
-            status: { $ne: 'cancelled' }
-        });
-        if (existingAppointment) {
-            return res.status(400).json({ success: false, message: 'This slot is already booked.' });
+        // Determine appointment mode for this hospital
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const hospital = hospitalId ? await Hospital.findById(hospitalId).select('appointmentMode') : null;
+        const isTokenMode = hospital?.appointmentMode === 'token';
+
+        let finalTime = appointmentTime;
+        let tokenNumber = null;
+
+        if (isTokenMode) {
+            // Token mode: ignore time slot, assign sequential token per doctor per day
+            const startOfDay = new Date(reqDateStr);
+            startOfDay.setUTCHours(0, 0, 0, 0);
+            const endOfDay = new Date(reqDateStr);
+            endOfDay.setUTCHours(23, 59, 59, 999);
+
+            const count = await Appointment.countDocuments({
+                doctorId: doctorDoc._id,
+                appointmentDate: { $gte: startOfDay, $lte: endOfDay },
+                status: { $ne: 'cancelled' }
+            });
+            tokenNumber = count + 1;
+            finalTime = `token-${tokenNumber}`;
+        } else {
+            // Slot mode: time is required and must not be double-booked
+            if (!appointmentTime) {
+                return res.status(400).json({ success: false, message: 'Appointment time is required for slot-based booking' });
+            }
+            const existingAppointment = await Appointment.findOne({
+                doctorId: doctorDoc._id,
+                appointmentDate: new Date(reqDateStr),
+                appointmentTime,
+                status: { $ne: 'cancelled' }
+            });
+            if (existingAppointment) {
+                return res.status(400).json({ success: false, message: 'This slot is already booked.' });
+            }
         }
 
         const appointment = new Appointment({
             userId,
             patientId: user.patientId,
-            hospitalId: req.hospitalId || req.user.hospitalId,
+            hospitalId,
             doctorId: doctorDoc._id,
             doctorName: doctorDoc.name,
             serviceId: serviceId || 'general',
             serviceName: serviceName || 'General Consultation',
             appointmentDate: new Date(reqDateStr),
-            appointmentTime,
+            appointmentTime: finalTime || '',
+            tokenNumber,
             amount: amount || doctorDoc.consultationFee || 500,
             notes: notes || '',
             prescriptionDescription: prescriptionDescription || '',

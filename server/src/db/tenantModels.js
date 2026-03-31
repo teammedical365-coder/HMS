@@ -54,12 +54,19 @@ const appointmentSchema = new mongoose.Schema({
     hospitalId: { type: mongoose.Schema.Types.ObjectId },
     date: Date,
     time: String,
+    appointmentDate: Date,
+    appointmentTime: { type: String, default: '' },
+    tokenNumber: { type: Number, default: null },
     status: { type: String, default: 'Scheduled' },
     paymentStatus: { type: String, enum: ['Pending', 'Paid', 'Waived'], default: 'Pending' },
     fee: { type: Number, default: 0 },
     type: String,
     notes: String,
     department: String,
+    doctorName: String,
+    serviceName: String,
+    amount: { type: Number, default: 0 },
+    bookedBy: { type: mongoose.Schema.Types.ObjectId },
 }, { timestamps: true });
 
 const labReportSchema = new mongoose.Schema({
@@ -102,6 +109,27 @@ const roleSchema = new mongoose.Schema({
     isSystemRole: { type: Boolean, default: false },
 }, { timestamps: true });
 
+const admissionSchema = new mongoose.Schema({
+    hospitalId: { type: mongoose.Schema.Types.ObjectId },
+    patientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    appointmentId: { type: mongoose.Schema.Types.ObjectId },
+    admittedBy: { type: mongoose.Schema.Types.ObjectId },
+    admissionDate: { type: Date, default: Date.now },
+    dischargeDate: Date,
+    status: { type: String, enum: ['Admitted', 'Discharged'], default: 'Admitted' },
+    ward: String,
+    bedNumber: String,
+    selectedFacilities: [{
+        facilityName: String,
+        pricePerDay: Number,
+        days: Number,
+        totalAmount: Number
+    }],
+    totalAmount: { type: Number, default: 0 },
+    paymentStatus: { type: String, enum: ['Pending', 'Paid'], default: 'Pending' },
+    notes: String,
+}, { timestamps: true });
+
 // ─── Model Factory ────────────────────────────────────────────────────────────
 
 /**
@@ -132,6 +160,7 @@ function getTenantModels(tenantDb) {
         PharmacyOrder: model('PharmacyOrder', pharmacyOrderSchema),
         FacilityCharge: model('FacilityCharge', facilityChargeSchema),
         Role: model('Role', roleSchema),
+        Admission: model('Admission', admissionSchema),
     };
 }
 
