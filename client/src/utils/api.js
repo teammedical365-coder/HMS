@@ -346,6 +346,33 @@ export const admissionAPI = {
     markAdmissionPaid: async (id) => (await apiClient.put(`/api/admissions/${id}/pay`, {})).data,
 };
 
+// Clinic self-service API (for clinic admin dashboard)
+export const clinicAPI = {
+    getStats: async () => (await apiClient.get('/api/clinic/stats')).data,
+    // Patients
+    getPatients: async (search = '') => (await apiClient.get(`/api/clinic/patients${search ? `?search=${encodeURIComponent(search)}` : ''}`)).data,
+    registerPatient: async (data) => (await apiClient.post('/api/clinic/patients', data)).data,
+    getPatientHistory: async (userId) => (await apiClient.get(`/api/clinic/patients/${userId}/history`)).data,
+    // Appointments
+    getAppointments: async (date = '', status = '') => {
+        const params = new URLSearchParams();
+        if (date) params.append('date', date);
+        if (status) params.append('status', status);
+        const qs = params.toString();
+        return (await apiClient.get(`/api/clinic/appointments${qs ? '?' + qs : ''}`)).data;
+    },
+    bookAppointment: async (data) => (await apiClient.post('/api/clinic/appointments', data)).data,
+    completeAppointment: async (id, data) => (await apiClient.put(`/api/clinic/appointments/${id}/complete`, data)).data,
+    payAppointment: async (id, paymentMethod = 'Cash') => (await apiClient.put(`/api/clinic/appointments/${id}/pay`, { paymentMethod })).data,
+    cancelAppointment: async (id) => (await apiClient.put(`/api/clinic/appointments/${id}/cancel`, {})).data,
+    // Inventory
+    getInventory: async () => (await apiClient.get('/api/clinic/inventory')).data,
+    addInventory: async (data) => (await apiClient.post('/api/clinic/inventory', data)).data,
+    // Pharmacy orders
+    getPharmacyOrders: async () => (await apiClient.get('/api/clinic/pharmacy-orders')).data,
+    dispenseOrder: async (id) => (await apiClient.put(`/api/clinic/pharmacy-orders/${id}/dispense`, {})).data,
+};
+
 export const simpleClinicAPI = {
     getClinics: async () => (await apiClient.get('/api/simple-clinics')).data,
     createClinic: async (data) => (await apiClient.post('/api/simple-clinics', data)).data,
