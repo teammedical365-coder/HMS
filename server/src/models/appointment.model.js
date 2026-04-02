@@ -10,18 +10,24 @@ const appointmentSchema = new mongoose.Schema({
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: [true, 'User ID is required']
+        required: false,
+        default: null
     },
     patientId: { type: String, required: false, index: true },
     hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', index: true },
 
-    // --- FIX: Strict Type for Doctor ID ---
     doctorId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Doctor',
-        required: true
+        required: false,
+        default: null
     },
-    // -------------------------------------
+    // clinicPatientId: for simple clinic appointments where userId may differ
+    clinicPatientId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ClinicPatient',
+        default: null
+    },
 
     doctorUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
     doctorName: { type: String, required: [true, 'Doctor name is required'] },

@@ -1,6 +1,6 @@
 /**
  * /api/clinic — Dedicated routes for simple clinics (clinicType = 'clinic')
- * Works for hospitaladmin role without needing Doctor profile documents.
+ * Uses ClinicPatient model (separate from User/staff).
  * All data is scoped to req.user.hospitalId.
  */
 
@@ -9,10 +9,11 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const { verifyToken } = require('../middleware/auth.middleware');
 const Hospital = require('../models/hospital.model');
-const User = require('../models/user.model');
 const Appointment = require('../models/appointment.model');
 const Inventory = require('../models/inventory.model');
 const PharmacyOrder = require('../models/pharmacyOrder.model');
+const ClinicPatient = require('../models/clinicPatient.model');
+const ClinicSubscription = require('../models/clinicSubscription.model');
 
 // ─────────────────────────────────────────────
 // Middleware: must be hospitaladmin of a clinic
@@ -20,8 +21,7 @@ const PharmacyOrder = require('../models/pharmacyOrder.model');
 const verifyClinicAdmin = async (req, res, next) => {
     try {
         await verifyToken(req, res, async () => {
-            const role = req.user.role;
-            if (role !== 'hospitaladmin') {
+            if (req.user.role !== 'hospitaladmin') {
                 return res.status(403).json({ success: false, message: 'Clinic admin access required' });
             }
             if (!req.user.hospitalId) {
@@ -34,7 +34,48 @@ const verifyClinicAdmin = async (req, res, next) => {
     }
 };
 
-const hid = (req) => req.user.hospitalId;
+const hid = (req) => new mongoose.Types.ObjectId(req.user.hospitalId.toString());
+
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+const todayRange = () => {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const end   = new Date(); end.setHours(23, 59, 59, 999);
+    return { start, end };
+};
+
+// Get or ensure clinic code (fallback if not set)
+const getClinicCode = async (hospitalId) => {
+    const clinic = await Hospital.findById(hospitalId).select('clinicCode name');
+    if (clinic.clinicCode) return clinic.clinicCode;
+    // Auto-generate from name
+    const code = clinic.name.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4) || 'CLN';
+    await Hospital.findByIdAndUpdate(hospitalId, { clinicCode: code });
+    return code;
+};
+
+// Upsert subscription record and increment new patient count
+const trackNewPatient = async (clinicId) => {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year  = now.getFullYear();
+    const clinic = await Hospital.findById(clinicId).select('subscription');
+    const rate   = clinic?.subscription?.ratePerPatient || 0;
+    const total  = await ClinicPatient.countDocuments({ clinicId });
+
+    await ClinicSubscription.findOneAndUpdate(
+        { clinicId, month, year },
+        {
+            $inc: { newPatientCount: 1 },
+            $set: { totalPatientCount: total, ratePerPatient: rate },
+        },
+        { upsert: true, new: true }
+    ).then(sub => {
+        sub.totalAmount = sub.newPatientCount * sub.ratePerPatient;
+        return sub.save();
+    }).catch(() => {}); // non-fatal
+};
 
 // ─────────────────────────────────────────────
 // STATS — GET /api/clinic/stats
@@ -42,12 +83,7 @@ const hid = (req) => req.user.hospitalId;
 router.get('/stats', verifyClinicAdmin, async (req, res) => {
     try {
         const hospitalId = hid(req);
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayEnd = new Date();
-        todayEnd.setHours(23, 59, 59, 999);
-
+        const { start: today, end: todayEnd } = todayRange();
         const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
         const [
@@ -63,37 +99,37 @@ router.get('/stats', verifyClinicAdmin, async (req, res) => {
             recentAppointments,
             lowStockItems,
         ] = await Promise.all([
-            User.countDocuments({ hospitalId: new mongoose.Types.ObjectId(hospitalId.toString()), patientId: { $exists: true, $ne: null } }),
-            User.countDocuments({ hospitalId: new mongoose.Types.ObjectId(hospitalId.toString()), patientId: { $exists: true, $ne: null }, createdAt: { $gte: today } }),
+            ClinicPatient.countDocuments({ clinicId: hospitalId }),
+            ClinicPatient.countDocuments({ clinicId: hospitalId, createdAt: { $gte: today } }),
             Appointment.countDocuments({ hospitalId }),
             Appointment.countDocuments({ hospitalId, appointmentDate: { $gte: today, $lte: todayEnd } }),
             Appointment.countDocuments({ hospitalId, status: 'completed' }),
             Appointment.countDocuments({ hospitalId, status: { $in: ['pending', 'confirmed'] } }),
             Appointment.aggregate([
-                { $match: { hospitalId: new mongoose.Types.ObjectId(hospitalId), paymentStatus: 'paid' } },
+                { $match: { hospitalId, paymentStatus: 'paid' } },
                 { $group: { _id: null, total: { $sum: '$amount' } } }
             ]),
             Appointment.aggregate([
-                { $match: { hospitalId: new mongoose.Types.ObjectId(hospitalId), paymentStatus: 'paid', appointmentDate: { $gte: today, $lte: todayEnd } } },
+                { $match: { hospitalId, paymentStatus: 'paid', appointmentDate: { $gte: today, $lte: todayEnd } } },
                 { $group: { _id: null, total: { $sum: '$amount' } } }
             ]),
             Appointment.aggregate([
-                { $match: { hospitalId: new mongoose.Types.ObjectId(hospitalId), paymentStatus: 'paid', createdAt: { $gte: firstOfMonth } } },
+                { $match: { hospitalId, paymentStatus: 'paid', createdAt: { $gte: firstOfMonth } } },
                 { $group: { _id: null, total: { $sum: '$amount' } } }
             ]),
             Appointment.find({ hospitalId })
-                .populate('userId', 'name phone patientId')
+                .populate('clinicPatientId', 'name phone patientUid')
                 .sort({ createdAt: -1 })
                 .limit(10)
                 .lean(),
             Inventory.find({ hospitalId, stock: { $lt: 10 } }).select('name stock unit').limit(5).lean(),
         ]);
 
-        // Monthly trend (last 6 months)
+        // Monthly revenue trend (last 6 months)
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
         const monthlyTrend = await Appointment.aggregate([
-            { $match: { hospitalId: new mongoose.Types.ObjectId(hospitalId), paymentStatus: 'paid', createdAt: { $gte: sixMonthsAgo } } },
+            { $match: { hospitalId, paymentStatus: 'paid', createdAt: { $gte: sixMonthsAgo } } },
             { $group: { _id: { month: { $month: '$createdAt' }, year: { $year: '$createdAt' } }, revenue: { $sum: '$amount' }, count: { $sum: 1 } } },
             { $sort: { '_id.year': 1, '_id.month': 1 } }
         ]);
@@ -107,9 +143,9 @@ router.get('/stats', verifyClinicAdmin, async (req, res) => {
                 todayAppointments,
                 completedAppointments,
                 pendingAppointments,
-                totalRevenue: revenueAgg[0]?.total || 0,
-                todayRevenue: todayRevenueAgg[0]?.total || 0,
-                monthRevenue: monthRevenueAgg[0]?.total || 0,
+                totalRevenue:  revenueAgg[0]?.total || 0,
+                todayRevenue:  todayRevenueAgg[0]?.total || 0,
+                monthRevenue:  monthRevenueAgg[0]?.total || 0,
                 recentAppointments,
                 lowStockItems,
                 monthlyTrend,
@@ -121,28 +157,23 @@ router.get('/stats', verifyClinicAdmin, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// PATIENTS — GET /api/clinic/patients
+// LIST PATIENTS — GET /api/clinic/patients
 // ─────────────────────────────────────────────
 router.get('/patients', verifyClinicAdmin, async (req, res) => {
     try {
         const { search } = req.query;
-        // Query by patientId existence — all registered clinic patients have a P-xxx ID
-        const query = {
-            hospitalId: new mongoose.Types.ObjectId(hid(req).toString()),
-            patientId: { $exists: true, $nin: [null, ''] },
-        };
+        const query = { clinicId: hid(req), isActive: true };
 
         if (search && search.trim().length >= 2) {
             const s = search.trim();
             query.$or = [
-                { name: { $regex: s, $options: 'i' } },
-                { phone: { $regex: s, $options: 'i' } },
-                { patientId: { $regex: s, $options: 'i' } },
+                { name:       { $regex: s, $options: 'i' } },
+                { phone:      { $regex: s, $options: 'i' } },
+                { patientUid: { $regex: s, $options: 'i' } },
             ];
         }
 
-        const patients = await User.find(query)
-            .select('name phone email patientId dob gender address createdAt')
+        const patients = await ClinicPatient.find(query)
             .sort({ createdAt: -1 })
             .limit(200)
             .lean();
@@ -158,54 +189,89 @@ router.get('/patients', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 router.post('/patients', verifyClinicAdmin, async (req, res) => {
     try {
-        const { name, phone, email, dob, gender, address } = req.body;
-        if (!name || !phone) {
-            return res.status(400).json({ success: false, message: 'Name and phone are required' });
-        }
+        const { name, phone, email, dob, gender, address, bloodGroup, allergies, chronicConditions } = req.body;
+        if (!name || !phone) return res.status(400).json({ success: false, message: 'Name and phone are required' });
+
         const cleanPhone = phone.replace(/\D/g, '');
-        if (cleanPhone.length !== 10) {
-            return res.status(400).json({ success: false, message: 'Phone must be exactly 10 digits' });
-        }
+        if (cleanPhone.length !== 10) return res.status(400).json({ success: false, message: 'Phone must be exactly 10 digits' });
 
-        const hospitalId = hid(req);
+        const clinicId = hid(req);
 
-        // Check if already exists in this clinic
-        const existing = await User.findOne({ phone: cleanPhone, hospitalId });
+        // Duplicate check within this clinic
+        const existing = await ClinicPatient.findOne({ clinicId, phone: cleanPhone });
         if (existing) {
-            return res.status(200).json({ success: true, patient: existing, message: 'Patient already exists — returning existing record', existing: true });
+            return res.status(200).json({ success: true, patient: existing, existing: true, message: `Patient already registered — ${existing.patientUid}` });
         }
 
-        // Generate patient ID
-        const lastPatient = await User.findOne({ hospitalId, patientId: { $exists: true, $ne: null } }).sort({ createdAt: -1 });
-        let patientId = 'P-101';
-        if (lastPatient?.patientId) {
-            const parts = lastPatient.patientId.split('-');
-            if (parts.length === 2 && !isNaN(parts[1])) {
-                patientId = `P-${parseInt(parts[1]) + 1}`;
-            }
-        }
+        // Clinic-scoped patient UID: e.g. "RAM-001"
+        const code  = await getClinicCode(clinicId);
+        const count = await ClinicPatient.countDocuments({ clinicId });
+        const patientUid = `${code}-${String(count + 1).padStart(3, '0')}`;
 
-        const userData = { name, phone: cleanPhone, hospitalId, role: 'patient', patientId };
-        if (email) userData.email = email;
-        if (dob) userData.dob = dob;
-        if (gender) userData.gender = gender;
-        if (address) userData.address = address;
+        const patient = await ClinicPatient.create({
+            clinicId,
+            patientUid,
+            name: name.trim(),
+            phone: cleanPhone,
+            email: email || '',
+            dob: dob ? new Date(dob) : null,
+            gender: gender || 'Male',
+            bloodGroup: bloodGroup || '',
+            address: address || '',
+            allergies: allergies || '',
+            chronicConditions: chronicConditions || '',
+        });
 
-        const patient = new User(userData);
-        await patient.save();
+        // Track in subscription (non-blocking)
+        trackNewPatient(clinicId);
 
-        res.status(201).json({ success: true, patient, message: 'Patient registered successfully' });
+        res.status(201).json({ success: true, patient, message: `Patient registered — ${patientUid}` });
     } catch (err) {
         if (err.code === 11000) {
-            const field = Object.keys(err.keyPattern || {})[0] || 'field';
-            return res.status(400).json({ success: false, message: `A patient with this ${field} already exists` });
+            return res.status(400).json({ success: false, message: 'A patient with this phone already exists in this clinic' });
         }
         res.status(500).json({ success: false, message: err.message });
     }
 });
 
 // ─────────────────────────────────────────────
-// APPOINTMENTS — GET /api/clinic/appointments
+// PATIENT HISTORY — GET /api/clinic/patients/:id/history
+// ─────────────────────────────────────────────
+router.get('/patients/:id/history', verifyClinicAdmin, async (req, res) => {
+    try {
+        const patient = await ClinicPatient.findOne({ _id: req.params.id, clinicId: hid(req) }).lean();
+        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+        const appointments = await Appointment.find({ clinicPatientId: patient._id, hospitalId: hid(req) })
+            .sort({ appointmentDate: -1 })
+            .lean();
+
+        res.json({ success: true, patient, appointments });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────
+// UPDATE PATIENT — PUT /api/clinic/patients/:id
+// ─────────────────────────────────────────────
+router.put('/patients/:id', verifyClinicAdmin, async (req, res) => {
+    try {
+        const { name, email, dob, gender, address, bloodGroup, allergies, chronicConditions, medicalNotes } = req.body;
+        const patient = await ClinicPatient.findOneAndUpdate(
+            { _id: req.params.id, clinicId: hid(req) },
+            { name, email, dob, gender, address, bloodGroup, allergies, chronicConditions, medicalNotes },
+            { new: true, runValidators: true }
+        );
+        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+        res.json({ success: true, patient });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────
+// LIST APPOINTMENTS — GET /api/clinic/appointments
 // ─────────────────────────────────────────────
 router.get('/appointments', verifyClinicAdmin, async (req, res) => {
     try {
@@ -213,17 +279,14 @@ router.get('/appointments', verifyClinicAdmin, async (req, res) => {
         const query = { hospitalId: hid(req) };
 
         if (date) {
-            const d = new Date(date);
-            d.setHours(0, 0, 0, 0);
-            const dEnd = new Date(date);
-            dEnd.setHours(23, 59, 59, 999);
-            query.appointmentDate = { $gte: d, $lte: dEnd };
+            const d = new Date(date); d.setHours(0, 0, 0, 0);
+            const e = new Date(date); e.setHours(23, 59, 59, 999);
+            query.appointmentDate = { $gte: d, $lte: e };
         }
-
         if (status) query.status = status;
 
         const appointments = await Appointment.find(query)
-            .populate('userId', 'name phone patientId')
+            .populate('clinicPatientId', 'name phone patientUid gender bloodGroup')
             .sort({ tokenNumber: 1, createdAt: -1 })
             .lean();
 
@@ -235,48 +298,40 @@ router.get('/appointments', verifyClinicAdmin, async (req, res) => {
 
 // ─────────────────────────────────────────────
 // BOOK APPOINTMENT (token) — POST /api/clinic/appointments
-// No Doctor document needed — uses clinic admin as doctor
 // ─────────────────────────────────────────────
 router.post('/appointments', verifyClinicAdmin, async (req, res) => {
     try {
-        const { patientUserId, patientId, amount, notes, serviceName } = req.body;
-        if (!patientUserId) {
-            return res.status(400).json({ success: false, message: 'patientUserId is required' });
-        }
+        const { patientId, amount, notes, serviceName } = req.body;
+        // patientId here is ClinicPatient._id
+        if (!patientId) return res.status(400).json({ success: false, message: 'patientId is required' });
 
-        const patient = await User.findById(patientUserId);
-        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+        const clinicId = hid(req);
+        const patient  = await ClinicPatient.findOne({ _id: patientId, clinicId });
+        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found in this clinic' });
 
-        const hospitalId = hid(req);
-
-        // Auto-assign next token for today
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayEnd = new Date();
-        todayEnd.setHours(23, 59, 59, 999);
-
+        const { start: today, end: todayEnd } = todayRange();
         const count = await Appointment.countDocuments({
-            hospitalId,
+            hospitalId: clinicId,
             appointmentDate: { $gte: today, $lte: todayEnd },
             status: { $ne: 'cancelled' }
         });
         const tokenNumber = count + 1;
 
         const appointment = new Appointment({
-            userId: patient._id,
-            patientId: patient.patientId,
-            hospitalId,
-            doctorUserId: req.user._id, // clinic admin acts as doctor
-            doctorName: req.user.name,
-            serviceName: serviceName || 'General Consultation',
+            clinicPatientId: patient._id,
+            patientId:       patient.patientUid, // display ID
+            hospitalId:      clinicId,
+            doctorUserId:    req.user._id,
+            doctorName:      req.user.name,
+            serviceName:     serviceName || 'General Consultation',
             appointmentDate: new Date(),
             appointmentTime: new Date().toTimeString().slice(0, 5),
             tokenNumber,
-            status: 'confirmed',
+            status:        'confirmed',
             paymentStatus: 'pending',
-            amount: amount || 0,
-            notes: notes || '',
-            bookedBy: req.user._id,
+            amount:        amount || 0,
+            notes:         notes || '',
+            bookedBy:      req.user._id,
         });
 
         await appointment.save();
@@ -301,11 +356,11 @@ router.put('/appointments/:id/complete', verifyClinicAdmin, async (req, res) => 
         const appt = await Appointment.findOne({ _id: req.params.id, hospitalId: hid(req) });
         if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
 
-        appt.status = 'completed';
-        appt.diagnosis = diagnosis || appt.diagnosis;
-        appt.doctorNotes = notes || appt.doctorNotes;
-        if (medicines && Array.isArray(medicines)) appt.pharmacy = medicines;
-        if (labTests && Array.isArray(labTests)) appt.labTests = labTests;
+        appt.status        = 'completed';
+        appt.diagnosis     = diagnosis     || appt.diagnosis;
+        appt.doctorNotes   = notes         || appt.doctorNotes;
+        if (medicines  && Array.isArray(medicines))  appt.pharmacy  = medicines;
+        if (labTests   && Array.isArray(labTests))   appt.labTests  = labTests;
         if (paymentStatus) appt.paymentStatus = paymentStatus;
         if (amount !== undefined) appt.amount = amount;
 
@@ -314,15 +369,15 @@ router.put('/appointments/:id/complete', verifyClinicAdmin, async (req, res) => 
         // Create pharmacy order if medicines prescribed
         if (medicines && medicines.length > 0) {
             await PharmacyOrder.create({
-                userId: appt.userId,
-                patientId: appt.patientId || appt._id.toString(),
-                hospitalId: hid(req),
+                userId:        appt.userId || req.user._id, // fallback to admin
+                patientId:     appt.patientId || appt._id.toString(),
+                hospitalId:    hid(req),
                 appointmentId: appt._id,
-                doctorId: req.user._id,
+                doctorId:      req.user._id,
                 items: medicines.map(m => ({
                     medicineName: m.name || m.medicineName,
-                    frequency: m.dosage || m.frequency,
-                    duration: m.duration || '',
+                    frequency:    m.dosage || m.frequency || '',
+                    duration:     m.duration || '',
                 })),
                 orderStatus: 'Upcoming',
             });
@@ -370,26 +425,6 @@ router.put('/appointments/:id/cancel', verifyClinicAdmin, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// PATIENT HISTORY — GET /api/clinic/patients/:userId/history
-// ─────────────────────────────────────────────
-router.get('/patients/:userId/history', verifyClinicAdmin, async (req, res) => {
-    try {
-        const patient = await User.findOne({ _id: req.params.userId, hospitalId: hid(req) })
-            .select('name phone email patientId dob gender address createdAt')
-            .lean();
-        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
-
-        const appointments = await Appointment.find({ userId: req.params.userId, hospitalId: hid(req) })
-            .sort({ appointmentDate: -1 })
-            .lean();
-
-        res.json({ success: true, patient, appointments });
-    } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
-    }
-});
-
-// ─────────────────────────────────────────────
 // INVENTORY — GET /api/clinic/inventory
 // ─────────────────────────────────────────────
 router.get('/inventory', verifyClinicAdmin, async (req, res) => {
@@ -402,20 +437,23 @@ router.get('/inventory', verifyClinicAdmin, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// ADD INVENTORY ITEM — POST /api/clinic/inventory
+// ADD INVENTORY — POST /api/clinic/inventory
 // ─────────────────────────────────────────────
 router.post('/inventory', verifyClinicAdmin, async (req, res) => {
     try {
         const { name, category, stock, unit, buyingPrice, sellingPrice, expiryDate } = req.body;
-        if (!name) return res.status(400).json({ success: false, message: 'Medicine name required' });
+        if (!name)       return res.status(400).json({ success: false, message: 'Medicine name required' });
         if (!expiryDate) return res.status(400).json({ success: false, message: 'Expiry date is required' });
+
         const item = new Inventory({
-            hospitalId: hid(req),
-            name, category: category || 'General',
-            stock: Number(stock) || 0, unit: unit || 'Tablets',
-            buyingPrice: Number(buyingPrice) || 0,
+            hospitalId:   hid(req),
+            name,
+            category:     category    || 'General',
+            stock:        Number(stock)       || 0,
+            unit:         unit         || 'Tablets',
+            buyingPrice:  Number(buyingPrice)  || 0,
             sellingPrice: Number(sellingPrice) || 0,
-            expiryDate: new Date(expiryDate),
+            expiryDate:   new Date(expiryDate),
         });
         await item.save();
         res.status(201).json({ success: true, item });
@@ -430,7 +468,6 @@ router.post('/inventory', verifyClinicAdmin, async (req, res) => {
 router.get('/pharmacy-orders', verifyClinicAdmin, async (req, res) => {
     try {
         const orders = await PharmacyOrder.find({ hospitalId: hid(req) })
-            .populate('userId', 'name patientId')
             .sort({ createdAt: -1 })
             .lean();
         res.json({ success: true, orders });
@@ -440,7 +477,7 @@ router.get('/pharmacy-orders', verifyClinicAdmin, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// COMPLETE PHARMACY ORDER — PUT /api/clinic/pharmacy-orders/:id/dispense
+// DISPENSE PHARMACY ORDER — PUT /api/clinic/pharmacy-orders/:id/dispense
 // ─────────────────────────────────────────────
 router.put('/pharmacy-orders/:id/dispense', verifyClinicAdmin, async (req, res) => {
     try {

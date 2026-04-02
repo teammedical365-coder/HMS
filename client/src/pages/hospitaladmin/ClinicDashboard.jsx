@@ -143,8 +143,8 @@ const OverviewMode = () => {
                                 <tr key={a._id}>
                                     <td><strong style={{ color: '#6366f1' }}>#{a.tokenNumber || '—'}</strong></td>
                                     <td>
-                                        <div style={{ fontWeight: 600 }}>{a.userId?.name || '—'}</div>
-                                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{a.userId?.patientId || a.patientId}</div>
+                                        <div style={{ fontWeight: 600 }}>{a.clinicPatientId?.name || '—'}</div>
+                                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{a.clinicPatientId?.patientUid || a.patientId}</div>
                                     </td>
                                     <td style={{ fontSize: '12px' }}>{fmtDate(a.appointmentDate)}</td>
                                     <td><StatusBadge status={a.status} /></td>
@@ -186,7 +186,7 @@ const PatientsMode = ({ onBookToken }) => {
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [patientHistory, setPatientHistory] = useState(null);
     const [loadingHistory, setLoadingHistory] = useState(false);
-    const [form, setForm] = useState({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '' });
+    const [form, setForm] = useState({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '' });
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState({ type: '', text: '' });
     const [justRegistered, setJustRegistered] = useState(null);
@@ -231,7 +231,7 @@ const PatientsMode = ({ onBookToken }) => {
             if (r.success) {
                 if (!r.existing) setPatients(prev => [r.patient, ...prev]);
                 setJustRegistered(r.patient);
-                setForm({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '' });
+                setForm({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '' });
             } else flash('error', r.message);
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
         finally { setSaving(false); }
@@ -248,12 +248,17 @@ const PatientsMode = ({ onBookToken }) => {
                         <div>
                             <h2 style={{ margin: 0 }}>{selectedPatient.name}</h2>
                             <div style={{ color: '#64748b', fontSize: '14px', marginTop: '4px' }}>
-                                <span style={{ background: '#eef2ff', color: '#6366f1', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '12px', marginRight: '8px' }}>{selectedPatient.patientId}</span>
+                                <span style={{ background: '#eef2ff', color: '#6366f1', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '12px', marginRight: '8px' }}>{selectedPatient.patientUid}</span>
                                 {selectedPatient.phone && `📞 ${selectedPatient.phone}`}
                                 {selectedPatient.gender && ` · ${selectedPatient.gender}`}
                                 {selectedPatient.dob && ` · DOB: ${fmtDate(selectedPatient.dob)}`}
                             </div>
                             {selectedPatient.address && <div style={{ color: '#94a3b8', fontSize: '13px', marginTop: '4px' }}>📍 {selectedPatient.address}</div>}
+                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '6px', fontSize: '12px' }}>
+                                {selectedPatient.bloodGroup && <span style={{ background: '#fee2e2', color: '#dc2626', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>🩸 {selectedPatient.bloodGroup}</span>}
+                                {selectedPatient.allergies && <span style={{ background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '4px' }}>⚠️ Allergies: {selectedPatient.allergies}</span>}
+                                {selectedPatient.chronicConditions && <span style={{ background: '#f0f9ff', color: '#0369a1', padding: '2px 8px', borderRadius: '4px' }}>🏥 {selectedPatient.chronicConditions}</span>}
+                            </div>
                         </div>
                         <div style={{ marginLeft: 'auto', fontSize: '12px', color: '#94a3b8' }}>
                             Registered: {fmtDate(selectedPatient.createdAt)}
@@ -322,7 +327,7 @@ const PatientsMode = ({ onBookToken }) => {
                             <tbody>
                                 {patients.map(p => (
                                     <tr key={p._id} style={{ cursor: 'pointer' }} onClick={() => openHistory(p)}>
-                                        <td><span style={{ background: '#eef2ff', color: '#6366f1', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '12px' }}>{p.patientId}</span></td>
+                                        <td><span style={{ background: '#eef2ff', color: '#6366f1', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '12px' }}>{p.patientUid}</span></td>
                                         <td>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <div className="clinic-avatar-sm">{p.name?.charAt(0)?.toUpperCase()}</div>
@@ -349,7 +354,7 @@ const PatientsMode = ({ onBookToken }) => {
                             <div style={{ fontSize: '48px', marginBottom: '8px' }}>✅</div>
                             <h3 style={{ margin: '0 0 4px' }}>Patient Registered!</h3>
                             <p style={{ color: '#64748b', margin: '0 0 20px' }}>
-                                <strong>{justRegistered.name}</strong> · <span style={{ background: '#eef2ff', color: '#6366f1', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '13px' }}>{justRegistered.patientId}</span> · {justRegistered.phone}
+                                <strong>{justRegistered.name}</strong> · <span style={{ background: '#eef2ff', color: '#6366f1', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '13px' }}>{justRegistered.patientUid}</span> · {justRegistered.phone}
                             </p>
                             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
                                 <button className="clinic-btn-primary" style={{ fontSize: '15px', padding: '10px 24px' }}
@@ -393,9 +398,24 @@ const PatientsMode = ({ onBookToken }) => {
                                         <option>Male</option><option>Female</option><option>Other</option>
                                     </select>
                                 </div>
+                                <div className="clinic-form-group">
+                                    <label>Blood Group</label>
+                                    <select className="clinic-input" value={form.bloodGroup} onChange={e => setForm(f => ({ ...f, bloodGroup: e.target.value }))}>
+                                        <option value=''>Unknown</option>
+                                        {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(g => <option key={g}>{g}</option>)}
+                                    </select>
+                                </div>
                                 <div className="clinic-form-group" style={{ gridColumn: '1/-1' }}>
                                     <label>Address</label>
                                     <input className="clinic-input" placeholder="Optional" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
+                                </div>
+                                <div className="clinic-form-group" style={{ gridColumn: '1/-1' }}>
+                                    <label>Known Allergies</label>
+                                    <input className="clinic-input" placeholder="e.g. Penicillin, Dust (optional)" value={form.allergies} onChange={e => setForm(f => ({ ...f, allergies: e.target.value }))} />
+                                </div>
+                                <div className="clinic-form-group" style={{ gridColumn: '1/-1' }}>
+                                    <label>Chronic Conditions</label>
+                                    <input className="clinic-input" placeholder="e.g. Diabetes, Hypertension (optional)" value={form.chronicConditions} onChange={e => setForm(f => ({ ...f, chronicConditions: e.target.value }))} />
                                 </div>
                                 <div style={{ gridColumn: '1/-1' }}>
                                     <button type="submit" className="clinic-btn-primary" disabled={saving}>
@@ -469,8 +489,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
         setBooking(true);
         try {
             const r = await clinicAPI.bookAppointment({
-                patientUserId: selectedPat._id,
-                patientId: selectedPat.patientId,
+                patientId: selectedPat._id,   // ClinicPatient._id
                 amount: Number(bookForm.amount) || 0,
                 serviceName: bookForm.serviceName,
                 notes: bookForm.notes,
@@ -498,7 +517,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
                 setPatResults([]);
                 setPatSearch('');
                 setQrForm({ name: '', phone: '', gender: 'Male' });
-                flash('success', `Patient ${r.existing ? 'found' : 'registered'}: ${r.patient.patientId} — fill in the details and book.`);
+                flash('success', `Patient ${r.existing ? 'found' : 'registered'}: ${r.patient.patientUid} — fill in the details and book.`);
             } else flash('error', r.message);
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
         finally { setQrSaving(false); }
@@ -545,9 +564,9 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
                                 <div key={a._id} className="clinic-token-card">
                                     <div className="token-number">#{a.tokenNumber || '—'}</div>
                                     <div className="token-info">
-                                        <div style={{ fontWeight: 700, fontSize: '15px' }}>{a.userId?.name || '—'}</div>
+                                        <div style={{ fontWeight: 700, fontSize: '15px' }}>{a.clinicPatientId?.name || '—'}</div>
                                         <div style={{ fontSize: '12px', color: '#64748b' }}>
-                                            {a.userId?.patientId || a.patientId} · {a.serviceName || 'General'} · {fmt(a.amount)}
+                                            {a.clinicPatientId?.patientUid || a.patientId} · {a.serviceName || 'General'} · {fmt(a.amount)}
                                         </div>
                                     </div>
                                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginLeft: 'auto' }}>
@@ -588,7 +607,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
                                             <div className="clinic-avatar-sm">{p.name?.charAt(0)?.toUpperCase()}</div>
                                             <div style={{ flex: 1 }}>
                                                 <strong>{p.name}</strong>
-                                                <div style={{ fontSize: '12px', color: '#64748b' }}>{p.patientId} · {p.phone}</div>
+                                                <div style={{ fontSize: '12px', color: '#64748b' }}>{p.patientUid} · {p.phone}</div>
                                             </div>
                                             <div style={{ color: '#6366f1', fontSize: '13px', fontWeight: 600 }}>Select →</div>
                                         </div>
@@ -643,7 +662,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
                                 <div className="clinic-avatar-sm" style={{ background: '#dcfce7', color: '#16a34a' }}>{selectedPat.name?.charAt(0)?.toUpperCase()}</div>
                                 <div style={{ flex: 1 }}>
                                     <strong>{selectedPat.name}</strong>
-                                    <div style={{ fontSize: '12px', color: '#64748b' }}>{selectedPat.patientId} · {selectedPat.phone}</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>{selectedPat.patientUid} · {selectedPat.phone}</div>
                                 </div>
                                 <button type="button" className="clinic-btn-remove" onClick={() => { setSelectedPat(null); setPatResults([]); setPatSearch(''); if (clearPreselected) clearPreselected(); }}>✕ Change</button>
                             </div>
@@ -686,8 +705,8 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
                                     <tr key={a._id}>
                                         <td><strong style={{ color: '#6366f1' }}>#{a.tokenNumber}</strong></td>
                                         <td>
-                                            <div style={{ fontWeight: 600 }}>{a.userId?.name || '—'}</div>
-                                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>{a.userId?.patientId || a.patientId}</div>
+                                            <div style={{ fontWeight: 600 }}>{a.clinicPatientId?.name || '—'}</div>
+                                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>{a.clinicPatientId?.patientUid || a.patientId}</div>
                                         </td>
                                         <td style={{ fontSize: '12px', color: '#64748b' }}>{a.diagnosis || '—'}</td>
                                         <td>{fmt(a.amount)}</td>
@@ -776,11 +795,16 @@ const DoctorMode = () => {
             <div className="clinic-card" style={{ marginTop: '12px' }}>
                 {/* Patient header */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div className="clinic-avatar-lg">{consulting.userId?.name?.charAt(0) || '?'}</div>
+                    <div className="clinic-avatar-lg">{(consulting.clinicPatientId?.name || '?').charAt(0)}</div>
                     <div>
-                        <h3 style={{ margin: 0 }}>{consulting.userId?.name || 'Patient'}</h3>
+                        <h3 style={{ margin: 0 }}>{consulting.clinicPatientId?.name || 'Patient'}</h3>
                         <div style={{ fontSize: '13px', color: '#64748b' }}>
-                            {consulting.userId?.patientId || consulting.patientId} · Token #{consulting.tokenNumber} · {consulting.serviceName || 'General'}
+                            {consulting.clinicPatientId?.patientUid || consulting.patientId} · Token #{consulting.tokenNumber} · {consulting.serviceName || 'General'}
+                            {consulting.clinicPatientId?.gender && ` · ${consulting.clinicPatientId.gender}`}
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px', fontSize: '12px' }}>
+                            {consulting.clinicPatientId?.bloodGroup && <span style={{ background: '#fee2e2', color: '#dc2626', padding: '1px 7px', borderRadius: '4px', fontWeight: 600 }}>🩸 {consulting.clinicPatientId.bloodGroup}</span>}
+                            {consulting.clinicPatientId?.allergies && <span style={{ background: '#fef3c7', color: '#92400e', padding: '1px 7px', borderRadius: '4px' }}>⚠️ {consulting.clinicPatientId.allergies}</span>}
                         </div>
                         {consulting.notes && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>Chief complaint: {consulting.notes}</div>}
                     </div>
@@ -878,9 +902,9 @@ const DoctorMode = () => {
                             <div key={a._id} className="clinic-token-card">
                                 <div className="token-number">#{a.tokenNumber}</div>
                                 <div className="token-info">
-                                    <div style={{ fontWeight: 700, fontSize: '15px' }}>{a.userId?.name || '—'}</div>
+                                    <div style={{ fontWeight: 700, fontSize: '15px' }}>{a.clinicPatientId?.name || '—'}</div>
                                     <div style={{ fontSize: '12px', color: '#64748b' }}>
-                                        {a.userId?.patientId || a.patientId} · {a.serviceName || 'General'} · {fmt(a.amount)}
+                                        {a.clinicPatientId?.patientUid || a.patientId} · {a.serviceName || 'General'} · {fmt(a.amount)}
                                         {a.notes && ` · "${a.notes}"`}
                                     </div>
                                 </div>
@@ -903,8 +927,8 @@ const DoctorMode = () => {
                                 <tr key={a._id}>
                                     <td><strong style={{ color: '#6366f1' }}>#{a.tokenNumber}</strong></td>
                                     <td>
-                                        <div style={{ fontWeight: 600 }}>{a.userId?.name || '—'}</div>
-                                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{a.userId?.patientId || a.patientId}</div>
+                                        <div style={{ fontWeight: 600 }}>{a.clinicPatientId?.name || '—'}</div>
+                                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{a.clinicPatientId?.patientUid || a.patientId}</div>
                                     </td>
                                     <td style={{ fontSize: '12px', maxWidth: '140px' }}>{a.diagnosis || '—'}</td>
                                     <td style={{ fontSize: '11px', color: '#64748b' }}>
@@ -995,7 +1019,7 @@ const PharmacyMode = () => {
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
                                                 <div>
                                                     <strong>{o.userId?.name || '—'}</strong>
-                                                    <span style={{ marginLeft: '8px', fontSize: '12px', color: '#94a3b8' }}>{o.userId?.patientId || o.patientId}</span>
+                                                    <span style={{ marginLeft: '8px', fontSize: '12px', color: '#94a3b8' }}>{o.patientId}</span>
                                                 </div>
                                                 <span style={{ fontSize: '12px', color: '#94a3b8' }}>{fmtDate(o.createdAt)}</span>
                                             </div>
@@ -1118,8 +1142,8 @@ const BillingMode = () => {
         if (!patSearch.trim()) { setAppointments(allAppointments); return; }
         const q = patSearch.trim().toLowerCase();
         setAppointments(allAppointments.filter(a =>
-            a.userId?.name?.toLowerCase().includes(q) ||
-            (a.userId?.patientId || a.patientId || '').toLowerCase().includes(q)
+            (a.clinicPatientId?.name || '').toLowerCase().includes(q) ||
+            (a.clinicPatientId?.patientUid || a.patientId || '').toLowerCase().includes(q)
         ));
     };
 
@@ -1182,8 +1206,8 @@ const BillingMode = () => {
                                     <td style={{ fontSize: '12px' }}>{fmtDate(a.appointmentDate)}</td>
                                     <td><strong style={{ color: '#6366f1' }}>#{a.tokenNumber || '—'}</strong></td>
                                     <td>
-                                        <div style={{ fontWeight: 600 }}>{a.userId?.name || '—'}</div>
-                                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{a.userId?.patientId || a.patientId}</div>
+                                        <div style={{ fontWeight: 600 }}>{a.clinicPatientId?.name || '—'}</div>
+                                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{a.clinicPatientId?.patientUid || a.patientId}</div>
                                     </td>
                                     <td style={{ fontSize: '12px', color: '#64748b' }}>{a.serviceName || 'General'}</td>
                                     <td><strong>{fmt(a.amount)}</strong></td>

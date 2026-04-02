@@ -349,11 +349,12 @@ export const admissionAPI = {
 // Clinic self-service API (for clinic admin dashboard)
 export const clinicAPI = {
     getStats: async () => (await apiClient.get('/api/clinic/stats')).data,
-    // Patients
+    // Patients — uses ClinicPatient model (separate from staff)
     getPatients: async (search = '') => (await apiClient.get(`/api/clinic/patients${search ? `?search=${encodeURIComponent(search)}` : ''}`)).data,
     registerPatient: async (data) => (await apiClient.post('/api/clinic/patients', data)).data,
-    getPatientHistory: async (userId) => (await apiClient.get(`/api/clinic/patients/${userId}/history`)).data,
-    // Appointments
+    updatePatient: async (id, data) => (await apiClient.put(`/api/clinic/patients/${id}`, data)).data,
+    getPatientHistory: async (patientId) => (await apiClient.get(`/api/clinic/patients/${patientId}/history`)).data,
+    // Appointments — patientId is ClinicPatient._id
     getAppointments: async (date = '', status = '') => {
         const params = new URLSearchParams();
         if (date) params.append('date', date);
@@ -391,6 +392,12 @@ export const simpleClinicAPI = {
     getStaff: async (id) => (await apiClient.get(`/api/simple-clinics/${id}/staff`)).data,
     createStaff: async (id, data) => (await apiClient.post(`/api/simple-clinics/${id}/staff`, data)).data,
     deleteStaff: async (clinicId, userId) => (await apiClient.delete(`/api/simple-clinics/${clinicId}/staff/${userId}`)).data,
+    // Tier management
+    updateTier: async (id, data) => (await apiClient.put(`/api/simple-clinics/${id}`, data)).data,
+    // Subscription / billing
+    getSubscriptions: async (id) => (await apiClient.get(`/api/simple-clinics/${id}/subscriptions`)).data,
+    setRate: async (id, data) => (await apiClient.put(`/api/simple-clinics/${id}/subscriptions/rate`, data)).data,
+    updateSubscription: async (clinicId, subId, data) => (await apiClient.put(`/api/simple-clinics/${clinicId}/subscriptions/${subId}`, data)).data,
 };
 
 export default apiClient;

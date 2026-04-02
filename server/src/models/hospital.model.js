@@ -58,6 +58,22 @@ const hospitalSchema = new mongoose.Schema({
 
     // Entity type — 'hospital' for full hospitals, 'clinic' for small simple clinics
     clinicType: { type: String, enum: ['hospital', 'clinic'], default: 'hospital' },
+
+    // Clinic-specific fields
+    // Short code used as prefix for patient IDs: e.g. "RAM" → patient IDs: RAM-001, RAM-002
+    clinicCode: { type: String, uppercase: true, trim: true, default: '' },
+
+    // Staff tier limits (enforced at staff creation)
+    tier: {
+        maxDoctors:       { type: Number, default: 1 },
+        maxReceptionists: { type: Number, default: 1 },
+    },
+
+    // Subscription / billing config (set by centraladmin)
+    subscription: {
+        ratePerPatient:  { type: Number, default: 0 },
+        billingEnabled:  { type: Boolean, default: false },
+    },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Hospital', hospitalSchema);

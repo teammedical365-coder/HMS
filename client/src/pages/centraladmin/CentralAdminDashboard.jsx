@@ -71,8 +71,11 @@ const CentralAdminDashboard = () => {
     const [clinicManagerForm, setClinicManagerForm] = useState({ name: '', email: '', password: '', phone: '' });
     const [savingClinicManager, setSavingClinicManager] = useState(false);
     const [showClinicStaffForm, setShowClinicStaffForm] = useState(false);
-    const [clinicStaffForm, setClinicStaffForm] = useState({ name: '', email: '', password: '', phone: '', roleId: '' });
+    const [clinicStaffForm, setClinicStaffForm] = useState({ name: '', email: '', password: '', phone: '', staffRole: 'doctor' });
     const [savingClinicStaff, setSavingClinicStaff] = useState(false);
+    const [clinicSubscriptions, setClinicSubscriptions] = useState([]);
+    const [subscriptionRateForm, setSubscriptionRateForm] = useState({ ratePerPatient: '', billingEnabled: false });
+    const [savingRate, setSavingRate] = useState(false);
 
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
@@ -128,14 +131,43 @@ const CentralAdminDashboard = () => {
         setSelectedClinic(clinic);
         setLoadingClinicStats(true);
         setClinicStats(null);
+        setClinicSubscriptions([]);
+        setSubscriptionRateForm({
+            ratePerPatient: clinic.subscription?.ratePerPatient ?? '',
+            billingEnabled: clinic.subscription?.billingEnabled ?? false,
+        });
         try {
-            const res = await simpleClinicAPI.getStats(clinic._id);
-            if (res.success) setClinicStats(res);
+            const [statsRes, subRes] = await Promise.all([
+                simpleClinicAPI.getStats(clinic._id),
+                simpleClinicAPI.getSubscriptions(clinic._id),
+            ]);
+            if (statsRes.success) setClinicStats(statsRes);
+            if (subRes.success) setClinicSubscriptions(subRes.subscriptions || []);
         } catch (err) { console.error('Failed to load clinic stats:', err); }
         finally { setLoadingClinicStats(false); }
     };
 
-    const closeClinicDetail = () => { setSelectedClinic(null); setClinicStats(null); setShowClinicManagerForm(false); setShowClinicStaffForm(false); };
+    const closeClinicDetail = () => { setSelectedClinic(null); setClinicStats(null); setShowClinicManagerForm(false); setShowClinicStaffForm(false); setClinicSubscriptions([]); };
+
+    const handleSaveRate = async (e) => {
+        e.preventDefault();
+        setSavingRate(true);
+        try {
+            await simpleClinicAPI.setRate(selectedClinic._id, subscriptionRateForm);
+            setSuccess('Billing rate updated successfully');
+        } catch (err) { setError(err.response?.data?.message || err.message); }
+        finally { setSavingRate(false); }
+    };
+
+    const handleMarkSubscription = async (subId, status) => {
+        try {
+            const res = await simpleClinicAPI.updateSubscription(selectedClinic._id, subId, { status });
+            if (res.success) {
+                setClinicSubscriptions(prev => prev.map(s => s._id === subId ? res.subscription : s));
+                setSuccess(`Month marked as ${status}`);
+            }
+        } catch (err) { setError(err.response?.data?.message || err.message); }
+    };
 
     const handleSaveClinic = async (e) => {
         e.preventDefault();
@@ -1384,7 +1416,7 @@ const CentralAdminDashboard = () => {
                                         <div>
                                             <h3 style={{ margin: 0 }}>👥 Additional Staff</h3>
                                             <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
-                                                {clinicStats.stats.staff?.length || 0}/4 staff slots used · All staff login at <strong>/login</strong>
+                                                Tier: {clinicStats.stats.staff?.filter(s=>s.role==='doctor').length||0}/{clinicStats.clinic?.tier?.maxDoctors||1} Doctors · {clinicStats.stats.staff?.filter(s=>s.role==='receptionist').length||0}/{clinicStats.clinic?.tier?.maxReceptionists||1} Receptionists · All login at <strong>/login</strong>
                                             </p>
                                         </div>
                                         <button className="btn-edit" style={{ fontSize: '13px', padding: '8px 14px' }}
@@ -1396,7 +1428,10 @@ const CentralAdminDashboard = () => {
                                     {/* Staff Form */}
                                     {showClinicStaffForm && (
                                         <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
-                                            <h4 style={{ margin: '0 0 12px', color: '#1e293b' }}>Add Staff Member</h4>
+                                            <h4 style={{ margin: '0 0 4px', color: '#1e293b' }}>Add Staff Login Account</h4>
+                                            <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 12px' }}>
+                                                Standard tier: 1 Doctor + 1 Receptionist. Upgrade tier first if slots are full.
+                                            </p>
                                             <form onSubmit={handleCreateClinicStaff} className="user-form">
                                                 <div className="form-row">
                                                     <div className="form-group">
@@ -1423,11 +1458,11 @@ const CentralAdminDashboard = () => {
                                                     </div>
                                                 </div>
                                                 <div className="form-group">
-                                                    <label className="staff-label">Role</label>
-                                                    <select className="staff-input" value={clinicStaffForm.roleId}
-                                                        onChange={e => setClinicStaffForm({ ...clinicStaffForm, roleId: e.target.value })}>
-                                                        <option value="">-- Hospital Admin (full access) --</option>
-                                                        {roles.map(r => <option key={r._id} value={r._id}>{r.name}</option>)}
+                                                    <label className="staff-label">Role *</label>
+                                                    <select className="staff-input" value={clinicStaffForm.staffRole}
+                                                        onChange={e => setClinicStaffForm({ ...clinicStaffForm, staffRole: e.target.value })}>
+                                                        <option value="doctor">🩺 Doctor</option>
+                                                        <option value="receptionist">📋 Receptionist</option>
                                                     </select>
                                                 </div>
                                                 <button type="submit" disabled={savingClinicStaff} className="submit-button">
@@ -1487,7 +1522,7 @@ const CentralAdminDashboard = () => {
                                                 <tbody>
                                                     {clinicStats.stats.recentAppointments.map((a, i) => (
                                                         <tr key={i}>
-                                                            <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{a.patientId || '—'}</td>
+                                                            <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{a.clinicPatientId?.patientUid || a.patientId || '—'}</td>
                                                             <td>{a.doctorName || '—'}</td>
                                                             <td>{a.appointmentDate ? new Date(a.appointmentDate).toLocaleDateString('en-IN') : '—'}</td>
                                                             <td><span className={`status-badge status-${a.status}`}>{a.status}</span></td>
@@ -1500,6 +1535,73 @@ const CentralAdminDashboard = () => {
                                         </div>
                                     </div>
                                 )}
+
+                                {/* ── Subscription / Billing Management ── */}
+                                <div className="admin-card" style={{ marginTop: '20px', border: '2px solid #e0e7ff' }}>
+                                    <h3 style={{ marginBottom: '4px' }}>💳 Billing &amp; Subscription</h3>
+                                    <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>
+                                        Patient code: <strong style={{ color: '#6366f1' }}>{clinicStats.clinic?.clinicCode || '—'}</strong> · Rate per new patient this month
+                                    </p>
+
+                                    {/* Set rate form */}
+                                    <form onSubmit={handleSaveRate} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '20px', padding: '14px', background: '#f8fafc', borderRadius: '8px' }}>
+                                        <div>
+                                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '4px' }}>Rate per New Patient (₹)</label>
+                                            <input type="number" min="0" style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '14px', width: '160px' }}
+                                                placeholder="e.g. 50" value={subscriptionRateForm.ratePerPatient}
+                                                onChange={e => setSubscriptionRateForm(f => ({ ...f, ratePerPatient: e.target.value }))} />
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingBottom: '4px' }}>
+                                            <input type="checkbox" id="billingEnabled" checked={subscriptionRateForm.billingEnabled}
+                                                onChange={e => setSubscriptionRateForm(f => ({ ...f, billingEnabled: e.target.checked }))} />
+                                            <label htmlFor="billingEnabled" style={{ fontSize: '13px', color: '#475569', cursor: 'pointer' }}>Enable billing</label>
+                                        </div>
+                                        <button type="submit" className="btn-save" style={{ fontSize: '13px', padding: '8px 16px' }} disabled={savingRate}>
+                                            {savingRate ? 'Saving...' : '💾 Save Rate'}
+                                        </button>
+                                    </form>
+
+                                    {/* Subscription history table */}
+                                    {clinicSubscriptions.length > 0 ? (
+                                        <div className="users-table">
+                                            <table>
+                                                <thead>
+                                                    <tr><th>Month / Year</th><th>New Patients</th><th>Total Patients</th><th>Rate</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+                                                </thead>
+                                                <tbody>
+                                                    {clinicSubscriptions.map(sub => (
+                                                        <tr key={sub._id}>
+                                                            <td style={{ fontWeight: 600 }}>{new Date(sub.year, sub.month - 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</td>
+                                                            <td style={{ color: '#6366f1', fontWeight: 600 }}>{sub.newPatientCount}</td>
+                                                            <td>{sub.totalPatientCount}</td>
+                                                            <td>₹{sub.ratePerPatient}</td>
+                                                            <td style={{ fontWeight: 700 }}>₹{sub.totalAmount.toLocaleString('en-IN')}</td>
+                                                            <td>
+                                                                <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700,
+                                                                    background: sub.status === 'paid' ? '#dcfce7' : sub.status === 'waived' ? '#f1f5f9' : '#fef3c7',
+                                                                    color: sub.status === 'paid' ? '#16a34a' : sub.status === 'waived' ? '#64748b' : '#92400e' }}>
+                                                                    {sub.status.toUpperCase()}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                {sub.status !== 'paid' && (
+                                                                    <button className="btn-save" style={{ fontSize: '11px', padding: '4px 10px', marginRight: '4px' }}
+                                                                        onClick={() => handleMarkSubscription(sub._id, 'paid')}>Mark Paid</button>
+                                                                )}
+                                                                {sub.status === 'pending' && (
+                                                                    <button className="btn-edit" style={{ fontSize: '11px', padding: '4px 10px' }}
+                                                                        onClick={() => handleMarkSubscription(sub._id, 'waived')}>Waive</button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <p style={{ color: '#94a3b8', textAlign: 'center', padding: '16px 0', fontSize: '13px' }}>No billing records yet. Records appear once patients are registered.</p>
+                                    )}
+                                </div>
 
                                 {/* Quick Access Links */}
                                 <div className="admin-card" style={{ marginTop: '20px' }}>

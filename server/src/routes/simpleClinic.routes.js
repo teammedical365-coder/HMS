@@ -4,11 +4,25 @@ const jwt = require('jsonwebtoken');
 const Hospital = require('../models/hospital.model');
 const User = require('../models/user.model');
 const Role = require('../models/role.model');
+const ClinicPatient = require('../models/clinicPatient.model');
+const ClinicSubscription = require('../models/clinicSubscription.model');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { getTenantConnection, removeTenantConnection } = require('../db/tenantDb');
 const { getTenantModels } = require('../db/tenantModels');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+// Generate a unique clinic code from name (3-4 uppercase letters)
+const generateClinicCode = async (name) => {
+    const base = name.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4) || 'CLN';
+    let code = base;
+    let suffix = 1;
+    while (await Hospital.findOne({ clinicCode: code })) {
+        code = base.slice(0, 3) + suffix;
+        suffix++;
+    }
+    return code;
+};
 
 const verifyCentralAdmin = async (req, res, next) => {
     try {
@@ -51,9 +65,12 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
         const existing = await Hospital.findOne({ slug: finalSlug });
         if (existing) return res.status(400).json({ success: false, message: 'Slug already in use. Try a different clinic name or slug.' });
 
+        const clinicCode = await generateClinicCode(name);
+
         const clinic = new Hospital({
             name,
             slug: finalSlug,
+            clinicCode,
             address: address || '',
             city: city || '',
             state: state || '',
@@ -63,7 +80,8 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             appointmentFee: appointmentFee || 300,
             isActive: true,
             clinicType: 'clinic',
-            appointmentMode: 'token', // clinics are always token-only
+            appointmentMode: 'token',
+            tier: { maxDoctors: 1, maxReceptionists: 1 },
         });
 
         await clinic.save();
@@ -87,11 +105,33 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
 // ==========================================
 router.put('/:id', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, address, city, state, phone, email, website, appointmentFee, isActive } = req.body;
-        // appointmentMode is intentionally excluded — clinics are always token-only
+        const { name, address, city, state, phone, email, website, appointmentFee, isActive,
+                maxDoctors, maxReceptionists, ratePerPatient, billingEnabled } = req.body;
+
+        const update = {
+            appointmentMode: 'token', // always token for clinics
+        };
+        if (name       !== undefined) update.name       = name;
+        if (address    !== undefined) update.address    = address;
+        if (city       !== undefined) update.city       = city;
+        if (state      !== undefined) update.state      = state;
+        if (phone      !== undefined) update.phone      = phone;
+        if (email      !== undefined) update.email      = email;
+        if (website    !== undefined) update.website    = website;
+        if (appointmentFee !== undefined) update.appointmentFee = appointmentFee;
+        if (isActive   !== undefined) update.isActive   = isActive;
+
+        // Tier update
+        if (maxDoctors       !== undefined) update['tier.maxDoctors']       = Number(maxDoctors);
+        if (maxReceptionists !== undefined) update['tier.maxReceptionists'] = Number(maxReceptionists);
+
+        // Subscription config
+        if (ratePerPatient !== undefined) update['subscription.ratePerPatient'] = Number(ratePerPatient);
+        if (billingEnabled !== undefined) update['subscription.billingEnabled'] = billingEnabled;
+
         const clinic = await Hospital.findOneAndUpdate(
             { _id: req.params.id, clinicType: 'clinic' },
-            { name, address, city, state, phone, email, website, appointmentFee, isActive, appointmentMode: 'token' },
+            { $set: update },
             { new: true, runValidators: true }
         );
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
@@ -130,45 +170,46 @@ router.delete('/:id', verifyCentralAdmin, async (req, res) => {
 // ==========================================
 router.get('/:id/stats', verifyCentralAdmin, async (req, res) => {
     try {
+        const mongoose = require('mongoose');
+        const Appointment = require('../models/appointment.model');
+
         const clinic = await Hospital.findOne({ _id: req.params.id, clinicType: 'clinic' }).populate('adminUserId', 'name email phone');
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
 
-        const tenantDb = await getTenantConnection(clinic._id.toString());
-        const { User: TUser, Appointment } = getTenantModels(tenantDb);
-
-        const { startDate, endDate } = req.query;
-        const apptFilter = { hospitalId: clinic._id };
-        if (startDate || endDate) {
-            apptFilter.createdAt = {};
-            if (startDate) apptFilter.createdAt.$gte = new Date(startDate);
-            if (endDate) apptFilter.createdAt.$lte = new Date(new Date(endDate).setHours(23, 59, 59, 999));
-        }
+        const clinicObjId = new mongoose.Types.ObjectId(clinic._id.toString());
 
         const [totalPatients, totalAppointments, completedAppointments, revenueAgg, recentAppointments] = await Promise.all([
-            TUser.countDocuments({ role: { $not: { $in: ['centraladmin', 'superadmin', 'hospitaladmin'] } } }),
-            Appointment.countDocuments(apptFilter),
-            Appointment.countDocuments({ ...apptFilter, status: 'completed' }),
+            ClinicPatient.countDocuments({ clinicId: clinic._id }),
+            Appointment.countDocuments({ hospitalId: clinicObjId }),
+            Appointment.countDocuments({ hospitalId: clinicObjId, status: 'completed' }),
             Appointment.aggregate([
-                { $match: { ...apptFilter, paymentStatus: 'paid' } },
+                { $match: { hospitalId: clinicObjId, paymentStatus: 'paid' } },
                 { $group: { _id: null, total: { $sum: '$amount' } } }
             ]),
-            Appointment.find(apptFilter)
+            Appointment.find({ hospitalId: clinicObjId })
                 .sort({ createdAt: -1 })
                 .limit(5)
-                .select('patientId doctorName status appointmentDate amount paymentStatus')
+                .select('patientId clinicPatientId doctorName status appointmentDate amount paymentStatus')
+                .populate('clinicPatientId', 'name patientUid')
+                .lean()
         ]);
 
-        // Get staff from master DB
-        const staff = await User.find({ hospitalId: clinic._id }).select('name email phone role createdAt').lean();
+        // Staff (only login accounts, not patients)
+        const staff = await User.find({ hospitalId: clinic._id, role: { $in: ['hospitaladmin', 'doctor', 'receptionist'] } })
+            .select('name email phone role createdAt').lean();
 
-        // Monthly revenue for chart (last 6 months)
+        // Monthly revenue (last 6 months)
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
         const monthlyRevenue = await Appointment.aggregate([
-            { $match: { hospitalId: clinic._id, paymentStatus: 'paid', createdAt: { $gte: sixMonthsAgo } } },
+            { $match: { hospitalId: clinicObjId, paymentStatus: 'paid', createdAt: { $gte: sixMonthsAgo } } },
             { $group: { _id: { month: { $month: '$createdAt' }, year: { $year: '$createdAt' } }, revenue: { $sum: '$amount' }, count: { $sum: 1 } } },
             { $sort: { '_id.year': 1, '_id.month': 1 } }
         ]);
+
+        // Recent subscription records
+        const subscriptions = await ClinicSubscription.find({ clinicId: clinic._id })
+            .sort({ year: -1, month: -1 }).limit(6).lean();
 
         res.json({
             success: true,
@@ -181,7 +222,8 @@ router.get('/:id/stats', verifyCentralAdmin, async (req, res) => {
                 revenue: revenueAgg[0]?.total || 0,
                 staff,
                 recentAppointments,
-                monthlyRevenue
+                monthlyRevenue,
+                subscriptions,
             }
         });
     } catch (err) {
@@ -237,44 +279,47 @@ router.post('/:id/manager', verifyCentralAdmin, async (req, res) => {
 // ==========================================
 router.get('/:id/staff', verifyCentralAdmin, async (req, res) => {
     try {
-        const staff = await User.find({ hospitalId: req.params.id })
+        // Only login staff, not patients
+        const STAFF_ROLES = ['hospitaladmin', 'doctor', 'receptionist'];
+        const staff = await User.find({ hospitalId: req.params.id, role: { $in: STAFF_ROLES } })
             .select('name email phone role createdAt')
             .lean();
 
-        // Populate role names for ObjectId roles
-        const staffWithRoles = await Promise.all(staff.map(async (s) => {
-            let roleName = s.role;
-            if (typeof s.role === 'object' && s.role !== null) {
-                try {
-                    const roleDoc = await Role.findById(s.role).select('name');
-                    roleName = roleDoc?.name || 'Staff';
-                } catch { roleName = 'Staff'; }
-            }
-            return { ...s, roleName };
-        }));
+        const clinic = await Hospital.findById(req.params.id).select('tier').lean();
 
-        res.json({ success: true, staff: staffWithRoles });
+        res.json({ success: true, staff, tier: clinic?.tier });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
 });
 
 // ==========================================
-// CREATE clinic staff member
+// CREATE clinic staff member (tier-enforced)
 // POST /api/simple-clinics/:id/staff
+// staffRole: 'doctor' | 'receptionist'
 // ==========================================
 router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, email, password, phone, roleId } = req.body;
+        const { name, email, password, phone, staffRole } = req.body;
         if (!name || !email || !password) return res.status(400).json({ success: false, message: 'Name, email and password are required' });
+
+        const role = staffRole === 'receptionist' ? 'receptionist' : 'doctor';
 
         const clinic = await Hospital.findOne({ _id: req.params.id, clinicType: 'clinic' });
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
 
-        // Check staff limit (max 4 for simple clinics)
-        const currentStaffCount = await User.countDocuments({ hospitalId: clinic._id });
-        if (currentStaffCount >= 4) {
-            return res.status(400).json({ success: false, message: 'Simple clinics support up to 4 staff members. Upgrade to a full hospital for more.' });
+        // Tier limit check
+        const maxForRole = role === 'doctor'
+            ? (clinic.tier?.maxDoctors       || 1)
+            : (clinic.tier?.maxReceptionists || 1);
+
+        const currentCount = await User.countDocuments({ hospitalId: clinic._id, role });
+        if (currentCount >= maxForRole) {
+            return res.status(400).json({
+                success: false,
+                message: `Tier limit reached: max ${maxForRole} ${role}(s) for this clinic. Please contact sales to upgrade.`,
+                contactSales: true,
+            });
         }
 
         const existing = await User.findOne({ email });
@@ -282,15 +327,15 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
 
         const staffMember = new User({
             name, email, password, phone: phone || '',
-            role: roleId || 'hospitaladmin',
-            hospitalId: clinic._id
+            role,
+            hospitalId: clinic._id,
         });
         await staffMember.save();
 
         res.status(201).json({
             success: true,
-            staff: { _id: staffMember._id, name, email, phone },
-            message: 'Staff member created'
+            staff: { _id: staffMember._id, name, email, phone, role },
+            message: `${role === 'doctor' ? 'Doctor' : 'Receptionist'} account created successfully`,
         });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -310,6 +355,70 @@ router.delete('/:clinicId/staff/:userId', verifyCentralAdmin, async (req, res) =
         await Hospital.updateOne({ _id: req.params.clinicId, adminUserId: req.params.userId }, { $set: { adminUserId: null } });
 
         res.json({ success: true, message: 'Staff member removed' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ==========================================
+// SUBSCRIPTION — GET all months for a clinic
+// GET /api/simple-clinics/:id/subscriptions
+// ==========================================
+router.get('/:id/subscriptions', verifyCentralAdmin, async (req, res) => {
+    try {
+        const subs = await ClinicSubscription.find({ clinicId: req.params.id })
+            .sort({ year: -1, month: -1 })
+            .lean();
+        const clinic = await Hospital.findById(req.params.id).select('name subscription clinicCode').lean();
+        res.json({ success: true, subscriptions: subs, clinic });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ==========================================
+// SUBSCRIPTION — Set rate & billing config
+// PUT /api/simple-clinics/:id/subscriptions/rate
+// ==========================================
+router.put('/:id/subscriptions/rate', verifyCentralAdmin, async (req, res) => {
+    try {
+        const { ratePerPatient, billingEnabled } = req.body;
+        const clinic = await Hospital.findOneAndUpdate(
+            { _id: req.params.id, clinicType: 'clinic' },
+            {
+                $set: {
+                    'subscription.ratePerPatient': Number(ratePerPatient) || 0,
+                    'subscription.billingEnabled': !!billingEnabled,
+                }
+            },
+            { new: true }
+        );
+        if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
+        res.json({ success: true, clinic, message: 'Billing rate updated' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ==========================================
+// SUBSCRIPTION — Mark month as paid/waived
+// PUT /api/simple-clinics/:id/subscriptions/:subId
+// ==========================================
+router.put('/:id/subscriptions/:subId', verifyCentralAdmin, async (req, res) => {
+    try {
+        const { status, notes } = req.body;
+        const update = { notes: notes || '' };
+        if (status === 'paid')   { update.status = 'paid';   update.paidAt = new Date(); }
+        if (status === 'waived') { update.status = 'waived'; }
+        if (status === 'pending') update.status = 'pending';
+
+        const sub = await ClinicSubscription.findOneAndUpdate(
+            { _id: req.params.subId, clinicId: req.params.id },
+            update,
+            { new: true }
+        );
+        if (!sub) return res.status(404).json({ success: false, message: 'Subscription record not found' });
+        res.json({ success: true, subscription: sub });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
