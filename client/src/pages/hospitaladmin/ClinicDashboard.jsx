@@ -434,76 +434,96 @@ const PatientsMode = ({ onBookToken }) => {
 // ═══════════════════════════════════════════════════
 // RECEPTION MODE
 // ═══════════════════════════════════════════════════
-const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
-    const [tab, setTab] = useState(preselectedPatient ? 'book' : 'queue');
-    const [appointments, setAppointments] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [msg, setMsg] = useState({ type: '', text: '' });
-
-    // Patient search for booking
-    const [patSearch, setPatSearch] = useState('');
-    const [patResults, setPatResults] = useState([]);
-    const [patSearching, setPatSearching] = useState(false);
-    const [selectedPat, setSelectedPat] = useState(preselectedPatient || null);
-    const [bookForm, setBookForm] = useState({ amount: '', serviceName: 'General Consultation', notes: '' });
+// ── Inline token booking form ──────────────────────────────────────────────
+const BookTokenForm = ({ patient, onBook, onCancel, flash }) => {
+    const [form, setForm] = useState({ amount: '', serviceName: 'General Consultation', notes: '' });
     const [booking, setBooking] = useState(false);
 
-    // Inline quick-register state
+    const submit = async (e) => {
+        e.preventDefault();
+        setBooking(true);
+        try {
+            const r = await clinicAPI.bookAppointment({
+                patientId: patient._id,
+                amount: Number(form.amount) || 0,
+                serviceName: form.serviceName,
+                notes: form.notes,
+            });
+            if (r.success) {
+                flash('success', `✅ Token #${r.appointment.tokenNumber} assigned to ${patient.name}`);
+                onBook();
+            } else flash('error', r.message);
+        } catch (e) { flash('error', e.response?.data?.message || e.message); }
+        finally { setBooking(false); }
+    };
+
+    return (
+        <form onSubmit={submit} style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px 16px', marginTop: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '2', minWidth: '150px' }}>
+                    <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Service</label>
+                    <input className="clinic-input" placeholder="General Consultation" value={form.serviceName}
+                        onChange={e => setForm(f => ({ ...f, serviceName: e.target.value }))} />
+                </div>
+                <div style={{ flex: '1', minWidth: '100px' }}>
+                    <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Fee (₹)</label>
+                    <input className="clinic-input" type="number" placeholder="0" value={form.amount}
+                        onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+                </div>
+                <div style={{ flex: '2', minWidth: '150px' }}>
+                    <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Complaint (optional)</label>
+                    <input className="clinic-input" placeholder="Reason for visit..." value={form.notes}
+                        onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                    <button type="submit" className="clinic-btn-primary" disabled={booking} style={{ whiteSpace: 'nowrap', padding: '8px 16px' }}>
+                        {booking ? '...' : '🎟️ Assign Token'}
+                    </button>
+                    <button type="button" className="clinic-btn-secondary" onClick={onCancel} style={{ padding: '8px 12px' }}>✕</button>
+                </div>
+            </div>
+        </form>
+    );
+};
+
+const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
+    const [appointments, setAppointments] = useState([]);
+    const [patients, setPatients] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+    const [searching, setSearching] = useState(false);
+    const [assigningFor, setAssigningFor] = useState(preselectedPatient?._id || null);
+    const [msg, setMsg] = useState({ type: '', text: '' });
+    // Quick register state
     const [showQuickReg, setShowQuickReg] = useState(false);
     const [qrForm, setQrForm] = useState({ name: '', phone: '', gender: 'Male' });
     const [qrSaving, setQrSaving] = useState(false);
 
     const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg({ type: '', text: '' }), 4000); };
-
-    // If preselected patient changes from parent, update local state
-    useEffect(() => {
-        if (preselectedPatient) {
-            setSelectedPat(preselectedPatient);
-            setTab('book');
-        }
-    }, [preselectedPatient]);
-
     const today = todayStr();
 
-    const loadQueue = useCallback(() => {
+    const loadAll = useCallback(() => {
         setLoading(true);
-        clinicAPI.getAppointments(today)
-            .then(r => { if (r.success) setAppointments(r.appointments); })
-            .catch(console.error)
-            .finally(() => setLoading(false));
-    }, [today]);
+        Promise.all([
+            clinicAPI.getPatients(search),
+            clinicAPI.getAppointments(today),
+        ]).then(([pr, ar]) => {
+            if (pr.success) setPatients(pr.patients);
+            if (ar.success) setAppointments(ar.appointments);
+        }).catch(console.error).finally(() => setLoading(false));
+    }, [today]); // eslint-disable-line
 
-    useEffect(() => { loadQueue(); }, [loadQueue]);
+    useEffect(() => { loadAll(); }, [loadAll]);
 
-    const searchPatients = async () => {
-        if (!patSearch.trim()) return;
-        setPatSearching(true);
-        clinicAPI.getPatients(patSearch)
-            .then(r => { if (r.success) setPatResults(r.patients); })
-            .finally(() => setPatSearching(false));
-    };
+    useEffect(() => {
+        if (preselectedPatient) setAssigningFor(preselectedPatient._id);
+    }, [preselectedPatient]);
 
-    const handleBook = async (e) => {
-        e.preventDefault();
-        if (!selectedPat) { flash('error', 'Select a patient first'); return; }
-        setBooking(true);
-        try {
-            const r = await clinicAPI.bookAppointment({
-                patientId: selectedPat._id,   // ClinicPatient._id
-                amount: Number(bookForm.amount) || 0,
-                serviceName: bookForm.serviceName,
-                notes: bookForm.notes,
-            });
-            if (r.success) {
-                flash('success', `✅ Token #${r.appointment.tokenNumber} assigned to ${selectedPat.name}`);
-                setSelectedPat(null); setPatSearch(''); setPatResults([]);
-                setBookForm({ amount: '', serviceName: 'General Consultation', notes: '' });
-                if (clearPreselected) clearPreselected();
-                loadQueue();
-                setTab('queue');
-            } else flash('error', r.message);
-        } catch (e) { flash('error', e.response?.data?.message || e.message); }
-        finally { setBooking(false); }
+    const handleSearch = () => {
+        setSearching(true);
+        clinicAPI.getPatients(search)
+            .then(r => { if (r.success) setPatients(r.patients); })
+            .finally(() => setSearching(false));
     };
 
     const handleQuickRegister = async (e) => {
@@ -512,210 +532,158 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
         try {
             const r = await clinicAPI.registerPatient(qrForm);
             if (r.success) {
-                setSelectedPat(r.patient);
+                setPatients(prev => r.existing ? prev : [r.patient, ...prev]);
+                setAssigningFor(r.patient._id);
                 setShowQuickReg(false);
-                setPatResults([]);
-                setPatSearch('');
                 setQrForm({ name: '', phone: '', gender: 'Male' });
-                flash('success', `Patient ${r.existing ? 'found' : 'registered'}: ${r.patient.patientUid} — fill in the details and book.`);
+                if (clearPreselected) clearPreselected();
+                flash('success', `${r.existing ? 'Found' : 'Registered'}: ${r.patient.patientUid} — assign a token below.`);
             } else flash('error', r.message);
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
         finally { setQrSaving(false); }
     };
 
     const cancelAppt = async (id) => {
-        if (!window.confirm('Cancel this appointment?')) return;
+        if (!window.confirm('Cancel this token?')) return;
         try {
             await clinicAPI.cancelAppointment(id);
             setAppointments(prev => prev.map(a => a._id === id ? { ...a, status: 'cancelled' } : a));
         } catch (e) { flash('error', e.message); }
     };
 
-    const pending = appointments.filter(a => a.status === 'confirmed' || a.status === 'pending');
-    const completed = appointments.filter(a => a.status === 'completed');
-    const cancelled = appointments.filter(a => a.status === 'cancelled');
+    // Map clinicPatientId._id → today's appointment (any status)
+    const todayApptMap = {};
+    appointments.forEach(a => {
+        const pid = a.clinicPatientId?._id || a.clinicPatientId;
+        if (pid) todayApptMap[pid.toString()] = a;
+    });
+
+    const activeTokens  = appointments.filter(a => a.status === 'confirmed' || a.status === 'pending');
+    const doneToday     = appointments.filter(a => a.status === 'completed');
+
+    // Merge: patients with today's token shown first
+    const withToken    = patients.filter(p => todayApptMap[p._id] && ['confirmed','pending'].includes(todayApptMap[p._id]?.status));
+    const withoutToken = patients.filter(p => !todayApptMap[p._id] || todayApptMap[p._id]?.status === 'cancelled');
+    const displayList  = [...withToken, ...withoutToken];
 
     return (
         <div>
-            <div className="clinic-sub-tabs">
-                {[
-                    { id: 'queue', label: `📋 Today's Queue (${pending.length})` },
-                    { id: 'book', label: '🎟️ Book Token' },
-                    { id: 'history', label: `✅ Done (${completed.length})` },
-                ].map(t => (
-                    <button key={t.id} className={`clinic-sub-tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>
-                ))}
-            </div>
-
             {msg.text && <div className={`clinic-msg clinic-msg-${msg.type}`}>{msg.text}</div>}
 
-            {/* TODAY'S QUEUE */}
-            {tab === 'queue' && (
-                <div className="clinic-card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h3 style={{ margin: 0 }}>📋 Today's Queue — {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}</h3>
-                        <button className="clinic-btn-secondary" style={{ fontSize: '12px' }} onClick={loadQueue}>↻ Refresh</button>
+            {/* ── Header + search ── */}
+            <div className="clinic-card" style={{ marginBottom: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <div>
+                        <h3 style={{ margin: 0 }}>📋 Reception — {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}</h3>
+                        <p style={{ color: '#64748b', fontSize: '12px', margin: '3px 0 0' }}>
+                            {activeTokens.length} in queue · {doneToday.length} done today · {patients.length} total patients
+                        </p>
                     </div>
-                    {loading ? <Spinner /> : pending.length === 0 ? (
-                        <Empty text="No appointments in queue today. Book a token to get started." />
-                    ) : (
-                        <div className="clinic-token-queue">
-                            {pending.map(a => (
-                                <div key={a._id} className="clinic-token-card">
-                                    <div className="token-number">#{a.tokenNumber || '—'}</div>
-                                    <div className="token-info">
-                                        <div style={{ fontWeight: 700, fontSize: '15px' }}>{a.clinicPatientId?.name || '—'}</div>
-                                        <div style={{ fontSize: '12px', color: '#64748b' }}>
-                                            {a.clinicPatientId?.patientUid || a.patientId} · {a.serviceName || 'General'} · {fmt(a.amount)}
-                                        </div>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginLeft: 'auto' }}>
-                                        <StatusBadge status={a.status} />
-                                        <button className="clinic-btn-remove" onClick={() => cancelAppt(a._id)}>✕</button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                    <button className="clinic-btn-secondary" style={{ fontSize: '12px' }} onClick={loadAll}>↻ Refresh</button>
                 </div>
-            )}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <input className="clinic-input" style={{ flex: 1 }} placeholder="Search patient by name, phone or ID..."
+                        value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} />
+                    <button className="clinic-btn-secondary" onClick={handleSearch} disabled={searching}>{searching ? '...' : '🔍'}</button>
+                    <button className="clinic-btn-primary" onClick={() => { setShowQuickReg(!showQuickReg); }}
+                        style={{ whiteSpace: 'nowrap', padding: '8px 14px', fontSize: '13px' }}>
+                        + New Patient
+                    </button>
+                </div>
 
-            {/* BOOK TOKEN */}
-            {tab === 'book' && (
-                <div className="clinic-card">
-                    <h3 style={{ marginBottom: '4px' }}>🎟️ Book Token Appointment</h3>
-                    <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 20px' }}>Token number is auto-assigned for today's queue.</p>
-
-                    {/* Step 1: Search patient */}
-                    {!selectedPat ? (
-                        <div>
-                            <label className="clinic-form-group" style={{ marginBottom: '10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Search Patient *</span>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    <input className="clinic-input" style={{ flex: 1 }} placeholder="Name, phone or patient ID..."
-                                        value={patSearch} onChange={e => setPatSearch(e.target.value)}
-                                        onKeyDown={e => e.key === 'Enter' && searchPatients()} />
-                                    <button className="clinic-btn-secondary" onClick={searchPatients} disabled={patSearching}>
-                                        {patSearching ? '...' : '🔍 Find'}
-                                    </button>
-                                </div>
-                            </label>
-                            {patResults.length > 0 && (
-                                <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-                                    {patResults.map(p => (
-                                        <div key={p._id} className="clinic-patient-select-row" onClick={() => setSelectedPat(p)}>
-                                            <div className="clinic-avatar-sm">{p.name?.charAt(0)?.toUpperCase()}</div>
-                                            <div style={{ flex: 1 }}>
-                                                <strong>{p.name}</strong>
-                                                <div style={{ fontSize: '12px', color: '#64748b' }}>{p.patientUid} · {p.phone}</div>
-                                            </div>
-                                            <div style={{ color: '#6366f1', fontSize: '13px', fontWeight: 600 }}>Select →</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                            {patResults.length === 0 && patSearch && !patSearching && !showQuickReg && (
-                                <div style={{ marginTop: '10px', padding: '12px 14px', background: '#fef9c3', border: '1px solid #fde047', borderRadius: '8px', fontSize: '13px' }}>
-                                    No patient found for "<strong>{patSearch}</strong>".{' '}
-                                    <button type="button" style={{ background: 'none', border: 'none', color: '#6366f1', fontWeight: 700, cursor: 'pointer', padding: 0, fontSize: '13px' }}
-                                        onClick={() => { setShowQuickReg(true); setQrForm(f => ({ ...f, name: /^\d/.test(patSearch) ? '' : patSearch, phone: /^\d+$/.test(patSearch) ? patSearch : '' })); }}>
-                                        + Register as new patient
-                                    </button>
-                                </div>
-                            )}
-                            {showQuickReg && (
-                                <div style={{ marginTop: '12px', border: '1px solid #c7d2fe', borderRadius: '10px', padding: '14px 16px', background: '#fafbff' }}>
-                                    <div style={{ fontWeight: 700, fontSize: '13px', marginBottom: '10px', color: '#6366f1' }}>Quick Register New Patient</div>
-                                    <form onSubmit={handleQuickRegister} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                                        <div style={{ flex: '2', minWidth: '140px' }}>
-                                            <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Full Name *</label>
-                                            <input className="clinic-input" placeholder="Patient name" value={qrForm.name}
-                                                onChange={e => setQrForm(f => ({ ...f, name: e.target.value }))} required />
-                                        </div>
-                                        <div style={{ flex: '1', minWidth: '130px' }}>
-                                            <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Phone * (10 digits)</label>
-                                            <input className="clinic-input" type="tel" placeholder="10-digit number" maxLength={10}
-                                                value={qrForm.phone}
-                                                onChange={e => setQrForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
-                                                pattern="[0-9]{10}" required />
-                                        </div>
-                                        <div style={{ flex: '1', minWidth: '100px' }}>
-                                            <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Gender</label>
-                                            <select className="clinic-input" value={qrForm.gender} onChange={e => setQrForm(f => ({ ...f, gender: e.target.value }))}>
-                                                <option>Male</option><option>Female</option><option>Other</option>
-                                            </select>
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '6px' }}>
-                                            <button type="submit" className="clinic-btn-primary" disabled={qrSaving} style={{ whiteSpace: 'nowrap' }}>
-                                                {qrSaving ? '...' : '✅ Register & Select'}
-                                            </button>
-                                            <button type="button" className="clinic-btn-secondary" onClick={() => setShowQuickReg(false)}>Cancel</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <form onSubmit={handleBook}>
-                            {/* Selected patient */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px' }}>
-                                <div className="clinic-avatar-sm" style={{ background: '#dcfce7', color: '#16a34a' }}>{selectedPat.name?.charAt(0)?.toUpperCase()}</div>
-                                <div style={{ flex: 1 }}>
-                                    <strong>{selectedPat.name}</strong>
-                                    <div style={{ fontSize: '12px', color: '#64748b' }}>{selectedPat.patientUid} · {selectedPat.phone}</div>
-                                </div>
-                                <button type="button" className="clinic-btn-remove" onClick={() => { setSelectedPat(null); setPatResults([]); setPatSearch(''); if (clearPreselected) clearPreselected(); }}>✕ Change</button>
+                {/* Quick register inline */}
+                {showQuickReg && (
+                    <div style={{ marginTop: '12px', border: '1px solid #c7d2fe', borderRadius: '10px', padding: '14px 16px', background: '#fafbff' }}>
+                        <div style={{ fontWeight: 700, fontSize: '13px', marginBottom: '10px', color: '#6366f1' }}>Quick Register New Patient</div>
+                        <form onSubmit={handleQuickRegister} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                            <div style={{ flex: '2', minWidth: '140px' }}>
+                                <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Full Name *</label>
+                                <input className="clinic-input" placeholder="Patient name" value={qrForm.name}
+                                    onChange={e => setQrForm(f => ({ ...f, name: e.target.value }))} required />
                             </div>
-                            <div className="clinic-form-grid">
-                                <div className="clinic-form-group">
-                                    <label>Service</label>
-                                    <input className="clinic-input" placeholder="e.g. General Consultation" value={bookForm.serviceName}
-                                        onChange={e => setBookForm(f => ({ ...f, serviceName: e.target.value }))} />
-                                </div>
-                                <div className="clinic-form-group">
-                                    <label>Consultation Fee (₹)</label>
-                                    <input className="clinic-input" type="number" placeholder="0" value={bookForm.amount}
-                                        onChange={e => setBookForm(f => ({ ...f, amount: e.target.value }))} />
-                                </div>
-                                <div className="clinic-form-group" style={{ gridColumn: '1/-1' }}>
-                                    <label>Notes (optional)</label>
-                                    <input className="clinic-input" placeholder="Complaint, reason for visit..." value={bookForm.notes}
-                                        onChange={e => setBookForm(f => ({ ...f, notes: e.target.value }))} />
-                                </div>
-                                <div style={{ gridColumn: '1/-1' }}>
-                                    <button type="submit" className="clinic-btn-primary" disabled={booking}>
-                                        {booking ? 'Booking...' : '🎟️ Assign Token & Book'}
-                                    </button>
-                                </div>
+                            <div style={{ flex: '1', minWidth: '130px' }}>
+                                <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Phone (10 digits) *</label>
+                                <input className="clinic-input" type="tel" placeholder="10-digit number" maxLength={10}
+                                    value={qrForm.phone}
+                                    onChange={e => setQrForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
+                                    pattern="[0-9]{10}" required />
+                            </div>
+                            <div style={{ flex: '1', minWidth: '100px' }}>
+                                <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Gender</label>
+                                <select className="clinic-input" value={qrForm.gender} onChange={e => setQrForm(f => ({ ...f, gender: e.target.value }))}>
+                                    <option>Male</option><option>Female</option><option>Other</option>
+                                </select>
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                                <button type="submit" className="clinic-btn-primary" disabled={qrSaving} style={{ whiteSpace: 'nowrap' }}>
+                                    {qrSaving ? '...' : '✅ Register & Assign Token'}
+                                </button>
+                                <button type="button" className="clinic-btn-secondary" onClick={() => setShowQuickReg(false)}>Cancel</button>
                             </div>
                         </form>
-                    )}
-                </div>
-            )}
+                    </div>
+                )}
+            </div>
 
-            {/* DONE TODAY */}
-            {tab === 'history' && (
-                <div className="clinic-card">
-                    <h3 style={{ marginBottom: '12px' }}>✅ Completed Today ({completed.length})</h3>
-                    {completed.length === 0 ? <Empty text="No completed appointments yet today." /> : (
-                        <table className="clinic-table">
-                            <thead><tr><th>Token</th><th>Patient</th><th>Diagnosis</th><th>Fee</th><th>Payment</th></tr></thead>
-                            <tbody>
-                                {completed.map(a => (
-                                    <tr key={a._id}>
-                                        <td><strong style={{ color: '#6366f1' }}>#{a.tokenNumber}</strong></td>
-                                        <td>
-                                            <div style={{ fontWeight: 600 }}>{a.clinicPatientId?.name || '—'}</div>
-                                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>{a.clinicPatientId?.patientUid || a.patientId}</div>
-                                        </td>
-                                        <td style={{ fontSize: '12px', color: '#64748b' }}>{a.diagnosis || '—'}</td>
-                                        <td>{fmt(a.amount)}</td>
-                                        <td><PayBadge status={a.paymentStatus} /></td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
+            {/* ── Patient list with inline token assignment ── */}
+            {loading ? <Spinner /> : displayList.length === 0 ? (
+                <Empty text="No patients found. Register your first patient." />
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {displayList.map(p => {
+                        const appt = todayApptMap[p._id];
+                        const hasToken = appt && (appt.status === 'confirmed' || appt.status === 'pending');
+                        const isDone   = appt && appt.status === 'completed';
+                        const isExpanding = assigningFor === p._id;
+
+                        return (
+                            <div key={p._id} style={{
+                                border: hasToken ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
+                                borderRadius: '10px',
+                                padding: '12px 16px',
+                                background: hasToken ? '#f0fdf4' : isDone ? '#f8fafc' : '#fff',
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <div className="clinic-avatar-sm" style={{ flexShrink: 0 }}>{p.name?.charAt(0)?.toUpperCase()}</div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontWeight: 700, fontSize: '14px' }}>{p.name}</div>
+                                        <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                            <span style={{ background: '#eef2ff', color: '#6366f1', padding: '1px 6px', borderRadius: '4px', fontWeight: 700, fontSize: '11px', marginRight: '6px' }}>{p.patientUid}</span>
+                                            {p.phone}
+                                            {p.gender && ` · ${p.gender}`}
+                                            {p.bloodGroup && <span style={{ marginLeft: '6px', background: '#fee2e2', color: '#dc2626', padding: '1px 5px', borderRadius: '3px', fontSize: '11px', fontWeight: 600 }}>🩸 {p.bloodGroup}</span>}
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+                                        {hasToken && (
+                                            <>
+                                                <span style={{ background: '#6366f1', color: '#fff', fontWeight: 800, padding: '4px 12px', borderRadius: '6px', fontSize: '14px' }}>
+                                                    #{appt.tokenNumber}
+                                                </span>
+                                                <StatusBadge status={appt.status} />
+                                                <button className="clinic-btn-remove" onClick={() => cancelAppt(appt._id)}>✕</button>
+                                            </>
+                                        )}
+                                        {isDone && <span style={{ background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600 }}>✅ Done</span>}
+                                        {!hasToken && !isDone && (
+                                            <button className="clinic-btn-primary" style={{ fontSize: '12px', padding: '6px 14px', whiteSpace: 'nowrap' }}
+                                                onClick={() => setAssigningFor(isExpanding ? null : p._id)}>
+                                                {isExpanding ? '✕ Cancel' : '🎟️ Assign Token'}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                {isExpanding && !hasToken && (
+                                    <BookTokenForm
+                                        patient={p}
+                                        flash={flash}
+                                        onBook={() => { setAssigningFor(null); if (clearPreselected) clearPreselected(); loadAll(); }}
+                                        onCancel={() => { setAssigningFor(null); if (clearPreselected) clearPreselected(); }}
+                                    />
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             )}
         </div>
@@ -728,11 +696,16 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
 const DoctorMode = () => {
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [consulting, setConsulting] = useState(null); // active appointment
-    const [rx, setRx] = useState({ diagnosis: '', notes: '', labTests: '', medicines: [], amount: '', paymentStatus: 'pending' });
+    const [consulting, setConsulting] = useState(null);
+    const [rx, setRx] = useState({ diagnosis: '', notes: '', labTests: '', medicines: [] });
     const [medInput, setMedInput] = useState({ name: '', dosage: '', duration: '', instruction: '' });
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState({ type: '', text: '' });
+    const [inventory, setInventory] = useState([]);
+    const [analytics, setAnalytics] = useState(null);
+    const [patientHistory, setPatientHistory] = useState([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
 
     const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg({ type: '', text: '' }), 4000); };
 
@@ -744,18 +717,38 @@ const DoctorMode = () => {
             .finally(() => setLoading(false));
     };
 
-    useEffect(() => { loadToday(); }, []);
+    useEffect(() => {
+        loadToday();
+        clinicAPI.getInventory().then(r => { if (r.success) setInventory(r.inventory || []); }).catch(() => {});
+        clinicAPI.getStats().then(r => { if (r.success) setAnalytics(r.stats); }).catch(() => {});
+    }, []);
 
     const openConsult = (appt) => {
         setConsulting(appt);
+        setShowHistory(false);
+        setPatientHistory([]);
         setRx({
             diagnosis: appt.diagnosis || '',
             notes: appt.doctorNotes || '',
             labTests: (appt.labTests || []).join(', '),
             medicines: appt.pharmacy || [],
-            amount: appt.amount || '',
-            paymentStatus: appt.paymentStatus || 'pending',
         });
+        if (appt.clinicPatientId?._id) {
+            setHistoryLoading(true);
+            clinicAPI.getPatientHistory(appt.clinicPatientId._id)
+                .then(r => { if (r.success) setPatientHistory(r.appointments || []); })
+                .catch(() => {})
+                .finally(() => setHistoryLoading(false));
+        }
+    };
+
+    const handleMedNameChange = (val) => {
+        const inv = inventory.find(i => i.name === val);
+        if (inv) {
+            setMedInput(m => ({ ...m, name: val, dosage: inv.unit || '' }));
+        } else {
+            setMedInput(m => ({ ...m, name: val }));
+        }
     };
 
     const addMed = () => {
@@ -773,8 +766,6 @@ const DoctorMode = () => {
                 notes: rx.notes,
                 medicines: rx.medicines,
                 labTests: labArr,
-                paymentStatus: rx.paymentStatus,
-                amount: Number(rx.amount) || consulting.amount || 0,
             });
             if (r.success) {
                 flash('success', 'Consultation saved. Prescription created.');
@@ -787,6 +778,7 @@ const DoctorMode = () => {
 
     const pending = appointments.filter(a => a.status === 'confirmed' || a.status === 'pending');
     const done = appointments.filter(a => a.status === 'completed');
+    const pastVisits = patientHistory.filter(h => h._id !== consulting?._id && h.status === 'completed');
 
     if (consulting) return (
         <div>
@@ -810,6 +802,39 @@ const DoctorMode = () => {
                     </div>
                 </div>
 
+                {/* Past Visits */}
+                {historyLoading ? (
+                    <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '16px' }}>Loading visit history...</div>
+                ) : pastVisits.length > 0 && (
+                    <div style={{ marginBottom: '20px', border: '1px solid #e0e7ff', borderRadius: '10px', overflow: 'hidden' }}>
+                        <button
+                            onClick={() => setShowHistory(h => !h)}
+                            style={{ width: '100%', background: '#eef2ff', border: 'none', padding: '10px 16px', textAlign: 'left', cursor: 'pointer', fontWeight: 600, fontSize: '13px', color: '#4338ca', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>📋 Past Visits ({pastVisits.length})</span>
+                            <span>{showHistory ? '▲' : '▼'}</span>
+                        </button>
+                        {showHistory && (
+                            <div style={{ background: '#f8faff', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {pastVisits.map(v => (
+                                    <div key={v._id} style={{ borderLeft: '3px solid #a5b4fc', paddingLeft: '12px' }}>
+                                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#6366f1' }}>{fmtDate(v.appointmentDate || v.createdAt)}</div>
+                                        {v.diagnosis && <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '2px' }}><strong>Dx:</strong> {v.diagnosis}</div>}
+                                        {v.doctorNotes && <div style={{ fontSize: '12px', color: '#475569' }}><strong>Notes:</strong> {v.doctorNotes}</div>}
+                                        {(v.pharmacy || []).length > 0 && (
+                                            <div style={{ fontSize: '12px', color: '#475569', marginTop: '4px' }}>
+                                                <strong>Rx:</strong> {v.pharmacy.map(m => m.medicineName || m.name).join(', ')}
+                                            </div>
+                                        )}
+                                        {(v.labTests || []).length > 0 && (
+                                            <div style={{ fontSize: '12px', color: '#475569' }}><strong>Labs:</strong> {v.labTests.join(', ')}</div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div className="clinic-form-grid">
                     <div className="clinic-form-group" style={{ gridColumn: '1/-1' }}>
                         <label>Diagnosis / Chief Complaint</label>
@@ -829,27 +854,19 @@ const DoctorMode = () => {
                             onChange={e => setRx(r => ({ ...r, labTests: e.target.value }))}
                             placeholder="CBC, Blood Sugar, Urine Routine" />
                     </div>
-                    <div className="clinic-form-group">
-                        <label>Fee Charged (₹)</label>
-                        <input className="clinic-input" type="number" value={rx.amount}
-                            onChange={e => setRx(r => ({ ...r, amount: e.target.value }))} />
-                    </div>
-                    <div className="clinic-form-group">
-                        <label>Payment</label>
-                        <select className="clinic-input" value={rx.paymentStatus}
-                            onChange={e => setRx(r => ({ ...r, paymentStatus: e.target.value }))}>
-                            <option value="pending">Pending</option>
-                            <option value="paid">Paid (Cash)</option>
-                        </select>
-                    </div>
                 </div>
 
-                {/* Medicines */}
+                {/* Prescription with inventory autocomplete */}
                 <div style={{ marginTop: '20px' }}>
                     <h4 style={{ marginBottom: '10px', color: '#1e293b' }}>💊 Prescription</h4>
+                    <datalist id="inv-meds">
+                        {inventory.map(i => <option key={i._id} value={i.name} />)}
+                    </datalist>
                     <div className="clinic-form-grid" style={{ marginBottom: '8px' }}>
-                        <input className="clinic-input" placeholder="Medicine name *" value={medInput.name} onChange={e => setMedInput(m => ({ ...m, name: e.target.value }))} />
-                        <input className="clinic-input" placeholder="Dosage (e.g. 500mg)" value={medInput.dosage} onChange={e => setMedInput(m => ({ ...m, dosage: e.target.value }))} />
+                        <input className="clinic-input" placeholder="Medicine name *" list="inv-meds"
+                            value={medInput.name}
+                            onChange={e => handleMedNameChange(e.target.value)} />
+                        <input className="clinic-input" placeholder="Dosage / Unit (e.g. 500mg)" value={medInput.dosage} onChange={e => setMedInput(m => ({ ...m, dosage: e.target.value }))} />
                         <input className="clinic-input" placeholder="Duration (e.g. 5 days)" value={medInput.duration} onChange={e => setMedInput(m => ({ ...m, duration: e.target.value }))} />
                         <input className="clinic-input" placeholder="When to take (e.g. After food)" value={medInput.instruction} onChange={e => setMedInput(m => ({ ...m, instruction: e.target.value }))} />
                     </div>
@@ -883,6 +900,27 @@ const DoctorMode = () => {
     return (
         <div>
             {msg.text && <div className={`clinic-msg clinic-msg-${msg.type}`}>{msg.text}</div>}
+
+            {/* Monthly Analytics */}
+            {analytics && (
+                <div className="clinic-card" style={{ marginBottom: '16px' }}>
+                    <h3 style={{ margin: '0 0 14px', fontSize: '15px' }}>📊 Clinic Performance — {new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })}</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
+                        {[
+                            { label: 'Seen Today', value: analytics.todayAppointments ?? '—', color: '#6366f1' },
+                            { label: 'This Month Revenue', value: `₹${(analytics.monthRevenue || 0).toLocaleString('en-IN')}`, color: '#16a34a' },
+                            { label: 'Total Patients', value: analytics.totalPatients ?? '—', color: '#0891b2' },
+                            { label: 'Completed All Time', value: analytics.completedAppointments ?? '—', color: '#7c3aed' },
+                        ].map(s => (
+                            <div key={s.label} style={{ background: '#f8fafc', borderRadius: '10px', padding: '14px', textAlign: 'center', border: '1px solid #e2e8f0' }}>
+                                <div style={{ fontSize: '22px', fontWeight: 800, color: s.color }}>{s.value}</div>
+                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{s.label}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="clinic-card" style={{ marginBottom: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <div>
@@ -904,7 +942,7 @@ const DoctorMode = () => {
                                 <div className="token-info">
                                     <div style={{ fontWeight: 700, fontSize: '15px' }}>{a.clinicPatientId?.name || '—'}</div>
                                     <div style={{ fontSize: '12px', color: '#64748b' }}>
-                                        {a.clinicPatientId?.patientUid || a.patientId} · {a.serviceName || 'General'} · {fmt(a.amount)}
+                                        {a.clinicPatientId?.patientUid || a.patientId} · {a.serviceName || 'General'}
                                         {a.notes && ` · "${a.notes}"`}
                                     </div>
                                 </div>
@@ -921,7 +959,7 @@ const DoctorMode = () => {
                 <div className="clinic-card">
                     <h3 style={{ marginBottom: '12px' }}>✅ Seen Today ({done.length})</h3>
                     <table className="clinic-table">
-                        <thead><tr><th>Token</th><th>Patient</th><th>Diagnosis</th><th>Medicines</th><th>Fee</th></tr></thead>
+                        <thead><tr><th>Token</th><th>Patient</th><th>Diagnosis</th><th>Medicines</th></tr></thead>
                         <tbody>
                             {done.map(a => (
                                 <tr key={a._id}>
@@ -934,7 +972,6 @@ const DoctorMode = () => {
                                     <td style={{ fontSize: '11px', color: '#64748b' }}>
                                         {(a.pharmacy || []).map((m, i) => <div key={i}>{m.medicineName || m.name}</div>)}
                                     </td>
-                                    <td>{fmt(a.amount)}</td>
                                 </tr>
                             ))}
                         </tbody>
