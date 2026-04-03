@@ -9,7 +9,7 @@ import './Navbar.css';
 
 /* ---- Brand Logo ---- */
 const BrandLogo = () => (
-  <img src="/logo.png" alt="Medical 365" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+  <img src="https://www.medical365.in/logo/medical365fav.jpg" alt="Medical 365" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
 );
 
 const Navbar = () => {

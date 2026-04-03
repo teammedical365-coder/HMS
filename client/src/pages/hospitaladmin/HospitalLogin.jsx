@@ -213,7 +213,7 @@ const HospitalLogin = () => {
                                 </form>
 
                                 <div className="auth-footer-note" style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-                                    <img src="/logo.png" alt="Medical 365" style={{ height: '18px', objectFit: 'contain' }} />
+                                    <img src="https://www.medical365.in/logo/medical365fav.jpg" alt="Medical 365" style={{ height: '18px', objectFit: 'contain' }} />
                                     <span>Safe & Secure Industrial-Grade Clinical System</span>
                                 </div>
                             </div>

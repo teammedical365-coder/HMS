@@ -11,12 +11,12 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { hospitalAPI } from '../utils/api';
 import socket from '../utils/socket';
 
-// Default MediCRM branding (platform defaults)
+// Default Medical 365 branding (platform defaults)
 const DEFAULT_BRANDING = {
-    appName: 'MediCRM',
+    appName: 'Medical 365',
     tagline: 'Healthcare Suite',
-    logoUrl: '',
-    faviconUrl: '',
+    logoUrl: 'https://www.medical365.in/logo/medical365fav.jpg',
+    faviconUrl: 'https://www.medical365.in/logo/medical365fav.jpg',
     primaryColor: '#14b8a6',
     secondaryColor: '#0a2647',
     accentColor: '#6366f1',
@@ -35,7 +35,7 @@ const DEFAULT_BRANDING = {
 
 const BrandingContext = createContext({
     branding: DEFAULT_BRANDING,
-    hospitalName: 'MediCRM',
+    hospitalName: 'Medical 365',
     hospitalId: null,
     loadBranding: async () => {},
     resetBranding: () => {},
@@ -121,7 +121,7 @@ function resetBrandingFromCSS() {
         '--shadow-brand', '--surface-1', '--gray-900', '--gray-800',
     ];
     overrides.forEach(v => root.style.removeProperty(v));
-    document.title = 'MediCRM';
+    document.title = 'Medical 365';
 }
 
 export const BrandingProvider = ({ children }) => {
@@ -132,7 +132,7 @@ export const BrandingProvider = ({ children }) => {
         } catch { return DEFAULT_BRANDING; }
     });
 
-    const [hospitalName, setHospitalName] = useState(() => localStorage.getItem('hospitalBrandingName') || 'MediCRM');
+    const [hospitalName, setHospitalName] = useState(() => localStorage.getItem('hospitalBrandingName') || 'Medical 365');
     const [hospitalId, setHospitalId] = useState(() => localStorage.getItem('hospitalBrandingId') || null);
     const [isCustomBranded, setIsCustomBranded] = useState(false);
 
@@ -147,7 +147,7 @@ export const BrandingProvider = ({ children }) => {
             if (res.success) {
                 const merged = { ...DEFAULT_BRANDING, ...res.branding };
                 setBranding(merged);
-                setHospitalName(res.hospitalName || 'MediCRM');
+                setHospitalName(res.hospitalName || 'Medical 365');
                 setHospitalId(hId);
                 setIsCustomBranded(true);
                 applyBrandingToCSS(merged);
@@ -162,11 +162,11 @@ export const BrandingProvider = ({ children }) => {
     }, []);
 
     /**
-     * Reset to default MediCRM branding
+     * Reset to default Medical 365 branding
      */
     const resetBranding = useCallback(() => {
         setBranding(DEFAULT_BRANDING);
-        setHospitalName('MediCRM');
+        setHospitalName('Medical 365');
         setHospitalId(null);
         setIsCustomBranded(false);
         resetBrandingFromCSS();

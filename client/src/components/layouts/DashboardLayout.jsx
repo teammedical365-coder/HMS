@@ -95,7 +95,7 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
                 ) : (
                     <>
                         <div className="brand-dot" />
-                        <span>{hospitalName !== 'MediCRM' ? hospitalName : 'MediCRM ERP'}</span>
+                        <span>{hospitalName !== 'Medical 365' ? hospitalName : 'Medical 365'}</span>
                     </>
                 )}
             </div>

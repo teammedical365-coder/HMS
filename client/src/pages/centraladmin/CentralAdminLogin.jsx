@@ -64,7 +64,7 @@ const CentralAdminLogin = () => {
                                 </button>
 
                                 <div className="hospital-brand">
-                                    <img src="/logo.png" alt="Medical 365" style={{ height: '40px', objectFit: 'contain' }} />
+                                    <img src="https://www.medical365.in/logo/medical365fav.jpg" alt="Medical 365" style={{ height: '40px', objectFit: 'contain' }} />
                                 </div>
 
                                 <div className="auth-header">
