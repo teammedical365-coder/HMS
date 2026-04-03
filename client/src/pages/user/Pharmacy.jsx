@@ -38,7 +38,7 @@ const Pharmacy = () => {
     try {
       setIsLoading(true);
       // Try to fetch from API first
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://crm-222i.onrender.com'}/api/pharmacy/my-orders`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com'}/api/pharmacy/my-orders`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`

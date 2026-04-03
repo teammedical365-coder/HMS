@@ -42,7 +42,7 @@ const CentralAdminLogin = () => {
     return (
         <section className="auth-section">
             <AnimatePresence>
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="auth-container"
@@ -50,7 +50,7 @@ const CentralAdminLogin = () => {
                     <div className="auth-blob blob-1" />
                     <div className="auth-blob blob-2" />
 
-                    <motion.div 
+                    <motion.div
                         initial={{ y: 20, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         transition={{ delay: 0.1 }}
@@ -64,7 +64,7 @@ const CentralAdminLogin = () => {
                                 </button>
 
                                 <div className="hospital-brand">
-                                    <img src="https://www.medical365.in/logo/medical365fav.jpg" alt="Medical 365" style={{ height: '40px', objectFit: 'contain' }} />
+                                    <img src="logo.png" alt="Medical 365" style={{ height: '40px', objectFit: 'contain' }} />
                                 </div>
 
                                 <div className="auth-header">
@@ -73,7 +73,7 @@ const CentralAdminLogin = () => {
                                 </div>
 
                                 {error && (
-                                    <motion.div 
+                                    <motion.div
                                         initial={{ height: 0, opacity: 0 }}
                                         animate={{ height: 'auto', opacity: 1 }}
                                         className="error-message"
@@ -88,11 +88,11 @@ const CentralAdminLogin = () => {
                                         <div className="input-field-wrapper">
                                             <HiOutlineMail className="input-icon" />
                                             <input
-                                                type="email" 
+                                                type="email"
                                                 name="email"
                                                 placeholder="admin@medical365.com"
-                                                value={formData.email} 
-                                                onChange={handleChange} 
+                                                value={formData.email}
+                                                onChange={handleChange}
                                                 required
                                             />
                                         </div>
@@ -103,11 +103,11 @@ const CentralAdminLogin = () => {
                                         <div className="input-field-wrapper">
                                             <HiOutlineLockClosed className="input-icon" />
                                             <input
-                                                type="password" 
+                                                type="password"
                                                 name="password"
                                                 placeholder="••••••••"
-                                                value={formData.password} 
-                                                onChange={handleChange} 
+                                                value={formData.password}
+                                                onChange={handleChange}
                                                 required
                                             />
                                         </div>

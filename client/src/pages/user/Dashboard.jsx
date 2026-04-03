@@ -166,7 +166,7 @@ const Dashboard = () => {
 
     const fetchDashboardData = async (token) => {
         setIsLoading(true);
-        const API_BASE = import.meta.env.VITE_API_URL || 'https://crm-222i.onrender.com';
+        const API_BASE = import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com';
         try {
             const appointmentsResponse = await fetch(`${API_BASE}/api/appointments/my-appointments`, {
                 headers: { 'Authorization': `Bearer ${token}` }

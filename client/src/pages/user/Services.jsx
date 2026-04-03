@@ -308,7 +308,7 @@ const Services = () => {
       };
 
       const response = await axios.post(
-        `${import.meta.env.VITE_API_URL || 'https://crm-222i.onrender.com'}/api/appointments/create`,
+        `${import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com'}/api/appointments/create`,
         appointmentData,
         {
           headers: {
