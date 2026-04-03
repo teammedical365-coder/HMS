@@ -16,8 +16,8 @@ const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
         origin: (origin, callback) => {
-            const allowedOrigins = ["http://localhost:5173", "http://localhost:3000", "https://crm-ebon-two.vercel.app", "https://crm-222i.onrender.com", "https://crm-arkw.vercel.app", "https://www.boonkies.com", "https://boonkies.com"];
-            if (!origin || origin.includes('localhost') || allowedOrigins.includes(origin) || origin.endsWith('.boonkies.com')) {
+            const allowedOrigins = ["http://localhost:5173", "http://localhost:3000", "https://crm-ebon-two.vercel.app", "https://crm-222i.onrender.com", "https://crm-arkw.vercel.app", "https://www.boonkies.com", "https://boonkies.com", "https://admin.boonkies.com", "https://medical365.in", "https://www.medical365.in", "https://admin.medical365.in"];
+            if (!origin || origin.includes('localhost') || allowedOrigins.includes(origin) || origin.endsWith('.boonkies.com') || origin.endsWith('.medical365.in')) {
                 callback(null, true);
             } else {
                 callback(new Error('CORS blocked origin: ' + origin), false);

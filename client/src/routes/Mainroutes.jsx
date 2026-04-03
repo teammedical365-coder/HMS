@@ -76,16 +76,49 @@ import AccountantDashboard from '../pages/accountant/AccountantDashboard';
 // Billing Pages
 import PatientBillingProfile from '../pages/billing/PatientBillingProfile';
 
+// Subdomains reserved for the platform itself — NOT hospital slugs
+const RESERVED_SUBDOMAINS = ['admin', 'www', 'api'];
+
 const SmartLogin = () => {
     const subdomain = getSubdomain();
-    if (subdomain) return <HospitalLogin />;
+    if (subdomain && !RESERVED_SUBDOMAINS.includes(subdomain)) return <HospitalLogin />;
     return <CentralAdminLogin />;
 };
 
 const SmartDashboardRedirector = () => {
     const subdomain = getSubdomain();
-    if (subdomain) return <Navigate to="/my-dashboard" replace />;
+    if (subdomain && !RESERVED_SUBDOMAINS.includes(subdomain)) return <Navigate to="/my-dashboard" replace />;
     return <Navigate to="/supremeadmin" replace />;
+};
+
+/**
+ * SubdomainRoleGuard — enforces that the user's role matches the subdomain context.
+ *
+ * admin.domain.com   → only centraladmin / superadmin allowed
+ * slug.domain.com    → hospital staff allowed, centraladmin/superadmin blocked
+ * localhost (null)   → no enforcement (local dev without subdomain)
+ */
+const SubdomainRoleGuard = ({ children }) => {
+    const { user, isAuthenticated } = useAuth();
+    const subdomain = getSubdomain();
+
+    if (subdomain && isAuthenticated && user) {
+        const role = (user.role || '').toLowerCase();
+        const isCentralRole = role === 'centraladmin' || role === 'superadmin';
+        const isAdminSubdomain = subdomain === 'admin';
+
+        // Central admin must operate from admin.* subdomain only
+        if (isCentralRole && !isAdminSubdomain) {
+            return <Navigate to="/login" replace />;
+        }
+
+        // Hospital staff / hospital admin must NOT operate from admin.* subdomain
+        if (!isCentralRole && isAdminSubdomain) {
+            return <Navigate to="/login" replace />;
+        }
+    }
+
+    return children;
 };
 
 const MainRoutes = () => {
@@ -97,6 +130,7 @@ const MainRoutes = () => {
 
             {isAuthenticated ? (
                 <DashboardLayout>
+                  <SubdomainRoleGuard>
                     <Routes>
                         <Route path="/" element={<SmartDashboardRedirector />} />
                         <Route path="/services" element={<Navigate to="/" replace />} />
@@ -166,6 +200,7 @@ const MainRoutes = () => {
 
                         <Route path="*" element={<Navigate to="/my-dashboard" />} />
                     </Routes>
+                  </SubdomainRoleGuard>
                 </DashboardLayout>
             ) : (
                 <Routes>

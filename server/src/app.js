@@ -47,11 +47,15 @@ app.use(cors({
             "https://crm-arkw.vercel.app", // <-- ADD THIS LINE! (Make sure there is no '/' at the very end)
             "https://crm-kappa-topaz.vercel.app",
             "https://www.boonkies.com",
-            "https://boonkies.com"
+            "https://boonkies.com",
+            "https://admin.boonkies.com",
+            "https://medical365.in",
+            "https://www.medical365.in",
+            "https://admin.medical365.in"
         ];
 
         // DYNAMIC ALLOW: If origin includes "localhost", allow it (Fixes 5174, 5175, etc.)
-        if (origin.includes('localhost') || allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.boonkies.com')) {
+        if (origin.includes('localhost') || allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.boonkies.com') || origin.endsWith('.medical365.in')) {
             return callback(null, true);
         }
 
