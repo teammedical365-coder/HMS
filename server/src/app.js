@@ -34,33 +34,19 @@ const clinicRoutes = require('./routes/clinic.routes');
 const app = express();
 // ughfgh
 // --- CORS CONFIGURATION ---
+const isAllowedOrigin = (origin) => {
+    if (!origin) return true;                                  // curl / mobile / server-to-server
+    if (origin.includes('localhost')) return true;             // any localhost port (dev)
+    if (origin === 'https://medical365.in') return true;       // root domain
+    if (origin === 'https://www.medical365.in') return true;   // www
+    if (origin.endsWith('.medical365.in')) return true;        // admin.* and all hospital subdomains
+    return false;
+};
+
 app.use(cors({
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)dr
-        if (!origin) return callback(null, true);
-
-        const allowedOrigins = [
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "https://crm-ebon-two.vercel.app",
-            "https://crm-222i.onrender.com",
-            "https://crm-arkw.vercel.app", // <-- ADD THIS LINE! (Make sure there is no '/' at the very end)
-            "https://crm-kappa-topaz.vercel.app",
-            "https://www.boonkies.com",
-            "https://boonkies.com",
-            "https://admin.boonkies.com",
-            "https://medical365.in",
-            "https://www.medical365.in",
-            "https://admin.medical365.in"
-        ];
-
-        // DYNAMIC ALLOW: If origin includes "localhost", allow it (Fixes 5174, 5175, etc.)
-        if (origin.includes('localhost') || allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.boonkies.com') || origin.endsWith('.medical365.in')) {
-            return callback(null, true);
-        }
-
-        var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-        return callback(new Error(msg), false);
+    origin: (origin, callback) => {
+        if (isAllowedOrigin(origin)) return callback(null, true);
+        callback(new Error('CORS blocked: ' + origin), false);
     },
     credentials: true
 }));
