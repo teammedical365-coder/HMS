@@ -212,8 +212,9 @@ const HospitalLogin = () => {
                                     </button>
                                 </form>
 
-                                <div className="auth-footer-note">
-                                    Safe & Secure Industrial-Grade Clinical System
+                                <div className="auth-footer-note" style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                                    <img src="/logo.png" alt="Medical 365" style={{ height: '18px', objectFit: 'contain' }} />
+                                    <span>Safe & Secure Industrial-Grade Clinical System</span>
                                 </div>
                             </div>
                         </div>
@@ -231,7 +232,7 @@ const HospitalLogin = () => {
                                 <h2>Isolated <br /> Medical Ecosystem.</h2>
                                 <p>
                                     Your data resides in a dedicated instance for {hospital?.name}.
-                                    Powered by Medical365 Enterprise Security.
+                                    Powered by Medical 365 Enterprise Security.
                                 </p>
                             </div>
                         </div>

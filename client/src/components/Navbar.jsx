@@ -7,12 +7,9 @@ import { FiBell, FiChevronDown, FiLogOut, FiLogIn, FiHome, FiSettings } from 're
 import { useBranding } from '../context/BrandingContext';
 import './Navbar.css';
 
-/* ---- Brand SVG ijhjiuuicon ---- */
-const HMSIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 2L3 7v10l9 5 9-5V7L12 2z" stroke="white" strokeWidth="1.5" strokeLinejoin="round" />
-    <path d="M12 8v8M8 12h8" stroke="white" strokeWidth="2" strokeLinecap="round" />
-  </svg>
+/* ---- Brand Logo ---- */
+const BrandLogo = () => (
+  <img src="/logo.png" alt="Medical 365" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
 );
 
 const Navbar = () => {
@@ -46,15 +43,17 @@ const Navbar = () => {
         <NavLink to="/" className="navbar-brand">
           <div className="navbar-logo-icon">
             {branding.logoUrl ? (
-              <img src={branding.logoUrl} alt={branding.appName || 'Logo'} className="navbar-custom-logo" />
+              <img src={branding.logoUrl} alt={branding.appName || 'Medical 365'} className="navbar-custom-logo" />
             ) : (
-              <HMSIcon />
+              <BrandLogo />
             )}
           </div>
-          <div className="navbar-logo-text">
-            <span className="navbar-logo-main">{branding.appName || 'Medical365'}</span>
-            <span className="navbar-logo-sub">{branding.tagline || 'Healthcare Suite'}</span>
-          </div>
+          {!branding.logoUrl && (
+            <div className="navbar-logo-text">
+              <span className="navbar-logo-main">{branding.appName || 'Medical 365'}</span>
+              <span className="navbar-logo-sub">{branding.tagline || 'Healthcare Suite'}</span>
+            </div>
+          )}
         </NavLink>
 
         {/* Navigation Links */}

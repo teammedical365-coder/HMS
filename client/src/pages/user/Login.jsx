@@ -3,7 +3,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAuth } from '../../store/hooks';
 import { loginUser, clearError } from '../../store/slices/authSlice';
 import { motion } from 'framer-motion';
-import { RiShieldLine, RiInformationLine } from 'react-icons/ri';
+import { RiInformationLine } from 'react-icons/ri';
 import './Login.css';
 
 const Login = () => {
@@ -55,13 +55,7 @@ const Login = () => {
           <div className="auth-form-container">
             <div className="auth-box">
               <div className="hospital-brand">
-                  <div className="hospital-logo-placeholder">
-                      <RiShieldLine />
-                  </div>
-                  <div className="hospital-brand-text">
-                      <h2>Medical365</h2>
-                      <p>HMS Enterprise Control</p>
-                  </div>
+                  <img src="/logo.png" alt="Medical 365" style={{ height: '40px', objectFit: 'contain' }} />
               </div>
 
               <div className="auth-header">

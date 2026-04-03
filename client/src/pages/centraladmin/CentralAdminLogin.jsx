@@ -4,7 +4,7 @@ import { useAppDispatch, useAuth } from '../../store/hooks';
 import { loginAdmin, clearError } from '../../store/slices/authSlice';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HiOutlineMail, HiOutlineLockClosed } from 'react-icons/hi';
-import { RiShieldUserLine, RiArrowLeftLine } from 'react-icons/ri';
+import { RiArrowLeftLine } from 'react-icons/ri';
 import '../user/Login.css';
 
 const CentralAdminLogin = () => {
@@ -64,13 +64,7 @@ const CentralAdminLogin = () => {
                                 </button>
 
                                 <div className="hospital-brand">
-                                    <div className="hospital-logo-placeholder" style={{ background: '#0f172a', color: 'white' }}>
-                                        <RiShieldUserLine />
-                                    </div>
-                                    <div className="hospital-brand-text">
-                                        <h2>Medical365</h2>
-                                        <p>Global Controller</p>
-                                    </div>
+                                    <img src="/logo.png" alt="Medical 365" style={{ height: '40px', objectFit: 'contain' }} />
                                 </div>
 
                                 <div className="auth-header">
