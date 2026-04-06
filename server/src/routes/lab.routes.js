@@ -123,8 +123,11 @@ router.post('/upload-report/:reportId', verifyToken, verifyLab, upload.single('r
 
         if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
 
-        const report = await LabReport.findById(reportId);
-        if (!report) return res.status(404).json({ message: 'Report request not found.' });
+        // RLS: scope by hospitalId so lab staff can only upload to their hospital's reports
+        const reportFilter = { _id: reportId };
+        if (req.user.hospitalId) reportFilter.hospitalId = req.user.hospitalId;
+        const report = await LabReport.findOne(reportFilter);
+        if (!report) return res.status(404).json({ message: 'Report request not found or access denied.' });
 
         // Upload to ImageKit
         const fileResult = await imagekit.upload({

@@ -90,7 +90,7 @@ const DoctorPatientDetails = () => {
 
                     if (res.appointment.userId?._id) {
                         const histRes = await doctorAPI.getPatientHistory(res.appointment.userId._id);
-                        if (histRes.success) setHistory(histRes.history || []);
+                        if (histRes.success) setHistory(histRes.history || histRes.data || []);
                     }
 
                     setSessionData({
@@ -575,26 +575,37 @@ const DoctorPatientDetails = () => {
                                             )}
                                             <div className="dpd-hist-top">
                                                 <span className="dpd-hist-date">
-                                                    {new Date(h.appointmentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                    {new Date(h.visitDate || h.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                                                 </span>
                                                 <span className={`dpd-hist-status status-${h.status}`}>{h.status}</span>
                                             </div>
+                                            {/* Diagnosis */}
                                             <div className="dpd-hist-diagnosis">
-                                                <strong>Diagnosis:</strong> {h.diagnosis || 'No diagnosis recorded'}
+                                                <strong>Diagnosis:</strong>{' '}
+                                                {(h.doctorConsultation?.diagnosis?.length > 0
+                                                    ? h.doctorConsultation.diagnosis.join(', ')
+                                                    : null) || 'No diagnosis recorded'}
                                             </div>
-                                            {h.doctorNotes && (
+                                            {/* Notes */}
+                                            {h.doctorConsultation?.clinicalNotes && (
                                                 <div className="dpd-hist-notes">
-                                                    <strong>Notes:</strong> {h.doctorNotes}
+                                                    <strong>Notes:</strong> {h.doctorConsultation.clinicalNotes}
                                                 </div>
                                             )}
-                                            {h.serviceName && (
-                                                <span className="dpd-hist-service">{h.serviceName}</span>
-                                            )}
-                                            {h.prescriptions && h.prescriptions.filter(p => p.type === 'lab_report').map((file, idx) => (
-                                                <div key={idx} className="dpd-hist-file">
-                                                    🧪 <a href={file.url} target="_blank" rel="noopener noreferrer">View Lab Report</a>
+                                            {/* Prescription / Medicines */}
+                                            {h.doctorConsultation?.prescription?.length > 0 && (
+                                                <div className="dpd-hist-notes">
+                                                    <strong>💊 Medicines:</strong>{' '}
+                                                    {h.doctorConsultation.prescription.map(p => `${p.medicine} (${p.dosage}, ${p.duration})`).join(' · ')}
                                                 </div>
-                                            ))}
+                                            )}
+                                            {/* Lab Tests */}
+                                            {h.doctorConsultation?.labTests?.length > 0 && (
+                                                <div className="dpd-hist-notes">
+                                                    <strong>🧪 Lab Tests:</strong>{' '}
+                                                    {h.doctorConsultation.labTests.join(', ')}
+                                                </div>
+                                            )}
                                             {h._id === appointmentId && <span className="dpd-current-badge">📌 Current Session</span>}
                                         </div>
                                     ))}

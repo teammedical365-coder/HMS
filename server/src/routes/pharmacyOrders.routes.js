@@ -63,21 +63,28 @@ router.patch('/:id/complete', verifyToken, async (req, res) => {
             item.purchased = wasPurchased;
 
             if (wasPurchased) {
-                // Find inventory item by name (hospital-scoped if possible)
-                // Extract actual medicine name by removing frequency if it was appended with " - "
+                // Extract medicine name — strip trailing " - DosageMg" if appended
                 let rawName = item.medicineName.trim();
-                let actualName = rawName.includes(' - ') ? rawName.substring(0, rawName.lastIndexOf(' - ')).trim() : rawName;
+                let actualName = rawName.includes(' - ')
+                    ? rawName.substring(0, rawName.lastIndexOf(' - ')).trim()
+                    : rawName;
+                // Normalize both sides to avoid casing/spacing mismatches
+                actualName = actualName.toLowerCase().trim();
 
                 const escapedName = actualName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const invQuery = { name: { $regex: new RegExp(`^${escapedName}$`, 'i') } };
                 if (req.user.hospitalId) invQuery.hospitalId = req.user.hospitalId;
                 let invItem = await Inventory.findOne(invQuery);
 
-                // Fallback: partial/contains match if exact fails (handles minor name differences)
+                // Fallback: partial match if exact fails
                 if (!invItem) {
-                    const fallbackQuery = { name: { $regex: actualName, $options: 'i' } };
+                    const fallbackQuery = { name: { $regex: escapedName, $options: 'i' } };
                     if (req.user.hospitalId) fallbackQuery.hospitalId = req.user.hospitalId;
                     invItem = await Inventory.findOne(fallbackQuery);
+                }
+
+                if (!invItem) {
+                    console.warn(`[Inventory] No match for medicine: "${item.medicineName}" (normalized: "${actualName}")`);
                 }
 
                 if (invItem) {

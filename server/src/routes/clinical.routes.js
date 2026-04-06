@@ -5,13 +5,14 @@ const { verifyToken } = require('../middleware/auth.middleware');
 const LabReport = require('../models/labReport.model');
 const PharmacyOrder = require('../models/pharmacyOrder.model');
 
-// 1. JUNIOR DR / NURSE: Create Visit & Add Vitals
+// 1. NURSE: Create Visit & Add Vitals
 router.post('/intake', verifyToken, async (req, res) => {
     try {
         const { patientId, vitals, intervalHistory, chiefComplaint } = req.body;
 
         const visit = new ClinicalVisit({
             patientId,
+            hospitalId: req.user.hospitalId,   // RLS: scope to hospital
             intake: {
                 filledBy: req.user.id,
                 timestamp: new Date(),
@@ -20,7 +21,7 @@ router.post('/intake', verifyToken, async (req, res) => {
                 chiefComplaint,
                 completed: true
             },
-            status: 'ready_for_doctor' // Triggers the patient to appear in Doctor's list
+            status: 'ready_for_doctor'
         });
 
         await visit.save();
@@ -30,36 +31,42 @@ router.post('/intake', verifyToken, async (req, res) => {
     }
 });
 
-// 2. SENIOR DOCTOR: Get Patient History (The "Timeline")
+// 2. DOCTOR: Get Patient History
 router.get('/history/:patientId', verifyToken, async (req, res) => {
     try {
-        // Returns all previous visits sorted by date (newest first)
-        // This gives the "fully intact medical knowledge"
-        const history = await ClinicalVisit.find({ patientId: req.params.patientId })
+        // RLS: scope by hospitalId so cross-hospital data never leaks
+        const filter = { patientId: req.params.patientId };
+        if (req.user.hospitalId) filter.hospitalId = req.user.hospitalId;
+
+        const history = await ClinicalVisit.find(filter)
             .sort({ visitDate: -1 })
             .populate('intake.filledBy', 'name')
             .populate('doctorConsultation.doctorId', 'name');
 
-        res.json({ success: true, data: history });
+        res.json({ success: true, history });   // key: history (was: data)
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
-// 3. SENIOR DOCTOR: Finalize Diagnosis
+// 3. DOCTOR: Finalize Diagnosis
 router.post('/diagnose/:visitId', verifyToken, async (req, res) => {
     try {
         const { diagnosis, prescription, labTests, notes } = req.body;
 
-        const visit = await ClinicalVisit.findByIdAndUpdate(
-            req.params.visitId,
+        // RLS: validate the visit belongs to this hospital before updating
+        const visitFilter = { _id: req.params.visitId };
+        if (req.user.hospitalId) visitFilter.hospitalId = req.user.hospitalId;
+
+        const visit = await ClinicalVisit.findOneAndUpdate(
+            visitFilter,
             {
                 doctorConsultation: {
                     doctorId: req.user.id,
                     timestamp: new Date(),
                     diagnosis,
                     prescription,
-                    labTests, // Store here for history
+                    labTests,
                     procedureAdvice: notes,
                     clinicalNotes: notes
                 },
@@ -68,79 +75,81 @@ router.post('/diagnose/:visitId', verifyToken, async (req, res) => {
             { new: true }
         );
 
-        if (!visit) return res.status(404).json({ message: 'Visit not found' });
+        if (!visit) return res.status(404).json({ message: 'Visit not found or access denied' });
 
         const io = req.app.get('io');
         const Notification = require('../models/notification.model');
 
-        // --- AUTOMATIC CREATION OF LINKED RECORDS ---
-
-        // A. CREATE PHARMACY ORDER
+        // A. CREATE PHARMACY ORDER — wrapped so it never blocks consultation completion
         if (prescription && prescription.length > 0) {
-            const pharmacyOrder = new PharmacyOrder({
-                appointmentId: visit.appointmentId || visit._id, // Providing a fallback if null
-                patientId: visit.patientId.toString(), // String
-                userId: visit.patientId,    // Duplicate for schema compatibility
-                doctorId: req.user.id,
-                items: prescription.map(p => ({
-                    medicineName: p.medicine,
-                    frequency: p.dosage, // Mapping dosage to frequency/dosage
-                    duration: p.duration
-                })),
-                orderStatus: 'Upcoming',
-                paymentStatus: 'Pending'
-            });
-            await pharmacyOrder.save();
+            try {
+                const pharmacyOrder = new PharmacyOrder({
+                    appointmentId: visit.appointmentId || visit._id,
+                    patientId: visit.patientId.toString(),
+                    userId: visit.patientId,
+                    doctorId: req.user.id,
+                    hospitalId: req.user.hospitalId,    // RLS: set hospitalId
+                    items: prescription.map(p => ({
+                        medicineName: p.medicine,
+                        frequency: p.dosage,
+                        duration: p.duration
+                    })),
+                    orderStatus: 'Upcoming',
+                    paymentStatus: 'Pending'
+                });
+                await pharmacyOrder.save();
 
-            const notificationItem = new Notification({
-                senderId: req.user.id,
-                recipientRole: 'pharmacy',
-                message: 'New prescription received for dispensing.',
-                referenceType: 'PharmacyOrder',
-                referenceId: pharmacyOrder._id,
-                patientId: visit.patientId.toString()
-            });
-            await notificationItem.save();
-
-            if (io) {
-                // Emit to anyone in the 'pharmacy' room
-                io.to('pharmacy').emit('new_notification', notificationItem);
+                const notif = new Notification({
+                    senderId: req.user.id,
+                    recipientRole: 'pharmacy',
+                    hospitalId: req.user.hospitalId,
+                    message: 'New prescription received for dispensing.',
+                    referenceType: 'PharmacyOrder',
+                    referenceId: pharmacyOrder._id,
+                    patientId: visit.patientId.toString()
+                });
+                await notif.save();
+                if (io) io.to('pharmacy').emit('new_notification', notif);
+            } catch (pharmacyErr) {
+                console.error('Pharmacy order creation failed (non-blocking):', pharmacyErr.message);
             }
         }
 
-        // B. CREATE LAB REQUEST
+        // B. CREATE LAB REQUEST — wrapped so it never blocks consultation completion
         if (labTests && labTests.length > 0) {
-            const labReport = new LabReport({
-                appointmentId: visit.appointmentId || visit._id,
-                patientId: visit.patientId.toString(),
-                userId: visit.patientId,
-                doctorId: req.user.id,
-                testNames: labTests,
-                testStatus: 'PENDING',
-                reportStatus: 'PENDING',
-                paymentStatus: 'PENDING'
-            });
-            await labReport.save();
+            try {
+                const labReport = new LabReport({
+                    appointmentId: visit.appointmentId || visit._id,
+                    patientId: visit.patientId.toString(),
+                    userId: visit.patientId,
+                    doctorId: req.user.id,
+                    hospitalId: req.user.hospitalId,    // RLS: set hospitalId
+                    testNames: labTests,
+                    testStatus: 'PENDING',
+                    reportStatus: 'PENDING',
+                    paymentStatus: 'PENDING'
+                });
+                await labReport.save();
 
-            const notificationItem = new Notification({
-                senderId: req.user.id,
-                recipientRole: 'lab',
-                message: 'New lab test requested.',
-                referenceType: 'LabReport',
-                referenceId: labReport._id,
-                patientId: visit.patientId.toString()
-            });
-            await notificationItem.save();
-
-            if (io) {
-                // Emit to anyone in the 'lab' room
-                io.to('lab').emit('new_notification', notificationItem);
+                const notif = new Notification({
+                    senderId: req.user.id,
+                    recipientRole: 'lab',
+                    hospitalId: req.user.hospitalId,
+                    message: 'New lab test requested.',
+                    referenceType: 'LabReport',
+                    referenceId: labReport._id,
+                    patientId: visit.patientId.toString()
+                });
+                await notif.save();
+                if (io) io.to('lab').emit('new_notification', notif);
+            } catch (labErr) {
+                console.error('Lab report creation failed (non-blocking):', labErr.message);
             }
         }
 
         res.json({ success: true, data: visit });
     } catch (error) {
-        console.error("Diagnosis Error:", error);
+        console.error('Diagnosis Error:', error);
         res.status(500).json({ message: error.message });
     }
 });
