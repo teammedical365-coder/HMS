@@ -32,8 +32,11 @@ const Patient = () => {
             const role = (user.role || '').toLowerCase();
             const permissions = user.permissions || [];
             
-            const isAdminOrStaff = ['nurse', 'admin', 'superadmin', 'hospitaladmin', 'reception', 'receptionist'].includes(role);
-            const hasViewAllAccess = isAdminOrStaff || permissions.includes('patient_view') || permissions.includes('appointment_view_all');
+            const staffRoles = ['nurse', 'admin', 'superadmin', 'hospitaladmin', 'reception', 'receptionist'];
+            const isAdminOrStaff = staffRoles.some(r => role.includes(r));
+            const isDoctor = role.includes('doctor');
+            // Doctors always use their own appointments; staff use the all-appointments view
+            const hasViewAllAccess = !isDoctor && (isAdminOrStaff || permissions.includes('patient_view') || permissions.includes('appointment_view_all'));
 
             const res = hasViewAllAccess
                 ? await doctorAPI.getAllAppointments()
@@ -389,7 +392,10 @@ const Patient = () => {
                                                 <td style={S.td}>
                                                     <div style={{ display: 'flex', gap: '8px' }}>
                                                         <button
-                                                            onClick={() => navigate(`/patient/${apt.userId?._id || apt.patientId}`)}
+                                                            onClick={() => {
+                                                                const pid = apt.userId?._id || apt.userId || apt.patientId;
+                                                                if (pid) navigate(`/patient/${pid}`);
+                                                            }}
                                                             style={{
                                                                 ...S.btn('rgba(59,130,246,0.1)'),
                                                                 color: '#3b82f6', border: '1px solid #3b82f6',

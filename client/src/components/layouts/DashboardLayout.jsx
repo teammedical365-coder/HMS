@@ -76,6 +76,17 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
                 { label: 'Billing/Payments', path: '/cashier/billing', icon: <FiFileText /> },
             ];
         }
+        if (role === 'nurse') {
+            return [
+                { label: 'Patient Queue', path: '/doctor/patients', icon: <FiUsers /> },
+                { label: 'Appointments', path: '/appointment', icon: <FiCalendar /> },
+            ];
+        }
+        if (role === 'billing') {
+            return [
+                { label: 'Patient Billing', path: '/cashier/billing', icon: <FiFileText /> },
+            ];
+        }
         return [
             { label: 'My Dashboard', path: '/my-dashboard', icon: <FiHome /> },
         ];

@@ -31,7 +31,8 @@ const Admin = () => {
     useEffect(() => {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         const perms = user.permissions || [];
-        if (user.role !== 'admin' && user.role !== 'superadmin' &&
+        const allowedRoles = ['admin', 'superadmin', 'centraladmin', 'hospitaladmin'];
+        if (!allowedRoles.includes(user.role) &&
             !perms.includes('*') && !perms.includes('admin_manage_roles') && !perms.includes('admin_view_stats')) {
             navigate('/');
         }

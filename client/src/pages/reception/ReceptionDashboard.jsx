@@ -408,10 +408,7 @@ const ReceptionDashboard = () => {
                 });
 
                 if (bookingRes.success) {
-                    const tokenMsg = bookingRes.appointment?.tokenNumber
-                        ? ` Token #${bookingRes.appointment.tokenNumber} assigned.` : '';
-                    alert(`Patient Registered & Assigned to Doctor!${tokenMsg}`);
-                    // --- Dynamic Receipt PDF ---
+                    // --- Dynamic Receipt PDF (generate BEFORE alert so it isn't blocked) ---
                     const doc = new jsPDF();
                     const hName = hospitalContext?.name || 'HOSPITAL';
                     const hAddr = [hospitalContext?.address, hospitalContext?.city, hospitalContext?.state].filter(Boolean).join(', ');
@@ -443,7 +440,7 @@ const ReceptionDashboard = () => {
                         startY: y,
                         body: [
                             ['Patient Name', `${intakeForm.firstName} ${intakeForm.lastName}`],
-                            ['MRN / ID', regRes.user?.patientId || 'N/A'],
+                            ['MRN / ID', regRes.user?.patientId || bookingRes.appointment?.patientId || 'N/A'],
                             ['Phone', intakeForm.mobile || '-'],
                             ['Aadhaar Verified', intakeForm.isAadhaarVerified ? 'YES - Verified' : 'NO'],
                             ['Department', intakeForm.department || '-'],
@@ -469,7 +466,12 @@ const ReceptionDashboard = () => {
                     doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 196, y, { align: 'right' });
                     y += 5;
                     doc.text('Thank you for choosing ' + hName, 105, y, { align: 'center' });
-                    doc.save(`Receipt_${regRes.user?.patientId || 'Patient'}.pdf`);
+                    const receiptPatientId = regRes.user?.patientId || bookingRes.appointment?.patientId || 'Patient';
+                    doc.save(`Receipt_${receiptPatientId}.pdf`);
+
+                    const tokenMsg = bookingRes.appointment?.tokenNumber
+                        ? ` Token #${bookingRes.appointment.tokenNumber} assigned.` : '';
+                    alert(`Patient Registered & Assigned to Doctor!${tokenMsg}`);
 
                     setPaymentScreenshot(null);
                     fetchAppointments();

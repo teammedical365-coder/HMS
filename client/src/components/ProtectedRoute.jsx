@@ -20,18 +20,19 @@ const ProtectedRoute = ({ children, requiredPermissions = [], allowedRoles = [] 
       return children;
     }
 
-    // Check permission-based access
-    if (requiredPermissions.length > 0) {
-      const hasPermission = requiredPermissions.some(perm => userPermissions.includes(perm));
-      if (!hasPermission) {
-        // Redirect to the user's own dashboard
+    const hasRequiredPermission = requiredPermissions.length === 0 ||
+      requiredPermissions.some(perm => userPermissions.includes(perm));
+    const hasAllowedRole = allowedRoles.length === 0 ||
+      allowedRoles.includes(userRole.toLowerCase());
+
+    // Allow if EITHER the role OR permission check passes (when both are specified, OR logic)
+    // When only one is specified, that check must pass
+    if (requiredPermissions.length > 0 && allowedRoles.length > 0) {
+      if (!hasRequiredPermission && !hasAllowedRole) {
         const dashboardPath = user.dashboardPath || '/my-dashboard';
         return <Navigate to={dashboardPath} replace />;
       }
-    }
-
-    // Legacy support: check role name strings (for backwards compatibility during transition)
-    if (allowedRoles.length > 0 && !allowedRoles.includes(userRole.toLowerCase())) {
+    } else if (!hasRequiredPermission || !hasAllowedRole) {
       const dashboardPath = user.dashboardPath || '/my-dashboard';
       return <Navigate to={dashboardPath} replace />;
     }

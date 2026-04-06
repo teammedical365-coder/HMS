@@ -251,10 +251,22 @@ router.put('/intake/:userId', verifyToken, verifyReception, async (req, res) => 
 router.get('/appointments', verifyToken, verifyReception, async (req, res) => {
     try {
         let queryFilter = {};
-        if (req.user.hospitalId) {
-            queryFilter.hospitalId = req.user.hospitalId;
+        if (req.user.hospitalId) queryFilter.hospitalId = req.user.hospitalId;
+
+        // Default: today's active appointments only (reception queue view)
+        // Pass ?all=true to get full history
+        if (req.query.all !== 'true') {
+            const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+            const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999);
+            queryFilter.appointmentDate = { $gte: todayStart, $lte: todayEnd };
+            queryFilter.status = { $nin: ['cancelled', 'completed'] };
         }
-        const appointments = await Appointment.find(queryFilter).populate('userId', 'name email phone patientId').populate('doctorId', 'name').sort({ appointmentDate: -1 }).lean();
+
+        const appointments = await Appointment.find(queryFilter)
+            .populate('userId', 'name email phone patientId')
+            .populate('doctorId', 'name')
+            .sort({ tokenNumber: 1, appointmentTime: 1 })
+            .lean();
         res.json({ success: true, appointments });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });

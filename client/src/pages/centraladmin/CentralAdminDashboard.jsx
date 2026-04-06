@@ -94,7 +94,8 @@ const CentralAdminDashboard = () => {
 
     useEffect(() => {
         const role = currentUser?.role;
-        if (role !== 'centraladmin' && role !== 'superadmin') navigate('/supremeadmin/login');
+        // Only redirect if user is logged in but has the wrong role (not during logout)
+        if (role && role !== 'centraladmin' && role !== 'superadmin') navigate('/login');
     }, [navigate]);
 
     useEffect(() => {
