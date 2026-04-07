@@ -30,6 +30,9 @@ const billingRoutes = require('./routes/billing.routes');
 const admissionRoutes = require('./routes/admission.routes');
 const simpleClinicRoutes = require('./routes/simpleClinic.routes');
 const clinicRoutes = require('./routes/clinic.routes');
+const syncRoutes        = require('./routes/sync.routes');
+const patientAppRoutes  = require('./routes/patientApp.routes');
+const patientLocalRoutes = require('./routes/patientLocal.routes');
 
 const app = express();
 // ughfgh
@@ -84,6 +87,14 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/admissions', admissionRoutes);
 app.use('/api/simple-clinics', simpleClinicRoutes);
 app.use('/api/clinic', clinicRoutes);
+
+// ── Hybrid local/cloud infrastructure ────────────────────────────────────────
+// Sync receiver + tunnel proxy (active on cloud; no-ops on local for sync routes)
+app.use('/api/sync', syncRoutes);
+// Patient mobile/PWA app routes (cloud: auth + tunnel proxy; local: data serving)
+app.use('/api/patient-app', patientAppRoutes);
+// Local patient data routes — called via tunnel from cloud, or directly on LAN
+app.use('/api/patient-local', patientLocalRoutes);
 
 app.get('/', (req, res) => {
     res.send('API is running...');

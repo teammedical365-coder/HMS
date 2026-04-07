@@ -1,0 +1,93 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Medical365 — Local Clinic Server
+# docker-compose.local.yml
+#
+# Usage:
+#   1. Copy .env.local.example to .env.local and fill in your values
+#   2. docker compose -f docker-compose.local.yml up -d
+#   3. Open http://localhost:3000 in the clinic browser
+#
+# To update:
+#   docker compose -f docker-compose.local.yml pull && docker compose -f docker-compose.local.yml up -d
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: '3.8'
+
+services:
+
+  # ── MongoDB (local, data stays on clinic machine) ──────────────────────────
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - ./clinic-data/mongo:/data/db          # persisted on local disk
+      - ./clinic-data/mongo-cfg:/data/configdb
+    environment:
+      MONGO_INITDB_DATABASE: hms
+    networks:
+      - clinic-net
+    # NOT exposed externally — only accessible inside clinic-net
+    expose:
+      - "27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Medical365 API server ─────────────────────────────────────────────────
+  api:
+    image: medical365/hms-server:latest       # pulled from Docker Hub
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "3000:3000"                           # clinic devices connect to this
+    env_file:
+      - .env.local                            # clinic-specific config
+    environment:
+      DEPLOYMENT_MODE: local
+      MONGODB_URL: mongodb://mongo:27017/hms
+      NODE_ENV: production
+    volumes:
+      - ./clinic-data/uploads:/app/uploads    # uploaded files stay local
+      - ./clinic-data/logs:/app/logs
+    networks:
+      - clinic-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Automatic daily backup ─────────────────────────────────────────────────
+  backup:
+    image: mongo:7
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    volumes:
+      - ./clinic-data/mongo:/data/db:ro
+      - ./clinic-data/backups:/backups
+    environment:
+      CLINIC_ID: ${CLINIC_ID}
+    networks:
+      - clinic-net
+    # Runs mongodump every night at 2am, keeps 7 days of backups
+    entrypoint: >
+      sh -c "
+        while true; do
+          sleep $$(( (2*3600 - ($$(date +%s) % 86400) + 86400) % 86400 ));
+          DATE=$$(date +%Y%m%d_%H%M);
+          echo \"[Backup] Starting backup $$DATE\";
+          mongodump --host mongo --db hms --out /backups/$$DATE;
+          echo \"[Backup] Done. Cleaning old backups...\";
+          ls -dt /backups/*/ | tail -n +8 | xargs rm -rf;
+          echo \"[Backup] Cleanup done.\";
+        done
+      "
+
+networks:
+  clinic-net:
+    driver: bridge

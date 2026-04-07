@@ -74,6 +74,17 @@ const hospitalSchema = new mongoose.Schema({
         ratePerPatient:  { type: Number, default: 0 },
         billingEnabled:  { type: Boolean, default: false },
     },
+
+    // Local deployment — API key (bcrypt hashed) issued when clinic goes on-premise
+    // null means clinic runs on cloud (default SaaS mode)
+    clinicApiKey: { type: String, default: null },
+
+    // Local server status — updated by heartbeat / stats sync
+    localServer: {
+        isOnline:      { type: Boolean, default: false },
+        lastSeenAt:    { type: Date, default: null },
+        serverVersion: { type: String, default: '' },
+    },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Hospital', hospitalSchema);

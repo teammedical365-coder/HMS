@@ -7,6 +7,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 
 const PORT = process.env.PORT || 3000;
+const DEPLOYMENT_MODE = process.env.DEPLOYMENT_MODE || 'cloud';
 
 // 1. Connect to Database
 connectDB();
@@ -48,8 +49,28 @@ io.on('connection', (socket) => {
     });
 });
 
-// 3. Start Server
+// 3. Attach tunnel relay (cloud only — accepts WebSocket connections from local servers)
+if (DEPLOYMENT_MODE !== 'local') {
+    const tunnelServer = require('./src/utils/tunnelServer');
+    tunnelServer.attach(server);
+}
+
+// 4. Start Server
 server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(`Server is running on port ${PORT} [mode: ${DEPLOYMENT_MODE}]`);
+
+    // 5. Post-startup services (after DB is ready — give it 3s)
+    setTimeout(() => {
+        if (DEPLOYMENT_MODE === 'local') {
+            // Start sync service — pushes stats to cloud every 15 min
+            const syncService = require('./src/utils/syncService');
+            syncService.start();
+
+            // Start tunnel client — maintains WebSocket to cloud for patient app
+            const tunnelClient = require('./src/utils/tunnelClient');
+            tunnelClient.setApp(app);
+            tunnelClient.connect();
+        }
+    }, 3000);
 });
 // Trigger Restart
