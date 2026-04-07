@@ -355,11 +355,12 @@ const DoctorPatientDetails = () => {
 
     // ─── STANDALONE PRESCRIPTION PDF ─────────────────────────────────────────
     const generatePrescriptionPDF = () => {
+        const pt = appointment?.userId || {};
         const doc = new jsPDF();
         const hName = hospitalContext?.name || 'HOSPITAL';
         const hAddr = [hospitalContext?.address, hospitalContext?.city, hospitalContext?.state].filter(Boolean).join(', ');
         const hPhone = hospitalContext?.phone || '';
-        const profile = patient?.fertilityProfile || intakeData;
+        const profile = pt.fertilityProfile || intakeData;
         let y = 18;
 
         // Header
@@ -380,8 +381,8 @@ const DoctorPatientDetails = () => {
         autoTable(doc, {
             startY: y,
             body: [
-                ['Patient', patient?.name || '-', 'MRN', patient?.patientId || 'N/A'],
-                ['Age / Gender', `${profile?.age || '-'} / ${profile?.gender || '-'}`, 'Phone', patient?.phone || '-'],
+                ['Patient', pt.name || '-', 'MRN', pt.patientId || 'N/A'],
+                ['Age / Gender', `${profile?.age || '-'} / ${profile?.gender || '-'}`, 'Phone', pt.phone || '-'],
                 ['Doctor', `Dr. ${appointment?.doctorName || user?.name || '-'}`, 'Date', new Date().toLocaleDateString('en-IN')],
                 ['Diagnosis', appointment?.diagnosis || sessionData.diagnosis || '-', '', ''],
             ],
@@ -400,7 +401,7 @@ const DoctorPatientDetails = () => {
             : (appointment?.pharmacy || []).map(p => `${p.medicineName}${p.frequency ? ' — ' + p.frequency : ''}${p.duration ? ' × ' + p.duration : ''}`);
 
         doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
-        doc.text('💊 Medicines Prescribed', 14, y); y += 6;
+        doc.text('Medicines Prescribed', 14, y); y += 6;
         if (rxLines.length > 0) {
             autoTable(doc, {
                 startY: y,
@@ -422,7 +423,7 @@ const DoctorPatientDetails = () => {
             : (appointment?.labTests || []);
 
         doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
-        doc.text('🧪 Lab Tests Ordered', 14, y); y += 6;
+        doc.text('Lab Tests Ordered', 14, y); y += 6;
         if (labItems.length > 0) {
             autoTable(doc, {
                 startY: y,
@@ -443,7 +444,7 @@ const DoctorPatientDetails = () => {
             const notesText = sessionData.notes || appointment?.doctorNotes || '';
             if (y > 250) { doc.addPage(); y = 20; }
             doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
-            doc.text('📋 Clinical Notes', 14, y); y += 6;
+            doc.text('Clinical Notes', 14, y); y += 6;
             doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(60);
             const wrapped = doc.splitTextToSize(notesText, 170);
             doc.text(wrapped, 16, y); y += wrapped.length * 5 + 8;
@@ -459,12 +460,12 @@ const DoctorPatientDetails = () => {
         doc.setFontSize(8);
         doc.text('This prescription is valid for 30 days from the date of issue.', 105, y, { align: 'center' });
 
-        const pid = patient?.patientId || 'Patient';
-        doc.save(`Prescription_${pid}_${new Date().toISOString().split('T')[0]}.pdf`);
+        doc.save(`Prescription_${pt.patientId || 'Patient'}_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     // ─── CONSULTATION RECEIPT PDF ─────────────────────────────────────────────
     const generateReceiptPDF = () => {
+        const pt = appointment?.userId || {};
         const doc = new jsPDF();
         const hName = hospitalContext?.name || 'HOSPITAL';
         const hAddr = [hospitalContext?.address, hospitalContext?.city, hospitalContext?.state].filter(Boolean).join(', ');
@@ -489,21 +490,20 @@ const DoctorPatientDetails = () => {
         doc.line(14, y, 196, y); y += 8;
         doc.setTextColor(0); doc.setFont('helvetica', 'normal');
 
-        const profile = patient?.fertilityProfile || intakeData;
         const dateDisplay = new Date(appointment?.appointmentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
         autoTable(doc, {
             startY: y,
             body: [
-                ['Patient Name', patient?.name || '-'],
-                ['MRN / ID', patient?.patientId || 'N/A'],
-                ['Phone', patient?.phone || '-'],
+                ['Patient Name', pt.name || '-'],
+                ['MRN / ID', pt.patientId || 'N/A'],
+                ['Phone', pt.phone || '-'],
                 ['Doctor', `Dr. ${appointment?.doctorName || user?.name || '-'}`],
                 ['Date & Time', `${dateDisplay} @ ${appointment?.appointmentTime || '-'}`],
                 ['Service', appointment?.serviceName || 'Consultation'],
                 ['Consultation Fee', `Rs. ${Number(appointment?.amount || 0).toLocaleString('en-IN')}`],
                 ['Payment Method', appointment?.paymentMethod || 'Cash'],
-                ['Payment Status', (appointment?.paymentStatus || 'Paid').toUpperCase() + ' ✓'],
+                ['Payment Status', (appointment?.paymentStatus || 'Paid').toUpperCase() + ' \u2713'],
             ],
             theme: 'grid',
             columnStyles: { 0: { fontStyle: 'bold', cellWidth: 52 } },
@@ -519,8 +519,7 @@ const DoctorPatientDetails = () => {
         y += 5;
         doc.text(`Thank you for choosing ${hName}`, 105, y, { align: 'center' });
 
-        const pid = patient?.patientId || 'Patient';
-        doc.save(`Receipt_${pid}.pdf`);
+        doc.save(`Receipt_${pt.patientId || 'Patient'}.pdf`);
     };
 
     if (loading) {
@@ -965,55 +964,50 @@ const DoctorPatientDetails = () => {
                             </div>
                         </div>
 
-                        <div className="dpd-right-footer" style={{ flexWrap: 'wrap', gap: '8px' }}>
+                        {/* PDF Quick-Action Bar — always visible, sits above footer */}
+                        <div style={{ padding: '10px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', gap: '8px', flexShrink: 0 }}>
+                            <button
+                                type="button"
+                                onClick={generatePrescriptionPDF}
+                                style={{ flex: 1, padding: '9px 10px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '12px' }}
+                            >
+                                📄 Prescription
+                            </button>
+                            <button
+                                type="button"
+                                onClick={generateReceiptPDF}
+                                style={{ flex: 1, padding: '9px 10px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '12px' }}
+                            >
+                                🧾 Receipt
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => generateCumulativePDF(intakeData, history, {
+                                    diagnosis: appointment.diagnosis || sessionData.diagnosis || '',
+                                    notes: appointment.doctorNotes || sessionData.notes || '',
+                                    pharmacy: appointment.pharmacy || sessionData.prescription.split('\n').filter(Boolean).map(m => ({ medicineName: m.trim() })),
+                                    labTests: appointment.labTests || sessionData.labTests.split(',').map(s => s.trim()).filter(Boolean),
+                                })}
+                                style={{ flex: 1, padding: '9px 10px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '12px' }}
+                            >
+                                📋 Full Report
+                            </button>
+                        </div>
+
+                        <div className="dpd-right-footer">
                             {!isLocked ? (
                                 <>
                                     <button className="dpd-btn-save-draft" onClick={handleSaveProfile} disabled={saving}>
                                         💾 Save Profile
                                     </button>
-                                    <button
-                                        type="button"
-                                        onClick={generatePrescriptionPDF}
-                                        style={{ padding: '10px 16px', background: 'linear-gradient(135deg, #16a34a, #15803d)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}
-                                    >
-                                        📄 Prescription PDF
-                                    </button>
                                     <button className="dpd-btn-finish" onClick={handleSaveAndMerge} disabled={saving}>
-                                        {saving ? '⏳ Processing...' : '✅ Complete & Full Report'}
+                                        {saving ? '⏳ Processing...' : '✅ Complete Session'}
                                     </button>
                                 </>
                             ) : (
-                                <>
-                                    <button
-                                        type="button"
-                                        onClick={generatePrescriptionPDF}
-                                        style={{ flex: 1, padding: '10px 16px', background: 'linear-gradient(135deg, #16a34a, #15803d)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}
-                                    >
-                                        📄 Prescription PDF
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={generateReceiptPDF}
-                                        style={{ flex: 1, padding: '10px 16px', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}
-                                    >
-                                        🧾 Receipt PDF
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => generateCumulativePDF(intakeData, history, {
-                                            diagnosis: appointment.diagnosis || '',
-                                            notes: appointment.doctorNotes || '',
-                                            pharmacy: appointment.pharmacy || [],
-                                            labTests: appointment.labTests || [],
-                                        })}
-                                        style={{ flex: 1, padding: '10px 16px', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}
-                                    >
-                                        📋 Full Report PDF
-                                    </button>
-                                    <button className="dpd-btn-finish" onClick={() => navigate('/doctor/patients')} style={{ background: '#64748b', flex: 1 }}>
-                                        ← Back to Queue
-                                    </button>
-                                </>
+                                <button className="dpd-btn-finish" onClick={() => navigate('/doctor/patients')} style={{ background: '#64748b', width: '100%' }}>
+                                    ← Back to Patient Queue
+                                </button>
                             )}
                         </div>
                     </>
@@ -1118,9 +1112,38 @@ const DoctorPatientDetails = () => {
 
                         </div>
 
-                        <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                            <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>Close</button>
-                            <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 30px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px', boxShadow: '0 4px 6px rgba(59, 130, 246, 0.3)' }}>Save Selections & Resume Note</button>
+                        <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                            {/* PDF buttons — left side */}
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button
+                                    onClick={() => { generatePrescriptionPDF(); }}
+                                    style={{ padding: '11px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}
+                                >
+                                    📄 Prescription PDF
+                                </button>
+                                <button
+                                    onClick={() => { generateReceiptPDF(); }}
+                                    style={{ padding: '11px 20px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}
+                                >
+                                    🧾 Receipt PDF
+                                </button>
+                                <button
+                                    onClick={() => generateCumulativePDF(intakeData, history, {
+                                        diagnosis: appointment.diagnosis || sessionData.diagnosis || '',
+                                        notes: appointment.doctorNotes || sessionData.notes || '',
+                                        pharmacy: sessionData.prescription.split('\n').filter(Boolean).map(m => ({ medicineName: m.trim() })),
+                                        labTests: sessionData.labTests.split(',').map(s => s.trim()).filter(Boolean),
+                                    })}
+                                    style={{ padding: '11px 20px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}
+                                >
+                                    📋 Full Report
+                                </button>
+                            </div>
+                            {/* Action buttons — right side */}
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>Close</button>
+                                <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 30px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px', boxShadow: '0 4px 6px rgba(59, 130, 246, 0.3)' }}>Save & Resume</button>
+                            </div>
                         </div>
                     </div>
                 </div>
