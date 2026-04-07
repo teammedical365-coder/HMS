@@ -386,8 +386,8 @@ const PatientsMode = ({ onBookToken }) => {
             if (r.success) {
                 if (!r.existing) setPatients(prev => [r.patient, ...prev]);
                 setJustRegistered(r.patient);
-                generateRegistrationSlipPDF(r.patient);
                 setForm({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '' });
+                try { generateRegistrationSlipPDF(r.patient); } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
             } else flash('error', r.message);
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
         finally { setSaving(false); }
@@ -606,9 +606,9 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash }) => {
                 notes: form.notes,
             });
             if (r.success) {
-                generateTokenReceiptPDF(patient, r.appointment);
                 flash('success', `✅ Token #${r.appointment.tokenNumber} assigned to ${patient.name}`);
                 onBook();
+                try { generateTokenReceiptPDF(patient, r.appointment); } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
             } else flash('error', r.message);
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
         finally { setBooking(false); }
@@ -925,10 +925,10 @@ const DoctorMode = () => {
                 labTests: labArr,
             });
             if (r.success) {
-                generatePrescriptionSlipPDF(consulting, rx);
                 flash('success', 'Consultation saved. Prescription generated.');
                 setConsulting(null);
                 loadToday();
+                try { generatePrescriptionSlipPDF(consulting, rx); } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
             } else flash('error', r.message);
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
         finally { setSaving(false); }
