@@ -382,6 +382,24 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
     }
 });
 
+// 7b. CONFIRM PAYMENT for an existing appointment
+router.patch('/appointments/:id/confirm-payment', verifyToken, verifyReception, async (req, res) => {
+    try {
+        const { paymentMethod, amount } = req.body;
+        const findQuery = { _id: req.params.id };
+        if (req.user.hospitalId) findQuery.hospitalId = req.user.hospitalId;
+        const appt = await Appointment.findOne(findQuery);
+        if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found or unauthorized' });
+        appt.paymentStatus = 'Paid';
+        appt.paymentMethod = paymentMethod || appt.paymentMethod || 'Cash';
+        if (amount !== undefined) appt.amount = amount;
+        await appt.save();
+        res.json({ success: true, appointment: appt });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 // 7. PATIENT CHECK-IN (Reception to Doctor/Clinic Workflow)
 router.post('/check-in', verifyToken, verifyReception, async (req, res) => {
     try {

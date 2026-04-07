@@ -353,6 +353,176 @@ const DoctorPatientDetails = () => {
         doc.save("Patient_Record.pdf");
     };
 
+    // ─── STANDALONE PRESCRIPTION PDF ─────────────────────────────────────────
+    const generatePrescriptionPDF = () => {
+        const doc = new jsPDF();
+        const hName = hospitalContext?.name || 'HOSPITAL';
+        const hAddr = [hospitalContext?.address, hospitalContext?.city, hospitalContext?.state].filter(Boolean).join(', ');
+        const hPhone = hospitalContext?.phone || '';
+        const profile = patient?.fertilityProfile || intakeData;
+        let y = 18;
+
+        // Header
+        doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+        doc.text(hName, 105, y, { align: 'center' }); y += 7;
+        if (hAddr) {
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
+            doc.text(hAddr, 105, y, { align: 'center' }); y += 5;
+        }
+        if (hPhone) { doc.text(`Ph: ${hPhone}`, 105, y, { align: 'center' }); y += 5; }
+        doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(76, 175, 80);
+        doc.text('PRESCRIPTION SLIP', 105, y, { align: 'center' }); y += 5;
+        doc.setDrawColor(76, 175, 80); doc.setLineWidth(0.5);
+        doc.line(14, y, 196, y); y += 8;
+        doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+
+        // Patient Info
+        autoTable(doc, {
+            startY: y,
+            body: [
+                ['Patient', patient?.name || '-', 'MRN', patient?.patientId || 'N/A'],
+                ['Age / Gender', `${profile?.age || '-'} / ${profile?.gender || '-'}`, 'Phone', patient?.phone || '-'],
+                ['Doctor', `Dr. ${appointment?.doctorName || user?.name || '-'}`, 'Date', new Date().toLocaleDateString('en-IN')],
+                ['Diagnosis', appointment?.diagnosis || sessionData.diagnosis || '-', '', ''],
+            ],
+            theme: 'grid',
+            columnStyles: {
+                0: { fontStyle: 'bold', cellWidth: 38 },
+                2: { fontStyle: 'bold', cellWidth: 28 },
+            },
+            bodyStyles: { fontSize: 10 },
+        });
+        y = doc.lastAutoTable.finalY + 10;
+
+        // Medicines
+        const rxLines = sessionData.prescription
+            ? sessionData.prescription.split('\n').filter(l => l.trim())
+            : (appointment?.pharmacy || []).map(p => `${p.medicineName}${p.frequency ? ' — ' + p.frequency : ''}${p.duration ? ' × ' + p.duration : ''}`);
+
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
+        doc.text('💊 Medicines Prescribed', 14, y); y += 6;
+        if (rxLines.length > 0) {
+            autoTable(doc, {
+                startY: y,
+                head: [['#', 'Medicine / Instructions']],
+                body: rxLines.map((line, i) => [i + 1, line]),
+                theme: 'striped',
+                headStyles: { fillColor: [76, 175, 80], textColor: 255 },
+                bodyStyles: { fontSize: 10 },
+            });
+            y = doc.lastAutoTable.finalY + 10;
+        } else {
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100);
+            doc.text('No medicines prescribed.', 16, y); y += 8;
+        }
+
+        // Lab Tests
+        const labItems = sessionData.labTests
+            ? sessionData.labTests.split(',').map(t => t.trim()).filter(Boolean)
+            : (appointment?.labTests || []);
+
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
+        doc.text('🧪 Lab Tests Ordered', 14, y); y += 6;
+        if (labItems.length > 0) {
+            autoTable(doc, {
+                startY: y,
+                head: [['#', 'Test Name']],
+                body: labItems.map((t, i) => [i + 1, t]),
+                theme: 'striped',
+                headStyles: { fillColor: [33, 150, 243], textColor: 255 },
+                bodyStyles: { fontSize: 10 },
+            });
+            y = doc.lastAutoTable.finalY + 10;
+        } else {
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100);
+            doc.text('No lab tests ordered.', 16, y); y += 8;
+        }
+
+        // Notes
+        if (sessionData.notes || appointment?.doctorNotes) {
+            const notesText = sessionData.notes || appointment?.doctorNotes || '';
+            if (y > 250) { doc.addPage(); y = 20; }
+            doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
+            doc.text('📋 Clinical Notes', 14, y); y += 6;
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(60);
+            const wrapped = doc.splitTextToSize(notesText, 170);
+            doc.text(wrapped, 16, y); y += wrapped.length * 5 + 8;
+        }
+
+        // Footer
+        if (y > 260) { doc.addPage(); y = 20; }
+        doc.setDrawColor(200); doc.line(14, y, 196, y); y += 6;
+        doc.setFontSize(9); doc.setTextColor(120);
+        doc.text(`Doctor: Dr. ${appointment?.doctorName || user?.name || 'N/A'}`, 14, y);
+        doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 196, y, { align: 'right' });
+        y += 5;
+        doc.setFontSize(8);
+        doc.text('This prescription is valid for 30 days from the date of issue.', 105, y, { align: 'center' });
+
+        const pid = patient?.patientId || 'Patient';
+        doc.save(`Prescription_${pid}_${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
+    // ─── CONSULTATION RECEIPT PDF ─────────────────────────────────────────────
+    const generateReceiptPDF = () => {
+        const doc = new jsPDF();
+        const hName = hospitalContext?.name || 'HOSPITAL';
+        const hAddr = [hospitalContext?.address, hospitalContext?.city, hospitalContext?.state].filter(Boolean).join(', ');
+        const hPhone = hospitalContext?.phone || '';
+        const hEmail = hospitalContext?.email || '';
+        let y = 18;
+
+        doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+        doc.text(hName, 105, y, { align: 'center' }); y += 7;
+        if (hAddr) {
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
+            doc.text(hAddr, 105, y, { align: 'center' }); y += 5;
+        }
+        if (hPhone || hEmail) {
+            const contact = [hPhone && `Ph: ${hPhone}`, hEmail && `Email: ${hEmail}`].filter(Boolean).join('  |  ');
+            doc.setFontSize(9); doc.setTextColor(100);
+            doc.text(contact, 105, y, { align: 'center' }); y += 5;
+        }
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(41, 128, 185);
+        doc.text('Consultation Receipt', 105, y, { align: 'center' }); y += 5;
+        doc.setDrawColor(41, 128, 185); doc.setLineWidth(0.5);
+        doc.line(14, y, 196, y); y += 8;
+        doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+
+        const profile = patient?.fertilityProfile || intakeData;
+        const dateDisplay = new Date(appointment?.appointmentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+        autoTable(doc, {
+            startY: y,
+            body: [
+                ['Patient Name', patient?.name || '-'],
+                ['MRN / ID', patient?.patientId || 'N/A'],
+                ['Phone', patient?.phone || '-'],
+                ['Doctor', `Dr. ${appointment?.doctorName || user?.name || '-'}`],
+                ['Date & Time', `${dateDisplay} @ ${appointment?.appointmentTime || '-'}`],
+                ['Service', appointment?.serviceName || 'Consultation'],
+                ['Consultation Fee', `Rs. ${Number(appointment?.amount || 0).toLocaleString('en-IN')}`],
+                ['Payment Method', appointment?.paymentMethod || 'Cash'],
+                ['Payment Status', (appointment?.paymentStatus || 'Paid').toUpperCase() + ' ✓'],
+            ],
+            theme: 'grid',
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 52 } },
+            bodyStyles: { fontSize: 10 },
+            alternateRowStyles: { fillColor: [245, 249, 255] },
+        });
+
+        y = doc.lastAutoTable.finalY + 10;
+        doc.setDrawColor(200); doc.line(14, y, 196, y); y += 6;
+        doc.setFontSize(8); doc.setTextColor(120);
+        doc.text(`Doctor: Dr. ${appointment?.doctorName || user?.name || 'N/A'}`, 14, y);
+        doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 196, y, { align: 'right' });
+        y += 5;
+        doc.text(`Thank you for choosing ${hName}`, 105, y, { align: 'center' });
+
+        const pid = patient?.patientId || 'Patient';
+        doc.save(`Receipt_${pid}.pdf`);
+    };
+
     if (loading) {
         return (
             <div className="dpd-loading">
@@ -795,20 +965,55 @@ const DoctorPatientDetails = () => {
                             </div>
                         </div>
 
-                        <div className="dpd-right-footer">
+                        <div className="dpd-right-footer" style={{ flexWrap: 'wrap', gap: '8px' }}>
                             {!isLocked ? (
                                 <>
                                     <button className="dpd-btn-save-draft" onClick={handleSaveProfile} disabled={saving}>
                                         💾 Save Profile
                                     </button>
+                                    <button
+                                        type="button"
+                                        onClick={generatePrescriptionPDF}
+                                        style={{ padding: '10px 16px', background: 'linear-gradient(135deg, #16a34a, #15803d)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}
+                                    >
+                                        📄 Prescription PDF
+                                    </button>
                                     <button className="dpd-btn-finish" onClick={handleSaveAndMerge} disabled={saving}>
-                                        {saving ? '⏳ Processing...' : '✅ Complete Session & Generate Report'}
+                                        {saving ? '⏳ Processing...' : '✅ Complete & Full Report'}
                                     </button>
                                 </>
                             ) : (
-                                <button className="dpd-btn-finish" onClick={() => navigate('/doctor/patients')} style={{ background: '#64748b', width: '100%' }}>
-                                    ← Back to Patient Queue
-                                </button>
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={generatePrescriptionPDF}
+                                        style={{ flex: 1, padding: '10px 16px', background: 'linear-gradient(135deg, #16a34a, #15803d)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}
+                                    >
+                                        📄 Prescription PDF
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={generateReceiptPDF}
+                                        style={{ flex: 1, padding: '10px 16px', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}
+                                    >
+                                        🧾 Receipt PDF
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => generateCumulativePDF(intakeData, history, {
+                                            diagnosis: appointment.diagnosis || '',
+                                            notes: appointment.doctorNotes || '',
+                                            pharmacy: appointment.pharmacy || [],
+                                            labTests: appointment.labTests || [],
+                                        })}
+                                        style={{ flex: 1, padding: '10px 16px', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' }}
+                                    >
+                                        📋 Full Report PDF
+                                    </button>
+                                    <button className="dpd-btn-finish" onClick={() => navigate('/doctor/patients')} style={{ background: '#64748b', flex: 1 }}>
+                                        ← Back to Queue
+                                    </button>
+                                </>
                             )}
                         </div>
                     </>

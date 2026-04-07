@@ -31,6 +31,10 @@ const ReceptionDashboard = () => {
     // Token mode — next token preview
     const [nextToken, setNextToken] = useState(null);
 
+    // Payment confirm modal
+    const [paymentModal, setPaymentModal] = useState({ open: false, appointment: null, method: 'Cash' });
+    const [confirmingPayment, setConfirmingPayment] = useState(false);
+
     // Hospitalization modal
     const [hospitalizeModal, setHospitalizeModal] = useState({ open: false, appointment: null });
     const [hospitalizeForm, setHospitalizeForm] = useState({ ward: '', bedNumber: '', admissionDate: new Date().toISOString().split('T')[0], notes: '', facilityDays: {} });
@@ -246,6 +250,83 @@ const ReceptionDashboard = () => {
             if (res.success) fetchAppointments();
         } catch (err) {
             alert(err.response?.data?.message || 'Failed to cancel appointment.');
+        }
+    };
+
+    // ─── RECEIPT PDF GENERATOR ────────────────────────────────────────────────
+    const generateReceiptPDF = (apt, paymentMethodOverride) => {
+        const doc = new jsPDF();
+        const hName = hospitalContext?.name || 'HOSPITAL';
+        const hAddr = [hospitalContext?.address, hospitalContext?.city, hospitalContext?.state].filter(Boolean).join(', ');
+        const hPhone = hospitalContext?.phone || '';
+        const hEmail = hospitalContext?.email || '';
+        const issuedBy = currentUser?.name || 'Reception Staff';
+        let y = 18;
+
+        doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+        doc.text(hName, 105, y, { align: 'center' }); y += 7;
+        if (hAddr) {
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
+            doc.text(hAddr, 105, y, { align: 'center' }); y += 5;
+        }
+        if (hPhone || hEmail) {
+            const contact = [hPhone && `Ph: ${hPhone}`, hEmail && `Email: ${hEmail}`].filter(Boolean).join('  |  ');
+            doc.setFontSize(9); doc.setTextColor(100);
+            doc.text(contact, 105, y, { align: 'center' }); y += 5;
+        }
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(41, 128, 185);
+        doc.text('Consultation Receipt', 105, y, { align: 'center' }); y += 5;
+        doc.setDrawColor(41, 128, 185); doc.setLineWidth(0.5);
+        doc.line(14, y, 196, y); y += 8;
+        doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+
+        const isToken = apt.tokenNumber != null;
+        const dateDisplay = new Date(apt.appointmentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+        autoTable(doc, {
+            startY: y,
+            body: [
+                ['Patient Name', apt.userId?.name || 'Walk-in'],
+                ['MRN / ID', apt.userId?.patientId || apt.patientId || 'N/A'],
+                ['Phone', apt.userId?.phone || '-'],
+                ['Doctor', `Dr. ${apt.doctorName || '-'}`],
+                isToken
+                    ? ['Date / Token', `${dateDisplay}  —  Token #${apt.tokenNumber}`]
+                    : ['Date & Time', `${dateDisplay} @ ${apt.appointmentTime || '-'}`],
+                ['Service', apt.serviceName || 'Consultation'],
+                ['Consultation Fee', `Rs. ${Number(apt.amount || 0).toLocaleString('en-IN')}`],
+                ['Payment Method', paymentMethodOverride || apt.paymentMethod || 'Cash'],
+                ['Payment Status', 'PAID ✓'],
+            ],
+            theme: 'grid',
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 52 } },
+            bodyStyles: { fontSize: 10 },
+            alternateRowStyles: { fillColor: [245, 249, 255] },
+        });
+
+        y = doc.lastAutoTable.finalY + 10;
+        doc.setDrawColor(200); doc.line(14, y, 196, y); y += 6;
+        doc.setFontSize(8); doc.setTextColor(120);
+        doc.text(`Issued by: ${issuedBy}`, 14, y);
+        doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 196, y, { align: 'right' });
+        y += 5;
+        doc.text(`Thank you for choosing ${hName}`, 105, y, { align: 'center' });
+        const pid = apt.userId?.patientId || apt.patientId || 'Patient';
+        doc.save(`Receipt_${pid}.pdf`);
+    };
+
+    const handleConfirmPayment = async () => {
+        setConfirmingPayment(true);
+        const { appointment, method } = paymentModal;
+        try {
+            await receptionAPI.confirmPayment(appointment._id, method, appointment.amount);
+            generateReceiptPDF({ ...appointment, paymentMethod: method, paymentStatus: 'Paid' }, method);
+            setPaymentModal({ open: false, appointment: null, method: 'Cash' });
+            fetchAppointments();
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to confirm payment.');
+        } finally {
+            setConfirmingPayment(false);
         }
     };
 
@@ -1015,6 +1096,24 @@ const ReceptionDashboard = () => {
                                     </td>
                                     <td><span className={`status ${apt.status}`}>{apt.status}</span></td>
                                     <td style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                        {/* Confirm Payment — show when not yet paid */}
+                                        {(apt.paymentStatus || '').toLowerCase() !== 'paid' && apt.status !== 'cancelled' && (
+                                            <button
+                                                onClick={() => setPaymentModal({ open: true, appointment: apt, method: apt.paymentMethod || 'Cash' })}
+                                                style={{ padding: '4px 10px', fontSize: '12px', background: '#dcfce7', color: '#166534', border: '1px solid #86efac', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
+                                            >
+                                                💰 Confirm Payment
+                                            </button>
+                                        )}
+                                        {/* Print Receipt — show when paid */}
+                                        {(apt.paymentStatus || '').toLowerCase() === 'paid' && (
+                                            <button
+                                                onClick={() => generateReceiptPDF(apt)}
+                                                style={{ padding: '4px 10px', fontSize: '12px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
+                                            >
+                                                🧾 Print Receipt
+                                            </button>
+                                        )}
                                         {apt.status !== 'cancelled' && apt.status !== 'completed' && (
                                             <>
                                                 <button
@@ -1039,6 +1138,52 @@ const ReceptionDashboard = () => {
                 </div>
             </div>
         </div>
+
+        {/* Payment Confirmation Modal */}
+        {paymentModal.open && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '440px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>💰 Confirm Payment</h2>
+                            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.88rem' }}>
+                                {paymentModal.appointment?.userId?.name} — Rs. {Number(paymentModal.appointment?.amount || 0).toLocaleString('en-IN')}
+                            </p>
+                        </div>
+                        <button onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+                    </div>
+                    <div style={{ marginBottom: '18px' }}>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '7px' }}>Payment Method</label>
+                        <select
+                            value={paymentModal.method}
+                            onChange={e => setPaymentModal(p => ({ ...p, method: e.target.value }))}
+                            style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
+                        >
+                            <option value="Cash">Cash</option>
+                            <option value="UPI">UPI</option>
+                            <option value="Card">Card</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="NEFT/RTGS">NEFT / RTGS</option>
+                        </select>
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button
+                            onClick={handleConfirmPayment}
+                            disabled={confirmingPayment}
+                            style={{ flex: 1, padding: '11px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
+                        >
+                            {confirmingPayment ? 'Confirming...' : '✓ Confirm & Print Receipt'}
+                        </button>
+                        <button
+                            onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })}
+                            style={{ padding: '11px 18px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
 
         {/* Hospitalize Modal */}
         {hospitalizeModal.open && (
