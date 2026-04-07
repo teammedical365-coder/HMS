@@ -1,7 +1,162 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clinicAPI } from '../../utils/api';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import './ClinicDashboard.css';
+
+// ─── PDF HELPERS ──────────────────────────────────────────────────────────────
+const getClinicInfo = () => {
+    try {
+        const h = JSON.parse(localStorage.getItem('hospitalContext') || 'null');
+        const u = JSON.parse(localStorage.getItem('user') || '{}');
+        return { hName: h?.name || u?.hospitalName || 'Clinic', hAddr: [h?.address, h?.city, h?.state].filter(Boolean).join(', '), hPhone: h?.phone || '', issuedBy: u?.name || 'Staff' };
+    } catch { return { hName: 'Clinic', hAddr: '', hPhone: '', issuedBy: 'Staff' }; }
+};
+
+const pdfHeader = (doc, title, color = [41, 128, 185]) => {
+    const { hName, hAddr, hPhone } = getClinicInfo();
+    let y = 18;
+    doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+    doc.text(hName, 105, y, { align: 'center' }); y += 7;
+    if (hAddr) { doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100); doc.text(hAddr, 105, y, { align: 'center' }); y += 5; }
+    if (hPhone) { doc.text(`Ph: ${hPhone}`, 105, y, { align: 'center' }); y += 5; }
+    doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(...color);
+    doc.text(title, 105, y, { align: 'center' }); y += 5;
+    doc.setDrawColor(...color); doc.setLineWidth(0.5); doc.line(14, y, 196, y); y += 8;
+    doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+    return y;
+};
+
+const generateRegistrationSlipPDF = (patient) => {
+    const doc = new jsPDF();
+    let y = pdfHeader(doc, 'Patient Registration Slip', [16, 163, 74]);
+    autoTable(doc, {
+        startY: y,
+        body: [
+            ['Patient Name', patient.name || '-'],
+            ['Patient ID', patient.patientUid || patient._id || 'N/A'],
+            ['Phone', patient.phone || '-'],
+            ['Gender', patient.gender || '-'],
+            ['Date of Birth', patient.dob ? new Date(patient.dob).toLocaleDateString('en-IN') : '-'],
+            ['Blood Group', patient.bloodGroup || '-'],
+            ['Address', patient.address || '-'],
+            ['Registered On', new Date().toLocaleString('en-IN')],
+        ],
+        theme: 'grid',
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 52 } },
+        bodyStyles: { fontSize: 10 },
+        alternateRowStyles: { fillColor: [245, 249, 255] },
+    });
+    y = doc.lastAutoTable.finalY + 8;
+    const { issuedBy, hName } = getClinicInfo();
+    doc.setFontSize(8); doc.setTextColor(120);
+    doc.text(`Issued by: ${issuedBy}  |  Generated: ${new Date().toLocaleString('en-IN')}`, 105, y, { align: 'center' }); y += 5;
+    doc.text(`Welcome to ${hName}`, 105, y, { align: 'center' });
+    doc.save(`Registration_${patient.patientUid || patient._id}.pdf`);
+};
+
+const generateTokenReceiptPDF = (patient, appointment) => {
+    const doc = new jsPDF();
+    let y = pdfHeader(doc, 'Consultation Token Receipt', [41, 128, 185]);
+    autoTable(doc, {
+        startY: y,
+        body: [
+            ['Patient Name', patient.name || '-'],
+            ['Patient ID', patient.patientUid || '-'],
+            ['Phone', patient.phone || '-'],
+            ['Token #', String(appointment.tokenNumber || '-')],
+            ['Service', appointment.serviceName || 'General Consultation'],
+            ['Date', new Date(appointment.appointmentDate || Date.now()).toLocaleDateString('en-IN')],
+            ['Consultation Fee', `Rs. ${Number(appointment.amount || 0).toLocaleString('en-IN')}`],
+            ['Payment Status', 'PAID \u2713'],
+        ],
+        theme: 'grid',
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 52 } },
+        bodyStyles: { fontSize: 10 },
+        alternateRowStyles: { fillColor: [245, 249, 255] },
+    });
+    y = doc.lastAutoTable.finalY + 8;
+    const { issuedBy, hName } = getClinicInfo();
+    doc.setFontSize(8); doc.setTextColor(120);
+    doc.text(`Issued by: ${issuedBy}  |  ${new Date().toLocaleString('en-IN')}`, 105, y, { align: 'center' }); y += 5;
+    doc.text(`Thank you for choosing ${hName}`, 105, y, { align: 'center' });
+    doc.save(`Receipt_Token${appointment.tokenNumber}_${patient.patientUid || patient._id}.pdf`);
+};
+
+const generatePrescriptionSlipPDF = (consulting, rx) => {
+    const pt = consulting.clinicPatientId || {};
+    const doc = new jsPDF();
+    let y = pdfHeader(doc, 'Prescription Slip', [76, 175, 80]);
+    autoTable(doc, {
+        startY: y,
+        body: [
+            ['Patient', pt.name || '-', 'ID', pt.patientUid || '-'],
+            ['Gender', pt.gender || '-', 'Blood Grp', pt.bloodGroup || '-'],
+            ['Token #', String(consulting.tokenNumber || '-'), 'Date', new Date().toLocaleDateString('en-IN')],
+            ['Diagnosis', rx.diagnosis || '-', '', ''],
+        ],
+        theme: 'grid',
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 30 }, 2: { fontStyle: 'bold', cellWidth: 24 } },
+        bodyStyles: { fontSize: 10 },
+    });
+    y = doc.lastAutoTable.finalY + 10;
+
+    // Medicines
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
+    doc.text('Medicines Prescribed', 14, y); y += 6;
+    if (rx.medicines.length > 0) {
+        autoTable(doc, {
+            startY: y,
+            head: [['#', 'Medicine', 'Dosage', 'Duration', 'Instruction']],
+            body: rx.medicines.map((m, i) => [i + 1, m.name || m.medicineName, m.dosage || m.frequency || '-', m.duration || '-', m.instruction || '-']),
+            theme: 'striped',
+            headStyles: { fillColor: [76, 175, 80], textColor: 255 },
+            bodyStyles: { fontSize: 10 },
+        });
+        y = doc.lastAutoTable.finalY + 10;
+    } else {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100);
+        doc.text('No medicines prescribed.', 16, y); y += 8;
+    }
+
+    // Lab Tests
+    const labArr = typeof rx.labTests === 'string' ? rx.labTests.split(',').map(t => t.trim()).filter(Boolean) : (rx.labTests || []);
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
+    doc.text('Lab Tests Ordered', 14, y); y += 6;
+    if (labArr.length > 0) {
+        autoTable(doc, {
+            startY: y,
+            head: [['#', 'Test Name']],
+            body: labArr.map((t, i) => [i + 1, t]),
+            theme: 'striped',
+            headStyles: { fillColor: [33, 150, 243], textColor: 255 },
+            bodyStyles: { fontSize: 10 },
+        });
+        y = doc.lastAutoTable.finalY + 10;
+    } else {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100);
+        doc.text('No lab tests ordered.', 16, y); y += 8;
+    }
+
+    // Notes
+    if (rx.notes) {
+        if (y > 250) { doc.addPage(); y = 20; }
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
+        doc.text('Doctor Notes', 14, y); y += 6;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(60);
+        const wrapped = doc.splitTextToSize(rx.notes, 170);
+        doc.text(wrapped, 16, y); y += wrapped.length * 5 + 6;
+    }
+
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.setDrawColor(200); doc.line(14, y, 196, y); y += 6;
+    doc.setFontSize(9); doc.setTextColor(120);
+    doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 196, y, { align: 'right' });
+    y += 5; doc.setFontSize(8);
+    doc.text('This prescription is valid for 30 days from the date of issue.', 105, y, { align: 'center' });
+    doc.save(`Prescription_${pt.patientUid || pt._id}_Token${consulting.tokenNumber}.pdf`);
+};
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -231,6 +386,7 @@ const PatientsMode = ({ onBookToken }) => {
             if (r.success) {
                 if (!r.existing) setPatients(prev => [r.patient, ...prev]);
                 setJustRegistered(r.patient);
+                generateRegistrationSlipPDF(r.patient);
                 setForm({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '' });
             } else flash('error', r.message);
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
@@ -450,6 +606,7 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash }) => {
                 notes: form.notes,
             });
             if (r.success) {
+                generateTokenReceiptPDF(patient, r.appointment);
                 flash('success', `✅ Token #${r.appointment.tokenNumber} assigned to ${patient.name}`);
                 onBook();
             } else flash('error', r.message);
@@ -477,7 +634,7 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash }) => {
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
                     <button type="submit" className="clinic-btn-primary" disabled={booking} style={{ whiteSpace: 'nowrap', padding: '8px 16px' }}>
-                        {booking ? '...' : '🎟️ Assign Token'}
+                        {booking ? '...' : '🎟️ Assign Token & Receipt'}
                     </button>
                     <button type="button" className="clinic-btn-secondary" onClick={onCancel} style={{ padding: '8px 12px' }}>✕</button>
                 </div>
@@ -768,7 +925,8 @@ const DoctorMode = () => {
                 labTests: labArr,
             });
             if (r.success) {
-                flash('success', 'Consultation saved. Prescription created.');
+                generatePrescriptionSlipPDF(consulting, rx);
+                flash('success', 'Consultation saved. Prescription generated.');
                 setConsulting(null);
                 loadToday();
             } else flash('error', r.message);
@@ -891,7 +1049,7 @@ const DoctorMode = () => {
                 </div>
 
                 <button className="clinic-btn-primary" style={{ marginTop: '24px', width: '100%', padding: '12px' }} disabled={saving} onClick={saveConsult}>
-                    {saving ? 'Saving...' : '✅ Complete Consultation & Save Prescription'}
+                    {saving ? 'Saving...' : '✅ Save & Generate Prescription'}
                 </button>
             </div>
         </div>
