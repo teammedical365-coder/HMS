@@ -810,8 +810,8 @@ const ReceptionDashboard = () => {
                                     : (() => {
                                         const isTokenMode = hospitalContext?.appointmentMode === 'token';
                                         const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
-                                        if (selectedPatientId) return canBook ? (isTokenMode ? 'Save & Issue Token' : 'Save & Book Appointment') : 'Save Patient Details';
-                                        return canBook ? (isTokenMode ? 'Register & Issue Token' : 'Confirm Assignment') : 'Save Patient Details';
+                                        if (selectedPatientId) return canBook ? (isTokenMode ? 'Save & Issue Token + Receipt' : 'Save & Generate Receipt') : 'Save Patient Details';
+                                        return canBook ? (isTokenMode ? 'Register & Issue Token + Receipt' : 'Register & Generate Receipt') : 'Save Patient Details';
                                     })()
                                 }
                             </button>

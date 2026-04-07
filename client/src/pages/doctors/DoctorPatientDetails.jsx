@@ -192,10 +192,10 @@ const DoctorPatientDetails = () => {
             };
             await doctorAPI.updateSession(appointmentId, payload);
 
-            // 3. Generate PDF
-            generateCumulativePDF(intakeData, history, payload);
+            // 3. Generate Prescription PDF automatically
+            generatePrescriptionPDF();
 
-            alert("✅ Session completed & report generated!");
+            alert("✅ Session saved & prescription generated!");
             navigate('/doctor/patients');
         } catch (err) {
             alert("Error: " + err.message);
@@ -964,36 +964,6 @@ const DoctorPatientDetails = () => {
                             </div>
                         </div>
 
-                        {/* PDF Quick-Action Bar — always visible, sits above footer */}
-                        <div style={{ padding: '10px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', gap: '8px', flexShrink: 0 }}>
-                            <button
-                                type="button"
-                                onClick={generatePrescriptionPDF}
-                                style={{ flex: 1, padding: '9px 10px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '12px' }}
-                            >
-                                📄 Prescription
-                            </button>
-                            <button
-                                type="button"
-                                onClick={generateReceiptPDF}
-                                style={{ flex: 1, padding: '9px 10px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '12px' }}
-                            >
-                                🧾 Receipt
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => generateCumulativePDF(intakeData, history, {
-                                    diagnosis: appointment.diagnosis || sessionData.diagnosis || '',
-                                    notes: appointment.doctorNotes || sessionData.notes || '',
-                                    pharmacy: appointment.pharmacy || sessionData.prescription.split('\n').filter(Boolean).map(m => ({ medicineName: m.trim() })),
-                                    labTests: appointment.labTests || sessionData.labTests.split(',').map(s => s.trim()).filter(Boolean),
-                                })}
-                                style={{ flex: 1, padding: '9px 10px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '12px' }}
-                            >
-                                📋 Full Report
-                            </button>
-                        </div>
-
                         <div className="dpd-right-footer">
                             {!isLocked ? (
                                 <>
@@ -1001,13 +971,21 @@ const DoctorPatientDetails = () => {
                                         💾 Save Profile
                                     </button>
                                     <button className="dpd-btn-finish" onClick={handleSaveAndMerge} disabled={saving}>
-                                        {saving ? '⏳ Processing...' : '✅ Complete Session'}
+                                        {saving ? '⏳ Saving...' : '✅ Save & Generate Prescription'}
                                     </button>
                                 </>
                             ) : (
-                                <button className="dpd-btn-finish" onClick={() => navigate('/doctor/patients')} style={{ background: '#64748b', width: '100%' }}>
-                                    ← Back to Patient Queue
-                                </button>
+                                <>
+                                    <button
+                                        className="dpd-btn-save-draft"
+                                        onClick={generatePrescriptionPDF}
+                                    >
+                                        📄 Reprint Prescription
+                                    </button>
+                                    <button className="dpd-btn-finish" onClick={() => navigate('/doctor/patients')} style={{ background: '#64748b' }}>
+                                        ← Back to Queue
+                                    </button>
+                                </>
                             )}
                         </div>
                     </>
@@ -1112,38 +1090,9 @@ const DoctorPatientDetails = () => {
 
                         </div>
 
-                        <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                            {/* PDF buttons — left side */}
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                                <button
-                                    onClick={() => { generatePrescriptionPDF(); }}
-                                    style={{ padding: '11px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}
-                                >
-                                    📄 Prescription PDF
-                                </button>
-                                <button
-                                    onClick={() => { generateReceiptPDF(); }}
-                                    style={{ padding: '11px 20px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}
-                                >
-                                    🧾 Receipt PDF
-                                </button>
-                                <button
-                                    onClick={() => generateCumulativePDF(intakeData, history, {
-                                        diagnosis: appointment.diagnosis || sessionData.diagnosis || '',
-                                        notes: appointment.doctorNotes || sessionData.notes || '',
-                                        pharmacy: sessionData.prescription.split('\n').filter(Boolean).map(m => ({ medicineName: m.trim() })),
-                                        labTests: sessionData.labTests.split(',').map(s => s.trim()).filter(Boolean),
-                                    })}
-                                    style={{ padding: '11px 20px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}
-                                >
-                                    📋 Full Report
-                                </button>
-                            </div>
-                            {/* Action buttons — right side */}
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                                <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>Close</button>
-                                <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 30px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px', boxShadow: '0 4px 6px rgba(59, 130, 246, 0.3)' }}>Save & Resume</button>
-                            </div>
+                        <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                            <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>Close</button>
+                            <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 30px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px', boxShadow: '0 4px 6px rgba(59, 130, 246, 0.3)' }}>Save Selections & Resume Note</button>
                         </div>
                     </div>
                 </div>
