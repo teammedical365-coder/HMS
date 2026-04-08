@@ -193,11 +193,11 @@ const DoctorPatientDetails = () => {
                 diagnosis: sessionData.diagnosis,
                 notes: sessionData.notes,
                 labTests: sessionData.labTests.split(',').map(s => s.trim()).filter(Boolean),
-                pharmacy: sessionData.medicines.filter(m => m.medicineName.trim()).map(m => ({
-                    medicineName: m.medicineName.trim(),
-                    saltName: m.saltName.trim(),
-                    frequency: m.dose.trim(),
-                    duration: m.days.trim()
+                pharmacy: (sessionData.medicines || []).filter(m => m.medicineName?.trim()).map(m => ({
+                    medicineName: m.medicineName?.trim() || '',
+                    saltName: m.saltName?.trim() || '',
+                    frequency: m.dose?.trim() || '',
+                    duration: m.days?.trim() || ''
                 }))
             };
             await doctorAPI.updateSession(appointmentId, payload);
