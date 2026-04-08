@@ -376,6 +376,15 @@ export const clinicAPI = {
     // Pharmacy orders
     getPharmacyOrders: async () => (await apiClient.get('/api/clinic/pharmacy-orders')).data,
     dispenseOrder: async (id) => (await apiClient.put(`/api/clinic/pharmacy-orders/${id}/dispense`, {})).data,
+    // Treatment Plans
+    getTreatmentPlans: async () => (await apiClient.get('/api/clinic/treatment-plans')).data,
+    createTreatmentPlan: async (data) => (await apiClient.post('/api/clinic/treatment-plans', data)).data,
+    getTreatmentPlan: async (id) => (await apiClient.get(`/api/clinic/treatment-plans/${id}`)).data,
+    getTodayDuePlans: async () => (await apiClient.get('/api/clinic/treatment-plans/today-due')).data,
+    payVisit: async (planId, visitId, data) => (await apiClient.put(`/api/clinic/treatment-plans/${planId}/visits/${visitId}/pay`, data)).data,
+    completeVisit: async (planId, visitId, data) => (await apiClient.put(`/api/clinic/treatment-plans/${planId}/visits/${visitId}/complete`, data)).data,
+    missVisit: async (planId, visitId) => (await apiClient.put(`/api/clinic/treatment-plans/${planId}/visits/${visitId}/miss`, {})).data,
+    cancelTreatmentPlan: async (id) => (await apiClient.put(`/api/clinic/treatment-plans/${id}/cancel`, {})).data,
 };
 
 export const simpleClinicAPI = {

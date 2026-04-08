@@ -14,6 +14,8 @@ const Inventory = require('../models/inventory.model');
 const PharmacyOrder = require('../models/pharmacyOrder.model');
 const ClinicPatient = require('../models/clinicPatient.model');
 const ClinicSubscription = require('../models/clinicSubscription.model');
+const TreatmentPlan = require('../models/treatmentPlan.model');
+const Notification = require('../models/notification.model');
 
 // ─────────────────────────────────────────────
 // Middleware: must be hospitaladmin of a clinic
@@ -494,6 +496,235 @@ router.put('/pharmacy-orders/:id/dispense', verifyClinicAdmin, async (req, res) 
         );
         if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
         res.json({ success: true, order });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ══════════════════════════════════════════════════════════
+// TREATMENT PLANS
+// ══════════════════════════════════════════════════════════
+
+// CREATE treatment plan
+router.post('/treatment-plans', verifyClinicAdmin, async (req, res) => {
+    try {
+        const { clinicPatientId, title, description, totalDurationDays, visits } = req.body;
+        if (!clinicPatientId || !title || !visits || !visits.length) {
+            return res.status(400).json({ success: false, message: 'Patient, title and at least one visit are required.' });
+        }
+
+        // Compute carry-forwards and totals
+        let carry = 0;
+        let totalAmount = 0;
+        const processedVisits = visits.map((v, i) => {
+            const amountDue = Number(v.amountDue) || 0;
+            const carryForward = carry;
+            const totalDue = amountDue + carryForward;
+            // On creation, no payment yet
+            const balance = totalDue;
+            carry = balance;
+            totalAmount += amountDue;
+            return {
+                visitNumber: i + 1,
+                scheduledDate: new Date(v.scheduledDate),
+                scheduledTime: v.scheduledTime || '',
+                procedure: v.procedure || '',
+                amountDue,
+                carryForward,
+                totalDue,
+                amountPaid: 0,
+                balance,
+                status: 'scheduled',
+                alertSent: false,
+            };
+        });
+
+        const plan = await TreatmentPlan.create({
+            hospitalId: hid(req),
+            clinicPatientId,
+            createdBy: req.user.id,
+            title,
+            description: description || '',
+            totalDurationDays: Number(totalDurationDays) || 0,
+            visits: processedVisits,
+            totalAmount,
+            pendingBalance: totalAmount,
+            totalPaid: 0,
+            status: 'active',
+        });
+
+        await plan.populate('clinicPatientId', 'name patientUid phone');
+        res.json({ success: true, plan });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// LIST all treatment plans for hospital
+router.get('/treatment-plans', verifyClinicAdmin, async (req, res) => {
+    try {
+        const plans = await TreatmentPlan.find({ hospitalId: hid(req) })
+            .populate('clinicPatientId', 'name patientUid phone gender')
+            .sort({ createdAt: -1 });
+        res.json({ success: true, plans });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// TODAY'S DUE VISITS — also fires notifications (call this on dashboard load)
+router.get('/treatment-plans/today-due', verifyClinicAdmin, async (req, res) => {
+    try {
+        const { start, end } = todayRange();
+        const plans = await TreatmentPlan.find({
+            hospitalId: hid(req),
+            status: 'active',
+            'visits.scheduledDate': { $gte: start, $lte: end },
+            'visits.status': 'scheduled',
+        }).populate('clinicPatientId', 'name patientUid phone');
+
+        // Fire notifications for un-alerted visits
+        const io = req.app.get('io');
+        for (const plan of plans) {
+            for (const visit of plan.visits) {
+                const vDate = new Date(visit.scheduledDate);
+                const isToday = vDate >= start && vDate <= end;
+                if (isToday && visit.status === 'scheduled' && !visit.alertSent) {
+                    const patName = plan.clinicPatientId?.name || 'Patient';
+                    const notif = await Notification.create({
+                        senderId: req.user.id,
+                        hospitalId: hid(req),
+                        recipientRole: 'hospitaladmin',
+                        message: `📅 ${patName} — Visit ${visit.visitNumber} of "${plan.title}" is due today${visit.scheduledTime ? ' at ' + visit.scheduledTime : ''}.`,
+                        status: 'Unread',
+                        referenceType: 'TreatmentPlan',
+                        referenceId: plan._id,
+                        patientId: (plan.clinicPatientId?.patientUid || plan.clinicPatientId?._id || 'N/A').toString(),
+                    });
+                    if (io) io.to('hospitaladmin').emit('new_notification', notif);
+                    visit.alertSent = true;
+                }
+            }
+            await plan.save();
+        }
+
+        res.json({ success: true, plans });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// GET single plan
+router.get('/treatment-plans/:id', verifyClinicAdmin, async (req, res) => {
+    try {
+        const plan = await TreatmentPlan.findOne({ _id: req.params.id, hospitalId: hid(req) })
+            .populate('clinicPatientId', 'name patientUid phone gender age');
+        if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
+        res.json({ success: true, plan });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// RECORD PAYMENT for a visit
+router.put('/treatment-plans/:id/visits/:visitId/pay', verifyClinicAdmin, async (req, res) => {
+    try {
+        const { amountPaid, paymentMethod, notes } = req.body;
+        const plan = await TreatmentPlan.findOne({ _id: req.params.id, hospitalId: hid(req) });
+        if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
+
+        const visit = plan.visits.id(req.params.visitId);
+        if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
+
+        const paid = Number(amountPaid) || 0;
+        visit.amountPaid = paid;
+        visit.balance = Math.max(0, visit.totalDue - paid);
+        visit.paymentMethod = paymentMethod || 'Cash';
+        if (notes) visit.notes = notes;
+
+        // Propagate remaining balance as carryForward to the next scheduled visit
+        const nextVisit = plan.visits.find(v => v.visitNumber === visit.visitNumber + 1 && v.status === 'scheduled');
+        if (nextVisit) {
+            nextVisit.carryForward = visit.balance;
+            nextVisit.totalDue = nextVisit.amountDue + nextVisit.carryForward;
+            nextVisit.balance = nextVisit.totalDue - nextVisit.amountPaid;
+        }
+
+        // Recalculate plan totals
+        plan.totalPaid = plan.visits.reduce((s, v) => s + (v.amountPaid || 0), 0);
+        plan.pendingBalance = plan.visits.reduce((s, v) => s + (v.balance || 0), 0);
+
+        await plan.save();
+        await plan.populate('clinicPatientId', 'name patientUid phone gender');
+        res.json({ success: true, plan });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// COMPLETE a visit
+router.put('/treatment-plans/:id/visits/:visitId/complete', verifyClinicAdmin, async (req, res) => {
+    try {
+        const { notes } = req.body;
+        const plan = await TreatmentPlan.findOne({ _id: req.params.id, hospitalId: hid(req) });
+        if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
+
+        const visit = plan.visits.id(req.params.visitId);
+        if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
+
+        visit.status = 'completed';
+        visit.completedAt = new Date();
+        if (notes) visit.notes = notes;
+
+        // If all visits done, complete the plan
+        const allDone = plan.visits.every(v => v.status === 'completed' || v.status === 'missed');
+        if (allDone) plan.status = 'completed';
+
+        await plan.save();
+        await plan.populate('clinicPatientId', 'name patientUid phone gender');
+        res.json({ success: true, plan });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// MARK visit as missed
+router.put('/treatment-plans/:id/visits/:visitId/miss', verifyClinicAdmin, async (req, res) => {
+    try {
+        const plan = await TreatmentPlan.findOne({ _id: req.params.id, hospitalId: hid(req) });
+        if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
+
+        const visit = plan.visits.id(req.params.visitId);
+        if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
+
+        visit.status = 'missed';
+        // Carry missed visit's totalDue to the next scheduled visit
+        const nextVisit = plan.visits.find(v => v.visitNumber === visit.visitNumber + 1 && v.status === 'scheduled');
+        if (nextVisit) {
+            nextVisit.carryForward = (nextVisit.carryForward || 0) + visit.totalDue;
+            nextVisit.totalDue = nextVisit.amountDue + nextVisit.carryForward;
+            nextVisit.balance = nextVisit.totalDue - nextVisit.amountPaid;
+        }
+
+        plan.pendingBalance = plan.visits.reduce((s, v) => s + (v.balance || 0), 0);
+        await plan.save();
+        await plan.populate('clinicPatientId', 'name patientUid phone gender');
+        res.json({ success: true, plan });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// CANCEL plan
+router.put('/treatment-plans/:id/cancel', verifyClinicAdmin, async (req, res) => {
+    try {
+        const plan = await TreatmentPlan.findOneAndUpdate(
+            { _id: req.params.id, hospitalId: hid(req) },
+            { status: 'cancelled' },
+            { new: true }
+        ).populate('clinicPatientId', 'name patientUid phone');
+        if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
+        res.json({ success: true, plan });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }

@@ -179,6 +179,7 @@ const MODES = [
     { id: 'reception', icon: '📋', label: 'Reception',  color: '#10b981', bg: '#f0fdf4' },
     { id: 'pharmacy',  icon: '💊', label: 'Pharmacy',   color: '#f97316', bg: '#fff7ed' },
     { id: 'billing',   icon: '💰', label: 'Billing',    color: '#f59e0b', bg: '#fffbeb' },
+    { id: 'plans',     icon: '📅', label: 'Treatment Plans', color: '#0891b2', bg: '#ecfeff' },
 ];
 
 // ─────────────────────────────────────────────
@@ -225,6 +226,7 @@ const ClinicDashboard = () => {
                 {mode === 'reception' && <ReceptionMode preselectedPatient={preselectedPatient} clearPreselected={() => setPreselectedPatient(null)} />}
                 {mode === 'pharmacy'  && <PharmacyMode />}
                 {mode === 'billing'   && <BillingMode />}
+                {mode === 'plans'     && <TreatmentPlanMode />}
             </div>
         </div>
     );
@@ -1378,6 +1380,478 @@ const PharmacyMode = () => {
             )}
         </div>
     );
+};
+
+// ═══════════════════════════════════════════════════
+// TREATMENT PLAN MODE
+// ═══════════════════════════════════════════════════
+const TreatmentPlanMode = () => {
+    const [view, setView] = useState('list');          // 'list' | 'create' | 'detail'
+    const [plans, setPlans] = useState([]);
+    const [todayDue, setTodayDue] = useState([]);
+    const [selectedPlan, setSelectedPlan] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [msg, setMsg] = useState({ type: '', text: '' });
+
+    // Create form state
+    const [patients, setPatients] = useState([]);
+    const [patSearch, setPatSearch] = useState('');
+    const [form, setForm] = useState({
+        clinicPatientId: '', title: '', description: '',
+        totalDurationDays: '', startDate: '', intervalDays: '', numberOfVisits: '',
+    });
+    const [visits, setVisits] = useState([]);
+
+    // Payment modal
+    const [payModal, setPayModal] = useState(null); // { visit, planId }
+    const [payInput, setPayInput] = useState({ amountPaid: '', paymentMethod: 'Cash', notes: '' });
+
+    const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg({ type: '', text: '' }), 4000); };
+
+    const loadAll = () => {
+        setLoading(true);
+        Promise.all([clinicAPI.getTreatmentPlans(), clinicAPI.getTodayDuePlans()])
+            .then(([plansR, dueR]) => {
+                if (plansR.success) setPlans(plansR.plans);
+                if (dueR.success) setTodayDue(dueR.plans);
+            })
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(() => { loadAll(); }, []);
+
+    // Auto-generate visits when interval/count/start changes
+    useEffect(() => {
+        const n = parseInt(form.numberOfVisits);
+        const interval = parseInt(form.intervalDays);
+        const start = form.startDate;
+        if (!n || !start) return;
+        const base = new Date(start);
+        setVisits(Array.from({ length: n }, (_, i) => {
+            const d = new Date(base);
+            d.setDate(d.getDate() + (interval || 0) * i);
+            return {
+                visitNumber: i + 1,
+                scheduledDate: d.toISOString().split('T')[0],
+                scheduledTime: '',
+                procedure: '',
+                amountDue: '',
+            };
+        }));
+    }, [form.numberOfVisits, form.intervalDays, form.startDate]);
+
+    const loadPatients = async (search) => {
+        try {
+            const r = await clinicAPI.getPatients(search);
+            if (r.success) setPatients(r.patients || []);
+        } catch { /* */ }
+    };
+
+    const handleCreateSubmit = async () => {
+        if (!form.clinicPatientId || !form.title || visits.length === 0) {
+            return flash('error', 'Patient, title and at least one visit are required.');
+        }
+        if (visits.some(v => !v.scheduledDate)) return flash('error', 'All visits must have a scheduled date.');
+        setSaving(true);
+        try {
+            const r = await clinicAPI.createTreatmentPlan({
+                ...form,
+                visits: visits.map(v => ({ ...v, amountDue: Number(v.amountDue) || 0 })),
+            });
+            if (r.success) {
+                flash('success', 'Treatment plan created successfully.');
+                setPlans(prev => [r.plan, ...prev]);
+                setView('list');
+                setForm({ clinicPatientId: '', title: '', description: '', totalDurationDays: '', startDate: '', intervalDays: '', numberOfVisits: '' });
+                setVisits([]);
+            } else flash('error', r.message);
+        } catch (e) { flash('error', e.response?.data?.message || e.message); }
+        finally { setSaving(false); }
+    };
+
+    const openDetail = async (plan) => {
+        try {
+            const r = await clinicAPI.getTreatmentPlan(plan._id);
+            if (r.success) { setSelectedPlan(r.plan); setView('detail'); }
+        } catch { setSelectedPlan(plan); setView('detail'); }
+    };
+
+    const handlePay = async () => {
+        if (!payModal) return;
+        setSaving(true);
+        try {
+            const r = await clinicAPI.payVisit(payModal.planId, payModal.visit._id, {
+                amountPaid: Number(payInput.amountPaid) || 0,
+                paymentMethod: payInput.paymentMethod,
+                notes: payInput.notes,
+            });
+            if (r.success) {
+                setSelectedPlan(r.plan);
+                setPlans(prev => prev.map(p => p._id === r.plan._id ? r.plan : p));
+                setPayModal(null);
+                flash('success', 'Payment recorded.');
+            } else flash('error', r.message);
+        } catch (e) { flash('error', e.response?.data?.message || e.message); }
+        finally { setSaving(false); }
+    };
+
+    const handleComplete = async (planId, visitId) => {
+        if (!window.confirm('Mark this visit as completed?')) return;
+        try {
+            const r = await clinicAPI.completeVisit(planId, visitId, {});
+            if (r.success) {
+                setSelectedPlan(r.plan);
+                setPlans(prev => prev.map(p => p._id === r.plan._id ? r.plan : p));
+                flash('success', 'Visit marked completed.');
+            }
+        } catch (e) { flash('error', e.message); }
+    };
+
+    const handleMiss = async (planId, visitId) => {
+        if (!window.confirm('Mark this visit as missed? The due amount will carry forward.')) return;
+        try {
+            const r = await clinicAPI.missVisit(planId, visitId);
+            if (r.success) {
+                setSelectedPlan(r.plan);
+                setPlans(prev => prev.map(p => p._id === r.plan._id ? r.plan : p));
+                flash('success', 'Visit marked as missed. Balance carried forward.');
+            }
+        } catch (e) { flash('error', e.message); }
+    };
+
+    const handleCancel = async (planId) => {
+        if (!window.confirm('Cancel this treatment plan?')) return;
+        try {
+            const r = await clinicAPI.cancelTreatmentPlan(planId);
+            if (r.success) {
+                setPlans(prev => prev.map(p => p._id === planId ? { ...p, status: 'cancelled' } : p));
+                if (selectedPlan?._id === planId) setSelectedPlan(prev => ({ ...prev, status: 'cancelled' }));
+                flash('success', 'Plan cancelled.');
+            }
+        } catch (e) { flash('error', e.message); }
+    };
+
+    const planStatusColor = { active: '#0891b2', completed: '#16a34a', cancelled: '#dc2626' };
+    const visitStatusColor = { scheduled: '#6366f1', completed: '#16a34a', missed: '#dc2626' };
+
+    // ── LIST VIEW ──
+    if (view === 'list') return (
+        <div>
+            {/* Today's Due Alert Banner */}
+            {todayDue.length > 0 && (
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '14px 18px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ fontWeight: '800', color: '#92400e', fontSize: '14px' }}>🔔 Today's Procedures Due ({todayDue.reduce((s, p) => s + p.visits.filter(v => { const d = new Date(v.scheduledDate); const t = new Date(); return d.toDateString() === t.toDateString() && v.status === 'scheduled'; }).length, 0)})</div>
+                    {todayDue.map(plan => plan.visits.filter(v => {
+                        const d = new Date(v.scheduledDate); const t = new Date();
+                        return d.toDateString() === t.toDateString() && v.status === 'scheduled';
+                    }).map(v => (
+                        <div key={v._id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#78350f' }}>
+                            <span style={{ fontWeight: '700' }}>📋 {plan.clinicPatientId?.name}</span>
+                            <span>— Visit {v.visitNumber} of "{plan.title}"</span>
+                            {v.scheduledTime && <span style={{ background: '#fef3c7', padding: '1px 8px', borderRadius: '4px', fontWeight: '700' }}>🕐 {v.scheduledTime}</span>}
+                            <span style={{ color: '#dc2626', fontWeight: '700' }}>₹{v.totalDue.toLocaleString('en-IN')} due</span>
+                            <button onClick={() => openDetail(plan)} style={{ marginLeft: 'auto', fontSize: '11px', padding: '3px 10px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: '700' }}>View Plan</button>
+                        </div>
+                    )))}
+                </div>
+            )}
+
+            {msg.text && <div className={`clinic-msg clinic-msg-${msg.type}`}>{msg.text}</div>}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, color: '#0f172a' }}>📅 Treatment Plans</h3>
+                <button className="clinic-btn-primary" onClick={() => { setView('create'); loadPatients(''); }}>+ New Plan</button>
+            </div>
+
+            {loading ? <Spinner /> : plans.length === 0 ? <Empty text="No treatment plans yet. Create one for a patient." /> : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {plans.map(plan => {
+                        const nextVisit = plan.visits.find(v => v.status === 'scheduled');
+                        return (
+                            <div key={plan._id} className="clinic-card" style={{ padding: '16px', cursor: 'pointer', borderLeft: `4px solid ${planStatusColor[plan.status] || '#94a3b8'}` }} onClick={() => openDetail(plan)}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div>
+                                        <div style={{ fontWeight: '800', fontSize: '15px', color: '#0f172a' }}>{plan.title}</div>
+                                        <div style={{ fontSize: '13px', color: '#475569', marginTop: '2px' }}>
+                                            👤 {plan.clinicPatientId?.name || '—'} · {plan.clinicPatientId?.patientUid || ''}
+                                        </div>
+                                        {plan.description && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{plan.description}</div>}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', background: planStatusColor[plan.status] + '20', color: planStatusColor[plan.status], textTransform: 'uppercase' }}>{plan.status}</span>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '20px', marginTop: '12px', flexWrap: 'wrap' }}>
+                                    <div style={{ fontSize: '12px', color: '#475569' }}>📋 <b>{plan.visits.length}</b> visits · <b style={{ color: '#16a34a' }}>{plan.visits.filter(v => v.status === 'completed').length}</b> done · <b style={{ color: '#6366f1' }}>{plan.visits.filter(v => v.status === 'scheduled').length}</b> upcoming</div>
+                                    <div style={{ fontSize: '12px', color: '#475569' }}>💰 Total: <b>₹{plan.totalAmount.toLocaleString('en-IN')}</b> · Paid: <b style={{ color: '#16a34a' }}>₹{plan.totalPaid.toLocaleString('en-IN')}</b> · Pending: <b style={{ color: '#dc2626' }}>₹{plan.pendingBalance.toLocaleString('en-IN')}</b></div>
+                                    {nextVisit && <div style={{ fontSize: '12px', color: '#0891b2' }}>📅 Next: <b>{new Date(nextVisit.scheduledDate).toLocaleDateString('en-IN')}</b>{nextVisit.scheduledTime ? ' ' + nextVisit.scheduledTime : ''}</div>}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+
+    // ── CREATE VIEW ──
+    if (view === 'create') return (
+        <div>
+            <button className="clinic-back-btn" onClick={() => setView('list')}>← Back to Plans</button>
+            {msg.text && <div className={`clinic-msg clinic-msg-${msg.type}`} style={{ marginTop: '10px' }}>{msg.text}</div>}
+            <div className="clinic-card" style={{ marginTop: '12px' }}>
+                <h3 style={{ margin: '0 0 20px', color: '#0f172a' }}>📅 New Treatment Plan</h3>
+
+                {/* Patient Search */}
+                <div className="clinic-form-group" style={{ marginBottom: '14px' }}>
+                    <label>Patient *</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <input className="clinic-input" style={{ flex: 1 }} placeholder="Search patient by name or ID..."
+                            value={patSearch}
+                            onChange={e => { setPatSearch(e.target.value); loadPatients(e.target.value); }} />
+                    </div>
+                    {patients.length > 0 && !form.clinicPatientId && (
+                        <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', maxHeight: '160px', overflowY: 'auto', marginTop: '4px' }}>
+                            {patients.map(p => (
+                                <div key={p._id} onClick={() => { setForm(f => ({ ...f, clinicPatientId: p._id })); setPatSearch(p.name + (p.patientUid ? ' (' + p.patientUid + ')' : '')); setPatients([]); }}
+                                    style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '13px' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = '#f0f9ff'}
+                                    onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                                    <b>{p.name}</b> · {p.patientUid || ''} · {p.phone || ''}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {form.clinicPatientId && <div style={{ fontSize: '12px', color: '#16a34a', marginTop: '4px' }}>✓ Patient selected. <span style={{ cursor: 'pointer', color: '#dc2626' }} onClick={() => { setForm(f => ({ ...f, clinicPatientId: '' })); setPatSearch(''); }}>Clear</span></div>}
+                </div>
+
+                {/* Plan Details */}
+                <div className="clinic-form-grid">
+                    <div className="clinic-form-group" style={{ gridColumn: '1/-1' }}>
+                        <label>Plan Title *</label>
+                        <input className="clinic-input" placeholder="e.g. Root Canal Treatment, Orthodontic Course..." value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+                    </div>
+                    <div className="clinic-form-group" style={{ gridColumn: '1/-1' }}>
+                        <label>Description / Procedure Notes</label>
+                        <textarea className="clinic-input" rows={2} placeholder="Brief description of the treatment plan..." value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+                    </div>
+                    <div className="clinic-form-group">
+                        <label>Total Duration (days)</label>
+                        <input className="clinic-input" type="number" placeholder="e.g. 15" value={form.totalDurationDays} onChange={e => setForm(f => ({ ...f, totalDurationDays: e.target.value }))} />
+                    </div>
+                    <div className="clinic-form-group">
+                        <label>Start Date *</label>
+                        <input className="clinic-input" type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
+                    </div>
+                    <div className="clinic-form-group">
+                        <label>Number of Visits *</label>
+                        <input className="clinic-input" type="number" min="1" placeholder="e.g. 5" value={form.numberOfVisits} onChange={e => setForm(f => ({ ...f, numberOfVisits: e.target.value }))} />
+                    </div>
+                    <div className="clinic-form-group">
+                        <label>Interval Between Visits (days)</label>
+                        <input className="clinic-input" type="number" min="0" placeholder="e.g. 3" value={form.intervalDays} onChange={e => setForm(f => ({ ...f, intervalDays: e.target.value }))} />
+                    </div>
+                </div>
+
+                {/* Visits Table */}
+                {visits.length > 0 && (
+                    <div style={{ marginTop: '20px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <h4 style={{ margin: 0, color: '#0f172a' }}>Visit Schedule</h4>
+                            <span style={{ fontSize: '12px', color: '#64748b' }}>Total: ₹{visits.reduce((s, v) => s + (Number(v.amountDue) || 0), 0).toLocaleString('en-IN')}</span>
+                        </div>
+                        <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                <thead>
+                                    <tr style={{ background: '#f1f5f9' }}>
+                                        <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '8%' }}>#</th>
+                                        <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '20%' }}>Date</th>
+                                        <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '15%' }}>Time</th>
+                                        <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '35%' }}>Procedure / Notes</th>
+                                        <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '22%' }}>Amount Due (₹)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {visits.map((v, idx) => (
+                                        <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                                            <td style={{ padding: '6px 10px', borderBottom: '1px solid #f1f5f9', fontWeight: '700', color: '#6366f1' }}>{v.visitNumber}</td>
+                                            <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                                <input type="date" value={v.scheduledDate}
+                                                    onChange={e => setVisits(prev => { const a = [...prev]; a[idx] = { ...a[idx], scheduledDate: e.target.value }; return a; })}
+                                                    style={{ border: '1px solid #e2e8f0', borderRadius: '5px', padding: '4px 6px', fontSize: '12px', width: '100%', boxSizing: 'border-box' }} />
+                                            </td>
+                                            <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                                <input type="time" value={v.scheduledTime}
+                                                    onChange={e => setVisits(prev => { const a = [...prev]; a[idx] = { ...a[idx], scheduledTime: e.target.value }; return a; })}
+                                                    style={{ border: '1px solid #e2e8f0', borderRadius: '5px', padding: '4px 6px', fontSize: '12px', width: '100%', boxSizing: 'border-box' }} />
+                                            </td>
+                                            <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                                <input value={v.procedure}
+                                                    onChange={e => setVisits(prev => { const a = [...prev]; a[idx] = { ...a[idx], procedure: e.target.value }; return a; })}
+                                                    placeholder="e.g. Canal cleaning, Filing..."
+                                                    style={{ border: '1px solid #e2e8f0', borderRadius: '5px', padding: '4px 6px', fontSize: '12px', width: '100%', boxSizing: 'border-box' }} />
+                                            </td>
+                                            <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                                <input type="number" value={v.amountDue}
+                                                    onChange={e => setVisits(prev => { const a = [...prev]; a[idx] = { ...a[idx], amountDue: e.target.value }; return a; })}
+                                                    placeholder="0"
+                                                    style={{ border: '1px solid #e2e8f0', borderRadius: '5px', padding: '4px 6px', fontSize: '12px', width: '100%', boxSizing: 'border-box' }} />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                    <button className="clinic-btn-secondary" onClick={() => setView('list')}>Cancel</button>
+                    <button className="clinic-btn-primary" style={{ flex: 1 }} disabled={saving} onClick={handleCreateSubmit}>
+                        {saving ? 'Creating...' : '✅ Create Treatment Plan'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+
+    // ── DETAIL VIEW ──
+    if (view === 'detail' && selectedPlan) return (
+        <div>
+            <button className="clinic-back-btn" onClick={() => setView('list')}>← Back to Plans</button>
+            {msg.text && <div className={`clinic-msg clinic-msg-${msg.type}`} style={{ marginTop: '10px' }}>{msg.text}</div>}
+
+            <div className="clinic-card" style={{ marginTop: '12px' }}>
+                {/* Plan Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                    <div>
+                        <h3 style={{ margin: '0 0 4px', color: '#0f172a' }}>{selectedPlan.title}</h3>
+                        <div style={{ fontSize: '13px', color: '#64748b' }}>👤 {selectedPlan.clinicPatientId?.name} · {selectedPlan.clinicPatientId?.patientUid || ''} · {selectedPlan.clinicPatientId?.phone || ''}</div>
+                        {selectedPlan.description && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>{selectedPlan.description}</div>}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 12px', borderRadius: '20px', background: (planStatusColor[selectedPlan.status] || '#94a3b8') + '20', color: planStatusColor[selectedPlan.status] || '#94a3b8', textTransform: 'uppercase' }}>{selectedPlan.status}</span>
+                        {selectedPlan.status === 'active' && (
+                            <button onClick={() => handleCancel(selectedPlan._id)} style={{ fontSize: '11px', padding: '4px 12px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '700' }}>Cancel Plan</button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Financial Summary */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+                    {[
+                        { label: 'Total Amount', value: '₹' + selectedPlan.totalAmount.toLocaleString('en-IN'), color: '#6366f1' },
+                        { label: 'Total Paid', value: '₹' + selectedPlan.totalPaid.toLocaleString('en-IN'), color: '#16a34a' },
+                        { label: 'Pending Balance', value: '₹' + selectedPlan.pendingBalance.toLocaleString('en-IN'), color: '#dc2626' },
+                        { label: 'Visits Done', value: `${selectedPlan.visits.filter(v => v.status === 'completed').length} / ${selectedPlan.visits.length}`, color: '#0891b2' },
+                    ].map((s, i) => (
+                        <div key={i} style={{ background: '#f8fafc', borderRadius: '8px', padding: '12px', borderTop: `3px solid ${s.color}` }}>
+                            <div style={{ fontSize: '18px', fontWeight: '800', color: s.color }}>{s.value}</div>
+                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{s.label}</div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Visits Table */}
+                <h4 style={{ margin: '0 0 12px', color: '#0f172a' }}>Visit Schedule</h4>
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                        <thead>
+                            <tr style={{ background: '#f1f5f9' }}>
+                                {['#', 'Date & Time', 'Procedure', 'Base Due', 'Carry Fwd', 'Total Due', 'Paid', 'Balance', 'Status', 'Actions'].map(h => (
+                                    <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap', fontSize: '12px' }}>{h}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {selectedPlan.visits.map((v, idx) => (
+                                <tr key={v._id} style={{ background: v.status === 'completed' ? '#f0fdf4' : v.status === 'missed' ? '#fff1f2' : idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', fontWeight: '700', color: '#6366f1' }}>{v.visitNumber}</td>
+                                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap', fontSize: '12px' }}>
+                                        <div style={{ fontWeight: '600' }}>{new Date(v.scheduledDate).toLocaleDateString('en-IN')}</div>
+                                        {v.scheduledTime && <div style={{ color: '#64748b', fontSize: '11px' }}>🕐 {v.scheduledTime}</div>}
+                                    </td>
+                                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', fontSize: '12px', maxWidth: '120px' }}>
+                                        <div>{v.procedure || '—'}</div>
+                                        {v.notes && <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '2px' }}>{v.notes}</div>}
+                                    </td>
+                                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9' }}>₹{v.amountDue.toLocaleString('en-IN')}</td>
+                                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', color: v.carryForward > 0 ? '#f97316' : '#94a3b8' }}>
+                                        {v.carryForward > 0 ? <span style={{ fontWeight: '700' }}>+₹{v.carryForward.toLocaleString('en-IN')}</span> : '—'}
+                                    </td>
+                                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', fontWeight: '700', color: '#0f172a' }}>₹{v.totalDue.toLocaleString('en-IN')}</td>
+                                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', color: '#16a34a', fontWeight: '600' }}>₹{v.amountPaid.toLocaleString('en-IN')}</td>
+                                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', color: v.balance > 0 ? '#dc2626' : '#16a34a', fontWeight: '700' }}>
+                                        {v.balance > 0 ? '₹' + v.balance.toLocaleString('en-IN') : '✓ Cleared'}
+                                    </td>
+                                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9' }}>
+                                        <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '4px', background: (visitStatusColor[v.status] || '#94a3b8') + '20', color: visitStatusColor[v.status] || '#94a3b8', textTransform: 'uppercase' }}>{v.status}</span>
+                                    </td>
+                                    <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9' }}>
+                                        {v.status === 'scheduled' && selectedPlan.status === 'active' && (
+                                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                                <button onClick={() => { setPayModal({ visit: v, planId: selectedPlan._id }); setPayInput({ amountPaid: v.totalDue, paymentMethod: 'Cash', notes: '' }); }}
+                                                    style={{ fontSize: '11px', padding: '3px 8px', background: '#dcfce7', color: '#16a34a', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '700' }}>💵 Pay</button>
+                                                <button onClick={() => handleComplete(selectedPlan._id, v._id)}
+                                                    style={{ fontSize: '11px', padding: '3px 8px', background: '#dbeafe', color: '#1d4ed8', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '700' }}>✓ Done</button>
+                                                <button onClick={() => handleMiss(selectedPlan._id, v._id)}
+                                                    style={{ fontSize: '11px', padding: '3px 8px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '700' }}>✗ Missed</button>
+                                            </div>
+                                        )}
+                                        {v.status === 'completed' && <span style={{ fontSize: '11px', color: '#94a3b8' }}>{v.completedAt ? new Date(v.completedAt).toLocaleDateString('en-IN') : '—'}</span>}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Payment Modal */}
+            {payModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '400px', maxWidth: '95vw', boxShadow: '0 20px 40px rgba(0,0,0,0.15)' }}>
+                        <h3 style={{ margin: '0 0 16px', color: '#0f172a' }}>💵 Record Payment — Visit {payModal.visit.visitNumber}</h3>
+                        <div style={{ fontSize: '13px', color: '#475569', marginBottom: '16px', background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
+                            <div>Base Due: <b>₹{payModal.visit.amountDue.toLocaleString('en-IN')}</b></div>
+                            {payModal.visit.carryForward > 0 && <div style={{ color: '#f97316' }}>Carry Forward: <b>+₹{payModal.visit.carryForward.toLocaleString('en-IN')}</b></div>}
+                            <div style={{ fontWeight: '800', color: '#dc2626', fontSize: '14px', marginTop: '4px' }}>Total Due: ₹{payModal.visit.totalDue.toLocaleString('en-IN')}</div>
+                        </div>
+                        <div className="clinic-form-group" style={{ marginBottom: '12px' }}>
+                            <label>Amount Paid (₹) *</label>
+                            <input className="clinic-input" type="number" value={payInput.amountPaid}
+                                onChange={e => setPayInput(p => ({ ...p, amountPaid: e.target.value }))} />
+                            {payInput.amountPaid && Number(payInput.amountPaid) < payModal.visit.totalDue && (
+                                <div style={{ fontSize: '12px', color: '#f97316', marginTop: '4px' }}>
+                                    ⚠ Remaining ₹{(payModal.visit.totalDue - Number(payInput.amountPaid)).toLocaleString('en-IN')} will carry forward to next visit.
+                                </div>
+                            )}
+                        </div>
+                        <div className="clinic-form-group" style={{ marginBottom: '12px' }}>
+                            <label>Payment Method</label>
+                            <select className="clinic-input" value={payInput.paymentMethod} onChange={e => setPayInput(p => ({ ...p, paymentMethod: e.target.value }))}>
+                                <option>Cash</option><option>UPI</option><option>Card</option><option>NEFT</option>
+                            </select>
+                        </div>
+                        <div className="clinic-form-group" style={{ marginBottom: '16px' }}>
+                            <label>Notes (optional)</label>
+                            <input className="clinic-input" placeholder="e.g. Partial payment, balance next visit..." value={payInput.notes} onChange={e => setPayInput(p => ({ ...p, notes: e.target.value }))} />
+                        </div>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button className="clinic-btn-secondary" style={{ flex: 1 }} onClick={() => setPayModal(null)}>Cancel</button>
+                            <button className="clinic-btn-primary" style={{ flex: 1 }} disabled={saving} onClick={handlePay}>
+                                {saving ? 'Saving...' : '✅ Confirm Payment'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+
+    return null;
 };
 
 // ═══════════════════════════════════════════════════
