@@ -108,11 +108,12 @@ const generatePrescriptionSlipPDF = (consulting, rx) => {
     if (rx.medicines.length > 0) {
         autoTable(doc, {
             startY: y,
-            head: [['#', 'Medicine', 'Dosage', 'Duration', 'Instruction']],
-            body: rx.medicines.map((m, i) => [i + 1, m.name || m.medicineName, m.dosage || m.frequency || '-', m.duration || '-', m.instruction || '-']),
+            head: [['#', 'Medicine Name', 'Salt / Generic', 'Dose / Frequency', 'Days']],
+            body: rx.medicines.map((m, i) => [i + 1, m.name || m.medicineName || '-', m.saltName || '-', m.dose || m.dosage || m.frequency || '-', m.days || m.duration || '-']),
             theme: 'striped',
             headStyles: { fillColor: [76, 175, 80], textColor: 255 },
             bodyStyles: { fontSize: 10 },
+            columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 55 }, 2: { cellWidth: 50 }, 3: { cellWidth: 40 }, 4: { cellWidth: 20 } },
         });
         y = doc.lastAutoTable.finalY + 10;
     } else {
@@ -855,7 +856,6 @@ const DoctorMode = () => {
     const [loading, setLoading] = useState(true);
     const [consulting, setConsulting] = useState(null);
     const [rx, setRx] = useState({ diagnosis: '', notes: '', labTests: '', medicines: [] });
-    const [medInput, setMedInput] = useState({ name: '', dosage: '', duration: '', instruction: '' });
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState({ type: '', text: '' });
     const [inventory, setInventory] = useState([]);
@@ -899,20 +899,6 @@ const DoctorMode = () => {
         }
     };
 
-    const handleMedNameChange = (val) => {
-        const inv = inventory.find(i => i.name === val);
-        if (inv) {
-            setMedInput(m => ({ ...m, name: val, dosage: inv.unit || '' }));
-        } else {
-            setMedInput(m => ({ ...m, name: val }));
-        }
-    };
-
-    const addMed = () => {
-        if (!medInput.name) return;
-        setRx(r => ({ ...r, medicines: [...r.medicines, { ...medInput }] }));
-        setMedInput({ name: '', dosage: '', duration: '', instruction: '' });
-    };
 
     const saveConsult = async () => {
         setSaving(true);
@@ -921,7 +907,15 @@ const DoctorMode = () => {
             const r = await clinicAPI.completeAppointment(consulting._id, {
                 diagnosis: rx.diagnosis,
                 notes: rx.notes,
-                medicines: rx.medicines,
+                medicines: rx.medicines.filter(m => (m.name || m.medicineName)?.trim()).map(m => ({
+                    name: (m.name || m.medicineName || '').trim(),
+                    saltName: (m.saltName || '').trim(),
+                    dose: (m.dose || m.dosage || '').trim(),
+                    days: (m.days || m.duration || '').trim(),
+                    medicineName: (m.name || m.medicineName || '').trim(),
+                    frequency: (m.dose || m.dosage || '').trim(),
+                    duration: (m.days || m.duration || '').trim(),
+                })),
                 labTests: labArr,
             });
             if (r.success) {
@@ -1014,38 +1008,115 @@ const DoctorMode = () => {
                     </div>
                 </div>
 
-                {/* Prescription with inventory autocomplete */}
+                {/* Prescription — inline Excel-like table */}
                 <div style={{ marginTop: '20px' }}>
                     <h4 style={{ marginBottom: '10px', color: '#1e293b' }}>💊 Prescription</h4>
-                    <datalist id="inv-meds">
-                        {inventory.map(i => <option key={i._id} value={i.name} />)}
-                    </datalist>
-                    <div className="clinic-form-grid" style={{ marginBottom: '8px' }}>
-                        <input className="clinic-input" placeholder="Medicine name *" list="inv-meds"
-                            value={medInput.name}
-                            onChange={e => handleMedNameChange(e.target.value)} />
-                        <input className="clinic-input" placeholder="Dosage / Unit (e.g. 500mg)" value={medInput.dosage} onChange={e => setMedInput(m => ({ ...m, dosage: e.target.value }))} />
-                        <input className="clinic-input" placeholder="Duration (e.g. 5 days)" value={medInput.duration} onChange={e => setMedInput(m => ({ ...m, duration: e.target.value }))} />
-                        <input className="clinic-input" placeholder="When to take (e.g. After food)" value={medInput.instruction} onChange={e => setMedInput(m => ({ ...m, instruction: e.target.value }))} />
-                    </div>
-                    <button className="clinic-btn-secondary" onClick={addMed} style={{ marginBottom: '12px' }}>+ Add Medicine</button>
 
-                    {rx.medicines.length > 0 && (
-                        <table className="clinic-table">
-                            <thead><tr><th>Medicine</th><th>Dosage</th><th>Duration</th><th>Instruction</th><th></th></tr></thead>
+                    {/* Quick-add from inventory */}
+                    {inventory.length > 0 && (
+                        <div style={{ marginBottom: '10px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '5px' }}>Quick-add from inventory:</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {inventory.map(inv => {
+                                    const isAdded = rx.medicines.some(m => (m.name || m.medicineName) === inv.name);
+                                    return (
+                                        <button
+                                            key={inv._id}
+                                            type="button"
+                                            onClick={() => {
+                                                if (isAdded) {
+                                                    setRx(r => ({ ...r, medicines: r.medicines.filter(m => (m.name || m.medicineName) !== inv.name) }));
+                                                } else {
+                                                    setRx(r => ({ ...r, medicines: [...r.medicines, { name: inv.name, saltName: inv.genericName || '', dose: '1 OD', days: '5' }] }));
+                                                }
+                                            }}
+                                            style={{ padding: '4px 10px', fontSize: '12px', border: `1px solid ${isAdded ? '#3b82f6' : '#e2e8f0'}`, borderRadius: '20px', background: isAdded ? '#eff6ff' : '#f8fafc', color: isAdded ? '#1d4ed8' : '#475569', cursor: 'pointer', fontWeight: isAdded ? '700' : '400' }}
+                                        >
+                                            {isAdded ? '✓ ' : '+ '}{inv.name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Inline table */}
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                            <thead>
+                                <tr style={{ background: '#f1f5f9' }}>
+                                    <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '30%' }}>Medicine Name</th>
+                                    <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '25%' }}>Salt / Generic Name</th>
+                                    <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '25%' }}>Dose / Frequency</th>
+                                    <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '12%' }}>Days</th>
+                                    <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '8%' }}></th>
+                                </tr>
+                            </thead>
                             <tbody>
-                                {rx.medicines.map((m, i) => (
-                                    <tr key={i}>
-                                        <td><strong>{m.name || m.medicineName}</strong></td>
-                                        <td>{m.dosage || m.frequency}</td>
-                                        <td>{m.duration}</td>
-                                        <td style={{ color: '#64748b', fontSize: '12px' }}>{m.instruction}</td>
-                                        <td><button className="clinic-btn-remove" onClick={() => setRx(r => ({ ...r, medicines: r.medicines.filter((_, idx) => idx !== i) }))}>✕</button></td>
+                                {rx.medicines.map((m, idx) => (
+                                    <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                                        <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                            <input
+                                                list="inv-meds-list"
+                                                value={m.name || m.medicineName || ''}
+                                                onChange={e => setRx(r => { const ms = [...r.medicines]; ms[idx] = { ...ms[idx], name: e.target.value }; return { ...r, medicines: ms }; })}
+                                                placeholder="e.g. Tab. Paracetamol 500mg"
+                                                style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box' }}
+                                            />
+                                        </td>
+                                        <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                            <input
+                                                value={m.saltName || ''}
+                                                onChange={e => setRx(r => { const ms = [...r.medicines]; ms[idx] = { ...ms[idx], saltName: e.target.value }; return { ...r, medicines: ms }; })}
+                                                placeholder="e.g. Paracetamol"
+                                                style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box' }}
+                                            />
+                                        </td>
+                                        <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                            <input
+                                                value={m.dose || m.dosage || ''}
+                                                onChange={e => setRx(r => { const ms = [...r.medicines]; ms[idx] = { ...ms[idx], dose: e.target.value }; return { ...r, medicines: ms }; })}
+                                                placeholder="e.g. 1 OD / 1 BD"
+                                                style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box' }}
+                                            />
+                                        </td>
+                                        <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                            <input
+                                                value={m.days || m.duration || ''}
+                                                onChange={e => setRx(r => { const ms = [...r.medicines]; ms[idx] = { ...ms[idx], days: e.target.value }; return { ...r, medicines: ms }; })}
+                                                placeholder="e.g. 5"
+                                                style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box' }}
+                                            />
+                                        </td>
+                                        <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRx(r => ({ ...r, medicines: r.medicines.filter((_, i) => i !== idx) }))}
+                                                style={{ background: '#fee2e2', border: 'none', borderRadius: '4px', color: '#dc2626', width: '24px', height: '24px', cursor: 'pointer', fontSize: '14px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                            >×</button>
+                                        </td>
                                     </tr>
                                 ))}
+                                {rx.medicines.length === 0 && (
+                                    <tr>
+                                        <td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+                                            No medicines added. Use quick-add above or click "+ Add Row".
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
-                    )}
+                    </div>
+                    <datalist id="inv-meds-list">
+                        {inventory.map(i => <option key={i._id} value={i.name} />)}
+                    </datalist>
+                    <button
+                        type="button"
+                        onClick={() => setRx(r => ({ ...r, medicines: [...r.medicines, { name: '', saltName: '', dose: '', days: '' }] }))}
+                        style={{ marginTop: '8px', padding: '6px 14px', fontSize: '12px', background: '#f0fdf4', border: '1px dashed #86efac', borderRadius: '6px', color: '#16a34a', cursor: 'pointer', fontWeight: '600' }}
+                    >
+                        + Add Row
+                    </button>
                 </div>
 
                 <button className="clinic-btn-primary" style={{ marginTop: '24px', width: '100%', padding: '12px' }} disabled={saving} onClick={saveConsult}>

@@ -359,7 +359,12 @@ router.put('/appointments/:id/complete', verifyClinicAdmin, async (req, res) => 
         appt.status        = 'completed';
         appt.diagnosis     = diagnosis     || appt.diagnosis;
         appt.doctorNotes   = notes         || appt.doctorNotes;
-        if (medicines  && Array.isArray(medicines))  appt.pharmacy  = medicines;
+        if (medicines && Array.isArray(medicines)) appt.pharmacy = medicines.map(m => ({
+            medicineName: m.medicineName || m.name || '',
+            saltName:     m.saltName || '',
+            frequency:    m.frequency || m.dose || m.dosage || '',
+            duration:     m.duration || m.days || '',
+        }));
         if (labTests   && Array.isArray(labTests))   appt.labTests  = labTests;
         if (paymentStatus) appt.paymentStatus = paymentStatus;
         if (amount !== undefined) appt.amount = amount;
@@ -375,9 +380,10 @@ router.put('/appointments/:id/complete', verifyClinicAdmin, async (req, res) => 
                 appointmentId: appt._id,
                 doctorId:      req.user._id,
                 items: medicines.map(m => ({
-                    medicineName: m.name || m.medicineName,
-                    frequency:    m.dosage || m.frequency || '',
-                    duration:     m.duration || '',
+                    medicineName: m.medicineName || m.name,
+                    saltName:     m.saltName || '',
+                    frequency:    m.frequency || m.dose || m.dosage || '',
+                    duration:     m.duration || m.days || '',
                 })),
                 orderStatus: 'Upcoming',
             });
