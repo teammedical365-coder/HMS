@@ -38,7 +38,7 @@ const DoctorPatientDetails = () => {
 
     // Doctor's Session Notepad (Right Panel)
     const [sessionData, setSessionData] = useState({
-        diagnosis: '', notes: '', prescription: '', labTests: ''
+        diagnosis: '', notes: '', medicines: [], labTests: ''
     });
 
     // Patient Intake Profile (Left Panel - Editable by Doctor)
@@ -96,7 +96,12 @@ const DoctorPatientDetails = () => {
                     setSessionData({
                         diagnosis: res.appointment.diagnosis || '',
                         notes: res.appointment.doctorNotes || '',
-                        prescription: '',
+                        medicines: (res.appointment.pharmacy || []).map(p => ({
+                            medicineName: p.medicineName || '',
+                            saltName: p.saltName || '',
+                            dose: p.frequency || '',
+                            days: p.duration || ''
+                        })),
                         labTests: (res.appointment.labTests || []).join(', ')
                     });
                     
@@ -188,7 +193,12 @@ const DoctorPatientDetails = () => {
                 diagnosis: sessionData.diagnosis,
                 notes: sessionData.notes,
                 labTests: sessionData.labTests.split(',').map(s => s.trim()).filter(Boolean),
-                pharmacy: sessionData.prescription.split('\n').filter(Boolean).map(m => ({ medicineName: m.trim() }))
+                pharmacy: sessionData.medicines.filter(m => m.medicineName.trim()).map(m => ({
+                    medicineName: m.medicineName.trim(),
+                    saltName: m.saltName.trim(),
+                    frequency: m.dose.trim(),
+                    duration: m.days.trim()
+                }))
             };
             await doctorAPI.updateSession(appointmentId, payload);
 
@@ -314,10 +324,11 @@ const DoctorPatientDetails = () => {
         if (rxItems.length > 0) {
             autoTable(doc, {
                 startY: y,
-                head: [['#', 'Medicine', 'Frequency', 'Duration']],
-                body: rxItems.map((p, i) => [i + 1, p.medicineName, p.frequency || '-', p.duration || '-']),
+                head: [['#', 'Medicine Name', 'Salt / Generic', 'Dose / Frequency', 'Days']],
+                body: rxItems.map((p, i) => [i + 1, p.medicineName, p.saltName || '-', p.frequency || '-', p.duration || '-']),
                 theme: 'striped',
                 headStyles: { fillColor: [76, 175, 80], textColor: 255 },
+                columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 55 }, 2: { cellWidth: 45 }, 3: { cellWidth: 40 }, 4: { cellWidth: 20 } },
             });
             y = doc.lastAutoTable.finalY + 10;
         } else {
@@ -396,20 +407,21 @@ const DoctorPatientDetails = () => {
         y = doc.lastAutoTable.finalY + 10;
 
         // Medicines
-        const rxLines = sessionData.prescription
-            ? sessionData.prescription.split('\n').filter(l => l.trim())
-            : (appointment?.pharmacy || []).map(p => `${p.medicineName}${p.frequency ? ' — ' + p.frequency : ''}${p.duration ? ' × ' + p.duration : ''}`);
+        const rxItems = sessionData.medicines?.length > 0
+            ? sessionData.medicines.filter(m => m.medicineName?.trim())
+            : (appointment?.pharmacy || []).map(p => ({ medicineName: p.medicineName, saltName: p.saltName || '', dose: p.frequency || '', days: p.duration || '' }));
 
         doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
         doc.text('Medicines Prescribed', 14, y); y += 6;
-        if (rxLines.length > 0) {
+        if (rxItems.length > 0) {
             autoTable(doc, {
                 startY: y,
-                head: [['#', 'Medicine / Instructions']],
-                body: rxLines.map((line, i) => [i + 1, line]),
+                head: [['#', 'Medicine Name', 'Salt / Generic', 'Dose / Frequency', 'Days']],
+                body: rxItems.map((m, i) => [i + 1, m.medicineName || '-', m.saltName || '-', m.dose || '-', m.days || '-']),
                 theme: 'striped',
                 headStyles: { fillColor: [76, 175, 80], textColor: 255 },
                 bodyStyles: { fontSize: 10 },
+                columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 55 }, 2: { cellWidth: 50 }, 3: { cellWidth: 40 }, 4: { cellWidth: 20 } },
             });
             y = doc.lastAutoTable.finalY + 10;
         } else {
@@ -945,9 +957,9 @@ const DoctorPatientDetails = () => {
                                     </button>
                                 )}
 
-                                {(sessionData.prescription || sessionData.labTests || (isLocked && appointment.pharmacy?.length > 0)) && (
+                                {(sessionData.medicines?.length > 0 || sessionData.labTests || (isLocked && appointment.pharmacy?.length > 0)) && (
                                     <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '10px', fontSize: '13px', color: '#475569' }}>
-                                        {(sessionData.prescription || (isLocked && appointment.pharmacy?.length > 0)) && <div style={{ marginBottom: '4px' }}><b>✅ Medicines included</b></div>}
+                                        {(sessionData.medicines?.length > 0 || (isLocked && appointment.pharmacy?.length > 0)) && <div style={{ marginBottom: '4px' }}><b>✅ Medicines included ({sessionData.medicines?.length || appointment.pharmacy?.length || 0})</b></div>}
                                         {(sessionData.labTests || (isLocked && appointment.labTests?.length > 0)) && <div><b>✅ Lab Tests included</b></div>}
                                         {!isLocked && (
                                             <div style={{ marginTop: '8px', fontSize: '12px', color: '#3b82f6', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setShowPrescribeModal(true)}>
@@ -1006,43 +1018,109 @@ const DoctorPatientDetails = () => {
 
                             {/* Medicines Section */}
                             <div>
-                                <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>💊 Select Medicines</h4>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '10px', marginBottom: '16px' }}>
-                                    {catalogMedicines.length > 0 ? catalogMedicines.map(med => {
-                                        const isIncluded = sessionData.prescription.includes(med.name);
-                                        return (
-                                            <label key={med._id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', cursor: 'pointer', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '10px', background: isIncluded ? '#eff6ff' : '#fafafa', borderColor: isIncluded ? '#93c5fd' : '#e2e8f0', transition: 'all 0.2s' }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isIncluded}
-                                                    onChange={(e) => {
-                                                        let lines = sessionData.prescription.split('\n').filter(l => l.trim() !== '');
-                                                        if (e.target.checked) {
-                                                            if (!isIncluded) lines.push(`${med.name} - 1 OD`);
-                                                        } else {
-                                                            lines = lines.filter(l => !l.startsWith(med.name));
-                                                        }
-                                                        setSessionData(prev => ({ ...prev, prescription: lines.join('\n') }));
-                                                    }}
-                                                    style={{ marginTop: '2px', cursor: 'pointer', width: '16px', height: '16px' }}
-                                                />
-                                                <div>
-                                                    <div style={{ fontWeight: '700', color: '#0f172a' }}>{med.name}</div>
-                                                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{med.salt || med.category}</div>
-                                                </div>
-                                            </label>
-                                        );
-                                    }) : <p style={{ color: '#94a3b8', fontSize: '13px', gridColumn: '1 / -1', textAlign: 'center', padding: '20px', background: '#f8fafc', borderRadius: '8px' }}>No medicines in pharmacy inventory. Ask pharmacist to add medicines.</p>}
+                                <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>💊 Medicines Prescribed</h4>
+
+                                {/* Quick-add from catalog */}
+                                {catalogMedicines.length > 0 && (
+                                    <div style={{ marginBottom: '14px' }}>
+                                        <div style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '6px' }}>Quick-add from inventory:</div>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                            {catalogMedicines.map(med => {
+                                                const isIncluded = sessionData.medicines.some(m => m.medicineName === med.name);
+                                                return (
+                                                    <button
+                                                        key={med._id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (isIncluded) {
+                                                                setSessionData(prev => ({ ...prev, medicines: prev.medicines.filter(m => m.medicineName !== med.name) }));
+                                                            } else {
+                                                                setSessionData(prev => ({ ...prev, medicines: [...prev.medicines, { medicineName: med.name, saltName: med.genericName || '', dose: '1 OD', days: '5' }] }));
+                                                            }
+                                                        }}
+                                                        style={{ padding: '5px 10px', fontSize: '12px', border: `1px solid ${isIncluded ? '#3b82f6' : '#e2e8f0'}`, borderRadius: '20px', background: isIncluded ? '#eff6ff' : '#f8fafc', color: isIncluded ? '#1d4ed8' : '#475569', cursor: 'pointer', fontWeight: isIncluded ? '700' : '400' }}
+                                                    >
+                                                        {isIncluded ? '✓ ' : '+ '}{med.name}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Medicine Table */}
+                                <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                        <thead>
+                                            <tr style={{ background: '#f1f5f9' }}>
+                                                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '30%' }}>Medicine Name</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '25%' }}>Salt / Generic Name</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '22%' }}>Dose / Frequency</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '15%' }}>Days</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0', width: '8%' }}></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {sessionData.medicines.map((med, idx) => (
+                                                <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                                                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                                        <input
+                                                            value={med.medicineName}
+                                                            onChange={e => setSessionData(prev => { const m = [...prev.medicines]; m[idx] = { ...m[idx], medicineName: e.target.value }; return { ...prev, medicines: m }; })}
+                                                            placeholder="e.g. Tab. Folic Acid 5mg"
+                                                            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box' }}
+                                                        />
+                                                    </td>
+                                                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                                        <input
+                                                            value={med.saltName}
+                                                            onChange={e => setSessionData(prev => { const m = [...prev.medicines]; m[idx] = { ...m[idx], saltName: e.target.value }; return { ...prev, medicines: m }; })}
+                                                            placeholder="e.g. Folic Acid"
+                                                            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box' }}
+                                                        />
+                                                    </td>
+                                                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                                        <input
+                                                            value={med.dose}
+                                                            onChange={e => setSessionData(prev => { const m = [...prev.medicines]; m[idx] = { ...m[idx], dose: e.target.value }; return { ...prev, medicines: m }; })}
+                                                            placeholder="e.g. 1 OD / 1 BD"
+                                                            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box' }}
+                                                        />
+                                                    </td>
+                                                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                                        <input
+                                                            value={med.days}
+                                                            onChange={e => setSessionData(prev => { const m = [...prev.medicines]; m[idx] = { ...m[idx], days: e.target.value }; return { ...prev, medicines: m }; })}
+                                                            placeholder="e.g. 7"
+                                                            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box' }}
+                                                        />
+                                                    </td>
+                                                    <td style={{ padding: '6px 8px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSessionData(prev => ({ ...prev, medicines: prev.medicines.filter((_, i) => i !== idx) }))}
+                                                            style={{ background: '#fee2e2', border: 'none', borderRadius: '4px', color: '#dc2626', width: '24px', height: '24px', cursor: 'pointer', fontSize: '14px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                        >×</button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {sessionData.medicines.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={5} style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+                                                        No medicines added yet. Use quick-add above or click "+ Add Row".
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <label style={{ fontSize: '13px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '6px' }}>Edit Final Prescription (Manual entry allowed):</label>
-                                <textarea
-                                    name="prescription"
-                                    value={sessionData.prescription}
-                                    onChange={handleSessionChange}
-                                    placeholder={"Tab. Folic Acid 5mg - 1 OD\nTab. Progesterone 200mg - 1 BD"}
-                                    className="dpd-prescription-textarea"
-                                    style={{ minHeight: '100px', width: '100%', boxSizing: 'border-box', background: '#fefce8', borderColor: '#fde68a' }}
-                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setSessionData(prev => ({ ...prev, medicines: [...prev.medicines, { medicineName: '', saltName: '', dose: '', days: '' }] }))}
+                                    style={{ marginTop: '8px', padding: '6px 14px', fontSize: '12px', background: '#f0fdf4', border: '1px dashed #86efac', borderRadius: '6px', color: '#16a34a', cursor: 'pointer', fontWeight: '600' }}
+                                >
+                                    + Add Row
+                                </button>
                             </div>
 
                             <hr style={{ border: 'none', borderTop: '2px dashed #e2e8f0', margin: '0' }} />

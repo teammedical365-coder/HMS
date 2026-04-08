@@ -356,6 +356,7 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
             if (Array.isArray(p)) {
                 appointment.pharmacy = p.map(item => ({
                     medicineName: item.medicineName || item.name,
+                    saltName: item.saltName || '',
                     frequency: item.frequency || '',
                     duration: item.duration || ''
                 }));

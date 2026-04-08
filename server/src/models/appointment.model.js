@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const pharmacyItemSchema = new mongoose.Schema({
     medicineName: { type: String, required: [true, 'Medicine name is required'], trim: true },
+    saltName: { type: String, default: '', trim: true },
     frequency: { type: String, default: '', trim: true },
     duration: { type: String, default: '', trim: true }
 }, { _id: false });
