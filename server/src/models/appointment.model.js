@@ -7,6 +7,17 @@ const pharmacyItemSchema = new mongoose.Schema({
     duration: { type: String, default: '', trim: true }
 }, { _id: false });
 
+const vitalsSchema = new mongoose.Schema({
+    weight:     { type: String, default: '' },  // kg
+    height:     { type: String, default: '' },  // cm
+    bmi:        { type: String, default: '' },
+    bp:         { type: String, default: '' },  // e.g. 120/80
+    temperature:{ type: String, default: '' },  // °F
+    pulse:      { type: String, default: '' },  // bpm
+    spo2:       { type: String, default: '' },  // %
+    rr:         { type: String, default: '' },  // breaths/min
+}, { _id: false });
+
 const appointmentSchema = new mongoose.Schema({
     userId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -61,6 +72,7 @@ const appointmentSchema = new mongoose.Schema({
     labTests: [{ type: String, trim: true }],
     dietPlan: [{ type: String, trim: true }],
     pharmacy: [pharmacyItemSchema],
+    vitals: { type: vitalsSchema, default: () => ({}) },
     ivfDetails: { type: mongoose.Schema.Types.Mixed, default: {} },
 
     // Files

@@ -353,7 +353,7 @@ router.post('/appointments', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 router.put('/appointments/:id/complete', verifyClinicAdmin, async (req, res) => {
     try {
-        const { diagnosis, notes, medicines, labTests, paymentStatus, amount } = req.body;
+        const { diagnosis, notes, medicines, labTests, paymentStatus, amount, vitals } = req.body;
 
         const appt = await Appointment.findOne({ _id: req.params.id, hospitalId: hid(req) });
         if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
@@ -361,6 +361,7 @@ router.put('/appointments/:id/complete', verifyClinicAdmin, async (req, res) => 
         appt.status        = 'completed';
         appt.diagnosis     = diagnosis     || appt.diagnosis;
         appt.doctorNotes   = notes         || appt.doctorNotes;
+        if (vitals && typeof vitals === 'object') appt.vitals = vitals;
         if (medicines && Array.isArray(medicines)) appt.pharmacy = medicines.map(m => ({
             medicineName: m.medicineName || m.name || '',
             saltName:     m.saltName || '',

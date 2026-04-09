@@ -84,7 +84,7 @@ const generateTokenReceiptPDF = (patient, appointment) => {
     doc.save(`Receipt_Token${appointment.tokenNumber}_${patient.patientUid || patient._id}.pdf`);
 };
 
-const generatePrescriptionSlipPDF = (consulting, rx) => {
+const generatePrescriptionSlipPDF = (consulting, rx, vitalsData) => {
     const pt = consulting.clinicPatientId || {};
     const doc = new jsPDF();
     let y = pdfHeader(doc, 'Prescription Slip', [76, 175, 80]);
@@ -100,7 +100,33 @@ const generatePrescriptionSlipPDF = (consulting, rx) => {
         columnStyles: { 0: { fontStyle: 'bold', cellWidth: 30 }, 2: { fontStyle: 'bold', cellWidth: 24 } },
         bodyStyles: { fontSize: 10 },
     });
-    y = doc.lastAutoTable.finalY + 10;
+    y = doc.lastAutoTable.finalY + 8;
+
+    // Vitals (only if any field is filled)
+    const v = vitalsData || {};
+    const hasVitals = Object.values(v).some(val => val);
+    if (hasVitals) {
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
+        doc.text('Vitals', 14, y); y += 5;
+        const vitalsRow = [
+            v.weight ? `Wt: ${v.weight} kg` : '',
+            v.height ? `Ht: ${v.height} cm` : '',
+            v.bmi    ? `BMI: ${v.bmi}` : '',
+            v.bp     ? `BP: ${v.bp} mmHg` : '',
+            v.temperature ? `Temp: ${v.temperature}°F` : '',
+            v.pulse  ? `Pulse: ${v.pulse} bpm` : '',
+            v.spo2   ? `SpO₂: ${v.spo2}%` : '',
+            v.rr     ? `RR: ${v.rr}/min` : '',
+        ].filter(Boolean);
+        autoTable(doc, {
+            startY: y,
+            body: [vitalsRow],
+            theme: 'grid',
+            bodyStyles: { fontSize: 9, cellPadding: 3 },
+            headStyles: { fillColor: [14, 165, 233], textColor: 255 },
+        });
+        y = doc.lastAutoTable.finalY + 8;
+    }
 
     // Medicines
     doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
@@ -858,6 +884,8 @@ const DoctorMode = () => {
     const [loading, setLoading] = useState(true);
     const [consulting, setConsulting] = useState(null);
     const [rx, setRx] = useState({ diagnosis: '', notes: '', labTests: '', medicines: [] });
+    const [vitals, setVitals] = useState({ weight: '', height: '', bmi: '', bp: '', temperature: '', pulse: '', spo2: '', rr: '' });
+    const [showVitals, setShowVitals] = useState(true);
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState({ type: '', text: '' });
     const [inventory, setInventory] = useState([]);
@@ -886,11 +914,22 @@ const DoctorMode = () => {
         setConsulting(appt);
         setShowHistory(false);
         setPatientHistory([]);
+        setShowVitals(true);
         setRx({
             diagnosis: appt.diagnosis || '',
             notes: appt.doctorNotes || '',
             labTests: (appt.labTests || []).join(', '),
             medicines: appt.pharmacy || [],
+        });
+        setVitals({
+            weight: appt.vitals?.weight || '',
+            height: appt.vitals?.height || '',
+            bmi: appt.vitals?.bmi || '',
+            bp: appt.vitals?.bp || '',
+            temperature: appt.vitals?.temperature || '',
+            pulse: appt.vitals?.pulse || '',
+            spo2: appt.vitals?.spo2 || '',
+            rr: appt.vitals?.rr || '',
         });
         if (appt.clinicPatientId?._id) {
             setHistoryLoading(true);
@@ -902,6 +941,17 @@ const DoctorMode = () => {
     };
 
 
+    const handleVitalChange = (field, value) => {
+        setVitals(prev => {
+            const updated = { ...prev, [field]: value };
+            if ((field === 'weight' || field === 'height') && updated.weight && updated.height) {
+                const hM = parseFloat(updated.height) / 100;
+                if (hM > 0) updated.bmi = (parseFloat(updated.weight) / (hM * hM)).toFixed(1);
+            }
+            return updated;
+        });
+    };
+
     const saveConsult = async () => {
         setSaving(true);
         try {
@@ -909,6 +959,7 @@ const DoctorMode = () => {
             const r = await clinicAPI.completeAppointment(consulting._id, {
                 diagnosis: rx.diagnosis,
                 notes: rx.notes,
+                vitals,
                 medicines: rx.medicines.filter(m => (m.name || m.medicineName)?.trim()).map(m => ({
                     name: (m.name || m.medicineName || '').trim(),
                     saltName: (m.saltName || '').trim(),
@@ -924,7 +975,7 @@ const DoctorMode = () => {
                 flash('success', 'Consultation saved. Prescription generated.');
                 setConsulting(null);
                 loadToday();
-                try { generatePrescriptionSlipPDF(consulting, rx); } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
+                try { generatePrescriptionSlipPDF(consulting, rx, vitals); } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
             } else flash('error', r.message);
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
         finally { setSaving(false); }
@@ -972,6 +1023,15 @@ const DoctorMode = () => {
                                 {pastVisits.map(v => (
                                     <div key={v._id} style={{ borderLeft: '3px solid #a5b4fc', paddingLeft: '12px' }}>
                                         <div style={{ fontSize: '12px', fontWeight: 700, color: '#6366f1' }}>{fmtDate(v.appointmentDate || v.createdAt)}</div>
+                                        {v.vitals && Object.values(v.vitals).some(x => x) && (
+                                            <div style={{ fontSize: '11px', color: '#0369a1', marginTop: '2px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                {v.vitals.weight && <span>Wt: <b>{v.vitals.weight}kg</b></span>}
+                                                {v.vitals.bp && <span>BP: <b>{v.vitals.bp}</b></span>}
+                                                {v.vitals.temperature && <span>Temp: <b>{v.vitals.temperature}°F</b></span>}
+                                                {v.vitals.pulse && <span>Pulse: <b>{v.vitals.pulse}bpm</b></span>}
+                                                {v.vitals.spo2 && <span>SpO₂: <b>{v.vitals.spo2}%</b></span>}
+                                            </div>
+                                        )}
                                         {v.diagnosis && <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '2px' }}><strong>Dx:</strong> {v.diagnosis}</div>}
                                         {v.doctorNotes && <div style={{ fontSize: '12px', color: '#475569' }}><strong>Notes:</strong> {v.doctorNotes}</div>}
                                         {(v.pharmacy || []).length > 0 && (
@@ -988,6 +1048,77 @@ const DoctorMode = () => {
                         )}
                     </div>
                 )}
+
+                {/* Vitals Panel */}
+                <div style={{ marginBottom: '20px', border: '1px solid #e0f2fe', borderRadius: '10px', overflow: 'hidden' }}>
+                    <button
+                        type="button"
+                        onClick={() => setShowVitals(v => !v)}
+                        style={{ width: '100%', background: '#f0f9ff', border: 'none', padding: '10px 16px', textAlign: 'left', cursor: 'pointer', fontWeight: 700, fontSize: '13px', color: '#0369a1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>🩺 Patient Vitals {Object.values(vitals).some(v => v) ? '✓' : ''}</span>
+                        <span>{showVitals ? '▲' : '▼'}</span>
+                    </button>
+                    {showVitals && (
+                        <div style={{ padding: '16px', background: '#fff' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px' }}>
+                                {/* Weight */}
+                                <div>
+                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>⚖️ Weight (kg)</label>
+                                    <input className="clinic-input" type="number" placeholder="e.g. 65" value={vitals.weight}
+                                        onChange={e => handleVitalChange('weight', e.target.value)} style={{ padding: '7px 10px' }} />
+                                </div>
+                                {/* Height */}
+                                <div>
+                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>📏 Height (cm)</label>
+                                    <input className="clinic-input" type="number" placeholder="e.g. 170" value={vitals.height}
+                                        onChange={e => handleVitalChange('height', e.target.value)} style={{ padding: '7px 10px' }} />
+                                </div>
+                                {/* BMI — auto computed */}
+                                <div>
+                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>🔢 BMI (auto)</label>
+                                    <input className="clinic-input" readOnly value={vitals.bmi}
+                                        placeholder="Auto-calculated"
+                                        style={{ padding: '7px 10px', background: vitals.bmi ? (parseFloat(vitals.bmi) < 18.5 ? '#fef9c3' : parseFloat(vitals.bmi) < 25 ? '#f0fdf4' : parseFloat(vitals.bmi) < 30 ? '#fff7ed' : '#fef2f2') : '#f8fafc', fontWeight: vitals.bmi ? '700' : '400', color: vitals.bmi ? '#0f172a' : '#94a3b8' }} />
+                                    {vitals.bmi && (
+                                        <div style={{ fontSize: '10px', marginTop: '2px', color: parseFloat(vitals.bmi) < 18.5 ? '#b45309' : parseFloat(vitals.bmi) < 25 ? '#16a34a' : parseFloat(vitals.bmi) < 30 ? '#ea580c' : '#dc2626', fontWeight: '600' }}>
+                                            {parseFloat(vitals.bmi) < 18.5 ? 'Underweight' : parseFloat(vitals.bmi) < 25 ? 'Normal' : parseFloat(vitals.bmi) < 30 ? 'Overweight' : 'Obese'}
+                                        </div>
+                                    )}
+                                </div>
+                                {/* BP */}
+                                <div>
+                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>💓 BP (mmHg)</label>
+                                    <input className="clinic-input" placeholder="e.g. 120/80" value={vitals.bp}
+                                        onChange={e => handleVitalChange('bp', e.target.value)} style={{ padding: '7px 10px' }} />
+                                </div>
+                                {/* Temperature */}
+                                <div>
+                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>🌡️ Temp (°F)</label>
+                                    <input className="clinic-input" type="number" step="0.1" placeholder="e.g. 98.6" value={vitals.temperature}
+                                        onChange={e => handleVitalChange('temperature', e.target.value)} style={{ padding: '7px 10px' }} />
+                                </div>
+                                {/* Pulse */}
+                                <div>
+                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>🫀 Pulse (bpm)</label>
+                                    <input className="clinic-input" type="number" placeholder="e.g. 72" value={vitals.pulse}
+                                        onChange={e => handleVitalChange('pulse', e.target.value)} style={{ padding: '7px 10px' }} />
+                                </div>
+                                {/* SpO2 */}
+                                <div>
+                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>🫁 SpO₂ (%)</label>
+                                    <input className="clinic-input" type="number" placeholder="e.g. 98" value={vitals.spo2}
+                                        onChange={e => handleVitalChange('spo2', e.target.value)} style={{ padding: '7px 10px' }} />
+                                </div>
+                                {/* Respiratory Rate */}
+                                <div>
+                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>🌬️ Resp. Rate (/min)</label>
+                                    <input className="clinic-input" type="number" placeholder="e.g. 16" value={vitals.rr}
+                                        onChange={e => handleVitalChange('rr', e.target.value)} style={{ padding: '7px 10px' }} />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
 
                 <div className="clinic-form-grid">
                     <div className="clinic-form-group" style={{ gridColumn: '1/-1' }}>
