@@ -586,37 +586,25 @@ router.put('/pharmacy-orders/:id/dispense', verifyClinicAdmin, async (req, res) 
 // CREATE treatment plan
 router.post('/treatment-plans', verifyClinicAdmin, async (req, res) => {
     try {
-        const { clinicPatientId, title, description, totalDurationDays, visits } = req.body;
+        const { clinicPatientId, title, description, totalDurationDays, totalAmount, visits } = req.body;
         if (!clinicPatientId || !title || !visits || !visits.length) {
             return res.status(400).json({ success: false, message: 'Patient, title and at least one visit are required.' });
         }
+        if (!totalAmount || Number(totalAmount) <= 0) {
+            return res.status(400).json({ success: false, message: 'Total treatment amount is required.' });
+        }
 
-        // Compute carry-forwards and totals
-        let carry = 0;
-        let totalAmount = 0;
-        const processedVisits = visits.map((v, i) => {
-            const amountDue = Number(v.amountDue) || 0;
-            const carryForward = carry;
-            const totalDue = amountDue + carryForward;
-            // On creation, no payment yet
-            const balance = totalDue;
-            carry = balance;
-            totalAmount += amountDue;
-            return {
-                visitNumber: i + 1,
-                scheduledDate: new Date(v.scheduledDate),
-                scheduledTime: v.scheduledTime || '',
-                procedure: v.procedure || '',
-                amountDue,
-                carryForward,
-                totalDue,
-                amountPaid: 0,
-                balance,
-                status: 'scheduled',
-                alertSent: false,
-            };
-        });
+        const processedVisits = visits.map((v, i) => ({
+            visitNumber: i + 1,
+            scheduledDate: new Date(v.scheduledDate),
+            scheduledTime: v.scheduledTime || '',
+            procedure: v.procedure || '',
+            amountPaid: 0,
+            status: 'scheduled',
+            alertSent: false,
+        }));
 
+        const amount = Number(totalAmount);
         const plan = await TreatmentPlan.create({
             hospitalId: hid(req),
             clinicPatientId,
@@ -625,8 +613,8 @@ router.post('/treatment-plans', verifyClinicAdmin, async (req, res) => {
             description: description || '',
             totalDurationDays: Number(totalDurationDays) || 0,
             visits: processedVisits,
-            totalAmount,
-            pendingBalance: totalAmount,
+            totalAmount: amount,
+            pendingBalance: amount,
             totalPaid: 0,
             status: 'active',
         });
@@ -704,7 +692,7 @@ router.get('/treatment-plans/:id', verifyClinicAdmin, async (req, res) => {
     }
 });
 
-// RECORD PAYMENT for a visit
+// RECORD PAYMENT for a visit (optional, any amount)
 router.put('/treatment-plans/:id/visits/:visitId/pay', verifyClinicAdmin, async (req, res) => {
     try {
         const { amountPaid, paymentMethod, notes } = req.body;
@@ -714,21 +702,11 @@ router.put('/treatment-plans/:id/visits/:visitId/pay', verifyClinicAdmin, async 
         const visit = plan.visits.id(req.params.visitId);
         if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
 
-        const paid = Number(amountPaid) || 0;
-        visit.amountPaid = paid;
-        visit.balance = Math.max(0, visit.totalDue - paid);
+        visit.amountPaid = Number(amountPaid) || 0;
         visit.paymentMethod = paymentMethod || 'Cash';
         if (notes) visit.notes = notes;
 
-        // Propagate remaining balance as carryForward to the next scheduled visit
-        const nextVisit = plan.visits.find(v => v.visitNumber === visit.visitNumber + 1 && v.status === 'scheduled');
-        if (nextVisit) {
-            nextVisit.carryForward = visit.balance;
-            nextVisit.totalDue = nextVisit.amountDue + nextVisit.carryForward;
-            nextVisit.balance = Math.max(0, nextVisit.totalDue - (nextVisit.amountPaid || 0));
-        }
-
-        // Recalculate plan totals — pendingBalance is simply totalAmount - totalPaid (never negative)
+        // Recalculate plan totals — pendingBalance = totalAmount - sum of all payments
         plan.totalPaid = plan.visits.reduce((s, v) => s + (v.amountPaid || 0), 0);
         plan.pendingBalance = Math.max(0, plan.totalAmount - plan.totalPaid);
 
@@ -749,6 +727,18 @@ router.put('/treatment-plans/:id/visits/:visitId/complete', verifyClinicAdmin, a
 
         const visit = plan.visits.id(req.params.visitId);
         if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
+
+        // Check if this is the last remaining scheduled visit
+        const remainingScheduled = plan.visits.filter(v => v.status === 'scheduled' && v._id.toString() !== visit._id.toString());
+        const isLastVisit = remainingScheduled.length === 0;
+
+        // Block closing if last visit and balance still pending
+        if (isLastVisit && plan.pendingBalance > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot close treatment — ₹${plan.pendingBalance.toLocaleString('en-IN')} is still pending. Collect full payment before closing the last visit.`
+            });
+        }
 
         visit.status = 'completed';
         visit.completedAt = new Date();
@@ -776,16 +766,7 @@ router.put('/treatment-plans/:id/visits/:visitId/miss', verifyClinicAdmin, async
         if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
 
         visit.status = 'missed';
-        // Carry missed visit's totalDue to the next scheduled visit
-        const nextVisit = plan.visits.find(v => v.visitNumber === visit.visitNumber + 1 && v.status === 'scheduled');
-        if (nextVisit) {
-            nextVisit.carryForward = (nextVisit.carryForward || 0) + visit.totalDue;
-            nextVisit.totalDue = nextVisit.amountDue + nextVisit.carryForward;
-            nextVisit.balance = nextVisit.totalDue - nextVisit.amountPaid;
-        }
-
-        plan.totalPaid = plan.visits.reduce((s, v) => s + (v.amountPaid || 0), 0);
-        plan.pendingBalance = Math.max(0, plan.totalAmount - plan.totalPaid);
+        // pendingBalance unchanged — it reflects totalAmount - totalPaid regardless of which visits were missed
         await plan.save();
         await plan.populate('clinicPatientId', 'name patientUid phone gender');
         res.json({ success: true, plan });
