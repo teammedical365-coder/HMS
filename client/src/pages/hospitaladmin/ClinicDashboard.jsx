@@ -280,6 +280,7 @@ const OverviewMode = () => {
         { label: 'Completed Today', value: stats?.completedAppointments ?? 0, icon: '✅', color: '#10b981' },
         { label: "Today's Revenue", value: fmt(stats?.todayRevenue), sub: fmt(stats?.totalRevenue) + ' total', icon: '💰', color: '#f59e0b' },
         { label: 'This Month', value: fmt(stats?.monthRevenue), icon: '📅', color: '#6366f1' },
+        { label: 'Treatment Plan Revenue', value: fmt(stats?.treatmentPlanRevenue), sub: stats?.treatmentPlanPending ? fmt(stats.treatmentPlanPending) + ' pending' : 'No pending', icon: '📅', color: '#0891b2' },
     ];
 
     return (

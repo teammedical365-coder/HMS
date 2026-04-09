@@ -100,6 +100,9 @@ router.get('/stats', verifyClinicAdmin, async (req, res) => {
             monthRevenueAgg,
             recentAppointments,
             lowStockItems,
+            planRevenueAgg,
+            planTodayRevenueAgg,
+            planMonthRevenueAgg,
         ] = await Promise.all([
             ClinicPatient.countDocuments({ clinicId: hospitalId }),
             ClinicPatient.countDocuments({ clinicId: hospitalId, createdAt: { $gte: today } }),
@@ -125,16 +128,71 @@ router.get('/stats', verifyClinicAdmin, async (req, res) => {
                 .limit(10)
                 .lean(),
             Inventory.find({ hospitalId, stock: { $lt: 10 } }).select('name stock unit').limit(5).lean(),
+            // Treatment plan revenue — sum of all amountPaid across visits
+            TreatmentPlan.aggregate([
+                { $match: { hospitalId } },
+                { $unwind: '$visits' },
+                { $group: { _id: null, total: { $sum: '$visits.amountPaid' } } }
+            ]),
+            TreatmentPlan.aggregate([
+                { $match: { hospitalId } },
+                { $unwind: '$visits' },
+                { $match: { 'visits.completedAt': { $gte: today, $lte: todayEnd } } },
+                { $group: { _id: null, total: { $sum: '$visits.amountPaid' } } }
+            ]),
+            TreatmentPlan.aggregate([
+                { $match: { hospitalId, createdAt: { $gte: firstOfMonth } } },
+                { $unwind: '$visits' },
+                { $group: { _id: null, total: { $sum: '$visits.amountPaid' } } }
+            ]),
         ]);
 
-        // Monthly revenue trend (last 6 months)
+        // Monthly revenue trend (last 6 months) — appointments + treatment plans combined
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-        const monthlyTrend = await Appointment.aggregate([
-            { $match: { hospitalId, paymentStatus: 'paid', createdAt: { $gte: sixMonthsAgo } } },
-            { $group: { _id: { month: { $month: '$createdAt' }, year: { $year: '$createdAt' } }, revenue: { $sum: '$amount' }, count: { $sum: 1 } } },
-            { $sort: { '_id.year': 1, '_id.month': 1 } }
+        const [apptTrend, planTrend] = await Promise.all([
+            Appointment.aggregate([
+                { $match: { hospitalId, paymentStatus: 'paid', createdAt: { $gte: sixMonthsAgo } } },
+                { $group: { _id: { month: { $month: '$createdAt' }, year: { $year: '$createdAt' } }, revenue: { $sum: '$amount' }, count: { $sum: 1 } } },
+                { $sort: { '_id.year': 1, '_id.month': 1 } }
+            ]),
+            TreatmentPlan.aggregate([
+                { $match: { hospitalId, createdAt: { $gte: sixMonthsAgo } } },
+                { $unwind: '$visits' },
+                { $match: { 'visits.amountPaid': { $gt: 0 } } },
+                { $group: { _id: { month: { $month: '$visits.completedAt' }, year: { $year: '$visits.completedAt' } }, revenue: { $sum: '$visits.amountPaid' } } },
+                { $sort: { '_id.year': 1, '_id.month': 1 } }
+            ]),
         ]);
+        // Merge the two trend arrays by month/year key
+        const trendMap = {};
+        for (const t of apptTrend) {
+            const key = `${t._id.year}-${t._id.month}`;
+            trendMap[key] = { ...t, revenue: t.revenue };
+        }
+        for (const t of planTrend) {
+            if (!t._id.month) continue; // skip if completedAt was null
+            const key = `${t._id.year}-${t._id.month}`;
+            if (trendMap[key]) trendMap[key].revenue += t.revenue;
+            else trendMap[key] = { _id: t._id, revenue: t.revenue, count: 0 };
+        }
+        const monthlyTrend = Object.values(trendMap).sort((a, b) =>
+            a._id.year !== b._id.year ? a._id.year - b._id.year : a._id.month - b._id.month
+        );
+
+        const apptRevenue      = revenueAgg[0]?.total || 0;
+        const apptTodayRevenue = todayRevenueAgg[0]?.total || 0;
+        const apptMonthRevenue = monthRevenueAgg[0]?.total || 0;
+        const planRevenue      = planRevenueAgg[0]?.total || 0;
+        const planTodayRevenue = planTodayRevenueAgg[0]?.total || 0;
+        const planMonthRevenue = planMonthRevenueAgg[0]?.total || 0;
+
+        // Total pending balance across all active plans
+        const pendingPlansAgg = await TreatmentPlan.aggregate([
+            { $match: { hospitalId, status: 'active' } },
+            { $group: { _id: null, total: { $sum: '$pendingBalance' } } }
+        ]);
+        const treatmentPlanPending = pendingPlansAgg[0]?.total || 0;
 
         res.json({
             success: true,
@@ -145,9 +203,11 @@ router.get('/stats', verifyClinicAdmin, async (req, res) => {
                 todayAppointments,
                 completedAppointments,
                 pendingAppointments,
-                totalRevenue:  revenueAgg[0]?.total || 0,
-                todayRevenue:  todayRevenueAgg[0]?.total || 0,
-                monthRevenue:  monthRevenueAgg[0]?.total || 0,
+                totalRevenue:          apptRevenue + planRevenue,
+                todayRevenue:          apptTodayRevenue + planTodayRevenue,
+                monthRevenue:          apptMonthRevenue + planMonthRevenue,
+                treatmentPlanRevenue:  planRevenue,
+                treatmentPlanPending,
                 recentAppointments,
                 lowStockItems,
                 monthlyTrend,
@@ -665,12 +725,12 @@ router.put('/treatment-plans/:id/visits/:visitId/pay', verifyClinicAdmin, async 
         if (nextVisit) {
             nextVisit.carryForward = visit.balance;
             nextVisit.totalDue = nextVisit.amountDue + nextVisit.carryForward;
-            nextVisit.balance = nextVisit.totalDue - nextVisit.amountPaid;
+            nextVisit.balance = Math.max(0, nextVisit.totalDue - (nextVisit.amountPaid || 0));
         }
 
-        // Recalculate plan totals
+        // Recalculate plan totals — pendingBalance is simply totalAmount - totalPaid (never negative)
         plan.totalPaid = plan.visits.reduce((s, v) => s + (v.amountPaid || 0), 0);
-        plan.pendingBalance = plan.visits.reduce((s, v) => s + (v.balance || 0), 0);
+        plan.pendingBalance = Math.max(0, plan.totalAmount - plan.totalPaid);
 
         await plan.save();
         await plan.populate('clinicPatientId', 'name patientUid phone gender');
@@ -724,7 +784,8 @@ router.put('/treatment-plans/:id/visits/:visitId/miss', verifyClinicAdmin, async
             nextVisit.balance = nextVisit.totalDue - nextVisit.amountPaid;
         }
 
-        plan.pendingBalance = plan.visits.reduce((s, v) => s + (v.balance || 0), 0);
+        plan.totalPaid = plan.visits.reduce((s, v) => s + (v.amountPaid || 0), 0);
+        plan.pendingBalance = Math.max(0, plan.totalAmount - plan.totalPaid);
         await plan.save();
         await plan.populate('clinicPatientId', 'name patientUid phone gender');
         res.json({ success: true, plan });
