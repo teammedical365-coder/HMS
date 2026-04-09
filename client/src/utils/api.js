@@ -413,4 +413,13 @@ export const simpleClinicAPI = {
     updateSubscription: async (clinicId, subId, data) => (await apiClient.put(`/api/simple-clinics/${clinicId}/subscriptions/${subId}`, data)).data,
 };
 
+export const revenueAPI = {
+    // Full system revenue analytics (monthly, quarterly, by model)
+    getSystemAnalytics: async () => (await apiClient.get('/api/revenue/system')).data,
+    // All hospitals with revenue config (lightweight)
+    getHospitalsRevenue: async () => (await apiClient.get('/api/revenue/hospitals')).data,
+    // Set or update revenue model for a hospital/clinic
+    setHospitalPlan: async (id, data) => (await apiClient.put(`/api/revenue/hospital/${id}`, data)).data,
+};
+
 export default apiClient;

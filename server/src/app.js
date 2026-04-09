@@ -33,6 +33,7 @@ const clinicRoutes = require('./routes/clinic.routes');
 const syncRoutes        = require('./routes/sync.routes');
 const patientAppRoutes  = require('./routes/patientApp.routes');
 const patientLocalRoutes = require('./routes/patientLocal.routes');
+const revenueRoutes     = require('./routes/revenue.routes');
 
 const app = express();
 // ughfgh
@@ -87,6 +88,9 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/admissions', admissionRoutes);
 app.use('/api/simple-clinics', simpleClinicRoutes);
 app.use('/api/clinic', clinicRoutes);
+
+// Revenue & Billing — Central Admin system analytics
+app.use('/api/revenue', revenueRoutes);
 
 // ── Hybrid local/cloud infrastructure ────────────────────────────────────────
 // Sync receiver + tunnel proxy (active on cloud; no-ops on local for sync routes)

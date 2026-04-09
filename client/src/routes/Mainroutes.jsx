@@ -43,6 +43,7 @@ import AdminTestPackages from '../pages/admin/AdminTestPackages';
 import CentralAdminLogin from '../pages/centraladmin/CentralAdminLogin';
 import CentralAdminSignup from '../pages/centraladmin/CentralAdminSignup';
 import CentralAdminDashboard from '../pages/centraladmin/CentralAdminDashboard';
+import SystemRevenueDashboard from '../pages/centraladmin/SystemRevenueDashboard';
 
 // Hospital Admin (Tier 2) Pages — /hospitaladmin
 import HospitalAdminLogin from '../pages/hospitaladmin/HospitalAdminLogin';
@@ -196,6 +197,7 @@ const MainRoutes = () => {
 
                         {/* Supreme Admin remains outside of hospital slugs */}
                         <Route path="/supremeadmin" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><CentralAdminDashboard /></ProtectedRoute>} />
+                        <Route path="/supremeadmin/revenue" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><SystemRevenueDashboard /></ProtectedRoute>} />
 
 
                         <Route path="*" element={<Navigate to="/my-dashboard" />} />

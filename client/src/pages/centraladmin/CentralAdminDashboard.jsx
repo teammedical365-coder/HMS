@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI, simpleClinicAPI } from '../../utils/api';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI, simpleClinicAPI, revenueAPI } from '../../utils/api';
 import HospitalBrandingEditor from '../../components/HospitalBrandingEditor';
 import '../administration/SuperAdmin.css';
 import './CentralAdminDashboard.css';
@@ -77,7 +77,16 @@ const CentralAdminDashboard = () => {
     const [subscriptionRateForm, setSubscriptionRateForm] = useState({ ratePerPatient: '', billingEnabled: false });
     const [savingRate, setSavingRate] = useState(false);
 
+    // Revenue Plans tab
+    const [revenuePlans, setRevenuePlans] = useState([]);
+    const [loadingRevenuePlans, setLoadingRevenuePlans] = useState(false);
+    const [revenuePlanSearch, setRevenuePlanSearch] = useState('');
+    const [editingPlan, setEditingPlan] = useState(null); // hospital being edited
+    const [planForm, setPlanForm] = useState({ revenueModel: 'per_patient', ratePerPatient: '', monthlyFee: '', ratePerLogin: '', billingCycle: 'monthly' });
+    const [savingPlan, setSavingPlan] = useState(false);
+
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const location = useLocation();
 
     const getBaseHost = () => {
         let host = window.location.host;
@@ -105,6 +114,58 @@ const CentralAdminDashboard = () => {
         fetchDepartments();
         fetchClinics();
     }, []);
+
+    // Handle navigation state from SystemRevenueDashboard "Manage Plan" button
+    useEffect(() => {
+        if (location.state?.openTab === 'revenue-plans') {
+            setActiveTab('revenue-plans');
+        }
+    }, [location.state]);
+
+    // Auto-load revenue plans when the tab becomes active
+    useEffect(() => {
+        if (activeTab === 'revenue-plans' && revenuePlans.length === 0) {
+            fetchRevenuePlans();
+        }
+    }, [activeTab]);
+
+    const fetchRevenuePlans = async () => {
+        setLoadingRevenuePlans(true);
+        try {
+            const res = await revenueAPI.getHospitalsRevenue();
+            if (res.success) setRevenuePlans(res.hospitals || []);
+        } catch (err) { console.error('Failed to load revenue plans:', err); }
+        finally { setLoadingRevenuePlans(false); }
+    };
+
+    const openPlanEditor = (hospital) => {
+        setEditingPlan(hospital);
+        setPlanForm({
+            revenueModel: hospital.revenueModel || 'per_patient',
+            ratePerPatient: hospital.subscription?.ratePerPatient ?? '',
+            monthlyFee: hospital.revenueConfig?.monthlyFee ?? '',
+            ratePerLogin: hospital.revenueConfig?.ratePerLogin ?? '',
+            billingCycle: hospital.revenueConfig?.billingCycle || 'monthly',
+        });
+    };
+
+    const handleSavePlan = async (e) => {
+        e.preventDefault();
+        setSavingPlan(true);
+        try {
+            await revenueAPI.setHospitalPlan(editingPlan._id, {
+                revenueModel: planForm.revenueModel,
+                ratePerPatient: planForm.ratePerPatient !== '' ? Number(planForm.ratePerPatient) : undefined,
+                monthlyFee: planForm.monthlyFee !== '' ? Number(planForm.monthlyFee) : undefined,
+                ratePerLogin: planForm.ratePerLogin !== '' ? Number(planForm.ratePerLogin) : undefined,
+                billingCycle: planForm.billingCycle,
+            });
+            setSuccess(`Revenue plan updated for ${editingPlan.name}`);
+            setEditingPlan(null);
+            fetchRevenuePlans();
+        } catch (err) { setError(err?.response?.data?.message || err.message); }
+        finally { setSavingPlan(false); }
+    };
 
     const fetchDepartments = async () => {
         try {
@@ -457,10 +518,17 @@ const CentralAdminDashboard = () => {
         ? allStaff.filter(u => String(u.hospitalId) === staffHospitalFilter)
         : allStaff;
 
+    const MODEL_LABELS = {
+        per_patient: { label: 'Model B — Per Patient', color: '#6366f1', bg: '#ede9fe', icon: '👤' },
+        fixed_monthly: { label: 'Model A — Fixed Monthly', color: '#10b981', bg: '#d1fae5', icon: '📅' },
+        per_login: { label: 'Model C — Per Login', color: '#f59e0b', bg: '#fef3c7', icon: '🔑' },
+    };
+
     const tabs = [
         { id: 'hospitals', label: '🏥 Hospitals', desc: 'Manage hospitals' },
         { id: 'simple-clinics', label: '🏪 Simple Clinics', desc: 'Small clinic management' },
         { id: 'staff', label: '👥 All Staff', desc: 'Global staff management' },
+        { id: 'revenue-plans', label: '💰 Revenue Plans', desc: 'Set billing models' },
         { id: 'configurations', label: '⚙️ Configurations', desc: 'Roles, tests, questions' },
     ];
 
@@ -814,12 +882,20 @@ const CentralAdminDashboard = () => {
         <div className="centraladmin-page">
             <div className={`centraladmin-container ${selectedHospital ? 'has-sidebar-padding' : ''}`}>
                 {/* Redundant Header Removed (now in TopBar) */}
-                <div style={{ marginBottom: '32px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 800, background: 'var(--brand-50, #f0fdfa)', color: 'var(--brand-600, #14b8a6)', padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.05em' }}>CENTRAL ADMIN</span>
+                <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 800, background: 'var(--brand-50, #f0fdfa)', color: 'var(--brand-600, #14b8a6)', padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.05em' }}>CENTRAL ADMIN</span>
+                        </div>
+                        <h1 style={{ fontSize: '1.8rem', fontWeight: 850, margin: '8px 0 4px', color: '#1e293b' }}>🏛️ Central Administration Dashboard</h1>
+                        <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Manage all hospitals, staff, and system configurations</p>
                     </div>
-                    <h1 style={{ fontSize: '1.8rem', fontWeight: 850, margin: '8px 0 4px', color: '#1e293b' }}>🏛️ Central Administration Dashboard</h1>
-                    <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Manage all hospitals, staff, and system configurations</p>
+                    <button
+                        onClick={() => navigate('/supremeadmin/revenue')}
+                        style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(99,102,241,0.3)', whiteSpace: 'nowrap' }}
+                    >
+                        📊 System Revenue Analytics
+                    </button>
                 </div>
 
                 {error && <div className="error-message">⚠️ {error}</div>}
@@ -1645,6 +1721,210 @@ const CentralAdminDashboard = () => {
                                 <button onClick={() => setDeleteClinicConfirm(null)} className="btn-cancel">Cancel</button>
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {/* ========== REVENUE PLANS TAB ========== */}
+                {activeTab === 'revenue-plans' && (
+                    <div>
+                        <div className="admin-card">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <div>
+                                    <h2>💰 Revenue Plans</h2>
+                                    <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>Assign a billing model to each hospital or clinic</p>
+                                </div>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <button
+                                        onClick={() => navigate('/supremeadmin/revenue')}
+                                        style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', border: 'none', padding: '9px 18px', borderRadius: '9px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}
+                                    >
+                                        📊 View System Analytics
+                                    </button>
+                                    <button className="btn-edit" onClick={fetchRevenuePlans} style={{ padding: '9px 18px' }}>
+                                        ↻ Refresh
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Model Legend */}
+                            <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                                {Object.entries(MODEL_LABELS).map(([key, m]) => (
+                                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', borderRadius: '10px', background: m.bg, border: `1px solid ${m.color}30` }}>
+                                        <span>{m.icon}</span>
+                                        <div>
+                                            <div style={{ fontSize: '12px', fontWeight: 700, color: m.color }}>{m.label}</div>
+                                            <div style={{ fontSize: '11px', color: '#888' }}>
+                                                {key === 'per_patient' && 'Charge per new patient registered monthly'}
+                                                {key === 'fixed_monthly' && 'Flat fee every billing cycle'}
+                                                {key === 'per_login' && 'Charge per login session (coming soon)'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Search */}
+                            <input
+                                placeholder="Search hospital or clinic name…"
+                                value={revenuePlanSearch}
+                                onChange={e => setRevenuePlanSearch(e.target.value)}
+                                style={{ width: '100%', padding: '9px 14px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', marginBottom: '16px', boxSizing: 'border-box', outline: 'none' }}
+                            />
+
+                            {loadingRevenuePlans ? (
+                                <p style={{ textAlign: 'center', color: '#888', padding: '24px' }}>Loading revenue plans…</p>
+                            ) : revenuePlans.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
+                                    <p style={{ fontSize: '32px', marginBottom: '8px' }}>💰</p>
+                                    <p>No hospitals found. Add hospitals first, then assign revenue plans.</p>
+                                    <button className="btn-save" style={{ marginTop: '12px' }} onClick={fetchRevenuePlans}>Load Plans</button>
+                                </div>
+                            ) : (
+                                <div className="users-table">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Name</th>
+                                                <th>Type</th>
+                                                <th>Revenue Model</th>
+                                                <th>Rate / Fee</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {revenuePlans
+                                                .filter(h => !revenuePlanSearch || h.name.toLowerCase().includes(revenuePlanSearch.toLowerCase()))
+                                                .map((h, i) => {
+                                                    const meta = MODEL_LABELS[h.revenueModel] || MODEL_LABELS.per_patient;
+                                                    const rateLabel = h.revenueModel === 'per_patient'
+                                                        ? `₹${h.subscription?.ratePerPatient || 0}/patient`
+                                                        : h.revenueModel === 'fixed_monthly'
+                                                            ? `₹${h.revenueConfig?.monthlyFee || 0}/month`
+                                                            : `₹${h.revenueConfig?.ratePerLogin || 0}/login`;
+                                                    return (
+                                                        <tr key={h._id}>
+                                                            <td style={{ color: '#94a3b8' }}>{i + 1}</td>
+                                                            <td><strong>{h.name}</strong></td>
+                                                            <td>
+                                                                <span style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, background: h.clinicType === 'hospital' ? '#eff6ff' : '#f5f3ff', color: h.clinicType === 'hospital' ? '#3b82f6' : '#8b5cf6' }}>
+                                                                    {h.clinicType === 'hospital' ? '🏥 Hospital' : '🏪 Clinic'}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, background: meta.bg, color: meta.color }}>
+                                                                    {meta.icon} {meta.label.split(' — ')[0]}
+                                                                </span>
+                                                            </td>
+                                                            <td style={{ fontWeight: 600, color: '#374151' }}>{rateLabel}</td>
+                                                            <td>
+                                                                <button className="btn-edit" style={{ fontSize: '12px', padding: '5px 12px' }}
+                                                                    onClick={() => openPlanEditor(h)}>
+                                                                    Edit Plan
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ── Plan Editor Modal ── */}
+                        {editingPlan && (
+                            <div className="modal-overlay">
+                                <div className="modal-content" style={{ maxWidth: '480px', width: '90%' }}>
+                                    <h3>💰 Set Revenue Plan — {editingPlan.name}</h3>
+                                    <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 20px' }}>
+                                        Choose a billing model and set the rate. This determines how your system charges this {editingPlan.clinicType}.
+                                    </p>
+                                    <form onSubmit={handleSavePlan}>
+                                        {/* Model selector */}
+                                        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                                            {Object.entries(MODEL_LABELS).map(([key, m]) => (
+                                                <div
+                                                    key={key}
+                                                    onClick={() => setPlanForm(f => ({ ...f, revenueModel: key }))}
+                                                    style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `2px solid ${planForm.revenueModel === key ? m.color : '#e2e8f0'}`, background: planForm.revenueModel === key ? m.bg : '#f8fafc', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}
+                                                >
+                                                    <div style={{ fontSize: '20px', marginBottom: '4px' }}>{m.icon}</div>
+                                                    <div style={{ fontSize: '11px', fontWeight: 700, color: planForm.revenueModel === key ? m.color : '#64748b' }}>{m.label.split(' — ')[0]}</div>
+                                                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>{m.label.split(' — ')[1]}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Rate fields based on model */}
+                                        {planForm.revenueModel === 'per_patient' && (
+                                            <div style={{ marginBottom: '16px' }}>
+                                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#374151' }}>Rate per Patient (₹)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={planForm.ratePerPatient}
+                                                    onChange={e => setPlanForm(f => ({ ...f, ratePerPatient: e.target.value }))}
+                                                    placeholder="e.g. 50"
+                                                    style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }}
+                                                />
+                                                <p style={{ fontSize: '11px', color: '#888', margin: '4px 0 0' }}>Charged per new patient registered each billing cycle.</p>
+                                            </div>
+                                        )}
+                                        {planForm.revenueModel === 'fixed_monthly' && (
+                                            <>
+                                                <div style={{ marginBottom: '16px' }}>
+                                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#374151' }}>Monthly Fee (₹)</label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={planForm.monthlyFee}
+                                                        onChange={e => setPlanForm(f => ({ ...f, monthlyFee: e.target.value }))}
+                                                        placeholder="e.g. 2000"
+                                                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }}
+                                                    />
+                                                </div>
+                                                <div style={{ marginBottom: '16px' }}>
+                                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#374151' }}>Billing Cycle</label>
+                                                    <select
+                                                        value={planForm.billingCycle}
+                                                        onChange={e => setPlanForm(f => ({ ...f, billingCycle: e.target.value }))}
+                                                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', background: 'white', boxSizing: 'border-box' }}
+                                                    >
+                                                        <option value="monthly">Monthly</option>
+                                                        <option value="quarterly">Quarterly</option>
+                                                        <option value="annual">Annual</option>
+                                                    </select>
+                                                </div>
+                                            </>
+                                        )}
+                                        {planForm.revenueModel === 'per_login' && (
+                                            <div style={{ marginBottom: '16px' }}>
+                                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#374151' }}>Rate per Login (₹)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={planForm.ratePerLogin}
+                                                    onChange={e => setPlanForm(f => ({ ...f, ratePerLogin: e.target.value }))}
+                                                    placeholder="e.g. 5"
+                                                    style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }}
+                                                />
+                                                <div style={{ padding: '10px 14px', borderRadius: '8px', background: '#fef3c7', border: '1px solid #fde68a', marginTop: '8px' }}>
+                                                    <p style={{ margin: 0, fontSize: '12px', color: '#92400e', fontWeight: 600 }}>⚠️ Coming Soon — Per Login tracking is not yet active. You can pre-configure the rate.</p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="modal-buttons">
+                                            <button type="submit" className="btn-save" disabled={savingPlan}>
+                                                {savingPlan ? 'Saving…' : '✓ Save Plan'}
+                                            </button>
+                                            <button type="button" className="btn-cancel" onClick={() => setEditingPlan(null)}>Cancel</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 

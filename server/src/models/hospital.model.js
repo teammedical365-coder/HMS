@@ -85,6 +85,24 @@ const hospitalSchema = new mongoose.Schema({
         lastSeenAt:    { type: Date, default: null },
         serverVersion: { type: String, default: '' },
     },
+
+    // ── Revenue / Billing Model ───────────────────────────────────────────────
+    // 'per_patient'   : Model B — charged per new patient registered each month
+    //                   Rate stored in subscription.ratePerPatient
+    // 'fixed_monthly' : Model A — flat monthly fee regardless of patient volume
+    //                   Fee stored in revenueConfig.monthlyFee
+    // 'per_login'     : Model C — charged per login session (future)
+    //                   Rate stored in revenueConfig.ratePerLogin
+    revenueModel: {
+        type: String,
+        enum: ['per_patient', 'fixed_monthly', 'per_login'],
+        default: 'per_patient',
+    },
+    revenueConfig: {
+        monthlyFee:    { type: Number, default: 0 },   // for fixed_monthly
+        ratePerLogin:  { type: Number, default: 0 },   // for per_login (future)
+        billingCycle:  { type: String, enum: ['monthly', 'quarterly', 'annual'], default: 'monthly' },
+    },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Hospital', hospitalSchema);
