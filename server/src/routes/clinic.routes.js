@@ -191,7 +191,7 @@ router.get('/patients', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 router.post('/patients', verifyClinicAdmin, async (req, res) => {
     try {
-        const { name, phone, email, dob, gender, address, bloodGroup, allergies, chronicConditions } = req.body;
+        const { name, phone, email, dob, gender, address, bloodGroup, allergies, chronicConditions, relatives } = req.body;
         if (!name || !phone) return res.status(400).json({ success: false, message: 'Name and phone are required' });
 
         const cleanPhone = phone.replace(/\D/g, '');
@@ -210,6 +210,14 @@ router.post('/patients', verifyClinicAdmin, async (req, res) => {
         const count = await ClinicPatient.countDocuments({ clinicId });
         const patientUid = `${code}-${String(count + 1).padStart(3, '0')}`;
 
+        const cleanRelatives = Array.isArray(relatives)
+            ? relatives.filter(r => r.name?.trim() || r.phone?.trim()).map(r => ({
+                name: (r.name || '').trim(),
+                relation: (r.relation || '').trim(),
+                phone: (r.phone || '').trim(),
+            }))
+            : [];
+
         const patient = await ClinicPatient.create({
             clinicId,
             patientUid,
@@ -222,6 +230,7 @@ router.post('/patients', verifyClinicAdmin, async (req, res) => {
             address: address || '',
             allergies: allergies || '',
             chronicConditions: chronicConditions || '',
+            relatives: cleanRelatives,
         });
 
         // Track in subscription (non-blocking)
@@ -259,10 +268,18 @@ router.get('/patients/:id/history', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 router.put('/patients/:id', verifyClinicAdmin, async (req, res) => {
     try {
-        const { name, email, dob, gender, address, bloodGroup, allergies, chronicConditions, medicalNotes } = req.body;
+        const { name, email, dob, gender, address, bloodGroup, allergies, chronicConditions, medicalNotes, relatives } = req.body;
+        const updateData = { name, email, dob, gender, address, bloodGroup, allergies, chronicConditions, medicalNotes };
+        if (Array.isArray(relatives)) {
+            updateData.relatives = relatives.filter(r => r.name?.trim() || r.phone?.trim()).map(r => ({
+                name: (r.name || '').trim(),
+                relation: (r.relation || '').trim(),
+                phone: (r.phone || '').trim(),
+            }));
+        }
         const patient = await ClinicPatient.findOneAndUpdate(
             { _id: req.params.id, clinicId: hid(req) },
-            { name, email, dob, gender, address, bloodGroup, allergies, chronicConditions, medicalNotes },
+            updateData,
             { new: true, runValidators: true }
         );
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });

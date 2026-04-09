@@ -33,6 +33,13 @@ const clinicPatientSchema = new mongoose.Schema({
     chronicConditions: { type: String, default: '' },
     medicalNotes:      { type: String, default: '' },
 
+    // Emergency / known contacts
+    relatives: [{
+        name:     { type: String, trim: true, default: '' },
+        relation: { type: String, trim: true, default: '' },
+        phone:    { type: String, trim: true, default: '' },
+    }],
+
     isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 

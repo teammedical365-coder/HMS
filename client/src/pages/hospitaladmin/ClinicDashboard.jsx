@@ -370,7 +370,7 @@ const PatientsMode = ({ onBookToken }) => {
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [patientHistory, setPatientHistory] = useState(null);
     const [loadingHistory, setLoadingHistory] = useState(false);
-    const [form, setForm] = useState({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '' });
+    const [form, setForm] = useState({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '', relatives: [] });
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState({ type: '', text: '' });
     const [justRegistered, setJustRegistered] = useState(null);
@@ -415,7 +415,7 @@ const PatientsMode = ({ onBookToken }) => {
             if (r.success) {
                 if (!r.existing) setPatients(prev => [r.patient, ...prev]);
                 setJustRegistered(r.patient);
-                setForm({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '' });
+                setForm({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '', relatives: [] });
                 try { generateRegistrationSlipPDF(r.patient); } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
             } else flash('error', r.message);
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
@@ -449,6 +449,22 @@ const PatientsMode = ({ onBookToken }) => {
                             Registered: {fmtDate(selectedPatient.createdAt)}
                         </div>
                     </div>
+
+                    {/* Relatives */}
+                    {selectedPatient.relatives?.length > 0 && (
+                        <div style={{ marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
+                            <div style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', marginBottom: '8px' }}>👨‍👩‍👧 Emergency Contacts</div>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                {selectedPatient.relatives.map((rel, i) => (
+                                    <div key={i} style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '8px 14px', fontSize: '12px' }}>
+                                        <div style={{ fontWeight: '700', color: '#0f172a' }}>{rel.name}</div>
+                                        {rel.relation && <div style={{ color: '#0369a1', fontSize: '11px' }}>{rel.relation}</div>}
+                                        {rel.phone && <div style={{ color: '#475569', marginTop: '2px' }}>📞 {rel.phone}</div>}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {loadingHistory ? <Spinner text="Loading history..." /> : patientHistory ? (
@@ -602,6 +618,64 @@ const PatientsMode = ({ onBookToken }) => {
                                     <label>Chronic Conditions</label>
                                     <input className="clinic-input" placeholder="e.g. Diabetes, Hypertension (optional)" value={form.chronicConditions} onChange={e => setForm(f => ({ ...f, chronicConditions: e.target.value }))} />
                                 </div>
+
+                                {/* Relatives / Emergency Contacts */}
+                                <div style={{ gridColumn: '1/-1', marginTop: '4px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                        <label style={{ fontWeight: '700', fontSize: '13px', color: '#374151' }}>👨‍👩‍👧 Relatives / Emergency Contacts</label>
+                                        <button type="button"
+                                            onClick={() => setForm(f => ({ ...f, relatives: [...f.relatives, { name: '', relation: '', phone: '' }] }))}
+                                            style={{ fontSize: '12px', padding: '4px 12px', background: '#f0fdf4', border: '1px dashed #86efac', borderRadius: '6px', color: '#16a34a', cursor: 'pointer', fontWeight: '600' }}>
+                                            + Add Contact
+                                        </button>
+                                    </div>
+                                    {form.relatives.length === 0 ? (
+                                        <div style={{ fontSize: '12px', color: '#94a3b8', padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
+                                            No contacts added. Click "+ Add Contact" to add a relative or emergency contact.
+                                        </div>
+                                    ) : (
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                                <thead>
+                                                    <tr style={{ background: '#f1f5f9' }}>
+                                                        <th style={{ padding: '7px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0' }}>Name</th>
+                                                        <th style={{ padding: '7px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0' }}>Relation</th>
+                                                        <th style={{ padding: '7px 10px', textAlign: 'left', fontWeight: '700', color: '#374151', borderBottom: '1px solid #e2e8f0' }}>Phone</th>
+                                                        <th style={{ padding: '7px 10px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', width: '40px' }}></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {form.relatives.map((rel, idx) => (
+                                                        <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                                                            <td style={{ padding: '5px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                                                <input value={rel.name} onChange={e => setForm(f => { const r = [...f.relatives]; r[idx] = { ...r[idx], name: e.target.value }; return { ...f, relatives: r }; })}
+                                                                    placeholder="e.g. Ramesh Kumar"
+                                                                    style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box' }} />
+                                                            </td>
+                                                            <td style={{ padding: '5px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                                                <select value={rel.relation} onChange={e => setForm(f => { const r = [...f.relatives]; r[idx] = { ...r[idx], relation: e.target.value }; return { ...f, relatives: r }; })}
+                                                                    style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box', background: '#fff' }}>
+                                                                    <option value=''>Select...</option>
+                                                                    {['Father','Mother','Spouse','Son','Daughter','Brother','Sister','Guardian','Friend','Other'].map(r => <option key={r}>{r}</option>)}
+                                                                </select>
+                                                            </td>
+                                                            <td style={{ padding: '5px 8px', borderBottom: '1px solid #f1f5f9' }}>
+                                                                <input value={rel.phone} onChange={e => setForm(f => { const r = [...f.relatives]; r[idx] = { ...r[idx], phone: e.target.value.replace(/\D/g, '').slice(0, 10) }; return { ...f, relatives: r }; })}
+                                                                    placeholder="10-digit number" maxLength={10} type="tel"
+                                                                    style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box' }} />
+                                                            </td>
+                                                            <td style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>
+                                                                <button type="button" onClick={() => setForm(f => ({ ...f, relatives: f.relatives.filter((_, i) => i !== idx) }))}
+                                                                    style={{ background: '#fee2e2', border: 'none', borderRadius: '4px', color: '#dc2626', width: '24px', height: '24px', cursor: 'pointer', fontSize: '14px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+
                                 <div style={{ gridColumn: '1/-1' }}>
                                     <button type="submit" className="clinic-btn-primary" disabled={saving}>
                                         {saving ? 'Registering...' : '✅ Register Patient'}
@@ -1004,6 +1078,15 @@ const DoctorMode = () => {
                             {consulting.clinicPatientId?.allergies && <span style={{ background: '#fef3c7', color: '#92400e', padding: '1px 7px', borderRadius: '4px' }}>⚠️ {consulting.clinicPatientId.allergies}</span>}
                         </div>
                         {consulting.notes && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>Chief complaint: {consulting.notes}</div>}
+                        {consulting.clinicPatientId?.relatives?.length > 0 && (
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                                {consulting.clinicPatientId.relatives.map((rel, i) => (
+                                    <span key={i} style={{ fontSize: '11px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '4px', padding: '1px 8px', color: '#0369a1' }}>
+                                        👤 {rel.name}{rel.relation ? ` (${rel.relation})` : ''}{rel.phone ? ` · ${rel.phone}` : ''}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 
