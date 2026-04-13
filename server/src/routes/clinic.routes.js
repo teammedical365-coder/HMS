@@ -498,23 +498,8 @@ router.put('/appointments/:id/complete', verifyClinicAdmin, async (req, res) => 
 
         await appt.save();
 
-        // Create pharmacy order if medicines prescribed
-        if (medicines && medicines.length > 0) {
-            await PharmacyOrder.create({
-                userId:        appt.userId || req.user._id, // fallback to admin
-                patientId:     appt.patientId || appt._id.toString(),
-                hospitalId:    hid(req),
-                appointmentId: appt._id,
-                doctorId:      req.user._id,
-                items: medicines.map(m => ({
-                    medicineName: m.medicineName || m.name,
-                    saltName:     m.saltName || '',
-                    frequency:    m.frequency || m.dose || m.dosage || '',
-                    duration:     m.duration || m.days || '',
-                })),
-                orderStatus: 'Upcoming',
-            });
-        }
+        // Note: clinic module does not manage pharmacy orders or billing.
+        // Prescribed medicines are stored on the appointment for prescription records only.
 
         res.json({ success: true, appointment: appt, message: 'Appointment completed' });
     } catch (err) {
@@ -574,19 +559,21 @@ router.get('/inventory', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 router.post('/inventory', verifyClinicAdmin, async (req, res) => {
     try {
-        const { name, category, stock, unit, buyingPrice, sellingPrice, expiryDate } = req.body;
-        if (!name)       return res.status(400).json({ success: false, message: 'Medicine name required' });
-        if (!expiryDate) return res.status(400).json({ success: false, message: 'Expiry date is required' });
+        const { name, category, unit } = req.body;
+        if (!name) return res.status(400).json({ success: false, message: 'Medicine name required' });
+
+        // Check for duplicate name in this clinic
+        const existing = await Inventory.findOne({ hospitalId: hid(req), name: { $regex: `^${name.trim()}$`, $options: 'i' } });
+        if (existing) return res.status(409).json({ success: false, message: `"${name}" already exists in medicine list` });
 
         const item = new Inventory({
             hospitalId:   hid(req),
-            name,
-            category:     category    || 'General',
-            stock:        Number(stock)       || 0,
-            unit:         unit         || 'Tablets',
-            buyingPrice:  Number(buyingPrice)  || 0,
-            sellingPrice: Number(sellingPrice) || 0,
-            expiryDate:   new Date(expiryDate),
+            name:         name.trim(),
+            category:     category || 'General',
+            stock:        0,
+            unit:         unit     || 'Tablets',
+            buyingPrice:  0,
+            sellingPrice: 0,
         });
         await item.save();
         res.status(201).json({ success: true, item });
