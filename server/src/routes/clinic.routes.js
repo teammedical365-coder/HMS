@@ -364,9 +364,15 @@ router.get('/appointments', verifyClinicAdmin, async (req, res) => {
         }
         if (status) query.status = status;
 
+        // Determine sort order based on clinic's appointment mode
+        const clinicForSort = await Hospital.findById(hid(req)).select('appointmentMode').lean();
+        const sortOrder = (clinicForSort?.appointmentMode || 'token') === 'slot'
+            ? { appointmentTime: 1, createdAt: -1 }
+            : { tokenNumber: 1, createdAt: -1 };
+
         const appointments = await Appointment.find(query)
             .populate('clinicPatientId', 'name phone patientUid gender bloodGroup')
-            .sort({ tokenNumber: 1, createdAt: -1 })
+            .sort(sortOrder)
             .lean();
 
         res.json({ success: true, appointments });
@@ -376,25 +382,66 @@ router.get('/appointments', verifyClinicAdmin, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// BOOK APPOINTMENT (token) — POST /api/clinic/appointments
+// CLINIC CONFIG — GET /api/clinic/config
+// Returns appointmentMode and basic clinic info
+// ─────────────────────────────────────────────
+router.get('/config', verifyClinicAdmin, async (req, res) => {
+    try {
+        const clinic = await Hospital.findById(hid(req)).select('appointmentMode name clinicCode').lean();
+        if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
+        res.json({ success: true, appointmentMode: clinic.appointmentMode || 'token', name: clinic.name, clinicCode: clinic.clinicCode });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────
+// BOOK APPOINTMENT — POST /api/clinic/appointments
+// Supports both token mode and time-slot mode
 // ─────────────────────────────────────────────
 router.post('/appointments', verifyClinicAdmin, async (req, res) => {
     try {
-        const { patientId, amount, notes, serviceName } = req.body;
+        const { patientId, amount, notes, serviceName, appointmentTime } = req.body;
         // patientId here is ClinicPatient._id
         if (!patientId) return res.status(400).json({ success: false, message: 'patientId is required' });
 
         const clinicId = hid(req);
-        const patient  = await ClinicPatient.findOne({ _id: patientId, clinicId });
+        const [patient, clinic] = await Promise.all([
+            ClinicPatient.findOne({ _id: patientId, clinicId }),
+            Hospital.findById(clinicId).select('appointmentMode').lean(),
+        ]);
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found in this clinic' });
 
+        const isTokenMode = (clinic?.appointmentMode || 'token') === 'token';
         const { start: today, end: todayEnd } = todayRange();
-        const count = await Appointment.countDocuments({
-            hospitalId: clinicId,
-            appointmentDate: { $gte: today, $lte: todayEnd },
-            status: { $ne: 'cancelled' }
-        });
-        const tokenNumber = count + 1;
+        let tokenNumber = null;
+        let finalTime   = new Date().toTimeString().slice(0, 5);
+
+        if (isTokenMode) {
+            // Token mode: assign next sequential token for today
+            const count = await Appointment.countDocuments({
+                hospitalId: clinicId,
+                appointmentDate: { $gte: today, $lte: todayEnd },
+                status: { $ne: 'cancelled' }
+            });
+            tokenNumber = count + 1;
+            finalTime   = new Date().toTimeString().slice(0, 5);
+        } else {
+            // Slot mode: appointmentTime is required, check for double-booking
+            if (!appointmentTime) {
+                return res.status(400).json({ success: false, message: 'Appointment time is required for time-slot booking' });
+            }
+            const conflict = await Appointment.findOne({
+                hospitalId: clinicId,
+                appointmentTime,
+                appointmentDate: { $gte: today, $lte: todayEnd },
+                status: { $ne: 'cancelled' },
+            });
+            if (conflict) {
+                return res.status(409).json({ success: false, message: `Time slot ${appointmentTime} is already booked for today` });
+            }
+            finalTime = appointmentTime;
+        }
 
         const appointment = new Appointment({
             clinicPatientId: patient._id,
@@ -404,7 +451,7 @@ router.post('/appointments', verifyClinicAdmin, async (req, res) => {
             doctorName:      req.user.name,
             serviceName:     serviceName || 'General Consultation',
             appointmentDate: new Date(),
-            appointmentTime: new Date().toTimeString().slice(0, 5),
+            appointmentTime: finalTime,
             tokenNumber,
             status:        'confirmed',
             paymentStatus: 'pending',
@@ -415,11 +462,11 @@ router.post('/appointments', verifyClinicAdmin, async (req, res) => {
 
         await appointment.save();
 
-        res.status(201).json({
-            success: true,
-            appointment,
-            message: `Token #${tokenNumber} assigned to ${patient.name}`
-        });
+        const message = isTokenMode
+            ? `Token #${tokenNumber} assigned to ${patient.name}`
+            : `Appointment at ${finalTime} booked for ${patient.name}`;
+
+        res.status(201).json({ success: true, appointment, message, isTokenMode });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }

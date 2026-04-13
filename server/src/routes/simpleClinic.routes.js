@@ -106,11 +106,9 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
 router.put('/:id', verifyCentralAdmin, async (req, res) => {
     try {
         const { name, address, city, state, phone, email, website, appointmentFee, isActive,
-                maxDoctors, maxReceptionists, ratePerPatient, billingEnabled } = req.body;
+                maxDoctors, maxReceptionists, ratePerPatient, billingEnabled, appointmentMode } = req.body;
 
-        const update = {
-            appointmentMode: 'token', // always token for clinics
-        };
+        const update = {};
         if (name       !== undefined) update.name       = name;
         if (address    !== undefined) update.address    = address;
         if (city       !== undefined) update.city       = city;
@@ -128,6 +126,11 @@ router.put('/:id', verifyCentralAdmin, async (req, res) => {
         // Subscription config
         if (ratePerPatient !== undefined) update['subscription.ratePerPatient'] = Number(ratePerPatient);
         if (billingEnabled !== undefined) update['subscription.billingEnabled'] = billingEnabled;
+
+        // Appointment mode — central admin can switch between token and slot
+        if (appointmentMode !== undefined && ['slot', 'token'].includes(appointmentMode)) {
+            update.appointmentMode = appointmentMode;
+        }
 
         const clinic = await Hospital.findOneAndUpdate(
             { _id: req.params.id, clinicType: 'clinic' },

@@ -694,38 +694,66 @@ const PatientsMode = ({ onBookToken }) => {
 // ═══════════════════════════════════════════════════
 // RECEPTION MODE
 // ═══════════════════════════════════════════════════
-// ── Inline token booking form ──────────────────────────────────────────────
-const BookTokenForm = ({ patient, onBook, onCancel, flash }) => {
-    const [form, setForm] = useState({ amount: '', serviceName: 'General Consultation', notes: '' });
+// ── Inline booking form (supports token and slot modes) ────────────────────
+const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token' }) => {
+    const isSlotMode = mode === 'slot';
+    const [form, setForm] = useState({ amount: '', serviceName: 'General Consultation', notes: '', appointmentTime: '' });
     const [booking, setBooking] = useState(false);
 
     const submit = async (e) => {
         e.preventDefault();
+        if (isSlotMode && !form.appointmentTime) {
+            flash('error', 'Please select an appointment time');
+            return;
+        }
         setBooking(true);
         try {
-            const r = await clinicAPI.bookAppointment({
+            const payload = {
                 patientId: patient._id,
                 amount: Number(form.amount) || 0,
                 serviceName: form.serviceName,
                 notes: form.notes,
-            });
+            };
+            if (isSlotMode) payload.appointmentTime = form.appointmentTime;
+
+            const r = await clinicAPI.bookAppointment(payload);
             if (r.success) {
-                flash('success', `✅ Token #${r.appointment.tokenNumber} assigned to ${patient.name}`);
+                if (isSlotMode) {
+                    flash('success', `✅ Appointment at ${form.appointmentTime} booked for ${patient.name}`);
+                } else {
+                    flash('success', `✅ Token #${r.appointment.tokenNumber} assigned to ${patient.name}`);
+                    try { generateTokenReceiptPDF(patient, r.appointment); } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
+                }
                 onBook();
-                try { generateTokenReceiptPDF(patient, r.appointment); } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
             } else flash('error', r.message);
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
         finally { setBooking(false); }
     };
 
+    // Generate 30-minute time slots from 07:00 to 20:00
+    const timeSlots = [];
+    for (let h = 7; h <= 20; h++) {
+        timeSlots.push(`${String(h).padStart(2, '0')}:00`);
+        if (h < 20) timeSlots.push(`${String(h).padStart(2, '0')}:30`);
+    }
+
     return (
-        <form onSubmit={submit} style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px 16px', marginTop: '8px' }}>
+        <form onSubmit={submit} style={{ background: isSlotMode ? '#eff6ff' : '#f0fdf4', border: `1px solid ${isSlotMode ? '#bfdbfe' : '#bbf7d0'}`, borderRadius: '10px', padding: '14px 16px', marginTop: '8px' }}>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: '2', minWidth: '150px' }}>
                     <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Service</label>
                     <input className="clinic-input" placeholder="General Consultation" value={form.serviceName}
                         onChange={e => setForm(f => ({ ...f, serviceName: e.target.value }))} />
                 </div>
+                {isSlotMode && (
+                    <div style={{ flex: '1', minWidth: '120px' }}>
+                        <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Time Slot *</label>
+                        <select className="clinic-input" value={form.appointmentTime} onChange={e => setForm(f => ({ ...f, appointmentTime: e.target.value }))} required>
+                            <option value="">Select time…</option>
+                            {timeSlots.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                    </div>
+                )}
                 <div style={{ flex: '1', minWidth: '100px' }}>
                     <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Fee (₹)</label>
                     <input className="clinic-input" type="number" placeholder="0" value={form.amount}
@@ -738,7 +766,7 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash }) => {
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
                     <button type="submit" className="clinic-btn-primary" disabled={booking} style={{ whiteSpace: 'nowrap', padding: '8px 16px' }}>
-                        {booking ? '...' : '🎟️ Assign Token & Receipt'}
+                        {booking ? '...' : isSlotMode ? '🕐 Book Appointment' : '🎟️ Assign Token & Receipt'}
                     </button>
                     <button type="button" className="clinic-btn-secondary" onClick={onCancel} style={{ padding: '8px 12px' }}>✕</button>
                 </div>
@@ -755,6 +783,8 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
     const [searching, setSearching] = useState(false);
     const [assigningFor, setAssigningFor] = useState(preselectedPatient?._id || null);
     const [msg, setMsg] = useState({ type: '', text: '' });
+    // Clinic appointment mode (fetched from config)
+    const [appointmentMode, setAppointmentMode] = useState('token');
     // Quick register state
     const [showQuickReg, setShowQuickReg] = useState(false);
     const [qrForm, setQrForm] = useState({ name: '', phone: '', gender: 'Male' });
@@ -762,6 +792,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
 
     const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg({ type: '', text: '' }), 4000); };
     const today = todayStr();
+    const isSlotMode = appointmentMode === 'slot';
 
     const loadAll = useCallback(() => {
         setLoading(true);
@@ -773,6 +804,10 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
             if (ar.success) setAppointments(ar.appointments);
         }).catch(console.error).finally(() => setLoading(false));
     }, [today]); // eslint-disable-line
+
+    useEffect(() => {
+        clinicAPI.getConfig().then(r => { if (r.success) setAppointmentMode(r.appointmentMode || 'token'); }).catch(() => {});
+    }, []);
 
     useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -798,14 +833,14 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
                 setShowQuickReg(false);
                 setQrForm({ name: '', phone: '', gender: 'Male' });
                 if (clearPreselected) clearPreselected();
-                flash('success', `${r.existing ? 'Found' : 'Registered'}: ${r.patient.patientUid} — assign a token below.`);
+                flash('success', `${r.existing ? 'Found' : 'Registered'}: ${r.patient.patientUid} — ${isSlotMode ? 'book an appointment below.' : 'assign a token below.'}`);
             } else flash('error', r.message);
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
         finally { setQrSaving(false); }
     };
 
     const cancelAppt = async (id) => {
-        if (!window.confirm('Cancel this token?')) return;
+        if (!window.confirm(isSlotMode ? 'Cancel this appointment?' : 'Cancel this token?')) return;
         try {
             await clinicAPI.cancelAppointment(id);
             setAppointments(prev => prev.map(a => a._id === id ? { ...a, status: 'cancelled' } : a));
@@ -837,7 +872,10 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
                     <div>
                         <h3 style={{ margin: 0 }}>📋 Reception — {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}</h3>
                         <p style={{ color: '#64748b', fontSize: '12px', margin: '3px 0 0' }}>
-                            {activeTokens.length} in queue · {doneToday.length} done today · {patients.length} total patients
+                            {activeTokens.length} {isSlotMode ? 'scheduled' : 'in queue'} · {doneToday.length} done today · {patients.length} total patients
+                            <span style={{ marginLeft: '8px', background: isSlotMode ? '#dbeafe' : '#fef3c7', color: isSlotMode ? '#1d4ed8' : '#92400e', padding: '1px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 700 }}>
+                                {isSlotMode ? '🕐 Time Slots' : '🎟️ Tokens'}
+                            </span>
                         </p>
                     </div>
                     <button className="clinic-btn-secondary" style={{ fontSize: '12px' }} onClick={loadAll}>↻ Refresh</button>
@@ -877,7 +915,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
                             </div>
                             <div style={{ display: 'flex', gap: '6px' }}>
                                 <button type="submit" className="clinic-btn-primary" disabled={qrSaving} style={{ whiteSpace: 'nowrap' }}>
-                                    {qrSaving ? '...' : '✅ Register & Assign Token'}
+                                    {qrSaving ? '...' : isSlotMode ? '✅ Register & Book' : '✅ Register & Assign Token'}
                                 </button>
                                 <button type="button" className="clinic-btn-secondary" onClick={() => setShowQuickReg(false)}>Cancel</button>
                             </div>
@@ -918,9 +956,15 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
                                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
                                         {hasToken && (
                                             <>
-                                                <span style={{ background: '#6366f1', color: '#fff', fontWeight: 800, padding: '4px 12px', borderRadius: '6px', fontSize: '14px' }}>
-                                                    #{appt.tokenNumber}
-                                                </span>
+                                                {isSlotMode ? (
+                                                    <span style={{ background: '#3b82f6', color: '#fff', fontWeight: 800, padding: '4px 12px', borderRadius: '6px', fontSize: '13px' }}>
+                                                        🕐 {appt.appointmentTime}
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ background: '#6366f1', color: '#fff', fontWeight: 800, padding: '4px 12px', borderRadius: '6px', fontSize: '14px' }}>
+                                                        #{appt.tokenNumber}
+                                                    </span>
+                                                )}
                                                 <StatusBadge status={appt.status} />
                                                 <button className="clinic-btn-remove" onClick={() => cancelAppt(appt._id)}>✕</button>
                                             </>
@@ -929,7 +973,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
                                         {!hasToken && !isDone && (
                                             <button className="clinic-btn-primary" style={{ fontSize: '12px', padding: '6px 14px', whiteSpace: 'nowrap' }}
                                                 onClick={() => setAssigningFor(isExpanding ? null : p._id)}>
-                                                {isExpanding ? '✕ Cancel' : '🎟️ Assign Token'}
+                                                {isExpanding ? '✕ Cancel' : isSlotMode ? '🕐 Book Slot' : '🎟️ Assign Token'}
                                             </button>
                                         )}
                                     </div>
@@ -937,6 +981,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
                                 {isExpanding && !hasToken && (
                                     <BookTokenForm
                                         patient={p}
+                                        mode={appointmentMode}
                                         flash={flash}
                                         onBook={() => { setAssigningFor(null); if (clearPreselected) clearPreselected(); loadAll(); }}
                                         onCancel={() => { setAssigningFor(null); if (clearPreselected) clearPreselected(); }}

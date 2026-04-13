@@ -366,6 +366,7 @@ export const clinicAPI = {
         const qs = params.toString();
         return (await apiClient.get(`/api/clinic/appointments${qs ? '?' + qs : ''}`)).data;
     },
+    getConfig: async () => (await apiClient.get('/api/clinic/config')).data,
     bookAppointment: async (data) => (await apiClient.post('/api/clinic/appointments', data)).data,
     completeAppointment: async (id, data) => (await apiClient.put(`/api/clinic/appointments/${id}/complete`, data)).data,
     payAppointment: async (id, paymentMethod = 'Cash') => (await apiClient.put(`/api/clinic/appointments/${id}/pay`, { paymentMethod })).data,
@@ -411,6 +412,9 @@ export const simpleClinicAPI = {
     getSubscriptions: async (id) => (await apiClient.get(`/api/simple-clinics/${id}/subscriptions`)).data,
     setRate: async (id, data) => (await apiClient.put(`/api/simple-clinics/${id}/subscriptions/rate`, data)).data,
     updateSubscription: async (clinicId, subId, data) => (await apiClient.put(`/api/simple-clinics/${clinicId}/subscriptions/${subId}`, data)).data,
+    // Appointment mode (Central Admin only)
+    updateAppointmentMode: async (id, appointmentMode) =>
+        (await apiClient.put(`/api/simple-clinics/${id}`, { appointmentMode })).data,
 };
 
 export const revenueAPI = {

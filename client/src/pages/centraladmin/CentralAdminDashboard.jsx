@@ -77,6 +77,10 @@ const CentralAdminDashboard = () => {
     const [subscriptionRateForm, setSubscriptionRateForm] = useState({ ratePerPatient: '', billingEnabled: false });
     const [savingRate, setSavingRate] = useState(false);
 
+    // Clinic appointment mode (Central Admin only)
+    const [clinicApptMode, setClinicApptMode] = useState('token'); // 'slot' | 'token'
+    const [savingClinicApptMode, setSavingClinicApptMode] = useState(false);
+
     // Revenue Plans tab
     const [revenuePlans, setRevenuePlans] = useState([]);
     const [loadingRevenuePlans, setLoadingRevenuePlans] = useState(false);
@@ -191,6 +195,7 @@ const CentralAdminDashboard = () => {
 
     const openClinicDetail = async (clinic) => {
         setSelectedClinic(clinic);
+        setClinicApptMode(clinic.appointmentMode || 'token');
         setLoadingClinicStats(true);
         setClinicStats(null);
         setClinicSubscriptions([]);
@@ -219,6 +224,20 @@ const CentralAdminDashboard = () => {
             setSuccess('Billing rate updated successfully');
         } catch (err) { setError(err.response?.data?.message || err.message); }
         finally { setSavingRate(false); }
+    };
+
+    const handleSaveClinicApptMode = async () => {
+        setSavingClinicApptMode(true);
+        setError(''); setSuccess('');
+        try {
+            const res = await simpleClinicAPI.updateAppointmentMode(selectedClinic._id, clinicApptMode);
+            if (res.success) {
+                setSuccess(`Appointment mode set to "${clinicApptMode === 'token' ? 'Token Queue' : 'Time Slot'}" for ${selectedClinic.name}`);
+                setSelectedClinic(prev => ({ ...prev, appointmentMode: clinicApptMode }));
+                fetchClinics();
+            }
+        } catch (err) { setError(err.response?.data?.message || err.message); }
+        finally { setSavingClinicApptMode(false); }
     };
 
     const handleMarkSubscription = async (subId, status) => {
@@ -1678,6 +1697,86 @@ const CentralAdminDashboard = () => {
                                     ) : (
                                         <p style={{ color: '#94a3b8', textAlign: 'center', padding: '16px 0', fontSize: '13px' }}>No billing records yet. Records appear once patients are registered.</p>
                                     )}
+                                </div>
+
+                                {/* ── Appointment System Mode ── */}
+                                <div className="admin-card" style={{ marginTop: '20px', border: '2px solid #e0f2fe' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                                        <h3 style={{ margin: 0 }}>🎟️ Appointment System Mode</h3>
+                                        <span style={{ fontSize: '0.75rem', background: selectedClinic.appointmentMode === 'token' ? '#fef3c7' : '#dbeafe', color: selectedClinic.appointmentMode === 'token' ? '#92400e' : '#1d4ed8', padding: '2px 10px', borderRadius: '20px', fontWeight: 700 }}>
+                                            Current: {selectedClinic.appointmentMode === 'token' ? 'Token Queue' : 'Time Slots'}
+                                        </span>
+                                    </div>
+                                    <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 18px' }}>
+                                        Choose how patients are managed in this clinic's reception queue.
+                                    </p>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                                        {/* Token Mode Card */}
+                                        <label style={{
+                                            display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
+                                            border: clinicApptMode === 'token' ? '2px solid #f59e0b' : '2px solid #e2e8f0',
+                                            background: clinicApptMode === 'token' ? '#fffbeb' : '#f8fafc',
+                                            transition: 'all 0.15s'
+                                        }}>
+                                            <input type="radio" name="clinicApptMode" value="token" checked={clinicApptMode === 'token'} onChange={() => setClinicApptMode('token')} style={{ display: 'none' }} />
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                                <span style={{ fontSize: '2rem', lineHeight: 1 }}>🎟️</span>
+                                                <div>
+                                                    <div style={{ fontWeight: 700, fontSize: '1rem', color: clinicApptMode === 'token' ? '#92400e' : '#1e293b', marginBottom: '4px' }}>
+                                                        Token Queue System
+                                                        {clinicApptMode === 'token' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#f59e0b', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
+                                                        Sequential tokens (1, 2, 3…) per day. Auto-resets at midnight. No time-slot picking needed. Best for walk-in clinics.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </label>
+                                        {/* Slot Mode Card */}
+                                        <label style={{
+                                            display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
+                                            border: clinicApptMode === 'slot' ? '2px solid #3b82f6' : '2px solid #e2e8f0',
+                                            background: clinicApptMode === 'slot' ? '#eff6ff' : '#f8fafc',
+                                            transition: 'all 0.15s'
+                                        }}>
+                                            <input type="radio" name="clinicApptMode" value="slot" checked={clinicApptMode === 'slot'} onChange={() => setClinicApptMode('slot')} style={{ display: 'none' }} />
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                                <span style={{ fontSize: '2rem', lineHeight: 1 }}>🕐</span>
+                                                <div>
+                                                    <div style={{ fontWeight: 700, fontSize: '1rem', color: clinicApptMode === 'slot' ? '#1d4ed8' : '#1e293b', marginBottom: '4px' }}>
+                                                        Time Slot Booking
+                                                        {clinicApptMode === 'slot' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#3b82f6', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
+                                                        Patients pick a specific time (09:00, 09:30…). Fixed scheduling with conflict prevention. Best for planned appointments.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    {clinicApptMode !== (selectedClinic.appointmentMode || 'token') && (
+                                        <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: '8px', padding: '10px 14px', fontSize: '0.85rem', color: '#713f12', marginBottom: '14px' }}>
+                                            ⚠️ You are changing the appointment mode. Existing appointments will not be affected — only new bookings will follow the new mode.
+                                        </div>
+                                    )}
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <button
+                                            onClick={handleSaveClinicApptMode}
+                                            disabled={savingClinicApptMode || clinicApptMode === (selectedClinic.appointmentMode || 'token')}
+                                            style={{
+                                                padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none',
+                                                borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem',
+                                                opacity: (savingClinicApptMode || clinicApptMode === (selectedClinic.appointmentMode || 'token')) ? 0.5 : 1
+                                            }}
+                                        >
+                                            {savingClinicApptMode ? 'Saving…' : 'Save Mode'}
+                                        </button>
+                                        {clinicApptMode === (selectedClinic.appointmentMode || 'token') && (
+                                            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>No changes to save</span>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Quick Access Links */}
