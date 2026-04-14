@@ -40,6 +40,14 @@ const clinicPatientSchema = new mongoose.Schema({
         phone:    { type: String, trim: true, default: '' },
     }],
 
+    // Uploaded medical reports (PDFs / images)
+    reports: [{
+        name:       { type: String, required: true, trim: true },
+        filename:   { type: String, required: true },   // server-side filename
+        mimetype:   { type: String, default: 'application/pdf' },
+        uploadedAt: { type: Date, default: Date.now },
+    }],
+
     isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 

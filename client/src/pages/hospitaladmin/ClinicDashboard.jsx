@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clinicAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
@@ -360,6 +360,93 @@ const OverviewMode = () => {
 };
 
 // ═══════════════════════════════════════════════════
+// REPORT VIEWER — inline PDF/image panel
+// ═══════════════════════════════════════════════════
+const baseURL = import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com';
+const reportURL = (filename) => `${baseURL}/uploads/patient-reports/${encodeURIComponent(filename)}`;
+
+const ReportViewerModal = ({ report, onClose }) => {
+    const url = reportURL(report.filename);
+    const isPDF = report.mimetype === 'application/pdf';
+    return (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9000, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#1e293b', padding: '10px 20px', color: '#fff' }}>
+                <span style={{ fontWeight: 700, fontSize: '14px' }}>📄 {report.name}</span>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <a href={url} target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize: '12px', color: '#7dd3fc', textDecoration: 'none' }}>Open in new tab ↗</a>
+                    <button onClick={onClose}
+                        style={{ background: '#ef4444', border: 'none', color: '#fff', borderRadius: '6px', padding: '4px 12px', cursor: 'pointer', fontWeight: 700 }}>✕ Close</button>
+                </div>
+            </div>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+                {isPDF ? (
+                    <iframe src={url} title={report.name} style={{ width: '100%', height: '100%', border: 'none' }} />
+                ) : (
+                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', overflow: 'auto' }}>
+                        <img src={url} alt={report.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// ─── Compact report panel used inside DoctorMode ─────────────────────────────
+const PatientReportPanel = ({ patientId, patientName }) => {
+    const [reports, setReports] = useState([]);
+    const [viewReport, setViewReport] = useState(null);
+    const [open, setOpen] = useState(false);
+
+    useEffect(() => {
+        if (!patientId) return;
+        clinicAPI.getPatientHistory(patientId)
+            .then(r => { if (r.success) setReports(r.patient?.reports || []); })
+            .catch(() => {});
+    }, [patientId]);
+
+    if (!patientId) return null;
+
+    return (
+        <>
+            {viewReport && <ReportViewerModal report={viewReport} onClose={() => setViewReport(null)} />}
+            <div style={{ marginBottom: '20px', border: '1px solid #e0e7ff', borderRadius: '10px', overflow: 'hidden' }}>
+                <button
+                    onClick={() => setOpen(o => !o)}
+                    style={{ width: '100%', background: '#eef2ff', border: 'none', padding: '10px 16px', textAlign: 'left', cursor: 'pointer', fontWeight: 600, fontSize: '13px', color: '#4338ca', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>📄 Previous Reports ({reports.length})</span>
+                    <span>{open ? '▲' : '▼'}</span>
+                </button>
+                {open && (
+                    <div style={{ background: '#f8faff', padding: '12px 16px' }}>
+                        {reports.length === 0 ? (
+                            <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>No reports uploaded for {patientName || 'this patient'}.</p>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {reports.map(r => (
+                                    <div key={r._id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', border: '1px solid #e0e7ff', borderRadius: '8px', padding: '8px 12px' }}>
+                                        <span style={{ fontSize: '20px' }}>{r.mimetype === 'application/pdf' ? '📄' : '🖼️'}</span>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontWeight: 600, fontSize: '13px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>{r.uploadedAt ? new Date(r.uploadedAt).toLocaleDateString('en-IN') : ''}</div>
+                                        </div>
+                                        <button
+                                            onClick={() => setViewReport(r)}
+                                            style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: '6px', padding: '4px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
+                                            View
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </>
+    );
+};
+
+// ═══════════════════════════════════════════════════
 // PATIENTS MODE
 // ═══════════════════════════════════════════════════
 const PatientsMode = ({ onBookToken }) => {
@@ -375,6 +462,12 @@ const PatientsMode = ({ onBookToken }) => {
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState({ type: '', text: '' });
     const [justRegistered, setJustRegistered] = useState(null);
+    // Reports state
+    const [patientReports, setPatientReports] = useState([]);
+    const [viewReport, setViewReport] = useState(null);
+    const [uploading, setUploading] = useState(false);
+    const [reportName, setReportName] = useState('');
+    const fileInputRef = useRef(null);
 
     const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg({ type: '', text: '' }), 6000); };
 
@@ -402,10 +495,43 @@ const PatientsMode = ({ onBookToken }) => {
         setSelectedPatient(p);
         setLoadingHistory(true);
         setPatientHistory(null);
+        setPatientReports([]);
         clinicAPI.getPatientHistory(p._id)
-            .then(r => { if (r.success) setPatientHistory(r); })
+            .then(r => {
+                if (r.success) {
+                    setPatientHistory(r);
+                    setPatientReports(r.patient?.reports || []);
+                }
+            })
             .catch(console.error)
             .finally(() => setLoadingHistory(false));
+    };
+
+    const handleUploadReport = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedPatient) return;
+        setUploading(true);
+        try {
+            const name = reportName.trim() || file.name;
+            const r = await clinicAPI.uploadPatientReport(selectedPatient._id, file, name);
+            if (r.success) {
+                setPatientReports(prev => [...prev, r.report]);
+                setReportName('');
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                flash('success', 'Report uploaded successfully');
+            } else flash('error', r.message);
+        } catch (e) { flash('error', e.response?.data?.message || e.message); }
+        finally { setUploading(false); }
+    };
+
+    const handleDeleteReport = async (reportId) => {
+        if (!selectedPatient) return;
+        if (!window.confirm('Delete this report?')) return;
+        try {
+            const r = await clinicAPI.deletePatientReport(selectedPatient._id, reportId);
+            if (r.success) setPatientReports(prev => prev.filter(rp => rp._id !== reportId));
+            else flash('error', r.message);
+        } catch (e) { flash('error', e.response?.data?.message || e.message); }
     };
 
     const handleRegister = async (e) => {
@@ -464,6 +590,66 @@ const PatientsMode = ({ onBookToken }) => {
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* ── Medical Reports ────────────────────────────────────────── */}
+                {viewReport && <ReportViewerModal report={viewReport} onClose={() => setViewReport(null)} />}
+                <div className="clinic-card" style={{ marginTop: '12px', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                        <h3 style={{ margin: 0 }}>📄 Medical Reports ({patientReports.length})</h3>
+                    </div>
+                    {/* Upload area */}
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '8px', padding: '12px' }}>
+                        <input
+                            className="clinic-input"
+                            style={{ flex: 1, minWidth: '140px' }}
+                            placeholder="Report name (optional)"
+                            value={reportName}
+                            onChange={e => setReportName(e.target.value)}
+                        />
+                        <label style={{ cursor: 'pointer', background: uploading ? '#e2e8f0' : '#6366f1', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: 600, fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                            {uploading ? 'Uploading...' : '⬆ Upload PDF / Image'}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".pdf,image/jpeg,image/png,image/webp"
+                                style={{ display: 'none' }}
+                                disabled={uploading}
+                                onChange={handleUploadReport}
+                            />
+                        </label>
+                        <div style={{ width: '100%', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>Supports PDF, JPG, PNG · max 20 MB</div>
+                    </div>
+                    {/* Report list */}
+                    {patientReports.length === 0 ? (
+                        <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '12px 0' }}>No reports uploaded yet.</p>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {patientReports.map(r => (
+                                <div key={r._id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', border: '1px solid #e0e7ff', borderRadius: '8px', padding: '10px 14px' }}>
+                                    <span style={{ fontSize: '22px' }}>{r.mimetype === 'application/pdf' ? '📄' : '🖼️'}</span>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontWeight: 600, fontSize: '14px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                                            {r.mimetype === 'application/pdf' ? 'PDF Document' : 'Image'} · {r.uploadedAt ? new Date(r.uploadedAt).toLocaleDateString('en-IN') : ''}
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button
+                                            onClick={() => setViewReport(r)}
+                                            style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 14px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
+                                            View
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteReport(r._id)}
+                                            style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
+                                            ✕
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>
@@ -1358,6 +1544,12 @@ const DoctorMode = () => {
                         )}
                     </div>
                 )}
+
+                {/* Patient Reports — inline viewer for doctor */}
+                <PatientReportPanel
+                    patientId={consulting.clinicPatientId?._id}
+                    patientName={consulting.clinicPatientId?.name}
+                />
 
                 {/* Vitals Panel */}
                 <div style={{ marginBottom: '20px', border: '1px solid #e0f2fe', borderRadius: '10px', overflow: 'hidden' }}>

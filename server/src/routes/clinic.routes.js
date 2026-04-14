@@ -7,6 +7,9 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const { verifyToken } = require('../middleware/auth.middleware');
 const Hospital = require('../models/hospital.model');
 const Appointment = require('../models/appointment.model');
@@ -16,6 +19,26 @@ const ClinicPatient = require('../models/clinicPatient.model');
 const ClinicSubscription = require('../models/clinicSubscription.model');
 const TreatmentPlan = require('../models/treatmentPlan.model');
 const Notification = require('../models/notification.model');
+
+// ─── Report upload configuration ─────────────────────────────────────────────
+const reportsDir = path.join(__dirname, '../../uploads/patient-reports');
+if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
+
+const reportStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, reportsDir),
+    filename:    (_req, file, cb) => {
+        const safe = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, 'report-' + safe + path.extname(file.originalname));
+    },
+});
+const uploadReport = multer({
+    storage: reportStorage,
+    limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+    fileFilter: (_req, file, cb) => {
+        const ok = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.mimetype);
+        cb(ok ? null : new Error('Only PDF and images are allowed'), ok);
+    },
+});
 
 // ─────────────────────────────────────────────
 // Middleware: must be hospitaladmin of a clinic
@@ -344,6 +367,47 @@ router.put('/patients/:id', verifyClinicAdmin, async (req, res) => {
         );
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
         res.json({ success: true, patient });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────
+// UPLOAD REPORT — POST /api/clinic/patients/:id/reports
+// ─────────────────────────────────────────────
+router.post('/patients/:id/reports', verifyClinicAdmin, uploadReport.single('report'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+        const patient = await ClinicPatient.findOne({ _id: req.params.id, clinicId: hid(req) });
+        if (!patient) {
+            fs.unlinkSync(req.file.path); // clean up orphaned file
+            return res.status(404).json({ success: false, message: 'Patient not found' });
+        }
+        const reportName = req.body.name?.trim() || req.file.originalname;
+        const entry = { name: reportName, filename: req.file.filename, mimetype: req.file.mimetype };
+        patient.reports.push(entry);
+        await patient.save();
+        res.json({ success: true, report: patient.reports[patient.reports.length - 1], message: 'Report uploaded' });
+    } catch (err) {
+        if (req.file) { try { fs.unlinkSync(req.file.path); } catch (_) {} }
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────
+// DELETE REPORT — DELETE /api/clinic/patients/:id/reports/:reportId
+// ─────────────────────────────────────────────
+router.delete('/patients/:id/reports/:reportId', verifyClinicAdmin, async (req, res) => {
+    try {
+        const patient = await ClinicPatient.findOne({ _id: req.params.id, clinicId: hid(req) });
+        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+        const report = patient.reports.id(req.params.reportId);
+        if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+        const filePath = path.join(reportsDir, report.filename);
+        patient.reports.pull(req.params.reportId);
+        await patient.save();
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        res.json({ success: true, message: 'Report deleted' });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
