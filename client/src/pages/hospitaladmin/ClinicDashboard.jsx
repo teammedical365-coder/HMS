@@ -276,11 +276,11 @@ const OverviewMode = () => {
 
     const kpis = [
         { label: 'Total Patients', value: stats?.totalPatients ?? 0, sub: `+${stats?.todayPatients ?? 0} today`, icon: '👤', color: '#0ea5e9' },
-        { label: "Today's Tokens", value: stats?.todayAppointments ?? 0, sub: `${stats?.pendingAppointments ?? 0} pending`, icon: '🎟️', color: '#8b5cf6' },
-        { label: 'Completed Today', value: stats?.completedAppointments ?? 0, icon: '✅', color: '#10b981' },
-        { label: "Today's Revenue", value: fmt(stats?.todayRevenue), sub: fmt(stats?.totalRevenue) + ' total', icon: '💰', color: '#f59e0b' },
+        { label: "Today's Visits", value: stats?.todayAppointments ?? 0, sub: `${stats?.completedAppointments ?? 0} completed`, icon: '🎟️', color: '#8b5cf6' },
+        { label: "Today's Collection", value: fmt(stats?.todayRevenue), sub: 'all paid upfront', icon: '💰', color: '#10b981' },
+        { label: 'Total Collection', value: fmt(stats?.totalRevenue), sub: fmt(stats?.monthRevenue) + ' this month', icon: '💵', color: '#f59e0b' },
         { label: 'This Month', value: fmt(stats?.monthRevenue), icon: '📅', color: '#6366f1' },
-        { label: 'Treatment Plan Revenue', value: fmt(stats?.treatmentPlanRevenue), sub: stats?.treatmentPlanPending ? fmt(stats.treatmentPlanPending) + ' pending' : 'No pending', icon: '📅', color: '#0891b2' },
+        { label: 'Treatment Plans', value: fmt(stats?.treatmentPlanRevenue), sub: stats?.treatmentPlanPending ? fmt(stats.treatmentPlanPending) + ' outstanding' : 'No outstanding', icon: '📋', color: '#0891b2' },
     ];
 
     return (
@@ -322,7 +322,7 @@ const OverviewMode = () => {
                 <div className="clinic-card" style={{ marginBottom: '16px' }}>
                     <h3 style={{ marginBottom: '12px' }}>📋 Recent Appointments</h3>
                     <table className="clinic-table">
-                        <thead><tr><th>Token</th><th>Patient</th><th>Date</th><th>Status</th><th>Fee</th><th>Payment</th></tr></thead>
+                        <thead><tr><th>Token</th><th>Patient</th><th>Date</th><th>Status</th><th>Fee</th><th>Method</th></tr></thead>
                         <tbody>
                             {stats.recentAppointments.map(a => (
                                 <tr key={a._id}>
@@ -333,8 +333,8 @@ const OverviewMode = () => {
                                     </td>
                                     <td style={{ fontSize: '12px' }}>{fmtDate(a.appointmentDate)}</td>
                                     <td><StatusBadge status={a.status} /></td>
-                                    <td>{fmt(a.amount)}</td>
-                                    <td><PayBadge status={a.paymentStatus} /></td>
+                                    <td><strong style={{ color: '#16a34a' }}>{fmt(a.amount)}</strong></td>
+                                    <td><span style={{ fontSize: '11px', color: '#64748b' }}>{a.paymentMethod || 'Cash'}</span></td>
                                 </tr>
                             ))}
                         </tbody>
@@ -475,7 +475,7 @@ const PatientsMode = ({ onBookToken }) => {
                             <p style={{ color: '#94a3b8', textAlign: 'center', padding: '20px 0' }}>No visits yet.</p>
                         ) : (
                             <table className="clinic-table">
-                                <thead><tr><th>Date</th><th>Token</th><th>Diagnosis</th><th>Medicines</th><th>Status</th><th>Fee</th><th>Payment</th></tr></thead>
+                                <thead><tr><th>Date</th><th>Token</th><th>Diagnosis</th><th>Medicines</th><th>Status</th><th>Fee</th></tr></thead>
                                 <tbody>
                                     {patientHistory.appointments.map(a => (
                                         <tr key={a._id}>
@@ -487,8 +487,7 @@ const PatientsMode = ({ onBookToken }) => {
                                                 {(a.pharmacy || []).length > 2 && <div>+{a.pharmacy.length - 2} more</div>}
                                             </td>
                                             <td><StatusBadge status={a.status} /></td>
-                                            <td>{fmt(a.amount)}</td>
-                                            <td><PayBadge status={a.paymentStatus} /></td>
+                                            <td><strong style={{ color: '#16a34a' }}>{fmt(a.amount)}</strong></td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -697,31 +696,34 @@ const PatientsMode = ({ onBookToken }) => {
 // ── Inline booking form (supports token and slot modes) ────────────────────
 const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token' }) => {
     const isSlotMode = mode === 'slot';
-    const [form, setForm] = useState({ amount: '', serviceName: 'General Consultation', notes: '', appointmentTime: '' });
+    const [form, setForm] = useState({ amount: '', serviceName: 'General Consultation', notes: '', appointmentTime: '', paymentMethod: 'Cash' });
     const [booking, setBooking] = useState(false);
+
+    const fee = Number(form.amount) || 0;
+    // Payment method is required when fee > 0
+    const canSubmit = !booking && (fee === 0 || form.paymentMethod) && (!isSlotMode || form.appointmentTime);
 
     const submit = async (e) => {
         e.preventDefault();
-        if (isSlotMode && !form.appointmentTime) {
-            flash('error', 'Please select an appointment time');
-            return;
-        }
+        if (isSlotMode && !form.appointmentTime) { flash('error', 'Please select an appointment time'); return; }
+        if (fee > 0 && !form.paymentMethod) { flash('error', 'Select a payment method to collect the fee'); return; }
         setBooking(true);
         try {
             const payload = {
-                patientId: patient._id,
-                amount: Number(form.amount) || 0,
-                serviceName: form.serviceName,
-                notes: form.notes,
+                patientId:     patient._id,
+                amount:        fee,
+                serviceName:   form.serviceName,
+                notes:         form.notes,
+                paymentMethod: fee > 0 ? form.paymentMethod : 'Free',
             };
             if (isSlotMode) payload.appointmentTime = form.appointmentTime;
 
             const r = await clinicAPI.bookAppointment(payload);
             if (r.success) {
                 if (isSlotMode) {
-                    flash('success', `✅ Appointment at ${form.appointmentTime} booked for ${patient.name}`);
+                    flash('success', `✅ Payment collected. Appointment at ${form.appointmentTime} confirmed for ${patient.name}`);
                 } else {
-                    flash('success', `✅ Token #${r.appointment.tokenNumber} assigned to ${patient.name}`);
+                    flash('success', `✅ Payment collected. Token #${r.appointment.tokenNumber} assigned to ${patient.name}`);
                     try { generateTokenReceiptPDF(patient, r.appointment); } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
                 }
                 onBook();
@@ -730,21 +732,31 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token' }) => 
         finally { setBooking(false); }
     };
 
-    // Generate 30-minute time slots from 07:00 to 20:00
+    // Generate 30-minute time slots 07:00–20:00
     const timeSlots = [];
     for (let h = 7; h <= 20; h++) {
         timeSlots.push(`${String(h).padStart(2, '0')}:00`);
         if (h < 20) timeSlots.push(`${String(h).padStart(2, '0')}:30`);
     }
 
+    const borderColor = isSlotMode ? '#bfdbfe' : '#bbf7d0';
+    const bgColor     = isSlotMode ? '#eff6ff' : '#f0fdf4';
+
     return (
-        <form onSubmit={submit} style={{ background: isSlotMode ? '#eff6ff' : '#f0fdf4', border: `1px solid ${isSlotMode ? '#bfdbfe' : '#bbf7d0'}`, borderRadius: '10px', padding: '14px 16px', marginTop: '8px' }}>
+        <form onSubmit={submit} style={{ background: bgColor, border: `1px solid ${borderColor}`, borderRadius: '10px', padding: '14px 16px', marginTop: '8px' }}>
+            {/* Payment notice */}
+            <div style={{ fontSize: '12px', color: '#0369a1', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '6px', padding: '6px 10px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>💰</span>
+                <span><strong>Payment is collected upfront.</strong> Token / appointment is confirmed only after fee is paid.</span>
+            </div>
+
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: '2', minWidth: '150px' }}>
                     <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Service</label>
                     <input className="clinic-input" placeholder="General Consultation" value={form.serviceName}
                         onChange={e => setForm(f => ({ ...f, serviceName: e.target.value }))} />
                 </div>
+
                 {isSlotMode && (
                     <div style={{ flex: '1', minWidth: '120px' }}>
                         <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Time Slot *</label>
@@ -754,19 +766,38 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token' }) => 
                         </select>
                     </div>
                 )}
-                <div style={{ flex: '1', minWidth: '100px' }}>
-                    <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Fee (₹)</label>
-                    <input className="clinic-input" type="number" placeholder="0" value={form.amount}
+
+                <div style={{ flex: '1', minWidth: '90px' }}>
+                    <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Fee (₹) *</label>
+                    <input className="clinic-input" type="number" min="0" placeholder="0" value={form.amount}
                         onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
                 </div>
-                <div style={{ flex: '2', minWidth: '150px' }}>
+
+                <div style={{ flex: '1', minWidth: '100px' }}>
+                    <label style={{ fontSize: '11px', color: fee > 0 ? '#dc2626' : '#64748b', display: 'block', marginBottom: '3px', fontWeight: fee > 0 ? 700 : 400 }}>
+                        Payment Method {fee > 0 ? '*' : ''}
+                    </label>
+                    <select className="clinic-input" value={form.paymentMethod}
+                        onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))}
+                        style={{ borderColor: fee > 0 && !form.paymentMethod ? '#dc2626' : '' }}>
+                        <option value="Cash">Cash</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Card">Card</option>
+                    </select>
+                </div>
+
+                <div style={{ flex: '2', minWidth: '140px' }}>
                     <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Complaint (optional)</label>
                     <input className="clinic-input" placeholder="Reason for visit..." value={form.notes}
                         onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
                 </div>
+
                 <div style={{ display: 'flex', gap: '6px' }}>
-                    <button type="submit" className="clinic-btn-primary" disabled={booking} style={{ whiteSpace: 'nowrap', padding: '8px 16px' }}>
-                        {booking ? '...' : isSlotMode ? '🕐 Book Appointment' : '🎟️ Assign Token & Receipt'}
+                    <button type="submit" className="clinic-btn-primary" disabled={!canSubmit}
+                        style={{ whiteSpace: 'nowrap', padding: '8px 16px', opacity: canSubmit ? 1 : 0.6 }}>
+                        {booking ? '...' : isSlotMode
+                            ? `💰 Pay${fee > 0 ? ` ₹${fee}` : ''} & Book Slot`
+                            : `💰 Pay${fee > 0 ? ` ₹${fee}` : ''} & Assign Token`}
                     </button>
                     <button type="button" className="clinic-btn-secondary" onClick={onCancel} style={{ padding: '8px 12px' }}>✕</button>
                 </div>
@@ -2187,25 +2218,26 @@ const TreatmentPlanMode = () => {
 };
 
 // ═══════════════════════════════════════════════════
-// BILLING MODE
+// BILLING MODE — Collection history only. All payments are upfront.
 // ═══════════════════════════════════════════════════
 const BillingMode = () => {
     const [appointments, setAppointments] = useState([]);
     const [allAppointments, setAllAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState(null);
-    const [paying, setPaying] = useState(null);
     const [patSearch, setPatSearch] = useState('');
-    const [msg, setMsg] = useState({ type: '', text: '' });
-
-    const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg({ type: '', text: '' }), 3000); };
 
     useEffect(() => {
         Promise.all([
             clinicAPI.getAppointments(),
             clinicAPI.getStats(),
         ]).then(([apptR, statsR]) => {
-            if (apptR.success) { setAllAppointments(apptR.appointments); setAppointments(apptR.appointments); }
+            if (apptR.success) {
+                // Only show paid appointments (all should be paid, but filter defensively)
+                const paid = apptR.appointments.filter(a => a.paymentStatus === 'paid');
+                setAllAppointments(paid);
+                setAppointments(paid);
+            }
             if (statsR.success) setStats(statsR.stats);
         }).catch(console.error).finally(() => setLoading(false));
     }, []);
@@ -2219,33 +2251,20 @@ const BillingMode = () => {
         ));
     };
 
-    const pay = async (id) => {
-        setPaying(id);
-        try {
-            const r = await clinicAPI.payAppointment(id, 'Cash');
-            if (r.success) {
-                const update = a => a._id === id ? { ...a, paymentStatus: 'paid' } : a;
-                setAppointments(prev => prev.map(update));
-                setAllAppointments(prev => prev.map(update));
-                flash('success', 'Payment recorded.');
-            }
-        } catch (e) { flash('error', e.message); }
-        finally { setPaying(null); }
-    };
-
-    const pendingPayment = appointments.filter(a => a.paymentStatus !== 'paid' && a.status === 'completed');
-    const paidToday = allAppointments.filter(a => a.paymentStatus === 'paid' && new Date(a.appointmentDate).toDateString() === new Date().toDateString());
+    const todayTotal = allAppointments
+        .filter(a => new Date(a.appointmentDate).toDateString() === new Date().toDateString())
+        .reduce((s, a) => s + (a.amount || 0), 0);
 
     return (
         <div>
-            {/* Revenue Strip */}
+            {/* Collection Summary Strip */}
             {stats && (
                 <div className="clinic-kpi-grid" style={{ marginBottom: '20px' }}>
                     {[
-                        { label: 'Total Revenue', value: fmt(stats.totalRevenue), icon: '💰', color: '#f59e0b' },
-                        { label: "Today's Revenue", value: fmt(stats.todayRevenue), icon: '📅', color: '#10b981' },
-                        { label: 'This Month', value: fmt(stats.monthRevenue), icon: '📊', color: '#6366f1' },
-                        { label: 'Pending Payments', value: pendingPayment.length, icon: '⏳', color: '#f97316' },
+                        { label: 'Total Collection', value: fmt(stats.totalRevenue),  icon: '💰', color: '#f59e0b' },
+                        { label: "Today's Collection",  value: fmt(todayTotal),        icon: '📅', color: '#10b981' },
+                        { label: 'This Month',           value: fmt(stats.monthRevenue), icon: '📊', color: '#6366f1' },
+                        { label: 'Total Paid Visits',    value: allAppointments.length,  icon: '✅', color: '#0ea5e9' },
                     ].map((k, i) => (
                         <div key={i} className="clinic-kpi-card" style={{ borderTop: `4px solid ${k.color}` }}>
                             <div style={{ fontSize: '24px' }}>{k.icon}</div>
@@ -2256,43 +2275,58 @@ const BillingMode = () => {
                 </div>
             )}
 
-            {msg.text && <div className={`clinic-msg clinic-msg-${msg.type}`}>{msg.text}</div>}
-
             <div className="clinic-card">
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                    <input className="clinic-input" style={{ flex: 1 }} placeholder="Filter by patient name or ID..."
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                    <h3 style={{ margin: 0 }}>🧾 Collection Records</h3>
+                    <span style={{ fontSize: '12px', background: '#dcfce7', color: '#16a34a', padding: '3px 10px', borderRadius: '10px', fontWeight: 700 }}>
+                        All payments collected upfront
+                    </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+                    <input className="clinic-input" style={{ flex: 1 }} placeholder="Search by patient name or ID…"
                         value={patSearch} onChange={e => setPatSearch(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && filterByPatient()} />
-                    <button className="clinic-btn-secondary" onClick={filterByPatient}>Filter</button>
-                    {patSearch && <button className="clinic-btn-secondary" onClick={() => { setPatSearch(''); setAppointments(allAppointments); }}>Clear</button>}
+                    <button className="clinic-btn-secondary" onClick={filterByPatient}>Search</button>
+                    {patSearch && <button className="clinic-btn-secondary" onClick={() => { setPatSearch(''); setAppointments(allAppointments); }}>✕ Clear</button>}
                 </div>
 
                 {loading ? <Spinner /> : appointments.length === 0 ? (
-                    <Empty text="No appointments found." />
+                    <Empty text="No collection records yet." />
                 ) : (
                     <table className="clinic-table">
-                        <thead><tr><th>Date</th><th>Token</th><th>Patient</th><th>Service</th><th>Fee</th><th>Status</th><th>Payment</th><th></th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Token / Slot</th>
+                                <th>Patient</th>
+                                <th>Service</th>
+                                <th>Fee</th>
+                                <th>Method</th>
+                                <th>Visit Status</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             {appointments.map(a => (
                                 <tr key={a._id}>
                                     <td style={{ fontSize: '12px' }}>{fmtDate(a.appointmentDate)}</td>
-                                    <td><strong style={{ color: '#6366f1' }}>#{a.tokenNumber || '—'}</strong></td>
+                                    <td>
+                                        {a.tokenNumber
+                                            ? <strong style={{ color: '#6366f1' }}>#{a.tokenNumber}</strong>
+                                            : <span style={{ color: '#3b82f6', fontWeight: 600 }}>🕐 {a.appointmentTime}</span>}
+                                    </td>
                                     <td>
                                         <div style={{ fontWeight: 600 }}>{a.clinicPatientId?.name || '—'}</div>
                                         <div style={{ fontSize: '11px', color: '#94a3b8' }}>{a.clinicPatientId?.patientUid || a.patientId}</div>
                                     </td>
                                     <td style={{ fontSize: '12px', color: '#64748b' }}>{a.serviceName || 'General'}</td>
-                                    <td><strong>{fmt(a.amount)}</strong></td>
-                                    <td><StatusBadge status={a.status} /></td>
-                                    <td><PayBadge status={a.paymentStatus} /></td>
+                                    <td><strong style={{ color: '#16a34a' }}>{fmt(a.amount)}</strong></td>
                                     <td>
-                                        {a.paymentStatus !== 'paid' && a.status === 'completed' && (
-                                            <button className="clinic-btn-primary" style={{ fontSize: '12px', padding: '5px 12px' }}
-                                                disabled={paying === a._id} onClick={() => pay(a._id)}>
-                                                {paying === a._id ? '...' : '💵 Collect'}
-                                            </button>
-                                        )}
+                                        <span style={{ background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: 600 }}>
+                                            {a.paymentMethod || 'Cash'}
+                                        </span>
                                     </td>
+                                    <td><StatusBadge status={a.status} /></td>
                                 </tr>
                             ))}
                         </tbody>

@@ -401,9 +401,15 @@ router.get('/config', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 router.post('/appointments', verifyClinicAdmin, async (req, res) => {
     try {
-        const { patientId, amount, notes, serviceName, appointmentTime } = req.body;
+        const { patientId, amount, notes, serviceName, appointmentTime, paymentMethod } = req.body;
         // patientId here is ClinicPatient._id
         if (!patientId) return res.status(400).json({ success: false, message: 'patientId is required' });
+
+        // Payment must be confirmed upfront — no pending payments in clinic module
+        const fee = Number(amount) || 0;
+        if (fee > 0 && !paymentMethod) {
+            return res.status(400).json({ success: false, message: 'Payment method is required to collect the fee and assign a token' });
+        }
 
         const clinicId = hid(req);
         const [patient, clinic] = await Promise.all([
@@ -453,11 +459,12 @@ router.post('/appointments', verifyClinicAdmin, async (req, res) => {
             appointmentDate: new Date(),
             appointmentTime: finalTime,
             tokenNumber,
-            status:        'confirmed',
-            paymentStatus: 'pending',
-            amount:        amount || 0,
-            notes:         notes || '',
-            bookedBy:      req.user._id,
+            status:         'confirmed',
+            paymentStatus:  'paid',   // payment is always collected upfront in clinic module
+            paymentMethod:  paymentMethod || (fee === 0 ? 'Free' : 'Cash'),
+            amount:         fee,
+            notes:          notes || '',
+            bookedBy:       req.user._id,
         });
 
         await appointment.save();
