@@ -63,7 +63,7 @@ router.post('/', verifyAdminOrSuperAdmin, async (req, res) => {
         res.status(201).json({ success: true, message: 'Test package created', data: populated });
     } catch (error) {
         console.error('Create Test Package Error:', error);
-        res.status(500).json({ success: false, message: 'Error creating test package', error: error.message });
+        res.status(500).json({ success: false, message: 'Error creating test package' });
     }
 });
 

@@ -1,8 +1,9 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/user.model');
 const Role = require('../models/role.model');
+const TokenBlacklist = require('../models/tokenBlacklist.model');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const { JWT_SECRET } = require('../config/jwt');
 
 /**
  * Verify JWT token and attach user + populated role to req.user
@@ -16,6 +17,21 @@ exports.verifyToken = async (req, res, next) => {
 
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, JWT_SECRET);
+
+        // Reject tokens that have been explicitly invalidated (logout)
+        const jti = decoded.jti;
+        if (jti) {
+            const revoked = await TokenBlacklist.exists({ jti });
+            if (revoked) return res.status(401).json({ success: false, message: 'Token has been invalidated. Please log in again.' });
+        }
+
+        // Reject tokens issued before the user's token version was bumped (revoke-all-sessions)
+        if (decoded.tv !== undefined) {
+            const currentVersion = await require('../models/user.model').findById(decoded.userId).select('tokenVersion').lean();
+            if (currentVersion && (currentVersion.tokenVersion ?? 0) !== decoded.tv) {
+                return res.status(401).json({ success: false, message: 'Session revoked. Please log in again.' });
+            }
+        }
 
         const user = await User.findById(decoded.userId);
         if (!user) return res.status(401).json({ success: false, message: 'User not found' });
@@ -125,7 +141,7 @@ exports.verifySuperAdmin = async (req, res, next) => {
             }
         });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 };
 
@@ -155,7 +171,7 @@ exports.verifyAdminOrSuperAdmin = async (req, res, next) => {
             return res.status(403).json({ success: false, message: 'Admin access required' });
         });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 };
 

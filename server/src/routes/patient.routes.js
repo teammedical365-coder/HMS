@@ -2,30 +2,40 @@ const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/auth.middleware');
 const { resolveTenant } = require('../middleware/tenantMiddleware');
+const auditLog = require('../middleware/audit.middleware');
 const MasterUser = require('../models/user.model');
 
 // SEARCH API: Identifies patient by Phone or Name — scoped to hospital tenant
 router.get('/search', verifyToken, resolveTenant, async (req, res) => {
     try {
         const { term } = req.query;
+        if (!term || typeof term !== 'string' || term.trim().length < 2) {
+            return res.status(400).json({ success: false, message: 'Search term must be at least 2 characters' });
+        }
+
+        // Escape special regex characters to prevent regex injection
+        const safeTerm = term.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const hFilter = req.user.hospitalId ? { hospitalId: req.user.hospitalId } : {};
 
         const patients = await MasterUser.find({
+            ...hFilter,
             $or: [
-                { phone: term },
-                { patientId: term },
-                { mrn: term },
-                { name: { $regex: term, $options: 'i' } }
+                { phone: safeTerm },
+                { patientId: safeTerm },
+                { mrn: safeTerm },
+                { name: { $regex: safeTerm, $options: 'i' } }
             ]
-        }).select('name phone patientId mrn dob gender city');
+        }).select('name phone patientId mrn dob gender city').limit(50);
 
         res.json({ success: true, data: patients });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('[patient-search]', error.message);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
 // FULL HISTORY API: Chronological Timeline — scoped to hospital tenant
-router.get('/:id/full-history', verifyToken, resolveTenant, async (req, res) => {
+router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIENT', (req) => ({ model: 'User', id: req.params.id })), async (req, res) => {
     try {
         const userId = req.params.id;
         const roleData = req.user._roleData;
@@ -54,13 +64,17 @@ router.get('/:id/full-history', verifyToken, resolveTenant, async (req, res) => 
         const PharmacyOrder = require('../models/pharmacyOrder.model');
         const Appointment = require('../models/appointment.model');
 
-        // Determine if ID is ObjectId or patientId string
         const mongoose = require('mongoose');
-        const isObjectId = mongoose.Types.ObjectId.isValid(userId);
-        
-        // Find the user first to get their actual ObjectId for relations
-        // Always use MasterUser — patients are registered in master DB
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && userId.length === 24;
+
+        // Reject obviously invalid IDs early — prevents arbitrary string lookups
+        if (!isObjectId && (!/^[A-Za-z0-9_-]{3,30}$/.test(userId))) {
+            return res.status(400).json({ success: false, message: 'Invalid patient identifier' });
+        }
+
         const userQuery = isObjectId ? { _id: userId } : { patientId: userId };
+        // Always scope to hospital for data isolation
+        if (req.user.hospitalId) userQuery.hospitalId = req.user.hospitalId;
         const user = await MasterUser.findOne(userQuery).lean();
 
         if (!user) {
@@ -104,7 +118,7 @@ router.get('/:id/full-history', verifyToken, resolveTenant, async (req, res) => 
 
         res.json({ success: true, user, timeline });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

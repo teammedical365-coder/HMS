@@ -32,7 +32,7 @@ router.get('/inventory', verifyToken, async (req, res) => {
         const items = await Inventory.find(query).sort({ createdAt: -1 });
         res.json({ success: true, data: items });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -70,7 +70,7 @@ router.delete('/inventory/:id', verifyToken, async (req, res) => {
 
         res.json({ success: true, message: 'Item deleted successfully' });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

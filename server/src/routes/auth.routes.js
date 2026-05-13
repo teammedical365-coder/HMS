@@ -6,8 +6,13 @@ const Role = require('../models/role.model');
 const Hospital = require('../models/hospital.model');
 const jwt = require('jsonwebtoken');
 
-// JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/jwt');
+const { loginLimiter, signupLimiter } = require('../middleware/rateLimiter');
+const validatePassword = require('../utils/validatePassword');
+const { verifyToken } = require('../middleware/auth.middleware');
+const TokenBlacklist = require('../models/tokenBlacklist.model');
+const auditLog = require('../middleware/audit.middleware');
+const { v4: uuidv4 } = require('uuid');
 
 /**
  * Helper: Build user response with full role data
@@ -48,17 +53,15 @@ async function buildUserResponse(user) {
 }
 
 // Signup Route
-router.post('/signup', async (req, res) => {
+router.post('/signup', signupLimiter, async (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
 
-    // Validation
     if (!name || !email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Name, email, and password are required'
-      });
+      return res.status(400).json({ success: false, message: 'Name, email, and password are required' });
     }
+    const pwErr = validatePassword(password);
+    if (pwErr) return res.status(400).json({ success: false, message: pwErr });
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -122,13 +125,15 @@ router.post('/signup', async (req, res) => {
     // Generate JWT token — include hospitalId for tenant DB routing
     const token = jwt.sign(
       {
+        jti: uuidv4(),
         userId: user._id,
         email: user.email,
         roleId: String(defaultRole._id),
-        hospitalId: user.hospitalId ? String(user.hospitalId) : null
+        hospitalId: user.hospitalId ? String(user.hospitalId) : null,
+        tv: user.tokenVersion ?? 0,
       },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: JWT_EXPIRES_IN }
     );
 
     const userData = await buildUserResponse(user);
@@ -156,13 +161,12 @@ router.post('/signup', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error creating user',
-      error: error.message
     });
   }
 });
 
 // Login Route
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password, hospitalId } = req.body;
 
@@ -177,9 +181,9 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
-    // Central admins must use their dedicated login pages
+    // Central admins must use their dedicated login pages — use generic message to avoid enumeration
     if (user.role === 'superadmin' || user.role === 'centraladmin') {
-      return res.status(403).json({ success: false, message: 'Central Admins must use the /supremeadmin/login page' });
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
 
@@ -219,7 +223,7 @@ router.post('/login', async (req, res) => {
     }
 
     if (roleData.name && ['superadmin', 'centraladmin'].includes(roleData.name.toLowerCase())) {
-      return res.status(403).json({ success: false, message: 'Global Admin accounts must use the dedicated central admin login page' });
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
     const isPasswordValid = await user.comparePassword(password);
@@ -252,15 +256,29 @@ router.post('/login', async (req, res) => {
         }
     }
 
+    // If MFA is enabled, issue a short-lived pre-auth token instead of a full session token.
+    // The client must POST this + a TOTP code to /api/mfa/complete-login to get a real token.
+    const mfaUser = await require('../models/user.model').findById(user._id).select('mfaEnabled');
+    if (mfaUser?.mfaEnabled) {
+      const preAuthToken = jwt.sign(
+        { mfa_pending: true, userId: String(user._id) },
+        JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({ success: true, mfaRequired: true, preAuthToken });
+    }
+
     const token = jwt.sign(
       {
+        jti: uuidv4(),
         userId: user._id,
         email: user.email,
         roleId: String(user.role),
-        hospitalId: user.hospitalId ? String(user.hospitalId) : null
+        hospitalId: user.hospitalId ? String(user.hospitalId) : null,
+        tv: user.tokenVersion ?? 0,
       },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: JWT_EXPIRES_IN }
     );
 
     // Build user response with role data (roleData is already fetched above)
@@ -295,8 +313,41 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ success: false, message: 'Error during login', error: error.message });
+    res.status(500).json({ success: false, message: 'Error during login' });
   }
+});
+
+// POST /api/auth/revoke-all-sessions — bump tokenVersion to invalidate every outstanding token for this user
+router.post('/revoke-all-sessions', verifyToken, async (req, res) => {
+    try {
+        await require('../models/user.model').findByIdAndUpdate(
+            req.user._id,
+            { $inc: { tokenVersion: 1 } }
+        );
+        res.json({ success: true, message: 'All sessions revoked. Please log in again on all devices.' });
+    } catch {
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// POST /api/auth/logout — blacklist the current token so it can never be reused
+router.post('/logout', verifyToken, auditLog('STAFF_LOGOUT'), async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        const token = authHeader.split(' ')[1];
+        const decoded = require('jsonwebtoken').decode(token);
+
+        if (decoded?.jti && decoded?.exp) {
+            await TokenBlacklist.create({
+                jti: decoded.jti,
+                expireAt: new Date(decoded.exp * 1000),
+            });
+        }
+
+        res.json({ success: true, message: 'Logged out successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
 });
 
 module.exports = router;

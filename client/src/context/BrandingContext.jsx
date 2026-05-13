@@ -8,7 +8,7 @@
  *   - Stored in localStorage so it persists across page refreshes
  */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { hospitalAPI } from '../utils/api';
+import { hospitalAPI, publicAPI } from '../utils/api';
 import socket from '../utils/socket';
 
 // Default Medical 365 branding (platform defaults)
@@ -175,16 +175,46 @@ export const BrandingProvider = ({ children }) => {
         localStorage.removeItem('hospitalBrandingId');
     }, []);
 
-    // Apply saved branding on mount
+    // Auto-detect white-label domain on mount
     useEffect(() => {
-        const saved = localStorage.getItem('hospitalBranding');
-        if (saved) {
-            try {
-                const b = JSON.parse(saved);
-                applyBrandingToCSS(b);
-                setIsCustomBranded(true);
-            } catch { /* ignore */ }
-        }
+        const initBranding = async () => {
+            const domain = window.location.hostname;
+            // Treat localhost specially for dev, though you can test domains locally by modifying hosts
+            const isBaseDomain = domain === 'medical365.in' || domain === 'www.medical365.in' || domain === 'localhost';
+            let fetchedFromDomain = false;
+
+            // If we are on a custom domain, try to fetch the tenant config
+            if (!isBaseDomain) {
+                try {
+                    const res = await publicAPI.getTenantConfig(domain);
+                    if (res.success && res.data) {
+                        const merged = { ...DEFAULT_BRANDING, ...res.data.branding };
+                        setBranding(merged);
+                        setHospitalName(res.data.name || 'Medical 365');
+                        setHospitalId(res.data._id);
+                        setIsCustomBranded(true);
+                        applyBrandingToCSS(merged);
+                        fetchedFromDomain = true;
+                    }
+                } catch (err) {
+                    console.warn('[Branding] Failed to fetch tenant config for domain:', domain, err?.message);
+                }
+            }
+
+            // Fallback to localStorage if no custom domain branding was fetched
+            if (!fetchedFromDomain) {
+                const saved = localStorage.getItem('hospitalBranding');
+                if (saved) {
+                    try {
+                        const b = JSON.parse(saved);
+                        applyBrandingToCSS(b);
+                        setIsCustomBranded(true);
+                    } catch { /* ignore */ }
+                }
+            }
+        };
+
+        initBranding();
     }, []);
 
     // Listen for live branding updates from server (Central Admin)

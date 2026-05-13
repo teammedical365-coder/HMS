@@ -43,7 +43,14 @@ const userSchema = new mongoose.Schema({
     departments: [{ type: String }],
 
     // Profile Image
-    avatar: { type: String, default: null }
+    avatar: { type: String, default: null },
+
+    // MFA (TOTP-based, optional per staff account)
+    mfaEnabled: { type: Boolean, default: false },
+    mfaSecret:  { type: String, default: null, select: false },
+
+    // Increment to invalidate all outstanding tokens for this user (revoke-all-sessions)
+    tokenVersion: { type: Number, default: 0 },
 }, { timestamps: true });
 
 userSchema.pre('save', async function (next) {

@@ -3,6 +3,7 @@ const router = express.Router();
 const { verifyToken } = require('../middleware/auth.middleware');
 const { resolveTenant } = require('../middleware/tenantMiddleware');
 const { getTenantModels } = require('../db/tenantModels');
+const auditLog = require('../middleware/audit.middleware');
 
 // Master fallbacks
 const MasterUser = require('../models/user.model');
@@ -31,7 +32,7 @@ const verifyBillingAccess = async (req, res, next) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 };
 
@@ -54,25 +55,29 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
         const { identifier } = req.params;
         const { User, Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission } = getModels(req);
 
-        // Find patient by MRN, patientId, or phone
+        // Scope patient lookup to the requesting user's hospital
+        const hospitalFilter = req.user.hospitalId ? { hospitalId: req.user.hospitalId } : {};
+
         const patient = await User.findOne({
+            ...hospitalFilter,
             $or: [{ mrn: identifier }, { patientId: identifier }, { phone: identifier }]
         });
 
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
         const pendingStatuses = ['pending', 'Pending', 'PENDING', 'Unpaid'];
+        const hFilter = req.user.hospitalId ? { hospitalId: req.user.hospitalId } : {};
 
         const [appointments, labReports, pharmacyOrders, facilityCharges, admissions] = await Promise.all([
-            Appointment.find({ patientId: patient._id, paymentStatus: { $in: pendingStatuses } })
+            Appointment.find({ patientId: patient._id, paymentStatus: { $in: pendingStatuses }, ...hFilter })
                 .select('appointmentDate appointmentTime amount paymentStatus serviceName doctorName status createdAt').lean(),
-            LabReport.find({ patientId: patient._id, paymentStatus: { $in: pendingStatuses } })
+            LabReport.find({ patientId: patient._id, paymentStatus: { $in: pendingStatuses }, ...hFilter })
                 .select('testNames amount paymentStatus testStatus createdAt').lean(),
-            PharmacyOrder.find({ patientId: patient._id, paymentStatus: { $in: pendingStatuses } })
+            PharmacyOrder.find({ patientId: patient._id, paymentStatus: { $in: pendingStatuses }, ...hFilter })
                 .select('items totalAmount paymentStatus orderStatus createdAt').lean(),
-            FacilityCharge.find({ patientId: patient._id, paymentStatus: { $in: pendingStatuses } })
+            FacilityCharge.find({ patientId: patient._id, paymentStatus: { $in: pendingStatuses }, ...hFilter })
                 .select('facilityName pricePerDay daysUsed totalAmount paymentStatus createdAt').lean(),
-            Admission.find({ patientId: patient._id })
+            Admission.find({ patientId: patient._id, ...hFilter })
                 .sort({ admissionDate: -1 }).lean(),
         ]);
 
@@ -91,7 +96,7 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -118,12 +123,12 @@ router.post('/facility-charge', verifyBillingAccess, async (req, res) => {
         res.status(201).json({ success: true, message: 'Facility charge added', charge });
 
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
 // 3. Mark items as paid — updates tenant DB
-router.put('/pay', verifyBillingAccess, async (req, res) => {
+router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req, res) => {
     try {
         const {
             appointmentIds = [],
@@ -151,7 +156,7 @@ router.put('/pay', verifyBillingAccess, async (req, res) => {
 
         res.json({ success: true, message: 'Billing settled successfully' });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

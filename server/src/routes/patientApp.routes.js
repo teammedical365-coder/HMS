@@ -27,8 +27,9 @@ const SyncedRecord   = require('../models/syncedRecord.model');
 const Hospital       = require('../models/hospital.model');
 const { sendOTP, hashOTP, verifyOTP } = require('../utils/otpService');
 
-const JWT_SECRET  = process.env.JWT_SECRET;
+const { JWT_SECRET } = require('../config/jwt');
 const JWT_EXPIRES = process.env.PATIENT_JWT_EXPIRES_IN || '8h';
+const { otpLimiter } = require('../middleware/rateLimiter');
 
 // ─── Patient JWT middleware ───────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ const verifyPatientToken = (req, res, next) => {
 };
 
 // ─── POST /auth/request-otp ───────────────────────────────────────────────────
-router.post('/auth/request-otp', async (req, res) => {
+router.post('/auth/request-otp', otpLimiter, async (req, res) => {
     try {
         const { phone, clinicId } = req.body;
         if (!phone || phone.replace(/\D/g, '').length !== 10) {
@@ -164,7 +165,7 @@ router.post('/auth/verify-otp', async (req, res) => {
         });
     } catch (err) {
         console.error('[PatientApp] OTP verify error:', err.message);
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -178,7 +179,7 @@ router.post('/auth/logout', verifyPatientToken, async (req, res) => {
         );
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

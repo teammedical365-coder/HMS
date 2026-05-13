@@ -22,7 +22,7 @@ router.get('/', verifyToken, async (req, res) => {
             .sort({ createdAt: -1 });
         res.json({ success: true, orders });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -34,7 +34,7 @@ router.get('/my-orders', verifyToken, async (req, res) => {
             .sort({ createdAt: -1 });
         res.json({ success: true, orders });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error fetching your orders', error: error.message });
+        res.status(500).json({ success: false, message: 'Error fetching your orders' });
     }
 });
 
@@ -126,7 +126,7 @@ router.patch('/:id/complete', verifyToken, async (req, res) => {
 
         res.json({ success: true, message: 'Order completed successfully', order });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

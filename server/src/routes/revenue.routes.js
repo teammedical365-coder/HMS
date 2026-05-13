@@ -12,7 +12,7 @@ const verifyCentralAdmin = async (req, res, next) => {
             return res.status(403).json({ success: false, message: 'Central Admin access required' });
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 };
 
@@ -162,7 +162,7 @@ router.get('/system', verifyCentralAdmin, async (req, res) => {
         });
     } catch (err) {
         console.error('Revenue system analytics error:', err);
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -198,7 +198,7 @@ router.put('/hospital/:id', verifyCentralAdmin, async (req, res) => {
 
         res.json({ success: true, hospital });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -213,7 +213,7 @@ router.get('/hospitals', verifyCentralAdmin, async (req, res) => {
             .lean();
         res.json({ success: true, hospitals });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

@@ -76,6 +76,7 @@ export const doctorAPI = {
         const response = await apiClient.get(`/api/doctor/patients/${patientId}/full-profile`);
         return response.data;
     },
+    getClinicPatientReports: async (clinicPatientId) => (await apiClient.get(`/api/doctor/clinic-patients/${clinicPatientId}/reports`)).data,
     startSession: async (patientId) => {
         const response = await apiClient.post('/api/doctor/session/start', { patientId });
         return response.data;
@@ -202,6 +203,10 @@ export const publicAPI = {
         const url = serviceId ? `/api/doctor?serviceId=${serviceId}` : '/api/doctor';
         return (await apiClient.get(url)).data;
     },
+    getTenantConfig: async (domain) => {
+        const url = `/api/public/tenant-config?domain=${encodeURIComponent(domain)}`;
+        return (await apiClient.get(url)).data;
+    }
 };
 
 export const uploadAPI = {
@@ -374,6 +379,8 @@ export const clinicAPI = {
         return (await apiClient.get(`/api/clinic/appointments${qs ? '?' + qs : ''}`)).data;
     },
     getConfig: async () => (await apiClient.get('/api/clinic/config')).data,
+    updateConfig: async (data) => (await apiClient.put('/api/clinic/config', data)).data,
+    getStaff: async () => (await apiClient.get('/api/clinic/staff')).data,
     bookAppointment: async (data) => (await apiClient.post('/api/clinic/appointments', data)).data,
     completeAppointment: async (id, data) => (await apiClient.put(`/api/clinic/appointments/${id}/complete`, data)).data,
     payAppointment: async (id, paymentMethod = 'Cash') => (await apiClient.put(`/api/clinic/appointments/${id}/pay`, { paymentMethod })).data,

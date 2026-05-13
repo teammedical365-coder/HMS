@@ -17,7 +17,7 @@ const CentralAdminDashboard = () => {
     const [hospitals, setHospitals] = useState([]);
     const [loadingHospitals, setLoadingHospitals] = useState(false);
     const [showHospitalForm, setShowHospitalForm] = useState(false);
-    const [hospitalForm, setHospitalForm] = useState({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 });
+    const [hospitalForm, setHospitalForm] = useState({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 });
     const [editHospital, setEditHospital] = useState(null);
     const [savingHospital, setSavingHospital] = useState(false);
     const [deleteHospitalConfirm, setDeleteHospitalConfirm] = useState(null);
@@ -446,7 +446,7 @@ const CentralAdminDashboard = () => {
                 if (res.success) { setSuccess('Hospital updated!'); setEditHospital(null); setShowHospitalForm(false); fetchHospitals(); }
             } else {
                 const res = await hospitalAPI.createHospital(hospitalForm);
-                if (res.success) { setSuccess('Hospital created!'); setShowHospitalForm(false); setHospitalForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 }); fetchHospitals(); }
+                if (res.success) { setSuccess('Hospital created!'); setShowHospitalForm(false); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 }); fetchHospitals(); }
             }
         } catch (err) { setError(err.response?.data?.message || 'Error saving hospital.'); }
         finally { setSavingHospital(false); }
@@ -467,7 +467,7 @@ const CentralAdminDashboard = () => {
 
     const openEditHospital = (h) => {
         setEditHospital(h);
-        setHospitalForm({ name: h.name, slug: h.slug || '', address: h.address || '', city: h.city || '', state: h.state || '', phone: h.phone || '', email: h.email || '', website: h.website || '', departments: h.departments || [], appointmentFee: h.appointmentFee || 500 });
+        setHospitalForm({ name: h.name, slug: h.slug || '', customDomain: h.customDomain || '', address: h.address || '', city: h.city || '', state: h.state || '', phone: h.phone || '', email: h.email || '', website: h.website || '', departments: h.departments || [], appointmentFee: h.appointmentFee || 500 });
         setShowHospitalAdminForm(false);
         setShowHospitalForm(true);
         setTimeout(() => hospitalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
@@ -565,7 +565,7 @@ const CentralAdminDashboard = () => {
                     <div className="centraladmin-header" style={{ marginBottom: '24px', background: 'white', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
                         <div className="header-brand">
                             <button onClick={closeHospitalDetail} className="back-btn" style={{ marginBottom: '12px' }}>← Back to All Hospitals</button>
-                            <h1 style={{ fontSize: '1.6rem', fontWeight: 800 }}>🏥 {h.name}</h1>
+                            <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#1e293b' }}>🏥 {h.name}</h1>
                             <p style={{ color: '#64748b' }}>{h.city && `${h.city}, `}{h.state} {h.phone && `· 📞 ${h.phone}`}</p>
                         </div>
                         <div className="admin-user-info">
@@ -944,7 +944,7 @@ const CentralAdminDashboard = () => {
                                         {showHospitalAdminForm ? 'Cancel' : '👤 Add Hospital Admin'}
                                     </button>
                                     <button className={showHospitalForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '10px 18px' }}
-                                        onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 }); }}>
+                                        onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 }); }}>
                                         {showHospitalForm ? 'Cancel' : '+ Add Hospital'}
                                     </button>
                                 </div>
@@ -977,7 +977,7 @@ const CentralAdminDashboard = () => {
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Phone</label>
-                                                <input type="text" className="staff-input" placeholder="Phone number" value={hospitalAdminForm.phone} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, phone: e.target.value })} />
+                                                <input type="text" className="staff-input" placeholder="Phone number" maxLength={10} value={hospitalAdminForm.phone} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, phone: e.target.value })} />
                                             </div>
                                         </div>
                                         <div className="form-row">
@@ -1013,7 +1013,14 @@ const CentralAdminDashboard = () => {
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Subdomain Prefix *</label>
-                                                <input type="text" className="staff-input" placeholder="e.g. citycare (maps to citycare.myurl.com)" value={hospitalForm.slug} onChange={e => setHospitalForm({ ...hospitalForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} required />
+                                                <input type="text" className="staff-input" placeholder="e.g. citycare" value={hospitalForm.slug} onChange={e => setHospitalForm({ ...hospitalForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} required />
+                                            </div>
+                                        </div>
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label className="staff-label">Custom White-label Domain</label>
+                                                <input type="text" className="staff-input" placeholder="e.g. portal.hospitalA.com" value={hospitalForm.customDomain || ''} onChange={e => setHospitalForm({ ...hospitalForm, customDomain: e.target.value.toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '') })} />
+                                                <small style={{ color: '#888' }}>Optional. Maps via DNS CNAME.</small>
                                             </div>
                                         </div>
                                         <div className="form-row">
@@ -1029,7 +1036,7 @@ const CentralAdminDashboard = () => {
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Phone</label>
-                                                <input type="text" className="staff-input" placeholder="Hospital contact number" value={hospitalForm.phone} onChange={e => setHospitalForm({ ...hospitalForm, phone: e.target.value })} />
+                                                <input type="text" className="staff-input" placeholder="Hospital contact number" maxLength={10} value={hospitalForm.phone} onChange={e => setHospitalForm({ ...hospitalForm, phone: e.target.value })} />
                                             </div>
                                         </div>
                                         <div className="form-row">
@@ -1196,7 +1203,7 @@ const CentralAdminDashboard = () => {
                                         </div>
                                         <div className="form-group">
                                             <label className="staff-label">Phone</label>
-                                            <input type="text" placeholder="Phone number" value={createStaffForm.phone} onChange={e => setCreateStaffForm({ ...createStaffForm, phone: e.target.value })} className="staff-input" />
+                                            <input type="text" placeholder="Phone number" maxLength={10} value={createStaffForm.phone} onChange={e => setCreateStaffForm({ ...createStaffForm, phone: e.target.value })} className="staff-input" />
                                         </div>
                                     </div>
                                     <button type="submit" disabled={creatingStaff || !createStaffForm.hospitalId} className="submit-button">
@@ -1308,7 +1315,7 @@ const CentralAdminDashboard = () => {
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Phone</label>
-                                                <input type="text" className="staff-input" placeholder="Clinic contact number" value={clinicForm.phone}
+                                                <input type="text" className="staff-input" placeholder="Clinic contact number" maxLength={10} value={clinicForm.phone}
                                                     onChange={e => setClinicForm({ ...clinicForm, phone: e.target.value })} />
                                             </div>
                                         </div>
@@ -1494,7 +1501,7 @@ const CentralAdminDashboard = () => {
                                                     </div>
                                                     <div className="form-group">
                                                         <label className="staff-label">Phone</label>
-                                                        <input type="text" className="staff-input" placeholder="Phone number" value={clinicManagerForm.phone}
+                                                        <input type="text" className="staff-input" placeholder="Phone number" maxLength={10} value={clinicManagerForm.phone}
                                                             onChange={e => setClinicManagerForm({ ...clinicManagerForm, phone: e.target.value })} />
                                                     </div>
                                                 </div>
@@ -1549,7 +1556,7 @@ const CentralAdminDashboard = () => {
                                                     </div>
                                                     <div className="form-group">
                                                         <label className="staff-label">Phone</label>
-                                                        <input type="text" className="staff-input" placeholder="Phone number" value={clinicStaffForm.phone}
+                                                        <input type="text" className="staff-input" placeholder="Phone number" maxLength={10} value={clinicStaffForm.phone}
                                                             onChange={e => setClinicStaffForm({ ...clinicStaffForm, phone: e.target.value })} />
                                                     </div>
                                                 </div>

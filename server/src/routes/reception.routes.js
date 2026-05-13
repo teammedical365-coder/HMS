@@ -12,29 +12,15 @@ const verifyReception = (req, res, next) => {
     const dynamicRoleName = req.user._roleData?.name;
     const permissions = req.user._roleData?.permissions || [];
 
-    // Normalize
     const roleStr = typeof userRole === 'string' ? userRole.toLowerCase() : '';
     const dynRoleStr = dynamicRoleName ? dynamicRoleName.toLowerCase() : '';
 
-    // Expanded Allowed Roles list (Substring Check)
-    const allowed = ['reception', 'admin', 'superadmin', 'staff', 'front'];
+    const ALLOWED_ROLES = new Set(['reception', 'receptionist', 'admin', 'hospitaladmin', 'superadmin', 'centraladmin', 'frontdesk']);
 
-    const hasAccess = allowed.some(keyword => dynRoleStr.includes(keyword) || roleStr.includes(keyword));
+    if (ALLOWED_ROLES.has(roleStr) || ALLOWED_ROLES.has(dynRoleStr)) return next();
+    if (permissions.includes('reception_access') || permissions.includes('*')) return next();
 
-    if (hasAccess) {
-        return next();
-    }
-
-    // Also check Permissions if available
-    if (permissions.includes('reception_access') || permissions.includes('*')) {
-        return next();
-    }
-
-    // Expanded debug info in error for troubleshooting
-    return res.status(403).json({
-        success: false,
-        message: `Access denied: Reception access only. Your role: ${dynamicRoleName || userRole}`
-    });
+    return res.status(403).json({ success: false, message: 'Access denied: Reception access only' });
 };
 
 // 1. REGISTER (WALK-IN)
@@ -51,6 +37,9 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         if (!name || !phone) {
             return res.status(400).json({ success: false, message: 'Name and Phone are required' });
         }
+        if (name.length > 100) return res.status(400).json({ success: false, message: 'Name too long (max 100 chars)' });
+        if (phone.length > 20) return res.status(400).json({ success: false, message: 'Phone too long (max 20 chars)' });
+        if (email && email.length > 200) return res.status(400).json({ success: false, message: 'Email too long (max 200 chars)' });
 
         // Check if patient exists by Phone (or Email if provided)
         const orClauses = [{ phone }];
@@ -111,71 +100,49 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
                 message: `A patient with this ${friendlyField} already exists. Please search for the existing patient instead.`
             });
         }
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
 // 1.5 AADHAAR VERIFICATION (OTP FLOW - SIMULATED)
+// NOTE: In production, integrate with UIDAI / NSDL Aadhaar API.
+// Hardcoded OTP removed — this route is disabled until a real OTP provider is wired up.
 router.post('/send-aadhaar-otp', verifyToken, verifyReception, async (req, res) => {
     try {
         const { aadhaarNumber } = req.body;
         if (!/^\d{12}$/.test(aadhaarNumber)) return res.status(400).json({ success: false, message: 'Invalid Aadhaar Format (12 digits required)' });
 
-        // Simulate Check: Reject "9999..."
-        if (aadhaarNumber.startsWith('9999')) return res.status(400).json({ success: false, message: 'Verification Failed: Invalid Aadhaar Number (Simulated).' });
+        if (aadhaarNumber.startsWith('9999')) return res.status(400).json({ success: false, message: 'Verification Failed: Invalid Aadhaar Number.' });
 
-        // Simulate API Delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // Simulate Sending OTP
-        res.json({ success: true, message: 'OTP sent to mobile linked with Aadhaar (Simulated: Use 123456)' });
-    } catch (e) { res.status(500).json({ message: e.message }); }
+        // TODO: Integrate real UIDAI/NSDL OTP API here
+        // For now return a pending message — DO NOT expose any OTP in the response
+        res.json({ success: true, message: 'Aadhaar OTP sent to the registered mobile number.' });
+    } catch (e) {
+        console.error('[send-aadhaar-otp]', e.message);
+        res.status(500).json({ success: false, message: 'Failed to send OTP. Please try again.' });
+    }
 });
 
 router.post('/verify-aadhaar-otp', verifyToken, verifyReception, async (req, res) => {
-    try {
-        const { aadhaarNumber, otp } = req.body;
-
-        // Mock OTP Validation (Use '123456' for success)
-        if (otp !== '123456') {
-            return res.status(400).json({ success: false, message: 'Invalid OTP. Try 123456.' });
-        }
-
-        // Check if Aadhaar is already linked
-        const existingUser = await User.findOne({ aadhaarNumber });
-        if (existingUser) {
-            return res.status(409).json({ success: false, message: `Aadhaar already linked to patient: ${existingUser.name} (${existingUser.phone})` });
-        }
-
-        // Mock KYC Data Return
-        const mockKYCData = {
-            verified: true,
-            fullName: "Simulated Aadhaar User",
-            dob: "1995-05-20",
-            gender: "Female",
-            address: "42, Simulated Residency, Connaught Place, New Delhi - 110001",
-            photo: "https://via.placeholder.com/150"
-        };
-
-        res.json({ success: true, message: 'Aadhaar Verified Successfully', data: mockKYCData });
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ message: e.message });
-    }
+    const { otp } = req.body;
+    if (!otp || !/^\d{6}$/.test(otp)) return res.status(400).json({ success: false, message: 'Invalid OTP format (6 digits required)' });
+    // TODO: Verify OTP with real UIDAI/NSDL API
+    return res.status(503).json({ success: false, message: 'Aadhaar verification is not available in this environment. Contact admin.' });
 });
 
 // 2. SEARCH
 router.get('/search-patients', verifyToken, verifyReception, async (req, res) => {
     try {
         const { query } = req.query;
-        if (!query || query.length < 2) return res.json({ success: true, patients: [] });
+        if (!query || typeof query !== 'string' || query.trim().length < 2) return res.json({ success: true, patients: [] });
 
+        const safeQuery = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const queryFilter = {
             role: { $in: ['user', 'patient'] },
             $or: [
-                { name: { $regex: query, $options: 'i' } },
-                { phone: { $regex: query, $options: 'i' } },
-                { patientId: { $regex: query, $options: 'i' } }
+                { name: { $regex: safeQuery, $options: 'i' } },
+                { phone: { $regex: safeQuery, $options: 'i' } },
+                { patientId: { $regex: safeQuery, $options: 'i' } }
             ]
         };
 
@@ -186,7 +153,7 @@ router.get('/search-patients', verifyToken, verifyReception, async (req, res) =>
         const patients = await User.find(queryFilter).select('name phone email patientId fertilityProfile');
 
         res.json({ success: true, patients });
-    } catch (error) { res.status(500).json({ success: false, message: error.message }); }
+    } catch (error) { res.status(500).json({ success: false, message: 'An internal error occurred' }); }
 });
 
 // 3. UPDATE INTAKE
@@ -244,7 +211,7 @@ router.put('/intake/:userId', verifyToken, verifyReception, async (req, res) => 
         const updatedUser = await User.findByIdAndUpdate(userId, { $set: updateQuery }, { new: true, runValidators: false });
         if (!updatedUser) return res.status(404).json({ success: false, message: 'Patient not found' });
         res.json({ success: true, message: 'Updated', user: updatedUser });
-    } catch (error) { res.status(500).json({ success: false, message: error.message }); }
+    } catch (error) { res.status(500).json({ success: false, message: 'An internal error occurred' }); }
 });
 
 // 4. APPOINTMENTS
@@ -268,7 +235,7 @@ router.get('/appointments', verifyToken, verifyReception, async (req, res) => {
             .sort({ tokenNumber: 1, appointmentTime: 1 })
             .lean();
         res.json({ success: true, appointments });
-    } catch (e) { res.status(500).json({ message: e.message }); }
+    } catch (e) { res.status(500).json({ success: false, message: 'An internal error occurred' }); }
 });
 
 // 5. RESCHEDULE & CANCEL
@@ -378,7 +345,7 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
 
     } catch (error) {
         console.error("Reception Booking Error:", error);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -396,7 +363,7 @@ router.patch('/appointments/:id/confirm-payment', verifyToken, verifyReception, 
         await appt.save();
         res.json({ success: true, appointment: appt });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -434,7 +401,7 @@ router.post('/check-in', verifyToken, verifyReception, async (req, res) => {
         res.json({ success: true, message: 'Patient checked in successfully', visit });
     } catch (error) {
         console.error("Check-in Error:", error);
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -452,7 +419,7 @@ router.get('/transactions', verifyToken, verifyReception, async (req, res) => {
             .limit(100)
             .lean();
         res.json({ success: true, transactions });
-    } catch (e) { res.status(500).json({ message: e.message }); }
+    } catch (e) { res.status(500).json({ success: false, message: 'An internal error occurred' }); }
 });
 
 module.exports = router;

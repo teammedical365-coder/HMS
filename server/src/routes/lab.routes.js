@@ -6,10 +6,16 @@ const Appointment = require('../models/appointment.model');
 const Lab = require('../models/lab.model');
 const { verifyToken } = require('../middleware/auth.middleware');
 const imagekit = require('../utils/imagekit');
+const validateFileType = require('../utils/validateFileType');
 
+const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'application/pdf'];
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        if (ALLOWED_MIMES.includes(file.mimetype)) cb(null, true);
+        else cb(new Error('Only JPEG, PNG and PDF allowed'), false);
+    },
 });
 
 // MIDDLEWARE: Verify User is a Lab
@@ -76,8 +82,8 @@ router.get('/stats', verifyToken, verifyLab, async (req, res) => {
             stats: { pending, completed, revenue, labName: labProfile?.name || 'Lab' }
         });
     } catch (error) {
-        console.error("Lab Stats Error:", error);
-        res.status(500).json({ success: false, message: error.message });
+        console.error("[lab] stats error");
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -110,8 +116,8 @@ router.get('/requests', verifyToken, verifyLab, async (req, res) => {
 
         res.json({ success: true, requests });
     } catch (error) {
-        console.error("Fetch Requests Error:", error);
-        res.status(500).json({ success: false, message: error.message });
+        console.error("[lab] fetch requests error");
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -122,6 +128,9 @@ router.post('/upload-report/:reportId', verifyToken, verifyLab, upload.single('r
         const { notes } = req.body;
 
         if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
+
+        const typeErr = await validateFileType(req.file, ALLOWED_MIMES);
+        if (typeErr) return res.status(400).json({ success: false, message: typeErr });
 
         // RLS: scope by hospitalId so lab staff can only upload to their hospital's reports
         const reportFilter = { _id: reportId };
@@ -186,8 +195,8 @@ router.post('/upload-report/:reportId', verifyToken, verifyLab, upload.single('r
         res.json({ success: true, message: 'Report uploaded successfully', report });
 
     } catch (error) {
-        console.error("Upload Error:", error);
-        res.status(500).json({ success: false, message: error.message });
+        console.error("[lab] upload error");
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

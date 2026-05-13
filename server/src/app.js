@@ -2,6 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
+const helmet = require('helmet');
+const mongoSanitize = require('express-mongo-sanitize');
+const hpp = require('hpp');
+
+const { generalLimiter } = require('./middleware/rateLimiter');
 
 // Import Routes
 const authRoutes = require('./routes/auth.routes');
@@ -34,34 +39,84 @@ const syncRoutes        = require('./routes/sync.routes');
 const patientAppRoutes  = require('./routes/patientApp.routes');
 const patientLocalRoutes = require('./routes/patientLocal.routes');
 const revenueRoutes     = require('./routes/revenue.routes');
+const mfaRoutes         = require('./routes/mfa.routes');
 
 const app = express();
-// ughfgh
-// --- CORS CONFIGURATION ---
+
+// ── Security headers ──────────────────────────────────────────────────────────
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", 'data:', 'https://ik.imagekit.io'],
+            connectSrc: ["'self'"],
+            fontSrc: ["'self'"],
+            objectSrc: ["'none'"],
+            frameSrc: ["'none'"],
+            upgradeInsecureRequests: [],
+        },
+    },
+    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+}));
+
+// ── CORS ──────────────────────────────────────────────────────────────────────
+const LOCALHOST_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const isAllowedOrigin = (origin) => {
-    if (!origin) return true;                                  // curl / mobile / server-to-server
-    if (origin.includes('localhost')) return true;             // any localhost port (dev)
-    if (origin === 'https://medical365.in') return true;       // root domain
-    if (origin === 'https://www.medical365.in') return true;   // www
-    if (origin.endsWith('.medical365.in')) return true;        // admin.* and all hospital subdomains
+    if (!origin) return true;
+    if (LOCALHOST_RE.test(origin)) return true;
+    if (origin === 'https://medical365.in') return true;
+    if (origin === 'https://www.medical365.in') return true;
+    if (origin.endsWith('.medical365.in')) return true;
     return false;
 };
 
+const HospitalModelForCors = require('./models/hospital.model');
+
 app.use(cors({
-    origin: (origin, callback) => {
+    origin: async (origin, callback) => {
         if (isAllowedOrigin(origin)) return callback(null, true);
+
+        try {
+            // Support for white-labeled custom domains
+            const domainOnly = origin.replace(/^https?:\/\//, '');
+            const hospital = await HospitalModelForCors.findOne({ customDomain: domainOnly }).select('_id').lean();
+            if (hospital) {
+                return callback(null, true);
+            }
+        } catch (err) {
+            console.error('CORS DB Check Error:', err);
+        }
+
         callback(new Error('CORS blocked: ' + origin), false);
     },
-    credentials: true
+    credentials: true,
 }));
 
-app.use(morgan('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// ── Body parsing (with size limits) ──────────────────────────────────────────
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: false, limit: '2mb' }));
 
+// ── NoSQL injection protection — strip $ and . from req.body/params/query ────
+app.use(mongoSanitize());
+
+// ── HTTP parameter pollution protection ──────────────────────────────────────
+app.use(hpp());
+
+// ── Global rate limit (200 req / 15 min per IP) ───────────────────────────────
+app.use('/api/', generalLimiter);
+
+// ── Logging (skip in test) ────────────────────────────────────────────────────
+if (process.env.NODE_ENV !== 'test') {
+    app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+}
+
+// ── Static uploads ────────────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// Routes
+// ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/doctor', doctorRoutes);
@@ -73,10 +128,8 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/pharmacy', pharmacyRoutes);
 app.use('/api/pharmacy/orders', pharmacyOrdersRoutes);
 app.use('/api/reception', receptionRoutes);
-
-// --- NEW ROUTES REGISTERED HERE ---
-app.use('/api/patients', patientRoutes); // For searching & identifying patients (e.g. /api/patients/search)
-app.use('/api/clinical', clinicalRoutes); // For visits, vitals & history (e.g. /api/clinical/intake)
+app.use('/api/patients', patientRoutes);
+app.use('/api/clinical', clinicalRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/lab-tests', labTestRoutes);
 app.use('/api/medicines', medicineRoutes);
@@ -88,30 +141,24 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/admissions', admissionRoutes);
 app.use('/api/simple-clinics', simpleClinicRoutes);
 app.use('/api/clinic', clinicRoutes);
-
-// Revenue & Billing — Central Admin system analytics
 app.use('/api/revenue', revenueRoutes);
-
-// ── Hybrid local/cloud infrastructure ────────────────────────────────────────
-// Sync receiver + tunnel proxy (active on cloud; no-ops on local for sync routes)
 app.use('/api/sync', syncRoutes);
-// Patient mobile/PWA app routes (cloud: auth + tunnel proxy; local: data serving)
 app.use('/api/patient-app', patientAppRoutes);
-// Local patient data routes — called via tunnel from cloud, or directly on LAN
 app.use('/api/patient-local', patientLocalRoutes);
+app.use('/api/mfa', mfaRoutes);
 
 app.get('/', (req, res) => {
     res.send('API is running...');
 });
 
+// ── Global error handler — never leak internal error details to client ────────
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({
+    console.error(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} —`, err.stack || err.message);
+    const status = err.status || err.statusCode || 500;
+    res.status(status).json({
         success: false,
-        message: 'Something went wrong!',
-        error: err.message
+        message: status === 500 ? 'An unexpected error occurred. Please try again.' : (err.message || 'Request failed'),
     });
 });
 
 module.exports = app;
-// Trigger nodemon restart

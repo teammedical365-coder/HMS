@@ -24,7 +24,7 @@ router.get('/', verifyToken, async (req, res) => {
 
         res.json({ success: true, data: notifications });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -39,7 +39,7 @@ router.patch('/:id/read', verifyToken, async (req, res) => {
         );
         res.json({ success: true, data: notification });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -61,7 +61,7 @@ router.patch('/read-all', verifyToken, async (req, res) => {
 
         res.json({ success: true });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

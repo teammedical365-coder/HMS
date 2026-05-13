@@ -314,6 +314,20 @@ const UnifiedPatientProfile = () => {
                                                     <strong>{item.data.serviceName || 'Consultation'} with {item.data.doctorName || 'Doctor'}</strong>
                                                     <div>Status: <span style={{ textTransform: 'capitalize' }}>{item.data.status}</span></div>
                                                     {item.data.amount > 0 && <div>Fees: ₹{item.data.amount} ({item.data.paymentStatus})</div>}
+                                                    {(item.data.prescriptions?.length > 0 || item.data.prescription) && (
+                                                        <div style={{ marginTop: '5px' }}>
+                                                            {item.data.prescription && (!item.data.prescriptions || item.data.prescriptions.length === 0) && (
+                                                                <a href={item.data.prescription} target="_blank" rel="noreferrer" style={{ color: '#2563eb', fontWeight: 600, display: 'inline-block', marginRight: '10px' }}>
+                                                                    📄 View Prescription
+                                                                </a>
+                                                            )}
+                                                            {item.data.prescriptions?.map((p, pIdx) => (
+                                                                <a key={pIdx} href={p.url} target="_blank" rel="noreferrer" style={{ color: '#2563eb', fontWeight: 600, display: 'inline-block', marginRight: '10px' }}>
+                                                                    📄 {p.name || 'Document'}
+                                                                </a>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </>
                                             )}
 
@@ -335,8 +349,8 @@ const UnifiedPatientProfile = () => {
                                                     <strong>Lab Order ({item.data.status})</strong>
                                                     <div>Tests: {(item.data.testNames || []).join(', ')}</div>
                                                     {item.data.amount > 0 && <div>Fees: ₹{item.data.amount} ({item.data.paymentStatus})</div>}
-                                                    {item.data.reportFileUrl && (
-                                                        <a href={item.data.reportFileUrl} target="_blank" rel="noreferrer" style={{ color: '#2563eb', fontWeight: 600, marginTop: '5px', display: 'inline-block' }}>
+                                                    {item.data.reportFile?.url && (
+                                                        <a href={item.data.reportFile.url} target="_blank" rel="noreferrer" style={{ color: '#2563eb', fontWeight: 600, marginTop: '5px', display: 'inline-block' }}>
                                                             📄 View Result
                                                         </a>
                                                     )}

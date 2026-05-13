@@ -20,8 +20,7 @@ const router    = express.Router();
 
 const ClinicPatient = require('../models/clinicPatient.model');
 const Appointment   = require('../models/appointment.model');
-
-const JWT_SECRET = process.env.JWT_SECRET;
+const { JWT_SECRET } = require('../config/jwt');
 
 // ─── Patient JWT verification (same as cloud side — shared secret) ─────────────
 const verifyPatientToken = (req, res, next) => {
@@ -63,7 +62,7 @@ router.get('/me', verifyPatientToken, async (req, res) => {
 
         res.json({ success: true, patient });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -121,7 +120,7 @@ router.get('/queue', verifyPatientToken, async (req, res) => {
             status:            myAppt.status,
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -157,7 +156,7 @@ router.get('/prescriptions', verifyPatientToken, async (req, res) => {
 
         res.json({ success: true, prescriptions, source: 'local' });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -191,7 +190,7 @@ router.get('/bills', verifyPatientToken, async (req, res) => {
 
         res.json({ success: true, bills, source: 'local' });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -256,7 +255,7 @@ router.post('/book', verifyPatientToken, async (req, res) => {
             message: `Token #${tokenNumber} booked for ${patient.name}`,
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

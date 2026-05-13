@@ -31,6 +31,10 @@ const hospitalSchema = new mongoose.Schema({
     // slug: URL-safe identifier used in path-based routing: myurl.com/:slug/login
     // Auto-generated from name on creation if not provided
     slug: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
+    
+    // Custom domain mapping for white-labeled deployments (e.g., portal.hospitalA.com)
+    customDomain: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
+
     address: { type: String, default: '' },
     city: { type: String, default: '' },
     state: { type: String, default: '' },
@@ -62,6 +66,10 @@ const hospitalSchema = new mongoose.Schema({
     // Clinic-specific fields
     // Short code used as prefix for patient IDs: e.g. "RAM" → patient IDs: RAM-001, RAM-002
     clinicCode: { type: String, uppercase: true, trim: true, default: '' },
+
+    // Default fee and service name pre-filled on reception booking form
+    defaultFee: { type: Number, default: 0, min: 0 },
+    defaultServiceName: { type: String, default: 'General Consultation', trim: true },
 
     // Staff tier limits (enforced at staff creation)
     tier: {

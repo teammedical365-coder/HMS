@@ -10,10 +10,18 @@ const Inventory = require('../models/inventory.model');
 const PharmacyOrder = require('../models/pharmacyOrder.model');
 const Notification = require('../models/notification.model');
 const { verifyToken } = require('../middleware/auth.middleware');
+const validateFileType = require('../utils/validateFileType');
+const imagekit = require('../utils/imagekit');
+const ClinicPatient = require('../models/clinicPatient.model');
 
+const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'application/pdf'];
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        if (ALLOWED_MIMES.includes(file.mimetype)) cb(null, true);
+        else cb(new Error('Only JPEG, PNG and PDF allowed'), false);
+    },
 });
 
 // --- HELPER ---
@@ -57,7 +65,8 @@ router.get('/', async (req, res) => {
             try {
                 const token = req.headers.authorization.split(' ')[1];
                 const jwt = require('jsonwebtoken');
-                const decoded = jwt.verify(token, process.env.JWT_SECRET || 'a7ad54f3356c02e5256a7a148afecede');
+                const { JWT_SECRET: _jwtSecret } = require('../config/jwt');
+                const decoded = jwt.verify(token, _jwtSecret);
                 if (decoded.hospitalId) {
                     hospitalIdFilter = decoded.hospitalId;
                 }
@@ -225,7 +234,7 @@ router.post('/session/start', verifyToken, async (req, res) => {
         await newSession.save();
         res.json({ success: true, appointment: newSession });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -326,11 +335,40 @@ router.get('/all-appointments', verifyToken, async (req, res) => {
 // 6. UPDATE Session (Notes)
 router.patch('/appointments/:id/prescription', verifyToken, upload.single('prescriptionFile'), async (req, res) => {
     try {
+        let uploadedFileEntry = null;
+        if (req.file) {
+            const typeErr = await validateFileType(req.file, ['image/jpeg', 'image/png', 'application/pdf']);
+            if (typeErr) return res.status(400).json({ success: false, message: typeErr });
+            try {
+                const result = await imagekit.upload({
+                    file: req.file.buffer,
+                    fileName: `prescription_${req.params.id}_${Date.now()}`,
+                    folder: '/crm/prescriptions',
+                });
+                uploadedFileEntry = {
+                    url: result.url,
+                    fileId: result.fileId,
+                    name: req.file.originalname,
+                    mimetype: req.file.mimetype,
+                    uploadedAt: new Date(),
+                };
+            } catch (uploadErr) {
+                console.error('[doctor] prescription file upload failed', uploadErr.message);
+                return res.status(500).json({ success: false, message: 'File upload failed. Save prescription without file or try again.' });
+            }
+        }
         const { status, diagnosis, labTests, dietPlan, pharmacy, notes, labId } = req.body;
         const findQuery = { _id: req.params.id };
         if (req.user.hospitalId) findQuery.hospitalId = req.user.hospitalId;
         const appointment = await Appointment.findOne(findQuery);
         if (!appointment) return res.status(404).json({ message: 'Not found' });
+
+        // Persist uploaded file URL to both legacy field and prescriptions array
+        if (uploadedFileEntry) {
+            appointment.prescription = uploadedFileEntry.url;
+            if (!appointment.prescriptions) appointment.prescriptions = [];
+            appointment.prescriptions.push({ type: 'prescription', ...uploadedFileEntry });
+        }
 
         if (labId) appointment.labId = labId;
         if (status) appointment.status = status;
@@ -466,7 +504,7 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
 
         res.json({ success: true, message: 'Saved', appointment });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Update failed', error: error.message });
+        res.status(500).json({ success: false, message: 'Update failed' });
     }
 });
 
@@ -505,6 +543,21 @@ router.get('/:doctorId/booked-slots', async (req, res) => {
     }
     const appointments = await Appointment.find(query);
     res.json({ success: true, bookedSlots: appointments.map(app => app.appointmentTime) });
+});
+
+// ─── Clinic Patient Reports — GET /api/doctor/clinic-patients/:clinicPatientId/reports
+// Allows doctors to view uploaded reports for a clinic patient
+router.get('/clinic-patients/:clinicPatientId/reports', verifyToken, async (req, res) => {
+    try {
+        const patient = await ClinicPatient.findOne({
+            _id: req.params.clinicPatientId,
+            clinicId: req.user.hospitalId,
+        }).select('name patientUid reports').lean();
+        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+        res.json({ success: true, reports: patient.reports || [], patientName: patient.name, patientUid: patient.patientUid });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
 });
 
 module.exports = router;

@@ -11,6 +11,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { verifyToken } = require('../middleware/auth.middleware');
+const validateFileType = require('../utils/validateFileType');
 const Hospital = require('../models/hospital.model');
 const Appointment = require('../models/appointment.model');
 const Inventory = require('../models/inventory.model');
@@ -19,6 +20,7 @@ const ClinicPatient = require('../models/clinicPatient.model');
 const ClinicSubscription = require('../models/clinicSubscription.model');
 const TreatmentPlan = require('../models/treatmentPlan.model');
 const Notification = require('../models/notification.model');
+const User = require('../models/user.model');
 
 // ─── Report upload configuration ─────────────────────────────────────────────
 const reportsDir = path.join(__dirname, '../../uploads/patient-reports');
@@ -55,7 +57,7 @@ const verifyClinicAdmin = async (req, res, next) => {
             next();
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 };
 
@@ -237,7 +239,7 @@ router.get('/stats', verifyClinicAdmin, async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -265,7 +267,7 @@ router.get('/patients', verifyClinicAdmin, async (req, res) => {
 
         res.json({ success: true, patients });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -324,7 +326,7 @@ router.post('/patients', verifyClinicAdmin, async (req, res) => {
         if (err.code === 11000) {
             return res.status(400).json({ success: false, message: 'A patient with this phone already exists in this clinic' });
         }
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -342,7 +344,7 @@ router.get('/patients/:id/history', verifyClinicAdmin, async (req, res) => {
 
         res.json({ success: true, patient, appointments });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -368,7 +370,7 @@ router.put('/patients/:id', verifyClinicAdmin, async (req, res) => {
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
         res.json({ success: true, patient });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -378,9 +380,16 @@ router.put('/patients/:id', verifyClinicAdmin, async (req, res) => {
 router.post('/patients/:id/reports', verifyClinicAdmin, uploadReport.single('report'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+        const typeErr = await validateFileType(req.file, ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+        if (typeErr) {
+            try { fs.unlinkSync(req.file.path); } catch (_) {}
+            return res.status(400).json({ success: false, message: typeErr });
+        }
+
         const patient = await ClinicPatient.findOne({ _id: req.params.id, clinicId: hid(req) });
         if (!patient) {
-            fs.unlinkSync(req.file.path); // clean up orphaned file
+            try { fs.unlinkSync(req.file.path); } catch (_) {}
             return res.status(404).json({ success: false, message: 'Patient not found' });
         }
         const reportName = req.body.name?.trim() || req.file.originalname;
@@ -390,7 +399,8 @@ router.post('/patients/:id/reports', verifyClinicAdmin, uploadReport.single('rep
         res.json({ success: true, report: patient.reports[patient.reports.length - 1], message: 'Report uploaded' });
     } catch (err) {
         if (req.file) { try { fs.unlinkSync(req.file.path); } catch (_) {} }
-        res.status(500).json({ success: false, message: err.message });
+        console.error('[upload-report]', err.message);
+        res.status(500).json({ success: false, message: 'Failed to upload report. Please try again.' });
     }
 });
 
@@ -409,7 +419,7 @@ router.delete('/patients/:id/reports/:reportId', verifyClinicAdmin, async (req, 
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         res.json({ success: true, message: 'Report deleted' });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -441,7 +451,7 @@ router.get('/appointments', verifyClinicAdmin, async (req, res) => {
 
         res.json({ success: true, appointments });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -451,11 +461,62 @@ router.get('/appointments', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 router.get('/config', verifyClinicAdmin, async (req, res) => {
     try {
-        const clinic = await Hospital.findById(hid(req)).select('appointmentMode name clinicCode').lean();
+        const clinic = await Hospital.findById(hid(req)).select('appointmentMode name clinicCode defaultFee defaultServiceName').lean();
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
-        res.json({ success: true, appointmentMode: clinic.appointmentMode || 'token', name: clinic.name, clinicCode: clinic.clinicCode });
+        res.json({
+            success: true,
+            appointmentMode: clinic.appointmentMode || 'token',
+            name: clinic.name,
+            clinicCode: clinic.clinicCode,
+            defaultFee: clinic.defaultFee ?? 0,
+            defaultServiceName: clinic.defaultServiceName || 'General Consultation',
+        });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// ─────────────────────────────────────────────
+// CLINIC CONFIG — PUT /api/clinic/config
+// Hospital admin sets default fee / service name
+// ─────────────────────────────────────────────
+router.put('/config', verifyClinicAdmin, async (req, res) => {
+    try {
+        const { defaultFee, defaultServiceName, appointmentMode } = req.body;
+        const update = {};
+
+        if (defaultFee !== undefined) {
+            const fee = Number(defaultFee);
+            if (isNaN(fee) || fee < 0) return res.status(400).json({ success: false, message: 'defaultFee must be a non-negative number' });
+            update.defaultFee = fee;
+        }
+        if (defaultServiceName !== undefined) {
+            const svc = String(defaultServiceName).trim().slice(0, 100);
+            if (!svc) return res.status(400).json({ success: false, message: 'defaultServiceName cannot be empty' });
+            update.defaultServiceName = svc;
+        }
+        if (appointmentMode !== undefined) {
+            if (!['slot', 'token'].includes(appointmentMode)) return res.status(400).json({ success: false, message: 'appointmentMode must be slot or token' });
+            update.appointmentMode = appointmentMode;
+        }
+
+        if (Object.keys(update).length === 0) return res.status(400).json({ success: false, message: 'No valid fields to update' });
+
+        const clinic = await Hospital.findByIdAndUpdate(hid(req), { $set: update }, { new: true })
+            .select('appointmentMode name clinicCode defaultFee defaultServiceName').lean();
+        if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
+
+        res.json({
+            success: true,
+            message: 'Clinic config updated',
+            appointmentMode: clinic.appointmentMode || 'token',
+            name: clinic.name,
+            clinicCode: clinic.clinicCode,
+            defaultFee: clinic.defaultFee ?? 0,
+            defaultServiceName: clinic.defaultServiceName || 'General Consultation',
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -465,7 +526,7 @@ router.get('/config', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 router.post('/appointments', verifyClinicAdmin, async (req, res) => {
     try {
-        const { patientId, amount, notes, serviceName, appointmentTime, paymentMethod } = req.body;
+        const { patientId, amount, notes, serviceName, appointmentTime, paymentMethod, cardRef, upiScreenshotUrl } = req.body;
         // patientId here is ClinicPatient._id
         if (!patientId) return res.status(400).json({ success: false, message: 'patientId is required' });
 
@@ -529,6 +590,8 @@ router.post('/appointments', verifyClinicAdmin, async (req, res) => {
             amount:         fee,
             notes:          notes || '',
             bookedBy:       req.user._id,
+            cardRef:        cardRef ? String(cardRef).slice(0, 50) : '',
+            upiScreenshotUrl: upiScreenshotUrl ? String(upiScreenshotUrl).slice(0, 500) : '',
         });
 
         await appointment.save();
@@ -539,7 +602,7 @@ router.post('/appointments', verifyClinicAdmin, async (req, res) => {
 
         res.status(201).json({ success: true, appointment, message, isTokenMode });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -574,7 +637,7 @@ router.put('/appointments/:id/complete', verifyClinicAdmin, async (req, res) => 
 
         res.json({ success: true, appointment: appt, message: 'Appointment completed' });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -592,7 +655,7 @@ router.put('/appointments/:id/pay', verifyClinicAdmin, async (req, res) => {
         if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
         res.json({ success: true, appointment: appt });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -609,7 +672,7 @@ router.put('/appointments/:id/cancel', verifyClinicAdmin, async (req, res) => {
         if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
         res.json({ success: true, appointment: appt });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -621,7 +684,7 @@ router.get('/inventory', verifyClinicAdmin, async (req, res) => {
         const inventory = await Inventory.find({ hospitalId: hid(req) }).sort({ name: 1 }).lean();
         res.json({ success: true, inventory });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -649,7 +712,7 @@ router.post('/inventory', verifyClinicAdmin, async (req, res) => {
         await item.save();
         res.status(201).json({ success: true, item });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -663,7 +726,7 @@ router.get('/pharmacy-orders', verifyClinicAdmin, async (req, res) => {
             .lean();
         res.json({ success: true, orders });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -680,7 +743,7 @@ router.put('/pharmacy-orders/:id/dispense', verifyClinicAdmin, async (req, res) 
         if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
         res.json({ success: true, order });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -727,7 +790,7 @@ router.post('/treatment-plans', verifyClinicAdmin, async (req, res) => {
         await plan.populate('clinicPatientId', 'name patientUid phone');
         res.json({ success: true, plan });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -739,7 +802,7 @@ router.get('/treatment-plans', verifyClinicAdmin, async (req, res) => {
             .sort({ createdAt: -1 });
         res.json({ success: true, plans });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -781,7 +844,7 @@ router.get('/treatment-plans/today-due', verifyClinicAdmin, async (req, res) => 
 
         res.json({ success: true, plans });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -793,7 +856,7 @@ router.get('/treatment-plans/:id', verifyClinicAdmin, async (req, res) => {
         if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
         res.json({ success: true, plan });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -819,7 +882,7 @@ router.put('/treatment-plans/:id/visits/:visitId/pay', verifyClinicAdmin, async 
         await plan.populate('clinicPatientId', 'name patientUid phone gender');
         res.json({ success: true, plan });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -857,7 +920,7 @@ router.put('/treatment-plans/:id/visits/:visitId/complete', verifyClinicAdmin, a
         await plan.populate('clinicPatientId', 'name patientUid phone gender');
         res.json({ success: true, plan });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -876,7 +939,7 @@ router.put('/treatment-plans/:id/visits/:visitId/miss', verifyClinicAdmin, async
         await plan.populate('clinicPatientId', 'name patientUid phone gender');
         res.json({ success: true, plan });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -891,7 +954,41 @@ router.put('/treatment-plans/:id/cancel', verifyClinicAdmin, async (req, res) =>
         if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
         res.json({ success: true, plan });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// ─────────────────────────────────────────────
+// CLINIC STAFF — GET /api/clinic/staff
+// Returns doctor and receptionist staff for this clinic
+// ─────────────────────────────────────────────
+router.get('/staff', verifyClinicAdmin, async (req, res) => {
+    try {
+        const STAFF_ROLES_LEGACY = ['doctor', 'receptionist'];
+        const Role = require('../models/role.model');
+        const roleIds = await Role.find({
+            hospitalId: hid(req),
+            name: { $in: STAFF_ROLES_LEGACY.map(r => new RegExp(`^${r}$`, 'i')) }
+        }).select('_id name').lean();
+        const roleIdSet = roleIds.map(r => r._id);
+
+        const staff = await User.find({
+            hospitalId: hid(req),
+            $or: [
+                { role: { $in: STAFF_ROLES_LEGACY } },
+                { role: { $in: roleIdSet } },
+            ],
+        }).select('name email phone role createdAt').lean();
+
+        const roleMap = Object.fromEntries(roleIds.map(r => [String(r._id), r.name]));
+        const enriched = staff.map(s => ({
+            ...s,
+            roleName: roleMap[String(s.role)] || String(s.role),
+        }));
+
+        res.json({ success: true, staff: enriched });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

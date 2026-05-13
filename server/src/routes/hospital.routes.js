@@ -17,7 +17,8 @@ const jwt = require('jsonwebtoken');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { getTenantConnection, getTenantDbName, getActiveConnections, removeTenantConnection } = require('../db/tenantDb');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const { JWT_SECRET } = require('../config/jwt');
+const validatePassword = require('../utils/validatePassword');
 
 /**
  * Central Admin middleware — only 'centraladmin' (or legacy 'superadmin') can access
@@ -32,7 +33,7 @@ const verifyCentralAdmin = async (req, res, next) => {
             return res.status(403).json({ success: false, message: 'Central Admin access required' });
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 };
 
@@ -49,7 +50,7 @@ const verifyHospitalAdmin = async (req, res, next) => {
             return res.status(403).json({ success: false, message: 'Hospital Admin access required' });
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 };
 
@@ -63,7 +64,7 @@ router.get('/', verifyCentralAdmin, async (req, res) => {
         const hospitals = await Hospital.find({}).populate('adminUserId', 'name email');
         res.json({ success: true, hospitals });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -83,7 +84,7 @@ router.get('/resolve/:slug', async (req, res) => {
         }
         res.json({ success: true, hospital });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -93,13 +94,22 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
         const { name, address, city, state, phone, email, website, logo, departments, appointmentFee, slug: customSlug } = req.body;
         if (!name) return res.status(400).json({ success: false, message: 'Hospital name is required' });
 
+        const RESERVED_SLUGS = ['api', 'admin', 'login', 'logout', 'signup', 'register', 'uploads',
+            'static', 'health', 'public', 'www', 'mail', 'ftp', 'app', 'dashboard', 'root', 'support'];
+
         // Auto-generate URL slug from hospital name: "AKG Hospital" -> "akg-hospital"
         const baseSlug = (customSlug || name)
             .toLowerCase()
             .trim()
-            .replace(/[^a-z0-9\s-]/g, '')   // remove special chars
-            .replace(/\s+/g, '-')            // spaces -> hyphens
-            .replace(/-+/g, '-');            // collapse multiple hyphens
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .slice(0, 60); // max length
+
+        if (!baseSlug) return res.status(400).json({ success: false, message: 'Could not generate a valid slug from the hospital name' });
+        if (RESERVED_SLUGS.includes(baseSlug)) {
+            return res.status(400).json({ success: false, message: `Slug "${baseSlug}" is reserved. Use a different hospital name.` });
+        }
 
         // Ensure slug uniqueness by appending number if needed
         let slug = baseSlug;
@@ -143,7 +153,7 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             tenantDb: getTenantDbName(String(hospital._id))
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -183,19 +193,23 @@ router.get('/tenant-status', verifyCentralAdmin, async (req, res) => {
             report,
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
 // Update a hospital
 router.put('/:id', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, address, city, state, phone, email, website, logo, isActive, departments, appointmentFee, slug, appointmentMode } = req.body;
+        const { name, address, city, state, phone, email, website, logo, isActive, departments, appointmentFee, slug, appointmentMode, customDomain } = req.body;
         const hospital = await Hospital.findById(req.params.id);
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
         if (name !== undefined) hospital.name = name;
         if (slug !== undefined) hospital.slug = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
+        if (customDomain !== undefined) {
+            // strip protocol and trailing slash
+            hospital.customDomain = customDomain ? customDomain.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase() : null;
+        }
         if (address !== undefined) hospital.address = address;
         if (city !== undefined) hospital.city = city;
         if (state !== undefined) hospital.state = state;
@@ -211,7 +225,7 @@ router.put('/:id', verifyCentralAdmin, async (req, res) => {
         await hospital.save();
         res.json({ success: true, message: 'Hospital updated successfully', hospital });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -248,7 +262,7 @@ router.get('/:id/next-token', verifyToken, async (req, res) => {
 
         res.json({ success: true, mode: 'token', nextToken: count + 1 });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -299,7 +313,7 @@ router.delete('/:id', verifyCentralAdmin, async (req, res) => {
         });
     } catch (err) {
         console.error('Delete hospital error:', err);
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -315,6 +329,8 @@ router.post('/admin/signup', verifyCentralAdmin, async (req, res) => {
         if (!name || !email || !password || !hospitalId) {
             return res.status(400).json({ success: false, message: 'Name, email, password, and hospitalId are required' });
         }
+        const pwErrH = validatePassword(password);
+        if (pwErrH) return res.status(400).json({ success: false, message: pwErrH });
 
         const hospital = await Hospital.findById(hospitalId);
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
@@ -347,7 +363,7 @@ router.post('/admin/signup', verifyCentralAdmin, async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -411,7 +427,7 @@ router.post('/admin/login', async (req, res) => {
             token
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -429,7 +445,7 @@ router.get('/my-hospital', verifyHospitalAdmin, async (req, res) => {
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
         res.json({ success: true, hospital });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -451,7 +467,7 @@ router.put('/my-hospital/facilities', verifyHospitalAdmin, async (req, res) => {
 
         res.json({ success: true, message: 'Facilities updated successfully', hospital });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -475,7 +491,7 @@ router.put('/my-hospital/department-fees', verifyHospitalAdmin, async (req, res)
 
         res.json({ success: true, message: 'Department fees updated successfully', hospital });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -493,7 +509,7 @@ router.get('/my-hospital/inventory', verifyHospitalAdmin, async (req, res) => {
         const items = await Inventory.find({ hospitalId }).sort({ createdAt: -1 }).lean();
         res.json({ success: true, data: items });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -538,7 +554,7 @@ router.delete('/my-hospital/inventory/:id', verifyHospitalAdmin, async (req, res
         if (!deleted) return res.status(404).json({ success: false, message: 'Item not found' });
         res.json({ success: true, message: 'Item deleted' });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -567,7 +583,7 @@ router.get('/my-hospital/lab-tests', verifyHospitalAdmin, async (req, res) => {
         });
         res.json({ success: true, data: tests });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -589,7 +605,7 @@ router.put('/my-hospital/lab-tests/:testId/price', verifyHospitalAdmin, async (r
         await test.save();
         res.json({ success: true, message: 'Price updated', data: test });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -856,7 +872,7 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
         });
     } catch (err) {
         console.error('Hospital stats error:', err);
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -875,7 +891,7 @@ router.get('/:id/branding', async (req, res) => {
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
         res.json({ success: true, branding: hospital.branding || {}, hospitalName: hospital.name, logo: hospital.logo });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -930,7 +946,7 @@ router.put('/:id/branding', verifyCentralAdmin, async (req, res) => {
 
         res.json({ success: true, message: 'Branding updated successfully', branding: hospital.branding });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

@@ -35,7 +35,7 @@ router.get('/', verifyToken, async (req, res) => {
 
         res.json({ success: true, data: library, allowedDepartments });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -58,7 +58,7 @@ router.post('/', verifyAdminOrSuperAdmin, async (req, res) => {
 
         res.status(201).json({ success: true, message: 'Question Library updated successfully', data: library });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

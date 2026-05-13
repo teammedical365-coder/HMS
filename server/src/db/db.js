@@ -2,11 +2,10 @@ const mongoose = require('mongoose');
 
 async function connectDB() {
     try {
-        const mongoUrl = process.env.MONGODB_URL;
+        const mongoUrl = process.env.MONGODB_URL || 'mongodb://127.0.0.1:27017/hms';
         
-        if (!mongoUrl) {
-            console.error('❌ MONGODB_URL is not defined in environment variables');
-            process.exit(1);
+        if (!process.env.MONGODB_URL) {
+            console.warn('⚠️ MONGODB_URL is not defined in environment variables. Falling back to local database: mongodb://127.0.0.1:27017/hms');
         }
 
         // Validate connection string format

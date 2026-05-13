@@ -68,7 +68,7 @@ router.post('/', verifyAdminOrSuperAdmin, async (req, res) => {
         res.status(201).json({ success: true, message: 'Lab test created', data: newTest });
     } catch (error) {
         console.error('Create Lab Test Error:', error);
-        res.status(500).json({ success: false, message: 'Error creating lab test', error: error.message });
+        res.status(500).json({ success: false, message: 'Error creating lab test' });
     }
 });
 

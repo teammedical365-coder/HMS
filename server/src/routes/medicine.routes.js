@@ -9,7 +9,7 @@ router.get('/', verifyToken, async (req, res) => {
         const medicines = await Medicine.find({}).sort({ name: 1 });
         res.json({ success: true, data: medicines });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -26,7 +26,7 @@ router.post('/', verifyAdminOrSuperAdmin, async (req, res) => {
 
         res.status(201).json({ success: true, message: 'Medicine added successfully', data: medicine });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -41,7 +41,7 @@ router.put('/:id', verifyAdminOrSuperAdmin, async (req, res) => {
 
         res.json({ success: true, message: 'Medicine updated successfully', data: medicine });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -55,7 +55,7 @@ router.delete('/:id', verifyAdminOrSuperAdmin, async (req, res) => {
 
         res.json({ success: true, message: 'Medicine deleted successfully' });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

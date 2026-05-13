@@ -35,8 +35,10 @@ const Patient = () => {
             const staffRoles = ['nurse', 'admin', 'superadmin', 'hospitaladmin', 'reception', 'receptionist'];
             const isAdminOrStaff = staffRoles.some(r => role.includes(r));
             const isDoctor = role.includes('doctor');
-            // Doctors always use their own appointments; staff use the all-appointments view
-            const hasViewAllAccess = !isDoctor && (isAdminOrStaff || permissions.includes('patient_view') || permissions.includes('appointment_view_all'));
+            const isClinicDoctor = isDoctor && user.clinicType === 'clinic';
+            // Doctors always use their own appointments; staff and clinic doctors use the all-appointments view
+            // (clinic appointments are not assigned to individual doctors via doctorUserId)
+            const hasViewAllAccess = isClinicDoctor || (!isDoctor && (isAdminOrStaff || permissions.includes('patient_view') || permissions.includes('appointment_view_all')));
 
             const res = hasViewAllAccess
                 ? await doctorAPI.getAllAppointments()

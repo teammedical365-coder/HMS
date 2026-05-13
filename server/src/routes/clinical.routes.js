@@ -27,7 +27,7 @@ router.post('/intake', verifyToken, async (req, res) => {
         await visit.save();
         res.json({ success: true, data: visit });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -45,7 +45,7 @@ router.get('/history/:patientId', verifyToken, async (req, res) => {
 
         res.json({ success: true, history });   // key: history (was: data)
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -150,7 +150,7 @@ router.post('/diagnose/:visitId', verifyToken, async (req, res) => {
         res.json({ success: true, data: visit });
     } catch (error) {
         console.error('Diagnosis Error:', error);
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

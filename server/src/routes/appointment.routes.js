@@ -40,13 +40,18 @@ router.get('/reception/all', verifyToken, resolveTenant, async (req, res) => {
         }
 
         const { Appointment } = getModels(req);
-        const appointments = await Appointment.find({})
+        const page  = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(200, parseInt(req.query.limit) || 100);
+        const hFilter = req.user.hospitalId ? { hospitalId: req.user.hospitalId } : {};
+        const appointments = await Appointment.find(hFilter)
             .sort({ appointmentDate: -1, appointmentTime: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
             .lean();
 
-        res.json({ success: true, appointments });
+        res.json({ success: true, appointments, page, limit });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error fetching all appointments', error: error.message });
+        res.status(500).json({ success: false, message: 'Error fetching all appointments' });
     }
 });
 
@@ -103,7 +108,7 @@ router.patch('/reception/reschedule/:id', verifyToken, resolveTenant, async (req
 
         res.json({ success: true, message: 'Appointment rescheduled successfully', appointment });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error rescheduling appointment', error: error.message });
+        res.status(500).json({ success: false, message: 'Error rescheduling appointment' });
     }
 });
 
@@ -120,7 +125,7 @@ router.patch('/reception/cancel/:id', verifyToken, resolveTenant, async (req, re
         if (!appointment) return res.status(404).json({ success: false, message: 'Appointment not found' });
         res.json({ success: true, message: 'Appointment cancelled', appointment });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error cancelling appointment', error: error.message });
+        res.status(500).json({ success: false, message: 'Error cancelling appointment' });
     }
 });
 
@@ -229,7 +234,7 @@ router.post('/create', verifyToken, resolveTenant, async (req, res) => {
         res.status(201).json({ success: true, message: 'Appointment booked successfully', appointment: savedAppointment });
 
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Server error creating appointment', error: error.message });
+        res.status(500).json({ success: false, message: 'Server error creating appointment' });
     }
 });
 

@@ -14,7 +14,8 @@ const Lab = require('../models/lab.model');
 const Pharmacy = require('../models/pharmacy.model');
 const Reception = require('../models/reception.model');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const { JWT_SECRET } = require('../config/jwt');
+const validatePassword = require('../utils/validatePassword');
 
 // ==========================================
 // HELPERS
@@ -121,7 +122,7 @@ router.get('/roles', verifyToken, async (req, res) => {
 
         res.json({ success: true, data: rolesWithCounts });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -153,7 +154,7 @@ router.post('/roles', verifyAdminOrSuperAdmin, async (req, res) => {
 
         res.json({ success: true, message: 'Role created successfully', data: newRole });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -185,7 +186,7 @@ router.put('/roles/:roleId', verifyAdminOrSuperAdmin, async (req, res) => {
         await roleDoc.save();
         res.json({ success: true, message: 'Role updated successfully', data: roleDoc });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -216,7 +217,7 @@ router.delete('/roles/:roleId', verifyAdminOrSuperAdmin, async (req, res) => {
         await Role.findByIdAndDelete(roleId);
         res.json({ success: true, message: 'Role deleted successfully' });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -232,6 +233,8 @@ router.post('/signup', async (req, res) => {
         if (!name || !email || !password) {
             return res.status(400).json({ success: false, message: 'Name, email, and password are required' });
         }
+        const pwErr1 = validatePassword(password);
+        if (pwErr1) return res.status(400).json({ success: false, message: pwErr1 });
 
         const existingUser = await User.findOne({ email });
         if (existingUser) {
@@ -261,7 +264,7 @@ router.post('/signup', async (req, res) => {
             token
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error creating admin', error: error.message });
+        res.status(500).json({ success: false, message: 'Error creating admin' });
     }
 });
 
@@ -309,7 +312,7 @@ router.post('/login', async (req, res) => {
             token
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error during login', error: error.message });
+        res.status(500).json({ success: false, message: 'Error during login' });
     }
 });
 
@@ -351,7 +354,7 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
 
         res.json({ success: true, users: staffOnly });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error fetching users', error: error.message });
+        res.status(500).json({ success: false, message: 'Error fetching users' });
     }
 });
 
@@ -363,6 +366,8 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         if (!name || !email || !password || !roleId) {
             return res.status(400).json({ success: false, message: 'Name, email, password, and roleId are required' });
         }
+        const pwErr2 = validatePassword(password);
+        if (pwErr2) return res.status(400).json({ success: false, message: pwErr2 });
 
         const roleDoc = await Role.findById(roleId);
         if (!roleDoc) {
@@ -455,7 +460,7 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
             user: userData
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error creating user', error: error.message });
+        res.status(500).json({ success: false, message: 'Error creating user' });
     }
 });
 
@@ -552,7 +557,7 @@ router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
         const updatedUser = await buildUserResponse(user);
         res.json({ success: true, message: 'User updated successfully', user: updatedUser });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error updating user', error: error.message });
+        res.status(500).json({ success: false, message: 'Error updating user' });
     }
 });
 
@@ -594,7 +599,7 @@ router.delete('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
         await User.findByIdAndDelete(userId);
         res.json({ success: true, message: 'User and associated profile deleted successfully' });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error deleting user', error: error.message });
+        res.status(500).json({ success: false, message: 'Error deleting user' });
     }
 });
 

@@ -154,7 +154,6 @@ router.post('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error creating doctor',
-      error: error.message,
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
@@ -167,7 +166,7 @@ router.get('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
     const doctors = await Doctor.find(filter).populate('userId', 'name email phone role').sort({ createdAt: -1 });
     res.json({ success: true, doctors });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error fetching doctors', error: error.message });
+    res.status(500).json({ success: false, message: 'Error fetching doctors' });
   }
 });
 
@@ -181,7 +180,7 @@ router.get('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     res.json({ success: true, doctor });
   } catch (error) {
     console.error('Get doctor error:', error);
-    res.status(500).json({ success: false, message: 'Error fetching doctor', error: error.message });
+    res.status(500).json({ success: false, message: 'Error fetching doctor' });
   }
 });
 
@@ -252,7 +251,7 @@ router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     res.json({ success: true, message: 'Doctor updated successfully', doctor: populatedDoctor });
   } catch (error) {
     console.error('Update doctor error:', error);
-    res.status(500).json({ success: false, message: 'Error updating doctor', error: error.message });
+    res.status(500).json({ success: false, message: 'Error updating doctor' });
   }
 });
 
@@ -273,7 +272,7 @@ router.delete('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     res.json({ success: true, message: 'Doctor deleted successfully' });
   } catch (error) {
     console.error('Delete doctor error:', error);
-    res.status(500).json({ success: false, message: 'Error deleting doctor', error: error.message });
+    res.status(500).json({ success: false, message: 'Error deleting doctor' });
   }
 });
 
@@ -358,7 +357,7 @@ router.post('/labs', verifyAdminOrSuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Create lab error:', error);
-    res.status(500).json({ success: false, message: 'Error creating lab', error: error.message });
+    res.status(500).json({ success: false, message: 'Error creating lab' });
   }
 });
 
@@ -368,7 +367,7 @@ router.get('/labs', verifyAdminOrSuperAdmin, async (req, res) => {
     const labs = await Lab.find(filter).sort({ createdAt: -1 });
     res.json({ success: true, labs });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error fetching labs', error: error.message });
+    res.status(500).json({ success: false, message: 'Error fetching labs' });
   }
 });
 
@@ -384,7 +383,7 @@ router.put('/labs/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     res.json({ success: true, message: 'Lab updated successfully', lab });
   } catch (error) {
     console.error('Update lab error:', error);
-    res.status(500).json({ success: false, message: 'Error updating lab', error: error.message });
+    res.status(500).json({ success: false, message: 'Error updating lab' });
   }
 });
 
@@ -404,7 +403,7 @@ router.delete('/labs/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     res.json({ success: true, message: 'Lab deleted successfully' });
   } catch (error) {
     console.error('Delete lab error:', error);
-    res.status(500).json({ success: false, message: 'Error deleting lab', error: error.message });
+    res.status(500).json({ success: false, message: 'Error deleting lab' });
   }
 });
 
@@ -488,7 +487,7 @@ router.post('/pharmacies', verifyAdminOrSuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Create pharmacy error:', error);
-    res.status(500).json({ success: false, message: 'Error creating pharmacy', error: error.message });
+    res.status(500).json({ success: false, message: 'Error creating pharmacy' });
   }
 });
 
@@ -498,7 +497,7 @@ router.get('/pharmacies', verifyAdminOrSuperAdmin, async (req, res) => {
     const pharmacies = await Pharmacy.find(filter).sort({ createdAt: -1 });
     res.json({ success: true, pharmacies });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error fetching pharmacies', error: error.message });
+    res.status(500).json({ success: false, message: 'Error fetching pharmacies' });
   }
 });
 
@@ -514,7 +513,7 @@ router.put('/pharmacies/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     res.json({ success: true, message: 'Pharmacy updated successfully', pharmacy });
   } catch (error) {
     console.error('Update pharmacy error:', error);
-    res.status(500).json({ success: false, message: 'Error updating pharmacy', error: error.message });
+    res.status(500).json({ success: false, message: 'Error updating pharmacy' });
   }
 });
 
@@ -534,7 +533,7 @@ router.delete('/pharmacies/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     res.json({ success: true, message: 'Pharmacy deleted successfully' });
   } catch (error) {
     console.error('Delete pharmacy error:', error);
-    res.status(500).json({ success: false, message: 'Error deleting pharmacy', error: error.message });
+    res.status(500).json({ success: false, message: 'Error deleting pharmacy' });
   }
 });
 
@@ -616,7 +615,7 @@ router.post('/receptions', verifyAdminOrSuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Create reception error:', error);
-    res.status(500).json({ success: false, message: 'Error creating reception', error: error.message });
+    res.status(500).json({ success: false, message: 'Error creating reception' });
   }
 });
 
@@ -626,7 +625,7 @@ router.get('/receptions', verifyAdminOrSuperAdmin, async (req, res) => {
     const receptions = await Reception.find(filter).populate('userId', 'name email phone').sort({ createdAt: -1 });
     res.json({ success: true, receptions });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error fetching receptions', error: error.message });
+    res.status(500).json({ success: false, message: 'Error fetching receptions' });
   }
 });
 
@@ -642,7 +641,7 @@ router.put('/receptions/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     res.json({ success: true, message: 'Reception updated successfully', reception });
   } catch (error) {
     console.error('Update reception error:', error);
-    res.status(500).json({ success: false, message: 'Error updating reception', error: error.message });
+    res.status(500).json({ success: false, message: 'Error updating reception' });
   }
 });
 
@@ -662,7 +661,7 @@ router.delete('/receptions/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     res.json({ success: true, message: 'Reception deleted successfully' });
   } catch (error) {
     console.error('Delete reception error:', error);
-    res.status(500).json({ success: false, message: 'Error deleting reception', error: error.message });
+    res.status(500).json({ success: false, message: 'Error deleting reception' });
   }
 });
 
@@ -695,7 +694,7 @@ router.post('/services', verifyAdminOrSuperAdmin, async (req, res) => {
     res.status(201).json({ success: true, message: 'Service created successfully', service });
   } catch (error) {
     console.error('Create service error:', error);
-    res.status(500).json({ success: false, message: 'Error creating service', error: error.message });
+    res.status(500).json({ success: false, message: 'Error creating service' });
   }
 });
 
@@ -705,7 +704,7 @@ router.get('/services', verifyAdminOrSuperAdmin, async (req, res) => {
     res.json({ success: true, services });
   } catch (error) {
     console.error('Get services error:', error);
-    res.status(500).json({ success: false, message: 'Error fetching services', error: error.message });
+    res.status(500).json({ success: false, message: 'Error fetching services' });
   }
 });
 
@@ -721,7 +720,7 @@ router.put('/services/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     res.json({ success: true, message: 'Service updated successfully', service });
   } catch (error) {
     console.error('Update service error:', error);
-    res.status(500).json({ success: false, message: 'Error updating service', error: error.message });
+    res.status(500).json({ success: false, message: 'Error updating service' });
   }
 });
 
@@ -734,7 +733,7 @@ router.delete('/services/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     res.json({ success: true, message: 'Service deleted successfully' });
   } catch (error) {
     console.error('Delete service error:', error);
-    res.status(500).json({ success: false, message: 'Error deleting service', error: error.message });
+    res.status(500).json({ success: false, message: 'Error deleting service' });
   }
 });
 

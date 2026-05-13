@@ -47,7 +47,7 @@ const verifyLocalServer = async (req, res, next) => {
         req.clinicId = new mongoose.Types.ObjectId(clinicId);
         next();
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 };
 
@@ -64,7 +64,7 @@ router.post('/heartbeat', verifyLocalServer, async (req, res) => {
         });
         res.json({ success: true, serverTime: new Date().toISOString() });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -109,7 +109,7 @@ router.post('/stats', verifyLocalServer, async (req, res) => {
 
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -149,7 +149,7 @@ router.post('/prescription', verifyLocalServer, async (req, res) => {
 
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -186,7 +186,7 @@ router.post('/bill', verifyLocalServer, async (req, res) => {
 
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -223,7 +223,7 @@ router.all('/tunnel/:clinicId/*', async (req, res) => {
 
         res.status(result.status).json(result.body);
     } catch (err) {
-        res.status(504).json({ success: false, message: err.message });
+        res.status(504).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

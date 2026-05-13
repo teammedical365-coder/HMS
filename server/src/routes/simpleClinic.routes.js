@@ -10,7 +10,8 @@ const { verifyToken } = require('../middleware/auth.middleware');
 const { getTenantConnection, removeTenantConnection } = require('../db/tenantDb');
 const { getTenantModels } = require('../db/tenantModels');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const { JWT_SECRET } = require('../config/jwt');
+const validatePassword = require('../utils/validatePassword');
 
 // Generate a unique clinic code from name (3-4 uppercase letters)
 const generateClinicCode = async (name) => {
@@ -32,7 +33,7 @@ const verifyCentralAdmin = async (req, res, next) => {
             return res.status(403).json({ success: false, message: 'Central Admin access required' });
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 };
 
@@ -45,7 +46,7 @@ router.get('/', verifyCentralAdmin, async (req, res) => {
         const clinics = await Hospital.find({ clinicType: 'clinic' }).populate('adminUserId', 'name email phone');
         res.json({ success: true, clinics });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -95,7 +96,7 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
 
         res.status(201).json({ success: true, clinic, message: 'Simple clinic created successfully' });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -140,7 +141,7 @@ router.put('/:id', verifyCentralAdmin, async (req, res) => {
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
         res.json({ success: true, clinic });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -163,7 +164,7 @@ router.delete('/:id', verifyCentralAdmin, async (req, res) => {
 
         res.json({ success: true, message: 'Clinic and all associated data deleted' });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -230,7 +231,7 @@ router.get('/:id/stats', verifyCentralAdmin, async (req, res) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -242,6 +243,8 @@ router.post('/:id/manager', verifyCentralAdmin, async (req, res) => {
     try {
         const { name, email, password, phone } = req.body;
         if (!name || !email || !password) return res.status(400).json({ success: false, message: 'Name, email and password are required' });
+        const pwErrM = validatePassword(password);
+        if (pwErrM) return res.status(400).json({ success: false, message: pwErrM });
 
         const clinic = await Hospital.findOne({ _id: req.params.id, clinicType: 'clinic' });
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
@@ -272,7 +275,7 @@ router.post('/:id/manager', verifyCentralAdmin, async (req, res) => {
             message: 'Clinic manager created. They can login at /hospitaladmin/login'
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -292,7 +295,7 @@ router.get('/:id/staff', verifyCentralAdmin, async (req, res) => {
 
         res.json({ success: true, staff, tier: clinic?.tier });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -305,6 +308,8 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
     try {
         const { name, email, password, phone, staffRole } = req.body;
         if (!name || !email || !password) return res.status(400).json({ success: false, message: 'Name, email and password are required' });
+        const pwErrS = validatePassword(password);
+        if (pwErrS) return res.status(400).json({ success: false, message: pwErrS });
 
         const role = staffRole === 'receptionist' ? 'receptionist' : 'doctor';
 
@@ -341,7 +346,7 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
             message: `${role === 'doctor' ? 'Doctor' : 'Receptionist'} account created successfully`,
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -359,7 +364,7 @@ router.delete('/:clinicId/staff/:userId', verifyCentralAdmin, async (req, res) =
 
         res.json({ success: true, message: 'Staff member removed' });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -375,7 +380,7 @@ router.get('/:id/subscriptions', verifyCentralAdmin, async (req, res) => {
         const clinic = await Hospital.findById(req.params.id).select('name subscription clinicCode').lean();
         res.json({ success: true, subscriptions: subs, clinic });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -399,7 +404,7 @@ router.put('/:id/subscriptions/rate', verifyCentralAdmin, async (req, res) => {
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
         res.json({ success: true, clinic, message: 'Billing rate updated' });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -423,7 +428,7 @@ router.put('/:id/subscriptions/:subId', verifyCentralAdmin, async (req, res) => 
         if (!sub) return res.status(404).json({ success: false, message: 'Subscription record not found' });
         res.json({ success: true, subscription: sub });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

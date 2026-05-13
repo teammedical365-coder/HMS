@@ -24,7 +24,7 @@ const verifyAdmissionAccess = async (req, res, next) => {
             }
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 };
 
@@ -65,7 +65,7 @@ router.post('/', verifyAdmissionAccess, async (req, res) => {
         await admission.save();
         res.status(201).json({ success: true, message: 'Patient admitted successfully', admission });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -80,7 +80,7 @@ router.get('/active', verifyAdmissionAccess, async (req, res) => {
 
         res.json({ success: true, admissions });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -95,7 +95,7 @@ router.get('/patient/:patientId', verifyAdmissionAccess, async (req, res) => {
 
         res.json({ success: true, admissions });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -117,7 +117,7 @@ router.put('/:id/discharge', verifyAdmissionAccess, async (req, res) => {
         if (!admission) return res.status(404).json({ success: false, message: 'Admission not found' });
         res.json({ success: true, message: 'Patient discharged successfully', admission });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 
@@ -133,7 +133,7 @@ router.put('/:id/pay', verifyAdmissionAccess, async (req, res) => {
         if (!admission) return res.status(404).json({ success: false, message: 'Admission not found' });
         res.json({ success: true, message: 'Admission marked as paid', admission });
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
 

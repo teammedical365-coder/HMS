@@ -8,43 +8,43 @@ const DoctorDashboard = () => {
     const [stats, setStats] = useState({ today: 0, pending: 0, completed: 0 });
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [user] = useState(JSON.parse(localStorage.getItem('user') || '{}'));
 
-    // Availability State (Matches AdminDoctors structure)
-    const [availability, setAvailability] = useState(null);
-    const [showAvailability, setShowAvailability] = useState(false);
+    const isClinicDoctor = user?.clinicType === 'clinic';
 
     useEffect(() => {
+        if (isClinicDoctor) {
+            // Clinic doctors use the Clinic Dashboard, not this page
+            navigate('/hospitaladmin', { replace: true });
+            return;
+        }
         fetchDashboardData();
-    }, []);
+    }, []); // eslint-disable-line
 
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
+            setError('');
 
-            // 1. Get Appointments
             const aptRes = await doctorAPI.getAppointments();
             if (aptRes.success) {
-                const apts = aptRes.appointments;
+                const apts = aptRes.appointments || [];
                 setAppointments(apts);
 
-                // Calculate Stats
-                const today = new Date().toISOString().split('T')[0];
+                const todayStr = new Date().toISOString().split('T')[0];
                 setStats({
-                    today: apts.filter(a => a.appointmentDate.startsWith(today)).length,
+                    today: apts.filter(a => a.appointmentDate && String(a.appointmentDate).startsWith(todayStr)).length,
                     pending: apts.filter(a => a.status === 'pending' || a.status === 'confirmed').length,
                     completed: apts.filter(a => a.status === 'completed').length
                 });
+            } else {
+                setError(aptRes.message || 'Failed to load appointments');
             }
-
-            // 2. Get Doctor Profile (for availability)
-            // Note: We might need a specific endpoint for "My Profile", 
-            // but usually this is fetched via context or a specific GET /doctor/me endpoint.
-            // For now, we assume availability is managed in Admin, 
-            // OR we add a fetch here if you implement 'getMe' in doctorAPI.
-
         } catch (err) {
-            console.error("Dashboard Error:", err);
+            const msg = err?.response?.data?.message || err.message || 'Network error';
+            setError(msg);
+            console.error('DoctorDashboard error:', err);
         } finally {
             setLoading(false);
         }
@@ -56,6 +56,14 @@ const DoctorDashboard = () => {
     };
 
     if (loading) return <div className="loading-screen">Loading Dashboard...</div>;
+    if (error) return (
+        <div className="doctor-dashboard-container">
+            <div style={{ background: '#fee2e2', border: '1px solid #fecaca', borderRadius: '10px', padding: '20px', margin: '20px', color: '#dc2626' }}>
+                <strong>Error loading dashboard:</strong> {error}
+                <button onClick={fetchDashboardData} style={{ marginLeft: '12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 14px', cursor: 'pointer' }}>Retry</button>
+            </div>
+        </div>
+    );
 
     return (
         <div className="doctor-dashboard-container">
@@ -90,7 +98,10 @@ const DoctorDashboard = () => {
             <div className="appointments-section">
                 <h2>Today's Schedule & Upcoming</h2>
                 {appointments.length === 0 ? (
-                    <div className="empty-state">No appointments found.</div>
+                    <div className="empty-state">
+                        <p>No appointments found.</p>
+                        <p style={{ fontSize: '13px', color: '#64748b', marginTop: '8px' }}>Your appointments will appear here once booked by reception. Contact your admin if you expect to see appointments.</p>
+                    </div>
                 ) : (
                     <table className="doctor-table">
                         <thead>
