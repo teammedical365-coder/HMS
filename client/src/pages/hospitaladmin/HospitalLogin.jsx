@@ -4,7 +4,7 @@ import { useAppDispatch, useAuth } from '../../store/hooks';
 import { loginUser, clearError } from '../../store/slices/authSlice';
 import { useBranding } from '../../context/BrandingContext';
 import { getSubdomain } from '../../utils/subdomain';
-import api from '../../utils/api';
+import api, { publicAPI } from '../../utils/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HiOutlineMail, HiOutlineLockClosed } from 'react-icons/hi';
 import { RiHospitalLine } from 'react-icons/ri';
@@ -32,18 +32,27 @@ const HospitalLogin = () => {
     const [hospitalError, setHospitalError] = useState('');
     const [formData, setFormData] = useState({ email: '', password: '' });
 
-    // Resolve hospital by slug on mount
+    // Resolve hospital by domain/slug on mount
     useEffect(() => {
         const resolveHospital = async () => {
             try {
                 setHospitalLoading(true);
-                const res = await api.get(`/api/hospitals/resolve/${hospitalSlug}`);
-                if (res.data.success) {
-                    setHospital(res.data.hospital);
+                const domain = window.location.hostname;
+                const res = await publicAPI.getTenantConfig(domain);
+                
+                if (res.success && res.tenant) {
+                    setHospital({
+                        _id: res.tenant.id,
+                        name: res.tenant.name,
+                        slug: res.tenant.slug,
+                        logo: res.tenant.branding?.logoUrl,
+                        city: res.tenant.branding?.city || ''
+                    });
+                    
                     // 🎨 Apply this hospital's specific branding (colors, logo, title) 
                     // to the login page *before* the user even signs in.
-                    if (res.data.hospital._id) {
-                        loadBranding(res.data.hospital._id);
+                    if (res.tenant.id) {
+                        loadBranding(res.tenant.id);
                     }
                 } else {
                     setHospitalError('Hospital not found.');

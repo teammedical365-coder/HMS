@@ -783,6 +783,7 @@ const CentralAdminDashboard = () => {
                                             { label: 'Admin', value: h.adminName || 'Not assigned' },
                                             { label: 'Admin Email', value: h.adminEmail },
                                             { label: 'Staff Login URL', value: h.slug && `${window.location.protocol}//${h.slug}.${getBaseHost()}/login`, isLink: true },
+                                            { label: 'Custom Domain', value: h.customDomain && `http://${h.customDomain}`, isLink: true },
                                             { label: 'Appointment Fee', value: h.appointmentFee !== undefined && h.appointmentFee !== null ? formatCurrency(h.appointmentFee) : formatCurrency(500) },
                                         ].map((item, i) => item.value && (
                                             <div key={i} style={{ display: 'flex', gap: '12px', marginBottom: '8px', fontSize: '14px' }}>
@@ -1114,7 +1115,8 @@ const CentralAdminDashboard = () => {
                                                 {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
                                                 {h.phone && <span>📞 {h.phone}</span>}
                                                 {h.email && <span>✉️ {h.email}</span>}
-                                                {h.slug && <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" style={{display: 'inline-block', marginTop: '6px', background: 'var(--brand-pink)', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none'}}>🌐 {h.slug}.{getBaseHost()}</a>}
+                                                {h.slug && <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" style={{display: 'inline-block', marginTop: '6px', background: 'var(--brand-pink)', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none', marginRight: '6px'}}>🌐 {h.slug}.{getBaseHost()}</a>}
+                                                {h.customDomain && <a href={`http://${h.customDomain}`} target="_blank" rel="noreferrer" style={{display: 'inline-block', marginTop: '6px', background: '#3b82f6', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none'}}>🌐 {h.customDomain}</a>}
                                                 {(h.departments && h.departments.length > 0) && (
                                                     <div style={{ marginTop: '8px', fontSize: '11px', color: '#64748b' }}>
                                                         <strong>Depts:</strong> {h.departments.join(', ')}

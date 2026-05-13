@@ -6,21 +6,27 @@ export const getSubdomain = () => {
         return null;
     }
 
-    const parts = hostname.split('.');
+    const isBaseDomain = hostname === 'medical365.in' || hostname === 'www.medical365.in';
 
-    // Localhost Subdomain testing (e.g., citycare.localhost)
-    if (hostname.endsWith('localhost') && parts.length >= 2) {
-        return parts[0] === 'www' ? null : parts[0];
-    }
+    // If it's not the base domain and not localhost, it's either a subdomain of base domain OR a completely custom domain.
+    if (!isBaseDomain) {
+        const parts = hostname.split('.');
 
-    // Live domain (e.g., citycare.myurl.com)
-    // We assume the base domain has at least 2 parts (myurl.com)
-    if (parts.length >= 3) {
-        const subdomain = parts[0];
-        if (subdomain === 'www') {
-            return parts.length > 3 ? parts[1] : null;
+        // Localhost Subdomain testing (e.g., citycare.localhost)
+        if (hostname.endsWith('localhost') && parts.length >= 2) {
+            return parts[0] === 'www' ? null : parts[0];
         }
-        return subdomain; 
+
+        // It is a live domain. If it's a subdomain of medical365.in:
+        if (hostname.endsWith('.medical365.in')) {
+            const subdomain = hostname.replace('.medical365.in', '');
+            return subdomain === 'www' ? null : subdomain;
+        }
+
+        // Otherwise, it is a custom domain (like portal.hospitalA.com or hospitalA.com)
+        // We can just return the full hostname or a special flag. Returning the hostname
+        // ensures it is truthy and not in RESERVED_SUBDOMAINS, triggering HospitalLogin.
+        return hostname;
     }
 
     return null;
