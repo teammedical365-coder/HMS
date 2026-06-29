@@ -61,7 +61,7 @@ const verifyHospitalAdmin = async (req, res, next) => {
 // Get all hospitals
 router.get('/', verifyCentralAdmin, async (req, res) => {
     try {
-        const hospitals = await Hospital.find({}).populate('adminUserId', 'name email');
+        const hospitals = await Hospital.find({ clinicType: { $ne: 'clinic' } }).populate('adminUserId', 'name email');
         res.json({ success: true, hospitals });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
@@ -201,7 +201,7 @@ router.get('/tenant-status', verifyCentralAdmin, async (req, res) => {
 router.put('/:id', verifyCentralAdmin, async (req, res) => {
     try {
         const { name, address, city, state, phone, email, website, logo, isActive, departments, appointmentFee, slug, appointmentMode, customDomain } = req.body;
-        const hospital = await Hospital.findById(req.params.id);
+        const hospital = await Hospital.findOne({ _id: req.params.id, clinicType: { $ne: 'clinic' } });
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
         if (name !== undefined) hospital.name = name;
@@ -270,7 +270,7 @@ router.get('/:id/next-token', verifyToken, async (req, res) => {
 router.delete('/:id', verifyCentralAdmin, async (req, res) => {
     try {
         const hospitalId = req.params.id;
-        const hospital = await Hospital.findById(hospitalId);
+        const hospital = await Hospital.findOne({ _id: hospitalId, clinicType: { $ne: 'clinic' } });
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
         const deletionLog = {};
@@ -332,7 +332,7 @@ router.post('/admin/signup', verifyCentralAdmin, async (req, res) => {
         const pwErrH = validatePassword(password);
         if (pwErrH) return res.status(400).json({ success: false, message: pwErrH });
 
-        const hospital = await Hospital.findById(hospitalId);
+        const hospital = await Hospital.findOne({ _id: hospitalId, clinicType: { $ne: 'clinic' } });
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
         const existing = await User.findOne({ email });
