@@ -101,6 +101,7 @@ const DoctorPatientDetails = () => {
 
     // Modal States
     const [showPrescribeModal, setShowPrescribeModal] = useState(false);
+    const [pendingDownload, setPendingDownload] = useState(null);
 
     // Tab State for Left Panel
     const [activeTab, setActiveTab] = useState('overview');
@@ -274,11 +275,14 @@ const DoctorPatientDetails = () => {
             };
             await doctorAPI.updateSession(appointmentId, payload);
 
-            // 3. Generate Prescription PDF automatically
-            generatePrescriptionPDF();
-
-            alert("✅ Session saved & prescription generated!");
-            navigate('/doctor/patients');
+            // 3. Stage Prescription PDF for manual download
+            const pdf = generatePrescriptionPDF(false);
+            setPendingDownload({
+                doc: pdf.doc,
+                filename: pdf.filename,
+                title: 'Prescription',
+                navigateOnClose: true
+            });
         } catch (err) {
             alert("Error: " + err.message);
         } finally { setSaving(false); }
@@ -437,7 +441,7 @@ const DoctorPatientDetails = () => {
     };
 
     // ─── STANDALONE PRESCRIPTION PDF ─────────────────────────────────────────
-    const generatePrescriptionPDF = () => {
+    const generatePrescriptionPDF = (shouldSave = true) => {
         const pt = appointment?.userId || {};
         const doc = new jsPDF();
         const hName = hospitalContext?.name || 'HOSPITAL';
@@ -544,7 +548,11 @@ const DoctorPatientDetails = () => {
         doc.setFontSize(8);
         doc.text('This prescription is valid for 30 days from the date of issue.', 105, y, { align: 'center' });
 
-        doc.save(`Prescription_${pt.patientId || 'Patient'}_${new Date().toISOString().split('T')[0]}.pdf`);
+        const filename = `Prescription_${pt.patientId || 'Patient'}_${new Date().toISOString().split('T')[0]}.pdf`;
+        if (shouldSave) {
+            doc.save(filename);
+        }
+        return { doc, filename };
     };
 
     // ─── CONSULTATION RECEIPT PDF ─────────────────────────────────────────────
@@ -1249,6 +1257,40 @@ const DoctorPatientDetails = () => {
                         <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                             <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>Close</button>
                             <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 30px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px', boxShadow: '0 4px 6px rgba(59, 130, 246, 0.3)' }}>Save Selections & Resume Note</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {pendingDownload && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                    <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', textAlign: 'center' }}>
+                        <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📄</div>
+                        <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>
+                            {pendingDownload.title || 'Document Generated'}
+                        </h2>
+                        <p style={{ margin: '8px 0 20px', color: '#64748b', fontSize: '0.9rem' }}>
+                            {pendingDownload.filename} is ready.
+                        </p>
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                            <button
+                                onClick={() => {
+                                    pendingDownload.doc.save(pendingDownload.filename);
+                                    setPendingDownload(null);
+                                    if (pendingDownload.navigateOnClose) navigate('/doctor/patients');
+                                }}
+                                style={{ padding: '10px 20px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                            >
+                                📥 Download File
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setPendingDownload(null);
+                                    if (pendingDownload.navigateOnClose) navigate('/doctor/patients');
+                                }}
+                                style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.95rem', color: '#475569' }}
+                            >
+                                Close
+                            </button>
                         </div>
                     </div>
                 </div>

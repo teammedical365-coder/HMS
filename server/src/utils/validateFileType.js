@@ -7,7 +7,7 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { fromBuffer } = require('file-type');
+const { fileTypeFromBuffer } = require('file-type');
 
 const ALLOWED_TYPES = {
     'image/jpeg':     ['.jpg', '.jpeg'],
@@ -45,7 +45,7 @@ async function validateFileType(file, allowedMimes) {
         return 'Invalid file object';
     }
 
-    const detected = await fromBuffer(buffer);
+    const detected = await fileTypeFromBuffer(buffer);
 
     if (!detected) {
         return 'Unrecognised file format. Only PDF and images are allowed.';

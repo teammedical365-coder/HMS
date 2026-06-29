@@ -53,7 +53,7 @@ const generateRegistrationSlipPDF = (patient) => {
     doc.setFontSize(8); doc.setTextColor(120);
     doc.text(`Issued by: ${issuedBy}  |  Generated: ${new Date().toLocaleString('en-IN')}`, 105, y, { align: 'center' }); y += 5;
     doc.text(`Welcome to ${hName}`, 105, y, { align: 'center' });
-    doc.save(`Registration_${patient.patientUid || patient._id}.pdf`);
+    return { doc, filename: `Registration_${patient.patientUid || patient._id}.pdf` };
 };
 
 const generateTokenReceiptPDF = (patient, appointment) => {
@@ -81,7 +81,7 @@ const generateTokenReceiptPDF = (patient, appointment) => {
     doc.setFontSize(8); doc.setTextColor(120);
     doc.text(`Issued by: ${issuedBy}  |  ${new Date().toLocaleString('en-IN')}`, 105, y, { align: 'center' }); y += 5;
     doc.text(`Thank you for choosing ${hName}`, 105, y, { align: 'center' });
-    doc.save(`Receipt_Token${appointment.tokenNumber}_${patient.patientUid || patient._id}.pdf`);
+    return { doc, filename: `Receipt_Token${appointment.tokenNumber}_${patient.patientUid || patient._id}.pdf` };
 };
 
 const generatePrescriptionSlipPDF = (consulting, rx, vitalsData) => {
@@ -182,7 +182,7 @@ const generatePrescriptionSlipPDF = (consulting, rx, vitalsData) => {
     doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 196, y, { align: 'right' });
     y += 5; doc.setFontSize(8);
     doc.text('This prescription is valid for 30 days from the date of issue.', 105, y, { align: 'center' });
-    doc.save(`Prescription_${pt.patientUid || pt._id}_Token${consulting.tokenNumber}.pdf`);
+    return { doc, filename: `Prescription_${pt.patientUid || pt._id}_Token${consulting.tokenNumber}.pdf` };
 };
 
 // ─────────────────────────────────────────────
@@ -215,17 +215,18 @@ const ClinicDashboard = () => {
     const navigate = useNavigate();
     const [mode, setMode] = useState('overview');
     const [preselectedPatient, setPreselectedPatient] = useState(null);
+    const [pendingDownload, setPendingDownload] = useState(null);
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-
+ 
     useEffect(() => {
         if (currentUser?.role !== 'hospitaladmin') navigate('/login');
     }, []);
-
+ 
     const goToReception = (patient) => {
         setPreselectedPatient(patient);
         setMode('reception');
     };
-
+ 
     return (
         <div className="clinic-dashboard">
             {/* Role Switcher */}
@@ -244,16 +245,46 @@ const ClinicDashboard = () => {
                     <span>{currentUser?.name}</span>
                 </div>
             </div>
-
+ 
             <div className="clinic-mode-content">
                 {mode === 'overview' && <OverviewMode />}
-                {mode === 'patients' && <PatientsMode onBookToken={goToReception} />}
-                {mode === 'doctor' && <DoctorMode />}
-                {mode === 'reception' && <ReceptionMode preselectedPatient={preselectedPatient} clearPreselected={() => setPreselectedPatient(null)} />}
+                {mode === 'patients' && <PatientsMode onBookToken={goToReception} setPendingDownload={setPendingDownload} />}
+                {mode === 'doctor' && <DoctorMode setPendingDownload={setPendingDownload} />}
+                {mode === 'reception' && <ReceptionMode preselectedPatient={preselectedPatient} clearPreselected={() => setPreselectedPatient(null)} setPendingDownload={setPendingDownload} />}
                 {mode === 'pharmacy' && <PharmacyMode />}
                 {mode === 'billing' && <BillingMode />}
                 {mode === 'plans' && <TreatmentPlanMode />}
             </div>
+            {pendingDownload && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                    <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', textAlign: 'center' }}>
+                        <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📄</div>
+                        <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>
+                            {pendingDownload.title || 'Document Generated'}
+                        </h2>
+                        <p style={{ margin: '8px 0 20px', color: '#64748b', fontSize: '0.9rem' }}>
+                            {pendingDownload.filename} is ready.
+                        </p>
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                            <button
+                                onClick={() => {
+                                    pendingDownload.doc.save(pendingDownload.filename);
+                                    setPendingDownload(null);
+                                }}
+                                style={{ padding: '10px 20px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                            >
+                                📥 Download File
+                            </button>
+                            <button
+                                onClick={() => setPendingDownload(null)}
+                                style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.95rem', color: '#475569' }}
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -497,7 +528,7 @@ const PatientReportPanel = ({ patientId, patientName }) => {
 // ═══════════════════════════════════════════════════
 // PATIENTS MODE
 // ═══════════════════════════════════════════════════
-const PatientsMode = ({ onBookToken }) => {
+const PatientsMode = ({ onBookToken, setPendingDownload }) => {
     const [tab, setTab] = useState('list');
     const [patients, setPatients] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -516,6 +547,7 @@ const PatientsMode = ({ onBookToken }) => {
     const [uploading, setUploading] = useState(false);
     const [reportName, setReportName] = useState('');
     const fileInputRef = useRef(null);
+    const [reportsTab, setReportsTab] = useState('upload'); // 'upload' | 'view'
 
     const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg({ type: '', text: '' }), 6000); };
 
@@ -582,6 +614,25 @@ const PatientsMode = ({ onBookToken }) => {
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
     };
 
+    const handleDownloadReport = async (report) => {
+        const url = reportURL(report.filename);
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = report.name || 'report';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error("Download failed:", error);
+            window.open(url, '_blank', 'noreferrer');
+        }
+    };
+
     const handleRegister = async (e) => {
         e.preventDefault();
         setSaving(true);
@@ -591,7 +642,12 @@ const PatientsMode = ({ onBookToken }) => {
                 if (!r.existing) setPatients(prev => [r.patient, ...prev]);
                 setJustRegistered(r.patient);
                 setForm({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '', relatives: [] });
-                try { generateRegistrationSlipPDF(r.patient); } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
+                try {
+                    const pdf = generateRegistrationSlipPDF(r.patient);
+                    if (setPendingDownload) {
+                        setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Registration Slip' });
+                    }
+                } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
             } else flash('error', r.message);
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
         finally { setSaving(false); }
@@ -648,57 +704,105 @@ const PatientsMode = ({ onBookToken }) => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                         <h3 style={{ margin: 0 }}>📄 Medical Reports ({patientReports.length})</h3>
                     </div>
-                    {/* Upload area */}
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '8px', padding: '12px' }}>
-                        <input
-                            className="clinic-input"
-                            style={{ flex: 1, minWidth: '140px' }}
-                            placeholder="Report name (optional)"
-                            value={reportName}
-                            onChange={e => setReportName(e.target.value)}
-                        />
-                        <label style={{ cursor: 'pointer', background: uploading ? '#e2e8f0' : '#6366f1', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: 600, fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
-                            {uploading ? 'Uploading...' : '⬆ Upload PDF / Image'}
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept=".pdf,image/jpeg,image/png,image/webp"
-                                style={{ display: 'none' }}
-                                disabled={uploading}
-                                onChange={handleUploadReport}
-                            />
-                        </label>
-                        <div style={{ width: '100%', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>Supports PDF, JPG, PNG · max 20 MB</div>
+
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setReportsTab('upload')}
+                            style={{
+                                padding: '6px 14px',
+                                background: reportsTab === 'upload' ? '#6366f1' : '#f1f5f9',
+                                color: reportsTab === 'upload' ? '#fff' : '#475569',
+                                border: 'none',
+                                borderRadius: '6px',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            Upload Reports
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setReportsTab('view')}
+                            style={{
+                                padding: '6px 14px',
+                                background: reportsTab === 'view' ? '#6366f1' : '#f1f5f9',
+                                color: reportsTab === 'view' ? '#fff' : '#475569',
+                                border: 'none',
+                                borderRadius: '6px',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            View Reports ({patientReports.length})
+                        </button>
                     </div>
+
+                    {/* Upload area */}
+                    {reportsTab === 'upload' && (
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '8px', padding: '12px' }}>
+                            <input
+                                className="clinic-input"
+                                style={{ flex: 1, minWidth: '140px' }}
+                                placeholder="Report name (optional)"
+                                value={reportName}
+                                onChange={e => setReportName(e.target.value)}
+                            />
+                            <label style={{ cursor: 'pointer', background: uploading ? '#e2e8f0' : '#6366f1', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: 600, fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                                {uploading ? 'Uploading...' : '⬆ Upload PDF / Image'}
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept=".pdf,image/jpeg,image/png,image/webp"
+                                    style={{ display: 'none' }}
+                                    disabled={uploading}
+                                    onChange={handleUploadReport}
+                                />
+                            </label>
+                            <div style={{ width: '100%', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>Supports PDF, JPG, PNG · max 20 MB</div>
+                        </div>
+                    )}
+
                     {/* Report list */}
-                    {patientReports.length === 0 ? (
-                        <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '12px 0' }}>No reports uploaded yet.</p>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            {patientReports.map(r => (
-                                <div key={r._id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', border: '1px solid #e0e7ff', borderRadius: '8px', padding: '10px 14px' }}>
-                                    <span style={{ fontSize: '22px' }}>{r.mimetype === 'application/pdf' ? '📄' : '🖼️'}</span>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontWeight: 600, fontSize: '14px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
-                                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                                            {r.mimetype === 'application/pdf' ? 'PDF Document' : 'Image'} · {r.uploadedAt ? new Date(r.uploadedAt).toLocaleDateString('en-IN') : ''}
+                    {reportsTab === 'view' && (
+                        patientReports.length === 0 ? (
+                            <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '12px 0' }}>No reports uploaded yet.</p>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {patientReports.map(r => (
+                                    <div key={r._id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', border: '1px solid #e0e7ff', borderRadius: '8px', padding: '10px 14px' }}>
+                                        <span style={{ fontSize: '22px' }}>{r.mimetype === 'application/pdf' ? '📄' : '🖼️'}</span>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontWeight: 600, fontSize: '14px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                                            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                                                {r.mimetype === 'application/pdf' ? 'PDF Document' : 'Image'} · {r.uploadedAt ? new Date(r.uploadedAt).toLocaleDateString('en-IN') : ''}
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button
+                                                onClick={() => setViewReport(r)}
+                                                style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 14px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
+                                                View
+                                            </button>
+                                            <button
+                                                onClick={() => handleDownloadReport(r)}
+                                                style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
+                                                Download
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteReport(r._id)}
+                                                style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
+                                                ✕
+                                            </button>
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                        <button
-                                            onClick={() => setViewReport(r)}
-                                            style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 14px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
-                                            View
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteReport(r._id)}
-                                            style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
-                                            ✕
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )
                     )}
                 </div>
 
@@ -928,7 +1032,7 @@ const PatientsMode = ({ onBookToken }) => {
 // RECEPTION MODE
 // ═══════════════════════════════════════════════════
 // ── Inline booking form (supports token and slot modes) ────────────────────
-const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defaultFee = 0, defaultServiceName = 'General Consultation' }) => {
+const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defaultFee = 0, defaultServiceName = 'General Consultation', setPendingDownload }) => {
     const isSlotMode = mode === 'slot';
     const [form, setForm] = useState({ amount: defaultFee > 0 ? String(defaultFee) : '', serviceName: defaultServiceName, notes: '', appointmentTime: '', paymentMethod: 'Cash', upiScreenshot: null, cardRef: '' });
     const [booking, setBooking] = useState(false);
@@ -973,7 +1077,12 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
                     flash('success', `✅ Payment collected. Appointment at ${form.appointmentTime} confirmed for ${patient.name}`);
                 } else {
                     flash('success', `✅ Payment collected. Token #${r.appointment.tokenNumber} assigned to ${patient.name}`);
-                    try { generateTokenReceiptPDF(patient, r.appointment); } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
+                    try {
+                        const pdf = generateTokenReceiptPDF(patient, r.appointment);
+                        if (setPendingDownload) {
+                            setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Token Receipt' });
+                        }
+                    } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
                 }
                 onBook();
             } else flash('error', r.message);
@@ -1074,7 +1183,7 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
     );
 };
 
-const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
+const ReceptionMode = ({ preselectedPatient, clearPreselected, setPendingDownload }) => {
     const [appointments, setAppointments] = useState([]);
     const [patients, setPatients] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -1292,6 +1401,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected }) => {
                                         flash={flash}
                                         defaultFee={defaultFee}
                                         defaultServiceName={defaultServiceName}
+                                        setPendingDownload={setPendingDownload}
                                         onBook={() => { setAssigningFor(null); if (clearPreselected) clearPreselected(); loadAll(); }}
                                         onCancel={() => { setAssigningFor(null); if (clearPreselected) clearPreselected(); }}
                                     />
@@ -1458,7 +1568,7 @@ const MedicineTable = ({ rx, setRx, inventory }) => {
 // ═══════════════════════════════════════════════════
 // DOCTOR MODE
 // ═══════════════════════════════════════════════════
-const DoctorMode = () => {
+const DoctorMode = ({ setPendingDownload }) => {
     const [tab, setTab] = useState('staff'); // 'staff' | 'queue'
     const [staff, setStaff] = useState([]);
     const [staffLoading, setStaffLoading] = useState(true);
@@ -1558,7 +1668,12 @@ const DoctorMode = () => {
                 flash('success', 'Consultation saved. Prescription generated.');
                 setConsulting(null);
                 loadToday();
-                try { generatePrescriptionSlipPDF(consulting, rx, vitals); } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
+                try {
+                    const pdf = generatePrescriptionSlipPDF(consulting, rx, vitals);
+                    if (setPendingDownload) {
+                        setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Prescription Slip' });
+                    }
+                } catch (pdfErr) { console.error('PDF generation error:', pdfErr); }
             } else flash('error', r.message);
         } catch (e) { flash('error', e.response?.data?.message || e.message); }
         finally { setSaving(false); }

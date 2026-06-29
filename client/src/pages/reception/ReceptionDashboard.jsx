@@ -69,6 +69,7 @@ const ReceptionDashboard = () => {
     const [otpSent, setOtpSent] = useState(false);
     const [aadhaarOtp, setAadhaarOtp] = useState('');
     const [hospitalContext, setHospitalContext] = useState(null);
+    const [pendingDownload, setPendingDownload] = useState(null);
 
     useEffect(() => {
         const fetchHospital = async () => {
@@ -254,7 +255,7 @@ const ReceptionDashboard = () => {
     };
 
     // ─── RECEIPT PDF GENERATOR ────────────────────────────────────────────────
-    const generateReceiptPDF = (apt, paymentMethodOverride) => {
+    const generateReceiptPDF = (apt, paymentMethodOverride, shouldSave = true) => {
         const doc = new jsPDF();
         const hName = hospitalContext?.name || 'HOSPITAL';
         const hAddr = [hospitalContext?.address, hospitalContext?.city, hospitalContext?.state].filter(Boolean).join(', ');
@@ -262,7 +263,7 @@ const ReceptionDashboard = () => {
         const hEmail = hospitalContext?.email || '';
         const issuedBy = currentUser?.name || 'Reception Staff';
         let y = 18;
-
+ 
         doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
         doc.text(hName, 105, y, { align: 'center' }); y += 7;
         if (hAddr) {
@@ -279,10 +280,10 @@ const ReceptionDashboard = () => {
         doc.setDrawColor(41, 128, 185); doc.setLineWidth(0.5);
         doc.line(14, y, 196, y); y += 8;
         doc.setTextColor(0); doc.setFont('helvetica', 'normal');
-
+ 
         const isToken = apt.tokenNumber != null;
         const dateDisplay = new Date(apt.appointmentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-
+ 
         autoTable(doc, {
             startY: y,
             body: [
@@ -303,7 +304,7 @@ const ReceptionDashboard = () => {
             bodyStyles: { fontSize: 10 },
             alternateRowStyles: { fillColor: [245, 249, 255] },
         });
-
+ 
         y = doc.lastAutoTable.finalY + 10;
         doc.setDrawColor(200); doc.line(14, y, 196, y); y += 6;
         doc.setFontSize(8); doc.setTextColor(120);
@@ -312,7 +313,11 @@ const ReceptionDashboard = () => {
         y += 5;
         doc.text(`Thank you for choosing ${hName}`, 105, y, { align: 'center' });
         const pid = apt.userId?.patientId || apt.patientId || 'Patient';
-        doc.save(`Receipt_${pid}.pdf`);
+        const filename = `Receipt_${pid}.pdf`;
+        if (shouldSave) {
+            doc.save(filename);
+        }
+        return { doc, filename };
     };
 
     const handleConfirmPayment = async () => {
@@ -320,7 +325,8 @@ const ReceptionDashboard = () => {
         const { appointment, method } = paymentModal;
         try {
             await receptionAPI.confirmPayment(appointment._id, method, appointment.amount);
-            generateReceiptPDF({ ...appointment, paymentMethod: method, paymentStatus: 'Paid' }, method);
+            const pdf = generateReceiptPDF({ ...appointment, paymentMethod: method, paymentStatus: 'Paid' }, method, false);
+            setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Payment Receipt' });
             setPaymentModal({ open: false, appointment: null, method: 'Cash' });
             fetchAppointments();
         } catch (err) {
@@ -548,7 +554,7 @@ const ReceptionDashboard = () => {
                     y += 5;
                     doc.text('Thank you for choosing ' + hName, 105, y, { align: 'center' });
                     const receiptPatientId = regRes.user?.patientId || bookingRes.appointment?.patientId || 'Patient';
-                    doc.save(`Receipt_${receiptPatientId}.pdf`);
+                    setPendingDownload({ doc, filename: `Receipt_${receiptPatientId}.pdf`, title: 'Registration Receipt' });
 
                     const tokenMsg = bookingRes.appointment?.tokenNumber
                         ? ` Token #${bookingRes.appointment.tokenNumber} assigned.` : '';
@@ -1302,6 +1308,36 @@ const ReceptionDashboard = () => {
                             style={{ padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: hospitalizingSaving ? 0.6 : 1 }}
                         >
                             {hospitalizingSaving ? 'Admitting...' : 'Admit Patient'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        {pendingDownload && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', textAlign: 'center' }}>
+                    <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📄</div>
+                    <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>
+                        {pendingDownload.title || 'Document Generated'}
+                    </h2>
+                    <p style={{ margin: '8px 0 20px', color: '#64748b', fontSize: '0.9rem' }}>
+                        {pendingDownload.filename} is ready.
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                        <button
+                            onClick={() => {
+                                pendingDownload.doc.save(pendingDownload.filename);
+                                setPendingDownload(null);
+                            }}
+                            style={{ padding: '10px 20px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+                        >
+                            📥 Download File
+                        </button>
+                        <button
+                            onClick={() => setPendingDownload(null)}
+                            style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.95rem', color: '#475569' }}
+                        >
+                            Close
                         </button>
                     </div>
                 </div>
