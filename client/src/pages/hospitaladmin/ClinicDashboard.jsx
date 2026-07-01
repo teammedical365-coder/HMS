@@ -685,8 +685,36 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                                 {selectedPatient.chronicConditions && <span style={{ background: '#f0f9ff', color: '#0369a1', padding: '2px 8px', borderRadius: '4px' }}>🏥 {selectedPatient.chronicConditions}</span>}
                             </div>
                         </div>
-                        <div style={{ marginLeft: 'auto', fontSize: '12px', color: '#94a3b8' }}>
-                            Registered: {fmtDate(selectedPatient.createdAt)}
+                        <div style={{ marginLeft: 'auto', textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                            <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                                Registered: {fmtDate(selectedPatient.createdAt)}
+                            </div>
+                            <button
+                                onClick={() => {
+                                    try {
+                                        const pdf = generateRegistrationSlipPDF(selectedPatient);
+                                        pdf.doc.save(pdf.filename);
+                                    } catch (pdfErr) {
+                                        console.error('PDF generation error:', pdfErr);
+                                        alert('Failed to generate registration slip PDF');
+                                    }
+                                }}
+                                style={{
+                                    padding: '6px 12px',
+                                    background: '#e0f2fe',
+                                    color: '#0369a1',
+                                    border: '1.5px solid #bae6fd',
+                                    borderRadius: '8px',
+                                    fontWeight: 700,
+                                    fontSize: '12px',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                📥 Download Slip
+                            </button>
                         </div>
                     </div>
 
