@@ -416,7 +416,7 @@ const SuperAdmin = () => {
                                     </div>
                                     <div className="form-group">
                                         <label className="staff-label">Role</label>
-                                        <select value={editForm.roleId} onChange={e => setEditForm({ ...editForm, roleId: e.target.value })} required className="staff-input">
+                                        <select value={editForm.roleId} onChange={e => setEditForm({ ...editForm, roleId: e.target.value })} required disabled className="staff-input">
                                             {roles.map(role => (
                                                 <option key={role._id} value={role._id}>{role.name}</option>
                                             ))}

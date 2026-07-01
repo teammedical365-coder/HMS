@@ -145,7 +145,7 @@
 .srd-kpi-icon { font-size: 28px; }
 .srd-kpi-body p { color: rgba(255,255,255,0.55); font-size: 12px; margin: 0 0 4px; }
 .srd-kpi-body h2 { color: white; font-size: 22px; font-weight: 800; margin: 0 0 4px; }
-.srd-kpi-body span { color: rgba(255,255,255,0.4); font-size: 11px; }
+.srd-kpi-body span { color: rgba(255,255,255,0.65); font-size: 11px; }
 
 /* ── Model Breakdown Cards ────────────────── */
 .srd-model-grid {
@@ -180,7 +180,7 @@
 
 .srd-model-stats { display: flex; gap: 24px; margin-bottom: 14px; }
 .srd-model-stat { display: flex; flex-direction: column; gap: 2px; }
-.srd-model-stat span { font-size: 11px; color: rgba(255,255,255,0.5); }
+.srd-model-stat span { font-size: 11px; color: rgba(255,255,255,0.65); }
 .srd-model-stat strong { font-size: 18px; font-weight: 800; }
 
 .srd-model-bar-wrap {
@@ -192,7 +192,7 @@
 }
 .srd-model-bar { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
 
-.srd-model-pct { font-size: 11px; color: rgba(255,255,255,0.4); margin: 0; }
+.srd-model-pct { font-size: 11px; color: rgba(255,255,255,0.6); margin: 0; }
 
 /* ── View Tabs ────────────────────────────── */
 .srd-view-tabs {

@@ -199,8 +199,27 @@ router.get('/:id/stats', verifyCentralAdmin, async (req, res) => {
         ]);
 
         // Staff (only login accounts, not patients)
-        const staff = await User.find({ hospitalId: clinic._id, role: { $in: ['hospitaladmin', 'doctor', 'receptionist'] } })
-            .select('name email phone role createdAt').lean();
+        const STAFF_ROLES_LEGACY = ['hospitaladmin', 'doctor', 'receptionist'];
+        const Role = require('../models/role.model');
+        const staffRoleIds = await Role.find({
+            hospitalId: { $in: [clinic._id, null] },
+            name: { $in: STAFF_ROLES_LEGACY.map(r => new RegExp(`^${r}$`, 'i')) }
+        }).select('_id name').lean();
+        const staffRoleIdSet = staffRoleIds.map(r => r._id);
+
+        const staff = await User.find({
+            hospitalId: clinic._id,
+            $or: [
+                { role: { $in: STAFF_ROLES_LEGACY } },
+                { role: { $in: staffRoleIdSet } },
+            ],
+        }).select('name email phone role createdAt').lean();
+
+        const roleMap = Object.fromEntries(staffRoleIds.map(r => [String(r._id), r.name]));
+        const enrichedStaff = staff.map(s => ({
+            ...s,
+            role: roleMap[String(s.role)] || String(s.role),
+        }));
 
         // Monthly revenue (last 6 months)
         const sixMonthsAgo = new Date();
@@ -224,7 +243,7 @@ router.get('/:id/stats', verifyCentralAdmin, async (req, res) => {
                 completedAppointments,
                 pendingAppointments: totalAppointments - completedAppointments,
                 revenue: revenueAgg[0]?.total || 0,
-                staff,
+                staff: enrichedStaff,
                 recentAppointments,
                 monthlyRevenue,
                 subscriptions,
@@ -311,7 +330,11 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
         const pwErrS = validatePassword(password);
         if (pwErrS) return res.status(400).json({ success: false, message: pwErrS });
 
-        const role = staffRole === 'receptionist' ? 'receptionist' : 'doctor';
+        // Clinics only support doctor staff — receptionist is handled by Clinic Admin
+        if (staffRole === 'receptionist') {
+            return res.status(400).json({ success: false, message: 'Receptionist role is not available for clinics. Clinic Admin handles reception.' });
+        }
+        const role = 'doctor';
 
         const clinic = await Hospital.findOne({ _id: req.params.id, clinicType: 'clinic' });
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
@@ -343,7 +366,7 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
         res.status(201).json({
             success: true,
             staff: { _id: staffMember._id, name, email, phone, role },
-            message: `${role === 'doctor' ? 'Doctor' : 'Receptionist'} account created successfully`,
+            message: 'Clinic Doctor account created successfully',
         });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });

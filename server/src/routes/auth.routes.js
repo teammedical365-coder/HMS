@@ -209,8 +209,15 @@ router.post('/login', loginLimiter, async (req, res) => {
       // Fallback: legacy string like 'admin', 'doctor' — look up by name
       if (!roleData) {
         roleData = await Role.findOne({
+          hospitalId: user.hospitalId || null,
           name: { $regex: new RegExp(`^${user.role}$`, 'i') }
         });
+        if (!roleData && user.hospitalId) {
+          roleData = await Role.findOne({
+            hospitalId: null,
+            name: { $regex: new RegExp(`^${user.role}$`, 'i') }
+          });
+        }
         // Auto-migrate to ObjectId
         if (roleData) {
           user.role = roleData._id;

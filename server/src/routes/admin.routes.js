@@ -483,8 +483,9 @@ router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
             return res.status(403).json({ success: false, message: 'Cannot modify Central Admin accounts' });
         }
 
-        if (userId === String(req.user._id) && roleId && roleId !== String(user.role)) {
-            return res.status(403).json({ success: false, message: 'Cannot change your own role' });
+        // Role is permanent after creation — reject any attempt to change it
+        if (roleId && String(roleId) !== String(user.role)) {
+            return res.status(403).json({ success: false, message: 'Role cannot be changed after creation' });
         }
 
         if (name) user.name = name;
@@ -493,16 +494,9 @@ router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
         if (avatar !== undefined) user.avatar = avatar;
         if (departments !== undefined) user.departments = departments;
 
-        let roleChanged = false;
         let newRoleName = null;
-
-        if (roleId && String(roleId) !== String(user.role)) {
-            const roleDoc = await Role.findById(roleId);
-            if (!roleDoc) return res.status(400).json({ success: false, message: 'Invalid role' });
-            user.role = roleId;
-            newRoleName = roleDoc.name.toLowerCase();
-            roleChanged = true;
-        } else if (user.role && !['centraladmin', 'superadmin', 'hospitaladmin'].includes(user.role)) {
+        let roleChanged = false;
+        if (user.role && !['centraladmin', 'superadmin', 'hospitaladmin'].includes(user.role)) {
             const roleDoc = await Role.findById(user.role);
             newRoleName = roleDoc ? roleDoc.name.toLowerCase() : null;
         }

@@ -1566,8 +1566,7 @@ const CentralAdminDashboard = () => {
                                                     <label className="staff-label">Role *</label>
                                                     <select className="staff-input" value={clinicStaffForm.staffRole}
                                                         onChange={e => setClinicStaffForm({ ...clinicStaffForm, staffRole: e.target.value })}>
-                                                        <option value="doctor">🩺 Doctor</option>
-                                                        <option value="receptionist">📋 Receptionist</option>
+                                                        <option value="doctor">🩺 Clinic Doctor</option>
                                                     </select>
                                                 </div>
                                                 <button type="submit" disabled={savingClinicStaff} className="submit-button">

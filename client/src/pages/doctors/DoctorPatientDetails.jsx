@@ -664,8 +664,47 @@ const DoctorPatientDetails = () => {
 
     return (
         <div className="dpd-container" style={isJrDoctor ? { gridTemplateColumns: '1fr' } : {}}>
-            {/* LEFT PANEL */}
             <div className="dpd-left">
+                {pendingDownload && (
+                    <div style={{
+                        margin: '12px',
+                        padding: '12px 20px',
+                        background: '#ecfdf5',
+                        border: '1.5px solid #a7f3d0',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.05)',
+                        fontFamily: 'var(--font-primary)'
+                    }}>
+                        <span style={{ color: '#065f46', fontWeight: 600, fontSize: '0.9rem' }}>
+                            ✅ {pendingDownload.title || 'Document Generated'} — {pendingDownload.filename} is ready
+                        </span>
+                        <button
+                            onClick={() => {
+                                pendingDownload.doc.save(pendingDownload.filename);
+                                setPendingDownload(null);
+                                if (pendingDownload.navigateOnClose) navigate('/doctor/patients');
+                            }}
+                            style={{
+                                padding: '8px 16px',
+                                background: '#059669',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontWeight: 700,
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            📥 Download
+                        </button>
+                    </div>
+                )}
                 {/* Patient Header Card */}
                 <div className="dpd-patient-header">
                     <button className="dpd-back-link" onClick={() => navigate('/doctor/patients')}>
@@ -1257,40 +1296,6 @@ const DoctorPatientDetails = () => {
                         <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                             <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 24px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>Close</button>
                             <button onClick={() => setShowPrescribeModal(false)} style={{ padding: '12px 30px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px', boxShadow: '0 4px 6px rgba(59, 130, 246, 0.3)' }}>Save Selections & Resume Note</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {pendingDownload && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-                    <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', textAlign: 'center' }}>
-                        <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📄</div>
-                        <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#1e293b' }}>
-                            {pendingDownload.title || 'Document Generated'}
-                        </h2>
-                        <p style={{ margin: '8px 0 20px', color: '#64748b', fontSize: '0.9rem' }}>
-                            {pendingDownload.filename} is ready.
-                        </p>
-                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                            <button
-                                onClick={() => {
-                                    pendingDownload.doc.save(pendingDownload.filename);
-                                    setPendingDownload(null);
-                                    if (pendingDownload.navigateOnClose) navigate('/doctor/patients');
-                                }}
-                                style={{ padding: '10px 20px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-                            >
-                                📥 Download File
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setPendingDownload(null);
-                                    if (pendingDownload.navigateOnClose) navigate('/doctor/patients');
-                                }}
-                                style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.95rem', color: '#475569' }}
-                            >
-                                Close
-                            </button>
                         </div>
                     </div>
                 </div>

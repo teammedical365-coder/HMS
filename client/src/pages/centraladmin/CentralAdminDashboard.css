@@ -49,7 +49,7 @@
 }
 
 .centraladmin-header p {
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.75);
     margin: 0;
     font-size: 14px;
 }
@@ -98,6 +98,18 @@
     background: rgba(255, 255, 255, 0.2);
 }
 
+/* Back button inside white cards needs dark text for visibility */
+.admin-card .back-btn {
+    background: #f1f5f9;
+    color: #334155;
+    border-color: #e2e8f0;
+}
+
+.admin-card .back-btn:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
 /* Tabs */
 .ca-tabs {
     display: flex;
@@ -108,7 +120,7 @@
 .ca-tab {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.65);
+    color: rgba(255, 255, 255, 0.8);
     padding: 10px 24px;
     border-radius: 12px;
     cursor: pointer;

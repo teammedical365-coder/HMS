@@ -69,7 +69,7 @@ router.get('/tenant-config', async (req, res) => {
                 slug: hospital.slug,
                 customDomain: hospital.customDomain,
                 branding: hospital.branding || {}
-            }
+}   
         });
     } catch (err) {
         console.error('Get tenant-config error:', err);
