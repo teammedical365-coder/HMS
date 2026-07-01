@@ -194,14 +194,31 @@ router.put('/patients/:patientId/profile', verifyToken, async (req, res) => {
         // Verify patient belongs to same hospital
         const findQuery = { _id: patientId };
         if (hospitalId) findQuery.hospitalId = hospitalId;
-        const user = await User.findOne(findQuery);
-        if (!user) return res.status(404).json({ message: 'Patient not found' });
+        let user = await User.findOne(findQuery);
+        if (user) {
+            // Merge existing profile with updates
+            user.fertilityProfile = { ...user.fertilityProfile, ...updates };
+            await user.save();
+            return res.json({ success: true, message: 'Patient history updated successfully', profile: user.fertilityProfile });
+        }
 
-        // Merge existing profile with updates
-        user.fertilityProfile = { ...user.fertilityProfile, ...updates };
-        await user.save();
+        // Fallback to ClinicPatient model for clinics
+        const ClinicPatient = require('../models/clinicPatient.model');
+        const clinicQuery = { _id: patientId };
+        if (hospitalId) clinicQuery.clinicId = hospitalId;
+        const clinicPatient = await ClinicPatient.findOne(clinicQuery);
+        if (clinicPatient) {
+            const allowedFields = ['name', 'phone', 'email', 'gender', 'dob', 'bloodGroup', 'address', 'allergies', 'chronicConditions'];
+            allowedFields.forEach(field => {
+                if (updates[field] !== undefined) {
+                    clinicPatient[field] = updates[field];
+                }
+            });
+            await clinicPatient.save();
+            return res.json({ success: true, message: 'Patient profile updated successfully', profile: clinicPatient });
+        }
 
-        res.json({ success: true, message: 'Patient history updated successfully', profile: user.fertilityProfile });
+        return res.status(404).json({ message: 'Patient not found' });
     } catch (error) {
         console.error("Update Profile Error:", error);
         res.status(500).json({ success: false, message: 'Failed to update profile' });
@@ -245,6 +262,7 @@ router.get('/appointments/:id', verifyToken, async (req, res) => {
         if (req.user.hospitalId) apptQuery.hospitalId = req.user.hospitalId;
         const appointment = await Appointment.findOne(apptQuery)
             .populate('userId')
+            .populate('clinicPatientId')
             .populate('labId', 'name')
             .lean();
 
@@ -255,8 +273,10 @@ router.get('/appointments/:id', verifyToken, async (req, res) => {
         let departments = [];
         if (doctorUser && doctorUser.departments && doctorUser.departments.length > 0) {
             departments = doctorUser.departments;
-        } else if (doctorUser && doctorUser.hospitalId && doctorUser.hospitalId.departments) {
+        } else if (doctorUser && doctorUser.hospitalId && doctorUser.hospitalId.departments && doctorUser.hospitalId.departments.length > 0) {
             departments = doctorUser.hospitalId.departments;
+        } else if (doctorUser && doctorUser.hospitalId && doctorUser.hospitalId.clinicType === 'clinic') {
+            departments = ['General'];
         }
 
         res.json({ success: true, appointment, departments });
@@ -511,7 +531,12 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
 // 7. GET Patient History
 router.get('/patients/:patientId/history', verifyToken, async (req, res) => {
     try {
-        const histQuery = { userId: req.params.patientId };
+        const histQuery = {
+            $or: [
+                { userId: req.params.patientId },
+                { clinicPatientId: req.params.patientId }
+            ]
+        };
         if (req.user.hospitalId) histQuery.hospitalId = req.user.hospitalId;
         const history = await Appointment.find(histQuery).sort({ appointmentDate: -1 });
         res.json({ success: true, history });

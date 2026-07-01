@@ -213,13 +213,20 @@ const MODES = [
 // ─────────────────────────────────────────────
 const ClinicDashboard = () => {
     const navigate = useNavigate();
-    const [mode, setMode] = useState('overview');
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const getInitialMode = () => {
+        const role = currentUser?.role;
+        if (role === 'doctor') return 'doctor';
+        if (role === 'reception' || role === 'receptionist') return 'reception';
+        return 'overview';
+    };
+    const [mode, setMode] = useState(getInitialMode());
     const [preselectedPatient, setPreselectedPatient] = useState(null);
     const [pendingDownload, setPendingDownload] = useState(null);
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
  
     useEffect(() => {
-        if (currentUser?.role !== 'hospitaladmin') navigate('/login');
+        const allowed = ['hospitaladmin', 'doctor', 'reception', 'receptionist'];
+        if (!allowed.includes(currentUser?.role)) navigate('/login');
     }, []);
  
     const goToReception = (patient) => {
@@ -232,7 +239,12 @@ const ClinicDashboard = () => {
             {/* Role Switcher */}
             <div className="clinic-role-switcher">
                 <div className="switcher-label">Mode:</div>
-                {MODES.map(m => (
+                {MODES.filter(m => {
+                    const role = currentUser?.role;
+                    if (role === 'doctor') return ['doctor', 'patients', 'overview'].includes(m.id);
+                    if (role === 'reception' || role === 'receptionist') return ['reception', 'patients', 'overview', 'billing', 'plans'].includes(m.id);
+                    return true;
+                }).map(m => (
                     <button key={m.id}
                         className={`switcher-btn ${mode === m.id ? 'active' : ''}`}
                         style={mode === m.id ? { background: m.color, color: '#fff', borderColor: m.color } : {}}

@@ -154,15 +154,27 @@ const DoctorPatientDetails = () => {
                 const res = await doctorAPI.getAppointmentDetails(appointmentId);
                 if (res.success) {
                     setAppointment(res.appointment);
-                    setIntakeData(res.appointment.userId?.fertilityProfile || {});
+                    const cp = res.appointment.clinicPatientId || {};
+                    const fert = res.appointment.userId?.fertilityProfile || {};
+                    setIntakeData({
+                        ...cp,
+                        ...fert,
+                        age: cp.age || fert.age || '',
+                        gender: cp.gender || fert.gender || 'Male',
+                        bloodGroup: cp.bloodGroup || fert.bloodGroup || '',
+                        address: cp.address || fert.address || '',
+                        allergies: cp.allergies || fert.allergies || '',
+                        chronicConditions: cp.chronicConditions || fert.chronicConditions || ''
+                    });
                     
                     // Lock if completed
                     if (res.appointment.status === 'completed') {
                         setIsLocked(true);
                     }
 
-                    if (res.appointment.userId?._id) {
-                        const histRes = await doctorAPI.getPatientHistory(res.appointment.userId._id);
+                    const pId = res.appointment.clinicPatientId?._id || res.appointment.clinicPatientId || res.appointment.userId?._id;
+                    if (pId) {
+                        const histRes = await doctorAPI.getPatientHistory(pId);
                         if (histRes.success) setHistory(histRes.history || histRes.data || []);
                     }
 
@@ -241,10 +253,11 @@ const DoctorPatientDetails = () => {
     };
 
     const handleSaveProfile = async () => {
-        if (!appointment?.userId?._id) return;
+        const patientId = appointment?.clinicPatientId?._id || appointment?.userId?._id;
+        if (!patientId) return;
         setSaving(true);
         try {
-            await doctorAPI.updatePatientProfile(appointment.userId._id, intakeData);
+            await doctorAPI.updatePatientProfile(patientId, intakeData);
             alert("✅ Patient profile saved successfully!");
         } catch (err) {
             alert("Error saving profile: " + err.message);
@@ -256,8 +269,9 @@ const DoctorPatientDetails = () => {
         setSaving(true);
         try {
             // 1. Save Profile
-            if (appointment.userId?._id) {
-                await doctorAPI.updatePatientProfile(appointment.userId._id, intakeData);
+            const patientId = appointment?.clinicPatientId?._id || appointment?.userId?._id;
+            if (patientId) {
+                await doctorAPI.updatePatientProfile(patientId, intakeData);
             }
 
             // 2. Save Session
@@ -442,12 +456,12 @@ const DoctorPatientDetails = () => {
 
     // ─── STANDALONE PRESCRIPTION PDF ─────────────────────────────────────────
     const generatePrescriptionPDF = (shouldSave = true) => {
-        const pt = appointment?.userId || {};
+        const pt = patient;
+        const prof = profile;
         const doc = new jsPDF();
         const hName = hospitalContext?.name || 'HOSPITAL';
         const hAddr = [hospitalContext?.address, hospitalContext?.city, hospitalContext?.state].filter(Boolean).join(', ');
         const hPhone = hospitalContext?.phone || '';
-        const profile = pt.fertilityProfile || intakeData;
         let y = 18;
 
         // Header
@@ -557,7 +571,7 @@ const DoctorPatientDetails = () => {
 
     // ─── CONSULTATION RECEIPT PDF ─────────────────────────────────────────────
     const generateReceiptPDF = () => {
-        const pt = appointment?.userId || {};
+        const pt = patient;
         const doc = new jsPDF();
         const hName = hospitalContext?.name || 'HOSPITAL';
         const hAddr = [hospitalContext?.address, hospitalContext?.city, hospitalContext?.state].filter(Boolean).join(', ');
@@ -632,8 +646,46 @@ const DoctorPatientDetails = () => {
         );
     }
 
-    const patient = appointment.userId || {};
-    const profile = patient.fertilityProfile || intakeData;
+    const rawPatient = appointment.userId || {};
+    const clinicPatient = appointment.clinicPatientId || {};
+    
+    // Compute age from dob if not explicitly given
+    let calculatedAge = '';
+    const dobVal = clinicPatient.dob || rawPatient.dob;
+    if (dobVal) {
+        const ageDifMs = Date.now() - new Date(dobVal).getTime();
+        const ageDate = new Date(ageDifMs);
+        calculatedAge = Math.abs(ageDate.getUTCFullYear() - 1970).toString();
+    }
+    
+    const patient = {
+        ...rawPatient,
+        name: clinicPatient.name || rawPatient.name || 'Unknown Patient',
+        patientId: clinicPatient.patientUid || rawPatient.patientId || 'N/A',
+        phone: clinicPatient.phone || rawPatient.phone || '-',
+        email: clinicPatient.email || rawPatient.email || '-',
+        address: clinicPatient.address || rawPatient.address || '-',
+    };
+
+    const rawProfile = rawPatient.fertilityProfile || intakeData || {};
+    const profile = {
+        ...rawProfile,
+        age: clinicPatient.age || calculatedAge || rawProfile.age || '-',
+        gender: clinicPatient.gender || rawProfile.gender || '-',
+        bloodGroup: clinicPatient.bloodGroup || rawProfile.bloodGroup || '-',
+        height: clinicPatient.height || rawProfile.height || '-',
+        weight: clinicPatient.weight || rawProfile.weight || '-',
+        bmi: clinicPatient.bmi || rawProfile.bmi || '-',
+        chiefComplaint: clinicPatient.chiefComplaint || rawProfile.chiefComplaint || '-',
+        reasonForVisit: clinicPatient.reasonForVisit || rawProfile.reasonForVisit || '-',
+        partnerFirstName: clinicPatient.partnerFirstName || rawProfile.partnerFirstName || '',
+        partnerLastName: clinicPatient.partnerLastName || rawProfile.partnerLastName || '',
+        partnerMobile: clinicPatient.partnerMobile || rawProfile.partnerMobile || '',
+        partnerAge: clinicPatient.partnerAge || rawProfile.partnerAge || rawProfile.husbandAge || '',
+        partnerBloodGroup: clinicPatient.partnerBloodGroup || rawProfile.partnerBloodGroup || '',
+        allergies: clinicPatient.allergies || rawProfile.allergies || '-',
+        chronicConditions: clinicPatient.chronicConditions || rawProfile.chronicConditions || '-'
+    };
 
     const tabs = [
         { id: 'overview', label: 'Overview', icon: '📋' },

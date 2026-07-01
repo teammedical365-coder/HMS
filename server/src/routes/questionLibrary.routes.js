@@ -26,8 +26,10 @@ router.get('/', verifyToken, async (req, res) => {
         let allowedDepartments = null; // null means all allowed (super/central admin)
         if (hospitalId) {
             const hospital = await Hospital.findById(hospitalId);
-            if (hospital && hospital.departments) {
+            if (hospital && hospital.departments && hospital.departments.length > 0) {
                 allowedDepartments = hospital.departments;
+            } else if (hospital && hospital.clinicType === 'clinic') {
+                allowedDepartments = ['General'];
             } else {
                 allowedDepartments = [];
             }

@@ -63,7 +63,7 @@ app.use(helmet({
 }));
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
-const LOCALHOST_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+const LOCALHOST_RE = /^https?:\/\/([a-zA-Z0-9-]+\.)*(localhost|127\.0\.0\.1)(:\d+)?$/;
 const isAllowedOrigin = (origin) => {
     if (!origin) return true;
     if (LOCALHOST_RE.test(origin)) return true;
