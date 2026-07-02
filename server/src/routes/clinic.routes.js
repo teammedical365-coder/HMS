@@ -61,6 +61,23 @@ const verifyClinicAdmin = async (req, res, next) => {
     }
 };
 
+const verifyClinicStaff = async (req, res, next) => {
+    try {
+        await verifyToken(req, res, async () => {
+            const allowed = ['hospitaladmin', 'doctor', 'reception', 'receptionist'];
+            if (!allowed.includes(req.user.role)) {
+                return res.status(403).json({ success: false, message: 'Clinic staff access required' });
+            }
+            if (!req.user.hospitalId) {
+                return res.status(403).json({ success: false, message: 'No clinic assigned to your account' });
+            }
+            next();
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+};
+
 const hid = (req) => new mongoose.Types.ObjectId(req.user.hospitalId.toString());
 
 // ─────────────────────────────────────────────
@@ -107,7 +124,7 @@ const trackNewPatient = async (clinicId) => {
 // ─────────────────────────────────────────────
 // STATS — GET /api/clinic/stats
 // ─────────────────────────────────────────────
-router.get('/stats', verifyClinicAdmin, async (req, res) => {
+router.get('/stats', verifyClinicStaff, async (req, res) => {
     try {
         const hospitalId = hid(req);
         const { start: today, end: todayEnd } = todayRange();
@@ -246,7 +263,7 @@ router.get('/stats', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 // LIST PATIENTS — GET /api/clinic/patients
 // ─────────────────────────────────────────────
-router.get('/patients', verifyClinicAdmin, async (req, res) => {
+router.get('/patients', verifyClinicStaff, async (req, res) => {
     try {
         const { search } = req.query;
         const query = { clinicId: hid(req), isActive: true };
@@ -274,7 +291,7 @@ router.get('/patients', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 // REGISTER PATIENT — POST /api/clinic/patients
 // ─────────────────────────────────────────────
-router.post('/patients', verifyClinicAdmin, async (req, res) => {
+router.post('/patients', verifyClinicStaff, async (req, res) => {
     try {
         const { name, phone, email, dob, gender, address, bloodGroup, allergies, chronicConditions, relatives } = req.body;
         if (!name || !phone) return res.status(400).json({ success: false, message: 'Name and phone are required' });
@@ -333,7 +350,7 @@ router.post('/patients', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 // PATIENT HISTORY — GET /api/clinic/patients/:id/history
 // ─────────────────────────────────────────────
-router.get('/patients/:id/history', verifyClinicAdmin, async (req, res) => {
+router.get('/patients/:id/history', verifyClinicStaff, async (req, res) => {
     try {
         const patient = await ClinicPatient.findOne({ _id: req.params.id, clinicId: hid(req) }).lean();
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
@@ -351,7 +368,7 @@ router.get('/patients/:id/history', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 // UPDATE PATIENT — PUT /api/clinic/patients/:id
 // ─────────────────────────────────────────────
-router.put('/patients/:id', verifyClinicAdmin, async (req, res) => {
+router.put('/patients/:id', verifyClinicStaff, async (req, res) => {
     try {
         const { name, email, dob, gender, address, bloodGroup, allergies, chronicConditions, medicalNotes, relatives } = req.body;
         const updateData = { name, email, dob, gender, address, bloodGroup, allergies, chronicConditions, medicalNotes };
@@ -375,9 +392,41 @@ router.put('/patients/:id', verifyClinicAdmin, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+// CHECK FEE WAIVER — GET /api/clinic/patients/:id/check-fee-waiver
+// ─────────────────────────────────────────────
+router.get('/patients/:id/check-fee-waiver', verifyClinicStaff, async (req, res) => {
+    try {
+        const patient = await ClinicPatient.findOne({ _id: req.params.id, clinicId: hid(req) });
+        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+        const createdAt = new Date(patient.createdAt);
+        const today = new Date();
+
+        // Calculate differences in calendar days
+        const d1 = new Date(createdAt.getFullYear(), createdAt.getMonth(), createdAt.getDate());
+        const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const diffTime = d2 - d1;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 1) {
+            return res.json({
+                success: true,
+                waived: true,
+                message: 'Registration fee waived (Registered yesterday)'
+            });
+        }
+
+        res.json({ success: true, waived: false });
+    } catch (err) {
+        console.error('[check-fee-waiver]', err.message);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// ─────────────────────────────────────────────
 // UPLOAD REPORT — POST /api/clinic/patients/:id/reports
 // ─────────────────────────────────────────────
-router.post('/patients/:id/reports', verifyClinicAdmin, uploadReport.single('report'), async (req, res) => {
+router.post('/patients/:id/reports', verifyClinicStaff, uploadReport.single('report'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
 
@@ -407,7 +456,7 @@ router.post('/patients/:id/reports', verifyClinicAdmin, uploadReport.single('rep
 // ─────────────────────────────────────────────
 // DELETE REPORT — DELETE /api/clinic/patients/:id/reports/:reportId
 // ─────────────────────────────────────────────
-router.delete('/patients/:id/reports/:reportId', verifyClinicAdmin, async (req, res) => {
+router.delete('/patients/:id/reports/:reportId', verifyClinicStaff, async (req, res) => {
     try {
         const patient = await ClinicPatient.findOne({ _id: req.params.id, clinicId: hid(req) });
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
@@ -426,7 +475,7 @@ router.delete('/patients/:id/reports/:reportId', verifyClinicAdmin, async (req, 
 // ─────────────────────────────────────────────
 // LIST APPOINTMENTS — GET /api/clinic/appointments
 // ─────────────────────────────────────────────
-router.get('/appointments', verifyClinicAdmin, async (req, res) => {
+router.get('/appointments', verifyClinicStaff, async (req, res) => {
     try {
         const { date, status } = req.query;
         const query = { hospitalId: hid(req) };
@@ -459,7 +508,7 @@ router.get('/appointments', verifyClinicAdmin, async (req, res) => {
 // CLINIC CONFIG — GET /api/clinic/config
 // Returns appointmentMode and basic clinic info
 // ─────────────────────────────────────────────
-router.get('/config', verifyClinicAdmin, async (req, res) => {
+router.get('/config', verifyClinicStaff, async (req, res) => {
     try {
         const clinic = await Hospital.findById(hid(req)).select('appointmentMode name clinicCode defaultFee defaultServiceName').lean();
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
@@ -524,7 +573,7 @@ router.put('/config', verifyClinicAdmin, async (req, res) => {
 // BOOK APPOINTMENT — POST /api/clinic/appointments
 // Supports both token mode and time-slot mode
 // ─────────────────────────────────────────────
-router.post('/appointments', verifyClinicAdmin, async (req, res) => {
+router.post('/appointments', verifyClinicStaff, async (req, res) => {
     try {
         const { patientId, amount, notes, serviceName, appointmentTime, paymentMethod, cardRef, upiScreenshotUrl } = req.body;
         // patientId here is ClinicPatient._id
@@ -609,7 +658,7 @@ router.post('/appointments', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 // COMPLETE APPOINTMENT — PUT /api/clinic/appointments/:id/complete
 // ─────────────────────────────────────────────
-router.put('/appointments/:id/complete', verifyClinicAdmin, async (req, res) => {
+router.put('/appointments/:id/complete', verifyClinicStaff, async (req, res) => {
     try {
         const { diagnosis, notes, medicines, labTests, paymentStatus, amount, vitals } = req.body;
 
@@ -642,9 +691,43 @@ router.put('/appointments/:id/complete', verifyClinicAdmin, async (req, res) => 
 });
 
 // ─────────────────────────────────────────────
+// UPDATE CONSULTATION — PUT /api/clinic/appointments/:id/update-consultation
+// ─────────────────────────────────────────────
+router.put('/appointments/:id/update-consultation', verifyClinicStaff, async (req, res) => {
+    try {
+        const { diagnosis, notes, medicines, labTests, paymentStatus, amount, vitals } = req.body;
+
+        const appt = await Appointment.findOne({ _id: req.params.id, hospitalId: hid(req) });
+        if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found' });
+
+        appt.diagnosis     = diagnosis !== undefined ? diagnosis : appt.diagnosis;
+        appt.doctorNotes   = notes !== undefined ? notes : appt.doctorNotes;
+        if (vitals && typeof vitals === 'object') appt.vitals = vitals;
+        if (medicines && Array.isArray(medicines)) {
+            appt.pharmacy = medicines.map(m => ({
+                medicineName: m.medicineName || m.name || '',
+                saltName:     m.saltName || '',
+                frequency:    m.frequency || m.dose || m.dosage || '',
+                duration:     m.duration || m.days || '',
+            }));
+        }
+        if (labTests && Array.isArray(labTests)) appt.labTests = labTests;
+        if (paymentStatus) appt.paymentStatus = paymentStatus;
+        if (amount !== undefined) appt.amount = amount;
+
+        await appt.save();
+
+        res.json({ success: true, appointment: appt, message: 'Consultation updated' });
+    } catch (err) {
+        console.error('[update-consultation]', err.message);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// ─────────────────────────────────────────────
 // PAY APPOINTMENT — PUT /api/clinic/appointments/:id/pay
 // ─────────────────────────────────────────────
-router.put('/appointments/:id/pay', verifyClinicAdmin, async (req, res) => {
+router.put('/appointments/:id/pay', verifyClinicStaff, async (req, res) => {
     try {
         const { paymentMethod } = req.body;
         const appt = await Appointment.findOneAndUpdate(
@@ -662,7 +745,7 @@ router.put('/appointments/:id/pay', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 // CANCEL APPOINTMENT — PUT /api/clinic/appointments/:id/cancel
 // ─────────────────────────────────────────────
-router.put('/appointments/:id/cancel', verifyClinicAdmin, async (req, res) => {
+router.put('/appointments/:id/cancel', verifyClinicStaff, async (req, res) => {
     try {
         const appt = await Appointment.findOneAndUpdate(
             { _id: req.params.id, hospitalId: hid(req) },
@@ -679,7 +762,7 @@ router.put('/appointments/:id/cancel', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 // INVENTORY — GET /api/clinic/inventory
 // ─────────────────────────────────────────────
-router.get('/inventory', verifyClinicAdmin, async (req, res) => {
+router.get('/inventory', verifyClinicStaff, async (req, res) => {
     try {
         const inventory = await Inventory.find({ hospitalId: hid(req) }).sort({ name: 1 }).lean();
         res.json({ success: true, inventory });
@@ -719,7 +802,7 @@ router.post('/inventory', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 // PHARMACY ORDERS — GET /api/clinic/pharmacy-orders
 // ─────────────────────────────────────────────
-router.get('/pharmacy-orders', verifyClinicAdmin, async (req, res) => {
+router.get('/pharmacy-orders', verifyClinicStaff, async (req, res) => {
     try {
         const orders = await PharmacyOrder.find({ hospitalId: hid(req) })
             .sort({ createdAt: -1 })
@@ -733,7 +816,7 @@ router.get('/pharmacy-orders', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 // DISPENSE PHARMACY ORDER — PUT /api/clinic/pharmacy-orders/:id/dispense
 // ─────────────────────────────────────────────
-router.put('/pharmacy-orders/:id/dispense', verifyClinicAdmin, async (req, res) => {
+router.put('/pharmacy-orders/:id/dispense', verifyClinicStaff, async (req, res) => {
     try {
         const order = await PharmacyOrder.findOneAndUpdate(
             { _id: req.params.id, hospitalId: hid(req) },
@@ -752,7 +835,7 @@ router.put('/pharmacy-orders/:id/dispense', verifyClinicAdmin, async (req, res) 
 // ══════════════════════════════════════════════════════════
 
 // CREATE treatment plan
-router.post('/treatment-plans', verifyClinicAdmin, async (req, res) => {
+router.post('/treatment-plans', verifyClinicStaff, async (req, res) => {
     try {
         const { clinicPatientId, title, description, totalDurationDays, totalAmount, visits } = req.body;
         if (!clinicPatientId || !title || !visits || !visits.length) {
@@ -795,7 +878,7 @@ router.post('/treatment-plans', verifyClinicAdmin, async (req, res) => {
 });
 
 // LIST all treatment plans for hospital
-router.get('/treatment-plans', verifyClinicAdmin, async (req, res) => {
+router.get('/treatment-plans', verifyClinicStaff, async (req, res) => {
     try {
         const plans = await TreatmentPlan.find({ hospitalId: hid(req) })
             .populate('clinicPatientId', 'name patientUid phone gender')
@@ -807,7 +890,7 @@ router.get('/treatment-plans', verifyClinicAdmin, async (req, res) => {
 });
 
 // TODAY'S DUE VISITS — also fires notifications (call this on dashboard load)
-router.get('/treatment-plans/today-due', verifyClinicAdmin, async (req, res) => {
+router.get('/treatment-plans/today-due', verifyClinicStaff, async (req, res) => {
     try {
         const { start, end } = todayRange();
         const plans = await TreatmentPlan.find({
@@ -849,7 +932,7 @@ router.get('/treatment-plans/today-due', verifyClinicAdmin, async (req, res) => 
 });
 
 // GET single plan
-router.get('/treatment-plans/:id', verifyClinicAdmin, async (req, res) => {
+router.get('/treatment-plans/:id', verifyClinicStaff, async (req, res) => {
     try {
         const plan = await TreatmentPlan.findOne({ _id: req.params.id, hospitalId: hid(req) })
             .populate('clinicPatientId', 'name patientUid phone gender age');
@@ -861,9 +944,9 @@ router.get('/treatment-plans/:id', verifyClinicAdmin, async (req, res) => {
 });
 
 // RECORD PAYMENT for a visit (optional, any amount)
-router.put('/treatment-plans/:id/visits/:visitId/pay', verifyClinicAdmin, async (req, res) => {
+router.put('/treatment-plans/:id/visits/:visitId/pay', verifyClinicStaff, async (req, res) => {
     try {
-        const { amountPaid, paymentMethod, notes } = req.body;
+        const { amountPaid, paymentMethod, notes, upiId, upiRef } = req.body;
         const plan = await TreatmentPlan.findOne({ _id: req.params.id, hospitalId: hid(req) });
         if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
 
@@ -872,6 +955,8 @@ router.put('/treatment-plans/:id/visits/:visitId/pay', verifyClinicAdmin, async 
 
         visit.amountPaid = Number(amountPaid) || 0;
         visit.paymentMethod = paymentMethod || 'Cash';
+        if (upiId !== undefined) visit.upiId = upiId;
+        if (upiRef !== undefined) visit.upiRef = upiRef;
         if (notes) visit.notes = notes;
 
         // Recalculate plan totals — pendingBalance = totalAmount - sum of all payments
@@ -887,7 +972,7 @@ router.put('/treatment-plans/:id/visits/:visitId/pay', verifyClinicAdmin, async 
 });
 
 // COMPLETE a visit
-router.put('/treatment-plans/:id/visits/:visitId/complete', verifyClinicAdmin, async (req, res) => {
+router.put('/treatment-plans/:id/visits/:visitId/complete', verifyClinicStaff, async (req, res) => {
     try {
         const { notes } = req.body;
         const plan = await TreatmentPlan.findOne({ _id: req.params.id, hospitalId: hid(req) });
@@ -925,7 +1010,7 @@ router.put('/treatment-plans/:id/visits/:visitId/complete', verifyClinicAdmin, a
 });
 
 // MARK visit as missed
-router.put('/treatment-plans/:id/visits/:visitId/miss', verifyClinicAdmin, async (req, res) => {
+router.put('/treatment-plans/:id/visits/:visitId/miss', verifyClinicStaff, async (req, res) => {
     try {
         const plan = await TreatmentPlan.findOne({ _id: req.params.id, hospitalId: hid(req) });
         if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
@@ -944,7 +1029,7 @@ router.put('/treatment-plans/:id/visits/:visitId/miss', verifyClinicAdmin, async
 });
 
 // CANCEL plan
-router.put('/treatment-plans/:id/cancel', verifyClinicAdmin, async (req, res) => {
+router.put('/treatment-plans/:id/cancel', verifyClinicStaff, async (req, res) => {
     try {
         const plan = await TreatmentPlan.findOneAndUpdate(
             { _id: req.params.id, hospitalId: hid(req) },
@@ -962,7 +1047,7 @@ router.put('/treatment-plans/:id/cancel', verifyClinicAdmin, async (req, res) =>
 // CLINIC STAFF — GET /api/clinic/staff
 // Returns doctor and receptionist staff for this clinic
 // ─────────────────────────────────────────────
-router.get('/staff', verifyClinicAdmin, async (req, res) => {
+router.get('/staff', verifyClinicStaff, async (req, res) => {
     try {
         const STAFF_ROLES_LEGACY = ['doctor', 'receptionist'];
         const Role = require('../models/role.model');

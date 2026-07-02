@@ -7,6 +7,8 @@ const visitSchema = new mongoose.Schema({
     procedure:     { type: String, default: '' },
     amountPaid:    { type: Number, default: 0 },    // payment collected on this visit (optional)
     paymentMethod: { type: String, default: 'Cash' },
+    upiId:         { type: String, default: '' },
+    upiRef:        { type: String, default: '' },
     status:        { type: String, enum: ['scheduled', 'completed', 'missed'], default: 'scheduled' },
     completedAt:   { type: Date },
     notes:         { type: String, default: '' },

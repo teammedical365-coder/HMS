@@ -363,6 +363,7 @@ export const clinicAPI = {
     registerPatient: async (data) => (await apiClient.post('/api/clinic/patients', data)).data,
     updatePatient: async (id, data) => (await apiClient.put(`/api/clinic/patients/${id}`, data)).data,
     getPatientHistory: async (patientId) => (await apiClient.get(`/api/clinic/patients/${patientId}/history`)).data,
+    checkFeeWaiver: async (patientId) => (await apiClient.get(`/api/clinic/patients/${patientId}/check-fee-waiver`)).data,
     uploadPatientReport: async (patientId, file, name) => {
         const fd = new FormData();
         fd.append('report', file);
@@ -383,6 +384,7 @@ export const clinicAPI = {
     getStaff: async () => (await apiClient.get('/api/clinic/staff')).data,
     bookAppointment: async (data) => (await apiClient.post('/api/clinic/appointments', data)).data,
     completeAppointment: async (id, data) => (await apiClient.put(`/api/clinic/appointments/${id}/complete`, data)).data,
+    updateConsultation: async (id, data) => (await apiClient.put(`/api/clinic/appointments/${id}/update-consultation`, data)).data,
     payAppointment: async (id, paymentMethod = 'Cash') => (await apiClient.put(`/api/clinic/appointments/${id}/pay`, { paymentMethod })).data,
     cancelAppointment: async (id) => (await apiClient.put(`/api/clinic/appointments/${id}/cancel`, {})).data,
     // Inventory

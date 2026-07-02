@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { clinicAPI, uploadAPI } from '../../utils/api';
+import { clinicAPI, uploadAPI, medicineAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './ClinicDashboard.css';
@@ -497,44 +497,167 @@ const PatientReportPanel = ({ patientId, patientName }) => {
     const [reports, setReports] = useState([]);
     const [viewReport, setViewReport] = useState(null);
     const [open, setOpen] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [reportName, setReportName] = useState('');
+    const [msg, setMsg] = useState({ type: '', text: '' });
+    const fileInputRef = useRef(null);
 
-    useEffect(() => {
+    const flash = (type, text) => {
+        setMsg({ type, text });
+        setTimeout(() => setMsg({ type: '', text: '' }), 4000);
+    };
+
+    const loadReports = useCallback(() => {
         if (!patientId) return;
         clinicAPI.getPatientHistory(patientId)
             .then(r => { if (r.success) setReports(r.patient?.reports || []); })
             .catch(() => { });
     }, [patientId]);
 
+    useEffect(() => {
+        loadReports();
+    }, [loadReports]);
+
+    const handleUploadReport = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file || !patientId) return;
+
+        // Frontend validation
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+        if (!allowedTypes.includes(file.type)) {
+            flash('error', 'Only JPG, PNG, WEBP, and PDF files are allowed.');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+        if (file.size > 20 * 1024 * 1024) {
+            flash('error', 'File size exceeds 20 MB limit.');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
+        setUploading(true);
+        try {
+            const name = reportName.trim() || file.name;
+            const r = await clinicAPI.uploadPatientReport(patientId, file, name);
+            if (r.success) {
+                setReports(prev => [...prev, r.report]);
+                setReportName('');
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                flash('success', 'Report uploaded successfully');
+            } else {
+                flash('error', r.message || 'Upload failed');
+            }
+        } catch (e) {
+            flash('error', e.response?.data?.message || e.message);
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const handleDeleteReport = async (reportId) => {
+        if (!patientId) return;
+        if (!window.confirm('Delete this report?')) return;
+        try {
+            const r = await clinicAPI.deletePatientReport(patientId, reportId);
+            if (r.success) {
+                setReports(prev => prev.filter(rp => rp._id !== reportId));
+                flash('success', 'Report deleted');
+            } else {
+                flash('error', r.message);
+            }
+        } catch (e) {
+            flash('error', e.response?.data?.message || e.message);
+        }
+    };
+
+    const handleDownloadReport = async (report) => {
+        const url = reportURL(report.filename);
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = report.name || 'report';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error("Download failed:", error);
+            window.open(url, '_blank', 'noreferrer');
+        }
+    };
+
     if (!patientId) return null;
 
     return (
         <>
             {viewReport && <ReportViewerModal report={viewReport} onClose={() => setViewReport(null)} />}
-            <div style={{ marginBottom: '20px', border: '1px solid #e0e7ff', borderRadius: '10px', overflow: 'hidden' }}>
+            <div className="clinic-reports-container" style={{ marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', background: '#fff' }}>
                 <button
                     onClick={() => setOpen(o => !o)}
-                    style={{ width: '100%', background: '#eef2ff', border: 'none', padding: '10px 16px', textAlign: 'left', cursor: 'pointer', fontWeight: 600, fontSize: '13px', color: '#4338ca', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>📄 Previous Reports ({reports.length})</span>
+                    style={{ width: '100%', background: '#f8fafc', border: 'none', padding: '12px 16px', textAlign: 'left', cursor: 'pointer', fontWeight: 700, fontSize: '13px', color: '#1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: open ? '1px solid #e2e8f0' : 'none' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>📄 Previous Reports ({reports.length})</span>
                     <span>{open ? '▲' : '▼'}</span>
                 </button>
                 {open && (
-                    <div style={{ background: '#f8faff', padding: '12px 16px' }}>
+                    <div style={{ padding: '16px', background: '#fff' }}>
+                        {msg.text && <div className={`clinic-msg clinic-msg-${msg.type}`} style={{ marginBottom: '12px', fontSize: '12px', padding: '8px 12px' }}>{msg.text}</div>}
+                        
+                        {/* Upload area */}
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '8px', padding: '12px' }}>
+                            <input
+                                className="clinic-input"
+                                style={{ flex: 1, minWidth: '140px', background: '#fff' }}
+                                placeholder="Report name (optional)"
+                                value={reportName}
+                                onChange={e => setReportName(e.target.value)}
+                            />
+                            <label style={{ cursor: 'pointer', background: uploading ? '#cbd5e1' : '#6366f1', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: 600, fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                                {uploading ? 'Uploading...' : '⬆ Upload PDF / Image'}
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept=".pdf,image/jpeg,image/png,image/webp"
+                                    style={{ display: 'none' }}
+                                    disabled={uploading}
+                                    onChange={handleUploadReport}
+                                />
+                            </label>
+                            <div style={{ width: '100%', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>Supports PDF, JPG, PNG, WEBP · max 20 MB</div>
+                        </div>
+
                         {reports.length === 0 ? (
-                            <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>No reports uploaded for {patientName || 'this patient'}.</p>
+                            <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0, textAlign: 'center', padding: '12px 0' }}>No reports uploaded for {patientName || 'this patient'}.</p>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 {reports.map(r => (
-                                    <div key={r._id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', border: '1px solid #e0e7ff', borderRadius: '8px', padding: '8px 12px' }}>
+                                    <div key={r._id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 14px' }}>
                                         <span style={{ fontSize: '20px' }}>{r.mimetype === 'application/pdf' ? '📄' : '🖼️'}</span>
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                             <div style={{ fontWeight: 600, fontSize: '13px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
-                                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>{r.uploadedAt ? new Date(r.uploadedAt).toLocaleDateString('en-IN') : ''}</div>
+                                            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                                                {r.mimetype === 'application/pdf' ? 'PDF Document' : 'Image'} · {r.uploadedAt ? new Date(r.uploadedAt).toLocaleDateString('en-IN') : ''}
+                                            </div>
                                         </div>
-                                        <button
-                                            onClick={() => setViewReport(r)}
-                                            style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: '6px', padding: '4px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
-                                            View
-                                        </button>
+                                        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                            <button
+                                                onClick={() => setViewReport(r)}
+                                                style={{ background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', padding: '4px 10px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>
+                                                View
+                                            </button>
+                                            <button
+                                                onClick={() => handleDownloadReport(r)}
+                                                style={{ background: '#dcfce7', color: '#16a34a', border: 'none', borderRadius: '6px', padding: '4px 10px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>
+                                                Download
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteReport(r._id)}
+                                                style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>
+                                                ✕
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -1078,13 +1201,28 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
 };
 
 // ═══════════════════════════════════════════════════
-// RECEPTION MODE
-// ═══════════════════════════════════════════════════
 // ── Inline booking form (supports token and slot modes) ────────────────────
 const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defaultFee = 0, defaultServiceName = 'General Consultation', setPendingDownload }) => {
     const isSlotMode = mode === 'slot';
     const [form, setForm] = useState({ amount: defaultFee > 0 ? String(defaultFee) : '', serviceName: defaultServiceName, notes: '', appointmentTime: '', paymentMethod: 'Cash', upiScreenshot: null, cardRef: '' });
     const [booking, setBooking] = useState(false);
+    const [feeWaived, setFeeWaived] = useState(false);
+    const [waiverMessage, setWaiverMessage] = useState('');
+
+    useEffect(() => {
+        if (!patient?._id) return;
+        clinicAPI.checkFeeWaiver(patient._id)
+            .then(r => {
+                if (r.success && r.waived) {
+                    setFeeWaived(true);
+                    setWaiverMessage(r.message || 'Registration fee waived (Registered yesterday)');
+                    setForm(f => ({ ...f, amount: '0', paymentMethod: 'Free' }));
+                }
+            })
+            .catch(err => {
+                console.error('Waiver check error:', err);
+            });
+    }, [patient]);
 
     const fee = Number(form.amount) || 0;
     const isUpi = form.paymentMethod === 'UPI';
@@ -1157,6 +1295,13 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
                 <span><strong>Payment is collected upfront.</strong> Token / appointment is confirmed only after fee is paid.</span>
             </div>
 
+            {feeWaived && (
+                <div style={{ fontSize: '12.5px', color: '#16a34a', background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: '6px', padding: '8px 12px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}>
+                    <span>🎁</span>
+                    <span>{waiverMessage}</span>
+                </div>
+            )}
+
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: '2', minWidth: '150px' }}>
                     <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Service</label>
@@ -1177,6 +1322,7 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
                 <div style={{ flex: '1', minWidth: '90px' }}>
                     <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Fee (₹) *</label>
                     <input className="clinic-input" type="number" min="0" placeholder="0" value={form.amount}
+                        disabled={feeWaived}
                         onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
                 </div>
 
@@ -1185,11 +1331,13 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
                         Payment Method {fee > 0 ? '*' : ''}
                     </label>
                     <select className="clinic-input" value={form.paymentMethod}
+                        disabled={feeWaived}
                         onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value, upiScreenshot: null, cardRef: '' }))}
                         style={{ borderColor: fee > 0 && !form.paymentMethod ? '#dc2626' : '' }}>
                         <option value="Cash">Cash</option>
                         <option value="UPI">UPI</option>
                         <option value="Card">Card</option>
+                        {feeWaived && <option value="Free">Free</option>}
                     </select>
                 </div>
 
@@ -1648,7 +1796,35 @@ const DoctorMode = ({ setPendingDownload }) => {
     useEffect(() => {
         clinicAPI.getStaff().then(r => { if (r.success) setStaff(r.staff || []); }).catch(() => {}).finally(() => setStaffLoading(false));
         loadToday();
-        clinicAPI.getInventory().then(r => { if (r.success) setInventory(r.inventory || []); }).catch(() => { });
+        
+        Promise.all([
+            clinicAPI.getInventory().catch(() => ({ success: false, inventory: [] })),
+            medicineAPI.getMedicines().catch(() => ({ success: false, medicines: [] }))
+        ]).then(([invRes, medRes]) => {
+            const localList = invRes.success ? (invRes.inventory || []) : [];
+            const globalList = medRes.success ? (medRes.medicines || []) : [];
+            
+            const mappedGlobal = globalList.map(m => ({
+                _id: m._id,
+                name: m.name,
+                category: m.category || '',
+                unit: m.unit || '',
+                isGlobal: true
+            }));
+
+            const seenNames = new Set(localList.map(item => item.name.toLowerCase()));
+            const merged = [...localList];
+            
+            for (const gMed of mappedGlobal) {
+                if (gMed.name && !seenNames.has(gMed.name.toLowerCase())) {
+                    seenNames.add(gMed.name.toLowerCase());
+                    merged.push(gMed);
+                }
+            }
+
+            setInventory(merged);
+        }).catch(() => {});
+
         clinicAPI.getStats().then(r => { if (r.success) setAnalytics(r.stats); }).catch(() => { });
     }, []);
 
@@ -1698,7 +1874,9 @@ const DoctorMode = ({ setPendingDownload }) => {
         setSaving(true);
         try {
             const labArr = rx.labTests.split(',').map(t => t.trim()).filter(Boolean);
-            const r = await clinicAPI.completeAppointment(consulting._id, {
+            const isEditing = consulting.status === 'completed';
+            
+            const payload = {
                 diagnosis: rx.diagnosis,
                 notes: rx.notes,
                 vitals,
@@ -1712,9 +1890,14 @@ const DoctorMode = ({ setPendingDownload }) => {
                     duration: (m.days || m.duration || '').trim(),
                 })),
                 labTests: labArr,
-            });
+            };
+
+            const r = isEditing
+                ? await clinicAPI.updateConsultation(consulting._id, payload)
+                : await clinicAPI.completeAppointment(consulting._id, payload);
+
             if (r.success) {
-                flash('success', 'Consultation saved. Prescription generated.');
+                flash('success', isEditing ? 'Consultation updated successfully.' : 'Consultation saved. Prescription generated.');
                 setConsulting(null);
                 loadToday();
                 try {
@@ -1733,12 +1916,12 @@ const DoctorMode = ({ setPendingDownload }) => {
     const pastVisits = patientHistory.filter(h => h._id !== consulting?._id && h.status === 'completed');
 
     if (consulting) return (
-        <div>
+        <div className="clinic-doctor-consult">
             <button className="clinic-back-btn" onClick={() => setConsulting(null)}>← Back to Queue</button>
             {msg.text && <div className={`clinic-msg clinic-msg-${msg.type}`} style={{ marginTop: '10px' }}>{msg.text}</div>}
             <div className="clinic-card" style={{ marginTop: '12px' }}>
                 {/* Patient header */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                <div className="clinic-consult-header">
                     <div className="clinic-avatar-lg">{(consulting.clinicPatientId?.name || '?').charAt(0)}</div>
                     <div>
                         <h3 style={{ margin: 0 }}>{consulting.clinicPatientId?.name || 'Patient'}</h3>
@@ -1812,70 +1995,70 @@ const DoctorMode = ({ setPendingDownload }) => {
                 />
 
                 {/* Vitals Panel */}
-                <div style={{ marginBottom: '20px', border: '1px solid #e0f2fe', borderRadius: '10px', overflow: 'hidden' }}>
+                <div className="clinic-vitals-container">
                     <button
                         type="button"
                         onClick={() => setShowVitals(v => !v)}
-                        style={{ width: '100%', background: '#f0f9ff', border: 'none', padding: '10px 16px', textAlign: 'left', cursor: 'pointer', fontWeight: 700, fontSize: '13px', color: '#0369a1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        className="clinic-vitals-header-btn">
                         <span>🩺 Patient Vitals {Object.values(vitals).some(v => v) ? '✓' : ''}</span>
                         <span>{showVitals ? '▲' : '▼'}</span>
                     </button>
                     {showVitals && (
-                        <div style={{ padding: '16px', background: '#fff' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px' }}>
+                        <div className="clinic-vitals-content">
+                            <div className="clinic-vitals-grid">
                                 {/* Weight */}
-                                <div>
-                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>⚖️ Weight (kg)</label>
-                                    <input className="clinic-input" type="number" placeholder="e.g. 65" value={vitals.weight}
-                                        onChange={e => handleVitalChange('weight', e.target.value)} style={{ padding: '7px 10px' }} />
+                                <div className="clinic-vital-card">
+                                    <label className="clinic-vital-label">⚖️ Weight (kg)</label>
+                                    <input className="clinic-vital-input" type="number" placeholder="e.g. 65" value={vitals.weight}
+                                        onChange={e => handleVitalChange('weight', e.target.value)} />
                                 </div>
                                 {/* Height */}
-                                <div>
-                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>📏 Height (cm)</label>
-                                    <input className="clinic-input" type="number" placeholder="e.g. 170" value={vitals.height}
-                                        onChange={e => handleVitalChange('height', e.target.value)} style={{ padding: '7px 10px' }} />
+                                <div className="clinic-vital-card">
+                                    <label className="clinic-vital-label">📏 Height (cm)</label>
+                                    <input className="clinic-vital-input" type="number" placeholder="e.g. 170" value={vitals.height}
+                                        onChange={e => handleVitalChange('height', e.target.value)} />
                                 </div>
                                 {/* BMI — auto computed */}
-                                <div>
-                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>🔢 BMI (auto)</label>
-                                    <input className="clinic-input" readOnly value={vitals.bmi}
+                                <div className="clinic-vital-card">
+                                    <label className="clinic-vital-label">🔢 BMI (auto)</label>
+                                    <input className="clinic-vital-input" readOnly value={vitals.bmi}
                                         placeholder="Auto-calculated"
-                                        style={{ padding: '7px 10px', background: vitals.bmi ? (parseFloat(vitals.bmi) < 18.5 ? '#fef9c3' : parseFloat(vitals.bmi) < 25 ? '#f0fdf4' : parseFloat(vitals.bmi) < 30 ? '#fff7ed' : '#fef2f2') : '#f8fafc', fontWeight: vitals.bmi ? '700' : '400', color: vitals.bmi ? '#0f172a' : '#94a3b8' }} />
+                                        style={{ background: vitals.bmi ? 'transparent' : '', fontWeight: vitals.bmi ? '700' : '400' }} />
                                     {vitals.bmi && (
-                                        <div style={{ fontSize: '10px', marginTop: '2px', color: parseFloat(vitals.bmi) < 18.5 ? '#b45309' : parseFloat(vitals.bmi) < 25 ? '#16a34a' : parseFloat(vitals.bmi) < 30 ? '#ea580c' : '#dc2626', fontWeight: '600' }}>
+                                        <div className={`clinic-bmi-badge clinic-bmi-${parseFloat(vitals.bmi) < 18.5 ? 'underweight' : parseFloat(vitals.bmi) < 25 ? 'normal' : parseFloat(vitals.bmi) < 30 ? 'overweight' : 'obese'}`}>
                                             {parseFloat(vitals.bmi) < 18.5 ? 'Underweight' : parseFloat(vitals.bmi) < 25 ? 'Normal' : parseFloat(vitals.bmi) < 30 ? 'Overweight' : 'Obese'}
                                         </div>
                                     )}
                                 </div>
                                 {/* BP */}
-                                <div>
-                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>💓 BP (mmHg)</label>
-                                    <input className="clinic-input" placeholder="e.g. 120/80" value={vitals.bp}
-                                        onChange={e => handleVitalChange('bp', e.target.value)} style={{ padding: '7px 10px' }} />
+                                <div className="clinic-vital-card">
+                                    <label className="clinic-vital-label">💓 BP (mmHg)</label>
+                                    <input className="clinic-vital-input" placeholder="e.g. 120/80" value={vitals.bp}
+                                        onChange={e => handleVitalChange('bp', e.target.value)} />
                                 </div>
                                 {/* Temperature */}
-                                <div>
-                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>🌡️ Temp (°F)</label>
-                                    <input className="clinic-input" type="number" step="0.1" placeholder="e.g. 98.6" value={vitals.temperature}
-                                        onChange={e => handleVitalChange('temperature', e.target.value)} style={{ padding: '7px 10px' }} />
+                                <div className="clinic-vital-card">
+                                    <label className="clinic-vital-label">🌡️ Temp (°F)</label>
+                                    <input className="clinic-vital-input" type="number" step="0.1" placeholder="e.g. 98.6" value={vitals.temperature}
+                                        onChange={e => handleVitalChange('temperature', e.target.value)} />
                                 </div>
                                 {/* Pulse */}
-                                <div>
-                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>🫀 Pulse (bpm)</label>
-                                    <input className="clinic-input" type="number" placeholder="e.g. 72" value={vitals.pulse}
-                                        onChange={e => handleVitalChange('pulse', e.target.value)} style={{ padding: '7px 10px' }} />
+                                <div className="clinic-vital-card">
+                                    <label className="clinic-vital-label">🫀 Pulse (bpm)</label>
+                                    <input className="clinic-vital-input" type="number" placeholder="e.g. 72" value={vitals.pulse}
+                                        onChange={e => handleVitalChange('pulse', e.target.value)} />
                                 </div>
                                 {/* SpO2 */}
-                                <div>
-                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>🫁 SpO₂ (%)</label>
-                                    <input className="clinic-input" type="number" placeholder="e.g. 98" value={vitals.spo2}
-                                        onChange={e => handleVitalChange('spo2', e.target.value)} style={{ padding: '7px 10px' }} />
+                                <div className="clinic-vital-card">
+                                    <label className="clinic-vital-label">🫁 SpO₂ (%)</label>
+                                    <input className="clinic-vital-input" type="number" placeholder="e.g. 98" value={vitals.spo2}
+                                        onChange={e => handleVitalChange('spo2', e.target.value)} />
                                 </div>
                                 {/* Respiratory Rate */}
-                                <div>
-                                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px' }}>🌬️ Resp. Rate (/min)</label>
-                                    <input className="clinic-input" type="number" placeholder="e.g. 16" value={vitals.rr}
-                                        onChange={e => handleVitalChange('rr', e.target.value)} style={{ padding: '7px 10px' }} />
+                                <div className="clinic-vital-card">
+                                    <label className="clinic-vital-label">🌬️ Resp. Rate (/min)</label>
+                                    <input className="clinic-vital-input" type="number" placeholder="e.g. 16" value={vitals.rr}
+                                        onChange={e => handleVitalChange('rr', e.target.value)} />
                                 </div>
                             </div>
                         </div>
@@ -2025,7 +2208,7 @@ const DoctorMode = ({ setPendingDownload }) => {
                 <div className="clinic-card">
                     <h3 style={{ marginBottom: '12px' }}>✅ Seen Today ({done.length})</h3>
                     <table className="clinic-table">
-                        <thead><tr><th>Token</th><th>Patient</th><th>Diagnosis</th><th>Medicines</th></tr></thead>
+                        <thead><tr><th>Token</th><th>Patient</th><th>Diagnosis</th><th>Medicines</th><th style={{ width: '80px', textAlign: 'center' }}>Action</th></tr></thead>
                         <tbody>
                             {done.map(a => (
                                 <tr key={a._id}>
@@ -2037,6 +2220,11 @@ const DoctorMode = ({ setPendingDownload }) => {
                                     <td style={{ fontSize: '12px', maxWidth: '140px' }}>{a.diagnosis || '—'}</td>
                                     <td style={{ fontSize: '11px', color: '#64748b' }}>
                                         {(a.pharmacy || []).map((m, i) => <div key={i}>{m.medicineName || m.name}</div>)}
+                                    </td>
+                                    <td style={{ textAlign: 'center' }}>
+                                        <button className="clinic-btn-secondary" style={{ fontSize: '12px', padding: '4px 10px', whiteSpace: 'nowrap' }} onClick={() => openConsult(a)}>
+                                            ✏️ Edit
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -2230,7 +2418,7 @@ const TreatmentPlanMode = () => {
     const [visits, setVisits] = useState([]);
 
     const [payModal, setPayModal] = useState(null);
-    const [payInput, setPayInput] = useState({ amountPaid: '', paymentMethod: 'Cash', notes: '' });
+    const [payInput, setPayInput] = useState({ amountPaid: '', paymentMethod: 'Cash', notes: '', upiId: 'payments@upi', upiRef: '', confirmedReceipt: false });
 
     const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg({ type: '', text: '' }), 5000); };
 
@@ -2294,11 +2482,28 @@ const TreatmentPlanMode = () => {
         if (!payModal) return;
         const paid = Number(payInput.amountPaid) || 0;
         if (paid <= 0) return flash('error', 'Enter a valid amount.');
+
+        if (payInput.paymentMethod === 'UPI') {
+            if (!payInput.upiId.trim()) return flash('error', 'Please enter the receiver UPI ID.');
+            if (!payInput.upiRef.trim()) return flash('error', 'Please enter the UPI transaction reference number.');
+            if (!payInput.confirmedReceipt) return flash('error', 'Please confirm you verified the receipt on the device.');
+        }
+
         setSaving(true);
         try {
-            const r = await clinicAPI.payVisit(payModal.planId, payModal.visit._id, {
-                amountPaid: paid, paymentMethod: payInput.paymentMethod, notes: payInput.notes,
-            });
+            const payload = {
+                amountPaid: paid,
+                paymentMethod: payInput.paymentMethod,
+                notes: payInput.notes,
+            };
+            if (payInput.paymentMethod === 'UPI') {
+                payload.upiId = payInput.upiId.trim();
+                payload.upiRef = payInput.upiRef.trim();
+                // Append info to notes field as well for safety
+                payload.notes = `[UPI ID: ${payload.upiId}, Ref: ${payload.upiRef}] ${payload.notes}`.trim();
+            }
+
+            const r = await clinicAPI.payVisit(payModal.planId, payModal.visit._id, payload);
             if (r.success) {
                 setSelectedPlan(r.plan);
                 setPlans(prev => prev.map(p => p._id === r.plan._id ? r.plan : p));
@@ -2687,13 +2892,44 @@ const TreatmentPlanMode = () => {
                                     <option>Cash</option><option>UPI</option><option>Card</option><option>NEFT</option>
                                 </select>
                             </div>
+                            
+                            {payInput.paymentMethod === 'UPI' && (
+                                <div style={{ border: '1px dashed #6366f1', borderRadius: '8px', padding: '12px', background: '#f5f3ff', marginBottom: '12px' }}>
+                                    <div className="clinic-form-group" style={{ marginBottom: '10px' }}>
+                                        <label style={{ color: '#4f46e5' }}>Clinic UPI ID *</label>
+                                        <input className="clinic-input" placeholder="e.g. payments@upi" value={payInput.upiId}
+                                            onChange={e => setPayInput(p => ({ ...p, upiId: e.target.value }))} style={{ background: '#fff' }} />
+                                    </div>
+                                    {Number(payInput.amountPaid) > 0 && payInput.upiId && (
+                                        <div style={{ textAlign: 'center', margin: '14px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                                            <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 'bold' }}>Scan QR to Pay ₹{payInput.amountPaid}</div>
+                                            <img
+                                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('upi://pay?pa=' + payInput.upiId.trim() + '&pn=' + encodeURIComponent(selectedPlan.title) + '&am=' + payInput.amountPaid + '&cu=INR')}`}
+                                                alt="UPI QR Code"
+                                                style={{ border: '4px solid #fff', borderRadius: '8px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="clinic-form-group" style={{ marginBottom: '10px' }}>
+                                        <label style={{ color: '#4f46e5' }}>Transaction Reference Number (Ref #) *</label>
+                                        <input className="clinic-input" placeholder="Enter 12-digit UPI reference ID" value={payInput.upiRef}
+                                            onChange={e => setPayInput(p => ({ ...p, upiRef: e.target.value }))} style={{ background: '#fff' }} />
+                                    </div>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#475569', cursor: 'pointer', marginTop: '8px', fontWeight: '600' }}>
+                                        <input type="checkbox" checked={payInput.confirmedReceipt}
+                                            onChange={e => setPayInput(p => ({ ...p, confirmedReceipt: e.target.checked }))} />
+                                        I have confirmed the payment receipt on the device
+                                    </label>
+                                </div>
+                            )}
+
                             <div className="clinic-form-group" style={{ marginBottom: '16px' }}>
                                 <label>Notes (optional)</label>
                                 <input className="clinic-input" placeholder="e.g. Advance, partial..." value={payInput.notes} onChange={e => setPayInput(p => ({ ...p, notes: e.target.value }))} />
                             </div>
                             <div style={{ display: 'flex', gap: '10px' }}>
                                 <button className="clinic-btn-secondary" style={{ flex: 1 }} onClick={() => setPayModal(null)}>Cancel</button>
-                                <button className="clinic-btn-primary" style={{ flex: 1 }} disabled={saving} onClick={handlePay}>
+                                <button className="clinic-btn-primary" style={{ flex: 1 }} disabled={saving || (payInput.paymentMethod === 'UPI' && (!payInput.upiRef.trim() || !payInput.confirmedReceipt))} onClick={handlePay}>
                                     {saving ? 'Saving...' : '✅ Confirm Payment'}
                                 </button>
                             </div>
