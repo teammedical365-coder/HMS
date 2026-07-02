@@ -133,27 +133,54 @@ router.get('/patients/:patientId/full-profile', verifyToken, async (req, res) =>
         const { patientId } = req.params;
         const hid = req.user.hospitalId;
 
-        // Get patient info — scope to hospital
-        const patientQuery = { _id: patientId };
-        if (hid) patientQuery.hospitalId = hid;
-        const patient = await User.findOne(patientQuery).lean();
-        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(patientId) && patientId.length === 24;
 
-        // Scope all sub-queries to hospital
-        const apptQ = { userId: patientId };
-        const labQ = { userId: patientId };
-        const rxQ = { $or: [{ userId: patientId }, { patientId: patientId }] };
-        if (hid) {
-            apptQ.hospitalId = hid;
-            labQ.hospitalId = hid;
-            rxQ.hospitalId = hid;
+        // Get patient info — scope to hospital
+        const patientQuery = isObjectId ? { _id: patientId } : { patientId: patientId };
+        if (hid) patientQuery.hospitalId = hid;
+        let patient = await User.findOne(patientQuery).lean();
+
+        let isClinicPatient = false;
+        if (!patient) {
+            // Check if it's a ClinicPatient
+            const ClinicPatient = require('../models/clinicPatient.model');
+            const clinicQuery = isObjectId ? { _id: patientId } : { patientUid: patientId };
+            if (hid) clinicQuery.clinicId = hid;
+            patient = await ClinicPatient.findOne(clinicQuery).lean();
+            if (patient) isClinicPatient = true;
         }
 
-        const [appointments, labReports, pharmacyOrders] = await Promise.all([
-            Appointment.find(apptQ).populate('doctorId', 'name specialty').sort({ appointmentDate: -1 }).lean(),
-            LabReport.find(labQ).sort({ createdAt: -1 }).lean(),
-            PharmacyOrder.find(rxQ).sort({ createdAt: -1 }).lean()
-        ]);
+        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+        let appointments = [];
+        let labReports = [];
+        let pharmacyOrders = [];
+
+        if (isClinicPatient) {
+            // Clinic patient queries
+            const Appointment = require('../models/appointment.model');
+            appointments = await Appointment.find({ clinicPatientId: patient._id, ...(hid ? { hospitalId: hid } : {}) })
+                .populate('doctorId', 'name specialty')
+                .sort({ appointmentDate: -1 })
+                .lean();
+        } else {
+            // Scope all sub-queries to hospital
+            const apptQ = { userId: patientId };
+            const labQ = { userId: patientId };
+            const rxQ = { $or: [{ userId: patientId }, { patientId: patientId }] };
+            if (hid) {
+                apptQ.hospitalId = hid;
+                labQ.hospitalId = hid;
+                rxQ.hospitalId = hid;
+            }
+
+            [appointments, labReports, pharmacyOrders] = await Promise.all([
+                Appointment.find(apptQ).populate('doctorId', 'name specialty').sort({ appointmentDate: -1 }).lean(),
+                LabReport.find(labQ).sort({ createdAt: -1 }).lean(),
+                PharmacyOrder.find(rxQ).sort({ createdAt: -1 }).lean()
+            ]);
+        }
 
         res.json({
             success: true,
@@ -191,10 +218,21 @@ router.put('/patients/:patientId/profile', verifyToken, async (req, res) => {
         const updates = req.body;
         const hospitalId = req.user.hospitalId;
 
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(patientId) && patientId.length === 24;
+
         // Verify patient belongs to same hospital
-        const findQuery = { _id: patientId };
-        if (hospitalId) findQuery.hospitalId = hospitalId;
-        let user = await User.findOne(findQuery);
+        let user = null;
+        if (isObjectId) {
+            const findQuery = { _id: patientId };
+            if (hospitalId) findQuery.hospitalId = hospitalId;
+            user = await User.findOne(findQuery);
+        } else {
+            const findQuery = { patientId };
+            if (hospitalId) findQuery.hospitalId = hospitalId;
+            user = await User.findOne(findQuery);
+        }
+
         if (user) {
             // Merge existing profile with updates
             user.fertilityProfile = { ...user.fertilityProfile, ...updates };
@@ -204,16 +242,33 @@ router.put('/patients/:patientId/profile', verifyToken, async (req, res) => {
 
         // Fallback to ClinicPatient model for clinics
         const ClinicPatient = require('../models/clinicPatient.model');
-        const clinicQuery = { _id: patientId };
+        const clinicQuery = isObjectId ? { _id: patientId } : { patientUid: patientId };
         if (hospitalId) clinicQuery.clinicId = hospitalId;
         const clinicPatient = await ClinicPatient.findOne(clinicQuery);
+
         if (clinicPatient) {
+            if (updates.previousReports) {
+                // Map frontend previousReports structure to ClinicPatient.reports array
+                const mappedReports = updates.previousReports.map(r => {
+                    const parts = (r.url || '').split('/');
+                    const fname = parts[parts.length - 1] || r.fileName;
+                    return {
+                        name: r.fileName || r.name || 'Report',
+                        filename: decodeURIComponent(fname),
+                        mimetype: (r.url || '').endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+                        uploadedAt: r.date || new Date()
+                    };
+                });
+                clinicPatient.reports = mappedReports;
+            }
+
             const allowedFields = ['name', 'phone', 'email', 'gender', 'dob', 'bloodGroup', 'address', 'allergies', 'chronicConditions'];
             allowedFields.forEach(field => {
                 if (updates[field] !== undefined) {
                     clinicPatient[field] = updates[field];
                 }
             });
+
             await clinicPatient.save();
             return res.json({ success: true, message: 'Patient profile updated successfully', profile: clinicPatient });
         }
@@ -221,7 +276,7 @@ router.put('/patients/:patientId/profile', verifyToken, async (req, res) => {
         return res.status(404).json({ message: 'Patient not found' });
     } catch (error) {
         console.error("Update Profile Error:", error);
-        res.status(500).json({ success: false, message: 'Failed to update profile' });
+        res.status(500).json({ success: false, message: 'Error updating patient profile' });
     }
 });
 

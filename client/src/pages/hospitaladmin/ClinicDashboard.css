@@ -431,3 +431,68 @@
     justify-content: center;
     gap: 6px;
 }
+
+/* --- High Contrast Text Colors for Clinic Doctor Dashboard --- */
+.clinic-dashboard {
+    color: #0f172a; /* Base text color */
+}
+
+.clinic-dashboard h1,
+.clinic-dashboard h2,
+.clinic-dashboard h3,
+.clinic-dashboard h4,
+.clinic-dashboard h5,
+.clinic-dashboard h6 {
+    color: #0f172a !important;
+}
+
+.clinic-dashboard p {
+    color: #334155 !important;
+}
+
+/* Table headings and body */
+.clinic-dashboard table.clinic-table th {
+    color: #334155 !important;
+    background: #f1f5f9 !important;
+    font-weight: 700;
+    border-bottom: 2px solid #cbd5e1 !important;
+}
+
+.clinic-dashboard table.clinic-table td,
+.clinic-dashboard table.clinic-table td strong {
+    color: #0f172a !important;
+}
+
+/* Queue items */
+.clinic-dashboard .clinic-token-card {
+    background: #ffffff !important;
+    border: 2px solid #cbd5e1 !important;
+}
+
+.clinic-dashboard .clinic-token-card .token-info div {
+    color: #0f172a !important;
+}
+
+.clinic-dashboard .clinic-token-card .token-info div[style*="color"] {
+    color: #475569 !important;
+}
+
+/* Form and input labels */
+.clinic-dashboard label {
+    color: #475569 !important;
+    font-weight: 700 !important;
+}
+
+/* Description subtitles in headings */
+.clinic-dashboard h3 + p {
+    color: #475569 !important;
+}
+
+/* Role switcher text */
+.clinic-dashboard .switcher-label {
+    color: #475569 !important;
+}
+
+.clinic-dashboard .switcher-user {
+    color: #334155 !important;
+}

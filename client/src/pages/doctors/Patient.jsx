@@ -78,10 +78,16 @@ const Patient = () => {
             const res = await uploadAPI.uploadImages(formData);
             if (res.success && res.files && res.files.length > 0) {
                 const uploadedFile = res.files[0];
-                const patientId = uploadPatient.userId?._id || uploadPatient.patientId;
+                const patientId = uploadPatient.userId?._id || uploadPatient.clinicPatientId?.patientUid || uploadPatient.clinicPatientId?._id || uploadPatient.patientId;
                 
-                const existingProfile = uploadPatient.userId?.fertilityProfile || {};
-                const existingReports = existingProfile.previousReports || [];
+                const isClinic = !!uploadPatient.clinicPatientId;
+                const existingReports = isClinic 
+                    ? (uploadPatient.clinicPatientId?.reports || []).map(r => ({
+                        fileName: r.name,
+                        url: `${import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com'}/uploads/patient-reports/${encodeURIComponent(r.filename)}`,
+                        date: r.uploadedAt
+                      }))
+                    : (uploadPatient.userId?.fertilityProfile?.previousReports || []);
                 
                 const newReport = {
                     fileName: uploadFile.name,
@@ -212,38 +218,38 @@ const Patient = () => {
 
     // ─── STYLES ─────────────────────────────────────────────────────
     const S = {
-        page: { minHeight: '100vh', background: 'linear-gradient(145deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)', fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" },
-        topbar: { background: 'rgba(15,23,42,0.9)', backdropFilter: 'blur(24px)', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '16px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 100 },
+        page: { minHeight: '100vh', background: 'transparent', fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" },
+        topbar: { background: '#ffffff', borderBottom: '1px solid #cbd5e1', padding: '16px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 100 },
         topLeft: { display: 'flex', alignItems: 'center', gap: '14px' },
         logo: { width: '44px', height: '44px', borderRadius: '14px', background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem' },
-        title: { margin: 0, color: '#f8fafc', fontSize: '1.25rem', fontWeight: '800', letterSpacing: '-0.02em' },
-        subtitle: { margin: 0, color: '#64748b', fontSize: '0.8rem', fontWeight: '500' },
-        dateBadge: { background: 'rgba(255,255,255,0.05)', padding: '8px 16px', borderRadius: '10px', color: '#94a3b8', fontSize: '0.82rem', border: '1px solid rgba(255,255,255,0.06)' },
+        title: { margin: 0, color: '#0f172a', fontSize: '1.25rem', fontWeight: '800', letterSpacing: '-0.02em' },
+        subtitle: { margin: 0, color: '#475569', fontSize: '0.8rem', fontWeight: '500' },
+        dateBadge: { background: '#ffffff', padding: '8px 16px', borderRadius: '10px', color: '#334155', fontSize: '0.82rem', border: '1px solid #cbd5e1' },
         statsRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', padding: '20px 28px 0' },
-        statCard: (gradient) => ({ background: 'rgba(255,255,255,0.04)', borderRadius: '16px', padding: '18px 20px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: '14px', transition: 'transform 0.2s' }),
+        statCard: (gradient) => ({ background: '#ffffff', borderRadius: '16px', padding: '18px 20px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '14px', transition: 'transform 0.2s', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }),
         statIcon: (gradient) => ({ width: '46px', height: '46px', borderRadius: '13px', background: gradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }),
-        statNum: { color: '#f8fafc', fontSize: '1.6rem', fontWeight: '800', lineHeight: 1.1 },
-        statLabel: { color: '#64748b', fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '2px' },
+        statNum: { color: '#0f172a', fontSize: '1.6rem', fontWeight: '800', lineHeight: 1.1 },
+        statLabel: { color: '#475569', fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '2px' },
         controls: { padding: '18px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', flexWrap: 'wrap' },
         searchWrap: { position: 'relative', flex: 1, maxWidth: '420px' },
-        searchInput: { width: '100%', padding: '11px 16px 11px 42px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#f8fafc', fontSize: '0.88rem', outline: 'none', transition: 'border 0.2s' },
+        searchInput: { width: '100%', padding: '11px 16px 11px 42px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px', color: '#0f172a', fontSize: '0.88rem', outline: 'none', transition: 'border 0.2s' },
         searchIcon: { position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', fontSize: '1rem' },
-        tabsWrap: { display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.04)', padding: '4px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' },
-        tab: (active) => ({ padding: '8px 20px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '0.82rem', transition: 'all 0.25s', background: active ? 'linear-gradient(135deg, #3b82f6, #6366f1)' : 'transparent', color: active ? '#fff' : '#94a3b8', boxShadow: active ? '0 2px 12px rgba(59,130,246,0.3)' : 'none' }),
+        tabsWrap: { display: 'flex', gap: '4px', background: '#f1f5f9', padding: '4px', borderRadius: '12px', border: '1px solid #cbd5e1' },
+        tab: (active) => ({ padding: '8px 20px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '0.82rem', transition: 'all 0.25s', background: active ? 'linear-gradient(135deg, #3b82f6, #6366f1)' : 'transparent', color: active ? '#fff' : '#475569', boxShadow: active ? '0 2px 12px rgba(59,130,246,0.25)' : 'none' }),
         content: { padding: '0 28px 40px' },
         sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' },
-        sectionTitle: { color: '#f8fafc', fontSize: '1rem', fontWeight: '700', margin: 0 },
-        sectionCount: { color: '#64748b', fontSize: '0.82rem', fontWeight: '600' },
+        sectionTitle: { color: '#0f172a', fontSize: '1rem', fontWeight: '700', margin: 0 },
+        sectionCount: { color: '#475569', fontSize: '0.82rem', fontWeight: '600' },
         table: { width: '100%', borderCollapse: 'collapse' },
-        th: { padding: '13px 16px', textAlign: 'left', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.06em', borderBottom: '1px solid rgba(255,255,255,0.06)' },
-        td: { padding: '13px 16px', borderBottom: '1px solid rgba(255,255,255,0.04)' },
-        tableWrap: { background: 'rgba(255,255,255,0.03)', borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.06)' },
+        th: { padding: '13px 16px', textAlign: 'left', color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.06em', borderBottom: '2px solid #cbd5e1' },
+        td: { padding: '13px 16px', borderBottom: '1px solid #e2e8f0' },
+        tableWrap: { background: '#ffffff', borderRadius: '16px', overflow: 'hidden', border: '1px solid #cbd5e1', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' },
         avatar: (color) => ({ width: '36px', height: '36px', borderRadius: '10px', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '800', fontSize: '0.85rem', flexShrink: 0 }),
-        btn: (bg) => ({ padding: '7px 18px', borderRadius: '9px', border: 'none', background: bg, color: '#fff', fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }),
-        empty: { textAlign: 'center', padding: '60px 20px', background: 'rgba(255,255,255,0.02)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.08)' },
+        btn: (bg, color = '#fff') => ({ padding: '7px 18px', borderRadius: '9px', border: 'none', background: bg, color: color, fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }),
+        empty: { textAlign: 'center', padding: '60px 20px', background: '#ffffff', borderRadius: '16px', border: '1px dashed #cbd5e1' },
         // Modal styles
         overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-        modal: { background: 'linear-gradient(145deg, #1e293b, #0f172a)', borderRadius: '20px', width: '560px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)' },
+        modal: { background: 'linear-gradient(145deg, #1e293b, #0f172a)', borderRadius: '20px', width: '560px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', color: '#f8fafc' },
         modalHeader: { padding: '22px 28px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
         modalBody: { padding: '24px 28px' },
         formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' },
@@ -252,8 +258,8 @@ const Patient = () => {
         formInput: { padding: '10px 14px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#f8fafc', fontSize: '0.88rem', outline: 'none' },
         formTextarea: { padding: '10px 14px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#f8fafc', fontSize: '0.88rem', outline: 'none', minHeight: '70px', resize: 'vertical', fontFamily: 'inherit' },
         modalFooter: { padding: '18px 28px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'flex-end', gap: '10px' },
-        loadingWrap: { textAlign: 'center', padding: '60px 0', color: '#94a3b8' },
-        errorBanner: { background: 'rgba(239,68,68,0.15)', color: '#fca5a5', padding: '14px 28px', fontSize: '0.88rem', fontWeight: '600', borderBottom: '1px solid rgba(239,68,68,0.2)' },
+        loadingWrap: { textAlign: 'center', padding: '60px 0', color: '#475569' },
+        errorBanner: { background: 'rgba(239,68,68,0.15)', color: '#ef4444', padding: '14px 28px', fontSize: '0.88rem', fontWeight: '600', borderBottom: '1px solid rgba(239,68,68,0.2)' },
     };
 
     return (
@@ -316,10 +322,10 @@ const Patient = () => {
                 ) : displayList.length === 0 ? (
                     <div style={S.empty}>
                         <div style={{ fontSize: '3rem', marginBottom: '10px' }}>{activeTab === 'today' ? '📭' : '📋'}</div>
-                        <h4 style={{ color: '#e2e8f0', margin: '0 0 6px', fontWeight: '700' }}>
+                        <h4 style={{ color: '#0f172a', margin: '0 0 6px', fontWeight: '700' }}>
                             {activeTab === 'today' ? 'No Patients in Today\'s Queue' : 'No Active Appointments'}
                         </h4>
-                        <p style={{ color: '#64748b', margin: 0, fontSize: '0.88rem' }}>
+                        <p style={{ color: '#475569', margin: 0, fontSize: '0.88rem' }}>
                             {searchQuery ? 'No results match your search. Try a different term.' : 'Patients will appear here when appointments are booked.'}
                         </p>
                     </div>
@@ -352,34 +358,34 @@ const Patient = () => {
                                         const hasVitals = apt.userId?.fertilityProfile?.vitals?.weight;
                                         return (
                                             <tr key={apt._id} style={{ transition: 'background 0.15s' }}
-                                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                                                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                                             >
                                                 <td style={{ ...S.td, color: '#475569', fontWeight: '600', fontSize: '0.82rem' }}>{idx + 1}</td>
                                                 <td style={S.td}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                         <div style={S.avatar('linear-gradient(135deg, #6366f1, #8b5cf6)')}>
-                                                            {(apt.userId?.name || 'W')[0].toUpperCase()}
+                                                            {(apt.userId?.name || apt.clinicPatientId?.name || 'W')[0].toUpperCase()}
                                                         </div>
                                                         <div>
-                                                            <div style={{ color: '#f8fafc', fontWeight: '700', fontSize: '0.88rem' }}>{apt.userId?.name || 'Walk-in'}</div>
-                                                            <div style={{ color: '#64748b', fontSize: '0.75rem' }}>MRN: {apt.userId?.patientId || apt.patientId || 'N/A'}</div>
+                                                            <div style={{ color: '#0f172a', fontWeight: '700', fontSize: '0.88rem' }}>{apt.userId?.name || apt.clinicPatientId?.name || 'Walk-in'}</div>
+                                                            <div style={{ color: '#475569', fontSize: '0.75rem' }}>MRN: {apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || 'N/A'}</div>
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td style={{ ...S.td, color: '#94a3b8', fontSize: '0.85rem' }}>{apt.userId?.phone || '-'}</td>
+                                                <td style={{ ...S.td, color: '#334155', fontSize: '0.85rem' }}>{apt.userId?.phone || apt.clinicPatientId?.phone || '-'}</td>
                                                 <td style={S.td}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                         <div style={S.avatar('linear-gradient(135deg, #10b981, #059669)')}>
                                                             {(apt.doctorName || 'D')[0].toUpperCase()}
                                                         </div>
-                                                        <span style={{ color: '#e2e8f0', fontWeight: '600', fontSize: '0.85rem' }}>
+                                                        <span style={{ color: '#0f172a', fontWeight: '600', fontSize: '0.85rem' }}>
                                                             {apt.doctorName || 'Not Assigned'}
                                                         </span>
                                                     </div>
                                                 </td>
-                                                <td style={{ ...S.td, color: '#f8fafc', fontWeight: '600', fontSize: '0.85rem' }}>{apt.appointmentTime || '-'}</td>
-                                                <td style={{ ...S.td, color: '#94a3b8', fontSize: '0.82rem' }}>
+                                                <td style={{ ...S.td, color: '#0f172a', fontWeight: '600', fontSize: '0.85rem' }}>{apt.appointmentTime || '-'}</td>
+                                                <td style={{ ...S.td, color: '#475569', fontSize: '0.82rem' }}>
                                                     {new Date(apt.appointmentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                                                 </td>
                                                 <td style={S.td}>
@@ -395,7 +401,7 @@ const Patient = () => {
                                                     <div style={{ display: 'flex', gap: '8px' }}>
                                                         <button
                                                             onClick={() => {
-                                                                const pid = apt.userId?._id || apt.userId || apt.patientId;
+                                                                const pid = apt.userId?._id || apt.clinicPatientId?.patientUid || apt.clinicPatientId?._id || apt.patientId;
                                                                 if (pid) navigate(`/patient/${pid}`);
                                                             }}
                                                             style={{

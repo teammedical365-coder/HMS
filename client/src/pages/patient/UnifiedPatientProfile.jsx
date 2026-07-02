@@ -314,6 +314,21 @@ const UnifiedPatientProfile = () => {
                                                     <strong>{item.data.serviceName || 'Consultation'} with {item.data.doctorName || 'Doctor'}</strong>
                                                     <div>Status: <span style={{ textTransform: 'capitalize' }}>{item.data.status}</span></div>
                                                     {item.data.amount > 0 && <div>Fees: ₹{item.data.amount} ({item.data.paymentStatus})</div>}
+                                                    {item.data.notes && <div><strong>Complaint:</strong> {item.data.notes}</div>}
+                                                    {item.data.doctorNotes && <div><strong>Doctor Notes:</strong> {item.data.doctorNotes}</div>}
+                                                    {item.data.diagnosis && <div><strong>Diagnosis:</strong> {item.data.diagnosis}</div>}
+                                                    {item.data.vitals && Object.values(item.data.vitals).some(x => x) && (
+                                                        <div style={{ fontSize: '12px', color: '#0369a1', marginTop: '6px', background: '#f0f9ff', padding: '6px 10px', borderRadius: '6px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                                            {item.data.vitals.weight && <span>Weight: <b>{item.data.vitals.weight} kg</b></span>}
+                                                            {item.data.vitals.height && <span>Height: <b>{item.data.vitals.height} cm</b></span>}
+                                                            {item.data.vitals.bmi && <span>BMI: <b>{item.data.vitals.bmi}</b></span>}
+                                                            {item.data.vitals.bp && <span>BP: <b>{item.data.vitals.bp}</b></span>}
+                                                            {item.data.vitals.temperature && <span>Temp: <b>{item.data.vitals.temperature} °F</b></span>}
+                                                            {item.data.vitals.pulse && <span>Pulse: <b>{item.data.vitals.pulse} bpm</b></span>}
+                                                            {item.data.vitals.spo2 && <span>SpO₂: <b>{item.data.vitals.spo2} %</b></span>}
+                                                            {item.data.vitals.rr && <span>RR: <b>{item.data.vitals.rr} /min</b></span>}
+                                                        </div>
+                                                    )}
                                                     {(item.data.prescriptions?.length > 0 || item.data.prescription) && (
                                                         <div style={{ marginTop: '5px' }}>
                                                             {item.data.prescription && (!item.data.prescriptions || item.data.prescriptions.length === 0) && (
@@ -328,6 +343,31 @@ const UnifiedPatientProfile = () => {
                                                             ))}
                                                         </div>
                                                     )}
+                                                </>
+                                            )}
+
+                                            {item.type === 'treatmentPlan' && (
+                                                <>
+                                                    <strong>Treatment Plan: {item.data.title} ({item.data.status})</strong>
+                                                    {item.data.description && <div style={{ fontSize: '13px', color: '#475569', marginTop: '2px' }}>{item.data.description}</div>}
+                                                    <div style={{ marginTop: '6px', fontSize: '12.5px', color: '#334155' }}>
+                                                        <div>Total Cost: ₹{item.data.totalAmount} · Paid: ₹{item.data.totalPaid} · Balance: ₹{item.data.pendingBalance}</div>
+                                                        {item.data.visits?.length > 0 && (
+                                                            <div style={{ marginTop: '8px', background: '#f8fafc', padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                                                <div style={{ fontWeight: 600, fontSize: '12px', color: '#0f172a', marginBottom: '4px' }}>Visits Timeline:</div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                                    {item.data.visits.map((v, vIdx) => (
+                                                                        <div key={vIdx} style={{ fontSize: '11.5px', color: '#475569', display: 'flex', gap: '8px' }}>
+                                                                            <span>• Visit #{v.visitNumber}:</span>
+                                                                            <span style={{ fontWeight: 600 }}>{v.procedure || 'No procedure'}</span>
+                                                                            <span>({new Date(v.scheduledDate).toLocaleDateString('en-IN')})</span>
+                                                                            <span style={{ textTransform: 'capitalize', color: v.status === 'completed' ? '#16a34a' : v.status === 'missed' ? '#ef4444' : '#eab308' }}>[{v.status}]</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </>
                                             )}
 
@@ -378,6 +418,37 @@ const UnifiedPatientProfile = () => {
 
                 {/* Right Column: Financial & Other Summaries */}
                 <div className="upp-side-col" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+                    {/* Clinic Patient Uploaded Reports */}
+                    {patientData.reports && patientData.reports.length > 0 && (
+                        <div className="upp-section">
+                            <h3>Uploaded Documents / Reports</h3>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {patientData.reports.map((report, idx) => {
+                                    const baseURL = import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com';
+                                    const url = `${baseURL}/uploads/patient-reports/${encodeURIComponent(report.filename)}`;
+                                    return (
+                                        <div key={idx} style={{ padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontWeight: '600', fontSize: '13px', color: '#1e293b' }}>
+                                                    {report.name}
+                                                </div>
+                                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                                                    Uploaded: {new Date(report.uploadedAt).toLocaleDateString('en-IN')}
+                                                </div>
+                                            </div>
+                                            <a href={url} target="_blank" rel="noreferrer" style={{
+                                                padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: '600',
+                                                background: '#eff6ff', color: '#2563eb', textDecoration: 'none', border: '1px solid #bfdbfe'
+                                            }}>
+                                                📄 View
+                                            </a>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Status: Upcoming Appointments */}
                     <div className="upp-section">

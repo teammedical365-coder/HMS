@@ -41,7 +41,7 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
         const roleData = req.user._roleData;
 
         const allowedRoles = ['doctor', 'nurse', 'superadmin', 'admin', 'reception', 'lab', 'pharmacy', 'centraladmin', 'hospitaladmin'];
-        const userRole = (req.user.role || '').toLowerCase();
+        const userRole = (req.user.role ? String(req.user.role) : '').toLowerCase();
         const dynRole = (roleData?.name || '').toLowerCase();
         
         // Ensure that explicit permissions are checked instead of just strictly hardcoded names
@@ -75,25 +75,55 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
         const userQuery = isObjectId ? { _id: userId } : { patientId: userId };
         // Always scope to hospital for data isolation
         if (req.user.hospitalId) userQuery.hospitalId = req.user.hospitalId;
-        const user = await MasterUser.findOne(userQuery).lean();
+        
+        let user = await MasterUser.findOne(userQuery).lean();
+        let isClinicPatient = false;
+
+        if (!user) {
+            // Check if it's a ClinicPatient
+            const ClinicPatient = require('../models/clinicPatient.model');
+            const clinicQuery = isObjectId ? { _id: userId } : { patientUid: userId };
+            if (req.user.hospitalId) clinicQuery.clinicId = req.user.hospitalId;
+            
+            const cp = await ClinicPatient.findOne(clinicQuery).lean();
+            if (cp) {
+                user = cp;
+                isClinicPatient = true;
+            }
+        }
 
         if (!user) {
             return res.status(404).json({ success: false, message: 'Patient not found' });
         }
 
         const realUserId = user._id;
-        const patientIdStr = user.patientId || userId;
+        const patientIdStr = user.patientId || user.patientUid || userId;
 
         // HARD ISOLATION: Scope all data to the staff's hospital
         const hid = req.user.hospitalId;
         const hFilter = hid ? { hospitalId: hid } : {};
 
-        const [visits, labs, pharmacies, appointments] = await Promise.all([
-            ClinicalVisit.find({ $or: [{ patientId: realUserId }, { patientId: patientIdStr }], ...hFilter }).lean(),
-            LabReport.find({ userId: realUserId, ...hFilter }).lean(),
-            PharmacyOrder.find({ userId: realUserId, ...hFilter }).lean(),
-            Appointment.find({ $or: [{ userId: realUserId }, { patientId: patientIdStr }], ...hFilter }).lean()
-        ]);
+        let visits = [];
+        let labs = [];
+        let pharmacies = [];
+        let appointments = [];
+        let plans = [];
+
+        if (isClinicPatient) {
+            const TreatmentPlan = require('../models/treatmentPlan.model');
+            // Clinic patients store appointments with clinicPatientId field
+            appointments = await Appointment.find({ clinicPatientId: realUserId, ...hFilter }).lean();
+            // Clinic treatment plans
+            plans = await TreatmentPlan.find({ clinicPatientId: realUserId, ...hFilter }).lean();
+        } else {
+            // Hospital queries
+            [visits, labs, pharmacies, appointments] = await Promise.all([
+                ClinicalVisit.find({ $or: [{ patientId: realUserId }, { patientId: patientIdStr }], ...hFilter }).lean(),
+                LabReport.find({ userId: realUserId, ...hFilter }).lean(),
+                PharmacyOrder.find({ userId: realUserId, ...hFilter }).lean(),
+                Appointment.find({ $or: [{ userId: realUserId }, { patientId: patientIdStr }], ...hFilter }).lean()
+            ]);
+        }
 
         let timeline = [];
 
@@ -114,10 +144,27 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
         pharmacies.forEach(p => timeline.push({ type: 'pharmacyOrder', date: p.createdAt, data: p }));
         appointments.forEach(a => timeline.push({ type: 'appointment', date: a.appointmentDate, data: a }));
 
+        plans.forEach(tp => {
+            timeline.push({
+                type: 'treatmentPlan',
+                date: tp.createdAt,
+                data: {
+                    title: tp.title,
+                    description: tp.description,
+                    totalAmount: tp.totalAmount,
+                    totalPaid: tp.totalPaid,
+                    pendingBalance: tp.pendingBalance,
+                    status: tp.status,
+                    visits: tp.visits || []
+                }
+            });
+        });
+
         timeline.sort((a, b) => new Date(b.date) - new Date(a.date));
 
         res.json({ success: true, user, timeline });
     } catch (error) {
+        console.error('patient full-history error:', error);
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
