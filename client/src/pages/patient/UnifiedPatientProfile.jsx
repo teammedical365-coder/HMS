@@ -248,18 +248,13 @@ const UnifiedPatientProfile = () => {
                     <div className="upp-info">
                         <h1>{patientData.name || 'Unknown Patient'}</h1>
                         <div className="upp-tags">
-                            <span className="upp-tag">MRN/ID: {patientData.patientId || patientData._id}</span>
+                            <span className="upp-tag">MRN/ID: {patientData.patientId || patientData.patientUid || patientData._id}</span>
                             <span className="upp-tag">📞 {patientData.phone || '-'}</span>
                             <span className="upp-tag">🩸 {profile.bloodGroup || 'O-'}</span>
                             <span className="upp-tag">{patientData.gender || 'Unknown'} - {patientData.dob ? new Date().getFullYear() - new Date(patientData.dob).getFullYear() : (profile.age || '-')} yrs</span>
                             {patientData.email && <span className="upp-tag">✉️ {patientData.email}</span>}
                         </div>
                     </div>
-                </div>
-                <div className="upp-actions">
-                    <button className="upp-btn-download" onClick={generatePDF}>
-                        📥 Download Full Profile
-                    </button>
                 </div>
             </div>
 
@@ -426,7 +421,8 @@ const UnifiedPatientProfile = () => {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 {patientData.reports.map((report, idx) => {
                                     const baseURL = import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com';
-                                    const url = `${baseURL}/uploads/patient-reports/${encodeURIComponent(report.filename)}`;
+                                    const isRemote = (report.filename || '').startsWith('http://') || (report.filename || '').startsWith('https://');
+                                    const url = isRemote ? report.filename : `${baseURL}/api/patients/reports/${encodeURIComponent(report.filename)}`;
                                     return (
                                         <div key={idx} style={{ padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <div style={{ flex: 1 }}>

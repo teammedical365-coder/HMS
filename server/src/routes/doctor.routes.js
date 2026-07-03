@@ -250,12 +250,13 @@ router.put('/patients/:patientId/profile', verifyToken, async (req, res) => {
             if (updates.previousReports) {
                 // Map frontend previousReports structure to ClinicPatient.reports array
                 const mappedReports = updates.previousReports.map(r => {
-                    const parts = (r.url || '').split('/');
-                    const fname = parts[parts.length - 1] || r.fileName;
+                    const isRemote = (r.url || '').startsWith('http://') || (r.url || '').startsWith('https://');
+                    const fname = isRemote ? r.url : (r.url || '').split('/').pop() || r.fileName;
+                    const isPdf = (r.url || '').toLowerCase().includes('.pdf') || (r.fileName || '').toLowerCase().includes('.pdf');
                     return {
                         name: r.fileName || r.name || 'Report',
                         filename: decodeURIComponent(fname),
-                        mimetype: (r.url || '').endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+                        mimetype: isPdf ? 'application/pdf' : 'image/jpeg',
                         uploadedAt: r.date || new Date()
                     };
                 });
@@ -483,14 +484,25 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
 
             let pId = appointment.patientId;
             let pName = 'Patient';
-            if (!pId || !appointment.userId.name) {
-                const pUser = await User.findById(appointment.userId);
-                if (pUser) {
-                    pId = pUser.patientId;
-                    pName = pUser.name;
+            if (appointment.clinicPatientId) {
+                const ClinicPatient = require('../models/clinicPatient.model');
+                const cp = await ClinicPatient.findById(appointment.clinicPatientId);
+                if (cp) {
+                    pId = cp.patientUid;
+                    pName = cp.name;
                 }
             } else {
-                pName = appointment.userId.name || pName;
+                if (!pId || !appointment.userId || !appointment.userId.name) {
+                    if (appointment.userId) {
+                        const pUser = await User.findById(appointment.userId);
+                        if (pUser) {
+                            pId = pUser.patientId;
+                            pName = pUser.name;
+                        }
+                    }
+                } else {
+                    pName = appointment.userId.name || pName;
+                }
             }
 
             let reportId;
@@ -606,10 +618,42 @@ router.get('/labs-list', verifyToken, async (req, res) => {
     res.json({ success: true, labs });
 });
 router.get('/medicines-list', verifyToken, async (req, res) => {
-    const medQuery = { stock: { $gt: 0 } };
-    if (req.user.hospitalId) medQuery.hospitalId = req.user.hospitalId;
-    const medicines = await Inventory.find(medQuery).select('name category stock');
-    res.json({ success: true, medicines });
+    try {
+        let medicines = [];
+        const Hospital = require('../models/hospital.model');
+        const h = await Hospital.findById(req.user.hospitalId).select('clinicType').lean();
+        
+        if (h && h.clinicType === 'clinic') {
+            const Medicine = require('../models/medicine.model');
+            const list = await Medicine.find({}).sort({ name: 1 }).select('name genericName category').lean();
+            medicines = list.map(m => ({
+                name: m.name,
+                genericName: m.genericName,
+                category: m.category || 'Medicine',
+                stock: 999
+            }));
+        } else {
+            const medQuery = { stock: { $gt: 0 } };
+            if (req.user.hospitalId) medQuery.hospitalId = req.user.hospitalId;
+            const list = await Inventory.find(medQuery).select('name category stock').lean();
+            medicines = list;
+            
+            if (medicines.length === 0) {
+                const Medicine = require('../models/medicine.model');
+                const list2 = await Medicine.find({}).sort({ name: 1 }).select('name genericName category').lean();
+                medicines = list2.map(m => ({
+                    name: m.name,
+                    genericName: m.genericName,
+                    category: m.category || 'Medicine',
+                    stock: 999
+                }));
+            }
+        }
+        res.json({ success: true, medicines });
+    } catch (err) {
+        console.error('Error fetching medicines-list:', err);
+        res.status(500).json({ success: false, message: 'Error fetching medicines' });
+    }
 });
 router.get('/:doctorId/booked-slots', async (req, res) => {
     const query = {

@@ -5,6 +5,25 @@ const { resolveTenant } = require('../middleware/tenantMiddleware');
 const auditLog = require('../middleware/audit.middleware');
 const MasterUser = require('../models/user.model');
 
+// Serve patient report files via public endpoint (guarantees proxy compatibility)
+router.get('/reports/:filename', (req, res) => {
+    try {
+        const path = require('path');
+        const fs = require('fs');
+        const filename = req.params.filename;
+        const filePath = path.join(__dirname, '../../uploads/patient-reports', filename);
+
+        if (fs.existsSync(filePath)) {
+            return res.sendFile(filePath);
+        } else {
+            return res.status(404).send('Report file not found');
+        }
+    } catch (error) {
+        console.error('Error serving report file:', error);
+        res.status(500).send('Internal server error');
+    }
+});
+
 // SEARCH API: Identifies patient by Phone or Name — scoped to hospital tenant
 router.get('/search', verifyToken, resolveTenant, async (req, res) => {
     try {

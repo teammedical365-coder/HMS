@@ -463,11 +463,15 @@ const OverviewMode = () => {
 // REPORT VIEWER — inline PDF/image panel
 // ═══════════════════════════════════════════════════
 const baseURL = import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com';
-const reportURL = (filename) => `${baseURL}/uploads/patient-reports/${encodeURIComponent(filename)}`;
+const reportURL = (filename) => (filename || '').startsWith('http://') || (filename || '').startsWith('https://')
+    ? filename
+    : `${baseURL}/api/patients/reports/${encodeURIComponent(filename)}`;
 
 const ReportViewerModal = ({ report, onClose }) => {
     const url = reportURL(report.filename);
-    const isPDF = report.mimetype === 'application/pdf';
+    const isPDF = report.mimetype === 'application/pdf' || 
+                  (report.filename || '').toLowerCase().endsWith('.pdf') || 
+                  (report.name || '').toLowerCase().endsWith('.pdf');
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9000, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#1e293b', padding: '10px 20px', color: '#fff' }}>
@@ -632,34 +636,37 @@ const PatientReportPanel = ({ patientId, patientName }) => {
                             <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0, textAlign: 'center', padding: '12px 0' }}>No reports uploaded for {patientName || 'this patient'}.</p>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {reports.map(r => (
-                                    <div key={r._id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 14px' }}>
-                                        <span style={{ fontSize: '20px' }}>{r.mimetype === 'application/pdf' ? '📄' : '🖼️'}</span>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontWeight: 600, fontSize: '13px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
-                                            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                                                {r.mimetype === 'application/pdf' ? 'PDF Document' : 'Image'} · {r.uploadedAt ? new Date(r.uploadedAt).toLocaleDateString('en-IN') : ''}
+                                {reports.map(r => {
+                                    const isPdf = r.mimetype === 'application/pdf' || (r.filename || '').toLowerCase().endsWith('.pdf') || (r.name || '').toLowerCase().endsWith('.pdf');
+                                    return (
+                                        <div key={r._id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 14px' }}>
+                                            <span style={{ fontSize: '20px' }}>{isPdf ? '📄' : '🖼️'}</span>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontWeight: 600, fontSize: '13px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                                                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                                                    {isPdf ? 'PDF Document' : 'Image'} · {r.uploadedAt ? new Date(r.uploadedAt).toLocaleDateString('en-IN') : ''}
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                                <button
+                                                    onClick={() => setViewReport(r)}
+                                                    style={{ background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', padding: '4px 10px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>
+                                                    View
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDownloadReport(r)}
+                                                    style={{ background: '#dcfce7', color: '#16a34a', border: 'none', borderRadius: '6px', padding: '4px 10px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>
+                                                    Download
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteReport(r._id)}
+                                                    style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>
+                                                    ✕
+                                                </button>
                                             </div>
                                         </div>
-                                        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                                            <button
-                                                onClick={() => setViewReport(r)}
-                                                style={{ background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', padding: '4px 10px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>
-                                                View
-                                            </button>
-                                            <button
-                                                onClick={() => handleDownloadReport(r)}
-                                                style={{ background: '#dcfce7', color: '#16a34a', border: 'none', borderRadius: '6px', padding: '4px 10px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>
-                                                Download
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteReport(r._id)}
-                                                style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight: 600 }}>
-                                                ✕
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
@@ -945,34 +952,37 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                             <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '12px 0' }}>No reports uploaded yet.</p>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {patientReports.map(r => (
-                                    <div key={r._id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', border: '1px solid #e0e7ff', borderRadius: '8px', padding: '10px 14px' }}>
-                                        <span style={{ fontSize: '22px' }}>{r.mimetype === 'application/pdf' ? '📄' : '🖼️'}</span>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontWeight: 600, fontSize: '14px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
-                                            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                                                {r.mimetype === 'application/pdf' ? 'PDF Document' : 'Image'} · {r.uploadedAt ? new Date(r.uploadedAt).toLocaleDateString('en-IN') : ''}
+                                {patientReports.map(r => {
+                                    const isPdf = r.mimetype === 'application/pdf' || (r.filename || '').toLowerCase().endsWith('.pdf') || (r.name || '').toLowerCase().endsWith('.pdf');
+                                    return (
+                                        <div key={r._id} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#fff', border: '1px solid #e0e7ff', borderRadius: '8px', padding: '10px 14px' }}>
+                                            <span style={{ fontSize: '22px' }}>{isPdf ? '📄' : '🖼️'}</span>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontWeight: 600, fontSize: '14px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                                                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                                                    {isPdf ? 'PDF Document' : 'Image'} · {r.uploadedAt ? new Date(r.uploadedAt).toLocaleDateString('en-IN') : ''}
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <button
+                                                    onClick={() => setViewReport(r)}
+                                                    style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 14px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
+                                                    View
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDownloadReport(r)}
+                                                    style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
+                                                    Download
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteReport(r._id)}
+                                                    style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
+                                                    ✕
+                                                </button>
                                             </div>
                                         </div>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <button
-                                                onClick={() => setViewReport(r)}
-                                                style={{ background: '#6366f1', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 14px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
-                                                View
-                                            </button>
-                                            <button
-                                                onClick={() => handleDownloadReport(r)}
-                                                style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
-                                                Download
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteReport(r._id)}
-                                                style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
-                                                ✕
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )
                     )}
@@ -1204,10 +1214,28 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
 // ── Inline booking form (supports token and slot modes) ────────────────────
 const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defaultFee = 0, defaultServiceName = 'General Consultation', setPendingDownload }) => {
     const isSlotMode = mode === 'slot';
-    const [form, setForm] = useState({ amount: defaultFee > 0 ? String(defaultFee) : '', serviceName: defaultServiceName, notes: '', appointmentTime: '', paymentMethod: 'Cash', upiScreenshot: null, cardRef: '' });
+    
+    const getTodayString = () => {
+        const d = new Date();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${d.getFullYear()}-${month}-${day}`;
+    };
+
+    const [form, setForm] = useState({ 
+        amount: defaultFee > 0 ? String(defaultFee) : '', 
+        serviceName: defaultServiceName, 
+        notes: '', 
+        appointmentDate: getTodayString(),
+        appointmentTime: '', 
+        paymentMethod: 'Cash', 
+        upiScreenshot: null, 
+        cardRef: '' 
+    });
     const [booking, setBooking] = useState(false);
     const [feeWaived, setFeeWaived] = useState(false);
     const [waiverMessage, setWaiverMessage] = useState('');
+    const [bookedSlots, setBookedSlots] = useState([]);
 
     useEffect(() => {
         if (!patient?._id) return;
@@ -1224,15 +1252,47 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
             });
     }, [patient]);
 
+    // Fetch appointments for selected date to find booked time slots
+    useEffect(() => {
+        const dateStr = form.appointmentDate || getTodayString();
+        clinicAPI.getAppointments(dateStr)
+            .then(r => {
+                if (r.success) {
+                    const booked = r.appointments
+                        .filter(a => a.status !== 'cancelled' && a.appointmentTime)
+                        .map(a => a.appointmentTime);
+                    setBookedSlots(booked);
+                }
+            })
+            .catch(err => console.error('Error fetching booked slots:', err));
+    }, [form.appointmentDate]);
+
+    const isSlotDisabled = (time) => {
+        if (bookedSlots.includes(time)) return true;
+        const selectedDate = form.appointmentDate || getTodayString();
+        const todayDate = getTodayString();
+        if (selectedDate === todayDate) {
+            const now = new Date();
+            const currentHour = now.getHours();
+            const currentMinute = now.getMinutes();
+            const [sh, sm] = time.split(':').map(Number);
+            if (sh < currentHour || (sh === currentHour && sm <= currentMinute)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
     const fee = Number(form.amount) || 0;
     const isUpi = form.paymentMethod === 'UPI';
     const isCard = form.paymentMethod === 'Card';
-    // Payment method is required when fee > 0
-    const canSubmit = !booking && (fee === 0 || form.paymentMethod) && (!isSlotMode || form.appointmentTime);
+    // Date and time slot are required
+    const canSubmit = !booking && (fee === 0 || form.paymentMethod) && form.appointmentDate && form.appointmentTime;
 
     const submit = async (e) => {
         e.preventDefault();
-        if (isSlotMode && !form.appointmentTime) { flash('error', 'Please select an appointment time'); return; }
+        if (!form.appointmentDate) { flash('error', 'Please select an appointment date'); return; }
+        if (!form.appointmentTime) { flash('error', 'Please select an appointment time'); return; }
         if (fee > 0 && !form.paymentMethod) { flash('error', 'Select a payment method to collect the fee'); return; }
         setBooking(true);
         try {
@@ -1253,17 +1313,18 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
                 serviceName: form.serviceName,
                 notes: form.notes,
                 paymentMethod: fee > 0 ? form.paymentMethod : 'Free',
+                appointmentDate: form.appointmentDate || getTodayString(),
+                appointmentTime: form.appointmentTime,
                 ...(form.cardRef && { cardRef: form.cardRef }),
                 ...(upiScreenshotUrl && { upiScreenshotUrl }),
             };
-            if (isSlotMode) payload.appointmentTime = form.appointmentTime;
 
             const r = await clinicAPI.bookAppointment(payload);
             if (r.success) {
                 if (isSlotMode) {
                     flash('success', `✅ Payment collected. Appointment at ${form.appointmentTime} confirmed for ${patient.name}`);
                 } else {
-                    flash('success', `✅ Payment collected. Token #${r.appointment.tokenNumber} assigned to ${patient.name}`);
+                    flash('success', `✅ Payment collected. Token #${r.appointment.tokenNumber} assigned at ${form.appointmentTime} to ${patient.name}`);
                     try {
                         const pdf = generateTokenReceiptPDF(patient, r.appointment);
                         if (setPendingDownload) {
@@ -1309,15 +1370,26 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
                         onChange={e => setForm(f => ({ ...f, serviceName: e.target.value }))} />
                 </div>
 
-                {isSlotMode && (
-                    <div style={{ flex: '1', minWidth: '120px' }}>
-                        <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Time Slot *</label>
-                        <select className="clinic-input" value={form.appointmentTime} onChange={e => setForm(f => ({ ...f, appointmentTime: e.target.value }))} required>
-                            <option value="">Select time…</option>
-                            {timeSlots.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                    </div>
-                )}
+                <div style={{ flex: '1', minWidth: '130px' }}>
+                    <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Date *</label>
+                    <input type="date" className="clinic-input" min={getTodayString()} value={form.appointmentDate}
+                        onChange={e => setForm(f => ({ ...f, appointmentDate: e.target.value, appointmentTime: '' }))} required />
+                </div>
+
+                <div style={{ flex: '1', minWidth: '120px' }}>
+                    <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Time Slot *</label>
+                    <select className="clinic-input" value={form.appointmentTime} onChange={e => setForm(f => ({ ...f, appointmentTime: e.target.value }))} required>
+                        <option value="">Select time…</option>
+                        {timeSlots.map(t => {
+                            const disabled = isSlotDisabled(t);
+                            return (
+                                <option key={t} value={t} disabled={disabled}>
+                                    {t} {disabled ? ' (Unavailable)' : ''}
+                                </option>
+                            );
+                        })}
+                    </select>
+                </div>
 
                 <div style={{ flex: '1', minWidth: '90px' }}>
                     <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Fee (₹) *</label>

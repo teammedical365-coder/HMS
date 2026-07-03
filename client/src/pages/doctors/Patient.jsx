@@ -84,7 +84,9 @@ const Patient = () => {
                 const existingReports = isClinic 
                     ? (uploadPatient.clinicPatientId?.reports || []).map(r => ({
                         fileName: r.name,
-                        url: `${import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com'}/uploads/patient-reports/${encodeURIComponent(r.filename)}`,
+                        url: (r.filename || '').startsWith('http://') || (r.filename || '').startsWith('https://')
+                            ? r.filename
+                            : `${import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com'}/api/patients/reports/${encodeURIComponent(r.filename)}`,
                         date: r.uploadedAt
                       }))
                     : (uploadPatient.userId?.fertilityProfile?.previousReports || []);

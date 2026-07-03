@@ -575,7 +575,7 @@ router.put('/config', verifyClinicAdmin, async (req, res) => {
 // ─────────────────────────────────────────────
 router.post('/appointments', verifyClinicStaff, async (req, res) => {
     try {
-        const { patientId, amount, notes, serviceName, appointmentTime, paymentMethod, cardRef, upiScreenshotUrl } = req.body;
+        const { patientId, amount, notes, serviceName, appointmentTime, paymentMethod, cardRef, upiScreenshotUrl, appointmentDate } = req.body;
         // patientId here is ClinicPatient._id
         if (!patientId) return res.status(400).json({ success: false, message: 'patientId is required' });
 
@@ -593,19 +593,40 @@ router.post('/appointments', verifyClinicStaff, async (req, res) => {
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found in this clinic' });
 
         const isTokenMode = (clinic?.appointmentMode || 'token') === 'token';
-        const { start: today, end: todayEnd } = todayRange();
+        
+        // Parse selected date or fallback to today
+        const dateObj = appointmentDate ? new Date(appointmentDate) : new Date();
+        const startOfSelectedDay = new Date(dateObj);
+        startOfSelectedDay.setHours(0, 0, 0, 0);
+        const endOfSelectedDay = new Date(dateObj);
+        endOfSelectedDay.setHours(23, 59, 59, 999);
+
+        // Date past validation
+        const todayLocal = new Date();
+        todayLocal.setHours(0, 0, 0, 0);
+        if (startOfSelectedDay < todayLocal) {
+            return res.status(400).json({ success: false, message: 'Cannot book appointments in the past' });
+        }
+
+        // Time past validation
+        if (startOfSelectedDay.getTime() === todayLocal.getTime() && appointmentTime) {
+            const nowTime = new Date().toTimeString().slice(0, 5); // "HH:MM"
+            if (appointmentTime < nowTime) {
+                return res.status(400).json({ success: false, message: 'Cannot book a past time slot for today' });
+            }
+        }
+
         let tokenNumber = null;
-        let finalTime   = new Date().toTimeString().slice(0, 5);
+        let finalTime = appointmentTime || new Date().toTimeString().slice(0, 5);
 
         if (isTokenMode) {
-            // Token mode: assign next sequential token for today
+            // Token mode: assign next sequential token for the selected date
             const count = await Appointment.countDocuments({
                 hospitalId: clinicId,
-                appointmentDate: { $gte: today, $lte: todayEnd },
+                appointmentDate: { $gte: startOfSelectedDay, $lte: endOfSelectedDay },
                 status: { $ne: 'cancelled' }
             });
             tokenNumber = count + 1;
-            finalTime   = new Date().toTimeString().slice(0, 5);
         } else {
             // Slot mode: appointmentTime is required, check for double-booking
             if (!appointmentTime) {
@@ -614,13 +635,26 @@ router.post('/appointments', verifyClinicStaff, async (req, res) => {
             const conflict = await Appointment.findOne({
                 hospitalId: clinicId,
                 appointmentTime,
-                appointmentDate: { $gte: today, $lte: todayEnd },
+                appointmentDate: { $gte: startOfSelectedDay, $lte: endOfSelectedDay },
                 status: { $ne: 'cancelled' },
             });
             if (conflict) {
-                return res.status(409).json({ success: false, message: `Time slot ${appointmentTime} is already booked for today` });
+                return res.status(409).json({ success: false, message: `Time slot ${appointmentTime} is already booked for this date` });
             }
             finalTime = appointmentTime;
+        }
+
+        // Also check if time slot is already booked if passed for token mode
+        if (appointmentTime) {
+            const conflict = await Appointment.findOne({
+                hospitalId: clinicId,
+                appointmentTime,
+                appointmentDate: { $gte: startOfSelectedDay, $lte: endOfSelectedDay },
+                status: { $ne: 'cancelled' },
+            });
+            if (conflict) {
+                return res.status(409).json({ success: false, message: `Time slot ${appointmentTime} is already booked for this date` });
+            }
         }
 
         const appointment = new Appointment({
@@ -630,7 +664,7 @@ router.post('/appointments', verifyClinicStaff, async (req, res) => {
             doctorUserId:    req.user._id,
             doctorName:      req.user.name,
             serviceName:     serviceName || 'General Consultation',
-            appointmentDate: new Date(),
+            appointmentDate: startOfSelectedDay,
             appointmentTime: finalTime,
             tokenNumber,
             status:         'confirmed',
