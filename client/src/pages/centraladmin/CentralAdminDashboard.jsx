@@ -1095,43 +1095,47 @@ const CentralAdminDashboard = () => {
                                 <div className="hospitals-grid">
                                     {hospitals.map(h => (
                                         <div key={h._id} className={`hospital-card clickable-card ${!h.isActive ? 'hospital-inactive' : ''}`} onClick={() => openHospitalDetail(h)}>
-                                            <div className="hospital-card-header">
-                                                <div className="hospital-icon">
-                                                    {h.branding?.logoUrl
-                                                        ? <img src={h.branding.logoUrl} alt={h.name} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 6 }} />
-                                                        : <span>🏥</span>
-                                                    }
-                                                </div>
-                                                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                                    {h.branding?.primaryColor && (
-                                                        <span title="Custom branding" style={{ width: 12, height: 12, borderRadius: '50%', background: h.branding.primaryColor, border: '1.5px solid rgba(0,0,0,0.1)', flexShrink: 0 }} />
-                                                    )}
-                                                    <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`}>{h.isActive ? 'Active' : 'Inactive'}</span>
-                                                </div>
-                                            </div>
-                                            <h3 className="hospital-name">{h.branding?.appName || h.name}</h3>
-                                            {h.branding?.tagline && <p style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 6px', fontStyle: 'italic' }}>{h.branding.tagline}</p>}
-                                            <div className="hospital-meta">
-                                                {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
-                                                {h.phone && <span>📞 {h.phone}</span>}
-                                                {h.email && <span>✉️ {h.email}</span>}
-                                                {h.slug && <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" style={{display: 'inline-block', marginTop: '6px', background: 'var(--brand-pink)', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none', marginRight: '6px'}}>🌐 {h.slug}.{getBaseHost()}</a>}
-                                                {h.customDomain && <a href={`http://${h.customDomain}`} target="_blank" rel="noreferrer" style={{display: 'inline-block', marginTop: '6px', background: '#3b82f6', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none'}}>🌐 {h.customDomain}</a>}
-                                                {(h.departments && h.departments.length > 0) && (
-                                                    <div style={{ marginTop: '8px', fontSize: '11px', color: '#64748b' }}>
-                                                        <strong>Depts:</strong> {h.departments.join(', ')}
+                                            <div className="hospital-card-content">
+                                                <div className="hospital-card-header">
+                                                    <div className="hospital-logo-container">
+                                                        {h.branding?.logoUrl
+                                                            ? <img src={h.branding.logoUrl} alt={h.name} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 6 }} />
+                                                            : <span>🏥</span>
+                                                        }
                                                     </div>
-                                                )}
+                                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                                        {h.branding?.primaryColor && (
+                                                            <span title="Custom branding" style={{ width: 12, height: 12, borderRadius: '50%', background: h.branding.primaryColor, border: '1.5px solid rgba(0,0,0,0.1)', flexShrink: 0 }} />
+                                                        )}
+                                                        <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`}>{h.isActive ? 'Active' : 'Inactive'}</span>
+                                                    </div>
+                                                </div>
+                                                <h3 className="hospital-name">{h.branding?.appName || h.name}</h3>
+                                                {h.branding?.tagline && <p className="hospital-tagline" style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 6px', fontStyle: 'italic' }}>{h.branding.tagline}</p>}
+                                                <div className="hospital-meta">
+                                                    {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
+                                                    {h.phone && <span>📞 {h.phone}</span>}
+                                                    {h.email && <span>✉️ {h.email}</span>}
+                                                    
+                                                    <div className="domain-links" onClick={e => e.stopPropagation()}>
+                                                        {h.slug && <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" className="subdomain-link" style={{display: 'inline-block', marginTop: '6px', background: 'var(--brand-pink)', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none', marginRight: '6px'}}>🌐 {h.slug}.{getBaseHost()}</a>}
+                                                        {h.customDomain && <a href={`http://${h.customDomain}`} target="_blank" rel="noreferrer" className="customdomain-link" style={{display: 'inline-block', marginTop: '6px', background: '#3b82f6', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none'}}>🌐 {h.customDomain}</a>}
+                                                    </div>
+                                                    
+                                                    {(h.departments && h.departments.length > 0) && (
+                                                        <div className="hospital-depts" style={{ marginTop: '8px', fontSize: '11px', color: '#64748b' }}>
+                                                            <strong>Depts:</strong> {h.departments.join(', ')}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="hospital-click-hint">📊 Click to view full analytics →</div>
-                                            <div className="hospital-actions" onClick={e => e.stopPropagation()}>
-                                                <button
-                                                    className="btn-edit"
-                                                    style={{ background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', color: '#15803d', border: '1.5px solid #86efac' }}
-                                                    onClick={() => setBrandingHospital(h)}
-                                                >🎨 Branding</button>
-                                                <button className="btn-edit" onClick={() => openEditHospital(h)}>Edit</button>
-                                                <button className="btn-delete" onClick={() => setDeleteHospitalConfirm(h._id)}>Delete</button>
+                                            <div className="hospital-card-footer">
+                                                <div className="hospital-click-hint">📊 Click to view full analytics →</div>
+                                                <div className="hospital-actions" onClick={e => e.stopPropagation()}>
+                                                    <button className="btn-branding" onClick={() => setBrandingHospital(h)}>🎨 Branding</button>
+                                                    <button className="btn-edit" onClick={() => openEditHospital(h)}>Edit</button>
+                                                    <button className="btn-delete" onClick={() => setDeleteHospitalConfirm(h._id)}>Delete</button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}

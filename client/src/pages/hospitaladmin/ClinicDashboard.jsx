@@ -1869,33 +1869,12 @@ const DoctorMode = ({ setPendingDownload }) => {
         clinicAPI.getStaff().then(r => { if (r.success) setStaff(r.staff || []); }).catch(() => {}).finally(() => setStaffLoading(false));
         loadToday();
         
-        Promise.all([
-            clinicAPI.getInventory().catch(() => ({ success: false, inventory: [] })),
-            medicineAPI.getMedicines().catch(() => ({ success: false, medicines: [] }))
-        ]).then(([invRes, medRes]) => {
-            const localList = invRes.success ? (invRes.inventory || []) : [];
-            const globalList = medRes.success ? (medRes.medicines || []) : [];
-            
-            const mappedGlobal = globalList.map(m => ({
-                _id: m._id,
-                name: m.name,
-                category: m.category || '',
-                unit: m.unit || '',
-                isGlobal: true
-            }));
-
-            const seenNames = new Set(localList.map(item => item.name.toLowerCase()));
-            const merged = [...localList];
-            
-            for (const gMed of mappedGlobal) {
-                if (gMed.name && !seenNames.has(gMed.name.toLowerCase())) {
-                    seenNames.add(gMed.name.toLowerCase());
-                    merged.push(gMed);
-                }
-            }
-
-            setInventory(merged);
-        }).catch(() => {});
+        clinicAPI.getInventory()
+            .then(invRes => {
+                const localList = invRes.success ? (invRes.inventory || []) : [];
+                setInventory(localList);
+            })
+            .catch(() => {});
 
         clinicAPI.getStats().then(r => { if (r.success) setAnalytics(r.stats); }).catch(() => { });
     }, []);
@@ -2492,7 +2471,24 @@ const TreatmentPlanMode = () => {
     const [payModal, setPayModal] = useState(null);
     const [payInput, setPayInput] = useState({ amountPaid: '', paymentMethod: 'Cash', notes: '', upiId: 'payments@upi', upiRef: '', confirmedReceipt: false });
 
+    const [rescheduleModal, setRescheduleModal] = useState(null);
+    const [rescheduleInput, setRescheduleInput] = useState({ newDate: '', newTime: '', remarks: '' });
+
     const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg({ type: '', text: '' }), 5000); };
+
+    const getEffectiveStatus = (visit) => {
+        if (visit.status === 'completed' || visit.status === 'missed') {
+            return visit.status;
+        }
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const sDate = new Date(visit.scheduledDate);
+        sDate.setHours(0,0,0,0);
+        if (sDate <= today) {
+            return 'due';
+        }
+        return visit.status;
+    };
 
     const loadAll = () => {
         setLoading(true);
@@ -2556,8 +2552,8 @@ const TreatmentPlanMode = () => {
         if (paid <= 0) return flash('error', 'Enter a valid amount.');
 
         if (payInput.paymentMethod === 'UPI') {
-            if (!payInput.upiId.trim()) return flash('error', 'Please enter the receiver UPI ID.');
-            if (!payInput.upiRef.trim()) return flash('error', 'Please enter the UPI transaction reference number.');
+            if (!(payInput.upiId || '').trim()) return flash('error', 'Please enter the receiver UPI ID.');
+            if (!(payInput.upiRef || '').trim()) return flash('error', 'Please enter the UPI transaction reference number.');
             if (!payInput.confirmedReceipt) return flash('error', 'Please confirm you verified the receipt on the device.');
         }
 
@@ -2569,8 +2565,8 @@ const TreatmentPlanMode = () => {
                 notes: payInput.notes,
             };
             if (payInput.paymentMethod === 'UPI') {
-                payload.upiId = payInput.upiId.trim();
-                payload.upiRef = payInput.upiRef.trim();
+                payload.upiId = (payInput.upiId || '').trim();
+                payload.upiRef = (payInput.upiRef || '').trim();
                 // Append info to notes field as well for safety
                 payload.notes = `[UPI ID: ${payload.upiId}, Ref: ${payload.upiRef}] ${payload.notes}`.trim();
             }
@@ -2616,6 +2612,27 @@ const TreatmentPlanMode = () => {
         } catch (e) { flash('error', e.message); }
     };
 
+    const handleRescheduleSubmit = async () => {
+        if (!rescheduleModal) return;
+        if (!rescheduleInput.newDate) return flash('error', 'New date is required.');
+        setSaving(true);
+        try {
+            const r = await clinicAPI.rescheduleVisit(rescheduleModal.planId, rescheduleModal.visit._id, rescheduleInput);
+            if (r.success) {
+                setSelectedPlan(r.plan);
+                setPlans(prev => prev.map(p => p._id === r.plan._id ? r.plan : p));
+                setRescheduleModal(null);
+                flash('success', 'Visit rescheduled successfully.');
+            } else {
+                flash('error', r.message);
+            }
+        } catch (e) {
+            flash('error', e.response?.data?.message || e.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleCancel = async (planId) => {
         if (!window.confirm('Cancel this treatment plan?')) return;
         try {
@@ -2629,7 +2646,13 @@ const TreatmentPlanMode = () => {
     };
 
     const planStatusColor = { active: '#0891b2', completed: '#16a34a', cancelled: '#dc2626' };
-    const visitStatusColor = { scheduled: '#6366f1', completed: '#16a34a', missed: '#dc2626' };
+    const visitStatusColor = {
+        scheduled: '#3b82f6',
+        completed: '#16a34a',
+        missed: '#dc2626',
+        rescheduled: '#a855f7',
+        due: '#f97316'
+    };
 
     // ── LIST VIEW ──
     if (view === 'list') return (
@@ -2639,7 +2662,7 @@ const TreatmentPlanMode = () => {
                     <div style={{ fontWeight: '800', color: '#92400e', fontSize: '14px' }}>🔔 Today's Visits Due</div>
                     {todayDue.map(plan => plan.visits.filter(v => {
                         const d = new Date(v.scheduledDate);
-                        return d.toDateString() === new Date().toDateString() && v.status === 'scheduled';
+                        return d.toDateString() === new Date().toDateString() && ['scheduled', 'rescheduled'].includes(v.status);
                     }).map(v => (
                         <div key={v._id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#78350f' }}>
                             <span style={{ fontWeight: '700' }}>📋 {plan.clinicPatientId?.name}</span>
@@ -2661,7 +2684,7 @@ const TreatmentPlanMode = () => {
             {loading ? <Spinner /> : plans.length === 0 ? <Empty text="No treatment plans yet." /> : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {plans.map(plan => {
-                        const nextVisit = plan.visits.find(v => v.status === 'scheduled');
+                        const nextVisit = plan.visits.find(v => ['scheduled', 'rescheduled', 'due'].includes(v.status));
                         const pct = plan.totalAmount > 0 ? Math.min(100, Math.round((plan.totalPaid / plan.totalAmount) * 100)) : 0;
                         return (
                             <div key={plan._id} className="clinic-card" style={{ padding: '16px', cursor: 'pointer', borderLeft: `4px solid ${planStatusColor[plan.status] || '#94a3b8'}` }} onClick={() => openDetail(plan)}>
@@ -2811,7 +2834,7 @@ const TreatmentPlanMode = () => {
 
     // ── DETAIL VIEW ──
     if (view === 'detail' && selectedPlan) {
-        const isLastScheduled = (visitId) => selectedPlan.visits.filter(v => v.status === 'scheduled' && v._id !== visitId).length === 0;
+        const isLastScheduled = (visitId) => selectedPlan.visits.filter(v => ['scheduled', 'rescheduled'].includes(v.status) && v._id !== visitId).length === 0;
         return (
             <div>
                 <button className="clinic-back-btn" onClick={() => setView('list')}>← Back to Plans</button>
@@ -2860,7 +2883,7 @@ const TreatmentPlanMode = () => {
                     )}
 
                     {/* Warning if last visit and balance pending */}
-                    {selectedPlan.status === 'active' && selectedPlan.pendingBalance > 0 && selectedPlan.visits.filter(v => v.status === 'scheduled').length === 1 && (
+                    {selectedPlan.status === 'active' && selectedPlan.pendingBalance > 0 && selectedPlan.visits.filter(v => ['scheduled', 'rescheduled'].includes(v.status)).length === 1 && (
                         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#dc2626' }}>
                             ⚠️ <b>Last visit remaining.</b> Patient must pay ₹{selectedPlan.pendingBalance.toLocaleString('en-IN')} before this visit can be closed.
                         </div>
@@ -2878,51 +2901,72 @@ const TreatmentPlanMode = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {selectedPlan.visits.map((v, idx) => (
-                                    <tr key={v._id} style={{ background: v.status === 'completed' ? '#f0fdf4' : v.status === 'missed' ? '#fff1f2' : idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', fontWeight: '700', color: '#6366f1' }}>{v.visitNumber}</td>
-                                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap', fontSize: '12px' }}>
-                                            <div style={{ fontWeight: '600' }}>{new Date(v.scheduledDate).toLocaleDateString('en-IN')}</div>
-                                            {v.scheduledTime && <div style={{ color: '#64748b', fontSize: '11px' }}>🕐 {v.scheduledTime}</div>}
-                                        </td>
-                                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', fontSize: '12px', maxWidth: '140px' }}>
-                                            <div>{v.procedure || '—'}</div>
-                                            {v.notes && <div style={{ color: '#94a3b8', fontSize: '11px' }}>{v.notes}</div>}
-                                        </td>
-                                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', fontWeight: '600' }}>
-                                            {v.amountPaid > 0
-                                                ? <span style={{ color: '#16a34a' }}>₹{v.amountPaid.toLocaleString('en-IN')}{v.paymentMethod ? ` · ${v.paymentMethod}` : ''}</span>
-                                                : <span style={{ color: '#94a3b8', fontSize: '11px' }}>—</span>}
-                                        </td>
-                                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9' }}>
-                                            <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '4px', background: (visitStatusColor[v.status] || '#94a3b8') + '20', color: visitStatusColor[v.status] || '#94a3b8', textTransform: 'uppercase' }}>{v.status}</span>
-                                        </td>
-                                        <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9' }}>
-                                            {v.status === 'scheduled' && selectedPlan.status === 'active' && (
-                                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                 {selectedPlan.visits.map((v, idx) => {
+                                    const effStatus = getEffectiveStatus(v);
+                                    const statusBg = effStatus === 'completed' ? '#f0fdf4' : effStatus === 'missed' ? '#fff1f2' : effStatus === 'due' ? '#fffbeb' : effStatus === 'rescheduled' ? '#faf5ff' : idx % 2 === 0 ? '#fff' : '#f8fafc';
+                                    return (
+                                        <tr key={v._id} style={{ background: statusBg }}>
+                                            <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', fontWeight: '700', color: '#6366f1' }}>{v.visitNumber}</td>
+                                            <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap', fontSize: '12px' }}>
+                                                <div style={{ fontWeight: '600' }}>{new Date(v.scheduledDate).toLocaleDateString('en-IN')}</div>
+                                                {v.scheduledTime && <div style={{ color: '#64748b', fontSize: '11px' }}>🕐 {v.scheduledTime}</div>}
+                                                {v.originalScheduledDate && (
+                                                    <div style={{ color: '#a855f7', fontSize: '10px', fontWeight: 'bold', marginTop: '2px' }}>
+                                                        Original: {new Date(v.originalScheduledDate).toLocaleDateString('en-IN')}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', fontSize: '12px', maxWidth: '140px' }}>
+                                                <div>{v.procedure || '—'}</div>
+                                                {v.notes && <div style={{ color: '#94a3b8', fontSize: '11px' }}>{v.notes}</div>}
+                                            </td>
+                                            <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', fontWeight: '600' }}>
+                                                {v.amountPaid > 0
+                                                    ? <span style={{ color: '#16a34a' }}>₹{v.amountPaid.toLocaleString('en-IN')}{v.paymentMethod ? ` · ${v.paymentMethod}` : ''}</span>
+                                                    : <span style={{ color: '#94a3b8', fontSize: '11px' }}>—</span>}
+                                            </td>
+                                            <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9' }}>
+                                                <span style={{ fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '4px', background: (visitStatusColor[effStatus] || '#94a3b8') + '20', color: visitStatusColor[effStatus] || '#94a3b8', textTransform: 'uppercase' }}>{effStatus}</span>
+                                                {v.rescheduledToDate && (
+                                                    <div style={{ fontSize: '10px', color: '#a855f7', marginTop: '4px', fontWeight: '600' }}>
+                                                        Rescheduled To: {new Date(v.rescheduledToDate).toLocaleDateString('en-IN')}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9' }}>
+                                                {!['completed', 'missed'].includes(v.status) && selectedPlan.status === 'active' && (
+                                                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                                                        <button
+                                                            onClick={() => { setPayModal({ visit: v, planId: selectedPlan._id }); setPayInput({ amountPaid: '', paymentMethod: 'Cash', notes: '', upiId: 'payments@upi', upiRef: '', confirmedReceipt: false }); }}
+                                                            style={{ fontSize: '11px', padding: '3px 8px', background: '#dcfce7', color: '#16a34a', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '700' }}>
+                                                            💵 Pay
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleComplete(selectedPlan._id, v._id)}
+                                                            disabled={isLastScheduled(v._id) && selectedPlan.pendingBalance > 0}
+                                                            title={isLastScheduled(v._id) && selectedPlan.pendingBalance > 0 ? `Collect ₹${selectedPlan.pendingBalance.toLocaleString('en-IN')} first` : ''}
+                                                            style={{ fontSize: '11px', padding: '3px 8px', background: isLastScheduled(v._id) && selectedPlan.pendingBalance > 0 ? '#f1f5f9' : '#dbeafe', color: isLastScheduled(v._id) && selectedPlan.pendingBalance > 0 ? '#94a3b8' : '#1d4ed8', border: 'none', borderRadius: '4px', cursor: isLastScheduled(v._id) && selectedPlan.pendingBalance > 0 ? 'not-allowed' : 'pointer', fontWeight: '700' }}>
+                                                            ✓ Done
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleMiss(selectedPlan._id, v._id)}
+                                                            style={{ fontSize: '11px', padding: '3px 8px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '700' }}>
+                                                            ✗ Missed
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {v.status === 'missed' && !v.rescheduledToDate && selectedPlan.status === 'active' && (
                                                     <button
-                                                        onClick={() => { setPayModal({ visit: v, planId: selectedPlan._id }); setPayInput({ amountPaid: '', paymentMethod: 'Cash', notes: '' }); }}
-                                                        style={{ fontSize: '11px', padding: '3px 8px', background: '#dcfce7', color: '#16a34a', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '700' }}>
-                                                        💵 Pay
+                                                        onClick={() => { setRescheduleModal({ visit: v, planId: selectedPlan._id }); setRescheduleInput({ newDate: '', newTime: '', remarks: '' }); }}
+                                                        style={{ fontSize: '11px', padding: '3px 8px', background: '#f3e8ff', color: '#a855f7', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '700' }}>
+                                                        🔄 Reschedule
                                                     </button>
-                                                    <button
-                                                        onClick={() => handleComplete(selectedPlan._id, v._id)}
-                                                        disabled={isLastScheduled(v._id) && selectedPlan.pendingBalance > 0}
-                                                        title={isLastScheduled(v._id) && selectedPlan.pendingBalance > 0 ? `Collect ₹${selectedPlan.pendingBalance.toLocaleString('en-IN')} first` : ''}
-                                                        style={{ fontSize: '11px', padding: '3px 8px', background: isLastScheduled(v._id) && selectedPlan.pendingBalance > 0 ? '#f1f5f9' : '#dbeafe', color: isLastScheduled(v._id) && selectedPlan.pendingBalance > 0 ? '#94a3b8' : '#1d4ed8', border: 'none', borderRadius: '4px', cursor: isLastScheduled(v._id) && selectedPlan.pendingBalance > 0 ? 'not-allowed' : 'pointer', fontWeight: '700' }}>
-                                                        ✓ Done
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleMiss(selectedPlan._id, v._id)}
-                                                        style={{ fontSize: '11px', padding: '3px 8px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '700' }}>
-                                                        ✗ Missed
-                                                    </button>
-                                                </div>
-                                            )}
-                                            {v.status === 'completed' && <span style={{ fontSize: '11px', color: '#94a3b8' }}>{v.completedAt ? new Date(v.completedAt).toLocaleDateString('en-IN') : '—'}</span>}
-                                        </td>
-                                    </tr>
-                                ))}
+                                                )}
+                                                {v.status === 'completed' && <span style={{ fontSize: '11px', color: '#94a3b8' }}>{v.completedAt ? new Date(v.completedAt).toLocaleDateString('en-IN') : '—'}</span>}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -2976,7 +3020,7 @@ const TreatmentPlanMode = () => {
                                         <div style={{ textAlign: 'center', margin: '14px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
                                             <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 'bold' }}>Scan QR to Pay ₹{payInput.amountPaid}</div>
                                             <img
-                                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('upi://pay?pa=' + payInput.upiId.trim() + '&pn=' + encodeURIComponent(selectedPlan.title) + '&am=' + payInput.amountPaid + '&cu=INR')}`}
+                                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('upi://pay?pa=' + (payInput.upiId || '').trim() + '&pn=' + encodeURIComponent(selectedPlan.title) + '&am=' + payInput.amountPaid + '&cu=INR')}`}
                                                 alt="UPI QR Code"
                                                 style={{ border: '4px solid #fff', borderRadius: '8px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}
                                             />
@@ -3001,8 +3045,56 @@ const TreatmentPlanMode = () => {
                             </div>
                             <div style={{ display: 'flex', gap: '10px' }}>
                                 <button className="clinic-btn-secondary" style={{ flex: 1 }} onClick={() => setPayModal(null)}>Cancel</button>
-                                <button className="clinic-btn-primary" style={{ flex: 1 }} disabled={saving || (payInput.paymentMethod === 'UPI' && (!payInput.upiRef.trim() || !payInput.confirmedReceipt))} onClick={handlePay}>
+                                <button className="clinic-btn-primary" style={{ flex: 1 }} disabled={saving || (payInput.paymentMethod === 'UPI' && (!(payInput.upiRef || '').trim() || !payInput.confirmedReceipt))} onClick={handlePay}>
                                     {saving ? 'Saving...' : '✅ Confirm Payment'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Reschedule Modal */}
+                {rescheduleModal && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '400px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 40px rgba(0,0,0,0.15)' }}>
+                            <h3 style={{ margin: '0 0 16px', color: '#0f172a' }}>🔄 Reschedule Visit {rescheduleModal.visit.visitNumber}</h3>
+                            <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '8px', padding: '12px', marginBottom: '16px', fontSize: '12px', color: '#6d28d9' }}>
+                                ℹ️ <b>Automatic Date Shifter Enabled</b>
+                                <br />
+                                All subsequent scheduled visits will automatically move forward to maintain their relative spacing.
+                            </div>
+                            <div className="clinic-form-group" style={{ marginBottom: '12px' }}>
+                                <label>New Visit Date *</label>
+                                <input
+                                    className="clinic-input"
+                                    type="date"
+                                    required
+                                    value={rescheduleInput.newDate}
+                                    onChange={e => setRescheduleInput(p => ({ ...p, newDate: e.target.value }))}
+                                />
+                            </div>
+                            <div className="clinic-form-group" style={{ marginBottom: '12px' }}>
+                                <label>New Visit Time (optional)</label>
+                                <input
+                                    className="clinic-input"
+                                    type="time"
+                                    value={rescheduleInput.newTime}
+                                    onChange={e => setRescheduleInput(p => ({ ...p, newTime: e.target.value }))}
+                                />
+                            </div>
+                            <div className="clinic-form-group" style={{ marginBottom: '16px' }}>
+                                <label>Reason / Remarks (optional)</label>
+                                <input
+                                    className="clinic-input"
+                                    placeholder="e.g. Patient requested delay..."
+                                    value={rescheduleInput.remarks}
+                                    onChange={e => setRescheduleInput(p => ({ ...p, remarks: e.target.value }))}
+                                />
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button className="clinic-btn-secondary" style={{ flex: 1 }} onClick={() => setRescheduleModal(null)}>Cancel</button>
+                                <button className="clinic-btn-primary" style={{ flex: 1 }} disabled={saving || !rescheduleInput.newDate} onClick={handleRescheduleSubmit}>
+                                    {saving ? 'Saving...' : '💾 Save & Shift'}
                                 </button>
                             </div>
                         </div>

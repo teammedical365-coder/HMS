@@ -316,6 +316,17 @@ const DoctorPatientDetails = () => {
             };
             await doctorAPI.updateSession(appointmentId, payload);
 
+            // Immediately lock UI and update appointment status locally
+            setIsLocked(true);
+            setAppointment(prev => ({
+                ...prev,
+                status: 'completed',
+                diagnosis: sessionData.diagnosis,
+                doctorNotes: sessionData.notes,
+                labTests: payload.labTests,
+                pharmacy: payload.pharmacy
+            }));
+
             // 3. Stage Prescription PDF for manual download
             const pdf = generatePrescriptionPDF(false);
             setPendingDownload({

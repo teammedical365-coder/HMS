@@ -198,18 +198,44 @@ router.get('/tenant-status', verifyCentralAdmin, async (req, res) => {
 });
 
 // Update a hospital
-router.put('/:id', verifyCentralAdmin, async (req, res) => {
+const updateHospital = async (req, res) => {
     try {
         const { name, address, city, state, phone, email, website, logo, isActive, departments, appointmentFee, slug, appointmentMode, customDomain } = req.body;
         const hospital = await Hospital.findOne({ _id: req.params.id, clinicType: { $ne: 'clinic' } });
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
         if (name !== undefined) hospital.name = name;
-        if (slug !== undefined) hospital.slug = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
+        
+        if (slug !== undefined) {
+            const formattedSlug = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
+            if (!formattedSlug) {
+                return res.status(400).json({ success: false, message: 'Subdomain prefix (slug) cannot be empty.' });
+            }
+            const existingSlug = await Hospital.findOne({ 
+                slug: formattedSlug, 
+                _id: { $ne: req.params.id }
+            });
+            if (existingSlug) {
+                return res.status(400).json({ success: false, message: 'Subdomain prefix (slug) is already in use.' });
+            }
+            hospital.slug = formattedSlug;
+        }
+
         if (customDomain !== undefined) {
             // strip protocol and trailing slash
-            hospital.customDomain = customDomain ? customDomain.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase() : null;
+            const formattedDomain = customDomain ? customDomain.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase() : undefined;
+            if (formattedDomain) {
+                const existingDomain = await Hospital.findOne({ 
+                    customDomain: formattedDomain, 
+                    _id: { $ne: req.params.id }
+                });
+                if (existingDomain) {
+                    return res.status(400).json({ success: false, message: 'Custom domain is already in use.' });
+                }
+            }
+            hospital.customDomain = formattedDomain;
         }
+
         if (address !== undefined) hospital.address = address;
         if (city !== undefined) hospital.city = city;
         if (state !== undefined) hospital.state = state;
@@ -225,9 +251,14 @@ router.put('/:id', verifyCentralAdmin, async (req, res) => {
         await hospital.save();
         res.json({ success: true, message: 'Hospital updated successfully', hospital });
     } catch (err) {
+        console.error("Error updating hospital:", err);
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
-});
+};
+
+router.put('/:id', verifyCentralAdmin, updateHospital);
+router.patch('/:id', verifyCentralAdmin, updateHospital);
+
 
 // ==========================================
 // APPOINTMENT MODE — Supreme Admin sets per hospital

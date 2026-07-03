@@ -9,10 +9,13 @@ const visitSchema = new mongoose.Schema({
     paymentMethod: { type: String, default: 'Cash' },
     upiId:         { type: String, default: '' },
     upiRef:        { type: String, default: '' },
-    status:        { type: String, enum: ['scheduled', 'completed', 'missed'], default: 'scheduled' },
+    status:        { type: String, enum: ['scheduled', 'completed', 'missed', 'rescheduled', 'due'], default: 'scheduled' },
     completedAt:   { type: Date },
     notes:         { type: String, default: '' },
     alertSent:     { type: Boolean, default: false },
+    rescheduledToDate: { type: Date },
+    rescheduledToTime: { type: String, default: '' },
+    originalScheduledDate: { type: Date },
 }, { _id: true });
 
 const treatmentPlanSchema = new mongoose.Schema({

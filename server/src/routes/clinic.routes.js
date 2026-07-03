@@ -169,7 +169,7 @@ router.get('/stats', verifyClinicStaff, async (req, res) => {
                 .sort({ createdAt: -1 })
                 .limit(10)
                 .lean(),
-            Inventory.find({ hospitalId, stock: { $lt: 10 } }).select('name stock unit').limit(5).lean(),
+            Promise.resolve([]), // no low stock alert for clinics
             // Treatment plan revenue — sum of all amountPaid across visits
             TreatmentPlan.aggregate([
                 { $match: { hospitalId } },
@@ -931,7 +931,7 @@ router.get('/treatment-plans/today-due', verifyClinicStaff, async (req, res) => 
             hospitalId: hid(req),
             status: 'active',
             'visits.scheduledDate': { $gte: start, $lte: end },
-            'visits.status': 'scheduled',
+            'visits.status': { $in: ['scheduled', 'rescheduled'] },
         }).populate('clinicPatientId', 'name patientUid phone');
 
         // Fire notifications for un-alerted visits
@@ -940,7 +940,7 @@ router.get('/treatment-plans/today-due', verifyClinicStaff, async (req, res) => 
             for (const visit of plan.visits) {
                 const vDate = new Date(visit.scheduledDate);
                 const isToday = vDate >= start && vDate <= end;
-                if (isToday && visit.status === 'scheduled' && !visit.alertSent) {
+                if (isToday && ['scheduled', 'rescheduled'].includes(visit.status) && !visit.alertSent) {
                     const patName = plan.clinicPatientId?.name || 'Patient';
                     const notif = await Notification.create({
                         senderId: req.user.id,
@@ -1016,7 +1016,7 @@ router.put('/treatment-plans/:id/visits/:visitId/complete', verifyClinicStaff, a
         if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
 
         // Check if this is the last remaining scheduled visit
-        const remainingScheduled = plan.visits.filter(v => v.status === 'scheduled' && v._id.toString() !== visit._id.toString());
+        const remainingScheduled = plan.visits.filter(v => ['scheduled', 'rescheduled', 'due'].includes(v.status) && v._id.toString() !== visit._id.toString());
         const isLastVisit = remainingScheduled.length === 0;
 
         // Block closing if last visit and balance still pending
@@ -1059,6 +1059,89 @@ router.put('/treatment-plans/:id/visits/:visitId/miss', verifyClinicStaff, async
         res.json({ success: true, plan });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// RESCHEDULE a missed visit
+router.put('/treatment-plans/:id/visits/:visitId/reschedule', verifyClinicStaff, async (req, res) => {
+    try {
+        const { newDate, newTime, remarks } = req.body;
+        if (!newDate) {
+            return res.status(400).json({ success: false, message: 'New visit date is required' });
+        }
+
+        const plan = await TreatmentPlan.findOne({ _id: req.params.id, hospitalId: hid(req) });
+        if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
+
+        const originalMissedVisit = plan.visits.id(req.params.visitId);
+        if (!originalMissedVisit) return res.status(404).json({ success: false, message: 'Visit not found' });
+        if (originalMissedVisit.status !== 'missed') {
+            return res.status(400).json({ success: false, message: 'Only missed visits can be rescheduled' });
+        }
+
+        // Store reschedule information on the original missed visit
+        originalMissedVisit.rescheduledToDate = new Date(newDate);
+        originalMissedVisit.rescheduledToTime = newTime || '';
+
+        // Determine where to insert the new rescheduled visit
+        const originalIndex = plan.visits.findIndex(v => v._id.toString() === originalMissedVisit._id.toString());
+
+        // Create the new rescheduled visit object
+        const newVisit = {
+            visitNumber: originalMissedVisit.visitNumber,
+            scheduledDate: new Date(newDate),
+            scheduledTime: newTime || '',
+            procedure: originalMissedVisit.procedure || '',
+            amountPaid: 0,
+            paymentMethod: 'Cash',
+            status: 'rescheduled',
+            notes: remarks || 'Rescheduled after missing visit on ' + new Date(originalMissedVisit.scheduledDate).toLocaleDateString('en-IN'),
+            originalScheduledDate: originalMissedVisit.scheduledDate
+        };
+
+        // Insert the new rescheduled visit right after the missed visit in the array
+        plan.visits.splice(originalIndex + 1, 0, newVisit);
+
+        // Now, shift all remaining pending visits
+        const originalDates = plan.visits.map(v => new Date(v.originalScheduledDate || v.scheduledDate));
+
+        // Start shifting from the newly inserted visit (at index originalIndex + 1)
+        let lastDate = new Date(newDate);
+
+        for (let i = originalIndex + 2; i < plan.visits.length; i++) {
+            const currentVisit = plan.visits[i];
+            
+            // Only shift future pending visits
+            if (['scheduled', 'rescheduled', 'due'].includes(currentVisit.status)) {
+                const prevOriginalDate = originalDates[i - 1];
+                const currOriginalDate = originalDates[i];
+                
+                const gapMs = currOriginalDate.getTime() - prevOriginalDate.getTime();
+                const gapDays = Math.round(gapMs / (1000 * 60 * 60 * 24));
+                
+                const nextDate = new Date(lastDate);
+                nextDate.setDate(nextDate.getDate() + gapDays);
+                
+                currentVisit.scheduledDate = nextDate;
+                lastDate = nextDate;
+            } else {
+                lastDate = new Date(currentVisit.scheduledDate);
+            }
+        }
+
+        const allDone = plan.visits.every(v => v.status === 'completed' || v.status === 'missed');
+        if (allDone) {
+            plan.status = 'completed';
+        } else {
+            plan.status = 'active';
+        }
+
+        await plan.save();
+        await plan.populate('clinicPatientId', 'name patientUid phone gender');
+        res.json({ success: true, plan });
+    } catch (err) {
+        console.error('Reschedule Error:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred: ' + err.message });
     }
 });
 
