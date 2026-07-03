@@ -363,6 +363,13 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
         const { name, email, password, phone, roleId, services, avatar, departments } = req.body;
 
+        if (phone && phone.trim() !== '') {
+            const isDigits = /^\d+$/.test(phone);
+            if (!isDigits || phone.length !== 10) {
+                return res.status(400).json({ success: false, message: 'Mobile number must be exactly 10 digits and contain digits only.' });
+            }
+        }
+
         if (!name || !email || !password || !roleId) {
             return res.status(400).json({ success: false, message: 'Name, email, password, and roleId are required' });
         }
@@ -469,6 +476,13 @@ router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
         const { userId } = req.params;
         const { name, email, phone, roleId, avatar, specialty, departments } = req.body;
+
+        if (phone && phone.trim() !== '') {
+            const isDigits = /^\d+$/.test(phone);
+            if (!isDigits || phone.length !== 10) {
+                return res.status(400).json({ success: false, message: 'Mobile number must be exactly 10 digits and contain digits only.' });
+            }
+        }
 
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });

@@ -189,6 +189,12 @@ const HospitalAdminDashboard = () => {
         setError('');
         setSuccess('');
 
+        if (createForm.phone && createForm.phone.length !== 10) {
+            setError('Mobile number must be exactly 10 digits.');
+            setCreating(false);
+            return;
+        }
+
         if (!createForm.name || !createForm.email || !createForm.password || !createForm.roleId) {
             setError('Name, email, password, and role are all required.');
             setCreating(false);
@@ -224,6 +230,13 @@ const HospitalAdminDashboard = () => {
         setUpdating(true);
         setError('');
         setSuccess('');
+
+        if (editForm.phone && editForm.phone.length !== 10) {
+            setError('Mobile number must be exactly 10 digits.');
+            setUpdating(false);
+            return;
+        }
+
         try {
             let avatarUrl = editForm.currentAvatar;
             if (editForm.newAvatarFile) {
@@ -537,7 +550,19 @@ const HospitalAdminDashboard = () => {
 
                         {/* Quick Operations */}
                         <div className="admin-card">
-                            <h2>⚡ Quick Operations</h2>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+                                <h2 style={{ margin: 0 }}>⚡ Quick Operations</h2>
+                                <button
+                                    onClick={() => {
+                                        setActiveTab('staff');
+                                        setShowCreateForm(true);
+                                    }}
+                                    className="btn-save"
+                                    style={{ padding: '8px 20px', fontSize: '14px' }}
+                                >
+                                    + Add Staff
+                                </button>
+                            </div>
                             <p style={{ color: '#888', fontSize: '14px', margin: '0 0 20px' }}>
                                 Jump to the areas you manage most frequently. Contact your Central Admin to manage question libraries, test packages, or medicine catalogs.
                             </p>
@@ -661,7 +686,16 @@ const HospitalAdminDashboard = () => {
                                         </div>
                                         <div className="form-group">
                                             <label className="staff-label">Phone</label>
-                                            <input type="text" placeholder="Phone number" value={createForm.phone} onChange={e => setCreateForm({ ...createForm, phone: e.target.value })} className="staff-input" />
+                                            <input 
+                                                type="text" 
+                                                placeholder="e.g. 9876543210" 
+                                                value={createForm.phone || ''} 
+                                                onChange={e => {
+                                                    const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                    setCreateForm({ ...createForm, phone: cleanVal });
+                                                }} 
+                                                className="staff-input" 
+                                            />
                                         </div>
                                     </div>
                                     <div className="form-row">
@@ -673,9 +707,11 @@ const HospitalAdminDashboard = () => {
                                             <label className="staff-label">Assign Role *</label>
                                             <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
                                                 <option value="">-- Select a Role --</option>
-                                                {roles.map(role => (
-                                                    <option key={role._id} value={role._id}>{role.name}</option>
-                                                ))}
+                                                {roles
+                                                    .filter(role => !role.name.toLowerCase().includes('clinic'))
+                                                    .map(role => (
+                                                        <option key={role._id} value={role._id}>{role.name}</option>
+                                                    ))}
                                             </select>
                                         </div>
                                     </div>
@@ -1259,14 +1295,25 @@ const HospitalAdminDashboard = () => {
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="staff-label">Phone</label>
-                                        <input type="text" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} className="staff-input" />
+                                        <input 
+                                            type="text" 
+                                            placeholder="e.g. 9876543210" 
+                                            value={editForm.phone || ''} 
+                                            onChange={e => {
+                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                setEditForm({ ...editForm, phone: cleanVal });
+                                            }} 
+                                            className="staff-input" 
+                                        />
                                     </div>
                                     <div className="form-group">
                                         <label className="staff-label">Role</label>
                                         <select value={editForm.roleId} onChange={e => setEditForm({ ...editForm, roleId: e.target.value })} required disabled className="staff-input">
-                                            {roles.map(role => (
-                                                <option key={role._id} value={role._id}>{role.name}</option>
-                                            ))}
+                                            {roles
+                                                .filter(role => !role.name.toLowerCase().includes('clinic'))
+                                                .map(role => (
+                                                    <option key={role._id} value={role._id}>{role.name}</option>
+                                                ))}
                                         </select>
                                     </div>
                                 </div>

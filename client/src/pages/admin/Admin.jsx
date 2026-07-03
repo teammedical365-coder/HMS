@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { adminAPI, uploadAPI, hospitalAPI } from '../../utils/api';
 import '../administration/SuperAdmin.css';
 
 const Admin = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [users, setUsers] = useState([]);
@@ -37,6 +38,12 @@ const Admin = () => {
             navigate('/');
         }
     }, [navigate]);
+ 
+    useEffect(() => {
+        if (location.state?.openCreateForm) {
+            setShowCreateForm(true);
+        }
+    }, [location.state]);
 
     useEffect(() => {
         fetchUsers();
@@ -112,6 +119,12 @@ const Admin = () => {
         setError('');
         setSuccess('');
 
+        if (editForm.phone && editForm.phone.length !== 10) {
+            setError('Mobile number must be exactly 10 digits.');
+            setUpdating(false);
+            return;
+        }
+
         try {
             let avatarUrl = editForm.currentAvatar;
 
@@ -169,6 +182,12 @@ const Admin = () => {
         setCreating(true);
         setError('');
         setSuccess('');
+
+        if (createForm.phone && createForm.phone.length !== 10) {
+            setError('Mobile number must be exactly 10 digits.');
+            setCreating(false);
+            return;
+        }
 
         if (!createForm.name || !createForm.email || !createForm.password || !createForm.roleId) {
             setError('Name, email, password, and role are all required.');
@@ -279,9 +298,18 @@ const Admin = () => {
                                     <small className="form-hint">Share this password with the staff member</small>
                                 </div>
                                 <div className="form-group">
-                                    <label className="staff-label">Phone Number</label>
-                                    <input type="text" placeholder="e.g. 9876543210" value={createForm.phone} onChange={e => setCreateForm({ ...createForm, phone: e.target.value })} className="staff-input" />
-                                </div>
+                                     <label className="staff-label">Phone Number</label>
+                                     <input 
+                                         type="text" 
+                                         placeholder="e.g. 9876543210" 
+                                         value={createForm.phone || ''} 
+                                         onChange={e => {
+                                             const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                             setCreateForm({ ...createForm, phone: cleanVal });
+                                         }} 
+                                         className="staff-input" 
+                                     />
+                                 </div>
                             </div>
 
                             <div className="form-row">
@@ -297,14 +325,17 @@ const Admin = () => {
                                 </div>
                                 <div className="form-group">
                                     <label className="staff-label">Assign Role * <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: '0.85rem', textTransform: 'none' }}>(Don't see your role? <a href="/admin/roles" style={{ color: '#0ea5e9' }}>Create one here</a>)</span></label>
-                                    <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
-                                        <option value="">-- Select a Role --</option>
-                                        {roles.filter(r => !['patient', 'user'].includes(r.name.toLowerCase())).map(role => (
-                                            <option key={role._id} value={role._id}>
-                                                {role.name} {role.description ? `— ${role.description}` : ''}
-                                            </option>
-                                        ))}
-                                    </select>
+                                     <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
+                                         <option value="">-- Select a Role --</option>
+                                         {roles
+                                             .filter(r => !['patient', 'user'].includes(r.name.toLowerCase()))
+                                             .filter(r => !r.name.toLowerCase().includes('clinic'))
+                                             .map(role => (
+                                                 <option key={role._id} value={role._id}>
+                                                     {role.name} {role.description ? `— ${role.description}` : ''}
+                                                 </option>
+                                             ))}
+                                     </select>
                                 </div>
                             </div>
                             
@@ -435,19 +466,31 @@ const Admin = () => {
                                 </div>
 
                                 <div className="form-row">
-                                    <div className="form-group">
-                                        <label className="staff-label">Phone</label>
-                                        <input type="text" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} className="staff-input" />
-                                    </div>
-                                    <div className="form-group">
-                                        <label className="staff-label">Role</label>
-                                        <select value={editForm.roleId} onChange={e => setEditForm({ ...editForm, roleId: e.target.value })} required disabled className="staff-input">
-                                            {roles.filter(r => !['patient', 'user'].includes(r.name.toLowerCase())).map(role => (
-                                                <option key={role._id} value={role._id}>{role.name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
+                                     <div className="form-group">
+                                         <label className="staff-label">Phone</label>
+                                         <input 
+                                             type="text" 
+                                             placeholder="e.g. 9876543210" 
+                                             value={editForm.phone || ''} 
+                                             onChange={e => {
+                                                 const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                 setEditForm({ ...editForm, phone: cleanVal });
+                                             }} 
+                                             className="staff-input" 
+                                         />
+                                     </div>
+                                     <div className="form-group">
+                                         <label className="staff-label">Role</label>
+                                         <select value={editForm.roleId} onChange={e => setEditForm({ ...editForm, roleId: e.target.value })} required disabled className="staff-input">
+                                             {roles
+                                                 .filter(r => !['patient', 'user'].includes(r.name.toLowerCase()))
+                                                 .filter(r => !r.name.toLowerCase().includes('clinic'))
+                                                 .map(role => (
+                                                     <option key={role._id} value={role._id}>{role.name}</option>
+                                                 ))}
+                                         </select>
+                                     </div>
+                                 </div>
 
                                 
                                 {hospital && hospital.departments && hospital.departments.length > 0 && (

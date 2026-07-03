@@ -114,7 +114,16 @@ const AdminMainDashboard = () => {
                 </div>
 
                 {/* Quick Actions */}
-                <div className="section-label">⚡ Quick Actions</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '24px 0 16px' }}>
+                    <div className="section-label" style={{ margin: 0 }}>⚡ Quick Actions</div>
+                    <button 
+                        onClick={() => navigate('/admin/users', { state: { openCreateForm: true } })} 
+                        className="btn-save" 
+                        style={{ padding: '8px 20px', fontSize: '14px', border: 'none', borderRadius: '10px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: 'white', fontWeight: '700', cursor: 'pointer' }}
+                    >
+                        + Add Staff
+                    </button>
+                </div>
                 <div className="actions-grid">
                     {quickActions.map((action, idx) => (
                         <div key={idx} className="action-card" onClick={() => navigate(action.path)}>

@@ -504,6 +504,12 @@ const CentralAdminDashboard = () => {
     const handleCreateStaff = async (e) => {
         e.preventDefault();
         if (!createStaffForm.hospitalId) { setError('You must select a hospital for this staff member.'); return; }
+        
+        if (createStaffForm.phone && createStaffForm.phone.length !== 10) {
+            setError('Mobile number must be exactly 10 digits.');
+            return;
+        }
+
         setCreatingStaff(true); setError(''); setSuccess('');
         try {
             let avatarUrl = null;
@@ -561,16 +567,27 @@ const CentralAdminDashboard = () => {
             <div className="centraladmin-page">
                 <div className="centraladmin-container">
                     {/* Back Header */}
-                    {/* Back Header (Customized for Detail View) */}
-                    <div className="centraladmin-header" style={{ marginBottom: '24px', background: 'white', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
-                        <div className="header-brand">
-                            <button onClick={closeHospitalDetail} className="back-btn" style={{ marginBottom: '12px' }}>← Back to All Hospitals</button>
-                            <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#1e293b' }}>🏥 {h.name}</h1>
-                            <p style={{ color: '#64748b' }}>{h.city && `${h.city}, `}{h.state} {h.phone && `· 📞 ${h.phone}`}</p>
+                    <div className="centraladmin-header-details" style={{ background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: 'var(--shadow-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                            <button onClick={closeHospitalDetail} className="back-btn-light">
+                                ← Back to Hospitals
+                            </button>
+                            {h.branding?.logoUrl ? (
+                                <img src={h.branding.logoUrl} alt="Logo" style={{ width: '48px', height: '48px', objectFit: 'contain', borderRadius: '8px', border: '1.5px solid #cbd5e1', background: '#f8fafc', padding: '4px' }} />
+                            ) : (
+                                <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', border: '1.5px solid #cbd5e1' }}>🏥</div>
+                            )}
+                            <div>
+                                <h1 style={{ fontSize: '1.5rem', fontWeight: 850, color: '#1e293b', margin: 0 }}>{h.name}</h1>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b', fontSize: '0.88rem', marginTop: '4px', flexWrap: 'wrap' }}>
+                                    {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
+                                    {h.phone && <span>· 📞 {h.phone}</span>}
+                                </div>
+                            </div>
                         </div>
-                        <div className="admin-user-info">
-                            <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`} style={{ padding: '6px 14px' }}>
-                                {h.isActive ? '● ACTIVE UNIT' : '● INACTIVE UNIT'}
+                        <div className="admin-user-info" style={{ display: 'flex', alignItems: 'center', margin: 0 }}>
+                            <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`} style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 700, color: 'white', textTransform: 'uppercase' }}>
+                                {h.isActive ? 'ACTIVE' : 'INACTIVE'}
                             </span>
                         </div>
                     </div>
@@ -826,9 +843,22 @@ const CentralAdminDashboard = () => {
                                 </div>
                             </div>
 
-                            {/* ---- STAFF LIST ---- */}
-                            <div className="admin-card">
-                                <h3>👥 Staff Members ({hospitalStats.staffList?.length || 0})</h3>
+                             {/* ---- STAFF LIST ---- */}
+                             <div className="admin-card">
+                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                                     <h3 style={{ margin: 0 }}>👥 Staff Members ({hospitalStats.staffList?.length || 0})</h3>
+                                     <button
+                                         onClick={() => {
+                                             setActiveTab('staff');
+                                             setCreateStaffForm(prev => ({ ...prev, hospitalId: h._id }));
+                                             setShowCreateStaffForm(true);
+                                         }}
+                                         className="btn-save"
+                                         style={{ padding: '8px 16px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                     >
+                                         + Add Staff
+                                     </button>
+                                 </div>
                                 {!hospitalStats.staffList?.length ? (
                                     <p style={{ color: '#888', fontSize: '14px' }}>No staff assigned to this hospital yet.</p>
                                 ) : (
@@ -1174,12 +1204,24 @@ const CentralAdminDashboard = () => {
                                             </select>
                                         </div>
                                         <div className="form-group">
-                                            <label className="staff-label">Assign Role *</label>
-                                            <select value={createStaffForm.roleId} onChange={e => setCreateStaffForm({ ...createStaffForm, roleId: e.target.value })} required className="staff-input">
-                                                <option value="">-- Select a Role --</option>
-                                                {roles.map(role => <option key={role._id} value={role._id}>{role.name}{role.description ? ` — ${role.description}` : ''}</option>)}
-                                            </select>
-                                        </div>
+                                             <label className="staff-label">Assign Role *</label>
+                                             <select value={createStaffForm.roleId} onChange={e => setCreateStaffForm({ ...createStaffForm, roleId: e.target.value })} required className="staff-input">
+                                                 <option value="">-- Select a Role --</option>
+                                                 {roles
+                                                     .filter(role => {
+                                                         const isFullHospitalSelected = hospitals.some(hospital => hospital._id === createStaffForm.hospitalId);
+                                                         if (isFullHospitalSelected && role.name.toLowerCase().includes('clinic')) {
+                                                             return false;
+                                                         }
+                                                         return true;
+                                                     })
+                                                     .map(role => (
+                                                         <option key={role._id} value={role._id}>
+                                                             {role.name}{role.description ? ` — ${role.description}` : ''}
+                                                         </option>
+                                                     ))}
+                                             </select>
+                                         </div>
                                         {createStaffForm.hospitalId && (
                                             <div className="form-group">
                                                 <label className="staff-label">Assign Department</label>
@@ -1207,10 +1249,19 @@ const CentralAdminDashboard = () => {
                                             <label className="staff-label">Password *</label>
                                             <input type="text" placeholder="Temporary password" value={createStaffForm.password} onChange={e => setCreateStaffForm({ ...createStaffForm, password: e.target.value })} required className="staff-input" />
                                         </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Phone</label>
-                                            <input type="text" placeholder="Phone number" maxLength={10} value={createStaffForm.phone} onChange={e => setCreateStaffForm({ ...createStaffForm, phone: e.target.value })} className="staff-input" />
-                                        </div>
+                                         <div className="form-group">
+                                             <label className="staff-label">Phone</label>
+                                             <input 
+                                                 type="text" 
+                                                 placeholder="e.g. 9876543210" 
+                                                 value={createStaffForm.phone || ''} 
+                                                 onChange={e => {
+                                                     const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                     setCreateStaffForm({ ...createStaffForm, phone: cleanVal });
+                                                 }} 
+                                                 className="staff-input" 
+                                             />
+                                         </div>
                                     </div>
                                     <button type="submit" disabled={creatingStaff || !createStaffForm.hospitalId} className="submit-button">
                                         {creatingStaff ? 'Creating...' : '✅ Create Staff Account'}
