@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAuth, useAdminEntities } from '../../store/hooks';
 import { fetchAdminDoctors, createDoctor, updateDoctor, deleteDoctor } from '../../store/slices/adminEntitiesSlice';
+import { adminEntitiesAPI } from '../../utils/api';
 import '../administration/SuperAdmin.css';
 
 const AdminDoctors = () => {
@@ -18,6 +19,11 @@ const AdminDoctors = () => {
     const [success, setSuccess] = useState('');
     const [editingDoctor, setEditingDoctor] = useState(null);
     const [showForm, setShowForm] = useState(false);
+
+    // Viewing doctor details modal state
+    const [viewingDoctor, setViewingDoctor] = useState(null);
+    const [loadingDoctorDetails, setLoadingDoctorDetails] = useState(false);
+    const [viewDoctorError, setViewDoctorError] = useState('');
 
     // Default Availability Structure
     const defaultAvailability = {
@@ -156,6 +162,40 @@ const AdminDoctors = () => {
         }
     };
 
+    const handleViewDetails = async (id) => {
+        setLoadingDoctorDetails(true);
+        setViewDoctorError('');
+        setViewingDoctor(null);
+        try {
+            const res = await adminEntitiesAPI.getDoctor(id);
+            if (res.success && res.doctor) {
+                setViewingDoctor(res.doctor);
+            } else {
+                setViewDoctorError(res.message || 'Failed to load doctor profile details.');
+            }
+        } catch (err) {
+            setViewDoctorError(err.response?.data?.message || 'Error fetching doctor profile details.');
+        } finally {
+            setLoadingDoctorDetails(false);
+        }
+    };
+
+    const renderAvailability = (availability) => {
+        if (!availability) return 'No availability defined';
+        const activeDays = Object.entries(availability).filter(([_, info]) => info.available);
+        if (activeDays.length === 0) return 'Not available (No active days)';
+        return (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '8px', marginTop: '4px' }}>
+                {activeDays.map(([day, info]) => (
+                    <div key={day} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px 10px', borderRadius: '6px', fontSize: '11px' }}>
+                        <strong style={{ textTransform: 'capitalize', color: '#1e293b', display: 'block' }}>{day}</strong>
+                        <span style={{ color: '#64748b' }}>{info.startTime} - {info.endTime}</span>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
     const handleEdit = (doctor) => {
         setEditingDoctor(doctor);
 
@@ -266,9 +306,15 @@ const AdminDoctors = () => {
                                 </div>
                             </div>
 
-                            <div className="form-group">
-                                <label htmlFor="education">Education</label>
-                                <input type="text" name="education" value={formData.education} onChange={handleChange} placeholder="e.g. MBBS, MD" />
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label htmlFor="education">Education</label>
+                                    <input type="text" name="education" value={formData.education} onChange={handleChange} placeholder="e.g. MBBS, MD" />
+                                </div>
+                                <div className="form-group">
+                                    <label htmlFor="consultationFee">Consultation Fee (₹)</label>
+                                    <input type="number" name="consultationFee" value={formData.consultationFee} onChange={handleChange} placeholder="e.g. 500" min="0" />
+                                </div>
                             </div>
 
                             <div className="form-group">
@@ -410,7 +456,7 @@ const AdminDoctors = () => {
                                         <td>
                                             <div className="action-buttons" style={{ display: 'flex', gap: '8px' }}>
                                                 <button
-                                                    onClick={() => handleEdit(doctor)}
+                                                    onClick={() => handleViewDetails(doctor._id)}
                                                     className="btn-edit"
                                                     style={{ backgroundColor: '#1976d2', color: 'white' }}
                                                 >
@@ -426,6 +472,185 @@ const AdminDoctors = () => {
                     )}
                 </div>
             </div>
+
+            {/* Doctor Details Modal */}
+            {(viewingDoctor || loadingDoctorDetails || viewDoctorError) && (
+                <div className="modal-overlay" style={{ display: 'flex' }} onClick={() => { if (!loadingDoctorDetails) { setViewingDoctor(null); setViewDoctorError(''); } }}>
+                    <div className="modal-content" style={{ maxWidth: '750px', width: '95%', padding: '28px', borderRadius: '20px', position: 'relative', background: '#ffffff', color: '#1e293b', boxShadow: '0 20px 48px rgba(0,0,0,0.15)' }} onClick={(e) => e.stopPropagation()}>
+                        
+                        {/* Close button */}
+                        <button 
+                            onClick={() => { setViewingDoctor(null); setViewDoctorError(''); }}
+                            style={{ position: 'absolute', right: '20px', top: '20px', background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8', transition: 'color 0.2s' }}
+                            onMouseOver={(e) => e.target.style.color = '#ef4444'}
+                            onMouseOut={(e) => e.target.style.color = '#94a3b8'}
+                        >
+                            ✕
+                        </button>
+
+                        {loadingDoctorDetails && (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '320px', gap: '16px' }}>
+                                <div style={{ width: '45px', height: '45px', border: '4px solid #f1f5f9', borderTop: '4px solid #14b8a6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                                <span style={{ color: '#64748b', fontWeight: 600, fontSize: '14px' }}>Fetching doctor profile details...</span>
+                                <style>{`
+                                    @keyframes spin {
+                                        0% { transform: rotate(0deg); }
+                                        100% { transform: rotate(360deg); }
+                                    }
+                                `}</style>
+                            </div>
+                        )}
+
+                        {viewDoctorError && (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '320px', gap: '20px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '3.5rem' }}>⚠️</div>
+                                <span style={{ color: '#ef4444', fontWeight: 700, fontSize: '15px' }}>{viewDoctorError}</span>
+                                <button className="btn btn-secondary" style={{ padding: '10px 24px', borderRadius: '10px', fontWeight: 'bold' }} onClick={() => { setViewingDoctor(null); setViewDoctorError(''); }}>Close</button>
+                            </div>
+                        )}
+
+                        {viewingDoctor && (
+                            <div className="doctor-profile-modal-body" style={{ animation: 'fadeIn 0.25s ease' }}>
+                                {/* Header section with Photo, Name & Specialty */}
+                                <div style={{ display: 'flex', gap: '24px', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '20px', marginBottom: '20px' }}>
+                                    {/* Avatar Photo */}
+                                    {(() => {
+                                        const avatar = viewingDoctor.userId?.avatar || viewingDoctor.image;
+                                        if (avatar && (avatar.startsWith('http') || avatar.startsWith('/'))) {
+                                            return <img src={avatar} alt={viewingDoctor.name} style={{ width: '90px', height: '90px', borderRadius: '50%', objectFit: 'cover', border: '3px solid #14b8a6' }} />;
+                                        }
+                                        return (
+                                            <div style={{ width: '90px', height: '90px', borderRadius: '50%', background: '#f0fdfa', border: '3px solid #14b8a6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem' }}>
+                                                {avatar || '👨‍⚕️'}
+                                            </div>
+                                        );
+                                    })()}
+
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                                            <h2 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, color: '#0f172a' }}>
+                                                {viewingDoctor.name || viewingDoctor.userId?.name || 'Unknown Name'}
+                                            </h2>
+                                        </div>
+                                        <p style={{ margin: '6px 0 0', fontWeight: '700', color: '#0d9488', fontSize: '1rem' }}>
+                                            {viewingDoctor.specialty || 'General Practitioner'}
+                                        </p>
+                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+                                            {viewingDoctor.departments?.map((dept, idx) => (
+                                                <span key={idx} style={{ background: '#f0fdfa', color: '#0d9488', fontSize: '11px', fontWeight: '700', padding: '4px 10px', borderRadius: '6px', border: '1px solid #ccfbef' }}>
+                                                    🏢 {dept}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Main details grid */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', maxHeight: '400px', overflowY: 'auto', paddingRight: '8px', marginBottom: '8px' }}>
+                                    
+                                    {/* Column 1: Contact & Demographics */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                        <h3 style={{ fontSize: '13px', margin: '0 0 4px 0', borderBottom: '2px solid #f1f5f9', paddingBottom: '6px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '800' }}>
+                                            Contact & Demographics
+                                        </h3>
+                                        
+                                        <div>
+                                            <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>Email Address</label>
+                                            <span style={{ fontSize: '13.5px', color: '#334155', fontWeight: 600 }}>{viewingDoctor.email || viewingDoctor.userId?.email || '—'}</span>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>Mobile Number</label>
+                                            <span style={{ fontSize: '13.5px', color: '#334155', fontWeight: 600 }}>{viewingDoctor.phone || viewingDoctor.userId?.phone || '—'}</span>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>Gender</label>
+                                            <span style={{ fontSize: '13.5px', color: '#334155', fontWeight: 600, textTransform: 'capitalize' }}>
+                                                {viewingDoctor.userId?.gender || '—'}
+                                            </span>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>Date of Birth</label>
+                                            <span style={{ fontSize: '13.5px', color: '#334155', fontWeight: 600 }}>
+                                                {viewingDoctor.userId?.dob ? new Date(viewingDoctor.userId.dob).toLocaleDateString('en-IN') : '—'}
+                                            </span>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>Residential Address</label>
+                                            <span style={{ fontSize: '13.5px', color: '#334155', fontWeight: 600 }}>{viewingDoctor.userId?.address || '—'}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Column 2: Professional Info */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                        <h3 style={{ fontSize: '13px', margin: '0 0 4px 0', borderBottom: '2px solid #f1f5f9', paddingBottom: '6px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '800' }}>
+                                            Professional Profile
+                                        </h3>
+
+                                        <div>
+                                            <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>Registration Number / Doc ID</label>
+                                            <span style={{ fontSize: '13.5px', color: '#0f172a', fontWeight: 700, fontFamily: 'monospace' }}>
+                                                {viewingDoctor.doctorId || '—'}
+                                            </span>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>Qualification / Education</label>
+                                            <span style={{ fontSize: '13.5px', color: '#334155', fontWeight: 600 }}>{viewingDoctor.education || '—'}</span>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>Years of Experience</label>
+                                            <span style={{ fontSize: '13.5px', color: '#334155', fontWeight: 600 }}>{viewingDoctor.experience || '—'}</span>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>Consultation Fee</label>
+                                            <span style={{ fontSize: '13.5px', color: '#16a34a', fontWeight: 700 }}>
+                                                ₹{Number(viewingDoctor.consultationFee || 0).toLocaleString('en-IN')}
+                                            </span>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>Joining Date</label>
+                                            <span style={{ fontSize: '13.5px', color: '#334155', fontWeight: 600 }}>
+                                                {viewingDoctor.createdAt ? new Date(viewingDoctor.createdAt).toLocaleDateString('en-IN') : '—'}
+                                            </span>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>Status</label>
+                                            <span style={{ display: 'inline-block', fontSize: '10.5px', fontWeight: '700', padding: '2px 8px', borderRadius: '4px', background: '#dcfce7', color: '#15803d', marginTop: '2px' }}>
+                                                Active
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Availability & Bio section */}
+                                <div style={{ borderTop: '1px solid #e2e8f0', marginTop: '16px', paddingTop: '16px' }}>
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>Weekly Availability & timing</label>
+                                        {renderAvailability(viewingDoctor.availability)}
+                                    </div>
+
+                                    {viewingDoctor.bio && (
+                                        <div>
+                                            <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Biography</label>
+                                            <p style={{ margin: 0, fontSize: '13px', color: '#475569', fontStyle: 'italic', background: '#f8fafc', padding: '12px', borderRadius: '10px', borderLeft: '4px solid #14b8a6', lineHeight: 1.5 }}>
+                                                "{viewingDoctor.bio}"
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

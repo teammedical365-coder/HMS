@@ -312,12 +312,6 @@ const HospitalAdminQuestionLibrary = () => {
                     </div>
                 ))}
                 
-                <button 
-                    onClick={() => alert("Contact the central admin team to assign your hospital a new department.")}
-                    style={{ background: '#e2e8f0', color: '#64748b', border: 'none', borderRadius: '5px', padding: '0 10px', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap', fontSize: '0.7rem' }}
-                >
-                    🔒 Locked
-                </button>
             </div>
 
             <div className="ql-admin-container">

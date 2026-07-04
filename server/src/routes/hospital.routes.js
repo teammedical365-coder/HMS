@@ -77,7 +77,7 @@ router.get('/resolve/:slug', async (req, res) => {
     try {
         const hospital = await Hospital.findOne(
             { slug: req.params.slug.toLowerCase(), isActive: true },
-            'name slug city logo departments departmentFees appointmentFee appointmentMode facilities isActive _id'
+            'name slug city logo departments departmentFees appointmentMode facilities isActive _id'
         );
         if (!hospital) {
             return res.status(404).json({ success: false, message: 'Hospital not found. Check the URL and try again.' });
@@ -91,7 +91,7 @@ router.get('/resolve/:slug', async (req, res) => {
 // Create a new hospital
 router.post('/', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, address, city, state, phone, email, website, logo, departments, appointmentFee, slug: customSlug } = req.body;
+        const { name, address, city, state, phone, email, website, logo, departments, slug: customSlug } = req.body;
         if (!name) return res.status(400).json({ success: false, message: 'Hospital name is required' });
 
         const RESERVED_SLUGS = ['api', 'admin', 'login', 'logout', 'signup', 'register', 'uploads',
@@ -118,7 +118,7 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             slug = `${baseSlug}-${counter++}`;
         }
 
-        const hospital = new Hospital({ name, slug, address, city, state, phone, email, website, logo, departments: departments || [], appointmentFee: appointmentFee || 500 });
+        const hospital = new Hospital({ name, slug, address, city, state, phone, email, website, logo, departments: departments || [] });
         await hospital.save();
 
 
@@ -200,7 +200,7 @@ router.get('/tenant-status', verifyCentralAdmin, async (req, res) => {
 // Update a hospital
 const updateHospital = async (req, res) => {
     try {
-        const { name, address, city, state, phone, email, website, logo, isActive, departments, appointmentFee, slug, appointmentMode, customDomain } = req.body;
+        const { name, address, city, state, phone, email, website, logo, isActive, departments, slug, appointmentMode, customDomain } = req.body;
         const hospital = await Hospital.findOne({ _id: req.params.id, clinicType: { $ne: 'clinic' } });
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
@@ -245,7 +245,6 @@ const updateHospital = async (req, res) => {
         if (logo !== undefined) hospital.logo = logo;
         if (isActive !== undefined) hospital.isActive = isActive;
         if (departments !== undefined) hospital.departments = departments;
-        if (appointmentFee !== undefined) hospital.appointmentFee = appointmentFee;
         if (appointmentMode !== undefined && ['slot', 'token'].includes(appointmentMode)) hospital.appointmentMode = appointmentMode;
 
         await hospital.save();

@@ -17,7 +17,7 @@ const CentralAdminDashboard = () => {
     const [hospitals, setHospitals] = useState([]);
     const [loadingHospitals, setLoadingHospitals] = useState(false);
     const [showHospitalForm, setShowHospitalForm] = useState(false);
-    const [hospitalForm, setHospitalForm] = useState({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 });
+    const [hospitalForm, setHospitalForm] = useState({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] });
     const [editHospital, setEditHospital] = useState(null);
     const [savingHospital, setSavingHospital] = useState(false);
     const [deleteHospitalConfirm, setDeleteHospitalConfirm] = useState(null);
@@ -446,7 +446,7 @@ const CentralAdminDashboard = () => {
                 if (res.success) { setSuccess('Hospital updated!'); setEditHospital(null); setShowHospitalForm(false); fetchHospitals(); }
             } else {
                 const res = await hospitalAPI.createHospital(hospitalForm);
-                if (res.success) { setSuccess('Hospital created!'); setShowHospitalForm(false); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 }); fetchHospitals(); }
+                if (res.success) { setSuccess('Hospital created!'); setShowHospitalForm(false); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] }); fetchHospitals(); }
             }
         } catch (err) { setError(err.response?.data?.message || 'Error saving hospital.'); }
         finally { setSavingHospital(false); }
@@ -467,7 +467,7 @@ const CentralAdminDashboard = () => {
 
     const openEditHospital = (h) => {
         setEditHospital(h);
-        setHospitalForm({ name: h.name, slug: h.slug || '', customDomain: h.customDomain || '', address: h.address || '', city: h.city || '', state: h.state || '', phone: h.phone || '', email: h.email || '', website: h.website || '', departments: h.departments || [], appointmentFee: h.appointmentFee || 500 });
+        setHospitalForm({ name: h.name, slug: h.slug || '', customDomain: h.customDomain || '', address: h.address || '', city: h.city || '', state: h.state || '', phone: h.phone || '', email: h.email || '', website: h.website || '', departments: h.departments || [] });
         setShowHospitalAdminForm(false);
         setShowHospitalForm(true);
         setTimeout(() => hospitalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
@@ -567,28 +567,52 @@ const CentralAdminDashboard = () => {
             <div className="centraladmin-page">
                 <div className="centraladmin-container">
                     {/* Back Header */}
-                    <div className="centraladmin-header-details" style={{ background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: 'var(--shadow-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                            <button onClick={closeHospitalDetail} className="back-btn-light">
+                    <div className="centraladmin-header-details" style={{ background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: 'var(--shadow-sm)', marginBottom: '24px' }}>
+                        {/* Top Row: Back Button */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <button onClick={closeHospitalDetail} className="back-btn-light" style={{ display: 'inline-flex', alignItems: 'center', margin: 0 }}>
                                 ← Back to Hospitals
                             </button>
-                            {h.branding?.logoUrl ? (
-                                <img src={h.branding.logoUrl} alt="Logo" style={{ width: '48px', height: '48px', objectFit: 'contain', borderRadius: '8px', border: '1.5px solid #cbd5e1', background: '#f8fafc', padding: '4px' }} />
-                            ) : (
-                                <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', border: '1.5px solid #cbd5e1' }}>🏥</div>
-                            )}
-                            <div>
-                                <h1 style={{ fontSize: '1.5rem', fontWeight: 850, color: '#1e293b', margin: 0 }}>{h.name}</h1>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#64748b', fontSize: '0.88rem', marginTop: '4px', flexWrap: 'wrap' }}>
-                                    {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
-                                    {h.phone && <span>· 📞 {h.phone}</span>}
+                        </div>
+
+                        {/* Bottom Row: Flex container with justify-content: space-between */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                            {/* Left Column: Logo + Name & Contact Details */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                                {h.branding?.logoUrl ? (
+                                    <img src={h.branding.logoUrl} alt="Logo" style={{ width: '48px', height: '48px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '4px' }} />
+                                ) : (
+                                    <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', border: '1px solid #cbd5e1' }}>🏥</div>
+                                )}
+                                <div>
+                                    <h1 style={{ fontSize: '1.6rem', fontWeight: 850, color: '#1e293b', margin: 0 }}>
+                                        {h.name}
+                                    </h1>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: '#64748b', fontSize: '0.92rem', marginTop: '6px', flexWrap: 'wrap' }}>
+                                        {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
+                                        {h.phone && <span>📞 {h.phone}</span>}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div className="admin-user-info" style={{ display: 'flex', alignItems: 'center', margin: 0 }}>
-                            <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`} style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 700, color: 'white', textTransform: 'uppercase' }}>
-                                {h.isActive ? 'ACTIVE' : 'INACTIVE'}
-                            </span>
+
+                            {/* Right Column: ACTIVE Badge */}
+                            <div>
+                                <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`} style={{ 
+                                    padding: '6px 14px', 
+                                    fontSize: '12px', 
+                                    fontWeight: 700, 
+                                    textTransform: 'uppercase',
+                                    borderRadius: '20px',
+                                    border: h.isActive ? '1px solid #15803d' : '1px solid #b91c1c',
+                                    background: h.isActive ? '#dcfce7' : '#fee2e2',
+                                    color: h.isActive ? '#15803d' : '#b91c1c',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    height: 'fit-content'
+                                }}>
+                                    {h.isActive ? 'ACTIVE' : 'INACTIVE'}
+                                </span>
+                            </div>
                         </div>
                     </div>
 
@@ -801,7 +825,7 @@ const CentralAdminDashboard = () => {
                                             { label: 'Admin Email', value: h.adminEmail },
                                             { label: 'Staff Login URL', value: h.slug && `${window.location.protocol}//${h.slug}.${getBaseHost()}/login`, isLink: true },
                                             { label: 'Custom Domain', value: h.customDomain && `http://${h.customDomain}`, isLink: true },
-                                            { label: 'Appointment Fee', value: h.appointmentFee !== undefined && h.appointmentFee !== null ? formatCurrency(h.appointmentFee) : formatCurrency(500) },
+
                                         ].map((item, i) => item.value && (
                                             <div key={i} style={{ display: 'flex', gap: '12px', marginBottom: '8px', fontSize: '14px' }}>
                                                 <span style={{ color: '#888', minWidth: '90px' }}>{item.label}</span>
@@ -937,7 +961,7 @@ const CentralAdminDashboard = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: 800, background: 'var(--brand-50, #f0fdfa)', color: 'var(--brand-600, #14b8a6)', padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.05em' }}>CENTRAL ADMIN</span>
                         </div>
-                        <h1 style={{ fontSize: '1.8rem', fontWeight: 850, margin: '8px 0 4px', color: '#1e293b' }}>🏛️ Central Administration Dashboard</h1>
+                        <h1 className="ca-dashboard-title" style={{ fontSize: '1.8rem', fontWeight: 850, margin: '8px 0 4px' }}>🏛️ Central Administration Dashboard</h1>
                         <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Manage all hospitals, staff, and system configurations</p>
                     </div>
                     <button
@@ -975,7 +999,7 @@ const CentralAdminDashboard = () => {
                                         {showHospitalAdminForm ? 'Cancel' : '👤 Add Hospital Admin'}
                                     </button>
                                     <button className={showHospitalForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '10px 18px' }}
-                                        onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], appointmentFee: 500 }); }}>
+                                        onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] }); }}>
                                         {showHospitalForm ? 'Cancel' : '+ Add Hospital'}
                                     </button>
                                 </div>
@@ -1083,10 +1107,6 @@ const CentralAdminDashboard = () => {
                                         <div className="form-group">
                                             <label className="staff-label">Address</label>
                                             <input type="text" className="staff-input" value={hospitalForm.address} onChange={e => setHospitalForm({ ...hospitalForm, address: e.target.value })} />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Standard Appointment Fee (₹)</label>
-                                            <input type="number" className="staff-input" value={hospitalForm.appointmentFee} onChange={e => setHospitalForm({ ...hospitalForm, appointmentFee: Number(e.target.value) })} min="0" />
                                         </div>
                                         <div className="form-group" style={{ marginBottom: '16px' }}>
                                             <label className="staff-label">Departments Provided (Linked to Question Library)</label>

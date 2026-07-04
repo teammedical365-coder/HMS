@@ -139,7 +139,7 @@
   gap: 20px;
 }
 
-.action-btn {
+.lab-action-btn {
   padding: 16px 32px;
   border-radius: 16px;
   border: none;
@@ -155,19 +155,19 @@
   box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
 }
 
-.action-btn:hover {
+.lab-action-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 25px rgba(59, 130, 246, 0.4);
 }
 
-.action-btn.secondary {
+.lab-action-btn.secondary {
   background: white;
   color: var(--lab-primary);
   border: 1px solid rgba(59, 130, 246, 0.2);
   box-shadow: var(--glass-shadow);
 }
 
-.action-btn.secondary:hover {
+.lab-action-btn.secondary:hover {
   background: #f8fafc;
 }
 
@@ -221,7 +221,7 @@
     flex-direction: column;
   }
 
-  .action-btn {
+  .lab-action-btn {
     width: 100%;
     justify-content: center;
   }

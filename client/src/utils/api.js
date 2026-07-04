@@ -181,7 +181,9 @@ export const adminAPI = {
 
 export const adminEntitiesAPI = {
     getDoctors: async () => (await apiClient.get('/api/admin-entities/doctors')).data,
+    getDoctor: async (id) => (await apiClient.get(`/api/admin-entities/doctors/${id}`)).data,
     createDoctor: async (data) => (await apiClient.post('/api/admin-entities/doctors', data)).data,
+    updateDoctor: async (id, data) => (await apiClient.put(`/api/admin-entities/doctors/${id}`, data)).data,
     deleteDoctor: async (id) => (await apiClient.delete(`/api/admin-entities/doctors/${id}`)).data,
     getLabs: async () => (await apiClient.get('/api/admin-entities/labs')).data,
     createLab: async (data) => (await apiClient.post('/api/admin-entities/labs', data)).data,

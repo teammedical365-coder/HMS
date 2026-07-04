@@ -117,7 +117,7 @@ const PharmacyInventory = () => {
                                     <td>{med.vendor}</td>
                                     <td>{new Date(med.expiryDate).toLocaleDateString()}</td>
                                     <td>
-                                        <button className="action-btn delete" onClick={() => handleDelete(med._id)}>🗑</button>
+                                        <button className="pharma-action-btn delete" onClick={() => handleDelete(med._id)}>🗑</button>
                                     </td>
                                 </tr>
                             ))}

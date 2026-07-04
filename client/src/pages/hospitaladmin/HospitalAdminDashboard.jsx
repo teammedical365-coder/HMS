@@ -442,7 +442,6 @@ const HospitalAdminDashboard = () => {
         { icon: '👨‍⚕️', label: 'Doctors', desc: 'Manage doctor profiles & schedules', path: '/admin/doctors', bg: '#dbeafe', color: '#2563eb' },
         { icon: '🧪', label: 'Labs', desc: 'Configure lab departments', path: '/admin/labs', bg: '#f3e8ff', color: '#9333ea' },
         { icon: '💊', label: 'Pharmacy', desc: 'Pharmacy inventory & orders', path: '/admin/pharmacy', bg: '#ffedd5', color: '#ea580c' },
-        { icon: '🏥', label: 'Reception', desc: 'Reception & appointments', path: '/admin/reception', bg: '#dcfce7', color: '#16a34a' },
         { icon: '🛠️', label: 'Services', desc: 'Hospital services & pricing', path: '/admin/services', bg: '#fefce8', color: '#ca8a04' },
         { icon: '👥', label: 'Manage Users', desc: 'View and manage all staff', path: '/admin/users', bg: '#f0f9ff', color: '#0284c7' },
         { icon: '📝', label: 'Question Library', desc: 'Manage diagnostic questions', path: '/hospitaladmin/question-library', bg: '#fdf2f8', color: '#be185d' },
@@ -628,7 +627,6 @@ const HospitalAdminDashboard = () => {
                                     {hospitalInfo.phone && <div><strong>Phone:</strong> {hospitalInfo.phone}</div>}
                                     {hospitalInfo.email && <div><strong>Email:</strong> {hospitalInfo.email}</div>}
                                     {hospitalInfo.address && <div><strong>Address:</strong> {hospitalInfo.address}</div>}
-                                    <div><strong>Appointment Fee:</strong> {formatCurrency(hospitalInfo.appointmentFee ?? 500)}</div>
                                 </div>
                             </div>
                         )}
@@ -857,7 +855,7 @@ const HospitalAdminDashboard = () => {
                                                             min="0"
                                                             className="staff-input"
                                                             style={{ width: '140px', padding: '8px 12px' }}
-                                                            value={hospitalInfo?.departmentFees?.[dept] ?? hospitalInfo?.appointmentFee ?? 500}
+                                                            value={hospitalInfo?.departmentFees?.[dept] ?? 500}
                                                             onChange={(e) => {
                                                                 const newFee = Number(e.target.value);
                                                                 setHospitalInfo(prev => ({

@@ -47,10 +47,10 @@ const LabDashboard = () => {
             </div>
 
             <div className="lab-actions">
-                <button className="action-btn" onClick={() => navigate('/lab/tests')}>
+                <button className="lab-action-btn" onClick={() => navigate('/lab/tests')}>
                     📋 View Assigned Tests
                 </button>
-                <button className="action-btn secondary" onClick={() => navigate('/lab/completed')}>
+                <button className="lab-action-btn secondary" onClick={() => navigate('/lab/completed')}>
                     🗄️ Past Records
                 </button>
             </div>

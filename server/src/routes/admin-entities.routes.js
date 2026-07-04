@@ -122,7 +122,7 @@ router.post('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
     });
 
     await doctor.save();
-    const populatedDoctor = await Doctor.findById(doctor._id).populate('userId', 'name email phone role');
+    const populatedDoctor = await Doctor.findById(doctor._id).populate('userId', 'name email phone role dob gender address avatar createdAt');
 
     res.status(201).json({
       success: true,
@@ -163,7 +163,7 @@ router.post('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
 router.get('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
     const filter = getHospitalFilter(req);
-    const doctors = await Doctor.find(filter).populate('userId', 'name email phone role').sort({ createdAt: -1 });
+    const doctors = await Doctor.find(filter).populate('userId', 'name email phone role dob gender address avatar createdAt').sort({ createdAt: -1 });
     res.json({ success: true, doctors });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching doctors' });
@@ -173,7 +173,7 @@ router.get('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
 // Get single doctor
 router.get('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
-    const doctor = await Doctor.findById(req.params.id).populate('userId', 'name email phone role');
+    const doctor = await Doctor.findById(req.params.id).populate('userId', 'name email phone role dob gender address avatar createdAt');
     if (!doctor) {
       return res.status(404).json({ success: false, message: 'Doctor not found' });
     }
@@ -247,7 +247,7 @@ router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
       }
     }
 
-    const populatedDoctor = await Doctor.findById(doctor._id).populate('userId', 'name email phone role');
+    const populatedDoctor = await Doctor.findById(doctor._id).populate('userId', 'name email phone role dob gender address avatar createdAt');
     res.json({ success: true, message: 'Doctor updated successfully', doctor: populatedDoctor });
   } catch (error) {
     console.error('Update doctor error:', error);
