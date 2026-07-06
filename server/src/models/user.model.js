@@ -28,7 +28,11 @@ const userSchema = new mongoose.Schema({
     gender: String,
     bloodGroup: String,
     address: String,
+    houseNo: String,
+    street: String,
     city: String,
+    state: String,
+    zipCode: String,
 
     // Identity Verification (KYC)
     aadhaarNumber: { type: String, unique: true, sparse: true, trim: true },

@@ -20,7 +20,7 @@ const vitalsSchema = new mongoose.Schema({
 
 const appointmentSchema = new mongoose.Schema({
     userId: {
-        type: mongoose.Schema.Types.ObjectId,
+        type: mongoose.Schema.Types.Mixed,
         ref: 'User',
         required: false,
         default: null

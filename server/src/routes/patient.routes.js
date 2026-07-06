@@ -59,7 +59,7 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
         const userId = req.params.id;
         const roleData = req.user._roleData;
 
-        const allowedRoles = ['doctor', 'nurse', 'superadmin', 'admin', 'reception', 'lab', 'pharmacy', 'centraladmin', 'hospitaladmin'];
+        const allowedRoles = ['doctor', 'nurse', 'superadmin', 'admin', 'reception', 'receptionist', 'lab', 'pharmacy', 'centraladmin', 'hospitaladmin'];
         const userRole = (req.user.role ? String(req.user.role) : '').toLowerCase();
         const dynRole = (roleData?.name || '').toLowerCase();
         
@@ -128,19 +128,29 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
         let appointments = [];
         let plans = [];
 
+        const idList = [realUserId];
+        if (patientIdStr && String(patientIdStr) !== String(realUserId)) {
+            idList.push(patientIdStr);
+        }
+
         if (isClinicPatient) {
             const TreatmentPlan = require('../models/treatmentPlan.model');
             // Clinic patients store appointments with clinicPatientId field
-            appointments = await Appointment.find({ clinicPatientId: realUserId, ...hFilter }).lean();
+            appointments = await Appointment.find({ $or: [{ clinicPatientId: { $in: idList } }, { userId: { $in: idList } }, { patientId: { $in: idList } }], ...hFilter }).lean();
             // Clinic treatment plans
-            plans = await TreatmentPlan.find({ clinicPatientId: realUserId, ...hFilter }).lean();
+            plans = await TreatmentPlan.find({ clinicPatientId: { $in: idList }, ...hFilter }).lean();
         } else {
             // Hospital queries
+            const visitQuery = { $or: [{ patientId: { $in: idList } }], ...hFilter };
+            const labQuery = { $or: [{ userId: { $in: idList } }, { patientId: { $in: idList } }], ...hFilter };
+            const pharmaQuery = { $or: [{ userId: { $in: idList } }, { patientId: { $in: idList } }], ...hFilter };
+            const apptQuery = { $or: [{ userId: { $in: idList } }, { patientId: { $in: idList } }], ...hFilter };
+
             [visits, labs, pharmacies, appointments] = await Promise.all([
-                ClinicalVisit.find({ $or: [{ patientId: realUserId }, { patientId: patientIdStr }], ...hFilter }).lean(),
-                LabReport.find({ userId: realUserId, ...hFilter }).lean(),
-                PharmacyOrder.find({ userId: realUserId, ...hFilter }).lean(),
-                Appointment.find({ $or: [{ userId: realUserId }, { patientId: patientIdStr }], ...hFilter }).lean()
+                ClinicalVisit.find(visitQuery).lean(),
+                LabReport.find(labQuery).lean(),
+                PharmacyOrder.find(pharmaQuery).lean(),
+                Appointment.find(apptQuery).lean()
             ]);
         }
 

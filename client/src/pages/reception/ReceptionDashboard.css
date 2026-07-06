@@ -347,23 +347,115 @@
 /* ---- Form Sections ---- */
 .form-section {
   background: var(--surface-0);
-  padding: 24px;
+  padding: 28px 26px;
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  margin-bottom: 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  margin-bottom: 22px;
   border: 1px solid var(--gray-200);
   animation: fadeIn 0.3s ease-out;
+  transition: box-shadow 0.2s ease;
+}
+
+.form-section:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .form-section h4 {
   font-size: 0.875rem;
   font-weight: 800;
   color: var(--gray-700);
-  margin: 0 0 18px;
+  margin: 0 0 20px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--gray-100);
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--gray-100);
+}
+
+/* ---- Patient Profile Photo Upload ---- */
+.patient-photo-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  border: 2px dashed var(--gray-300);
+  border-radius: 12px;
+  margin-bottom: 18px;
+  transition: border-color 0.2s ease;
+}
+
+.patient-photo-upload-row:hover {
+  border-color: var(--brand-500, #14b8a6);
+}
+
+.photo-preview-box {
+  width: 90px;
+  height: 90px;
+  border-radius: 14px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--gray-200);
+}
+
+.photo-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--gray-400);
+}
+
+.photo-placeholder span {
+  font-size: 1.8rem;
+}
+
+.photo-placeholder small {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--gray-400);
+}
+
+.photo-upload-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.photo-upload-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--gray-700);
+}
+
+.photo-file-input {
+  padding: 8px;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  background: white;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.photo-file-input:hover {
+  border-color: var(--brand-500, #14b8a6);
+}
+
+.photo-hint {
+  font-size: 0.72rem;
+  color: var(--gray-400);
+  font-style: italic;
 }
 
 /* ---- Form Fields ---- */

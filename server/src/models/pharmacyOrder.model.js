@@ -8,7 +8,7 @@ const pharmacyOrderSchema = new mongoose.Schema({
     },
     patientId: { type: String, required: true },
     userId: {
-        type: mongoose.Schema.Types.ObjectId,
+        type: mongoose.Schema.Types.Mixed,
         ref: 'User',
         required: true
     },

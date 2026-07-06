@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI } from '../../utils/api';
 import { useAuth } from '../../store/hooks';
 import { getSubdomain } from '../../utils/subdomain';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { FiSearch, FiUserPlus, FiFileText, FiDollarSign, FiUsers, FiCalendar, FiHome, FiPlusSquare } from 'react-icons/fi';
 import './ReceptionDashboard.css';
 
 const timeSlots = [
@@ -15,11 +16,12 @@ const timeSlots = [
 
 const ReceptionDashboard = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { user: currentUser } = useAuth();
     const [appointments, setAppointments] = useState([]);
     const [doctorsList, setDoctorsList] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [viewMode, setViewMode] = useState('dashboard');
+    const [viewMode, setViewMode] = useState('welcome');
     const [selectedPatientId, setSelectedPatientId] = useState(null);
     const [saving, setSaving] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -50,9 +52,12 @@ const ReceptionDashboard = () => {
         // Identity
         title: 'Mrs.', firstName: '', middleName: '', lastName: '',
         dob: '', age: '', gender: 'Female', mobile: '', email: '',
-        address: '', aadhaar: '', isAadhaarVerified: false,
+        address: '', houseNo: '', street: '', city: '', state: '', zipCode: '',
+        aadhaar: '', isAadhaarVerified: false,
+        relationToPatient: '',
+        avatar: '',
 
-        // Partner
+        // Partner / Relative
         partnerTitle: 'Mr.', partnerFirstName: '', partnerLastName: '', partnerMobile: '',
 
         // Vitals / Payment (Reception Duties)
@@ -64,6 +69,8 @@ const ReceptionDashboard = () => {
         referralType: '', reasonForVisit: '', paymentMethod: 'Cash'
     });
 
+    const [profilePhoto, setProfilePhoto] = useState(null);
+    const [profilePhotoPreview, setProfilePhotoPreview] = useState(null);
     const [paymentScreenshot, setPaymentScreenshot] = useState(null);
     const [verifyingAadhaar, setVerifyingAadhaar] = useState(false);
     const [otpSent, setOtpSent] = useState(false);
@@ -83,6 +90,23 @@ const ReceptionDashboard = () => {
         fetchAppointments();
         fetchDoctors();
     }, []);
+
+    useEffect(() => {
+        const searchParams = new URLSearchParams(location.search);
+        const view = searchParams.get('view');
+        if (view === 'intake') {
+            handleNewWalkIn();
+        } else if (view === 'transactions') {
+            fetchTransactions();
+            setViewMode('transactions');
+        } else if (view === 'list' || view === 'desk' || view === 'availability') {
+            setViewMode('list');
+        } else if (location.state?.patient) {
+            handleEditPatient(location.state.patient);
+        } else {
+            setViewMode('welcome');
+        }
+    }, [location.state, location.search, hospitalContext]);
 
     useEffect(() => {
         if (availabilityCheck.doctorId && availabilityCheck.date) {
@@ -167,10 +191,13 @@ const ReceptionDashboard = () => {
         setOtpSent(false);
         setAadhaarOtp('');
         setVerifyingAadhaar(false);
+        setProfilePhoto(null);
+        setProfilePhotoPreview(null);
         setIntakeForm({
             title: 'Mrs.', firstName: '', middleName: '', lastName: '',
             dob: '', age: '', gender: 'Female', mobile: '', email: '',
-            address: '', aadhaar: '', isAadhaarVerified: false,
+            address: '', houseNo: '', street: '', city: '', state: '', zipCode: '',
+            aadhaar: '', isAadhaarVerified: false, relationToPatient: '', avatar: '',
             partnerTitle: 'Mr.', partnerFirstName: '', partnerLastName: '', partnerMobile: '',
             height: '', weight: '', bmi: '', bloodGroup: '',
             paymentStatus: 'Pending', consultationFee: hospitalContext?.appointmentFee ?? '500',
@@ -185,6 +212,8 @@ const ReceptionDashboard = () => {
         setOtpSent(false);
         setAadhaarOtp('');
         setVerifyingAadhaar(false);
+        setProfilePhoto(null);
+        setProfilePhotoPreview(patient.avatar || null);
         const p = patient.fertilityProfile || {};
         const getVal = (val) => val || '';
 
@@ -196,6 +225,14 @@ const ReceptionDashboard = () => {
             email: getVal(patient.email),
             aadhaar: p.aadhaar || '',
             isAadhaarVerified: p.aadhaar ? true : false,
+            relationToPatient: p.relationToPatient || patient.relationToPatient || '',
+            address: patient.address || '',
+            houseNo: patient.houseNo || '',
+            street: patient.street || '',
+            city: patient.city || '',
+            state: patient.state || '',
+            zipCode: patient.zipCode || '',
+            avatar: patient.avatar || '',
             ...p,
             consultationFee: hospitalContext?.appointmentFee ?? '500',
             department: '', doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: ''
@@ -204,7 +241,7 @@ const ReceptionDashboard = () => {
     };
 
     const handleViewProfile = (patient) => {
-        navigate(`/patient/${patient._id}`);
+        navigate(`/patient/${patient._id || patient.patientId || patient.id}`);
     };
 
     const openHospitalizeModal = (apt) => {
@@ -380,6 +417,13 @@ const ReceptionDashboard = () => {
                 return;
             }
         }
+
+        if (name === 'mobile' || name === 'partnerMobile') {
+            const cleaned = value.replace(/\D/g, '');
+            if (cleaned.length > 10) return;
+            setIntakeForm(prev => ({ ...prev, [name]: cleaned }));
+            return;
+        }
         setIntakeForm(prev => ({ ...prev, [name]: value }));
     };
 
@@ -443,6 +487,18 @@ const ReceptionDashboard = () => {
             setSaving(false); return;
         }
 
+        if (!/^\d{10}$/.test(intakeForm.mobile)) {
+            alert("Mobile number must be exactly 10 digits.");
+            setSaving(false); return;
+        }
+
+        // Compile full address
+        const fullAddress = [intakeForm.houseNo, intakeForm.street, intakeForm.city, intakeForm.state, intakeForm.zipCode]
+            .map(s => String(s || '').trim())
+            .filter(Boolean)
+            .join(', ');
+        intakeForm.address = fullAddress;
+
         if (intakeForm.doctor && intakeForm.visitTime && intakeForm.paymentMethod !== 'Cash' && !paymentScreenshot) {
             alert(`Please upload a payment screenshot/proof for ${intakeForm.paymentMethod} payment before booking.`);
             setSaving(false); return;
@@ -464,8 +520,23 @@ const ReceptionDashboard = () => {
                 throw new Error(regRes.message || "Registration failed.");
             }
 
-            // 2. Update Profile (Vitals + Basic Info + Aadhaar)
-            await receptionAPI.updateIntake(userId, intakeForm);
+            // 2. Upload profile photo if selected
+            let avatarUrl = null;
+            if (profilePhoto) {
+                try {
+                    const photoFD = new FormData();
+                    photoFD.append('images', profilePhoto);
+                    const photoRes = await uploadAPI.uploadImages(photoFD);
+                    if (photoRes.success && photoRes.files?.length > 0) {
+                        avatarUrl = photoRes.files[0].url;
+                    }
+                } catch { /* non-fatal */ }
+            }
+
+            // 3. Update Profile (Vitals + Basic Info + Aadhaar + Avatar)
+            const intakePayload = { ...intakeForm };
+            if (avatarUrl) intakePayload.avatar = avatarUrl;
+            await receptionAPI.updateIntake(userId, intakePayload);
 
             // 3. Book Appointment (optional when editing existing patient)
             const isTokenMode = hospitalContext?.appointmentMode === 'token';
@@ -562,14 +633,14 @@ const ReceptionDashboard = () => {
 
                     setPaymentScreenshot(null);
                     fetchAppointments();
-                    setViewMode('dashboard');
+                    navigate('/reception/dashboard?view=list');
                 } else {
                     alert("Booking Failed: " + bookingRes.message);
                 }
             } else if (selectedPatientId) {
                 // Editing existing patient — profile saved, no appointment needed
                 alert("✅ Patient details updated successfully!");
-                setViewMode('dashboard');
+                navigate('/reception/dashboard?view=list');
             } else {
                 alert("Please select a Doctor and Time Slot to complete the registration.");
             }
@@ -586,109 +657,179 @@ const ReceptionDashboard = () => {
             <div className="intake-full-page">
                 <div className="context-bar">
                     <h3>{selectedPatientId ? 'Edit Patient Details' : 'New Registration'}</h3>
-                    <button className="btn-cancel" onClick={() => setViewMode('dashboard')}>Close ✖</button>
+                    <button className="btn-cancel" onClick={() => navigate('/reception/dashboard?view=list')}>Close ✖</button>
                 </div>
                 <div className="intake-container">
                     <form onSubmit={handleSave}>
+                        {/* Unifying Sections 1, 2, and 3 into a single card container */}
                         <div className="form-section">
                             <h4>1. Patient Identity & KYC</h4>
+
+                            {/* PATIENT PROFILE PHOTO */}
+                            <div style={{ marginBottom: '18px' }}>
+                                <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '6px' }}>Patient Photo</label>
+                                <div 
+                                    onClick={() => document.getElementById('avatarFileInput').click()} 
+                                    style={{ 
+                                        cursor: 'pointer', 
+                                        border: '1.5px dashed #cbd5e1', 
+                                        borderRadius: '8px', 
+                                        padding: '12px', 
+                                        display: 'inline-flex', 
+                                        alignItems: 'center', 
+                                        gap: '10px', 
+                                        backgroundColor: '#f8fafc',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseOver={(e) => e.currentTarget.style.borderColor = '#14b8a6'}
+                                    onMouseOut={(e) => e.currentTarget.style.borderColor = '#cbd5e1'}
+                                >
+                                    {profilePhotoPreview || (profilePhoto && URL.createObjectURL(profilePhoto)) ? (
+                                        <img
+                                            src={profilePhoto ? URL.createObjectURL(profilePhoto) : profilePhotoPreview}
+                                            alt="Patient"
+                                            style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover' }}
+                                        />
+                                    ) : (
+                                        <span style={{ fontSize: '1.25rem' }}>📷</span>
+                                    )}
+                                    <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569' }}>
+                                        {profilePhoto || profilePhotoPreview ? 'Change Photo' : 'Open Camera / Upload'}
+                                    </span>
+                                </div>
+                                <input
+                                    id="avatarFileInput"
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    onChange={(e) => {
+                                        const file = e.target.files[0];
+                                        if (file) {
+                                            setProfilePhoto(file);
+                                            setProfilePhotoPreview(URL.createObjectURL(file));
+                                        }
+                                    }}
+                                    style={{ display: 'none' }}
+                                />
+                            </div>
 
                             {/* AADHAAR VERIFICATION ROW */}
                             <div className="form-row" style={{ alignItems: 'flex-end', backgroundColor: '#f0fdf4', padding: '15px', borderRadius: '8px', border: '1px dashed #22c55e', gap: '15px' }}>
                                 {/* AADHAAR INPUT */}
-                                <div className="field" style={{ flex: 2 }}>
-                                    <label>Aadhaar Number {intakeForm.isAadhaarVerified && '✅ Verified'}</label>
+                                <div className="field" style={{ flex: 1 }}>
+                                    <label>Aadhaar Number</label>
                                     <input
                                         name="aadhaar"
                                         maxLength="12"
                                         placeholder="Enter 12-digit Aadhaar"
-                                        value={intakeForm.aadhaar}
+                                        value={intakeForm.aadhaar || ''}
                                         onChange={handleInputChange}
-                                        disabled={intakeForm.isAadhaarVerified || otpSent}
                                         style={{
-                                            borderColor: intakeForm.isAadhaarVerified ? 'green' : '#ccc',
-                                            backgroundColor: intakeForm.isAadhaarVerified ? '#e6fffa' : 'white',
+                                            borderColor: '#ccc',
                                             fontWeight: 'bold'
                                         }}
                                     />
                                 </div>
-
-                                {/* OTP INPUT (Conditional) */}
-                                {otpSent && !intakeForm.isAadhaarVerified && (
-                                    <div className="field verified-anim" style={{ flex: 1 }}>
-                                        <label>Enter OTP</label>
-                                        <input
-                                            type="text"
-                                            maxLength="6"
-                                            placeholder="Ex: 123456"
-                                            value={aadhaarOtp}
-                                            onChange={(e) => setAadhaarOtp(e.target.value)}
-                                            style={{ borderColor: '#2563eb' }}
-                                        />
-                                    </div>
-                                )}
-
-                                {/* ACTION BUTTONS */}
-                                <div className="field" style={{ flex: 1 }}>
-                                    {!intakeForm.isAadhaarVerified ? (
-                                        !otpSent ? (
-                                            <button
-                                                type="button"
-                                                onClick={handleSendOTP}
-                                                className="btn-save"
-                                                style={{ width: '100%', backgroundColor: '#2563eb' }}
-                                                disabled={verifyingAadhaar || !intakeForm.aadhaar}
-                                            >
-                                                {verifyingAadhaar ? 'Sending...' : 'Send OTP'}
-                                            </button>
-                                        ) : (
-                                            <div style={{ display: 'flex', gap: '5px' }}>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleVerifyOTP}
-                                                    className="btn-save"
-                                                    style={{ flex: 2, backgroundColor: '#059669' }}
-                                                    disabled={verifyingAadhaar}
-                                                >
-                                                    {verifyingAadhaar ? '...' : 'Verify OTP'}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => { setOtpSent(false); setAadhaarOtp(''); }}
-                                                    className="btn-cancel"
-                                                    style={{ flex: 1, padding: '0 5px', fontSize: '0.8rem', height: '100%' }}
-                                                >
-                                                    Cancel
-                                                </button>
-                                            </div>
-                                        )
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            onClick={() => setIntakeForm({ ...intakeForm, isAadhaarVerified: false, aadhaar: '' })}
-                                            className="btn-cancel"
-                                            style={{ width: '100%' }}
-                                        >
-                                            Reset / Clear
-                                        </button>
-                                    )}
-                                </div>
                             </div>
 
-                            <div className="form-row" style={{ marginTop: '10px' }}>
+                            <div className="form-row" style={{ marginTop: '14px' }}>
                                 <div className="field"><label>First Name</label><input name="firstName" value={intakeForm.firstName} onChange={handleInputChange} /></div>
                                 <div className="field"><label>Last Name</label><input name="lastName" value={intakeForm.lastName} onChange={handleInputChange} /></div>
                                 <div className="field"><label>Mobile</label><input name="mobile" value={intakeForm.mobile} onChange={handleInputChange} /></div>
                                 <div className="field"><label>Age</label><input name="age" value={intakeForm.age} onChange={handleInputChange} /></div>
                             </div>
                             <div className="form-row">
-                                <div className="field"><label>Partner Name</label><input name="partnerFirstName" value={intakeForm.partnerFirstName} onChange={handleInputChange} /></div>
-                                <div className="field"><label>Partner Mobile</label><input name="partnerMobile" value={intakeForm.partnerMobile} onChange={handleInputChange} /></div>
+                                <div className="field"><label>Relative Name</label><input name="partnerFirstName" placeholder="Relative Name" value={intakeForm.partnerFirstName} onChange={handleInputChange} /></div>
+                                <div className="field">
+                                    <label>Relation To Patient</label>
+                                    <select name="relationToPatient" value={intakeForm.relationToPatient || ''} onChange={handleInputChange}>
+                                        <option value="">-- Select Relation --</option>
+                                        <option value="Husband">Husband</option>
+                                        <option value="Wife">Wife</option>
+                                        <option value="Father">Father</option>
+                                        <option value="Mother">Mother</option>
+                                        <option value="Son">Son</option>
+                                        <option value="Others">Others</option>
+                                    </select>
+                                </div>
+                                <div className="field"><label>Relative Mobile</label><input name="partnerMobile" placeholder="Relative Mobile" value={intakeForm.partnerMobile} onChange={handleInputChange} /></div>
                             </div>
-                        </div>
 
-                        <div className="form-section">
-                            <h4>2. Vitals & Payment</h4>
+                            <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
+
+                            <h4>2. Address Information</h4>
+                            <div className="form-row">
+                                <div className="field">
+                                    <label>House No / Flat No / Building Name</label>
+                                    <input
+                                        name="houseNo"
+                                        placeholder="House No / Flat No / Building Name"
+                                        value={intakeForm.houseNo || ''}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+                                <div className="field">
+                                    <label>Street / Area / Locality</label>
+                                    <input
+                                        name="street"
+                                        placeholder="Street / Area / Locality"
+                                        value={intakeForm.street || ''}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+                            </div>
+                            <div className="form-row">
+                                <div className="field">
+                                    <label>City</label>
+                                    <input
+                                        name="city"
+                                        placeholder="City"
+                                        value={intakeForm.city || ''}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+                                <div className="field">
+                                    <label>State</label>
+                                    <input
+                                        name="state"
+                                        placeholder="State"
+                                        value={intakeForm.state || ''}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+                                <div className="field">
+                                    <label>Pincode</label>
+                                    <input
+                                        name="zipCode"
+                                        placeholder="Pincode"
+                                        value={intakeForm.zipCode || ''}
+                                        onChange={handleInputChange}
+                                    />
+                                </div>
+                            </div>
+
+                            <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
+
+                            <h4>3. Patient Source Information</h4>
+                            <div className="form-row">
+                                <div className="field">
+                                    <label>Referral Type</label>
+                                    <select name="referralType" value={intakeForm.referralType || ''} onChange={handleInputChange}>
+                                        <option value="">-- Select Source / Referral --</option>
+                                        <option value="Self">Self / Direct</option>
+                                        <option value="Doctor Referral">Doctor Referral</option>
+                                        <option value="Social Media">Social Media (FB/Insta)</option>
+                                        <option value="Google/Website">Google Search / Website</option>
+                                        <option value="Newspaper/Banner">Newspaper / Banner</option>
+                                        <option value="Friend/Relative">Friend / Relative</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
+
+                            <h4>4. Vitals & Payment</h4>
                             <div className="form-row">
                                 <div className="field"><label>Height (cm)</label><input name="height" value={intakeForm.height} onChange={handleInputChange} /></div>
                                 <div className="field"><label>Weight (kg)</label><input name="weight" value={intakeForm.weight} onChange={handleInputChange} /></div>
@@ -729,10 +870,12 @@ const ReceptionDashboard = () => {
                                     </div>
                                 </div>
                             )}
-                        </div>
 
-                        <div className="form-section" style={{ backgroundColor: '#e3f2fd' }}>
-                            <h4>3. Assign to Doctor/Counselor</h4>
+                            <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
+
+                            {/* 5. Assign to Doctor/Counselor nested styling */}
+                            <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
+                                <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px', borderBottom: '2px solid #bfdbfe', paddingBottom: '10px' }}>5. Assign to Doctor/Counselor</h4>
                             <div className="form-row">
                                 <div className="field">
                                     <label>Department</label>
@@ -808,6 +951,7 @@ const ReceptionDashboard = () => {
                                 )
                             )}
                         </div>
+                        </div>
 
                         <div className="form-footer">
                             <button type="submit" className="btn-save" disabled={saving}>
@@ -834,7 +978,7 @@ const ReceptionDashboard = () => {
         return (
             <div className="reception-dashboard" style={{ maxWidth: '900px', margin: '0 auto' }}>
                 <div className="dashboard-header">
-                    <button onClick={() => setViewMode('dashboard')} style={{ padding: '8px 20px', background: '#f1f5f9', border: '2px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}>← Back to Dashboard</button>
+                    <button onClick={() => navigate('/reception/dashboard')} style={{ padding: '8px 20px', background: '#f1f5f9', border: '2px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}>← Back to Dashboard</button>
                     <button className="btn-save" onClick={() => handleEditPatient(profilePatient)} style={{ padding: '10px 24px', fontSize: '1rem' }}>📋 Book Appointment</button>
                 </div>
 
@@ -897,7 +1041,7 @@ const ReceptionDashboard = () => {
                     </div>
                 )}
 
-                {/* Fertility / Clinical profile */}
+                {}
                 {(fp.chiefComplaint || fp.medicalHistory) && (
                     <div style={{ background: 'white', borderRadius: '16px', padding: '24px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
                         <h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', color: '#1e40af' }}>🏥 Clinical Summary</h3>
@@ -940,7 +1084,7 @@ const ReceptionDashboard = () => {
         return (
             <div className="reception-dashboard" style={{ maxWidth: '1000px', margin: '0 auto' }}>
                 <div className="dashboard-header">
-                    <button onClick={() => setViewMode('dashboard')} style={{ padding: '8px 20px', background: '#f1f5f9', border: '2px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>← Back to Dashboard</button>
+                    <button onClick={() => navigate('/reception/dashboard')} style={{ padding: '8px 20px', background: '#f1f5f9', border: '2px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>← Back to Dashboard</button>
                     <h2>Transaction History</h2>
                 </div>
 
@@ -990,6 +1134,514 @@ const ReceptionDashboard = () => {
                     </table>
                 </div>
             </div>
+        );
+    }
+
+    const renderTodaysQueue = () => (
+        <div className="appointments-list">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+                <h3 style={{ margin: 0 }}>Today's Queue</h3>
+                {hospitalContext?.appointmentMode === 'token' && (
+                    <span style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '3px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>
+                        🎟️ Token Queue Mode
+                    </span>
+                )}
+            </div>
+            <div className="table-responsive">
+                <table className="reception-table">
+                    <thead>
+                        <tr>
+                            <th>Patient</th>
+                            <th>Assigned To</th>
+                            <th>{hospitalContext?.appointmentMode === 'token' ? 'Token #' : 'Time'}</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {appointments.map(apt => (
+                            <tr key={apt._id}>
+                                <td>{apt.userId?.name}<br /><small>{apt.userId?.phone}</small></td>
+                                <td>{apt.doctorName}</td>
+                                <td>
+                                    {apt.tokenNumber != null
+                                        ? <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#d97706' }}>#{apt.tokenNumber}</span>
+                                        : apt.appointmentTime?.startsWith('token-')
+                                            ? <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#d97706' }}>#{apt.appointmentTime.replace('token-', '')}</span>
+                                            : apt.appointmentTime}
+                                </td>
+                                <td><span className={`status ${apt.status}`}>{apt.status}</span></td>
+                                <td style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                    {(apt.paymentStatus || '').toLowerCase() !== 'paid' && apt.status !== 'cancelled' && (
+                                        <button
+                                            onClick={() => setPaymentModal({ open: true, appointment: apt, method: apt.paymentMethod || 'Cash' })}
+                                            style={{ padding: '4px 10px', fontSize: '12px', background: '#dcfce7', color: '#166534', border: '1px solid #86efac', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
+                                        >
+                                            💰 Confirm Payment
+                                        </button>
+                                    )}
+                                    {(apt.paymentStatus || '').toLowerCase() === 'paid' && (
+                                        <button
+                                            onClick={() => generateReceiptPDF(apt)}
+                                            style={{ padding: '4px 10px', fontSize: '12px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
+                                        >
+                                            🧾 Print Receipt
+                                        </button>
+                                    )}
+                                    {apt.status !== 'cancelled' && apt.status !== 'completed' && (
+                                        <>
+                                            <button
+                                                onClick={() => openHospitalizeModal(apt)}
+                                                style={{ padding: '4px 10px', fontSize: '12px', background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
+                                            >
+                                                Hospitalize
+                                            </button>
+                                            <button
+                                                onClick={() => handleCancelAppointment(apt._id)}
+                                                style={{ padding: '4px 10px', fontSize: '12px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
+                                            >
+                                                Cancel
+                                            </button>
+                                        </>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+
+    const renderModals = () => (
+        <>
+        {paymentModal.open && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '440px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>💰 Confirm Payment</h2>
+                            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.88rem' }}>
+                                {paymentModal.appointment?.userId?.name} — Rs. {Number(paymentModal.appointment?.amount || 0).toLocaleString('en-IN')}
+                            </p>
+                        </div>
+                        <button onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+                    </div>
+                    <div style={{ marginBottom: '18px' }}>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '7px' }}>Payment Method</label>
+                        <select
+                            value={paymentModal.method}
+                            onChange={e => setPaymentModal(p => ({ ...p, method: e.target.value }))}
+                            style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
+                        >
+                            <option value="Cash">Cash</option>
+                            <option value="UPI">UPI</option>
+                            <option value="Card">Card</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="NEFT/RTGS">NEFT / RTGS</option>
+                        </select>
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button
+                            onClick={handleConfirmPayment}
+                            disabled={confirmingPayment}
+                            style={{ flex: 1, padding: '11px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
+                        >
+                            {confirmingPayment ? 'Confirming...' : '✓ Confirm & Print Receipt'}
+                        </button>
+                        <button
+                            onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })}
+                            style={{ padding: '11px 18px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {hospitalizeModal.open && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700 }}>Hospitalize Patient</h2>
+                            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>
+                                {hospitalizeModal.appointment?.userId?.name} — {hospitalizeModal.appointment?.doctorName}
+                            </p>
+                        </div>
+                        <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Ward / Room</label>
+                            <input
+                                type="text"
+                                placeholder="e.g. General Ward, ICU"
+                                value={hospitalizeForm.ward}
+                                onChange={e => setHospitalizeForm(p => ({ ...p, ward: e.target.value }))}
+                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Bed Number</label>
+                            <input
+                                type="text"
+                                placeholder="e.g. B-12"
+                                value={hospitalizeForm.bedNumber}
+                                onChange={e => setHospitalizeForm(p => ({ ...p, bedNumber: e.target.value }))}
+                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                            />
+                        </div>
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Admission Date</label>
+                        <input
+                            type="date"
+                            value={hospitalizeForm.admissionDate}
+                            onChange={e => setHospitalizeForm(p => ({ ...p, admissionDate: e.target.value }))}
+                            style={{ padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
+                        />
+                    </div>
+
+                    {(hospitalContext?.facilities?.length > 0) ? (
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>
+                                Select Facilities &amp; Days
+                            </label>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {hospitalContext.facilities.map(f => (
+                                    <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{f.name}</div>
+                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>₹{f.pricePerDay}/day</div>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <label style={{ fontSize: '0.82rem', color: '#475569' }}>Days:</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                placeholder="0"
+                                                value={hospitalizeForm.facilityDays[f.name] || ''}
+                                                onChange={e => setHospitalizeForm(p => ({ ...p, facilityDays: { ...p.facilityDays, [f.name]: e.target.value } }))}
+                                                style={{ width: '70px', padding: '6px 10px', border: '1.5px solid #e2e8f0', borderRadius: '7px', fontSize: '0.9rem', textAlign: 'center' }}
+                                            />
+                                        </div>
+                                        {hospitalizeForm.facilityDays[f.name] > 0 && (
+                                            <div style={{ fontWeight: 700, color: '#1d4ed8', fontSize: '0.9rem', minWidth: '70px', textAlign: 'right' }}>
+                                                ₹{(f.pricePerDay * Number(hospitalizeForm.facilityDays[f.name])).toLocaleString('en-IN')}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            {Object.values(hospitalizeForm.facilityDays).some(d => d > 0) && (
+                                <div style={{ marginTop: '12px', padding: '10px 14px', background: '#eff6ff', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                                    <span>Total Facility Cost:</span>
+                                    <span style={{ color: '#1d4ed8' }}>
+                                        ₹{(hospitalContext.facilities.reduce((sum, f) => sum + (f.pricePerDay * (Number(hospitalizeForm.facilityDays[f.name]) || 0)), 0)).toLocaleString('en-IN')}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div style={{ padding: '12px 14px', background: '#fef9c3', borderRadius: '8px', fontSize: '0.88rem', color: '#92400e', marginBottom: '16px' }}>
+                            No facilities configured. Hospital admin can add facilities from the Hospital Admin Dashboard.
+                        </div>
+                    )}
+
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Notes (optional)</label>
+                        <textarea
+                            placeholder="Any notes for admission..."
+                            value={hospitalizeForm.notes}
+                            onChange={e => setHospitalizeForm(p => ({ ...p, notes: e.target.value }))}
+                            rows={2}
+                            style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
+                        />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                        <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleHospitalize}
+                            disabled={hospitalizingSaving}
+                            style={{ padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: hospitalizingSaving ? 0.6 : 1 }}
+                        >
+                            {hospitalizingSaving ? 'Admitting...' : 'Admit Patient'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
+    );
+
+    if (viewMode === 'welcome') {
+        const timeOfDay = new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening';
+        return (
+            <>
+            <div className="reception-dashboard" style={{ padding: '10px 0' }}>
+                {pendingDownload && (
+                    <div style={{
+                        margin: '0 0 20px 0',
+                        padding: '12px 20px',
+                        background: '#ecfdf5',
+                        border: '1.5px solid #a7f3d0',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.05)',
+                        fontFamily: 'var(--font-primary)'
+                    }}>
+                        <span style={{ color: '#065f46', fontWeight: 600, fontSize: '0.95rem' }}>
+                            ✅ {pendingDownload.title || 'Document Generated'} — {pendingDownload.filename} is ready
+                        </span>
+                        <button
+                            onClick={() => {
+                                pendingDownload.doc.save(pendingDownload.filename);
+                                setPendingDownload(null);
+                            }}
+                            style={{
+                                padding: '8px 16px',
+                                background: '#059669',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontWeight: 700,
+                                fontSize: '0.85rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            📥 Download
+                        </button>
+                    </div>
+                )}
+
+                {/* WELCOME BANNER (Matched to Reference Image) */}
+                <div style={{
+                    background: '#ffffff',
+                    borderRadius: '24px',
+                    padding: '44px 34px',
+                    marginBottom: '36px',
+                    boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.06), 0 4px 12px -2px rgba(0, 0, 0, 0.03)',
+                    border: '1px solid #f1f5f9',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    textAlign: 'center'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                        <span style={{ fontSize: '2.2rem' }}>👋</span>
+                        <span style={{
+                            background: '#0d9488',
+                            color: '#ffffff',
+                            padding: '5px 14px',
+                            borderRadius: '20px',
+                            fontSize: '0.78rem',
+                            fontWeight: 800,
+                            letterSpacing: '0.06em',
+                            textTransform: 'uppercase',
+                            boxShadow: '0 4px 10px rgba(13, 148, 136, 0.2)'
+                        }}>
+                            RECEPTIONIST
+                        </span>
+                    </div>
+                    <h1 style={{ margin: '0 0 10px', fontSize: '2.4rem', fontWeight: 800, color: '#1e293b', letterSpacing: '-0.02em' }}>
+                        Good {timeOfDay.toLowerCase()}, <span style={{ color: '#0d9488' }}>{currentUser?.name || 'vedika singh'}</span>
+                    </h1>
+                    <p style={{ margin: 0, color: '#64748b', fontSize: '1.05rem', fontWeight: 500 }}>
+                        Here's your workspace. Pick any section to get started.
+                    </p>
+                </div>
+
+                {/* QUICK ACCESS CARDS */}
+                <div style={{ marginBottom: '34px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>⚡ QUICK ACCESS</span>
+                        <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
+                    </div>
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                        gap: '22px'
+                    }}>
+                        {/* Card 1: Patient Registration */}
+                        <div
+                            onClick={() => navigate('/reception/dashboard?view=intake')}
+                            style={{
+                                background: '#ffffff',
+                                borderRadius: '16px',
+                                padding: '26px',
+                                border: '1px solid #e2e8f0',
+                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '18px'
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(13, 148, 136, 0.12)'; e.currentTarget.style.borderColor = '#99f6e4'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                        >
+                            <div style={{
+                                width: '54px',
+                                height: '54px',
+                                borderRadius: '14px',
+                                background: '#f0fdf4',
+                                color: '#16a34a',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '1.6rem',
+                                flexShrink: 0
+                            }}>
+                                <FiUserPlus />
+                            </div>
+                            <div>
+                                <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Patient Registration</h4>
+                                <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
+                                    View and manage patient records
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Card 2: Patient Search */}
+                        <div
+                            onClick={() => navigate('/reception/patients')}
+                            style={{
+                                background: '#ffffff',
+                                borderRadius: '16px',
+                                padding: '26px',
+                                border: '1px solid #e2e8f0',
+                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '18px'
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(37, 99, 235, 0.12)'; e.currentTarget.style.borderColor = '#bfdbfe'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                        >
+                            <div style={{
+                                width: '54px',
+                                height: '54px',
+                                borderRadius: '14px',
+                                background: '#eff6ff',
+                                color: '#2563eb',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '1.6rem',
+                                flexShrink: 0
+                            }}>
+                                <FiSearch />
+                            </div>
+                            <div>
+                                <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Patient Search</h4>
+                                <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
+                                    View and manage patient records
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Card 3: Finance & Accounting */}
+                        <div
+                            onClick={() => {
+                                fetchTransactions();
+                                setViewMode('transactions');
+                                navigate('/reception/dashboard?view=transactions');
+                            }}
+                            style={{
+                                background: '#ffffff',
+                                borderRadius: '16px',
+                                padding: '26px',
+                                border: '1px solid #e2e8f0',
+                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '18px'
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(217, 119, 6, 0.12)'; e.currentTarget.style.borderColor = '#fde68a'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                        >
+                            <div style={{
+                                width: '54px',
+                                height: '54px',
+                                borderRadius: '14px',
+                                background: '#fffbeb',
+                                color: '#d97706',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '1.6rem',
+                                flexShrink: 0
+                            }}>
+                                <FiDollarSign />
+                            </div>
+                            <div>
+                                <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Finance & Accounting</h4>
+                                <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
+                                    Access Finance & Accounting
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Card 4: Patient Billing */}
+                        <div
+                            onClick={() => navigate('/billing/patient')}
+                            style={{
+                                background: '#ffffff',
+                                borderRadius: '16px',
+                                padding: '26px',
+                                border: '1px solid #e2e8f0',
+                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '18px'
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(13, 148, 136, 0.12)'; e.currentTarget.style.borderColor = '#99f6e4'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                        >
+                            <div style={{
+                                width: '54px',
+                                height: '54px',
+                                borderRadius: '14px',
+                                background: '#f0fdf4',
+                                color: '#0d9488',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '1.6rem',
+                                flexShrink: 0
+                            }}>
+                                <FiFileText />
+                            </div>
+                            <div>
+                                <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Patient Billing</h4>
+                                <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
+                                    View and manage patient records
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {renderModals()}
+            </>
         );
     }
 
@@ -1070,17 +1722,16 @@ const ReceptionDashboard = () => {
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                     <button
-                                        onClick={() => handleViewProfile(p)}
-                                        style={{ padding: '6px 15px', fontSize: '0.9rem', background: '#f0f4ff', color: '#3b82f6', border: '2px solid #3b82f6', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
+                                        onClick={() => handleSelectSearchResult(p)}
+                                        style={{ padding: '6px 14px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
                                     >
-                                        👁 View Profile
+                                        📋 Book Appointment
                                     </button>
                                     <button
-                                        onClick={() => handleEditPatient(p)}
-                                        className="btn-save"
-                                        style={{ padding: '6px 15px', fontSize: '0.9rem' }}
+                                        onClick={() => handleViewProfile(p)}
+                                        style={{ padding: '6px 14px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
                                     >
-                                        Select / Book
+                                        👤 View Profile
                                     </button>
                                 </div>
                             </div>
@@ -1108,251 +1759,10 @@ const ReceptionDashboard = () => {
                 )}
             </div>
 
-            <div className="appointments-list">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                    <h3 style={{ margin: 0 }}>Today's Queue</h3>
-                    {hospitalContext?.appointmentMode === 'token' && (
-                        <span style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '3px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>
-                            🎟️ Token Queue Mode
-                        </span>
-                    )}
-                </div>
-                <div className="table-responsive">
-                    <table className="reception-table">
-                        <thead>
-                            <tr>
-                                <th>Patient</th>
-                                <th>Assigned To</th>
-                                <th>{hospitalContext?.appointmentMode === 'token' ? 'Token #' : 'Time'}</th>
-                                <th>Status</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {appointments.map(apt => (
-                                <tr key={apt._id}>
-                                    <td>{apt.userId?.name}<br /><small>{apt.userId?.phone}</small></td>
-                                    <td>{apt.doctorName}</td>
-                                    <td>
-                                        {apt.tokenNumber != null
-                                            ? <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#d97706' }}>#{apt.tokenNumber}</span>
-                                            : apt.appointmentTime?.startsWith('token-')
-                                                ? <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#d97706' }}>#{apt.appointmentTime.replace('token-', '')}</span>
-                                                : apt.appointmentTime}
-                                    </td>
-                                    <td><span className={`status ${apt.status}`}>{apt.status}</span></td>
-                                    <td style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                        {/* Confirm Payment — show when not yet paid */}
-                                        {(apt.paymentStatus || '').toLowerCase() !== 'paid' && apt.status !== 'cancelled' && (
-                                            <button
-                                                onClick={() => setPaymentModal({ open: true, appointment: apt, method: apt.paymentMethod || 'Cash' })}
-                                                style={{ padding: '4px 10px', fontSize: '12px', background: '#dcfce7', color: '#166534', border: '1px solid #86efac', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
-                                            >
-                                                💰 Confirm Payment
-                                            </button>
-                                        )}
-                                        {/* Print Receipt — show when paid */}
-                                        {(apt.paymentStatus || '').toLowerCase() === 'paid' && (
-                                            <button
-                                                onClick={() => generateReceiptPDF(apt)}
-                                                style={{ padding: '4px 10px', fontSize: '12px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
-                                            >
-                                                🧾 Print Receipt
-                                            </button>
-                                        )}
-                                        {apt.status !== 'cancelled' && apt.status !== 'completed' && (
-                                            <>
-                                                <button
-                                                    onClick={() => openHospitalizeModal(apt)}
-                                                    style={{ padding: '4px 10px', fontSize: '12px', background: '#dbeafe', color: '#1d4ed8', border: '1px solid #93c5fd', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
-                                                >
-                                                    Hospitalize
-                                                </button>
-                                                <button
-                                                    onClick={() => handleCancelAppointment(apt._id)}
-                                                    style={{ padding: '4px 10px', fontSize: '12px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
-                                                >
-                                                    Cancel
-                                                </button>
-                                            </>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            {renderTodaysQueue()}
         </div>
 
-        {/* Payment Confirmation Modal */}
-        {paymentModal.open && (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-                <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '440px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                        <div>
-                            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>💰 Confirm Payment</h2>
-                            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.88rem' }}>
-                                {paymentModal.appointment?.userId?.name} — Rs. {Number(paymentModal.appointment?.amount || 0).toLocaleString('en-IN')}
-                            </p>
-                        </div>
-                        <button onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
-                    </div>
-                    <div style={{ marginBottom: '18px' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '7px' }}>Payment Method</label>
-                        <select
-                            value={paymentModal.method}
-                            onChange={e => setPaymentModal(p => ({ ...p, method: e.target.value }))}
-                            style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
-                        >
-                            <option value="Cash">Cash</option>
-                            <option value="UPI">UPI</option>
-                            <option value="Card">Card</option>
-                            <option value="Cheque">Cheque</option>
-                            <option value="NEFT/RTGS">NEFT / RTGS</option>
-                        </select>
-                    </div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <button
-                            onClick={handleConfirmPayment}
-                            disabled={confirmingPayment}
-                            style={{ flex: 1, padding: '11px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
-                        >
-                            {confirmingPayment ? 'Confirming...' : '✓ Confirm & Print Receipt'}
-                        </button>
-                        <button
-                            onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })}
-                            style={{ padding: '11px 18px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {/* Hospitalize Modal */}
-        {hospitalizeModal.open && (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-                <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                        <div>
-                            <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700 }}>Hospitalize Patient</h2>
-                            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>
-                                {hospitalizeModal.appointment?.userId?.name} — {hospitalizeModal.appointment?.doctorName}
-                            </p>
-                        </div>
-                        <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
-                    </div>
-
-                    {/* Bed & Ward */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Ward / Room</label>
-                            <input
-                                type="text"
-                                placeholder="e.g. General Ward, ICU"
-                                value={hospitalizeForm.ward}
-                                onChange={e => setHospitalizeForm(p => ({ ...p, ward: e.target.value }))}
-                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Bed Number</label>
-                            <input
-                                type="text"
-                                placeholder="e.g. B-12"
-                                value={hospitalizeForm.bedNumber}
-                                onChange={e => setHospitalizeForm(p => ({ ...p, bedNumber: e.target.value }))}
-                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
-                            />
-                        </div>
-                    </div>
-
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Admission Date</label>
-                        <input
-                            type="date"
-                            value={hospitalizeForm.admissionDate}
-                            onChange={e => setHospitalizeForm(p => ({ ...p, admissionDate: e.target.value }))}
-                            style={{ padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
-                        />
-                    </div>
-
-                    {/* Facilities */}
-                    {(hospitalContext?.facilities?.length > 0) ? (
-                        <div style={{ marginBottom: '16px' }}>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>
-                                Select Facilities &amp; Days
-                            </label>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {hospitalContext.facilities.map(f => (
-                                    <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{f.name}</div>
-                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>₹{f.pricePerDay}/day</div>
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <label style={{ fontSize: '0.82rem', color: '#475569' }}>Days:</label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                placeholder="0"
-                                                value={hospitalizeForm.facilityDays[f.name] || ''}
-                                                onChange={e => setHospitalizeForm(p => ({ ...p, facilityDays: { ...p.facilityDays, [f.name]: e.target.value } }))}
-                                                style={{ width: '70px', padding: '6px 10px', border: '1.5px solid #e2e8f0', borderRadius: '7px', fontSize: '0.9rem', textAlign: 'center' }}
-                                            />
-                                        </div>
-                                        {hospitalizeForm.facilityDays[f.name] > 0 && (
-                                            <div style={{ fontWeight: 700, color: '#1d4ed8', fontSize: '0.9rem', minWidth: '70px', textAlign: 'right' }}>
-                                                ₹{(f.pricePerDay * Number(hospitalizeForm.facilityDays[f.name])).toLocaleString('en-IN')}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                            {/* Total */}
-                            {Object.values(hospitalizeForm.facilityDays).some(d => d > 0) && (
-                                <div style={{ marginTop: '12px', padding: '10px 14px', background: '#eff6ff', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-                                    <span>Total Facility Cost:</span>
-                                    <span style={{ color: '#1d4ed8' }}>
-                                        ₹{(hospitalContext.facilities.reduce((sum, f) => sum + (f.pricePerDay * (Number(hospitalizeForm.facilityDays[f.name]) || 0)), 0)).toLocaleString('en-IN')}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div style={{ padding: '12px 14px', background: '#fef9c3', borderRadius: '8px', fontSize: '0.88rem', color: '#92400e', marginBottom: '16px' }}>
-                            No facilities configured. Hospital admin can add facilities from the Hospital Admin Dashboard.
-                        </div>
-                    )}
-
-                    <div style={{ marginBottom: '20px' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Notes (optional)</label>
-                        <textarea
-                            placeholder="Any notes for admission..."
-                            value={hospitalizeForm.notes}
-                            onChange={e => setHospitalizeForm(p => ({ ...p, notes: e.target.value }))}
-                            rows={2}
-                            style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
-                        />
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                        <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleHospitalize}
-                            disabled={hospitalizingSaving}
-                            style={{ padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: hospitalizingSaving ? 0.6 : 1 }}
-                        >
-                            {hospitalizingSaving ? 'Admitting...' : 'Admit Patient'}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
+        {renderModals()}
         </>
     );
 };

@@ -12,7 +12,7 @@ const labReportSchema = new mongoose.Schema({
     required: true
   },
   userId: { // Patient's User ObjectId
-    type: mongoose.Schema.Types.ObjectId,
+    type: mongoose.Schema.Types.Mixed,
     ref: 'User',
     required: true
   },

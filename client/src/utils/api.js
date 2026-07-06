@@ -114,8 +114,12 @@ export const doctorAPI = {
 };
 
 export const receptionAPI = {
-    getAllAppointments: async () => {
-        const response = await apiClient.get('/api/reception/appointments');
+    getAllAppointments: async (params = {}) => {
+        const response = await apiClient.get('/api/reception/appointments', { params });
+        return response.data;
+    },
+    getAllPatients: async () => {
+        const response = await apiClient.get('/api/reception/patients');
         return response.data;
     },
     registerPatient: async (data) => {

@@ -37,8 +37,10 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         if (!name || !phone) {
             return res.status(400).json({ success: false, message: 'Name and Phone are required' });
         }
+        if (!/^\d{10}$/.test(phone)) {
+            return res.status(400).json({ success: false, message: 'Mobile number must be exactly 10 digits.' });
+        }
         if (name.length > 100) return res.status(400).json({ success: false, message: 'Name too long (max 100 chars)' });
-        if (phone.length > 20) return res.status(400).json({ success: false, message: 'Phone too long (max 20 chars)' });
         if (email && email.length > 200) return res.status(400).json({ success: false, message: 'Email too long (max 200 chars)' });
 
         // Check if patient exists by Phone (or Email if provided)
@@ -130,7 +132,7 @@ router.post('/verify-aadhaar-otp', verifyToken, verifyReception, async (req, res
     return res.status(503).json({ success: false, message: 'Aadhaar verification is not available in this environment. Contact admin.' });
 });
 
-// 2. SEARCH
+// 2. SEARCH & LIST
 router.get('/search-patients', verifyToken, verifyReception, async (req, res) => {
     try {
         const { query } = req.query;
@@ -150,10 +152,85 @@ router.get('/search-patients', verifyToken, verifyReception, async (req, res) =>
             queryFilter.hospitalId = req.user.hospitalId;
         }
 
-        const patients = await User.find(queryFilter).select('name phone email patientId fertilityProfile');
+        const patients = await User.find(queryFilter).select('name phone email patientId fertilityProfile createdAt').lean();
 
-        res.json({ success: true, patients });
-    } catch (error) { res.status(500).json({ success: false, message: 'An internal error occurred' }); }
+        // Resolve doctor names and appointment status
+        const patientIds = patients.map(p => p._id);
+        const appointments = await Appointment.find({
+            userId: { $in: patientIds }
+        })
+        .populate('doctorId', 'name')
+        .sort({ createdAt: -1 })
+        .lean();
+
+        const apptMap = {};
+        appointments.forEach(appt => {
+            if (appt.userId && !apptMap[appt.userId.toString()]) {
+                apptMap[appt.userId.toString()] = appt;
+            }
+        });
+
+        const resolvedPatients = patients.map(p => {
+            const latestAppt = apptMap[p._id.toString()];
+            return {
+                ...p,
+                assignedDoctor: latestAppt?.doctorId?.name || 'Not Assigned',
+                appointmentStatus: latestAppt?.status || 'No Appointment'
+            };
+        });
+
+        res.json({ success: true, patients: resolvedPatients });
+    } catch (error) {
+        console.error("Search error:", error);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+router.get('/patients', verifyToken, verifyReception, async (req, res) => {
+    try {
+        const queryFilter = {
+            role: { $in: ['user', 'patient'] }
+        };
+        if (req.user.hospitalId) {
+            queryFilter.hospitalId = req.user.hospitalId;
+        }
+
+        const patients = await User.find(queryFilter)
+            .select('name phone email patientId fertilityProfile createdAt')
+            .sort({ createdAt: -1 })
+            .limit(100)
+            .lean();
+
+        // Resolve doctor names and appointment status
+        const patientIds = patients.map(p => p._id);
+        const appointments = await Appointment.find({
+            userId: { $in: patientIds }
+        })
+        .populate('doctorId', 'name')
+        .sort({ createdAt: -1 })
+        .lean();
+
+        const apptMap = {};
+        appointments.forEach(appt => {
+            if (appt.userId && !apptMap[appt.userId.toString()]) {
+                apptMap[appt.userId.toString()] = appt;
+            }
+        });
+
+        const resolvedPatients = patients.map(p => {
+            const latestAppt = apptMap[p._id.toString()];
+            return {
+                ...p,
+                assignedDoctor: latestAppt?.doctorId?.name || 'Not Assigned',
+                appointmentStatus: latestAppt?.status || 'No Appointment'
+            };
+        });
+
+        res.json({ success: true, patients: resolvedPatients });
+    } catch (error) {
+        console.error("Error fetching patients list:", error);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
 });
 
 // 3. UPDATE INTAKE
@@ -166,11 +243,21 @@ router.put('/intake/:userId', verifyToken, verifyReception, async (req, res) => 
         // Map Root fields
         if (updates.firstName || updates.lastName) updateQuery.name = `${updates.firstName || ''} ${updates.lastName || ''}`.trim();
         if (updates.email) updateQuery.email = updates.email;
-        if (updates.phone || updates.mobile) updateQuery.phone = updates.phone || updates.mobile;
+        if (updates.phone || updates.mobile) {
+            const ph = updates.phone || updates.mobile;
+            if (!/^\d{10}$/.test(ph)) {
+                return res.status(400).json({ success: false, message: 'Mobile number must be exactly 10 digits.' });
+            }
+            updateQuery.phone = ph;
+        }
         if (updates.address) updateQuery.address = updates.address;
+        if (updates.houseNo) updateQuery.houseNo = updates.houseNo;
+        if (updates.street) updateQuery.street = updates.street;
         if (updates.city) updateQuery.city = updates.city;
         if (updates.state) updateQuery.state = updates.state;
         if (updates.zipCode) updateQuery.zipCode = updates.zipCode;
+        if (updates.avatar) updateQuery.avatar = updates.avatar;
+        if (updates.relationToPatient) updateQuery.relationToPatient = updates.relationToPatient;
 
         // Update Root Aadhaar Fields
         if (updates.aadhaar) updateQuery.aadhaarNumber = updates.aadhaar;
@@ -199,7 +286,8 @@ router.put('/intake/:userId', verifyToken, verifyReception, async (req, res) => 
             'usgType', 'afcRight', 'afcLeft', 'amh', 'uterusSize', 'uterusPosition',
             'ovaryRightSize', 'ovaryLeftSize', 'endometriumThickness',
             'diagnosisInfertilityType', 'maleFactor', 'femaleFactor', 'diagnosisYears', 'diagnosisOthers',
-            'doctorNotes', 'prescriptionComments', 'procedureAdvice', 'followUpDate'
+            'doctorNotes', 'prescriptionComments', 'procedureAdvice', 'followUpDate',
+            'relationToPatient'
         ];
 
         profileFields.forEach(field => {
