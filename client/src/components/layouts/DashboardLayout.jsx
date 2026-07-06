@@ -42,7 +42,12 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
                 { label: 'Pharma Inventory', path: '/pharmacy/inventory', icon: <FiPackage /> },
             ];
         }
-        if (role === 'doctor') {
+        if (role === 'doctor' || role === 'clinic doctor') {
+            if (user?.clinicType === 'clinic') {
+                return [
+                    { label: 'Doctor Dashboard', path: '/hospitaladmin', icon: <FiHome /> },
+                ];
+            }
             return [
                 { label: 'My Patients', path: '/doctor/dashboard', icon: <FiUsers /> },
                 { label: 'Appointments', path: '/doctor/patients', icon: <FiCalendar /> },
@@ -236,7 +241,7 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                         <FiHome size={15} /> Home
                     </button>
                     <div className="profile-text-info">
-                        <span className="user-disp-name">{user?.role === 'doctor' ? 'DR. ' : ''}{user?.name || 'User'}</span>
+                        <span className="user-disp-name">{(user?.role || '').toLowerCase().includes('doctor') ? 'DR. ' : ''}{user?.name || 'User'}</span>
                         <span className="user-disp-role">{user?.email}</span>
                     </div>
                     <div className="profile-avatar-wrap">

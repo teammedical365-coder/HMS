@@ -304,15 +304,39 @@ router.post('/:id/manager', verifyCentralAdmin, async (req, res) => {
 // ==========================================
 router.get('/:id/staff', verifyCentralAdmin, async (req, res) => {
     try {
-        // Only login staff, not patients
+        const Role = require('../models/role.model');
+        const roleDoc = await Role.findOne({ name: 'Clinic Doctor', hospitalId: null });
+
         const STAFF_ROLES = ['hospitaladmin', 'doctor', 'receptionist'];
-        const staff = await User.find({ hospitalId: req.params.id, role: { $in: STAFF_ROLES } })
+        const query = {
+            hospitalId: req.params.id,
+            $or: [
+                { role: { $in: STAFF_ROLES } }
+            ]
+        };
+        if (roleDoc) {
+            query.$or.push({ role: roleDoc._id });
+        }
+
+        const staff = await User.find(query)
             .select('name email phone role createdAt')
             .lean();
 
         const clinic = await Hospital.findById(req.params.id).select('tier').lean();
 
-        res.json({ success: true, staff, tier: clinic?.tier });
+        const enriched = staff.map(s => {
+            let roleName = String(s.role);
+            if (s.role === 'hospitaladmin') roleName = 'Clinic Admin';
+            else if (s.role === 'receptionist') roleName = 'Clinic Receptionist';
+            else if (roleDoc && String(s.role) === String(roleDoc._id)) roleName = 'Clinic Doctor';
+            else if (s.role === 'doctor') roleName = 'Clinic Doctor'; // Legacy
+            return {
+                ...s,
+                roleName
+            };
+        });
+
+        res.json({ success: true, staff: enriched, tier: clinic?.tier });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
@@ -334,21 +358,30 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
         if (staffRole === 'receptionist') {
             return res.status(400).json({ success: false, message: 'Receptionist role is not available for clinics. Clinic Admin handles reception.' });
         }
-        const role = 'doctor';
+
+        const Role = require('../models/role.model');
+        const roleDoc = await Role.findOne({ name: 'Clinic Doctor', hospitalId: null });
+        if (!roleDoc) {
+            return res.status(500).json({ success: false, message: 'Clinic Doctor role not seeded yet' });
+        }
 
         const clinic = await Hospital.findOne({ _id: req.params.id, clinicType: 'clinic' });
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
 
         // Tier limit check
-        const maxForRole = role === 'doctor'
-            ? (clinic.tier?.maxDoctors       || 1)
-            : (clinic.tier?.maxReceptionists || 1);
+        const maxForRole = clinic.tier?.maxDoctors || 1;
 
-        const currentCount = await User.countDocuments({ hospitalId: clinic._id, role });
+        const currentCount = await User.countDocuments({
+            hospitalId: clinic._id,
+            $or: [
+                { role: 'doctor' },
+                { role: roleDoc._id }
+            ]
+        });
         if (currentCount >= maxForRole) {
             return res.status(400).json({
                 success: false,
-                message: `Tier limit reached: max ${maxForRole} ${role}(s) for this clinic. Please contact sales to upgrade.`,
+                message: `Tier limit reached: max ${maxForRole} Clinic Doctor(s) for this clinic. Please contact sales to upgrade.`,
                 contactSales: true,
             });
         }
@@ -358,14 +391,14 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
 
         const staffMember = new User({
             name, email, password, phone: phone || '',
-            role,
+            role: roleDoc._id,
             hospitalId: clinic._id,
         });
         await staffMember.save();
 
         res.status(201).json({
             success: true,
-            staff: { _id: staffMember._id, name, email, phone, role },
+            staff: { _id: staffMember._id, name, email, phone, role: roleDoc._id },
             message: 'Clinic Doctor account created successfully',
         });
     } catch (err) {

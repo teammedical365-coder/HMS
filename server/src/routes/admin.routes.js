@@ -403,6 +403,31 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
             });
         }
 
+        // Validate clinic vs hospital role mapping
+        if (assignedHospitalId && !isPatientRole) {
+            const hospitalDoc = await Hospital.findById(assignedHospitalId).select('clinicType');
+            if (hospitalDoc) {
+                const isClinic = hospitalDoc.clinicType === 'clinic';
+                const assignedRoleNameLower = (roleDoc.name || '').toLowerCase();
+                
+                if (isClinic) {
+                    if (assignedRoleNameLower !== 'clinic doctor') {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Clinics only support the "Clinic Doctor" role for staff. Other roles are not allowed.'
+                        });
+                    }
+                } else {
+                    if (assignedRoleNameLower === 'clinic doctor') {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'Hospital users cannot be assigned the "Clinic Doctor" role.'
+                        });
+                    }
+                }
+            }
+        }
+
         const existingUser = await User.findOne({ email });
         if (existingUser) return res.status(400).json({ success: false, message: 'User already exists' });
 

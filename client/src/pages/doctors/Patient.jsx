@@ -120,7 +120,7 @@ const Patient = () => {
         if (!vitalsPatient) return;
         setSaving(true);
         try {
-            const patientId = vitalsPatient.userId?._id || vitalsPatient.userId;
+            const patientId = vitalsPatient.clinicPatientId?._id || vitalsPatient.clinicPatientId || vitalsPatient.userId?._id || vitalsPatient.userId;
             const profileData = {
                 vitals: {
                     weight: vitals.weight,
@@ -157,16 +157,34 @@ const Patient = () => {
     };
 
     const openVitalsForm = (apt) => {
-        const existing = apt.userId?.fertilityProfile?.vitals || {};
+        let existing = {};
+        if (apt.clinicPatientId) {
+            existing = apt.clinicPatientId.vitals || {};
+            if (!existing.weight && apt.vitals) {
+                existing = {
+                    weight: apt.vitals.weight,
+                    height: apt.vitals.height,
+                    bmi: apt.vitals.bmi,
+                    bloodPressure: apt.vitals.bp,
+                    pulse: apt.vitals.pulse,
+                    temperature: apt.vitals.temperature,
+                    spo2: apt.vitals.spo2,
+                    respiratoryRate: apt.vitals.rr
+                };
+            }
+        } else {
+            existing = apt.userId?.fertilityProfile?.vitals || {};
+        }
+
         setVitals({
             weight: existing.weight || '',
             height: existing.height || '',
             bmi: existing.bmi || '',
-            bloodPressure: existing.bloodPressure || '',
+            bloodPressure: existing.bloodPressure || existing.bp || '',
             pulse: existing.pulse || '',
             temperature: existing.temperature || '',
             spo2: existing.spo2 || '',
-            respiratoryRate: existing.respiratoryRate || '',
+            respiratoryRate: existing.respiratoryRate || existing.rr || '',
             chiefComplaint: '',
             notes: ''
         });
@@ -357,7 +375,9 @@ const Patient = () => {
                                 <tbody>
                                     {displayList.map((apt, idx) => {
                                         const statusS = getStatusStyle(apt.status);
-                                        const hasVitals = apt.userId?.fertilityProfile?.vitals?.weight;
+                                        const hasVitals = apt.userId
+                                            ? apt.userId?.fertilityProfile?.vitals?.weight
+                                            : (apt.clinicPatientId?.vitals?.weight || apt.vitals?.weight);
                                         return (
                                             <tr key={apt._id} style={{ transition: 'background 0.15s' }}
                                                 onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
@@ -466,8 +486,8 @@ const Patient = () => {
                                         💉 Enter Vitals
                                     </h2>
                                     <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.82rem' }}>
-                                        Patient: <strong style={{ color: '#e2e8f0' }}>{vitalsPatient.userId?.name || 'Unknown'}</strong> •
-                                        MRN: {vitalsPatient.userId?.patientId || 'N/A'} •
+                                        Patient: <strong style={{ color: '#e2e8f0' }}>{vitalsPatient.userId?.name || vitalsPatient.clinicPatientId?.name || 'Unknown'}</strong> •
+                                        MRN: {vitalsPatient.userId?.patientId || vitalsPatient.clinicPatientId?.patientUid || vitalsPatient.patientId || 'N/A'} •
                                         Dr. {vitalsPatient.doctorName}
                                     </p>
                                 </div>

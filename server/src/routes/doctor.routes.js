@@ -270,6 +270,42 @@ router.put('/patients/:patientId/profile', verifyToken, async (req, res) => {
                 }
             });
 
+            // Save and Sync Vitals
+            if (updates.vitals !== undefined) {
+                clinicPatient.vitals = {
+                    weight: updates.vitals.weight || '',
+                    height: updates.vitals.height || '',
+                    bmi: updates.vitals.bmi || '',
+                    bloodPressure: updates.vitals.bloodPressure || '',
+                    pulse: updates.vitals.pulse || '',
+                    temperature: updates.vitals.temperature || '',
+                    spo2: updates.vitals.spo2 || '',
+                    respiratoryRate: updates.vitals.respiratoryRate || '',
+                    lastRecorded: updates.vitals.lastRecorded || new Date()
+                };
+
+                // Sync to latest clinic appointment
+                const Appointment = require('../models/appointment.model');
+                const latestAppt = await Appointment.findOne({
+                    clinicPatientId: clinicPatient._id,
+                    hospitalId: hospitalId
+                }).sort({ appointmentDate: -1, createdAt: -1 });
+
+                if (latestAppt) {
+                    latestAppt.vitals = {
+                        weight: updates.vitals.weight || '',
+                        height: updates.vitals.height || '',
+                        bmi: updates.vitals.bmi || '',
+                        bp: updates.vitals.bloodPressure || '',
+                        temperature: updates.vitals.temperature || '',
+                        pulse: updates.vitals.pulse || '',
+                        spo2: updates.vitals.spo2 || '',
+                        rr: updates.vitals.respiratoryRate || ''
+                    };
+                    await latestAppt.save();
+                }
+            }
+
             await clinicPatient.save();
             return res.json({ success: true, message: 'Patient profile updated successfully', profile: clinicPatient });
         }
@@ -348,6 +384,7 @@ router.get('/appointments', verifyToken, async (req, res) => {
         const query = await getDoctorQuery(doctorUserId, req.user.hospitalId);
         const appointments = await Appointment.find(query)
             .populate('userId', 'name email phone patientId fertilityProfile')
+            .populate('clinicPatientId')
             .sort({ appointmentDate: 1, appointmentTime: 1 })
             .lean();
         res.json({ success: true, appointments });
@@ -389,6 +426,7 @@ router.get('/all-appointments', verifyToken, async (req, res) => {
 
         const appointments = await Appointment.find(query)
             .populate('userId', 'name email phone patientId fertilityProfile')
+            .populate('clinicPatientId')
             .populate('doctorId', 'name specialty departments')
             .populate('doctorUserId', 'name')
             .sort({ appointmentDate: -1, appointmentTime: 1 })

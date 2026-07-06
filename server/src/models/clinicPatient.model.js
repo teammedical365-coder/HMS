@@ -33,6 +33,18 @@ const clinicPatientSchema = new mongoose.Schema({
     chronicConditions: { type: String, default: '' },
     medicalNotes:      { type: String, default: '' },
 
+    vitals: {
+        weight:          { type: String, default: '' },
+        height:          { type: String, default: '' },
+        bmi:             { type: String, default: '' },
+        bloodPressure:   { type: String, default: '' },
+        pulse:           { type: String, default: '' },
+        temperature:     { type: String, default: '' },
+        spo2:            { type: String, default: '' },
+        respiratoryRate: { type: String, default: '' },
+        lastRecorded:    { type: Date, default: null }
+    },
+
     // Emergency / known contacts
     relatives: [{
         name:     { type: String, trim: true, default: '' },

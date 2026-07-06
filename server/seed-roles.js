@@ -11,7 +11,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const Role = require('./src/models/role.model');
 
-const DB_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/crm';
+const DB_URI = process.env.MONGODB_URL || process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/crm';
 
 const defaultRoles = [
     {
@@ -48,6 +48,18 @@ const defaultRoles = [
         dashboardPath: '/doctor/patients',
         navLinks: [
             { label: 'Patients', path: '/doctor/patients' }
+        ],
+        isSystemRole: true
+    },
+    {
+        name: 'Clinic Doctor',
+        description: 'Clinic medical doctor with clinic access',
+        permissions: [
+            'visit_diagnose', 'patient_view', 'clinical_history_view'
+        ],
+        dashboardPath: '/hospitaladmin',
+        navLinks: [
+            { label: 'Clinic Hub', path: '/hospitaladmin' }
         ],
         isSystemRole: true
     },

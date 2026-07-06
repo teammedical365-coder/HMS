@@ -329,7 +329,15 @@ const Admin = () => {
                                          <option value="">-- Select a Role --</option>
                                          {roles
                                              .filter(r => !['patient', 'user'].includes(r.name.toLowerCase()))
-                                             .filter(r => !r.name.toLowerCase().includes('clinic'))
+                                             .filter(r => {
+                                                 const isClinic = hospital?.clinicType === 'clinic';
+                                                 const name = r.name.toLowerCase();
+                                                 if (isClinic) {
+                                                     return name === 'clinic doctor';
+                                                 } else {
+                                                     return !name.includes('clinic');
+                                                 }
+                                             })
                                              .map(role => (
                                                  <option key={role._id} value={role._id}>
                                                      {role.name} {role.description ? `— ${role.description}` : ''}
@@ -484,7 +492,15 @@ const Admin = () => {
                                          <select value={editForm.roleId} onChange={e => setEditForm({ ...editForm, roleId: e.target.value })} required disabled className="staff-input">
                                              {roles
                                                  .filter(r => !['patient', 'user'].includes(r.name.toLowerCase()))
-                                                 .filter(r => !r.name.toLowerCase().includes('clinic'))
+                                                 .filter(r => {
+                                                     const isClinic = hospital?.clinicType === 'clinic';
+                                                     const name = r.name.toLowerCase();
+                                                     if (isClinic) {
+                                                         return name === 'clinic doctor';
+                                                     } else {
+                                                         return !name.includes('clinic');
+                                                     }
+                                                 })
                                                  .map(role => (
                                                      <option key={role._id} value={role._id}>{role.name}</option>
                                                  ))}

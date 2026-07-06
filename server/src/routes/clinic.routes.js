@@ -48,7 +48,8 @@ const uploadReport = multer({
 const verifyClinicAdmin = async (req, res, next) => {
     try {
         await verifyToken(req, res, async () => {
-            if (req.user.role !== 'hospitaladmin') {
+            const roleName = (req.user._roleData?.name || '').toLowerCase();
+            if (roleName !== 'hospitaladmin') {
                 return res.status(403).json({ success: false, message: 'Clinic admin access required' });
             }
             if (!req.user.hospitalId) {
@@ -64,8 +65,9 @@ const verifyClinicAdmin = async (req, res, next) => {
 const verifyClinicStaff = async (req, res, next) => {
     try {
         await verifyToken(req, res, async () => {
-            const allowed = ['hospitaladmin', 'doctor', 'reception', 'receptionist'];
-            if (!allowed.includes(req.user.role)) {
+            const roleName = (req.user._roleData?.name || '').toLowerCase();
+            const allowed = ['hospitaladmin', 'doctor', 'clinic doctor', 'reception', 'receptionist'];
+            if (!allowed.includes(roleName)) {
                 return res.status(403).json({ success: false, message: 'Clinic staff access required' });
             }
             if (!req.user.hospitalId) {
@@ -1166,11 +1168,14 @@ router.put('/treatment-plans/:id/cancel', verifyClinicStaff, async (req, res) =>
 // ─────────────────────────────────────────────
 router.get('/staff', verifyClinicStaff, async (req, res) => {
     try {
-        const STAFF_ROLES_LEGACY = ['doctor', 'receptionist'];
+        const STAFF_ROLES_LEGACY = ['doctor', 'receptionist', 'clinic doctor'];
         const Role = require('../models/role.model');
         const roleIds = await Role.find({
-            hospitalId: hid(req),
-            name: { $in: STAFF_ROLES_LEGACY.map(r => new RegExp(`^${r}$`, 'i')) }
+            $or: [
+                { hospitalId: hid(req) },
+                { hospitalId: null }
+            ],
+            name: { $in: ['Doctor', 'Clinic Doctor', 'Receptionist'].map(r => new RegExp(`^${r}$`, 'i')) }
         }).select('_id name').lean();
         const roleIdSet = roleIds.map(r => r._id);
 
@@ -1183,10 +1188,14 @@ router.get('/staff', verifyClinicStaff, async (req, res) => {
         }).select('name email phone role createdAt').lean();
 
         const roleMap = Object.fromEntries(roleIds.map(r => [String(r._id), r.name]));
-        const enriched = staff.map(s => ({
-            ...s,
-            roleName: roleMap[String(s.role)] || String(s.role),
-        }));
+        const enriched = staff.map(s => {
+            let roleName = roleMap[String(s.role)] || String(s.role);
+            if (roleName === 'doctor') roleName = 'Clinic Doctor'; // Legacy fallback
+            return {
+                ...s,
+                roleName
+            };
+        });
 
         res.json({ success: true, staff: enriched });
     } catch (err) {
