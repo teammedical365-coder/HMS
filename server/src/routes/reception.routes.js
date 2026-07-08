@@ -4,6 +4,9 @@ const Appointment = require('../models/appointment.model');
 const User = require('../models/user.model');
 const Doctor = require('../models/doctor.model'); // Required to fetch doctor details
 const { verifyToken } = require('../middleware/auth.middleware');
+const { resolveTenant } = require('../middleware/tenantMiddleware');
+const MasterAdmission = require('../models/admission.model');
+const { getTenantModels } = require('../db/tenantModels');
 
 const verifyReception = (req, res, next) => {
     if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
@@ -22,6 +25,51 @@ const verifyReception = (req, res, next) => {
 
     return res.status(403).json({ success: false, message: 'Access denied: Reception access only' });
 };
+
+async function generateSmartMRN(hospitalId, hospital, User) {
+    // 1. If this entity is a Clinic, strictly preserve original clinic logic (Do NOT change Clinic MRN generation)
+    if (hospital && hospital.clinicType === 'clinic') {
+        const prefix = hospital.clinicCode || hospital.slug?.toUpperCase() || 'MRN';
+        const count = await User.countDocuments({ hospitalId, role: 'patient' });
+        return `${prefix}-${String(count + 1).padStart(3, '0')}`;
+    }
+
+    // 2. Otherwise, this is strictly the Hospital module.
+    const Hospital = require('../models/hospital.model');
+    const hospitalCode = await Hospital.ensureHospitalCode(hospital);
+
+    // Count existing patients for this specific hospital starting sequence at 1
+    const count = await User.countDocuments({ hospitalId, role: 'patient' });
+
+    // Also scan any existing MRNs formatted as <HospitalCode>-M365-<Digits> to avoid sequence collisions/gaps
+    const escapedCode = hospitalCode.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`^${escapedCode}-M365-(\\d+)$`, 'i');
+    const existingPatients = await User.find({ hospitalId, mrn: regex }).select('mrn').lean();
+
+    let maxSeq = count;
+    for (const p of existingPatients) {
+        if (p.mrn) {
+            const match = p.mrn.match(regex);
+            if (match && match[1]) {
+                const num = parseInt(match[1], 10);
+                if (!isNaN(num) && num > maxSeq) {
+                    maxSeq = num;
+                }
+            }
+        }
+    }
+
+    let nextNum = maxSeq + 1;
+    while (true) {
+        const runningStr = String(nextNum).padStart(3, '0');
+        const candidate = `${hospitalCode}-M365-${runningStr}`;
+        const exists = await User.findOne({ $or: [{ mrn: candidate }, { patientId: candidate }] });
+        if (!exists) {
+            return candidate;
+        }
+        nextNum++;
+    }
+}
 
 // 1. REGISTER (WALK-IN)
 router.post('/register', verifyToken, verifyReception, async (req, res) => {
@@ -60,25 +108,34 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
             // Only update email if provided and different (avoid overwriting with empty)
             if (email && email !== user.email) user.email = email;
 
-            // Backfill PatientId for legacy walk-ins that were created without one
+            // Backfill PatientId/MRN for legacy walk-ins that were created without one
             if (!user.patientId) {
-                user.patientId = 'MRN-' + Date.now() + Math.floor(Math.random() * 1000);
+                const hospitalId = req.user.hospitalId || user.hospitalId;
+                const Hospital = require('../models/hospital.model');
+                const hospital = hospitalId ? await Hospital.findById(hospitalId) : null;
+                const patientId = await generateSmartMRN(hospitalId, hospital, User);
+                user.patientId = patientId;
+                user.mrn = patientId;
             }
 
             await user.save();
             return res.status(200).json({ success: true, message: 'Patient record updated!', user });
         }
 
-        // Create New Walk-in Patient — use collision-resistant ID
-        const patientId = 'MRN-' + Date.now() + Math.floor(Math.random() * 1000);
+        // Create New Walk-in Patient — use smart hospital/clinic MRN sequence
+        const hospitalId = req.user.hospitalId;
+        const Hospital = require('../models/hospital.model');
+        const hospital = hospitalId ? await Hospital.findById(hospitalId) : null;
+        const patientId = await generateSmartMRN(hospitalId, hospital, User);
 
         const userData = {
             name,
             phone,
             role: 'patient',
             patientId,
+            mrn: patientId,
             fertilityProfile: {},
-            hospitalId: req.user.hospitalId || undefined
+            hospitalId: hospitalId || undefined
         };
 
         // Only attach email if it actually exists, to prevent duplicate sparse index errors
@@ -303,7 +360,7 @@ router.put('/intake/:userId', verifyToken, verifyReception, async (req, res) => 
 });
 
 // 4. APPOINTMENTS
-router.get('/appointments', verifyToken, verifyReception, async (req, res) => {
+router.get('/appointments', verifyToken, verifyReception, resolveTenant, async (req, res) => {
     try {
         let queryFilter = {};
         if (req.user.hospitalId) queryFilter.hospitalId = req.user.hospitalId;
@@ -322,7 +379,24 @@ router.get('/appointments', verifyToken, verifyReception, async (req, res) => {
             .populate('doctorId', 'name')
             .sort({ tokenNumber: 1, appointmentTime: 1 })
             .lean();
-        res.json({ success: true, appointments });
+
+        // Check active admissions for these patients to set isHospitalized
+        const patientIds = appointments.map(apt => apt.userId?._id).filter(Boolean);
+        const Admission = req.tenantDb ? getTenantModels(req.tenantDb).Admission : MasterAdmission;
+        const activeAdmissions = await Admission.find({
+            hospitalId: req.user.hospitalId,
+            patientId: { $in: patientIds },
+            status: 'Admitted'
+        }).select('patientId').lean();
+
+        const activeAdmittedPatientIds = new Set(activeAdmissions.map(adm => adm.patientId.toString()));
+
+        const appointmentsWithHospitalized = appointments.map(apt => ({
+            ...apt,
+            isHospitalized: apt.userId?._id ? activeAdmittedPatientIds.has(apt.userId._id.toString()) : false
+        }));
+
+        res.json({ success: true, appointments: appointmentsWithHospitalized });
     } catch (e) { res.status(500).json({ success: false, message: 'An internal error occurred' }); }
 });
 

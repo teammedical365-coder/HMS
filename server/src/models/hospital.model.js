@@ -62,6 +62,9 @@ const hospitalSchema = new mongoose.Schema({
     // Entity type — 'hospital' for full hospitals, 'clinic' for small simple clinics
     clinicType: { type: String, enum: ['hospital', 'clinic'], default: 'hospital' },
 
+    // Permanent unique Hospital Code (e.g. "APL", "APL1", "FOR") — never auto-regenerated once set
+    hospitalCode: { type: String, uppercase: true, trim: true, unique: true, sparse: true },
+
     // Clinic-specific fields
     // Short code used as prefix for patient IDs: e.g. "RAM" → patient IDs: RAM-001, RAM-002
     clinicCode: { type: String, uppercase: true, trim: true, default: '' },
@@ -111,5 +114,97 @@ const hospitalSchema = new mongoose.Schema({
         billingCycle:  { type: String, enum: ['monthly', 'quarterly', 'annual'], default: 'monthly' },
     },
 }, { timestamps: true });
+
+function deriveBaseCode(name) {
+    if (!name || typeof name !== 'string') return 'HSP';
+    const clean = name.trim();
+    const upper = clean.toUpperCase();
+
+    // Specific well-known hospital mappings for exact match with prompt rules
+    if (upper.includes('APOLLO')) return 'APL';
+    if (upper.includes('FORTIS')) return 'FOR';
+    if (upper.includes('MEDANTA')) return 'MDT';
+    if (upper.includes('AIIMS')) return 'AIM';
+    if (upper.includes('MAX')) return 'MAX';
+
+    // General smart generation for any other hospital
+    const ignoredWords = new Set(['HOSPITAL', 'HOSPITALS', 'HEALTHCARE', 'HEALTH', 'CARE', 'CLINIC', 'MEDICAL', 'CENTER', 'INSTITUTE', 'MULTI', 'SPECIALTY', 'SUPERSPECIALTY', 'PVT', 'LTD', 'THE', 'DR', 'OF', 'AND', '&', '-', 'GENERAL', 'CITY']);
+    const words = upper.replace(/[^A-Z\s]/g, ' ').split(/\s+/).filter(w => w.length > 0 && !ignoredWords.has(w));
+    
+    if (words.length === 0) {
+        const letters = upper.replace(/[^A-Z]/g, '');
+        return (letters.substring(0, 3) || 'HSP').padEnd(3, 'X');
+    }
+
+    const firstWord = words[0];
+    if (firstWord.length <= 3) {
+        return firstWord.padEnd(3, 'X');
+    }
+
+    // Try 1st letter + next two consonants of firstWord
+    const firstLetter = firstWord[0];
+    const rest = firstWord.substring(1);
+    const consonants = rest.replace(/[^BCDFGHJKLMNPQRSTVWXYZ]/g, '');
+    if (consonants.length >= 2) {
+        return firstLetter + consonants.substring(0, 2);
+    }
+
+    return firstWord.substring(0, 3);
+}
+
+hospitalSchema.pre('save', async function (next) {
+    // Only generate for hospital entity types (do NOT touch clinic module)
+    if (this.clinicType === 'clinic') return next();
+
+    // Once created/set, hospitalCode should NEVER change automatically even if name changes
+    if (this.hospitalCode && this.hospitalCode.trim() !== '') return next();
+
+    const baseCode = deriveBaseCode(this.name);
+    let candidate = baseCode;
+    let counter = 1;
+
+    // Check if any existing hospital already uses this candidate code
+    while (true) {
+        const existing = await this.constructor.findOne({
+            hospitalCode: candidate,
+            _id: { $ne: this._id }
+        });
+        if (!existing) {
+            break;
+        }
+        candidate = `${baseCode}${counter++}`;
+    }
+
+    this.hospitalCode = candidate;
+    next();
+});
+
+hospitalSchema.statics.ensureHospitalCode = async function (hospital) {
+    if (!hospital) return 'HSP';
+    if (hospital.clinicType === 'clinic') return hospital.clinicCode || 'CLC';
+    if (hospital.hospitalCode && hospital.hospitalCode.trim() !== '') {
+        return hospital.hospitalCode.trim().toUpperCase();
+    }
+    const doc = await this.findById(hospital._id || hospital);
+    if (doc) {
+        if (!doc.hospitalCode || doc.hospitalCode.trim() === '') {
+            const baseCode = deriveBaseCode(doc.name);
+            let candidate = baseCode;
+            let counter = 1;
+            while (true) {
+                const existing = await this.findOne({
+                    hospitalCode: candidate,
+                    _id: { $ne: doc._id }
+                });
+                if (!existing) break;
+                candidate = `${baseCode}${counter++}`;
+            }
+            doc.hospitalCode = candidate;
+            await doc.save();
+        }
+        return doc.hospitalCode || 'HSP';
+    }
+    return 'HSP';
+};
 
 module.exports = mongoose.model('Hospital', hospitalSchema);

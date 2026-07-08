@@ -348,10 +348,13 @@ export const financeAPI = {
 };
 
 export const billingAPI = {
+    getPatients: async () => (await apiClient.get('/api/billing/patients')).data,
     getPatientBills: async (identifier) => (await apiClient.get(`/api/billing/patient/${identifier}`)).data,
     addFacilityCharge: async (data) => (await apiClient.post('/api/billing/facility-charge', data)).data,
     processPayment: async (data) => (await apiClient.put('/api/billing/pay', data)).data,
 };
+
+
 
 export const admissionAPI = {
     createAdmission: async (data) => (await apiClient.post('/api/admissions', data)).data,

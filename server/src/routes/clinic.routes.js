@@ -1220,7 +1220,7 @@ router.put('/treatment-plans/:id/cancel', verifyClinicStaff, async (req, res) =>
 // ─────────────────────────────────────────────
 router.get('/staff', verifyClinicStaff, async (req, res) => {
     try {
-        const STAFF_ROLES_LEGACY = ['doctor', 'receptionist', 'clinic doctor'];
+        const STAFF_ROLES_LEGACY = ['doctor', 'receptionist', 'clinic doctor', 'hospitaladmin'];
         const Role = require('../models/role.model');
         const roleIds = await Role.find({
             $or: [
@@ -1242,7 +1242,9 @@ router.get('/staff', verifyClinicStaff, async (req, res) => {
         const roleMap = Object.fromEntries(roleIds.map(r => [String(r._id), r.name]));
         const enriched = staff.map(s => {
             let roleName = roleMap[String(s.role)] || String(s.role);
-            if (roleName === 'doctor') roleName = 'Clinic Doctor'; // Legacy fallback
+            if (roleName === 'hospitaladmin') roleName = 'Clinic Admin';
+            else if (roleName === 'doctor') roleName = 'Clinic Doctor'; // Legacy fallback
+            else if (roleName === 'clinic doctor') roleName = 'Clinic Doctor';
             return {
                 ...s,
                 roleName

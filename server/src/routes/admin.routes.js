@@ -405,7 +405,7 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
 
         // Validate clinic vs hospital role mapping
         if (assignedHospitalId && !isPatientRole) {
-            const hospitalDoc = await Hospital.findById(assignedHospitalId).select('clinicType');
+            const hospitalDoc = await Hospital.findById(assignedHospitalId).select('clinicType tier');
             if (hospitalDoc) {
                 const isClinic = hospitalDoc.clinicType === 'clinic';
                 const assignedRoleNameLower = (roleDoc.name || '').toLowerCase();
@@ -415,6 +415,20 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
                         return res.status(400).json({
                             success: false,
                             message: 'Clinics only support the "Clinic Doctor" role for staff. Other roles are not allowed.'
+                        });
+                    }
+                    const maxForRole = hospitalDoc.tier?.maxDoctors || 1;
+                    const currentCount = await User.countDocuments({
+                        hospitalId: assignedHospitalId,
+                        $or: [
+                            { role: 'doctor' },
+                            { role: roleDoc._id }
+                        ]
+                    });
+                    if (currentCount >= maxForRole) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'This clinic already has an assigned Clinic Doctor.'
                         });
                     }
                 } else {
@@ -624,7 +638,7 @@ router.delete('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
             roleName = roleDoc ? roleDoc.name.toLowerCase() : null;
         }
 
-        if (roleName === 'doctor') await Doctor.findOneAndDelete({ userId: user._id });
+        if (roleName === 'doctor' || roleName === 'clinic doctor') await Doctor.findOneAndDelete({ userId: user._id });
         if (roleName === 'lab' || roleName === 'lab technician') await Lab.findOneAndDelete({ userId: user._id });
         if (roleName === 'pharmacy' || roleName === 'pharmacist') await Pharmacy.findOneAndDelete({ userId: user._id });
         if (roleName === 'reception' || roleName === 'receptionist') await Reception.findOneAndDelete({ userId: user._id });
@@ -635,5 +649,4 @@ router.delete('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
         res.status(500).json({ success: false, message: 'Error deleting user' });
     }
 });
-
 module.exports = router;

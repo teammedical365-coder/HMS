@@ -128,8 +128,12 @@
 }
 
 .patient-outstanding { text-align: right; }
-.outstanding-label { font-size: 0.8rem; opacity: 0.85; margin-bottom: 4px; }
-.outstanding-amount { font-size: 1.6rem; font-weight: 700; }
+.outstanding-label { font-size: 0.82rem; opacity: 0.9; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+.outstanding-amount { font-size: 1.8rem; font-weight: 700; margin-bottom: 6px; }
+.paid-balance-meta { font-size: 0.92rem; font-weight: 600; display: flex; gap: 14px; justify-content: flex-end; }
+.meta-paid { color: #a7f3d0; }
+.meta-balance { color: #fef08a; }
+.paid-icon-check { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; background: #dcfce7; color: #16a34a; border-radius: 50%; font-weight: bold; font-size: 0.85rem; }
 
 /* Sections */
 .billing-section {
@@ -224,10 +228,10 @@
     background: #f1f5f9;
     color: #475569;
 }
-.status-badge.status-confirmed { background: #dcfce7; color: #16a34a; }
-.status-badge.status-pending { background: #fef9c3; color: #ca8a04; }
-.status-badge.status-completed { background: #dbeafe; color: #1d4ed8; }
-.status-badge.status-cancelled { background: #fee2e2; color: #dc2626; }
+.status-badge.status-confirmed, .status-badge.status-Confirmed, .status-badge.status-Paid, .status-badge.status-paid { background: #dcfce7; color: #16a34a; }
+.status-badge.status-pending, .status-badge.status-Pending { background: #fef9c3; color: #ca8a04; }
+.status-badge.status-completed, .status-badge.status-Completed { background: #dbeafe; color: #1d4ed8; }
+.status-badge.status-cancelled, .status-badge.status-Cancelled { background: #fee2e2; color: #dc2626; }
 
 /* Admission Cards */
 .admission-card {

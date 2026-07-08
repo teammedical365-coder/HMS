@@ -510,20 +510,15 @@
 
 /* ---- Form Footer ---- */
 .form-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  background: var(--glass-white);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  padding: 14px 24px;
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.08);
+  margin-top: 24px;
+  padding: 20px 24px;
+  background: var(--surface-0);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--gray-200);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  z-index: 100;
-  border-top: 1px solid var(--gray-200);
 }
 
 /* ---- Responsive ---- */

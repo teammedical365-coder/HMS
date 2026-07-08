@@ -329,7 +329,9 @@ const ReceptionPatients = () => {
                                                         </div>
                                                         <div>
                                                             <div style={{ fontWeight: 700, color: '#1e293b' }}>{appt.userId?.name || 'Walk-in'}</div>
-                                                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>MRN: {appt.userId?.patientId || 'N/A'}</div>
+                                                            <div title={appt.userId?.patientId} style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                                                MRN: {appt.userId?.patientId ? (appt.userId.patientId.length > 18 ? `${appt.userId.patientId.substring(0, 15)}...` : appt.userId.patientId) : 'N/A'}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -370,43 +372,43 @@ const ReceptionPatients = () => {
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                                                    <div style={{ display: 'inline-flex', gap: '8px' }}>
+                                                    <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                                                         <button 
                                                             onClick={() => navigate(`/patient/${appt.userId?._id || appt.userId?.patientId || appt.patientId || appt._id}`)}
                                                             style={{
                                                                 background: '#eff6ff',
                                                                 color: '#2563eb',
                                                                 border: '1px solid #bfdbfe',
-                                                                padding: '6px 14px',
+                                                                padding: '6px 12px',
                                                                 borderRadius: '6px',
                                                                 cursor: 'pointer',
                                                                 fontSize: '0.8rem',
                                                                 fontWeight: 600,
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center',
-                                                                gap: '4px'
+                                                                justifyContent: 'center',
+                                                                gap: '6px',
+                                                                whiteSpace: 'nowrap'
                                                             }}
-                                                        >
-                                                            👁️ Profile
-                                                        </button>
+                                                        >👁️ Profile</button>
                                                         <button 
                                                             onClick={() => setUploadModal({ open: true, apptId: appt._id, patientName: appt.userId?.name || 'Patient' })}
                                                             style={{
                                                                 background: '#fdf2f8',
                                                                 color: '#db2777',
                                                                 border: '1px solid #fbcfe8',
-                                                                padding: '6px 14px',
+                                                                padding: '6px 12px',
                                                                 borderRadius: '6px',
                                                                 cursor: 'pointer',
                                                                 fontSize: '0.8rem',
                                                                 fontWeight: 600,
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center',
-                                                                gap: '4px'
+                                                                justifyContent: 'center',
+                                                                gap: '6px',
+                                                                whiteSpace: 'nowrap'
                                                             }}
-                                                        >
-                                                            📁 Upload Report
-                                                        </button>
+                                                        >📁 Upload Report</button>
                                                     </div>
                                                 </td>
                                             </tr>

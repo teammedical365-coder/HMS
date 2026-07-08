@@ -34,15 +34,29 @@ router.get('/search', verifyToken, resolveTenant, async (req, res) => {
 
         // Escape special regex characters to prevent regex injection
         const safeTerm = term.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const hFilter = req.user.hospitalId ? { hospitalId: req.user.hospitalId } : {};
+        const regexTerm = { $regex: safeTerm, $options: 'i' };
+        let hFilter = {};
+        if (req.user.hospitalId) {
+            hFilter = {
+                $or: [
+                    { hospitalId: req.user.hospitalId },
+                    { hospitalId: { $exists: false } },
+                    { hospitalId: null }
+                ]
+            };
+        }
 
         const patients = await MasterUser.find({
-            ...hFilter,
-            $or: [
-                { phone: safeTerm },
-                { patientId: safeTerm },
-                { mrn: safeTerm },
-                { name: { $regex: safeTerm, $options: 'i' } }
+            $and: [
+                hFilter,
+                {
+                    $or: [
+                        { phone: regexTerm },
+                        { patientId: regexTerm },
+                        { mrn: regexTerm },
+                        { name: regexTerm }
+                    ]
+                }
             ]
         }).select('name phone patientId mrn dob gender city').limit(50);
 

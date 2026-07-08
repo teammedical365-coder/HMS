@@ -52,34 +52,96 @@ const getModels = (req) => {
 // 1. Search Patient & Fetch All Bills (pending + paid summary) — tenant-scoped
 router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
     try {
-        const { identifier } = req.params;
+        const identifier = (req.params.identifier || '').trim();
         const { User, Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission } = getModels(req);
 
-        // Scope patient lookup to the requesting user's hospital
-        const hospitalFilter = req.user.hospitalId ? { hospitalId: req.user.hospitalId } : {};
+        // Scope patient lookup flexibly to requesting user's hospital or legacy records without hospitalId
+        const hospitalFilter = req.user.hospitalId ? {
+            $or: [
+                { hospitalId: req.user.hospitalId },
+                { hospitalId: { $exists: false } },
+                { hospitalId: null }
+            ]
+        } : {};
 
-        const patient = await User.findOne({
-            ...hospitalFilter,
-            $or: [{ mrn: identifier }, { patientId: identifier }, { phone: identifier }]
-        });
+        // Find patient by MRN, patientId, phone, or name (case-insensitive regex)
+        const isObjectId = identifier.length === 24 && /^[0-9a-fA-F]{24}$/.test(identifier);
+        const safeRegex = new RegExp(identifier.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'i');
+        const searchQuery = isObjectId ? { _id: identifier } : {
+            $and: [
+                hospitalFilter,
+                {
+                    $or: [
+                        { mrn: safeRegex },
+                        { patientId: safeRegex },
+                        { phone: safeRegex },
+                        { name: safeRegex }
+                    ]
+                }
+            ]
+        };
 
+        let patient = await User.findOne(searchQuery);
+        if (!patient && User !== MasterUser) {
+            patient = await MasterUser.findOne(searchQuery);
+        }
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
-        const pendingStatuses = ['pending', 'Pending', 'PENDING', 'Unpaid'];
-        const hFilter = req.user.hospitalId ? { hospitalId: req.user.hospitalId } : {};
+        const hFilter = req.user.hospitalId ? {
+            $or: [
+                { hospitalId: req.user.hospitalId },
+                { hospitalId: { $exists: false } },
+                { hospitalId: null }
+            ]
+        } : {};
+
+        const fetchWithMasterFallback = async (Model, MasterModel, query, selectFields, sortFields = null) => {
+            let results = await (sortFields ? Model.find(query).sort(sortFields).lean() : Model.find(query).select(selectFields).lean());
+            if (Model !== MasterModel) {
+                const masterResults = await (sortFields ? MasterModel.find(query).sort(sortFields).lean() : MasterModel.find(query).select(selectFields).lean());
+                const seen = new Set(results.map(r => r._id.toString()));
+                for (const mr of masterResults) {
+                    if (!seen.has(mr._id.toString())) results.push(mr);
+                }
+            }
+            return results;
+        };
 
         const [appointments, labReports, pharmacyOrders, facilityCharges, admissions] = await Promise.all([
-            Appointment.find({ patientId: patient._id, paymentStatus: { $in: pendingStatuses }, ...hFilter })
-                .select('appointmentDate appointmentTime amount paymentStatus serviceName doctorName status createdAt').lean(),
-            LabReport.find({ patientId: patient._id, paymentStatus: { $in: pendingStatuses }, ...hFilter })
-                .select('testNames amount paymentStatus testStatus createdAt').lean(),
-            PharmacyOrder.find({ patientId: patient._id, paymentStatus: { $in: pendingStatuses }, ...hFilter })
-                .select('items totalAmount paymentStatus orderStatus createdAt').lean(),
-            FacilityCharge.find({ patientId: patient._id, paymentStatus: { $in: pendingStatuses }, ...hFilter })
-                .select('facilityName pricePerDay daysUsed totalAmount paymentStatus createdAt').lean(),
-            Admission.find({ patientId: patient._id, ...hFilter })
-                .sort({ admissionDate: -1 }).lean(),
+            fetchWithMasterFallback(Appointment, MasterAppointment, { userId: patient._id, ...hFilter }, 'appointmentDate appointmentTime amount paymentStatus serviceName doctorName status createdAt'),
+            fetchWithMasterFallback(LabReport, MasterLabReport, { userId: patient._id, ...hFilter }, 'testNames amount paymentStatus testStatus createdAt'),
+            fetchWithMasterFallback(PharmacyOrder, MasterPharmacyOrder, { userId: patient._id, ...hFilter }, 'items totalAmount paymentStatus orderStatus createdAt'),
+            fetchWithMasterFallback(FacilityCharge, MasterFacilityCharge, { patientId: patient._id, ...hFilter }, 'facilityName pricePerDay days totalAmount paymentStatus createdAt'),
+            fetchWithMasterFallback(Admission, MasterAdmission, { patientId: patient._id, ...hFilter }, null, { admissionDate: -1 })
         ]);
+
+        // Calculate ICU charges dynamically for active/past admissions
+        const Hospital = require('../models/hospital.model');
+        const hospital = patient.hospitalId ? await Hospital.findById(patient.hospitalId).lean() : null;
+        const icuFacility = hospital?.facilities?.find(f => f.name.toUpperCase().startsWith('ICU'));
+        const icuRate = icuFacility ? (Number(icuFacility.pricePerDay) || 0) : 0;
+
+        for (const adm of admissions) {
+            if (adm.ward && adm.ward.toUpperCase().startsWith('ICU')) {
+                const hasIcuCharge = adm.selectedFacilities?.some(f => f.facilityName.toUpperCase().startsWith('ICU'));
+                if (!hasIcuCharge && icuRate > 0) {
+                    const startDate = new Date(adm.admissionDate);
+                    const endDate = adm.dischargeDate ? new Date(adm.dischargeDate) : new Date();
+                    const diffTime = Math.max(0, endDate - startDate);
+                    const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+                    const icuTotal = icuRate * diffDays;
+                    
+                    adm.selectedFacilities = adm.selectedFacilities || [];
+                    adm.selectedFacilities.push({
+                        facilityName: icuFacility.name,
+                        pricePerDay: icuRate,
+                        days: diffDays,
+                        totalAmount: icuTotal
+                    });
+                    adm.totalAmount = (adm.totalAmount || 0) + icuTotal;
+                }
+            }
+        }
 
         res.json({
             success: true,
@@ -96,6 +158,7 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
         });
 
     } catch (error) {
+        console.error('[patient-billing-error]', error);
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
@@ -114,7 +177,7 @@ router.post('/facility-charge', verifyBillingAccess, async (req, res) => {
             patientId,
             facilityName,
             pricePerDay: Number(pricePerDay),
-            daysUsed: Number(days),
+            days: Number(days),
             totalAmount: Number(pricePerDay) * Number(days),
             addedBy: req.user._id || req.user.userId
         });
@@ -141,6 +204,40 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
 
         const { Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission } = getModels(req);
 
+        // Calculate and persist ICU charges for any admissions before marking Paid
+        if (admissionIds.length > 0) {
+            const admissionsToPay = await Admission.find({ _id: { $in: admissionIds } });
+            for (const adm of admissionsToPay) {
+                if (adm.ward && adm.ward.toUpperCase().startsWith('ICU')) {
+                    const hasIcuCharge = adm.selectedFacilities?.some(f => f.facilityName.toUpperCase().startsWith('ICU'));
+                    if (!hasIcuCharge) {
+                        const Hospital = require('../models/hospital.model');
+                        const hospital = adm.hospitalId ? await Hospital.findById(adm.hospitalId).lean() : null;
+                        const icuFacility = hospital?.facilities?.find(f => f.name.toUpperCase().startsWith('ICU'));
+                        const icuRate = icuFacility ? (Number(icuFacility.pricePerDay) || 0) : 0;
+                        if (icuRate > 0) {
+                            const startDate = new Date(adm.admissionDate);
+                            const endDate = adm.dischargeDate ? new Date(adm.dischargeDate) : new Date();
+                            const diffTime = Math.max(0, endDate - startDate);
+                            const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+                            const icuTotal = icuRate * diffDays;
+                            
+                            adm.selectedFacilities = adm.selectedFacilities || [];
+                            adm.selectedFacilities.push({
+                                facilityName: icuFacility.name,
+                                pricePerDay: icuRate,
+                                days: diffDays,
+                                totalAmount: icuTotal
+                            });
+                            adm.totalAmount = (adm.totalAmount || 0) + icuTotal;
+                        }
+                    }
+                }
+                adm.paymentStatus = 'Paid';
+                await adm.save();
+            }
+        }
+
         await Promise.all([
             appointmentIds.length > 0 && Appointment.updateMany(
                 { _id: { $in: appointmentIds } }, { $set: { paymentStatus: 'Paid', paymentMode } }),
@@ -150,12 +247,119 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
                 { _id: { $in: pharmacyOrderIds } }, { $set: { paymentStatus: 'Paid' } }),
             facilityChargeIds.length > 0 && FacilityCharge.updateMany(
                 { _id: { $in: facilityChargeIds } }, { $set: { paymentStatus: 'Paid' } }),
-            admissionIds.length > 0 && Admission.updateMany(
-                { _id: { $in: admissionIds } }, { $set: { paymentStatus: 'Paid' } }),
         ].filter(Boolean));
 
         res.json({ success: true, message: 'Billing settled successfully' });
     } catch (error) {
+        console.error('[confirm-payment-error]', error);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// 4. Fetch All Patients with their Billing Metrics (pending + paid dues) — tenant-scoped
+router.get('/patients', verifyBillingAccess, async (req, res) => {
+    try {
+        const { User, Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission } = getModels(req);
+        
+        // Scope patient lookup to the requesting user's hospital
+        const hospitalFilter = req.user.hospitalId ? { hospitalId: req.user.hospitalId } : {};
+
+        // Find all patients registered under this hospital
+        const patients = await User.find({
+            ...hospitalFilter,
+            role: 'patient'
+        }).sort({ createdAt: -1 }).lean();
+
+        const resolvedPatients = [];
+
+        // For each patient, compute billing statistics
+        for (const patient of patients) {
+            const hFilter = req.user.hospitalId ? { hospitalId: req.user.hospitalId } : {};
+            
+            const [appointments, labReports, pharmacyOrders, facilityCharges, admissions] = await Promise.all([
+                Appointment.find({ userId: patient._id, ...hFilter }).lean(),
+                LabReport.find({ userId: patient._id, ...hFilter }).lean(),
+                PharmacyOrder.find({ userId: patient._id, ...hFilter }).lean(),
+                FacilityCharge.find({ patientId: patient._id, ...hFilter }).lean(),
+                Admission.find({ patientId: patient._id, ...hFilter }).lean(),
+            ]);
+
+            // Calculate ICU charges dynamically for active/past admissions
+            const Hospital = require('../models/hospital.model');
+            const hospital = req.user.hospitalId ? await Hospital.findById(req.user.hospitalId).lean() : null;
+            const icuFacility = hospital?.facilities?.find(f => f.name.toUpperCase().startsWith('ICU'));
+            const icuRate = icuFacility ? (Number(icuFacility.pricePerDay) || 0) : 0;
+
+            for (const adm of admissions) {
+                if (adm.ward && adm.ward.toUpperCase().startsWith('ICU')) {
+                    const hasIcuCharge = adm.selectedFacilities?.some(f => f.facilityName.toUpperCase().startsWith('ICU'));
+                    if (!hasIcuCharge && icuRate > 0) {
+                        const startDate = new Date(adm.admissionDate);
+                        const endDate = adm.dischargeDate ? new Date(adm.dischargeDate) : new Date();
+                        const diffTime = Math.max(0, endDate - startDate);
+                        const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+                        const icuTotal = icuRate * diffDays;
+                        
+                        adm.selectedFacilities = adm.selectedFacilities || [];
+                        adm.selectedFacilities.push({
+                            facilityName: icuFacility.name,
+                            pricePerDay: icuRate,
+                            days: diffDays,
+                            totalAmount: icuTotal
+                        });
+                        adm.totalAmount = (adm.totalAmount || 0) + icuTotal;
+                    }
+                }
+            }
+
+            // Dues calculations
+            let totalPaid = 0;
+            let pendingDues = 0;
+
+            appointments.forEach(a => {
+                if (['Paid', 'paid'].includes(a.paymentStatus)) totalPaid += (a.amount || 0);
+                else totalPaid += 0; // wait, if not paid, it could be pending
+                if (!['Paid', 'paid'].includes(a.paymentStatus)) pendingDues += (a.amount || 0);
+            });
+
+            labReports.forEach(l => {
+                if (['PAID', 'Paid', 'paid'].includes(l.paymentStatus)) totalPaid += (l.amount || 0);
+                if (!['PAID', 'Paid', 'paid'].includes(l.paymentStatus)) pendingDues += (l.amount || 0);
+            });
+
+            pharmacyOrders.forEach(p => {
+                if (['Paid', 'paid'].includes(p.paymentStatus)) totalPaid += (p.totalAmount || 0);
+                if (!['Paid', 'paid'].includes(p.paymentStatus)) pendingDues += (p.totalAmount || 0);
+            });
+
+            facilityCharges.forEach(f => {
+                if (['Paid', 'paid'].includes(f.paymentStatus)) totalPaid += (f.totalAmount || 0);
+                if (!['Paid', 'paid'].includes(f.paymentStatus)) pendingDues += (f.totalAmount || 0);
+            });
+
+            admissions.forEach(adm => {
+                if (['Paid', 'paid'].includes(adm.paymentStatus)) totalPaid += (adm.totalAmount || 0);
+                if (!['Paid', 'paid'].includes(adm.paymentStatus)) pendingDues += (adm.totalAmount || 0);
+            });
+
+            resolvedPatients.push({
+                _id: patient._id,
+                name: patient.name,
+                mrn: patient.mrn,
+                patientId: patient.patientId,
+                phone: patient.phone,
+                email: patient.email,
+                gender: patient.gender,
+                dob: patient.dob,
+                pendingDues,
+                totalPaid,
+                billingStatus: pendingDues > 0 ? 'Pending' : 'Settled'
+            });
+        }
+
+        res.json({ success: true, patients: resolvedPatients });
+    } catch (error) {
+        console.error('[billing-patients-error]', error);
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });

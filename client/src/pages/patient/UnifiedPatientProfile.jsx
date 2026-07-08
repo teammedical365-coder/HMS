@@ -3,6 +3,20 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { patientAPI, publicAPI, receptionAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { 
+    FiArrowLeft, 
+    FiCalendar, 
+    FiDownload, 
+    FiMail, 
+    FiPhone, 
+    FiActivity, 
+    FiDollarSign, 
+    FiUserCheck, 
+    FiAlertCircle, 
+    FiFileText, 
+    FiPlus,
+    FiEye 
+} from 'react-icons/fi';
 import './UnifiedPatientProfile.css';
 
 import ClinicPatientProfile from './ClinicPatientProfile';
@@ -21,7 +35,7 @@ const UnifiedPatientProfile = () => {
     const [timeline, setTimeline] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [activeTab, setActiveTab] = useState('overview');
+    const [activeTab, setActiveTab] = useState('timeline');
 
     // Booking Modal States
     const [bookingModalOpen, setBookingModalOpen] = useState(false);
@@ -86,7 +100,6 @@ const UnifiedPatientProfile = () => {
             const res = await publicAPI.getDoctors();
             if (res.success && Array.isArray(res.doctors)) {
                 setDoctorsList(res.doctors);
-                // Extract unique departments
                 const deps = [...new Set(res.doctors.map(d => d.specialization || d.department).filter(Boolean))];
                 setDepartments(deps);
             }
@@ -122,67 +135,67 @@ const UnifiedPatientProfile = () => {
     };
 
     const calculateFollowUpFee = () => {
-        if (!bookingForm.date) return;
+        if (!bookingForm.doctor) return;
+        const selectedDoc = doctorsList.find(d => d._id === bookingForm.doctor);
+        if (!selectedDoc) return;
+
+        const baseConsultationFee = selectedDoc.consultationFee || 500;
+        const baseFollowUpFee = selectedDoc.followUpFee || 300;
+        const followUpDaysLimit = selectedDoc.followUpDays || 10;
+
         if (!lastApptDate) {
-            setBookingForm(prev => ({ ...prev, fee: 500 }));
-            setFollowUpDaysMsg('');
+            setBookingForm(prev => ({ ...prev, fee: baseConsultationFee }));
+            setFollowUpDaysMsg('New consult: Base consultation fee applies');
             return;
         }
 
-        const selected = new Date(bookingForm.date);
-        const last = new Date(lastApptDate);
-        // Clear times for exact days difference
-        selected.setHours(0, 0, 0, 0);
-        last.setHours(0, 0, 0, 0);
+        const dateDiffMs = new Date(bookingForm.date).getTime() - new Date(lastApptDate).getTime();
+        const diffDays = Math.ceil(dateDiffMs / (1000 * 60 * 60 * 24));
 
-        const diffTime = Math.abs(selected - last);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        // Let's assume hospital follow-up days threshold is 5 days
-        const threshold = 5;
-        if (diffDays <= threshold) {
-            setBookingForm(prev => ({ ...prev, fee: 0 }));
-            setFollowUpDaysMsg(`🎉 Free follow-up visit active! (within ${threshold} days of last visit on ${last.toLocaleDateString('en-IN')})`);
+        if (diffDays >= 0 && diffDays <= followUpDaysLimit) {
+            setBookingForm(prev => ({ ...prev, fee: baseFollowUpFee }));
+            setFollowUpDaysMsg(`Follow-up consult within ${followUpDaysLimit} days: Follow-up fee applies`);
         } else {
-            setBookingForm(prev => ({ ...prev, fee: 500 }));
-            setFollowUpDaysMsg(`Last visit was ${diffDays} days ago (Follow-up period: ${threshold} days). Standard fee applies.`);
+            setBookingForm(prev => ({ ...prev, fee: baseConsultationFee }));
+            setFollowUpDaysMsg(`Consultation outside follow-up window (> ${followUpDaysLimit} days): Standard fee applies`);
         }
     };
 
     const handleBookingSubmit = async (e) => {
         e.preventDefault();
-        if (!bookingForm.doctor) {
-            alert('Please select a doctor!');
-            return;
-        }
-        if (!bookingForm.time) {
-            alert('Please select a time slot!');
+        if (!bookingForm.doctor || !bookingForm.time || !bookingForm.date) {
+            alert('Please fill in Date, Doctor, and Time Slot.');
             return;
         }
 
         setBookingSaving(true);
         try {
             const selectedDoc = doctorsList.find(d => d._id === bookingForm.doctor);
-            const res = await receptionAPI.bookAppointment({
-                patientId: patientId,
+            const payload = {
+                userId: patientData._id,
+                patientId: patientData.patientId,
                 doctorId: bookingForm.doctor,
-                date: bookingForm.date,
-                time: bookingForm.time,
-                notes: `Rebooking visit. Fee: ₹${bookingForm.fee}. Note: ${bookingForm.notes}`,
+                doctorName: selectedDoc ? selectedDoc.name : 'Doctor',
+                serviceName: 'Consultation',
+                appointmentDate: bookingForm.date,
+                appointmentTime: bookingForm.time,
+                amount: bookingForm.fee,
+                paymentStatus: bookingForm.paymentMethod === 'Cash' ? 'paid' : 'pending',
                 paymentMethod: bookingForm.paymentMethod,
-                paymentStatus: bookingForm.fee === 0 ? 'Paid' : 'Pending',
-                amount: bookingForm.fee
-            });
+                notes: bookingForm.notes
+            };
+
+            const res = await receptionAPI.createAppointment(payload);
             if (res.success) {
-                alert(`Appointment booked successfully! Token: #${res.appointment?.tokenNumber || 'Slot Mode'}`);
+                alert('Appointment booked successfully!');
                 setBookingModalOpen(false);
                 fetchProfile();
             } else {
-                alert("Failed to book appointment: " + res.message);
+                alert(res.message || 'Booking failed');
             }
         } catch (err) {
             console.error("Booking error:", err);
-            alert("Booking error: " + err.message);
+            alert('Error booking appointment');
         } finally {
             setBookingSaving(false);
         }
@@ -190,683 +203,677 @@ const UnifiedPatientProfile = () => {
 
     // Calculate Metrics
     const calculateMetrics = () => {
-        let m = { totalPaid: 0, totalDue: 0, appointmentsCount: 0, upcomingAppointments: 0 };
-        const now = new Date();
-        now.setHours(0,0,0,0);
+        const appointments = timeline.filter(t => t.type === 'appointment') || [];
+        const completed = appointments.filter(a => a.data?.status === 'completed');
+        const upcoming = appointments.filter(a => {
+            const status = a.data?.status;
+            const date = new Date(a.date);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            return (status === 'pending' || status === 'confirmed') && date >= today;
+        });
 
-        timeline.forEach(item => {
-            const data = item.data;
-            if (item.type === 'appointment') {
-                m.appointmentsCount++;
-                if (new Date(data.appointmentDate) >= now && data.status !== 'cancelled' && data.status !== 'completed') {
-                    m.upcomingAppointments++;
-                }
-                const amt = Number(data.amount) || 0;
-                if (data.paymentStatus === 'paid' || data.paymentStatus === 'Paid') m.totalPaid += amt;
-                else if (data.paymentStatus === 'pending' || data.paymentStatus === 'Pending') m.totalDue += amt;
-            } else if (item.type === 'labReport') {
-                const amt = Number(data.amount) || 0;
-                if (data.paymentStatus === 'paid' || data.paymentStatus === 'Paid') m.totalPaid += amt;
-                else if (data.paymentStatus === 'pending' || data.paymentStatus === 'Pending') m.totalDue += amt;
-            } else if (item.type === 'pharmacyOrder') {
-                const amt = Number(data.totalAmount) || 0;
-                if (data.paymentStatus === 'paid' || data.paymentStatus === 'Paid') m.totalPaid += amt;
-                else if (data.paymentStatus === 'pending' || data.paymentStatus === 'Pending') m.totalDue += amt;
+        let totalPaid = 0;
+        let pendingDues = 0;
+
+        timeline.forEach(t => {
+            const amt = t.data?.amount || t.data?.totalAmount || 0;
+            const pStatus = (t.data?.paymentStatus || '').toLowerCase();
+            if (pStatus === 'paid') {
+                totalPaid += amt;
+            } else if (pStatus === 'pending') {
+                pendingDues += amt;
             }
         });
-        return m;
+
+        return {
+            totalVisits: appointments.length,
+            upcomingCount: upcoming.length,
+            totalPaid,
+            pendingDues
+        };
     };
 
-    const generatePDF = () => {
+    // Export PDF Summary
+    const handleDownloadPDF = () => {
         if (!patientData) return;
         const doc = new jsPDF();
-        let y = 20;
-
+        const fp = patientData.fertilityProfile || {};
+        
+        // Title banner
+        doc.setFillColor(99, 102, 241);
+        doc.rect(0, 0, 210, 40, 'F');
+        doc.setFont("helvetica", "bold");
         doc.setFontSize(22);
-        doc.setTextColor(41, 128, 185);
-        doc.text("PAWAN HARISH IVF CENTER", 105, y, { align: 'center' });
-        y += 10;
+        doc.setTextColor(255, 255, 255);
+        doc.text("HOSPITAL PATIENT PROFILE SUMMARY", 15, 26);
+
+        // Patient details
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.text("Patient Name:", 15, 55);
+        doc.setFont("helvetica", "normal");
+        doc.text(patientData.name || '—', 50, 55);
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Patient ID (MRN):", 15, 63);
+        doc.setFont("helvetica", "normal");
+        doc.text(patientData.patientId || '—', 50, 63);
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Phone Number:", 15, 71);
+        doc.setFont("helvetica", "normal");
+        doc.text(patientData.phone || '—', 50, 71);
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Blood Group:", 115, 55);
+        doc.setFont("helvetica", "normal");
+        doc.text(patientData.bloodGroup || '—', 150, 55);
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Gender / DOB:", 115, 63);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${patientData.gender || '—'} / ${patientData.dob ? new Date(patientData.dob).toLocaleDateString('en-IN') : '—'}`, 150, 63);
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Allergies:", 115, 71);
+        doc.setFont("helvetica", "normal");
+        doc.text(fp.allergies || 'None', 150, 71);
+
+        // Vitals box (from latest consult or fertilityProfile)
+        doc.setFillColor(248, 250, 252);
+        doc.rect(15, 80, 180, 26, 'F');
+        doc.setFont("helvetica", "bold");
         doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text("Complete Unified Patient Record", 105, y, { align: 'center' });
-        y += 15;
+        doc.setTextColor(99, 102, 241);
+        doc.text("LATEST RECORDED VITALS", 20, 88);
+        doc.setTextColor(15, 23, 42);
+        doc.setFont("helvetica", "normal");
+        
+        doc.text(`Weight: ${fp.weight || '—'} kg`, 20, 98);
+        doc.text(`Height: ${fp.height || '—'} cm`, 65, 98);
+        doc.text(`BP: ${fp.historyBp || '—'}`, 110, 98);
+        doc.text(`Pulse: ${fp.historyPulse || '—'} bpm`, 150, 98);
 
-        doc.setFontSize(12);
-        doc.setTextColor(0);
-        doc.setFillColor(240, 240, 240);
-        doc.rect(14, y, 182, 35, 'F');
-
-        y += 10;
-        doc.setFont("helvetica", "bold"); doc.text("Patient Name:", 18, y);
-        doc.setFont("helvetica", "normal"); doc.text(`${patientData.name || '-'}`, 55, y);
-        doc.setFont("helvetica", "bold"); doc.text("MRN / ID:", 120, y);
-        doc.setFont("helvetica", "normal"); doc.text(`${patientData.patientId || '-'}`, 150, y);
-
-        y += 10;
-        doc.setFont("helvetica", "bold"); doc.text("Phone:", 18, y);
-        doc.setFont("helvetica", "normal"); doc.text(`${patientData.phone || '-'}`, 55, y);
-        doc.setFont("helvetica", "bold"); doc.text("DOB:", 120, y);
-        doc.setFont("helvetica", "normal"); doc.text(`${patientData.dob ? new Date(patientData.dob).toLocaleDateString() : '-'}`, 150, y);
-
-        y += 10;
-        doc.setFont("helvetica", "bold"); doc.text("Gender:", 18, y);
-        doc.setFont("helvetica", "normal"); doc.text(`${patientData.gender || '-'}`, 55, y);
-        doc.setFont("helvetica", "bold"); doc.text("Report Date:", 120, y);
-        doc.setFont("helvetica", "normal"); doc.text(`${new Date().toLocaleDateString()}`, 150, y);
-
-        y += 20;
-        doc.setFontSize(14);
-        doc.setTextColor(0);
-        doc.text("Comprehensive Medical & Financial History", 14, y);
-        y += 8;
-
-        const tableBody = timeline.map(item => {
-            const d = new Date(item.date).toLocaleDateString();
-            let desc = '';
-            let amount = '-';
-            let payStatus = '-';
-
-            if (item.type === 'appointment') {
-                desc = `Appointment w/ ${item.data.doctorName || 'Doctor'} - ${item.data.serviceName || 'Consultation'}`;
-                amount = `₹${item.data.amount || 0}`;
-                payStatus = item.data.paymentStatus || 'pending';
-            } else if (item.type === 'clinicalVisit') {
-                desc = `Clinical Visit - ${item.summary?.outcome || 'Session Recorded'}`;
-            } else if (item.type === 'labReport') {
-                desc = `Lab Order: ${(item.data.testNames || []).join(', ')}`;
-                amount = `₹${item.data.amount || 0}`;
-                payStatus = item.data.paymentStatus || 'pending';
-            } else if (item.type === 'pharmacyOrder') {
-                desc = `Pharmacy Order (${item.data.items?.length || 0} items)`;
-                amount = `₹${item.data.totalAmount || 0}`;
-                payStatus = item.data.paymentStatus || 'pending';
-            }
-            return [d, item.type.toUpperCase(), desc, amount, payStatus];
-        });
+        // Visits table
+        const appointments = timeline.filter(t => t.type === 'appointment');
+        const rows = appointments.map(a => [
+            new Date(a.date).toLocaleDateString('en-IN'),
+            a.data?.doctorName || 'Doctor',
+            a.data?.diagnosis || '—',
+            a.data?.doctorNotes || '—',
+            a.data?.status || 'Pending'
+        ]);
 
         autoTable(doc, {
-            startY: y,
-            head: [['Date', 'Category', 'Description/Details', 'Amount', 'Payment status']],
-            body: tableBody,
-            theme: 'grid',
-            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-            columnStyles: { 2: { cellWidth: 80 } }
+            startY: 115,
+            head: [['Date', 'Doctor', 'Diagnosis', 'Doctor Consultation Notes', 'Status']],
+            body: rows,
+            headStyles: { fillColor: [99, 102, 241] },
+            theme: 'striped',
+            margin: { horizontal: 15 }
         });
 
-        doc.save(`Patient_Profile_${patientData.patientId || patientData._id}.pdf`);
+        doc.save(`Patient_Profile_${patientData.patientId || 'summary'}.pdf`);
     };
 
-    if (loading) return <div style={{ padding: '80px', textAlign: 'center', color: '#64748b' }}>Loading unified profile...</div>;
-    if (error || !patientData) return (
-        <div style={{ padding: '40px', textAlign: 'center' }}>
-            <p style={{ color: 'red' }}>{error || 'Patient not found.'}</p>
-            <button onClick={() => navigate(-1)} style={{ padding: '8px 16px', cursor: 'pointer' }}>← Go Back</button>
-        </div>
-    );
+    if (loading) {
+        return (
+            <div className="upp-loading-screen">
+                <div className="upp-spinner"></div>
+                <p>Loading patient history details...</p>
+            </div>
+        );
+    }
+
+    if (error || !patientData) {
+        return (
+            <div className="upp-loading-screen">
+                <FiAlertCircle size={48} color="#ef4444" />
+                <p>{error || 'Patient profile not found.'}</p>
+                <button className="upp-btn-action" onClick={() => navigate(-1)} style={{ background: '#64748b' }}>
+                    <FiArrowLeft /> Go Back
+                </button>
+            </div>
+        );
+    }
 
     const metrics = calculateMetrics();
     const fp = patientData.fertilityProfile || {};
-    const vitals = fp.vitals || {};
-
-    const tabs = [
-        { key: 'overview', label: '📋 Overview' },
-        { key: 'details', label: '👤 Demographics' },
-        { key: 'appointments', label: '📅 Visits History' },
-        { key: 'vitals', label: '💓 Vitals' },
-        { key: 'reports', label: '🧪 Lab Reports' },
-        { key: 'prescriptions', label: '💊 Prescriptions' },
-        { key: 'treatment', label: '🩺 Treatment History' },
-        { key: 'notes', label: '📝 Notes' },
-        { key: 'timeline', label: '🕐 Timeline Logs' },
-        { key: 'billing', label: '💰 Billing & Invoices' },
-        { key: 'consultations', label: '💬 Consult Sessions' }
-    ];
-
-    const renderField = (label, value) => (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', padding: '12px 16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-            <span style={{ color: '#94a3b8', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-            <span style={{ color: '#1e293b', fontSize: '0.9rem', fontWeight: '600' }}>{value || '—'}</span>
-        </div>
+    
+    // Spreading role check for booking modal view
+    const isStaff = ['reception', 'receptionist', 'admin', 'superadmin', 'hospitaladmin', 'cashier'].some(
+        r => (currentUser.role || '').toLowerCase().includes(r)
     );
 
+    // Medicines extraction
+    const getMedicinesList = () => {
+        const list = [];
+        timeline.forEach(t => {
+            if (t.type === 'appointment' && t.data?.pharmacy) {
+                t.data.pharmacy.forEach(m => {
+                    list.push({
+                        name: m.medicineName,
+                        salt: m.saltName || '—',
+                        frequency: m.frequency,
+                        duration: m.duration,
+                        date: t.date,
+                        source: 'Consultation'
+                    });
+                });
+            } else if (t.type === 'pharmacyOrder' && t.data?.items) {
+                t.data.items.forEach(m => {
+                    list.push({
+                        name: m.medicineName,
+                        salt: '—',
+                        frequency: '—',
+                        duration: `Qty: ${m.quantity}`,
+                        date: t.date,
+                        source: 'Pharmacy Order'
+                    });
+                });
+            }
+        });
+        return list;
+    };
+    const medicinesList = getMedicinesList();
+
+    // Financials Billing extraction
+    const getInvoicesList = () => {
+        const list = [];
+        timeline.forEach(t => {
+            if (t.type === 'appointment' && t.data?.amount > 0) {
+                list.push({
+                    date: t.date,
+                    desc: 'Consultation Fee',
+                    amount: t.data.amount,
+                    method: t.data.paymentMethod || 'Cash',
+                    status: t.data.paymentStatus || 'Pending'
+                });
+            } else if (t.type === 'labReport' && t.data?.amount > 0) {
+                list.push({
+                    date: t.date,
+                    desc: `Lab Tests: ${(t.data.testNames || []).join(', ')}`,
+                    amount: t.data.amount,
+                    method: t.data.paymentMode || 'ONLINE',
+                    status: t.data.paymentStatus || 'PENDING'
+                });
+            } else if (t.type === 'pharmacyOrder' && t.data?.totalAmount > 0) {
+                list.push({
+                    date: t.date,
+                    desc: 'Pharmacy Prescription Order',
+                    amount: t.data.totalAmount,
+                    method: 'ONLINE',
+                    status: t.data.paymentStatus || 'PENDING'
+                });
+            }
+        });
+        return list;
+    };
+    const invoicesList = getInvoicesList();
+
     return (
-        <div className="upp-container" style={{ padding: '24px', background: '#f8fafc', minHeight: '100vh' }}>
-            
-            {/* Header profile card */}
-            <div className="upp-header-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
-                <div className="upp-identity" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                    <div className="upp-avatar" style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', color: '#ffffff', fontSize: '2rem', fontWeight: '800', display: 'flex', alignItems: 'center', justifyText: 'center', justifyContent: 'center' }}>
+        <div className="upp-container">
+            {/* Header Identity Card */}
+            <div className="upp-header-card">
+                <div className="upp-identity">
+                    <div className="upp-avatar">
                         {(patientData.name || 'P')[0].toUpperCase()}
                     </div>
                     <div className="upp-info">
-                        <h1 style={{ margin: '0 0 6px', fontSize: '1.6rem', color: '#0f172a', fontWeight: 800 }}>{patientData.name}</h1>
-                        <div className="upp-tags" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                            <span className="upp-tag" style={{ background: '#f1f5f9', color: '#475569', padding: '4px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600 }}>MRN: {patientData.patientId || 'N/A'}</span>
-                            <span className="upp-tag" style={{ background: '#f1f5f9', color: '#475569', padding: '4px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600 }}>📱 {patientData.phone}</span>
-                            <span className="upp-tag" style={{ background: '#f1f5f9', color: '#475569', padding: '4px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600 }}>🩸 {fp.bloodGroup || 'O-'}</span>
-                            <span className="upp-tag" style={{ background: '#f1f5f9', color: '#475569', padding: '4px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 600 }}>Age: {fp.age || '—'} yrs</span>
+                        <h1>{patientData.name}</h1>
+                        <div className="upp-tags">
+                            <span className="upp-tag upp-tag-primary">MRN: {patientData.patientId || 'N/A'}</span>
+                            <span className="upp-tag">📱 {patientData.phone}</span>
+                            <span className="upp-tag">🩸 Blood: {patientData.bloodGroup || '—'}</span>
+                            <span className="upp-tag">👤 {patientData.gender}</span>
                         </div>
                     </div>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={generatePDF} style={{ padding: '10px 18px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem', color: '#475569' }}>
-                        📄 Download History
+                <div style={{ display: 'flex', gap: '12px' }}>
+                    <button className="upp-btn-action" onClick={() => navigate(-1)} style={{ background: '#64748b' }}>
+                        <FiArrowLeft /> Back
                     </button>
-                    <button onClick={() => setBookingModalOpen(true)} style={{ padding: '10px 20px', background: '#2563eb', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem', color: '#ffffff', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)' }}>
-                        ➕ Book Again
+                    {isStaff && (
+                        <button className="upp-btn-action" onClick={() => setBookingModalOpen(true)} style={{ background: '#6366f1' }}>
+                            <FiPlus /> Book Consult
+                        </button>
+                    )}
+                    <button className="upp-btn-action" onClick={handleDownloadPDF}>
+                        <FiDownload /> Export Summary
                     </button>
                 </div>
             </div>
 
-            {/* Metrics cards grid */}
-            <div className="upp-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-                <div className="upp-metric-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', borderLeft: '4px solid #2563eb' }}>
-                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>Total Visits</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: '800', color: '#1e293b', marginTop: '4px' }}>{metrics.appointmentsCount}</span>
+            {/* Quick Metrics Cards Grid */}
+            <div className="upp-metrics">
+                <div className="upp-metric-card metric-visits">
+                    <div className="upp-metric-info">
+                        <span className="upp-metric-label">Total Visits</span>
+                        <span className="upp-metric-val">{metrics.totalVisits}</span>
+                    </div>
+                    <div className="upp-metric-icon"><FiUserCheck /></div>
                 </div>
-                <div className="upp-metric-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', borderLeft: '4px solid #eab308' }}>
-                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>Upcoming Appts</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: '800', color: '#1e293b', marginTop: '4px' }}>{metrics.upcomingAppointments}</span>
+                <div className="upp-metric-card metric-upcoming">
+                    <div className="upp-metric-info">
+                        <span className="upp-metric-label">Upcoming</span>
+                        <span className="upp-metric-val">{metrics.upcomingCount}</span>
+                    </div>
+                    <div className="upp-metric-icon"><FiCalendar /></div>
                 </div>
-                <div className="upp-metric-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', borderLeft: '4px solid #ef4444' }}>
-                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>Pending Dues</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ef4444', marginTop: '4px' }}>₹{metrics.totalDue}</span>
+                <div className="upp-metric-card metric-paid">
+                    <div className="upp-metric-info">
+                        <span className="upp-metric-label">Total Paid</span>
+                        <span className="upp-metric-val">₹{metrics.totalPaid}</span>
+                    </div>
+                    <div className="upp-metric-icon"><FiDollarSign /></div>
                 </div>
-                <div className="upp-metric-card" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', borderLeft: '4px solid #16a34a' }}>
-                    <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '800', textTransform: 'uppercase' }}>Total Paid</span>
-                    <span style={{ fontSize: '1.4rem', fontWeight: '800', color: '#16a34a', marginTop: '4px' }}>₹{metrics.totalPaid}</span>
+                <div className="upp-metric-card metric-pending">
+                    <div className="upp-metric-info">
+                        <span className="upp-metric-label">Pending Dues</span>
+                        <span className="upp-metric-val">₹{metrics.pendingDues}</span>
+                    </div>
+                    <div className="upp-metric-icon"><FiAlertCircle /></div>
                 </div>
             </div>
 
-            {/* Clinic-Style Tabs bar */}
-            <div style={{ display: 'flex', gap: '6px', background: '#f1f5f9', padding: '4px', borderRadius: '12px', marginBottom: '24px', overflowX: 'auto', border: '1px solid #e2e8f0' }}>
-                {tabs.map(t => (
-                    <button
-                        key={t.key}
-                        onClick={() => setActiveTab(t.key)}
-                        style={{
-                            padding: '10px 18px',
-                            border: 'none',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            fontWeight: '700',
-                            fontSize: '0.82rem',
-                            whiteSpace: 'nowrap',
-                            transition: 'all 0.2s',
-                            background: activeTab === t.key ? '#ffffff' : 'transparent',
-                            color: activeTab === t.key ? '#2563eb' : '#64748b',
-                            boxShadow: activeTab === t.key ? '0 1px 3px rgba(0,0,0,0.05)' : 'none'
-                        }}
-                    >
-                        {t.label}
-                    </button>
-                ))}
-            </div>
-
-            {/* TAB CONTENTS CONTAINER */}
-            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+            {/* Sidebar and content grid */}
+            <div className="upp-content-grid">
                 
-                {/* 1. OVERVIEW TAB */}
-                {activeTab === 'overview' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                        <div>
-                            <h3 style={{ margin: '0 0 14px', color: '#0f172a', fontWeight: 800 }}>👤 Quick Demographics</h3>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
-                                {renderField('Gender', patientData.gender)}
-                                {renderField('Date of Birth', patientData.dob ? new Date(patientData.dob).toLocaleDateString() : '')}
-                                {renderField('Alt Phone', fp.altPhone)}
-                                {renderField('Email Address', patientData.email)}
-                                {renderField('Relative Name', fp.partnerFirstName ? `${fp.partnerTitle || ''} ${fp.partnerFirstName} ${fp.partnerLastName || ''}` : '')}
-                                {renderField('Relation', fp.relationToPatient)}
-                                {renderField('Category', fp.patientCategory)}
-                                {renderField('Referral Source', fp.referralType)}
+                {/* Left Sidebar Demographics */}
+                <div className="upp-sidebar">
+                    {/* Demographics Card */}
+                    <div className="upp-card">
+                        <h3 className="upp-card-title"><FiUserCheck /> Demographics</h3>
+                        <div className="upp-details-list">
+                            <div className="upp-detail-item">
+                                <span className="upp-detail-lbl">Full Name</span>
+                                <span className="upp-detail-val">{patientData.name}</span>
+                            </div>
+                            <div className="upp-detail-item">
+                                <span className="upp-detail-lbl">Email Address</span>
+                                <span className="upp-detail-val">{patientData.email || 'No email registered'}</span>
+                            </div>
+                            <div className="upp-detail-item">
+                                <span className="upp-detail-lbl">Date of Birth</span>
+                                <span className="upp-detail-val">
+                                    {patientData.dob ? new Date(patientData.dob).toLocaleDateString('en-IN') : '—'}
+                                </span>
+                            </div>
+                            <div className="upp-detail-item">
+                                <span className="upp-detail-lbl">Address</span>
+                                <span className="upp-detail-val">{patientData.address || fp.address || '—'}</span>
                             </div>
                         </div>
+                    </div>
 
-                        <div style={{ marginTop: '10px' }}>
-                            <h3 style={{ margin: '0 0 14px', color: '#0f172a', fontWeight: 800 }}>🕐 Recent Visits History</h3>
-                            {timeline.filter(t => t.type === 'appointment').length === 0 ? (
-                                <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>No recent visits recorded.</div>
+                    {/* Clinical Profile Card */}
+                    <div className="upp-card">
+                        <h3 className="upp-card-title" style={{ color: '#f59e0b' }}><FiAlertCircle /> Clinical Profile</h3>
+                        <div className="upp-details-list">
+                            <div className="upp-detail-item">
+                                <span className="upp-detail-lbl">Allergies</span>
+                                <span className="upp-detail-val" style={{ color: fp.allergies ? '#ef4444' : 'inherit' }}>
+                                    {fp.allergies || 'No allergies recorded'}
+                                </span>
+                            </div>
+                            <div className="upp-detail-item">
+                                <span className="upp-detail-lbl">Chronic Conditions</span>
+                                <span className="upp-detail-val">
+                                    {fp.chronicConditions || 'No chronic conditions'}
+                                </span>
+                            </div>
+                            <div className="cpp-detail-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '10px 12px', background: '#f8fafc', borderRadius: '10px' }}>
+                                <span className="upp-detail-lbl">Clinical / General Notes</span>
+                                <span className="upp-detail-val">
+                                    {fp.doctorNotes || 'No clinical notes added'}
+                                </span>
+                            </div>
+                            <div className="cpp-detail-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '10px 12px', background: '#f8fafc', borderRadius: '10px' }}>
+                                <span className="upp-detail-lbl">Intake symptoms</span>
+                                <span className="upp-detail-val">
+                                    {fp.medicalNotes || fp.notes || 'No intake notes added'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right Panel Main Contents */}
+                <div className="upp-main-panel">
+                    
+                    {/* Horizontal Nav Tabs */}
+                    <div className="upp-tabs-bar">
+                        <button 
+                            className={`upp-tab-btn ${activeTab === 'timeline' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('timeline')}
+                        >
+                            📋 Visit History ({timeline.filter(t => t.type === 'appointment' || t.type === 'clinicalVisit').length})
+                        </button>
+                        <button 
+                            className={`upp-tab-btn ${activeTab === 'medicines' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('medicines')}
+                        >
+                            💊 Medicines ({medicinesList.length})
+                        </button>
+                        <button 
+                            className={`upp-tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('reports')}
+                        >
+                            🧪 Lab Reports ({timeline.filter(t => t.type === 'labReport').length})
+                        </button>
+                        <button 
+                            className={`upp-tab-btn ${activeTab === 'billing' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('billing')}
+                        >
+                            💰 Financials ({invoicesList.length})
+                        </button>
+                    </div>
+
+                    {/* Tab Panels */}
+                    {activeTab === 'timeline' && (
+                        <div className="upp-card">
+                            <h3 className="upp-card-title"><FiFileText /> Visit Consultation Log</h3>
+                            {timeline.filter(t => t.type === 'appointment' || t.type === 'clinicalVisit').length === 0 ? (
+                                <div className="upp-empty-state">No consult history logs recorded.</div>
                             ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div className="upp-timeline">
                                     {timeline
-                                        .filter(t => t.type === 'appointment')
-                                        .slice(0, 3)
-                                        .map((apt, idx) => (
-                                            <div key={idx} style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', background: '#f8fafc' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                                                    <span style={{ fontWeight: 700, color: '#1e293b' }}>Dr. {apt.data.doctorName || 'Doctor'}</span>
-                                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{new Date(apt.date).toLocaleDateString('en-IN')}</span>
+                                        .filter(t => t.type === 'appointment' || t.type === 'clinicalVisit')
+                                        .map((item, idx) => {
+                                            const dateStr = new Date(item.date).toLocaleDateString('en-IN', {
+                                                day: '2-digit', month: 'short', year: 'numeric'
+                                            });
+                                            const timeStr = item.data?.appointmentTime || '';
+                                            const diag = item.data?.diagnosis || 'No diagnosis logged';
+                                            const status = item.data?.status || 'completed';
+                                            
+                                            // Vitals mapping
+                                            const apptVitals = item.data?.vitals || {};
+                                            const hasVitals = apptVitals.weight || apptVitals.height || apptVitals.bp || apptVitals.temperature || apptVitals.pulse;
+
+                                            return (
+                                                <div key={idx} className="upp-timeline-item">
+                                                    <div className="upp-tl-head">
+                                                        <div className="upp-tl-meta">
+                                                            <span className="upp-tl-date">{dateStr} {timeStr && `• ${timeStr}`}</span>
+                                                            <span className="upp-tl-doctor">Dr. {item.data?.doctorName || 'Doctor'}</span>
+                                                        </div>
+                                                        <span className={`upp-tl-badge badge-${status.toLowerCase()}`}>
+                                                            {status}
+                                                        </span>
+                                                    </div>
+                                                    <div className="upp-tl-body">
+                                                        <div className="upp-tl-section">
+                                                            <span className="upp-tl-lbl">Diagnosis</span>
+                                                            <span className="upp-tl-val" style={{ fontWeight: '700' }}>{diag}</span>
+                                                        </div>
+                                                        {item.data?.notes && (
+                                                            <div className="upp-tl-section">
+                                                                <span className="upp-tl-lbl">Symptoms / Chief Complaint</span>
+                                                                <span className="upp-tl-val">{item.data.notes}</span>
+                                                            </div>
+                                                        )}
+                                                        {item.data?.doctorNotes && (
+                                                            <div className="upp-tl-section">
+                                                                <span className="upp-tl-lbl">Consultation notes</span>
+                                                                <span className="upp-tl-val">{item.data.doctorNotes}</span>
+                                                            </div>
+                                                        )}
+                                                        {/* Vitals summary */}
+                                                        {hasVitals && (
+                                                            <div className="upp-tl-section">
+                                                                <span className="upp-tl-lbl">Intake Vitals</span>
+                                                                <div className="upp-tl-vitals">
+                                                                    {apptVitals.weight && <span className="upp-tl-vital-pill">⚖️ Weight: {apptVitals.weight}kg</span>}
+                                                                    {apptVitals.height && <span className="upp-tl-vital-pill">📏 Height: {apptVitals.height}cm</span>}
+                                                                    {apptVitals.bp && <span className="upp-tl-vital-pill">🩸 BP: {apptVitals.bp}</span>}
+                                                                    {apptVitals.temperature && <span className="upp-tl-vital-pill">🌡️ Temp: {apptVitals.temperature}°F</span>}
+                                                                    {apptVitals.pulse && <span className="upp-tl-vital-pill">💓 Pulse: {apptVitals.pulse}</span>}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <div style={{ fontSize: '0.85rem', color: '#475569' }}>
-                                                    <strong>Diagnosis:</strong> {apt.data.diagnosis || 'No diagnosis recorded yet'}
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                 </div>
                             )}
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* 2. DEMOGRAPHICS DETAILS TAB */}
-                {activeTab === 'details' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                        {renderField('Title', fp.title)}
-                        {renderField('First Name', fp.firstName)}
-                        {renderField('Last Name', fp.lastName)}
-                        {renderField('Email Address', patientData.email)}
-                        {renderField('Phone / Mobile', patientData.phone)}
-                        {renderField('Alt Phone', fp.altPhone)}
-                        {renderField('Age', fp.age)}
-                        {renderField('Gender', patientData.gender)}
-                        {renderField('Address', fp.address || patientData.address)}
-                        {renderField('Relative Name', fp.partnerFirstName ? `${fp.partnerTitle || ''} ${fp.partnerFirstName} ${fp.partnerLastName || ''}` : '')}
-                        {renderField('Relative Contact', fp.partnerMobile)}
-                        {renderField('Relation Type', fp.relationToPatient)}
-                    </div>
-                )}
-
-                {/* 3. APPOINTMENTS HISTORY TAB */}
-                {activeTab === 'appointments' && (
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                            <thead>
-                                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #edf2f7' }}>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Date</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Doctor</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Service</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Fee Paid</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {timeline.filter(t => t.type === 'appointment').length === 0 ? (
-                                    <tr><td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No appointments records.</td></tr>
-                                ) : (
-                                    timeline
-                                        .filter(t => t.type === 'appointment')
-                                        .map((apt, i) => (
-                                            <tr key={i} style={{ borderBottom: '1px solid #edf2f7' }}>
-                                                <td style={{ padding: '12px 14px', fontWeight: 600 }}>{new Date(apt.date).toLocaleDateString('en-IN')}</td>
-                                                <td style={{ padding: '12px 14px' }}>Dr. {apt.data.doctorName || 'Doctor'}</td>
-                                                <td style={{ padding: '12px 14px' }}>{apt.data.serviceName || 'Consultation'}</td>
-                                                <td style={{ padding: '12px 14px', fontWeight: 'bold' }}>₹{apt.data.amount}</td>
-                                                <td style={{ padding: '12px 14px' }}>
-                                                    <span style={{
-                                                        padding: '4px 10px',
-                                                        borderRadius: '20px',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 700,
-                                                        background: apt.data.status === 'confirmed' ? '#dcfce7' : '#fef3c7',
-                                                        color: apt.data.status === 'confirmed' ? '#15803d' : '#b45309'
-                                                    }}>
-                                                        {apt.data.status}
-                                                    </span>
-                                                </td>
+                    {activeTab === 'medicines' && (
+                        <div className="upp-card">
+                            <h3 className="upp-card-title"><FiActivity /> Prescribed Medicines Log</h3>
+                            {medicinesList.length === 0 ? (
+                                <div className="upp-empty-state">No prescribed medicines records found.</div>
+                            ) : (
+                                <div className="upp-table-wrap">
+                                    <table className="upp-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Date Prescribed</th>
+                                                <th>Medicine Name</th>
+                                                <th>Generic Salt</th>
+                                                <th>Frequency</th>
+                                                <th>Duration / Qty</th>
+                                                <th>Source</th>
                                             </tr>
-                                        ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                {/* 4. VITALS TAB */}
-                {activeTab === 'vitals' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
-                        {renderField('Height (cm)', fp.height)}
-                        {renderField('Weight (kg)', fp.weight)}
-                        {renderField('BMI', fp.bmi)}
-                        {renderField('Blood Group', fp.bloodGroup || vitals.bloodGroup)}
-                        {renderField('Pulse Rate (bpm)', vitals.pulse || fp.historyPulse)}
-                        {renderField('Blood Pressure (BP)', vitals.bp || fp.historyBp)}
-                        {renderField('Temperature (°F)', vitals.temperature)}
-                        {renderField('SPO2 (%)', vitals.spo2)}
-                    </div>
-                )}
-
-                {/* 5. REPORTS TAB */}
-                {activeTab === 'reports' && (
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                            <thead>
-                                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #edf2f7' }}>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Date</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Test / Report Name</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Amount</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {timeline.filter(t => t.type === 'labReport').length === 0 ? (
-                                    <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No lab reports uploaded.</td></tr>
-                                ) : (
-                                    timeline
-                                        .filter(t => t.type === 'labReport')
-                                        .map((rep, i) => (
-                                            <tr key={i} style={{ borderBottom: '1px solid #edf2f7' }}>
-                                                <td style={{ padding: '12px 14px', fontWeight: 600 }}>{new Date(rep.date).toLocaleDateString('en-IN')}</td>
-                                                <td style={{ padding: '12px 14px' }}>{(rep.data.testNames || []).join(', ') || 'Lab Test'}</td>
-                                                <td style={{ padding: '12px 14px', fontWeight: 'bold' }}>₹{rep.data.amount || 0}</td>
-                                                <td style={{ padding: '12px 14px' }}>{rep.data.status}</td>
-                                            </tr>
-                                        ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                {/* 6. PRESCRIPTIONS TAB */}
-                {activeTab === 'prescriptions' && (
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                            <thead>
-                                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #edf2f7' }}>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Date</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Medicines Prescribed</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Amount</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Payment</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {timeline.filter(t => t.type === 'pharmacyOrder').length === 0 ? (
-                                    <tr><td colSpan="4" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No prescriptions pharmacy history.</td></tr>
-                                ) : (
-                                    timeline
-                                        .filter(t => t.type === 'pharmacyOrder')
-                                        .map((ph, i) => (
-                                            <tr key={i} style={{ borderBottom: '1px solid #edf2f7' }}>
-                                                <td style={{ padding: '12px 14px', fontWeight: 600 }}>{new Date(ph.date).toLocaleDateString('en-IN')}</td>
-                                                <td style={{ padding: '12px 14px' }}>{ph.data.items?.map(it => `${it.medicineName} (${it.quantity})`).join(', ') || 'Medicines'}</td>
-                                                <td style={{ padding: '12px 14px', fontWeight: 'bold' }}>₹{ph.data.totalAmount || 0}</td>
-                                                <td style={{ padding: '12px 14px' }}>{ph.data.paymentStatus}</td>
-                                            </tr>
-                                        ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                {/* 7. TREATMENT HISTORY TAB */}
-                {activeTab === 'treatment' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                        {timeline.filter(t => t.type === 'treatmentPlan').length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>No treatment plans recorded.</div>
-                        ) : (
-                            timeline
-                                .filter(t => t.type === 'treatmentPlan')
-                                .map((tp, idx) => (
-                                    <div key={idx} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '18px', background: '#f8fafc' }}>
-                                        <h4 style={{ margin: '0 0 8px', color: '#2563eb', fontSize: '1.05rem', fontWeight: 700 }}>{tp.data.title}</h4>
-                                        <p style={{ margin: '0 0 10px', fontSize: '0.9rem', color: '#475569' }}>{tp.data.description}</p>
-                                        <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                                            <strong>Status:</strong> {tp.data.status} · <strong>Amount:</strong> ₹{tp.data.totalAmount} (Paid: ₹{tp.data.totalPaid})
-                                        </div>
-                                    </div>
-                                ))
-                        )}
-                    </div>
-                )}
-
-                {/* 8. NOTES TAB */}
-                {activeTab === 'notes' && (
-                    <div style={{ whiteSpace: 'pre-wrap', color: '#334155', lineHeight: '1.6', fontSize: '0.95rem' }}>
-                        {fp.doctorNotes || 'No custom notes logged on this patient profile.'}
-                    </div>
-                )}
-
-                {/* 9. TIMELINE TAB */}
-                {activeTab === 'timeline' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {timeline.map((t, i) => (
-                            <div key={i} style={{ padding: '14px', borderLeft: '4px solid #3b82f6', background: '#f8fafc', borderRadius: '0 10px 10px 0' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                    <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{t.type.toUpperCase()}</span>
-                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{new Date(t.date).toLocaleString()}</span>
+                                        </thead>
+                                        <tbody>
+                                            {medicinesList.map((med, idx) => (
+                                                <tr key={idx}>
+                                                    <td><strong>{new Date(med.date).toLocaleDateString('en-IN')}</strong></td>
+                                                    <td style={{ color: 'var(--upp-primary)', fontWeight: '700' }}>{med.name}</td>
+                                                    <td>{med.salt}</td>
+                                                    <td><span style={{ background: 'var(--upp-secondary-light)', color: 'var(--upp-secondary)', padding: '2px 8px', borderRadius: '4px', fontWeight: '700' }}>{med.frequency}</span></td>
+                                                    <td>{med.duration}</td>
+                                                    <td><span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>{med.source}</span></td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <span style={{ fontSize: '0.88rem', color: '#475569' }}>
-                                    {t.type === 'appointment' ? `Appointment booked with Dr. ${t.data.doctorName}` : `Patient activity recorded`}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                            )}
+                        </div>
+                    )}
 
-                {/* 10. BILLING TAB */}
-                {activeTab === 'billing' && (
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                            <thead>
-                                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #edf2f7' }}>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Date</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Transaction ID</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Description</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Amount</th>
-                                    <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {timeline.filter(t => t.type === 'appointment' || t.type === 'pharmacyOrder' || t.type === 'labReport').length === 0 ? (
-                                    <tr><td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>No billing records found.</td></tr>
-                                ) : (
-                                    timeline
-                                        .filter(t => t.type === 'appointment' || t.type === 'pharmacyOrder' || t.type === 'labReport')
-                                        .map((bill, i) => (
-                                            <tr key={i} style={{ borderBottom: '1px solid #edf2f7' }}>
-                                                <td style={{ padding: '12px 14px', fontWeight: 600 }}>{new Date(bill.date).toLocaleDateString('en-IN')}</td>
-                                                <td style={{ padding: '12px 14px', fontFamily: 'monospace' }}>TXN-{bill.data._id?.slice(-8).toUpperCase()}</td>
-                                                <td style={{ padding: '12px 14px' }}>{bill.type.toUpperCase()} Billing</td>
-                                                <td style={{ padding: '12px 14px', fontWeight: 'bold' }}>₹{bill.data.amount || bill.data.totalAmount || 0}</td>
-                                                <td style={{ padding: '12px 14px' }}>
-                                                    <span style={{
-                                                        padding: '4px 10px',
-                                                        borderRadius: '20px',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 700,
-                                                        background: (bill.data.paymentStatus === 'paid' || bill.data.paymentStatus === 'Paid') ? '#dcfce7' : '#fef3c7',
-                                                        color: (bill.data.paymentStatus === 'paid' || bill.data.paymentStatus === 'Paid') ? '#15803d' : '#b45309'
-                                                    }}>
-                                                        {bill.data.paymentStatus || 'pending'}
-                                                    </span>
-                                                </td>
+                    {activeTab === 'reports' && (
+                        <div className="upp-card">
+                            <h3 className="upp-card-title"><FiFileText /> Uploaded Documents & Reports</h3>
+                            {timeline.filter(t => t.type === 'labReport').length === 0 ? (
+                                <div className="upp-empty-state">No lab reports found.</div>
+                            ) : (
+                                <div className="upp-table-wrap">
+                                    <table className="upp-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Date</th>
+                                                <th>Test Names</th>
+                                                <th>Amount</th>
+                                                <th>Status</th>
+                                                <th>Action</th>
                                             </tr>
-                                        ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                                        </thead>
+                                        <tbody>
+                                            {timeline
+                                                .filter(t => t.type === 'labReport')
+                                                .map((rep, idx) => (
+                                                    <tr key={idx}>
+                                                        <td><strong>{new Date(rep.date).toLocaleDateString('en-IN')}</strong></td>
+                                                        <td>{(rep.data.testNames || []).join(', ') || 'Lab Report'}</td>
+                                                        <td style={{ fontWeight: 'bold' }}>₹{rep.data.amount || 0}</td>
+                                                        <td>
+                                                            <span className={`upp-tl-badge badge-${(rep.data.testStatus || 'pending').toLowerCase()}`}>
+                                                                {rep.data.testStatus}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            {rep.data.reportFile?.url ? (
+                                                                <button 
+                                                                    className="upp-btn-action" 
+                                                                    style={{ padding: '6px 12px', fontSize: '12px' }}
+                                                                    onClick={() => window.open(rep.data.reportFile.url, '_blank')}
+                                                                >
+                                                                    <FiEye /> View Report
+                                                                </button>
+                                                            ) : (
+                                                                <span style={{ color: '#94a3b8', fontSize: '12px' }}>File Pending</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
-                {/* 11. CONSULTATIONS TAB */}
-                {activeTab === 'consultations' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                        {timeline.filter(t => t.type === 'appointment' && t.data.doctorNotes).length === 0 ? (
-                            <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>No clinical consult logs recorded.</div>
-                        ) : (
-                            timeline
-                                .filter(t => t.type === 'appointment' && t.data.doctorNotes)
-                                .map((c, i) => (
-                                    <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', background: '#f8fafc' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                            <span style={{ fontWeight: 700, color: '#1e293b' }}>Dr. {c.data.doctorName || 'Doctor'}</span>
-                                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{new Date(c.date).toLocaleDateString()}</span>
-                                        </div>
-                                        <div style={{ fontSize: '0.88rem', color: '#334155' }}>
-                                            <strong>Diagnosis Outcome:</strong> {c.data.diagnosis || 'None'}
-                                            <br />
-                                            <strong>Notes:</strong> {c.data.doctorNotes}
-                                        </div>
-                                    </div>
-                                ))
-                        )}
-                    </div>
-                )}
-
+                    {activeTab === 'billing' && (
+                        <div className="upp-card">
+                            <h3 className="upp-card-title"><FiDollarSign /> Consultation Financial Details</h3>
+                            {invoicesList.length === 0 ? (
+                                <div className="upp-empty-state">No billing details logged yet.</div>
+                            ) : (
+                                <div className="upp-table-wrap">
+                                    <table className="upp-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Billing Date</th>
+                                                <th>Description</th>
+                                                <th>Amount</th>
+                                                <th>Payment Method</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {invoicesList.map((inv, idx) => (
+                                                <tr key={idx}>
+                                                    <td><strong>{new Date(inv.date).toLocaleDateString('en-IN')}</strong></td>
+                                                    <td style={{ color: 'var(--upp-primary)', fontWeight: '600' }}>{inv.desc}</td>
+                                                    <td style={{ color: '#10b981', fontWeight: '800' }}>₹{inv.amount}</td>
+                                                    <td>{inv.method}</td>
+                                                    <td>
+                                                        <span className={`upp-tl-badge badge-${inv.status.toLowerCase()}`}>
+                                                            {inv.status}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {/* BOOK AGAIN MODAL */}
+            {/* BOOK AGAIN MODAL (PRESERVED FOR RECEPTION / STAFF ROLES) */}
             {bookingModalOpen && (
                 <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)',
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
                 }}>
-                    <div style={{
-                        background: '#ffffff',
-                        borderRadius: '16px',
-                        padding: '28px',
-                        width: '500px',
-                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-                        fontFamily: 'Inter, sans-serif'
-                    }}>
-                        <h3 style={{ margin: '0 0 16px', color: '#1e293b', fontSize: '1.25rem', fontWeight: 800 }}>Book Appointment Again</h3>
-                        
-                        <form onSubmit={handleBookingSubmit}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
-                                
-                                {/* Select Department */}
-                                <div>
-                                    <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '4px' }}>Department</label>
-                                    <select 
-                                        value={bookingForm.department} 
-                                        onChange={e => setBookingForm({ ...bookingForm, department: e.target.value, doctor: '', time: '' })}
-                                        style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }}
-                                        required
-                                    >
-                                        <option value="">Select Department</option>
-                                        {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                                    </select>
-                                </div>
-
-                                {/* Select Doctor */}
-                                <div>
-                                    <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '4px' }}>Doctor</label>
-                                    <select 
-                                        value={bookingForm.doctor} 
-                                        onChange={e => setBookingForm({ ...bookingForm, doctor: e.target.value, time: '' })}
-                                        disabled={!bookingForm.department}
-                                        style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }}
-                                        required
-                                    >
-                                        <option value="">Select Doctor</option>
-                                        {doctorsList
-                                            .filter(d => (d.specialization || d.department) === bookingForm.department)
-                                            .map(d => <option key={d._id} value={d._id}>{d.name}</option>)
-                                        }
-                                    </select>
-                                </div>
-
-                                {/* Appointment Date */}
-                                <div>
-                                    <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '4px' }}>Appointment Date</label>
-                                    <input 
-                                        type="date" 
-                                        value={bookingForm.date} 
-                                        onChange={e => setBookingForm({ ...bookingForm, date: e.target.value, time: '' })}
-                                        style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }}
-                                        required
-                                    />
-                                </div>
-
-                                {/* Availability Grid Slots */}
-                                {bookingForm.doctor && bookingForm.date && (
-                                    <div>
-                                        <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '6px' }}>Select Slot</label>
-                                        {checkingSlots ? (
-                                            <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Checking slot availability...</div>
-                                        ) : (
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', maxHeight: '120px', overflowY: 'auto' }}>
-                                                {timeSlots.map(t => {
-                                                    const isBooked = bookedSlots.includes(t);
-                                                    const isSelected = bookingForm.time === t;
-                                                    return (
-                                                        <button
-                                                            key={t}
-                                                            type="button"
-                                                            disabled={isBooked}
-                                                            onClick={() => setBookingForm({ ...bookingForm, time: t })}
-                                                            style={{
-                                                                padding: '6px 4px',
-                                                                border: isSelected ? '1px solid #2563eb' : '1px solid #cbd5e1',
-                                                                borderRadius: '6px',
-                                                                fontSize: '0.75rem',
-                                                                fontWeight: 600,
-                                                                cursor: isBooked ? 'not-allowed' : 'pointer',
-                                                                background: isSelected ? '#eff6ff' : isBooked ? '#f1f5f9' : '#ffffff',
-                                                                color: isSelected ? '#2563eb' : isBooked ? '#94a3b8' : '#334155'
-                                                            }}
-                                                        >
-                                                            {t}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Follow Up Alert / Consultation Fee */}
-                                <div style={{ background: bookingForm.fee === 0 ? '#f0fdf4' : '#fafafa', border: bookingForm.fee === 0 ? '1px solid #bbf7d0' : '1px solid #cbd5e1', padding: '12px', borderRadius: '10px' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '0.9rem', color: '#1e293b' }}>
-                                        <span>Consultation Fee:</span>
-                                        <span style={{ color: bookingForm.fee === 0 ? '#16a34a' : '#1e293b' }}>
-                                            {bookingForm.fee === 0 ? 'FREE' : `₹${bookingForm.fee}`}
-                                        </span>
-                                    </div>
-                                    {followUpDaysMsg && (
-                                        <div style={{ fontSize: '0.78rem', color: bookingForm.fee === 0 ? '#166534' : '#64748b', marginTop: '6px', fontWeight: 500 }}>
-                                            {followUpDaysMsg}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Custom notes */}
-                                <div>
-                                    <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '4px' }}>Notes</label>
-                                    <textarea 
-                                        rows="2"
-                                        placeholder="Reason or medical comments..."
-                                        value={bookingForm.notes}
-                                        onChange={e => setBookingForm({ ...bookingForm, notes: e.target.value })}
-                                        style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontFamily: 'sans-serif', fontSize: '0.85rem' }}
-                                    />
-                                </div>
-
+                    <div style={{ background: 'white', padding: '30px', borderRadius: '16px', width: '480px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                        <h3 style={{ margin: '0 0 16px 0', fontSize: '1.25rem', fontWeight: 800 }}>Book Appointment</h3>
+                        <form onSubmit={handleBookingSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Date</label>
+                                <input 
+                                    type="date" 
+                                    style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }}
+                                    value={bookingForm.date}
+                                    onChange={e => setBookingForm(prev => ({ ...prev, date: e.target.value }))}
+                                />
                             </div>
 
-                            {/* Actions */}
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Department</label>
+                                <select 
+                                    style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }}
+                                    value={bookingForm.department}
+                                    onChange={e => setBookingForm(prev => ({ ...prev, department: e.target.value, doctor: '' }))}
+                                >
+                                    <option value="">Select Department</option>
+                                    {departments.map((d, i) => <option key={i} value={d}>{d}</option>)}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Doctor</label>
+                                <select 
+                                    style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }}
+                                    value={bookingForm.doctor}
+                                    onChange={e => setBookingForm(prev => ({ ...prev, doctor: e.target.value, time: '' }))}
+                                    disabled={!bookingForm.department}
+                                >
+                                    <option value="">Select Doctor</option>
+                                    {doctorsList
+                                        .filter(d => (d.specialization || d.department) === bookingForm.department)
+                                        .map((d, i) => <option key={i} value={d._id}>{d.name}</option>)}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Time Slot</label>
+                                <select 
+                                    style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }}
+                                    value={bookingForm.time}
+                                    onChange={e => setBookingForm(prev => ({ ...prev, time: e.target.value }))}
+                                    disabled={!bookingForm.doctor}
+                                >
+                                    <option value="">Select Slot</option>
+                                    {timeSlots.map((slot, i) => {
+                                        const isBooked = bookedSlots.includes(slot);
+                                        return <option key={i} value={slot} disabled={isBooked}>{slot} {isBooked ? '(Booked)' : ''}</option>;
+                                    })}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Fee (INR)</label>
+                                <input 
+                                    type="text" 
+                                    style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', background: '#f8fafc' }}
+                                    value={`₹${bookingForm.fee}`}
+                                    readOnly
+                                />
+                                {followUpDaysMsg && <span style={{ fontSize: '11px', color: '#6366f1', marginTop: '4px', display: 'block' }}>{followUpDaysMsg}</span>}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Notes</label>
+                                <textarea 
+                                    style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', minHeight: '60px' }}
+                                    value={bookingForm.notes}
+                                    onChange={e => setBookingForm(prev => ({ ...prev, notes: e.target.value }))}
+                                />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
                                 <button 
                                     type="button" 
+                                    style={{ flex: 1, padding: '12px', background: '#f1f5f9', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
                                     onClick={() => setBookingModalOpen(false)}
-                                    style={{ padding: '8px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' }}
                                 >
                                     Cancel
                                 </button>
                                 <button 
-                                    type="submit"
+                                    type="submit" 
+                                    style={{ flex: 1, padding: '12px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
                                     disabled={bookingSaving}
-                                    style={{ padding: '8px 24px', background: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' }}
                                 >
-                                    {bookingSaving ? 'Booking...' : 'Book Visit'}
+                                    {bookingSaving ? 'Booking...' : 'Book'}
                                 </button>
                             </div>
-
                         </form>
                     </div>
                 </div>
             )}
-
         </div>
     );
 };

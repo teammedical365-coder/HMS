@@ -27,6 +27,43 @@ const Admin = () => {
         name: '', email: '', password: '', phone: '', roleId: '', file: null, department: ''
     });
     const [creating, setCreating] = useState(false);
+    const [clinicDoctorExists, setClinicDoctorExists] = useState(false);
+    const [checkingDocLimit, setCheckingDocLimit] = useState(false);
+
+    const handleToggleCreateForm = async () => {
+        const nextState = !showCreateForm;
+        if (nextState && hospital?.clinicType === 'clinic') {
+            setCheckingDocLimit(true);
+            setError('');
+            try {
+                const response = await adminAPI.getUsers();
+                if (response.success) {
+                    const staffUsers = response.users || [];
+                    const hasDoc = staffUsers.some(u => {
+                        const rName = (u.role || '').toLowerCase();
+                        return rName === 'clinic doctor' || rName === 'doctor';
+                    });
+                    setClinicDoctorExists(hasDoc);
+                }
+            } catch (err) {
+                console.error("Error rechecking Clinic Doctor count:", err);
+            } finally {
+                setCheckingDocLimit(false);
+            }
+        }
+        setShowCreateForm(nextState);
+    };
+
+    // Reactive check to sync Clinic Doctor count status
+    useEffect(() => {
+        if (hospital?.clinicType === 'clinic') {
+            const hasDoc = users.some(u => {
+                const rName = (u.role || '').toLowerCase();
+                return rName === 'clinic doctor' || rName === 'doctor';
+            });
+            setClinicDoctorExists(hasDoc);
+        }
+    }, [users, hospital]);
 
     // Check if user is admin
     useEffect(() => {
@@ -195,6 +232,27 @@ const Admin = () => {
             return;
         }
 
+        if (hospital?.clinicType === 'clinic') {
+            try {
+                const response = await adminAPI.getUsers();
+                if (response.success) {
+                    const staffUsers = response.users || [];
+                    const hasDoc = staffUsers.some(u => {
+                        const rName = (u.role || '').toLowerCase();
+                        return rName === 'clinic doctor' || rName === 'doctor';
+                    });
+                    if (hasDoc) {
+                        setError('This clinic already has an assigned Clinic Doctor.');
+                        setClinicDoctorExists(true);
+                        setCreating(false);
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error("Error checking clinic doctor before submit:", err);
+            }
+        }
+
         try {
             let avatarUrl = null;
 
@@ -264,11 +322,12 @@ const Admin = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                         <h2>👤 Create Staff Account</h2>
                         <button
-                            onClick={() => setShowCreateForm(!showCreateForm)}
+                            onClick={handleToggleCreateForm}
                             className={showCreateForm ? 'btn-cancel' : 'btn-save'}
                             style={{ padding: '8px 20px', fontSize: '14px' }}
+                            disabled={checkingDocLimit}
                         >
-                            {showCreateForm ? 'Cancel' : '+ New Staff'}
+                            {checkingDocLimit ? 'Checking...' : showCreateForm ? 'Cancel' : '+ New Staff'}
                         </button>
                     </div>
 
@@ -280,6 +339,11 @@ const Admin = () => {
 
                     {showCreateForm && (
                         <form onSubmit={handleCreateStaff} className="user-form">
+                            {hospital?.clinicType === 'clinic' && clinicDoctorExists && (
+                                <div style={{ color: '#be123c', background: '#fff1f2', border: '1px solid #fda4af', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', fontWeight: 'bold', fontSize: '14px', width: '100%', boxSizing: 'border-box' }}>
+                                    ⚠️ This clinic already has an assigned Clinic Doctor.
+                                </div>
+                            )}
                             <div className="form-row">
                                 <div className="form-group">
                                     <label className="staff-label">Full Name *</label>
@@ -366,7 +430,16 @@ const Admin = () => {
                                 </div>
                             )}
 
-                            <button type="submit" disabled={creating} className="submit-button" style={{ marginTop: '20px' }}>
+                            <button
+                                type="submit"
+                                disabled={creating || (hospital?.clinicType === 'clinic' && clinicDoctorExists)}
+                                className="submit-button"
+                                style={{
+                                    marginTop: '20px',
+                                    cursor: (hospital?.clinicType === 'clinic' && clinicDoctorExists) ? 'not-allowed' : 'pointer',
+                                    opacity: (hospital?.clinicType === 'clinic' && clinicDoctorExists) ? 0.65 : 1
+                                }}
+                            >
                                 {creating ? 'Creating Account...' : '✅ Create Staff Account'}
                             </button>
                         </form>

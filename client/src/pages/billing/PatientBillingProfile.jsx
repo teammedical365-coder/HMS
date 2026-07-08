@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { billingAPI, admissionAPI } from '../../utils/api';
+import { billingAPI, admissionAPI, patientAPI } from '../../utils/api';
 import './PatientBillingProfile.css';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n || 0);
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const PatientBillingProfile = () => {
     const navigate = useNavigate();
@@ -18,10 +18,10 @@ const PatientBillingProfile = () => {
     const [paying, setPaying] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
     const [dischargingId, setDischargingId] = useState(null);
+    const [suggestions, setSuggestions] = useState([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
 
-    const handleSearch = async (e) => {
-        e.preventDefault();
-        if (!searchQuery.trim()) return;
+    const loadPatientBilling = async (identifier) => {
         setLoading(true);
         setError('');
         setPatient(null);
@@ -29,7 +29,7 @@ const PatientBillingProfile = () => {
         setSelected({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [] });
         setSuccessMsg('');
         try {
-            const res = await billingAPI.getPatientBills(searchQuery.trim());
+            const res = await billingAPI.getPatientBills(identifier);
             if (res.success) {
                 setPatient(res.patient);
                 setBilling(res.billing);
@@ -38,6 +38,31 @@ const PatientBillingProfile = () => {
             setError(err.response?.data?.message || 'Patient not found');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleSearch = (e) => {
+        e?.preventDefault();
+        if (!searchQuery.trim()) return;
+        setShowSuggestions(false);
+        loadPatientBilling(searchQuery.trim());
+    };
+
+    const handleQueryChange = async (val) => {
+        setSearchQuery(val);
+        if (val.trim().length >= 2) {
+            try {
+                const res = await patientAPI.search(val.trim());
+                if (res.success) {
+                    setSuggestions(res.data || []);
+                    setShowSuggestions(true);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        } else {
+            setSuggestions([]);
+            setShowSuggestions(false);
         }
     };
 
@@ -50,33 +75,68 @@ const PatientBillingProfile = () => {
         }));
     };
 
-    const toggleAll = (category, ids) => {
+    const toggleAll = (category, items) => {
+        const pendingIds = items.filter(x => x.paymentStatus !== 'Paid').map(x => x._id);
         setSelected(prev => {
-            const allSelected = ids.every(id => prev[category].includes(id));
-            return { ...prev, [category]: allSelected ? [] : ids };
+            const allSelected = pendingIds.every(id => prev[category].includes(id));
+            return { ...prev, [category]: allSelected ? [] : pendingIds };
         });
     };
 
     const totalSelected = () => {
         if (!billing) return 0;
         let total = 0;
-        billing.appointments.filter(a => selected.appointments.includes(a._id)).forEach(a => total += (a.amount || 0));
-        billing.labReports.filter(l => selected.labReports.includes(l._id)).forEach(l => total += (l.amount || l.price || 0));
-        billing.pharmacyOrders.filter(p => selected.pharmacyOrders.includes(p._id)).forEach(p => total += (p.totalAmount || 0));
-        billing.facilityCharges.filter(f => selected.facilityCharges.includes(f._id)).forEach(f => total += (f.totalAmount || 0));
-        billing.admissions.filter(a => selected.admissions.includes(a._id)).forEach(a => total += (a.totalAmount || 0));
+        billing.appointments.filter(a => selected.appointments.includes(a._id)).forEach(a => total += (Number(a.amount) || 0));
+        billing.labReports.filter(l => selected.labReports.includes(l._id)).forEach(l => total += (Number(l.amount || l.price) || 0));
+        billing.pharmacyOrders.filter(p => selected.pharmacyOrders.includes(p._id)).forEach(p => total += (Number(p.totalAmount) || 0));
+        billing.facilityCharges.filter(f => selected.facilityCharges.includes(f._id)).forEach(f => total += (Number(f.totalAmount) || 0));
+        billing.admissions.filter(a => selected.admissions.includes(a._id)).forEach(a => total += (Number(a.totalAmount) || 0));
         return total;
     };
 
     const pendingTotal = () => {
         if (!billing) return 0;
         let total = 0;
-        billing.appointments.forEach(a => total += (a.amount || 0));
-        billing.labReports.forEach(l => total += (l.amount || l.price || 0));
-        billing.pharmacyOrders.forEach(p => total += (p.totalAmount || 0));
-        billing.facilityCharges.forEach(f => total += (f.totalAmount || 0));
-        billing.admissions.filter(a => a.paymentStatus !== 'Paid').forEach(a => total += (a.totalAmount || 0));
+        billing.appointments.filter(a => a.paymentStatus !== 'Paid').forEach(a => total += (Number(a.amount) || 0));
+        billing.labReports.filter(l => l.paymentStatus !== 'Paid').forEach(l => total += (Number(l.amount || l.price) || 0));
+        billing.pharmacyOrders.filter(p => p.paymentStatus !== 'Paid').forEach(p => total += (Number(p.totalAmount) || 0));
+        billing.facilityCharges.filter(f => f.paymentStatus !== 'Paid').forEach(f => total += (Number(f.totalAmount) || 0));
+        billing.admissions.filter(a => a.paymentStatus !== 'Paid').forEach(a => total += (Number(a.totalAmount) || 0));
         return total;
+    };
+
+    const grandTotalBill = () => {
+        if (!billing) return 0;
+        let total = 0;
+        billing.appointments?.forEach(a => total += (Number(a.amount) || 0));
+        billing.labReports?.forEach(l => total += (Number(l.amount || l.price) || 0));
+        billing.pharmacyOrders?.forEach(p => total += (Number(p.totalAmount) || 0));
+        billing.facilityCharges?.forEach(f => total += (Number(f.totalAmount) || 0));
+        billing.admissions?.forEach(a => total += (Number(a.totalAmount) || 0));
+        return total;
+    };
+
+    const totalPaidBill = () => {
+        if (!billing) return 0;
+        let total = 0;
+        billing.appointments?.filter(a => a.paymentStatus === 'Paid').forEach(a => total += (Number(a.amount) || 0));
+        billing.labReports?.filter(l => l.paymentStatus === 'Paid').forEach(l => total += (Number(l.amount || l.price) || 0));
+        billing.pharmacyOrders?.filter(p => p.paymentStatus === 'Paid').forEach(p => total += (Number(p.totalAmount) || 0));
+        billing.facilityCharges?.filter(f => f.paymentStatus === 'Paid').forEach(f => total += (Number(f.totalAmount) || 0));
+        billing.admissions?.filter(a => a.paymentStatus === 'Paid').forEach(a => total += (Number(a.totalAmount) || 0));
+        return total;
+    };
+
+    const balanceBill = () => Math.max(0, grandTotalBill() - totalPaidBill());
+
+    const getSectionBadge = (items) => {
+        const total = items.length;
+        if (total === 0) return null;
+        const paid = items.filter(x => x.paymentStatus === 'Paid').length;
+        const pending = total - paid;
+        if (paid === total) return `${total} paid`;
+        if (pending === total) return `${total} pending`;
+        return `${pending} pending, ${paid} paid`;
     };
 
     const handlePay = async () => {
@@ -94,7 +154,6 @@ const PatientBillingProfile = () => {
                 paymentMode,
             });
             setSuccessMsg(`Payment of ${fmt(total)} processed successfully via ${paymentMode}.`);
-            // Reload billing
             const res = await billingAPI.getPatientBills(searchQuery.trim());
             if (res.success) setBilling(res.billing);
             setSelected({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [] });
@@ -133,18 +192,66 @@ const PatientBillingProfile = () => {
             </div>
 
             {/* Search */}
-            <form className="billing-search-bar" onSubmit={handleSearch}>
-                <input
-                    type="text"
-                    placeholder="Search by Phone / MRN / Patient ID..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className="billing-search-input"
-                />
-                <button type="submit" className="btn-search" disabled={loading}>
-                    {loading ? 'Searching...' : 'Search'}
-                </button>
-            </form>
+            <div style={{ position: 'relative', marginBottom: '20px' }} className="billing-search-container">
+                <form className="billing-search-bar" onSubmit={handleSearch}>
+                    <input
+                        type="text"
+                        placeholder="Search by Phone / MRN / Patient ID..."
+                        value={searchQuery}
+                        onChange={e => handleQueryChange(e.target.value)}
+                        className="billing-search-input"
+                        onFocus={() => searchQuery.trim().length >= 2 && setShowSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    />
+                    <button type="submit" className="btn-search" disabled={loading}>
+                        {loading ? 'Searching...' : 'Search'}
+                    </button>
+                </form>
+
+                {showSuggestions && suggestions.length > 0 && (
+                    <div className="search-suggestions-dropdown" style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                        zIndex: 1000,
+                        maxHeight: '240px',
+                        overflowY: 'auto',
+                        marginTop: '4px'
+                    }}>
+                        {suggestions.map(p => (
+                            <div
+                                key={p._id}
+                                onClick={() => {
+                                    setSearchQuery(p.mrn || p.patientId || p.phone || p.name);
+                                    setShowSuggestions(false);
+                                    loadPatientBilling(p.mrn || p.patientId || p.phone || p.name);
+                                }}
+                                style={{
+                                    padding: '10px 14px',
+                                    borderBottom: '1px solid #f1f5f9',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    textAlign: 'left'
+                                }}
+                                className="suggestion-item"
+                                onMouseDown={(e) => e.preventDefault()}
+                            >
+                                <strong style={{ color: '#1e293b' }}>{p.name}</strong>
+                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                    MRN: {p.mrn || 'N/A'} | Phone: {p.phone || 'N/A'}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             {error && <div className="billing-error">{error}</div>}
             {successMsg && <div className="billing-success">{successMsg}</div>}
@@ -164,8 +271,12 @@ const PatientBillingProfile = () => {
                             </div>
                         </div>
                         <div className="patient-outstanding">
-                            <div className="outstanding-label">Total Outstanding</div>
-                            <div className="outstanding-amount">{fmt(pendingTotal())}</div>
+                            <div className="outstanding-label">Grand Total Bill</div>
+                            <div className="outstanding-amount">{fmt(grandTotalBill())}</div>
+                            <div className="paid-balance-meta">
+                                <span className="meta-paid">Paid: {fmt(totalPaidBill())}</span>
+                                <span className="meta-balance">Balance: {fmt(balanceBill())}</span>
+                            </div>
                         </div>
                     </div>
 
@@ -240,21 +351,33 @@ const PatientBillingProfile = () => {
                     {billing.appointments.length > 0 && (
                         <div className="billing-section">
                             <div className="section-header">
-                                <h3>OPD Consultations ({billing.appointments.length} pending)</h3>
-                                <button className="btn-select-all" onClick={() => toggleAll('appointments', billing.appointments.map(a => a._id))}>
-                                    {billing.appointments.every(a => selected.appointments.includes(a._id)) ? 'Deselect All' : 'Select All'}
-                                </button>
+                                <h3>OPD Consultations ({getSectionBadge(billing.appointments)})</h3>
+                                {billing.appointments.some(a => a.paymentStatus !== 'Paid') && (
+                                    <button className="btn-select-all" onClick={() => toggleAll('appointments', billing.appointments)}>
+                                        {billing.appointments.filter(a => a.paymentStatus !== 'Paid').every(a => selected.appointments.includes(a._id)) ? 'Deselect All' : 'Select All'}
+                                    </button>
+                                )}
                             </div>
                             <table className="billing-table">
                                 <thead><tr><th></th><th>Date</th><th>Doctor</th><th>Service</th><th>Status</th><th>Amount</th></tr></thead>
                                 <tbody>
                                     {billing.appointments.map(a => (
                                         <tr key={a._id} className={selected.appointments.includes(a._id) ? 'selected-row' : ''}>
-                                            <td><input type="checkbox" checked={selected.appointments.includes(a._id)} onChange={() => toggle('appointments', a._id)} /></td>
+                                            <td>
+                                                {a.paymentStatus === 'Paid' ? (
+                                                    <span className="paid-icon-check">✓</span>
+                                                ) : (
+                                                    <input type="checkbox" checked={selected.appointments.includes(a._id)} onChange={() => toggle('appointments', a._id)} />
+                                                )}
+                                            </td>
                                             <td>{fmtDate(a.appointmentDate)}{a.appointmentTime && ` ${a.appointmentTime}`}</td>
                                             <td>{a.doctorName || '—'}</td>
                                             <td>{a.serviceName || 'Consultation'}</td>
-                                            <td><span className={`status-badge status-${a.status}`}>{a.status}</span></td>
+                                            <td>
+                                                <span className={`status-badge status-${a.paymentStatus === 'Paid' ? 'Confirmed' : (a.status || 'Pending')}`}>
+                                                    {a.paymentStatus === 'Paid' ? 'PAID' : (a.status || 'Pending')}
+                                                </span>
+                                            </td>
                                             <td className="amount-cell">{fmt(a.amount)}</td>
                                         </tr>
                                     ))}
@@ -267,20 +390,32 @@ const PatientBillingProfile = () => {
                     {billing.labReports.length > 0 && (
                         <div className="billing-section">
                             <div className="section-header">
-                                <h3>Lab Tests ({billing.labReports.length} pending)</h3>
-                                <button className="btn-select-all" onClick={() => toggleAll('labReports', billing.labReports.map(l => l._id))}>
-                                    {billing.labReports.every(l => selected.labReports.includes(l._id)) ? 'Deselect All' : 'Select All'}
-                                </button>
+                                <h3>Lab Tests ({getSectionBadge(billing.labReports)})</h3>
+                                {billing.labReports.some(l => l.paymentStatus !== 'Paid') && (
+                                    <button className="btn-select-all" onClick={() => toggleAll('labReports', billing.labReports)}>
+                                        {billing.labReports.filter(l => l.paymentStatus !== 'Paid').every(l => selected.labReports.includes(l._id)) ? 'Deselect All' : 'Select All'}
+                                    </button>
+                                )}
                             </div>
                             <table className="billing-table">
                                 <thead><tr><th></th><th>Date</th><th>Tests</th><th>Status</th><th>Amount</th></tr></thead>
                                 <tbody>
                                     {billing.labReports.map(l => (
                                         <tr key={l._id} className={selected.labReports.includes(l._id) ? 'selected-row' : ''}>
-                                            <td><input type="checkbox" checked={selected.labReports.includes(l._id)} onChange={() => toggle('labReports', l._id)} /></td>
+                                            <td>
+                                                {l.paymentStatus === 'Paid' ? (
+                                                    <span className="paid-icon-check">✓</span>
+                                                ) : (
+                                                    <input type="checkbox" checked={selected.labReports.includes(l._id)} onChange={() => toggle('labReports', l._id)} />
+                                                )}
+                                            </td>
                                             <td>{fmtDate(l.createdAt)}</td>
                                             <td>{Array.isArray(l.testNames) ? l.testNames.join(', ') : (l.testName || '—')}</td>
-                                            <td><span className={`status-badge`}>{l.testStatus || l.status || 'Pending'}</span></td>
+                                            <td>
+                                                <span className="status-badge">
+                                                    {l.paymentStatus === 'Paid' ? 'PAID' : (l.testStatus || l.status || 'Pending')}
+                                                </span>
+                                            </td>
                                             <td className="amount-cell">{fmt(l.amount || l.price)}</td>
                                         </tr>
                                     ))}
@@ -293,20 +428,32 @@ const PatientBillingProfile = () => {
                     {billing.pharmacyOrders.length > 0 && (
                         <div className="billing-section">
                             <div className="section-header">
-                                <h3>Pharmacy Orders ({billing.pharmacyOrders.length} pending)</h3>
-                                <button className="btn-select-all" onClick={() => toggleAll('pharmacyOrders', billing.pharmacyOrders.map(p => p._id))}>
-                                    {billing.pharmacyOrders.every(p => selected.pharmacyOrders.includes(p._id)) ? 'Deselect All' : 'Select All'}
-                                </button>
+                                <h3>Pharmacy Orders ({getSectionBadge(billing.pharmacyOrders)})</h3>
+                                {billing.pharmacyOrders.some(p => p.paymentStatus !== 'Paid') && (
+                                    <button className="btn-select-all" onClick={() => toggleAll('pharmacyOrders', billing.pharmacyOrders)}>
+                                        {billing.pharmacyOrders.filter(p => p.paymentStatus !== 'Paid').every(p => selected.pharmacyOrders.includes(p._id)) ? 'Deselect All' : 'Select All'}
+                                    </button>
+                                )}
                             </div>
                             <table className="billing-table">
                                 <thead><tr><th></th><th>Date</th><th>Items</th><th>Order Status</th><th>Amount</th></tr></thead>
                                 <tbody>
                                     {billing.pharmacyOrders.map(p => (
                                         <tr key={p._id} className={selected.pharmacyOrders.includes(p._id) ? 'selected-row' : ''}>
-                                            <td><input type="checkbox" checked={selected.pharmacyOrders.includes(p._id)} onChange={() => toggle('pharmacyOrders', p._id)} /></td>
+                                            <td>
+                                                {p.paymentStatus === 'Paid' ? (
+                                                    <span className="paid-icon-check">✓</span>
+                                                ) : (
+                                                    <input type="checkbox" checked={selected.pharmacyOrders.includes(p._id)} onChange={() => toggle('pharmacyOrders', p._id)} />
+                                                )}
+                                            </td>
                                             <td>{fmtDate(p.createdAt)}</td>
                                             <td>{Array.isArray(p.items) ? p.items.map(i => i.medicineName || i.name).filter(Boolean).join(', ') : '—'}</td>
-                                            <td><span className="status-badge">{p.orderStatus || 'Pending'}</span></td>
+                                            <td>
+                                                <span className="status-badge">
+                                                    {p.paymentStatus === 'Paid' ? 'PAID' : (p.orderStatus || 'Pending')}
+                                                </span>
+                                            </td>
                                             <td className="amount-cell">{fmt(p.totalAmount)}</td>
                                         </tr>
                                     ))}
@@ -319,17 +466,25 @@ const PatientBillingProfile = () => {
                     {billing.facilityCharges.length > 0 && (
                         <div className="billing-section">
                             <div className="section-header">
-                                <h3>Facility Charges ({billing.facilityCharges.length} pending)</h3>
-                                <button className="btn-select-all" onClick={() => toggleAll('facilityCharges', billing.facilityCharges.map(f => f._id))}>
-                                    {billing.facilityCharges.every(f => selected.facilityCharges.includes(f._id)) ? 'Deselect All' : 'Select All'}
-                                </button>
+                                <h3>Facility Charges ({getSectionBadge(billing.facilityCharges)})</h3>
+                                {billing.facilityCharges.some(f => f.paymentStatus !== 'Paid') && (
+                                    <button className="btn-select-all" onClick={() => toggleAll('facilityCharges', billing.facilityCharges)}>
+                                        {billing.facilityCharges.filter(f => f.paymentStatus !== 'Paid').every(f => selected.facilityCharges.includes(f._id)) ? 'Deselect All' : 'Select All'}
+                                    </button>
+                                )}
                             </div>
                             <table className="billing-table">
                                 <thead><tr><th></th><th>Date</th><th>Facility</th><th>Rate/Day</th><th>Days</th><th>Amount</th></tr></thead>
                                 <tbody>
                                     {billing.facilityCharges.map(f => (
                                         <tr key={f._id} className={selected.facilityCharges.includes(f._id) ? 'selected-row' : ''}>
-                                            <td><input type="checkbox" checked={selected.facilityCharges.includes(f._id)} onChange={() => toggle('facilityCharges', f._id)} /></td>
+                                            <td>
+                                                {f.paymentStatus === 'Paid' ? (
+                                                    <span className="paid-icon-check">✓</span>
+                                                ) : (
+                                                    <input type="checkbox" checked={selected.facilityCharges.includes(f._id)} onChange={() => toggle('facilityCharges', f._id)} />
+                                                )}
+                                            </td>
                                             <td>{fmtDate(f.createdAt)}</td>
                                             <td>{f.facilityName}</td>
                                             <td>{fmt(f.pricePerDay)}</td>
@@ -373,17 +528,15 @@ const PatientBillingProfile = () => {
                         </div>
                     )}
 
-                    {/* No pending bills */}
+                    {/* No items at all */}
                     {billing.appointments.length === 0 && billing.labReports.length === 0 &&
                         billing.pharmacyOrders.length === 0 && billing.facilityCharges.length === 0 &&
-                        activeAdmissions.length === 0 && (
-                        <div className="no-bills">No pending bills found for this patient.</div>
+                        activeAdmissions.length === 0 && pastAdmissions.length === 0 && (
+                        <div className="no-bills">No billing items found for this patient.</div>
                     )}
 
                     {/* Payment Panel */}
-                    {(billing.appointments.length > 0 || billing.labReports.length > 0 ||
-                        billing.pharmacyOrders.length > 0 || billing.facilityCharges.length > 0 ||
-                        activeAdmissions.length > 0) && (
+                    {pendingTotal() > 0 && (
                         <div className="payment-panel">
                             <div className="payment-summary">
                                 <div className="payment-row">
@@ -391,7 +544,7 @@ const PatientBillingProfile = () => {
                                     <strong className="selected-amount">{fmt(totalSelected())}</strong>
                                 </div>
                                 <div className="payment-row">
-                                    <span>Total Outstanding:</span>
+                                    <span>Total Balance Due:</span>
                                     <strong>{fmt(pendingTotal())}</strong>
                                 </div>
                             </div>

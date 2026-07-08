@@ -1,245 +1,511 @@
-.upp-container {
-    padding: 24px;
-    background-color: #f1f5f9;
-    min-height: calc(100vh - 60px);
-    font-family: 'Inter', sans-serif;
+/* UnifiedPatientProfile.css — Sleek Modern Medical Design System for Hospital Module */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+    --upp-primary: #6366f1;
+    --upp-primary-hover: #4f46e5;
+    --upp-primary-light: rgba(99, 102, 241, 0.08);
+    --upp-secondary: #0ea5e9;
+    --upp-secondary-hover: #0284c7;
+    --upp-secondary-light: rgba(14, 165, 233, 0.08);
+    --upp-bg: #f8fafc;
+    --upp-card-bg: #ffffff;
+    --upp-text-main: #0f172a;
+    --upp-text-muted: #64748b;
+    --upp-border: #e2e8f0;
+    --upp-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --upp-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+    --upp-shadow-lg: 0 10px 25px -5px rgba(99, 102, 241, 0.05), 0 8px 16px -6px rgba(0, 0, 0, 0.03);
+    --upp-radius: 16px;
+    --upp-radius-sm: 10px;
 }
 
+.upp-container {
+    padding: 30px;
+    background-color: var(--upp-bg);
+    min-height: calc(100vh - 60px);
+    font-family: 'Plus Jakarta Sans', 'Outfit', sans-serif;
+    color: var(--upp-text-main);
+    animation: uppFadeIn 0.4s ease-out;
+}
+
+@keyframes uppFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Header Profile Card */
 .upp-header-card {
-    background: white;
-    padding: 24px;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    background: var(--upp-card-bg);
+    border: 1px solid var(--upp-border);
+    border-radius: var(--upp-radius);
+    padding: 24px 30px;
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     margin-bottom: 24px;
+    box-shadow: var(--upp-shadow);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.upp-header-card:hover {
+    box-shadow: var(--upp-shadow-lg);
 }
 
 .upp-identity {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 24px;
 }
 
 .upp-avatar {
-    width: 80px;
-    height: 80px;
+    width: 90px;
+    height: 90px;
     border-radius: 50%;
-    background: #4f46e5;
+    background: linear-gradient(135deg, var(--upp-primary), var(--upp-secondary));
     color: white;
-    font-size: 32px;
-    font-weight: bold;
+    font-size: 38px;
+    font-weight: 800;
     display: flex;
     align-items: center;
     justify-content: center;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+    border: 3px solid #ffffff;
+    font-family: 'Outfit', sans-serif;
 }
 
 .upp-info h1 {
     margin: 0 0 8px 0;
-    color: #1e293b;
-    font-size: 24px;
+    color: var(--upp-text-main);
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
 }
 
 .upp-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
 }
 
 .upp-tag {
     background: #f1f5f9;
-    padding: 6px 12px;
+    padding: 6px 14px;
     border-radius: 20px;
     font-size: 13px;
     color: #475569;
-    font-weight: 500;
-}
-
-.upp-actions {
+    font-weight: 600;
     display: flex;
-    gap: 12px;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.02);
 }
 
-.upp-btn-download {
-    background-color: #22c55e;
+.upp-tag-primary {
+    background: var(--upp-primary-light);
+    color: var(--upp-primary);
+}
+
+/* Action Buttons */
+.upp-btn-action {
+    background: linear-gradient(135deg, #10b981, #059669);
     color: white;
     border: none;
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-weight: 600;
+    padding: 12px 24px;
+    border-radius: var(--upp-radius-sm);
+    font-weight: 700;
+    font-size: 14px;
     cursor: pointer;
     display: flex;
     align-items: center;
     gap: 8px;
-    transition: background-color 0.2s;
+    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+    transition: all 0.2s ease;
 }
 
-.upp-btn-download:hover {
-    background-color: #16a34a;
+.upp-btn-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(16, 185, 129, 0.3);
 }
 
-/* Metrics Grid */
+.upp-btn-action:active {
+    transform: translateY(0);
+}
+
+/* Stats Metrics Cards */
 .upp-metrics {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 20px;
     margin-bottom: 24px;
 }
 
 .upp-metric-card {
-    background: white;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    background: var(--upp-card-bg);
+    padding: 20px 24px;
+    border-radius: var(--upp-radius);
+    border: 1px solid var(--upp-border);
+    box-shadow: var(--upp-shadow-sm);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.upp-metric-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--upp-shadow);
+}
+
+.upp-metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--upp-primary);
+}
+
+.upp-metric-card.metric-visits::before { background: var(--upp-primary); }
+.upp-metric-card.metric-upcoming::before { background: var(--upp-secondary); }
+.upp-metric-card.metric-paid::before { background: #10b981; }
+.upp-metric-card.metric-pending::before { background: #f59e0b; }
+
+.upp-metric-info {
     display: flex;
     flex-direction: column;
 }
 
-.upp-metric-card span:last-child {
-    font-size: 24px;
-    font-weight: 700;
-    color: #0f172a;
-    margin-top: 8px;
-}
-
 .upp-metric-label {
-    font-size: 14px;
-    color: #64748b;
-    font-weight: 600;
+    font-size: 13px;
+    color: var(--upp-text-muted);
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-/* Timeline Layout */
+.upp-metric-val {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--upp-text-main);
+    margin-top: 6px;
+    font-family: 'Outfit', sans-serif;
+}
+
+.upp-metric-icon {
+    font-size: 32px;
+    opacity: 0.15;
+    color: var(--upp-text-main);
+}
+
+/* Content Grid Layout */
 .upp-content-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: 320px 1fr;
     gap: 24px;
 }
 
-.upp-section {
-    background: white;
-    border-radius: 12px;
-    padding: 24px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+.upp-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
 }
 
-.upp-section h3 {
+.upp-main-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* Shared Section Card Styling */
+.upp-card {
+    background: var(--upp-card-bg);
+    border-radius: var(--upp-radius);
+    border: 1px solid var(--upp-border);
+    padding: 24px;
+    box-shadow: var(--upp-shadow-sm);
+}
+
+.upp-card-title {
     margin: 0 0 20px 0;
-    color: #0f172a;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--upp-text-main);
     border-bottom: 2px solid #f1f5f9;
     padding-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Demographic / Details Styling */
+.upp-details-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.upp-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border-radius: var(--upp-radius-sm);
+    border: 1px solid rgba(0, 0, 0, 0.01);
+}
+
+.upp-detail-lbl {
+    font-size: 11px;
+    color: var(--upp-text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.upp-detail-val {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--upp-text-main);
+}
+
+/* Tab Navigation */
+.upp-tabs-bar {
+    display: flex;
+    background: #f1f5f9;
+    padding: 6px;
+    border-radius: var(--upp-radius-sm);
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.upp-tab-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--upp-text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.upp-tab-btn:hover {
+    color: var(--upp-text-main);
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.upp-tab-btn.active {
+    background: var(--upp-card-bg);
+    color: var(--upp-primary);
+    box-shadow: var(--upp-shadow-sm);
+}
+
+/* Clean Tables styling */
+.upp-table-wrap {
+    overflow-x: auto;
+}
+
+.upp-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 13.5px;
+}
+
+.upp-table th {
+    padding: 12px 16px;
+    background: #f8fafc;
+    color: var(--upp-text-muted);
+    font-weight: 700;
+    border-bottom: 2px solid var(--upp-border);
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+}
+
+.upp-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--upp-border);
+    color: var(--upp-text-main);
+    vertical-align: middle;
+}
+
+.upp-table tr:last-child td {
+    border-bottom: none;
+}
+
+.upp-table tr:hover td {
+    background-color: #f8fafc;
+}
+
+/* Timeline Layout */
+.upp-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .upp-timeline-item {
-    padding: 16px;
-    border-left: 3px solid #cbd5e1;
-    margin-bottom: 16px;
     background: #f8fafc;
-    border-radius: 0 8px 8px 0;
-    position: relative;
-    transition: border-color 0.2s, background 0.2s;
+    border: 1px solid var(--upp-border);
+    border-left: 4px solid var(--upp-primary);
+    border-radius: var(--upp-radius-sm);
+    padding: 18px 20px;
+    transition: all 0.2s ease;
 }
 
 .upp-timeline-item:hover {
-    background: #f1f5f9;
+    transform: translateX(4px);
+    box-shadow: var(--upp-shadow);
+    background: #ffffff;
 }
 
-.upp-timeline-item.type-appointment {
-    border-left-color: #3b82f6;
-}
-
-.upp-timeline-item.type-clinicalVisit {
-    border-left-color: #8b5cf6;
-}
-
-.upp-timeline-item.type-labReport {
-    border-left-color: #f59e0b;
-}
-
-.upp-timeline-item.type-pharmacyOrder {
-    border-left-color: #ef4444;
-}
-
-.upp-tl-header {
+.upp-tl-head {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 8px;
-    font-size: 14px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.upp-tl-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
 .upp-tl-date {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--upp-text-main);
+}
+
+.upp-tl-doctor {
+    font-size: 12px;
+    color: var(--upp-text-muted);
     font-weight: 600;
-    color: #475569;
 }
 
 .upp-tl-badge {
-    padding: 2px 8px;
+    padding: 4px 10px;
     border-radius: 12px;
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
 }
 
-.badge-appointment {
-    background: #dcece8;
-    color: #2563eb;
-}
-
-.badge-clinicalVisit {
-    background: #ede9fe;
-    color: #7c3aed;
-}
-
-.badge-labReport {
-    background: #fef3c7;
-    color: #d97706;
-}
-
-.badge-pharmacyOrder {
-    background: #fee2e2;
-    color: #dc2626;
-}
+.badge-completed { background: #dcfce7; color: #166534; }
+.badge-pending { background: #fef3c7; color: #d97706; }
+.badge-confirmed { background: #e0f2fe; color: #0369a1; }
+.badge-cancelled { background: #fee2e2; color: #b91c1c; }
 
 .upp-tl-body {
-    font-size: 14px;
-    color: #334155;
-    line-height: 1.5;
-}
-
-.upp-finance-row {
     display: flex;
-    justify-content: space-between;
-    padding: 12px 0;
-    border-bottom: 1px dashed #e2e8f0;
-    font-size: 14px;
+    flex-direction: column;
+    gap: 12px;
 }
 
-.upp-finance-row:last-child {
-    border-bottom: none;
+.upp-tl-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
-.upp-finance-status {
-    padding: 2px 8px;
-    border-radius: 4px;
+.upp-tl-lbl {
+    font-size: 10px;
+    color: var(--upp-text-muted);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.upp-tl-val {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #334155;
+}
+
+/* Vitals Cards in Timeline */
+.upp-tl-vitals {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+    padding: 10px 0;
+}
+
+.upp-tl-vital-pill {
+    background: #f1f5f9;
+    padding: 8px;
+    border-radius: 8px;
     font-size: 12px;
-    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
-.status-paid {
-    background: #dcfce7;
-    color: #166534;
+/* Empty / Loading Spinners styling */
+.upp-loading-screen {
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    color: var(--upp-text-muted);
+    font-family: 'Plus Jakarta Sans', sans-serif;
 }
 
-.status-pending {
-    background: #fef9c3;
-    color: #854d0e;
+.upp-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid var(--upp-border);
+    border-top: 4px solid var(--upp-primary);
+    border-radius: 50%;
+    animation: uppSpin 1s linear infinite;
+}
+
+@keyframes uppSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.upp-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--upp-text-muted);
+    font-size: 14px;
 }
 
 @media (max-width: 1024px) {
+    .upp-metrics {
+        grid-template-columns: repeat(2, 1fr);
+    }
     .upp-content-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .upp-metrics {
+        grid-template-columns: 1fr;
+    }
+    .upp-header-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+    .upp-btn-action {
+        width: 100%;
+        justify-content: center;
     }
 }

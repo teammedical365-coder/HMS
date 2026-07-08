@@ -215,8 +215,8 @@ const ClinicDashboard = () => {
     const navigate = useNavigate();
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
     const getInitialMode = () => {
-        const role = currentUser?.role;
-        if (role === 'doctor') return 'doctor';
+        const role = (currentUser?.role || '').toLowerCase();
+        if (role === 'doctor' || role === 'clinic doctor') return 'doctor';
         if (role === 'reception' || role === 'receptionist') return 'reception';
         return 'overview';
     };
@@ -225,8 +225,8 @@ const ClinicDashboard = () => {
     const [pendingDownload, setPendingDownload] = useState(null);
  
     useEffect(() => {
-        const allowed = ['hospitaladmin', 'doctor', 'reception', 'receptionist'];
-        if (!allowed.includes(currentUser?.role)) navigate('/login');
+        const allowed = ['hospitaladmin', 'doctor', 'clinic doctor', 'reception', 'receptionist'];
+        if (!allowed.includes((currentUser?.role || '').toLowerCase())) navigate('/login');
     }, []);
  
     const goToReception = (patient) => {
@@ -234,29 +234,41 @@ const ClinicDashboard = () => {
         setMode('reception');
     };
  
+    const isClinicDoctorUser = (currentUser?.role || '').toLowerCase().includes('doctor');
+
     return (
         <div className="clinic-dashboard">
             {/* Role Switcher */}
-            <div className="clinic-role-switcher">
-                <div className="switcher-label">Mode:</div>
-                {MODES.filter(m => {
-                    const role = currentUser?.role;
-                    if (role === 'doctor') return ['doctor', 'patients', 'overview'].includes(m.id);
-                    if (role === 'reception' || role === 'receptionist') return ['reception', 'patients', 'overview', 'billing', 'plans'].includes(m.id);
-                    return true;
-                }).map(m => (
-                    <button key={m.id}
-                        className={`switcher-btn ${mode === m.id ? 'active' : ''}`}
-                        style={mode === m.id ? { background: m.color, color: '#fff', borderColor: m.color } : {}}
-                        onClick={() => setMode(m.id)}>
-                        <span>{m.icon}</span> {m.label}
-                    </button>
-                ))}
-                <div className="switcher-user">
-                    <div className="switcher-avatar">{currentUser?.name?.charAt(0)?.toUpperCase()}</div>
-                    <span>{currentUser?.name}</span>
+            {!isClinicDoctorUser && (
+                <div className="clinic-role-switcher">
+                    <div className="switcher-label">Mode:</div>
+                    {MODES.filter(m => {
+                        const role = (currentUser?.role || '').toLowerCase();
+                        if (role === 'doctor' || role === 'clinic doctor') return ['doctor', 'patients', 'overview'].includes(m.id);
+                        if (role === 'reception' || role === 'receptionist') return ['reception', 'patients', 'overview', 'billing', 'plans'].includes(m.id);
+                        return true;
+                    }).map(m => (
+                        <button key={m.id}
+                            className={`switcher-btn ${mode === m.id ? 'active' : ''}`}
+                            style={mode === m.id ? { background: m.color, color: '#fff', borderColor: m.color } : {}}
+                            onClick={() => setMode(m.id)}>
+                            <span>{m.icon}</span> {m.label}
+                        </button>
+                    ))}
+                    <div className="switcher-user">
+                        <div className="switcher-avatar">{currentUser?.name?.charAt(0)?.toUpperCase()}</div>
+                        <span>{currentUser?.name}</span>
+                    </div>
                 </div>
-            </div>
+            )}
+            {isClinicDoctorUser && (
+                <div className="clinic-role-switcher" style={{ justifyContent: 'flex-end' }}>
+                    <div className="switcher-user">
+                        <div className="switcher-avatar">{currentUser?.name?.charAt(0)?.toUpperCase()}</div>
+                        <span>Dr. {currentUser?.name}</span>
+                    </div>
+                </div>
+            )}
  
             {pendingDownload && (
                 <div style={{

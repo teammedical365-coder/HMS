@@ -418,6 +418,10 @@ router.delete('/:clinicId/staff/:userId', verifyCentralAdmin, async (req, res) =
         // Unlink from clinic admin if needed
         await Hospital.updateOne({ _id: req.params.clinicId, adminUserId: req.params.userId }, { $set: { adminUserId: null } });
 
+        // Also clean up any Doctor model record
+        const Doctor = require('../models/doctor.model');
+        await Doctor.deleteMany({ userId: req.params.userId, hospitalId: req.params.clinicId });
+
         res.json({ success: true, message: 'Staff member removed' });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
