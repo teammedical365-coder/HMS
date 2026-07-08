@@ -120,28 +120,6 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
             return res.status(403).json({ success: false, message: 'Clinic Doctors can only access Clinic Patient history.' });
         }
 
-        if (isClinicPatient) {
-            // Map ClinicPatient fields to look like User/fertilityProfile structure for frontend compatibility
-            user.fertilityProfile = {
-                address: user.address || '',
-                bloodGroup: user.bloodGroup || '',
-                allergies: user.allergies || '',
-                chronicConditions: user.chronicConditions || '',
-                medicalNotes: user.medicalNotes || '',
-                vitals: {
-                    weight: user.vitals?.weight || '',
-                    height: user.vitals?.height || '',
-                    bmi: user.vitals?.bmi || '',
-                    bloodPressure: user.vitals?.bloodPressure || '',
-                    pulse: user.vitals?.pulse || '',
-                    temperature: user.vitals?.temperature || '',
-                    spo2: user.vitals?.spo2 || '',
-                    respiratoryRate: user.vitals?.respiratoryRate || '',
-                    lastRecorded: user.vitals?.lastRecorded || null
-                }
-            };
-        }
-
         const realUserId = user._id;
         const patientIdStr = user.patientId || user.patientUid || userId;
 
@@ -176,6 +154,46 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
             }).lean();
             // Clinic treatment plans
             plans = await TreatmentPlan.find({ clinicPatientId: { $in: objectIdList }, ...hFilter }).lean();
+
+            // Populate latest vitals fallback if patient document vitals are empty
+            if (!user.vitals || !Object.values(user.vitals).some(v => v !== '' && v !== null && v !== undefined)) {
+                const latestApptWithVitals = appointments
+                    .filter(a => a.vitals && (a.vitals.weight || a.vitals.height || a.vitals.bp || a.vitals.temperature || a.vitals.pulse))
+                    .sort((a, b) => new Date(b.appointmentDate) - new Date(a.appointmentDate))[0];
+                if (latestApptWithVitals) {
+                    user.vitals = {
+                        weight:          latestApptWithVitals.vitals.weight || '',
+                        height:          latestApptWithVitals.vitals.height || '',
+                        bmi:             latestApptWithVitals.vitals.bmi || '',
+                        bloodPressure:   latestApptWithVitals.vitals.bp || latestApptWithVitals.vitals.bloodPressure || '',
+                        pulse:           latestApptWithVitals.vitals.pulse || '',
+                        temperature:     latestApptWithVitals.vitals.temperature || '',
+                        spo2:            latestApptWithVitals.vitals.spo2 || '',
+                        respiratoryRate: latestApptWithVitals.vitals.rr || latestApptWithVitals.vitals.respiratoryRate || '',
+                        lastRecorded:    latestApptWithVitals.appointmentDate
+                    };
+                }
+            }
+
+            // Map ClinicPatient fields to look like User/fertilityProfile structure for frontend compatibility
+            user.fertilityProfile = {
+                address: user.address || '',
+                bloodGroup: user.bloodGroup || '',
+                allergies: user.allergies || '',
+                chronicConditions: user.chronicConditions || '',
+                medicalNotes: user.medicalNotes || '',
+                vitals: {
+                    weight:          user.vitals?.weight || '',
+                    height:          user.vitals?.height || '',
+                    bmi:             user.vitals?.bmi || '',
+                    bloodPressure:   user.vitals?.bloodPressure || '',
+                    pulse:           user.vitals?.pulse || '',
+                    temperature:     user.vitals?.temperature || '',
+                    spo2:            user.vitals?.spo2 || '',
+                    respiratoryRate: user.vitals?.respiratoryRate || '',
+                    lastRecorded:    user.vitals?.lastRecorded || null
+                }
+            };
         } else {
             // Hospital queries
             const visitQuery = { $or: [{ patientId: { $in: idList } }], ...hFilter };

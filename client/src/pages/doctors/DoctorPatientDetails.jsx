@@ -186,6 +186,7 @@ const DoctorPatientDetails = () => {
                     setIntakeData({
                         ...cp,
                         ...fert,
+                        ...(cp.vitals || {}),
                         age: cp.age || fert.age || '',
                         gender: cp.gender || fert.gender || 'Male',
                         bloodGroup: cp.bloodGroup || fert.bloodGroup || '',
@@ -711,9 +712,9 @@ const DoctorPatientDetails = () => {
         age: clinicPatient.age || calculatedAge || rawProfile.age || '-',
         gender: clinicPatient.gender || rawProfile.gender || '-',
         bloodGroup: clinicPatient.bloodGroup || rawProfile.bloodGroup || '-',
-        height: clinicPatient.height || rawProfile.height || '-',
-        weight: clinicPatient.weight || rawProfile.weight || '-',
-        bmi: clinicPatient.bmi || rawProfile.bmi || '-',
+        height: clinicPatient.vitals?.height || clinicPatient.height || rawProfile.height || '-',
+        weight: clinicPatient.vitals?.weight || clinicPatient.weight || rawProfile.weight || '-',
+        bmi: clinicPatient.vitals?.bmi || clinicPatient.bmi || rawProfile.bmi || '-',
         chiefComplaint: clinicPatient.chiefComplaint || rawProfile.chiefComplaint || '-',
         reasonForVisit: clinicPatient.reasonForVisit || rawProfile.reasonForVisit || '-',
         partnerFirstName: clinicPatient.partnerFirstName || rawProfile.partnerFirstName || '',
@@ -901,10 +902,6 @@ const DoctorPatientDetails = () => {
                                 <div className="dpd-ov-card">
                                     <span className="dpd-ov-label">Address</span>
                                     <span className="dpd-ov-value">{patient.address || profile.address || '-'}</span>
-                                </div>
-                                <div className="dpd-ov-card">
-                                    <span className="dpd-ov-label">Chief Complaint</span>
-                                    <span className="dpd-ov-value">{profile.chiefComplaint || intakeData.chiefComplaint || '-'}</span>
                                 </div>
                                 <div className="dpd-ov-card">
                                     <span className="dpd-ov-label">Reason for Visit</span>

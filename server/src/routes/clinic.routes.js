@@ -438,7 +438,11 @@ router.post('/patients/:id/reports', verifyClinicStaff, uploadReport.single('rep
             return res.status(400).json({ success: false, message: typeErr });
         }
 
-        const patient = await ClinicPatient.findOne({ _id: req.params.id, clinicId: hid(req) });
+        const isObjectId = mongoose.Types.ObjectId.isValid(req.params.id) && req.params.id.length === 24;
+        const patientQuery = isObjectId ? { _id: req.params.id } : { patientUid: req.params.id };
+        patientQuery.clinicId = hid(req);
+
+        const patient = await ClinicPatient.findOne(patientQuery);
         if (!patient) {
             try { fs.unlinkSync(req.file.path); } catch (_) {}
             return res.status(404).json({ success: false, message: 'Patient not found' });
@@ -460,7 +464,11 @@ router.post('/patients/:id/reports', verifyClinicStaff, uploadReport.single('rep
 // ─────────────────────────────────────────────
 router.delete('/patients/:id/reports/:reportId', verifyClinicStaff, async (req, res) => {
     try {
-        const patient = await ClinicPatient.findOne({ _id: req.params.id, clinicId: hid(req) });
+        const isObjectId = mongoose.Types.ObjectId.isValid(req.params.id) && req.params.id.length === 24;
+        const patientQuery = isObjectId ? { _id: req.params.id } : { patientUid: req.params.id };
+        patientQuery.clinicId = hid(req);
+
+        const patient = await ClinicPatient.findOne(patientQuery);
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
         const report = patient.reports.id(req.params.reportId);
         if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
@@ -717,6 +725,28 @@ router.put('/appointments/:id/complete', verifyClinicStaff, async (req, res) => 
 
         await appt.save();
 
+        // Sync vitals to ClinicPatient document if clinicPatientId is set
+        if (vitals && typeof vitals === 'object' && appt.clinicPatientId) {
+            await ClinicPatient.updateOne(
+                { _id: appt.clinicPatientId },
+                {
+                    $set: {
+                        vitals: {
+                            weight:          vitals.weight || '',
+                            height:          vitals.height || '',
+                            bmi:             vitals.bmi || '',
+                            bloodPressure:   vitals.bp || vitals.bloodPressure || '',
+                            pulse:           vitals.pulse || '',
+                            temperature:     vitals.temperature || '',
+                            spo2:            vitals.spo2 || '',
+                            respiratoryRate: vitals.rr || vitals.respiratoryRate || '',
+                            lastRecorded:    new Date()
+                        }
+                    }
+                }
+            );
+        }
+
         // Note: clinic module does not manage pharmacy orders or billing.
         // Prescribed medicines are stored on the appointment for prescription records only.
 
@@ -752,6 +782,28 @@ router.put('/appointments/:id/update-consultation', verifyClinicStaff, async (re
         if (amount !== undefined) appt.amount = amount;
 
         await appt.save();
+
+        // Sync vitals to ClinicPatient document if clinicPatientId is set
+        if (vitals && typeof vitals === 'object' && appt.clinicPatientId) {
+            await ClinicPatient.updateOne(
+                { _id: appt.clinicPatientId },
+                {
+                    $set: {
+                        vitals: {
+                            weight:          vitals.weight || '',
+                            height:          vitals.height || '',
+                            bmi:             vitals.bmi || '',
+                            bloodPressure:   vitals.bp || vitals.bloodPressure || '',
+                            pulse:           vitals.pulse || '',
+                            temperature:     vitals.temperature || '',
+                            spo2:            vitals.spo2 || '',
+                            respiratoryRate: vitals.rr || vitals.respiratoryRate || '',
+                            lastRecorded:    new Date()
+                        }
+                    }
+                }
+            );
+        }
 
         res.json({ success: true, appointment: appt, message: 'Consultation updated' });
     } catch (err) {

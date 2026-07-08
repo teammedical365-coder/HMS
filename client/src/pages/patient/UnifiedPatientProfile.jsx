@@ -5,9 +5,16 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './UnifiedPatientProfile.css';
 
+import ClinicPatientProfile from './ClinicPatientProfile';
+
 const UnifiedPatientProfile = () => {
     const { id: patientId } = useParams();
     const navigate = useNavigate();
+
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    if (currentUser?.clinicType === 'clinic') {
+        return <ClinicPatientProfile />;
+    }
 
     // Data States
     const [patientData, setPatientData] = useState(null);
