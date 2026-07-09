@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { receptionAPI } from '../../utils/api';
+import { receptionAPI, patientAPI } from '../../utils/api';
 import { FiSearch, FiUsers, FiCalendar, FiActivity } from 'react-icons/fi';
 
 const ReceptionPatients = () => {
@@ -15,8 +15,9 @@ const ReceptionPatients = () => {
     const [activeTab, setActiveTab] = useState('all'); // 'today' or 'all'
 
     // Modals state
-    const [uploadModal, setUploadModal] = useState({ open: false, apptId: null, patientName: '' });
+    const [uploadModal, setUploadModal] = useState({ open: false, apptId: null, patientName: '', patientId: null });
     const [selectedReportFile, setSelectedReportFile] = useState(null);
+    const [uploadingReport, setUploadingReport] = useState(false);
     const [profileModal, setProfileModal] = useState({ open: false, patient: null });
 
     useEffect(() => {
@@ -69,15 +70,35 @@ const ReceptionPatients = () => {
         return colors[charCode % colors.length];
     };
 
-    const handleReportSubmit = (e) => {
+    const handleReportSubmit = async (e) => {
         e.preventDefault();
         if (!selectedReportFile) {
             alert('Please select a file to upload!');
             return;
         }
-        alert(`Report file "${selectedReportFile.name}" uploaded successfully for ${uploadModal.patientName}!`);
-        setSelectedReportFile(null);
-        setUploadModal({ open: false, apptId: null, patientName: '' });
+        if (!uploadModal.patientId) {
+            alert('Could not identify patient ID for report upload.');
+            return;
+        }
+        setUploadingReport(true);
+        try {
+            const formData = new FormData();
+            formData.append('document', selectedReportFile);
+            formData.append('docType', 'Medical Report');
+            const res = await patientAPI.uploadDocument(uploadModal.patientId, formData);
+            if (res.success) {
+                alert(`Report file "${selectedReportFile.name}" uploaded successfully for ${uploadModal.patientName}! It is now synchronized and visible inside the Hospital Patient Profile under Reports & Documents.`);
+                setSelectedReportFile(null);
+                setUploadModal({ open: false, apptId: null, patientName: '', patientId: null });
+            } else {
+                alert(res.message || 'Failed to upload report.');
+            }
+        } catch (err) {
+            console.error('Error uploading report:', err);
+            alert('Error uploading report file.');
+        } finally {
+            setUploadingReport(false);
+        }
     };
 
     const todayStr = new Date().toISOString().split('T')[0];
@@ -392,7 +413,7 @@ const ReceptionPatients = () => {
                                                             }}
                                                         >👁️ Profile</button>
                                                         <button 
-                                                            onClick={() => setUploadModal({ open: true, apptId: appt._id, patientName: appt.userId?.name || 'Patient' })}
+                                                            onClick={() => setUploadModal({ open: true, apptId: appt._id, patientName: appt.userId?.name || 'Patient', patientId: appt.userId?._id || appt.userId?.patientId || appt.patientId || appt._id })}
                                                             style={{
                                                                 background: '#fdf2f8',
                                                                 color: '#db2777',
@@ -437,29 +458,23 @@ const ReceptionPatients = () => {
                             background: '#ffffff',
                             borderRadius: '16px',
                             padding: '28px',
-                            width: '400px',
+                            width: '450px',
                             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
                         }}>
                             <h3 style={{ margin: '0 0 16px', color: '#1e293b', fontSize: '1.2rem', fontWeight: 800 }}>Upload Patient Report</h3>
-                            <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '20px' }}>
+                            <p style={{ margin: '0 0 20px', color: '#64748b', fontSize: '0.9rem' }}>
                                 Patient: <strong>{uploadModal.patientName}</strong>
                             </p>
                             <form onSubmit={handleReportSubmit}>
                                 <div style={{ marginBottom: '20px' }}>
-                                    <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '8px' }}>Select File (PDF or Image)</label>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
+                                        Select Document (PDF / Image)
+                                    </label>
                                     <input 
                                         type="file" 
-                                        accept="image/*,application/pdf"
-                                        required
-                                        onChange={e => setSelectedReportFile(e.target.files[0])}
-                                        style={{
-                                            width: '100%',
-                                            padding: '10px',
-                                            border: '2px dashed #cbd5e1',
-                                            borderRadius: '8px',
-                                            background: '#f8fafc',
-                                            cursor: 'pointer'
-                                        }}
+                                        accept="application/pdf,image/*" 
+                                        onChange={(e) => setSelectedReportFile(e.target.files[0])}
+                                        style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }}
                                     />
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
@@ -467,7 +482,7 @@ const ReceptionPatients = () => {
                                         type="button" 
                                         onClick={() => {
                                             setSelectedReportFile(null);
-                                            setUploadModal({ open: false, apptId: null, patientName: '' });
+                                            setUploadModal({ open: false, apptId: null, patientName: '', patientId: null });
                                         }}
                                         style={{ padding: '8px 16px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
                                     >
@@ -475,9 +490,10 @@ const ReceptionPatients = () => {
                                     </button>
                                     <button 
                                         type="submit" 
-                                        style={{ padding: '8px 20px', background: '#db2777', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+                                        disabled={uploadingReport}
+                                        style={{ padding: '8px 20px', background: '#db2777', color: '#ffffff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, opacity: uploadingReport ? 0.7 : 1 }}
                                     >
-                                        Upload
+                                        {uploadingReport ? 'Uploading...' : 'Upload'}
                                     </button>
                                 </div>
                             </form>

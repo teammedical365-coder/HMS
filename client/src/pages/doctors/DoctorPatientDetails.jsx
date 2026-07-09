@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doctorAPI, labTestAPI, questionLibraryAPI, hospitalAPI } from '../../utils/api';
+import { doctorAPI, labTestAPI, questionLibraryAPI, hospitalAPI, patientAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './DoctorPatientDetails.css';
@@ -10,17 +10,26 @@ import { useAuth } from '../../store/hooks';
 // ─── Reports & Files Tab ──────────────────────────────────────────────────────
 const ReportsFilesTab = ({ appointment }) => {
     const [clinicReports, setClinicReports] = useState([]);
+    const [hospitalReports, setHospitalReports] = useState([]);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         const clinicPatientId = appointment?.clinicPatientId?._id || appointment?.clinicPatientId;
+        const hospitalPatientId = appointment?.userId?._id || appointment?.userId || appointment?.patientId;
+        
+        setLoading(true);
+        const promises = [];
         if (clinicPatientId) {
-            setLoading(true);
-            doctorAPI.getClinicPatientReports(clinicPatientId)
+            promises.push(doctorAPI.getClinicPatientReports(clinicPatientId)
                 .then(r => { if (r.success) setClinicReports(r.reports || []); })
-                .catch(() => {})
-                .finally(() => setLoading(false));
+                .catch(() => {}));
         }
+        if (hospitalPatientId) {
+            promises.push(patientAPI.getDocuments(hospitalPatientId)
+                .then(r => { if (r.success) setHospitalReports(r.documents || []); })
+                .catch(() => {}));
+        }
+        Promise.all(promises).finally(() => setLoading(false));
     }, [appointment?._id]); // eslint-disable-line
 
     const BASE = import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com';
@@ -28,12 +37,19 @@ const ReportsFilesTab = ({ appointment }) => {
     const allFiles = [
         ...prescriptions.map(p => ({ ...p, source: 'appointment' })),
         ...clinicReports.map(r => ({
-            name: r.name,
+            name: r.name || r.fileName || 'Medical Report',
             url: r.url || r.fileUrl || (r.filename ? ((r.filename || '').startsWith('http://') || (r.filename || '').startsWith('https://') ? r.filename : `${BASE}/api/patients/reports/${encodeURIComponent(r.filename)}`) : null),
-            uploadedAt: r.uploadedAt,
-            mimetype: r.mimetype,
+            uploadedAt: r.uploadedAt || r.date || null,
+            mimetype: r.mimetype || r.mimeType || (r.url?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
             source: 'clinic-patient',
         })),
+        ...hospitalReports.map(r => ({
+            name: r.fileName || r.name || 'Medical Report',
+            url: r.url || r.fileUrl || (r.filename ? ((r.filename || '').startsWith('http://') || (r.filename || '').startsWith('https://') ? r.filename : `${BASE}/api/patients/reports/${encodeURIComponent(r.filename)}`) : null),
+            uploadedAt: r.uploadedAt || r.date || null,
+            mimetype: r.mimeType || r.mimetype || (r.url?.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
+            source: 'hospital-patient',
+        }))
     ];
 
     const isPDF = (mimetype) => mimetype === 'application/pdf' || (typeof mimetype === 'string' && mimetype.endsWith('pdf'));
@@ -125,6 +141,7 @@ const DoctorPatientDetails = () => {
     const [hospitalDepartments, setHospitalDepartments] = useState([]);
     const [isLocked, setIsLocked] = useState(false);
     const [hospitalContext, setHospitalContext] = useState(null);
+    const [toast, setToast] = useState({ show: false, message: '', title: '' });
 
     // Modal States
     const [showPrescribeModal, setShowPrescribeModal] = useState(false);
@@ -198,6 +215,14 @@ const DoctorPatientDetails = () => {
                     // Lock if completed
                     if (res.appointment.status === 'completed') {
                         setIsLocked(true);
+                        setToast({
+                            show: true,
+                            title: '✅ Session Completed Successfully',
+                            message: 'This consultation has already been completed. This record is now read-only.'
+                        });
+                        setTimeout(() => {
+                            setToast(prev => ({ ...prev, show: false }));
+                        }, 3000);
                     }
 
                     const pId = res.appointment.clinicPatientId?._id || res.appointment.clinicPatientId || res.appointment.userId?._id;
@@ -319,13 +344,33 @@ const DoctorPatientDetails = () => {
 
             // Immediately lock UI and update appointment status locally
             setIsLocked(true);
+            setToast({
+                show: true,
+                title: '✅ Session Completed Successfully',
+                message: 'This consultation has already been completed. This record is now read-only.'
+            });
+            setTimeout(() => {
+                setToast(prev => ({ ...prev, show: false }));
+            }, 3000);
+
             setAppointment(prev => ({
                 ...prev,
                 status: 'completed',
                 diagnosis: sessionData.diagnosis,
                 doctorNotes: sessionData.notes,
                 labTests: payload.labTests,
-                pharmacy: payload.pharmacy
+                pharmacy: payload.pharmacy,
+                vitals: {
+                    ...prev?.vitals,
+                    weight: intakeData.weight || prev?.vitals?.weight || '',
+                    height: intakeData.height || prev?.vitals?.height || '',
+                    bmi: intakeData.bmi || prev?.vitals?.bmi || '',
+                    bp: intakeData.historyBp || intakeData.bp || intakeData.bloodPressure || prev?.vitals?.bp || '',
+                    pulse: intakeData.historyPulse || intakeData.pulse || intakeData.pulseRate || prev?.vitals?.pulse || '',
+                    temperature: intakeData.temperature || intakeData.temp || prev?.vitals?.temperature || '',
+                    spo2: intakeData.spo2 || prev?.vitals?.spo2 || '',
+                    rr: intakeData.respiratoryRate || intakeData.rr || prev?.vitals?.rr || ''
+                }
             }));
 
             // 3. Stage Prescription PDF for manual download
@@ -887,18 +932,118 @@ const DoctorPatientDetails = () => {
                                     <span className="dpd-ov-label">Blood Group</span>
                                     <span className="dpd-ov-value">{profile.bloodGroup || intakeData.bloodGroup || '-'}</span>
                                 </div>
-                                <div className="dpd-ov-card">
-                                    <span className="dpd-ov-label">Height</span>
-                                    <span className="dpd-ov-value">{profile.height || intakeData.height || '-'} cm</span>
-                                </div>
-                                <div className="dpd-ov-card">
-                                    <span className="dpd-ov-label">Weight</span>
-                                    <span className="dpd-ov-value">{profile.weight || intakeData.weight || '-'} kg</span>
-                                </div>
-                                <div className="dpd-ov-card">
-                                    <span className="dpd-ov-label">BMI</span>
-                                    <span className="dpd-ov-value">{profile.bmi || intakeData.bmi || '-'}</span>
-                                </div>
+                                {(() => {
+                                    const apptVitals = appointment?.vitals || {};
+                                    const vitalsInfo = {
+                                        height: apptVitals.height || profile.height || intakeData.height || intakeData.vitals?.height,
+                                        weight: apptVitals.weight || profile.weight || intakeData.weight || intakeData.vitals?.weight,
+                                        bmi: apptVitals.bmi || profile.bmi || intakeData.bmi || intakeData.vitals?.bmi,
+                                        bp: apptVitals.bp || profile.bp || profile.bloodPressure || profile.historyBp || intakeData.bp || intakeData.bloodPressure || intakeData.historyBp || intakeData.vitals?.bloodPressure || intakeData.vitals?.bp,
+                                        pulse: apptVitals.pulse || profile.pulse || profile.pulseRate || profile.historyPulse || intakeData.pulse || intakeData.pulseRate || intakeData.historyPulse || intakeData.vitals?.pulse,
+                                        rr: apptVitals.rr || apptVitals.respiratoryRate || profile.rr || profile.respiratoryRate || intakeData.rr || intakeData.respiratoryRate || intakeData.vitals?.respiratoryRate,
+                                        temp: apptVitals.temperature || apptVitals.temp || profile.temperature || profile.temp || intakeData.temperature || intakeData.temp || intakeData.vitals?.temperature,
+                                        spo2: apptVitals.spo2 || profile.spo2 || intakeData.spo2 || intakeData.vitals?.spo2,
+                                        bloodSugar: apptVitals.bloodSugar || profile.bloodSugar || profile.blood_sugar || intakeData.bloodSugar || intakeData.blood_sugar,
+                                        heartRate: apptVitals.heartRate || apptVitals.heart_rate || profile.heartRate || profile.heart_rate || intakeData.heartRate || intakeData.heart_rate,
+                                        painScale: apptVitals.painScale || apptVitals.pain_scale || profile.painScale || profile.pain_scale || intakeData.painScale || intakeData.pain_scale,
+                                        allergies: (profile.allergies && profile.allergies !== '-') ? profile.allergies : ((intakeData.allergies && intakeData.allergies !== '-') ? intakeData.allergies : ''),
+                                        medications: profile.currentMedications || profile.currentMedication || intakeData.currentMedications || intakeData.currentMedication || profile.medications || intakeData.medications,
+                                        history: (profile.chronicConditions && profile.chronicConditions !== '-') ? profile.chronicConditions : ((intakeData.chronicConditions && intakeData.chronicConditions !== '-') ? intakeData.chronicConditions : '')
+                                    };
+
+                                    const isValAvailable = (val) => {
+                                        return val && val !== '-' && val !== 'None' && val.toString().trim() !== '';
+                                    };
+
+                                    return (
+                                        <>
+                                            {isValAvailable(vitalsInfo.height) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">Height</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.height} cm</span>
+                                                </div>
+                                            )}
+                                            {isValAvailable(vitalsInfo.weight) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">Weight</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.weight} kg</span>
+                                                </div>
+                                            )}
+                                            {isValAvailable(vitalsInfo.bmi) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">BMI</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.bmi}</span>
+                                                </div>
+                                            )}
+                                            {isValAvailable(vitalsInfo.bp) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">Blood Pressure</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.bp}</span>
+                                                </div>
+                                            )}
+                                            {isValAvailable(vitalsInfo.pulse) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">Pulse Rate</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.pulse} bpm</span>
+                                                </div>
+                                            )}
+                                            {isValAvailable(vitalsInfo.rr) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">Respiratory Rate</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.rr} breaths/min</span>
+                                                </div>
+                                            )}
+                                            {isValAvailable(vitalsInfo.temp) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">Temperature</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.temp} °F</span>
+                                                </div>
+                                            )}
+                                            {isValAvailable(vitalsInfo.spo2) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">Oxygen Saturation (SpO₂)</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.spo2}%</span>
+                                                </div>
+                                            )}
+                                            {isValAvailable(vitalsInfo.bloodSugar) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">Blood Sugar</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.bloodSugar}</span>
+                                                </div>
+                                            )}
+                                            {isValAvailable(vitalsInfo.heartRate) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">Heart Rate</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.heartRate} bpm</span>
+                                                </div>
+                                            )}
+                                            {isValAvailable(vitalsInfo.painScale) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">Pain Scale</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.painScale} / 10</span>
+                                                </div>
+                                            )}
+                                            {isValAvailable(vitalsInfo.allergies) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">Allergies</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.allergies}</span>
+                                                </div>
+                                            )}
+                                            {isValAvailable(vitalsInfo.medications) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">Current Medications</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.medications}</span>
+                                                </div>
+                                            )}
+                                            {isValAvailable(vitalsInfo.history) && (
+                                                <div className="dpd-ov-card">
+                                                    <span className="dpd-ov-label">Medical History</span>
+                                                    <span className="dpd-ov-value">{vitalsInfo.history}</span>
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
                                 <div className="dpd-ov-card">
                                     <span className="dpd-ov-label">Address</span>
                                     <span className="dpd-ov-value">{patient.address || profile.address || '-'}</span>
@@ -1126,16 +1271,6 @@ const DoctorPatientDetails = () => {
                                 {appointment.status}
                             </span>
                         </div>
-
-                        {isLocked && (
-                            <div style={{ padding: '15px', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: '8px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <span style={{ fontSize: '20px' }}>⚠️</span>
-                                <div style={{ fontSize: '13px', color: '#92400e' }}>
-                                    <b>Session Locked.</b> This clinical record has been marked as complete and is now immutable. 
-                                    Contact administrator for any corrections.
-                                </div>
-                            </div>
-                        )}
 
                         <div className="dpd-right-content">
                             <div className="dpd-session-field">
@@ -1407,6 +1542,38 @@ const DoctorPatientDetails = () => {
                         </div>
                     </div>
                 </div>
+            )}
+            {toast.show && (
+                <>
+                    <style>{`
+                        @keyframes slideIn {
+                            from { transform: translateY(20px); opacity: 0; }
+                            to { transform: translateY(0); opacity: 1; }
+                        }
+                    `}</style>
+                    <div style={{
+                        position: 'fixed',
+                        bottom: '24px',
+                        right: '24px',
+                        background: '#ffffff',
+                        color: '#0f172a',
+                        padding: '16px 20px',
+                        borderRadius: '12px',
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                        borderLeft: '5px solid #10b981',
+                        zIndex: 99999,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '4px',
+                        animation: 'slideIn 0.3s ease forwards',
+                        fontFamily: 'Inter, sans-serif',
+                        minWidth: '300px',
+                        maxWidth: '400px'
+                    }}>
+                        <div style={{ fontWeight: '700', color: '#065f46', fontSize: '15px' }}>{toast.title}</div>
+                        <div style={{ fontSize: '13px', color: '#475569', lineHeight: '1.4' }}>{toast.message}</div>
+                    </div>
+                </>
             )}
         </div>
     );

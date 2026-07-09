@@ -391,7 +391,35 @@ const Patient = () => {
                                                         </div>
                                                         <div>
                                                             <div style={{ color: '#0f172a', fontWeight: '700', fontSize: '0.88rem' }}>{apt.userId?.name || apt.clinicPatientId?.name || 'Walk-in'}</div>
-                                                            <div style={{ color: '#475569', fontSize: '0.75rem' }}>MRN: {apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || 'N/A'}</div>
+                                                            <div style={{ color: '#475569', fontSize: '0.75rem', marginBottom: '2px' }}>MRN: {apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || 'N/A'}</div>
+                                                            {(() => {
+                                                                const v = apt.vitals || {};
+                                                                const userVitals = apt.userId?.fertilityProfile?.vitals || {};
+                                                                const cpVitals = apt.clinicPatientId?.vitals || {};
+                                                                
+                                                                const weight = v.weight || cpVitals.weight || userVitals.weight;
+                                                                const height = v.height || cpVitals.height || userVitals.height;
+                                                                const bmi = v.bmi || cpVitals.bmi || userVitals.bmi;
+                                                                const bp = v.bp || cpVitals.bloodPressure || cpVitals.bp || userVitals.bloodPressure || userVitals.bp;
+                                                                const pulse = v.pulse || cpVitals.pulse || userVitals.pulse;
+                                                                const temp = v.temperature || cpVitals.temperature || userVitals.temperature;
+                                                                const spo2 = v.spo2 || cpVitals.spo2 || userVitals.spo2;
+
+                                                                const hasAny = weight || height || bmi || bp || pulse || temp || spo2;
+                                                                if (!hasAny) return null;
+
+                                                                return (
+                                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px', maxWidth: '350px' }}>
+                                                                        {height && <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>📏 Ht: {height}cm</span>}
+                                                                        {weight && <span style={{ background: '#f0fdf4', color: '#166534', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>⚖️ Wt: {weight}kg</span>}
+                                                                        {bmi && <span style={{ background: '#faf5ff', color: '#6b21a8', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>📊 BMI: {bmi}</span>}
+                                                                        {bp && <span style={{ background: '#fef2f2', color: '#991b1b', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>🩸 BP: {bp}</span>}
+                                                                        {pulse && <span style={{ background: '#fff1f2', color: '#9f1239', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>💓 Pulse: {pulse}</span>}
+                                                                        {temp && <span style={{ background: '#fff7ed', color: '#c2410c', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>🌡️ Temp: {temp}°F</span>}
+                                                                        {spo2 && <span style={{ background: '#ecfeff', color: '#0891b2', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>🫁 SpO₂: {spo2}%</span>}
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     </div>
                                                 </td>

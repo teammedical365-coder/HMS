@@ -94,15 +94,15 @@ const ReceptionDashboard = () => {
     useEffect(() => {
         const searchParams = new URLSearchParams(location.search);
         const view = searchParams.get('view');
-        if (view === 'intake') {
+        if (location.state?.patient) {
+            handleEditPatient(location.state.patient);
+        } else if (view === 'intake') {
             handleNewWalkIn();
         } else if (view === 'transactions') {
             fetchTransactions();
             setViewMode('transactions');
         } else if (view === 'list' || view === 'desk' || view === 'availability') {
             setViewMode('list');
-        } else if (location.state?.patient) {
-            handleEditPatient(location.state.patient);
         } else {
             setViewMode('welcome');
         }
@@ -238,6 +238,11 @@ const ReceptionDashboard = () => {
             department: '', doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: ''
         }));
         setViewMode('intake');
+    };
+
+    const handleSelectSearchResult = (patient) => {
+        handleEditPatient(patient);
+        setSearchResults([]);
     };
 
     const handleViewProfile = (patient) => {
@@ -498,9 +503,9 @@ const ReceptionDashboard = () => {
             .map(s => String(s || '').trim())
             .filter(Boolean)
             .join(', ');
-        intakeForm.address = fullAddress;
+        intakeForm.address = fullAddress || intakeForm.address || '';
 
-        if (intakeForm.doctor && intakeForm.visitTime && intakeForm.paymentMethod !== 'Cash' && !paymentScreenshot) {
+        if (!selectedPatientId && intakeForm.doctor && intakeForm.visitTime && intakeForm.paymentMethod !== 'Cash' && !paymentScreenshot) {
             alert(`Please upload a payment screenshot/proof for ${intakeForm.paymentMethod} payment before booking.`);
             setSaving(false); return;
         }
@@ -538,6 +543,18 @@ const ReceptionDashboard = () => {
             const intakePayload = { ...intakeForm };
             if (avatarUrl) intakePayload.avatar = avatarUrl;
             await receptionAPI.updateIntake(userId, intakePayload);
+
+            if (selectedPatientId) {
+                alert("✅ Patient profile and demographics updated successfully!");
+                setSaving(false);
+                if (location.state?.isEditingExisting) {
+                    navigate(`/patient/${userId}`);
+                    return;
+                }
+                fetchRecentPatients();
+                setViewMode('list');
+                return;
+            }
 
             // 3. Book Appointment (optional when editing existing patient)
             const isTokenMode = hospitalContext?.appointmentMode === 'token';
@@ -835,123 +852,142 @@ const ReceptionDashboard = () => {
                                 <div className="field"><label>Height (cm)</label><input name="height" value={intakeForm.height} onChange={handleInputChange} /></div>
                                 <div className="field"><label>Weight (kg)</label><input name="weight" value={intakeForm.weight} onChange={handleInputChange} /></div>
                                 <div className="field"><label>BMI</label><input name="bmi" value={intakeForm.bmi} readOnly /></div>
-                                <div className="field"><label>Consultation Fee</label><input name="consultationFee" value={intakeForm.consultationFee} readOnly style={{ backgroundColor: '#f1f5f9', color: '#475569', cursor: 'not-allowed' }} /></div>
+                                {!selectedPatientId && (
+                                    <div className="field"><label>Consultation Fee</label><input name="consultationFee" value={intakeForm.consultationFee} readOnly style={{ backgroundColor: '#f1f5f9', color: '#475569', cursor: 'not-allowed' }} /></div>
+                                )}
                             </div>
-                            <div className="form-row">
-                                <div className="field">
-                                    <label>Payment Method</label>
-                                    <select name="paymentMethod" value={intakeForm.paymentMethod} onChange={handleInputChange}>
-                                        <option value="Cash">Cash</option>
-                                        <option value="UPI">UPI</option>
-                                        <option value="Card">Card</option>
-                                        <option value="Cheque">Cheque</option>
-                                        <option value="NEFT/RTGS">NEFT / RTGS</option>
-                                    </select>
-                                </div>
-                                <div className="field" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', marginTop: '22px' }}>
-                                    <span style={{ fontSize: '18px' }}>✅</span>
-                                    <span style={{ fontWeight: 600, color: '#15803d', fontSize: '14px' }}>Payment Confirmed — Paid</span>
-                                </div>
-                            </div>
-                            {intakeForm.paymentMethod !== 'Cash' && (
-                                <div className="form-row" style={{ marginTop: '6px' }}>
-                                    <div className="field" style={{ flex: 1 }}>
-                                        <label>Payment Screenshot / Proof <span style={{ color: '#ef4444', fontSize: '12px' }}>*Required for {intakeForm.paymentMethod}</span></label>
-                                        <input
-                                            type="file"
-                                            accept="image/*,application/pdf"
-                                            onChange={e => setPaymentScreenshot(e.target.files[0])}
-                                            style={{ padding: '8px', border: '2px dashed #6366f1', borderRadius: '8px', background: '#f5f3ff', width: '100%' }}
-                                        />
-                                        {paymentScreenshot && (
-                                            <span style={{ fontSize: '12px', color: '#059669', marginTop: '4px', display: 'block' }}>
-                                                ✅ {paymentScreenshot.name}
-                                            </span>
-                                        )}
+                            {!selectedPatientId ? (
+                                <>
+                                    <div className="form-row">
+                                        <div className="field">
+                                            <label>Payment Method</label>
+                                            <select name="paymentMethod" value={intakeForm.paymentMethod} onChange={handleInputChange}>
+                                                <option value="Cash">Cash</option>
+                                                <option value="UPI">UPI</option>
+                                                <option value="Card">Card</option>
+                                                <option value="Cheque">Cheque</option>
+                                                <option value="NEFT/RTGS">NEFT / RTGS</option>
+                                            </select>
+                                        </div>
+                                        <div className="field" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', marginTop: '22px' }}>
+                                            <span style={{ fontSize: '18px' }}>✅</span>
+                                            <span style={{ fontWeight: 600, color: '#15803d', fontSize: '14px' }}>Payment Confirmed — Paid</span>
+                                        </div>
                                     </div>
+                                    {intakeForm.paymentMethod !== 'Cash' && (
+                                        <div className="form-row" style={{ marginTop: '6px' }}>
+                                            <div className="field" style={{ flex: 1 }}>
+                                                <label>Payment Screenshot / Proof <span style={{ color: '#ef4444', fontSize: '12px' }}>*Required for {intakeForm.paymentMethod}</span></label>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*,application/pdf"
+                                                    onChange={e => setPaymentScreenshot(e.target.files[0])}
+                                                    style={{ padding: '8px', border: '2px dashed #6366f1', borderRadius: '8px', background: '#f5f3ff', width: '100%' }}
+                                                />
+                                                {paymentScreenshot && (
+                                                    <span style={{ fontSize: '12px', color: '#059669', marginTop: '4px', display: 'block' }}>
+                                                        ✅ {paymentScreenshot.name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <div style={{ padding: '14px 18px', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '10px', color: '#475569', fontSize: '0.85rem', marginTop: '12px' }}>
+                                    🔒 <strong>Payment Section Disabled:</strong> Consultation Fee, Payment Method, and Payment Status are hidden while editing an existing patient record to prevent duplicate charges.
                                 </div>
                             )}
 
                             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
 
-                            {/* 5. Assign to Doctor/Counselor nested styling */}
-                            <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
-                                <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px', borderBottom: '2px solid #bfdbfe', paddingBottom: '10px' }}>5. Assign to Doctor/Counselor</h4>
-                            <div className="form-row">
-                                <div className="field">
-                                    <label>Department</label>
-                                    <select name="department" value={intakeForm.department} onChange={handleInputChange}>
-                                        <option value="">-- Choose Department --</option>
-                                        {[...new Set([...(hospitalContext?.departments || []), ...doctorsList.flatMap(d => d.departments || [])])].filter(Boolean).map(dept => (
-                                            <option key={dept} value={dept}>{dept}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="field">
-                                    <label>Select Specialist</label>
-                                    <select 
-                                        name="doctor" 
-                                        value={intakeForm.doctor} 
-                                        onChange={handleInputChange}
-                                        disabled={!intakeForm.department}
-                                        style={!intakeForm.department ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
-                                    >
-                                        {!intakeForm.department ? (
-                                            <option value="">-- Select Department First --</option>
-                                        ) : (
-                                            <>
-                                                <option value="">-- Choose Specialist --</option>
-                                                {doctorsList.filter(doc => (doc.departments || []).includes(intakeForm.department)).map(doc => (
-                                                    <option key={doc._id} value={doc._id}>{doc.name} {doc.departments?.length > 0 ? `(${doc.departments.join(', ')})` : ''}</option>
-                                                ))}
-                                            </>
-                                        )}
-                                    </select>
-                                </div>
-                                <div className="field">
-                                    <label>Date</label>
-                                    <input type="date" name="visitDate" value={intakeForm.visitDate} min={todayStr} onChange={handleInputChange} disabled={!intakeForm.doctor} style={!intakeForm.doctor ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}} />
-                                </div>
-                            </div>
-                            {intakeForm.doctor && (
-                                hospitalContext?.appointmentMode === 'token' ? (
-                                    /* Token mode: show next token number */
-                                    <div style={{ margin: '14px 0', padding: '18px 24px', background: 'linear-gradient(135deg, #fef3c7, #fde68a)', borderRadius: '12px', border: '2px solid #f59e0b', display: 'flex', alignItems: 'center', gap: '18px' }}>
-                                        <span style={{ fontSize: '2.5rem' }}>🎟️</span>
-                                        <div>
-                                            <div style={{ fontWeight: 700, fontSize: '1rem', color: '#78350f', marginBottom: '2px' }}>Token Queue Mode Active</div>
-                                            {nextToken !== null ? (
-                                                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#92400e' }}>
-                                                    Next Token: <span style={{ fontSize: '2rem', color: '#d97706' }}>#{nextToken}</span>
-                                                </div>
+                            {!selectedPatientId ? (
+                                /* 5. Assign to Doctor/Counselor nested styling */
+                                <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
+                                    <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px', borderBottom: '2px solid #bfdbfe', paddingBottom: '10px' }}>5. Assign to Doctor/Counselor</h4>
+                                <div className="form-row">
+                                    <div className="field">
+                                        <label>Department</label>
+                                        <select name="department" value={intakeForm.department} onChange={handleInputChange}>
+                                            <option value="">-- Choose Department --</option>
+                                            {[...new Set([...(hospitalContext?.departments || []), ...doctorsList.flatMap(d => d.departments || [])])].filter(Boolean).map(dept => (
+                                                <option key={dept} value={dept}>{dept}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="field">
+                                        <label>Select Specialist</label>
+                                        <select 
+                                            name="doctor" 
+                                            value={intakeForm.doctor} 
+                                            onChange={handleInputChange}
+                                            disabled={!intakeForm.department}
+                                            style={!intakeForm.department ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
+                                        >
+                                            {!intakeForm.department ? (
+                                                <option value="">-- Select Department First --</option>
                                             ) : (
-                                                <div style={{ color: '#92400e', fontSize: '0.9rem' }}>Select doctor and date to see next token</div>
+                                                <>
+                                                    <option value="">-- Choose Specialist --</option>
+                                                    {doctorsList.filter(doc => (doc.departments || []).includes(intakeForm.department)).map(doc => (
+                                                        <option key={doc._id} value={doc._id}>{doc.name} {doc.departments?.length > 0 ? `(${doc.departments.join(', ')})` : ''}</option>
+                                                    ))}
+                                                </>
                                             )}
-                                            <div style={{ fontSize: '0.8rem', color: '#92400e', marginTop: '4px', opacity: 0.8 }}>Tokens reset daily at midnight</div>
+                                        </select>
+                                    </div>
+                                    <div className="field">
+                                        <label>Date</label>
+                                        <input type="date" name="visitDate" value={intakeForm.visitDate} min={todayStr} onChange={handleInputChange} disabled={!intakeForm.doctor} style={!intakeForm.doctor ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}} />
+                                    </div>
+                                </div>
+                                {intakeForm.doctor && (
+                                    hospitalContext?.appointmentMode === 'token' ? (
+                                        /* Token mode: show next token number */
+                                        <div style={{ margin: '14px 0', padding: '18px 24px', background: 'linear-gradient(135deg, #fef3c7, #fde68a)', borderRadius: '12px', border: '2px solid #f59e0b', display: 'flex', alignItems: 'center', gap: '18px' }}>
+                                            <span style={{ fontSize: '2.5rem' }}>🎟️</span>
+                                            <div>
+                                                <div style={{ fontWeight: 700, fontSize: '1rem', color: '#78350f', marginBottom: '2px' }}>Token Queue Mode Active</div>
+                                                {nextToken !== null ? (
+                                                    <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#92400e' }}>
+                                                        Next Token: <span style={{ fontSize: '2rem', color: '#d97706' }}>#{nextToken}</span>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ color: '#92400e', fontSize: '0.9rem' }}>Select doctor and date to see next token</div>
+                                                )}
+                                                <div style={{ fontSize: '0.8rem', color: '#92400e', marginTop: '4px', opacity: 0.8 }}>Tokens reset daily at midnight</div>
+                                            </div>
                                         </div>
-                                    </div>
-                                ) : (
-                                    /* Slot mode: existing time slot grid */
-                                    <div className="slot-grid">
-                                        {timeSlots.map(time => {
-                                            const isBooked = availabilityCheck.bookedSlots.includes(time);
-                                            const isPast = isSlotInPast(time);
-                                            const isDisabled = isBooked || isPast;
-                                            return (
-                                                <button
-                                                    key={time} type="button"
-                                                    className={`slot-btn ${isBooked ? 'booked' : ''} ${isPast ? 'booked' : ''} ${intakeForm.visitTime === time ? 'selected' : ''}`}
-                                                    onClick={() => !isDisabled && setIntakeForm({ ...intakeForm, visitTime: time })}
-                                                    disabled={isDisabled}
-                                                >
-                                                    {time}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                )
+                                    ) : (
+                                        /* Slot mode: existing time slot grid */
+                                        <div className="slot-grid">
+                                            {timeSlots.map(time => {
+                                                const isBooked = availabilityCheck.bookedSlots.includes(time);
+                                                const isPast = isSlotInPast(time);
+                                                const isDisabled = isBooked || isPast;
+                                                return (
+                                                    <button
+                                                        key={time} type="button"
+                                                        className={`slot-btn ${isBooked ? 'booked' : ''} ${isPast ? 'booked' : ''} ${intakeForm.visitTime === time ? 'selected' : ''}`}
+                                                        onClick={() => !isDisabled && setIntakeForm({ ...intakeForm, visitTime: time })}
+                                                        disabled={isDisabled}
+                                                    >
+                                                        {time}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )
+                                )}
+                            </div>
+                            ) : (
+                                <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
+                                    <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 8px' }}>5. Assign to Doctor/Counselor</h4>
+                                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#1d4ed8' }}>
+                                        🔒 <strong>Appointment Booking Disabled:</strong> Department, Doctor, Date, and Time Slot are disabled when updating existing demographics to avoid generating duplicate appointments.
+                                    </p>
+                                </div>
                             )}
-                        </div>
                         </div>
 
                         <div className="form-footer">

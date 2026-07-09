@@ -267,4 +267,286 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
     }
 });
 
+// ─── CONSENT FORM MANAGEMENT ─────────────────────────────────────────────────
+const multer = require('multer');
+const consentUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
+            cb(null, true);
+        } else {
+            cb(new Error('Only images and PDFs are allowed'), false);
+        }
+    }
+});
+
+// POST /api/patients/:id/consent — Upload a consent form
+router.post('/:id/consent', verifyToken, resolveTenant, consentUpload.single('consentFile'), async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const hid = req.user.hospitalId;
+
+        const userQuery = { _id: userId };
+        if (hid) userQuery.hospitalId = hid;
+
+        const user = await MasterUser.findOne(userQuery);
+        if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+        if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+        const imagekit = require('../utils/imagekit');
+        const result = await imagekit.upload({
+            file: req.file.buffer,
+            fileName: `consent_${userId}_${Date.now()}_${req.file.originalname}`,
+            folder: '/consent-forms',
+            tags: ['consent', req.file.mimetype]
+        });
+
+        const consentEntry = {
+            fileName: req.file.originalname,
+            url: result.url,
+            fileId: result.fileId,
+            mimeType: req.file.mimetype,
+            uploadedAt: new Date(),
+            uploadedBy: req.user.name || req.user._id
+        };
+
+        if (!user.fertilityProfile) user.fertilityProfile = {};
+        if (!Array.isArray(user.fertilityProfile.consentForms)) {
+            user.fertilityProfile.consentForms = [];
+        }
+        user.fertilityProfile.consentForms.push(consentEntry);
+        user.markModified('fertilityProfile');
+        await user.save();
+
+        res.json({ success: true, message: 'Consent form uploaded', consent: consentEntry });
+    } catch (error) {
+        console.error('[consent-upload]', error.message);
+        res.status(500).json({ success: false, message: 'Upload failed' });
+    }
+});
+
+// GET /api/patients/:id/consent — Fetch consent forms
+router.get('/:id/consent', verifyToken, resolveTenant, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const hid = req.user.hospitalId;
+
+        const userQuery = { _id: userId };
+        if (hid) userQuery.hospitalId = hid;
+
+        const user = await MasterUser.findOne(userQuery).lean();
+        if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+        const consentForms = user.fertilityProfile?.consentForms || [];
+        res.json({ success: true, consentForms });
+    } catch (error) {
+        console.error('[consent-fetch]', error.message);
+        res.status(500).json({ success: false, message: 'Failed to fetch consent forms' });
+    }
+});
+
+// DELETE /api/patients/:id/consent/:index — Delete a consent form
+router.delete('/:id/consent/:index', verifyToken, resolveTenant, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const index = parseInt(req.params.index, 10);
+        const { fileId } = req.body || {};
+
+        const user = await MasterUser.findOne({ _id: userId });
+        if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+        if (!user.fertilityProfile || !Array.isArray(user.fertilityProfile.consentForms)) {
+            return res.status(404).json({ success: false, message: 'No consent forms found' });
+        }
+
+        let removed = null;
+        if (!isNaN(index) && index >= 0 && index < user.fertilityProfile.consentForms.length) {
+            removed = user.fertilityProfile.consentForms.splice(index, 1)[0];
+        } else if (fileId) {
+            const idx = user.fertilityProfile.consentForms.findIndex(c => c.fileId === fileId || c._id?.toString() === fileId);
+            if (idx !== -1) removed = user.fertilityProfile.consentForms.splice(idx, 1)[0];
+        }
+
+        if (!removed) {
+            return res.status(404).json({ success: false, message: 'Consent form not found' });
+        }
+
+        user.markModified('fertilityProfile');
+        await user.save();
+
+        if (removed.fileId) {
+            try {
+                const imagekit = require('../utils/imagekit');
+                await imagekit.deleteFile(removed.fileId);
+            } catch (ikErr) {
+                console.warn('[consent-ik-delete]', ikErr.message);
+            }
+        }
+
+        res.json({ success: true, message: 'Consent form deleted successfully', consentForms: user.fertilityProfile.consentForms });
+    } catch (error) {
+        console.error('[consent-delete]', error.message);
+        res.status(500).json({ success: false, message: 'Failed to delete consent form' });
+    }
+});
+
+// POST /api/patients/:id/documents — Upload a general document (lab report, scan, etc.)
+router.post('/:id/documents', verifyToken, resolveTenant, consentUpload.single('document'), async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const hid = req.user.hospitalId;
+
+        const userQuery = { _id: userId };
+        if (hid) userQuery.hospitalId = hid;
+
+        const user = await MasterUser.findOne(userQuery);
+        if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+        if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+        const imagekit = require('../utils/imagekit');
+        const result = await imagekit.upload({
+            file: req.file.buffer,
+            fileName: `doc_${userId}_${Date.now()}_${req.file.originalname}`,
+            folder: '/patient-documents',
+            tags: ['patient-document', req.file.mimetype]
+        });
+
+        const docEntry = {
+            fileName: req.file.originalname,
+            docType: req.body.docType || 'General',
+            url: result.url,
+            fileId: result.fileId,
+            mimeType: req.file.mimetype,
+            uploadedAt: new Date(),
+            uploadedBy: req.user.name || req.user._id
+        };
+
+        if (!user.fertilityProfile) user.fertilityProfile = {};
+        if (!Array.isArray(user.fertilityProfile.documents)) {
+            user.fertilityProfile.documents = [];
+        }
+        user.fertilityProfile.documents.push(docEntry);
+        user.markModified('fertilityProfile');
+        await user.save();
+
+        res.json({ success: true, message: 'Document uploaded', document: docEntry });
+    } catch (error) {
+        console.error('[document-upload]', error.message);
+        res.status(500).json({ success: false, message: 'Upload failed' });
+    }
+});
+
+// GET /api/patients/:id/documents — Fetch all uploaded documents
+router.get('/:id/documents', verifyToken, resolveTenant, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const hid = req.user.hospitalId;
+
+        const userQuery = { _id: userId };
+        if (hid) userQuery.hospitalId = hid;
+
+        const user = await MasterUser.findOne(userQuery).lean();
+        if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+        const fp = user.fertilityProfile || {};
+        const baseDocs = Array.isArray(fp.documents) ? fp.documents : [];
+        const prevReports = Array.isArray(fp.previousReports) ? fp.previousReports.map(r => ({
+            fileName: r.fileName || r.name || 'Medical Report',
+            docType: r.docType || 'Medical Report',
+            url: r.url || r.fileUrl || r.filename,
+            uploadedAt: r.date || r.uploadedAt || user.updatedAt || new Date(),
+            fileId: r.fileId || r._id || null,
+            uploadedBy: r.uploadedBy || 'Doctor'
+        })) : [];
+        const doctorReports = Array.isArray(fp.reports) ? fp.reports.map(r => ({
+            fileName: r.name || r.fileName || 'Medical Report',
+            docType: r.docType || 'Medical Report',
+            url: r.url || r.fileUrl || (r.filename ? ((r.filename || '').startsWith('http') ? r.filename : `/api/patients/reports/${encodeURIComponent(r.filename)}`) : null),
+            uploadedAt: r.uploadedAt || r.date || new Date(),
+            fileId: r.fileId || r._id || null,
+            uploadedBy: r.uploadedBy || 'Doctor'
+        })) : [];
+
+        // Also check if any LabReports exist with fileUrl
+        const LabReport = require('../models/labReport.model');
+        const labQuery = { $or: [{ userId: userId }, { patientId: userId }] };
+        if (hid) labQuery.hospitalId = hid;
+        const labReports = await LabReport.find({ ...labQuery, 'data.fileUrl': { $ne: null } }).lean();
+        const labDocs = labReports.map(l => ({
+            fileName: l.data?.reportName || l.data?.testName || 'Lab Investigation Report',
+            docType: 'Lab Report',
+            url: l.data.fileUrl,
+            uploadedAt: l.createdAt,
+            fileId: l._id,
+            uploadedBy: 'Lab'
+        }));
+
+        const allCombined = [...baseDocs, ...prevReports, ...doctorReports, ...labDocs];
+        const seen = new Set();
+        const documents = [];
+        for (const doc of allCombined) {
+            const key = doc.url || doc.fileName;
+            if (key && !seen.has(key)) {
+                seen.add(key);
+                documents.push(doc);
+            }
+        }
+
+        documents.sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0));
+
+        res.json({ success: true, documents });
+    } catch (error) {
+        console.error('[documents-fetch]', error.message);
+        res.status(500).json({ success: false, message: 'Failed to fetch documents' });
+    }
+});
+
+// DELETE /api/patients/:id/documents/:index — Delete a general document
+router.delete('/:id/documents/:index', verifyToken, resolveTenant, async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const index = parseInt(req.params.index, 10);
+        const { fileId } = req.body || {};
+
+        const user = await MasterUser.findOne({ _id: userId });
+        if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });
+
+        if (!user.fertilityProfile || !Array.isArray(user.fertilityProfile.documents)) {
+            return res.status(404).json({ success: false, message: 'No documents found' });
+        }
+
+        let removed = null;
+        if (!isNaN(index) && index >= 0 && index < user.fertilityProfile.documents.length) {
+            removed = user.fertilityProfile.documents.splice(index, 1)[0];
+        } else if (fileId) {
+            const idx = user.fertilityProfile.documents.findIndex(d => d.fileId === fileId || d._id?.toString() === fileId);
+            if (idx !== -1) removed = user.fertilityProfile.documents.splice(idx, 1)[0];
+        }
+
+        if (!removed) {
+            return res.status(404).json({ success: false, message: 'Document not found' });
+        }
+
+        user.markModified('fertilityProfile');
+        await user.save();
+
+        if (removed.fileId) {
+            try {
+                const imagekit = require('../utils/imagekit');
+                await imagekit.deleteFile(removed.fileId);
+            } catch (ikErr) {
+                console.warn('[document-ik-delete]', ikErr.message);
+            }
+        }
+
+        res.json({ success: true, message: 'Document deleted successfully', documents: user.fertilityProfile.documents });
+    } catch (error) {
+        console.error('[document-delete]', error.message);
+        res.status(500).json({ success: false, message: 'Failed to delete document' });
+    }
+});
+
 module.exports = router;

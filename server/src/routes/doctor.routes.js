@@ -236,7 +236,56 @@ router.put('/patients/:patientId/profile', verifyToken, async (req, res) => {
         if (user) {
             // Merge existing profile with updates
             user.fertilityProfile = { ...user.fertilityProfile, ...updates };
+
+            // Ensure Doctor uploaded reports also sync directly into fertilityProfile.documents
+            if (!Array.isArray(user.fertilityProfile.documents)) {
+                user.fertilityProfile.documents = [];
+            }
+            const docUrls = new Set(user.fertilityProfile.documents.map(d => d.url || d.fileName));
+            const reportsToSync = [
+                ...(Array.isArray(user.fertilityProfile.previousReports) ? user.fertilityProfile.previousReports : []),
+                ...(Array.isArray(user.fertilityProfile.reports) ? user.fertilityProfile.reports : [])
+            ];
+            for (const r of reportsToSync) {
+                const rUrl = r.url || r.fileUrl || r.filename;
+                const rName = r.fileName || r.name || 'Medical Report';
+                if (rUrl && !docUrls.has(rUrl)) {
+                    docUrls.add(rUrl);
+                    user.fertilityProfile.documents.push({
+                        fileName: rName,
+                        docType: 'Medical Report',
+                        url: rUrl,
+                        uploadedAt: r.date || r.uploadedAt || new Date(),
+                        uploadedBy: 'Doctor'
+                    });
+                }
+            }
+            user.markModified('fertilityProfile');
             await user.save();
+
+            // Sync to latest hospital appointment
+            if (updates.vitals || updates.height || updates.weight || updates.bmi || updates.historyBp || updates.historyPulse) {
+                const Appointment = require('../models/appointment.model');
+                const latestAppt = await Appointment.findOne({
+                    userId: user._id,
+                    hospitalId: hospitalId
+                }).sort({ appointmentDate: -1, createdAt: -1 });
+
+                if (latestAppt) {
+                    latestAppt.vitals = {
+                        weight: updates.weight || updates.vitals?.weight || latestAppt.vitals?.weight || '',
+                        height: updates.height || updates.vitals?.height || latestAppt.vitals?.height || '',
+                        bmi: updates.bmi || updates.vitals?.bmi || latestAppt.vitals?.bmi || '',
+                        bp: updates.historyBp || updates.bp || updates.bloodPressure || updates.vitals?.bloodPressure || updates.vitals?.bp || latestAppt.vitals?.bp || '',
+                        pulse: updates.historyPulse || updates.pulse || updates.pulseRate || updates.vitals?.pulse || latestAppt.vitals?.pulse || '',
+                        temperature: updates.temperature || updates.temp || updates.vitals?.temperature || latestAppt.vitals?.temperature || '',
+                        spo2: updates.spo2 || updates.vitals?.spo2 || latestAppt.vitals?.spo2 || '',
+                        rr: updates.respiratoryRate || updates.rr || updates.vitals?.respiratoryRate || updates.vitals?.rr || latestAppt.vitals?.rr || ''
+                    };
+                    await latestAppt.save();
+                }
+            }
+
             return res.json({ success: true, message: 'Patient history updated successfully', profile: user.fertilityProfile });
         }
 

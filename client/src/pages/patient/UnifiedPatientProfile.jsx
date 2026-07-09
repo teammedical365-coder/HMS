@@ -1,21 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { patientAPI, publicAPI, receptionAPI } from '../../utils/api';
+import { patientAPI, receptionAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { 
     FiArrowLeft, 
-    FiCalendar, 
     FiDownload, 
-    FiMail, 
+    FiEdit3,
     FiPhone, 
+    FiCalendar,
     FiActivity, 
     FiDollarSign, 
-    FiUserCheck, 
     FiAlertCircle, 
     FiFileText, 
     FiPlus,
-    FiEye 
+    FiEye,
+    FiCheckCircle,
+    FiClock,
+    FiFolder,
+    FiShield,
+    FiFile,
+    FiUpload,
+    FiX,
+    FiTrash2,
+    FiMapPin
 } from 'react-icons/fi';
 import './UnifiedPatientProfile.css';
 
@@ -25,47 +33,39 @@ const UnifiedPatientProfile = () => {
     const { id: patientId } = useParams();
     const navigate = useNavigate();
 
+    // Check if the current user/tenant is Clinic -> immediately render Clinic profile
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
     if (currentUser?.clinicType === 'clinic') {
         return <ClinicPatientProfile />;
     }
 
-    // Data States
+    // Role check for Edit access (Only Reception/Admins can edit; Doctors see read-only + download)
+    const userRole = String(currentUser.role || '').toLowerCase();
+    const dynRole = String(currentUser._roleData?.name || '').toLowerCase();
+    const permissions = currentUser._roleData?.permissions || [];
+    const isReception = ['reception', 'receptionist', 'admin', 'hospitaladmin', 'superadmin', 'centraladmin', 'frontdesk'].includes(userRole) || 
+                        ['reception', 'receptionist', 'admin', 'hospitaladmin', 'superadmin', 'centraladmin', 'frontdesk'].includes(dynRole) || 
+                        permissions.includes('reception_access') || 
+                        permissions.includes('*');
+
+    // State
     const [patientData, setPatientData] = useState(null);
     const [timeline, setTimeline] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [activeTab, setActiveTab] = useState('timeline');
 
-    // Booking Modal States
-    const [bookingModalOpen, setBookingModalOpen] = useState(false);
-    const [doctorsList, setDoctorsList] = useState([]);
-    const [departments, setDepartments] = useState([]);
-    const [bookingForm, setBookingForm] = useState({
-        department: '',
-        doctor: '',
-        date: new Date().toISOString().split('T')[0],
-        time: '',
-        notes: '',
-        paymentMethod: 'Cash',
-        fee: 500
-    });
-    const [bookedSlots, setBookedSlots] = useState([]);
-    const [checkingSlots, setCheckingSlots] = useState(false);
-    const [bookingSaving, setBookingSaving] = useState(false);
-    const [lastApptDate, setLastApptDate] = useState(null);
-    const [followUpDaysMsg, setFollowUpDaysMsg] = useState('');
+    // Consent & Document States
+    const [consentList, setConsentList] = useState([]);
+    const [consentFile, setConsentFile] = useState(null);
+    const [uploadingConsent, setUploadingConsent] = useState(false);
 
-    const timeSlots = [
-        '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-        '12:00', '12:30', '14:00', '14:30', '15:00', '15:30',
-        '16:00', '16:30', '17:00', '17:30'
-    ];
+    const [documentList, setDocumentList] = useState([]);
+
 
     useEffect(() => {
         if (patientId) {
             fetchProfile();
-            fetchDoctorsAndDeps();
+            fetchConsentAndDocs();
         }
     }, [patientId]);
 
@@ -73,155 +73,201 @@ const UnifiedPatientProfile = () => {
         setLoading(true);
         try {
             const res = await patientAPI.getFullHistory(patientId);
-            if (res.success) {
+            if (res.success && res.user) {
                 setPatientData(res.user);
-                const historyTimeline = res.timeline || [];
-                setTimeline(historyTimeline);
+                setTimeline(res.timeline || []);
 
-                // Find the latest completed/confirmed appointment for follow-up calculation
-                const appts = historyTimeline
-                    .filter(t => t.type === 'appointment' && ['completed', 'confirmed'].includes(t.data?.status))
-                    .map(t => new Date(t.date))
-                    .sort((a, b) => b - a);
-                if (appts.length > 0) {
-                    setLastApptDate(appts[0]);
+                const fp = res.user.fertilityProfile || {};
+                if (Array.isArray(fp.consentForms) && fp.consentForms.length > 0) {
+                    setConsentList(fp.consentForms);
                 }
+                const combinedDocs = [
+                    ...(Array.isArray(fp.documents) ? fp.documents : []),
+                    ...(Array.isArray(fp.previousReports) ? fp.previousReports.map(r => ({
+                        fileName: r.fileName || r.name || 'Medical Report',
+                        docType: r.docType || 'Medical Report',
+                        url: r.url || r.fileUrl || r.filename,
+                        uploadedAt: r.date || r.uploadedAt || new Date(),
+                        fileId: r.fileId || r._id || null,
+                        uploadedBy: 'Doctor'
+                    })) : []),
+                    ...(Array.isArray(fp.reports) ? fp.reports.map(r => ({
+                        fileName: r.name || r.fileName || 'Medical Report',
+                        docType: r.docType || 'Medical Report',
+                        url: r.url || r.fileUrl || (r.filename ? ((r.filename || '').startsWith('http') ? r.filename : `/api/patients/reports/${encodeURIComponent(r.filename)}`) : null),
+                        uploadedAt: r.uploadedAt || r.date || new Date(),
+                        fileId: r.fileId || r._id || null,
+                        uploadedBy: 'Doctor'
+                    })) : [])
+                ];
+                const seen = new Set();
+                const uniqueDocs = combinedDocs.filter(d => {
+                    const key = d.url || d.fileName;
+                    if (key && seen.has(key)) return false;
+                    if (key) seen.add(key);
+                    return true;
+                });
+                if (uniqueDocs.length > 0) {
+                    setDocumentList(uniqueDocs);
+                }
+            } else {
+                setError('Could not load patient details.');
             }
         } catch (err) {
-            console.error("Error fetching unified profile", err);
-            setError('Failed to load patient history or unauthorized access.');
+            console.error("Error fetching patient profile:", err);
+            setError('Failed to load patient profile or unauthorized access.');
         } finally {
             setLoading(false);
         }
     };
 
-    const fetchDoctorsAndDeps = async () => {
+    const fetchConsentAndDocs = async () => {
         try {
-            const res = await publicAPI.getDoctors();
-            if (res.success && Array.isArray(res.doctors)) {
-                setDoctorsList(res.doctors);
-                const deps = [...new Set(res.doctors.map(d => d.specialization || d.department).filter(Boolean))];
-                setDepartments(deps);
+            const consentRes = await patientAPI.getConsent(patientId);
+            if (consentRes.success && Array.isArray(consentRes.consentForms)) {
+                setConsentList(consentRes.consentForms);
             }
         } catch (err) {
-            console.error("Error loading doctors:", err);
+            console.warn("Could not fetch separate consent list:", err?.message);
         }
-    };
 
-    // Load slots on doctor / date change
-    useEffect(() => {
-        if (bookingForm.doctor && bookingForm.date) {
-            loadSlots(bookingForm.doctor, bookingForm.date);
-        }
-    }, [bookingForm.doctor, bookingForm.date]);
-
-    // Recalculate fee on doctor/date change
-    useEffect(() => {
-        calculateFollowUpFee();
-    }, [bookingForm.date, bookingForm.doctor, lastApptDate]);
-
-    const loadSlots = async (doctorId, date) => {
-        setCheckingSlots(true);
         try {
-            const res = await receptionAPI.getBookedSlots(doctorId, date);
-            if (res.success) {
-                setBookedSlots(res.bookedSlots || []);
+            const docRes = await patientAPI.getDocuments(patientId);
+            if (docRes.success && Array.isArray(docRes.documents)) {
+                setDocumentList(docRes.documents);
             }
         } catch (err) {
-            console.error("Error loading slots:", err);
-        } finally {
-            setCheckingSlots(false);
+            console.warn("Could not fetch separate document list:", err?.message);
         }
     };
 
-    const calculateFollowUpFee = () => {
-        if (!bookingForm.doctor) return;
-        const selectedDoc = doctorsList.find(d => d._id === bookingForm.doctor);
-        if (!selectedDoc) return;
-
-        const baseConsultationFee = selectedDoc.consultationFee || 500;
-        const baseFollowUpFee = selectedDoc.followUpFee || 300;
-        const followUpDaysLimit = selectedDoc.followUpDays || 10;
-
-        if (!lastApptDate) {
-            setBookingForm(prev => ({ ...prev, fee: baseConsultationFee }));
-            setFollowUpDaysMsg('New consult: Base consultation fee applies');
-            return;
-        }
-
-        const dateDiffMs = new Date(bookingForm.date).getTime() - new Date(lastApptDate).getTime();
-        const diffDays = Math.ceil(dateDiffMs / (1000 * 60 * 60 * 24));
-
-        if (diffDays >= 0 && diffDays <= followUpDaysLimit) {
-            setBookingForm(prev => ({ ...prev, fee: baseFollowUpFee }));
-            setFollowUpDaysMsg(`Follow-up consult within ${followUpDaysLimit} days: Follow-up fee applies`);
-        } else {
-            setBookingForm(prev => ({ ...prev, fee: baseConsultationFee }));
-            setFollowUpDaysMsg(`Consultation outside follow-up window (> ${followUpDaysLimit} days): Standard fee applies`);
-        }
-    };
-
-    const handleBookingSubmit = async (e) => {
+    const handleConsentUpload = async (e) => {
         e.preventDefault();
-        if (!bookingForm.doctor || !bookingForm.time || !bookingForm.date) {
-            alert('Please fill in Date, Doctor, and Time Slot.');
-            return;
-        }
+        if (!consentFile || !patientData) return;
 
-        setBookingSaving(true);
+        setUploadingConsent(true);
+        const formData = new FormData();
+        formData.append('consentFile', consentFile);
+
         try {
-            const selectedDoc = doctorsList.find(d => d._id === bookingForm.doctor);
-            const payload = {
-                userId: patientData._id,
-                patientId: patientData.patientId,
-                doctorId: bookingForm.doctor,
-                doctorName: selectedDoc ? selectedDoc.name : 'Doctor',
-                serviceName: 'Consultation',
-                appointmentDate: bookingForm.date,
-                appointmentTime: bookingForm.time,
-                amount: bookingForm.fee,
-                paymentStatus: bookingForm.paymentMethod === 'Cash' ? 'paid' : 'pending',
-                paymentMethod: bookingForm.paymentMethod,
-                notes: bookingForm.notes
-            };
-
-            const res = await receptionAPI.createAppointment(payload);
-            if (res.success) {
-                alert('Appointment booked successfully!');
-                setBookingModalOpen(false);
-                fetchProfile();
+            const res = await patientAPI.uploadConsent(patientData._id, formData);
+            if (res.success && res.consent) {
+                setConsentList(prev => [...prev, res.consent]);
+                setConsentFile(null);
+                // Reset file input
+                const fileInput = document.getElementById('consent-file-input');
+                if (fileInput) fileInput.value = '';
+                alert('Consent form uploaded successfully!');
             } else {
-                alert(res.message || 'Booking failed');
+                alert(res.message || 'Upload failed.');
             }
         } catch (err) {
-            console.error("Booking error:", err);
-            alert('Error booking appointment');
+            console.error("Consent upload error:", err);
+            alert('Failed to upload consent form. Please try again.');
         } finally {
-            setBookingSaving(false);
+            setUploadingConsent(false);
         }
+    };
+
+    const handleDeleteConsent = async (index, fileId) => {
+        if (!window.confirm('Are you sure you want to delete this consent form?')) return;
+        try {
+            const res = await patientAPI.deleteConsent(patientData._id, index, fileId);
+            if (res.success) {
+                setConsentList(prev => prev.filter((_, i) => i !== index));
+            } else {
+                alert(res.message || 'Failed to delete consent form.');
+            }
+        } catch (err) {
+            console.error('Delete consent error:', err);
+            alert('Failed to delete consent form.');
+        }
+    };
+
+    const handleDeleteDocument = async (index, fileId) => {
+        if (!window.confirm('Are you sure you want to delete this report/document?')) return;
+        try {
+            const res = await patientAPI.deleteDocument(patientData._id, index, fileId);
+            if (res.success) {
+                setDocumentList(prev => prev.filter((_, i) => i !== index));
+            } else {
+                alert(res.message || 'Failed to delete document.');
+            }
+        } catch (err) {
+            console.error('Delete document error:', err);
+            alert('Failed to delete report/document.');
+        }
+    };
+
+    // Helper to check if appointment has expired based on date and time
+    const isAppointmentExpired = (dateStr, timeStr) => {
+        if (!dateStr) return false;
+        const now = new Date();
+        const apptDate = new Date(dateStr);
+        if (isNaN(apptDate.getTime())) return false;
+
+        const nowYear = now.getFullYear();
+        const nowMonth = now.getMonth();
+        const nowDay = now.getDate();
+
+        const apptYear = apptDate.getFullYear();
+        const apptMonth = apptDate.getMonth();
+        const apptDay = apptDate.getDate();
+
+        const nowDateOnly = new Date(nowYear, nowMonth, nowDay).getTime();
+        const apptDateOnly = new Date(apptYear, apptMonth, apptDay).getTime();
+
+        if (apptDateOnly < nowDateOnly) return true;
+        if (apptDateOnly > nowDateOnly) return false;
+
+        if (!timeStr) {
+            return false;
+        }
+
+        let hours = 0;
+        let minutes = 0;
+        const cleanTime = String(timeStr).trim().toUpperCase();
+        
+        const isPM = cleanTime.includes('PM');
+        const isAM = cleanTime.includes('AM');
+        const timeParts = cleanTime.replace(/[^\d:]/g, '').split(':');
+        
+        if (timeParts.length >= 1) {
+            hours = parseInt(timeParts[0], 10) || 0;
+            minutes = timeParts.length >= 2 ? (parseInt(timeParts[1], 10) || 0) : 0;
+            
+            if (isPM && hours < 12) {
+                hours += 12;
+            } else if (isAM && hours === 12) {
+                hours = 0;
+            }
+        }
+
+        const apptExactTime = new Date(nowYear, nowMonth, nowDay, hours, minutes, 0, 0).getTime();
+        return apptExactTime <= now.getTime();
     };
 
     // Calculate Metrics
     const calculateMetrics = () => {
-        const appointments = timeline.filter(t => t.type === 'appointment') || [];
-        const completed = appointments.filter(a => a.data?.status === 'completed');
-        const upcoming = appointments.filter(a => {
-            const status = a.data?.status;
-            const date = new Date(a.date);
-            const today = new Date();
-            today.setHours(0,0,0,0);
-            return (status === 'pending' || status === 'confirmed') && date >= today;
+        const appointments = timeline.filter(t => t.type === 'appointment' || t.type === 'clinicalVisit') || [];
+        const upcoming = timeline.filter(t => {
+            if (t.type !== 'appointment') return false;
+            const status = (t.data?.status || '').toLowerCase();
+            if (status !== 'pending' && status !== 'confirmed' && status !== 'scheduled') return false;
+            const apptTime = t.data?.appointmentTime || t.data?.visitTime || t.data?.time || '';
+            return !isAppointmentExpired(t.date, apptTime);
         });
 
         let totalPaid = 0;
         let pendingDues = 0;
 
         timeline.forEach(t => {
-            const amt = t.data?.amount || t.data?.totalAmount || 0;
-            const pStatus = (t.data?.paymentStatus || '').toLowerCase();
-            if (pStatus === 'paid') {
+            const amt = Number(t.data?.amount || t.data?.totalAmount || t.data?.fee || 0);
+            if (!amt) return;
+            const pStatus = (t.data?.paymentStatus || t.data?.status || '').toLowerCase();
+            if (pStatus === 'paid' || pStatus === 'completed') {
                 totalPaid += amt;
-            } else if (pStatus === 'pending') {
+            } else if (pStatus === 'pending' || pStatus === 'due') {
                 pendingDues += amt;
             }
         });
@@ -234,7 +280,6 @@ const UnifiedPatientProfile = () => {
         };
     };
 
-    // Export PDF Summary
     const handleDownloadPDF = () => {
         if (!patientData) return;
         const doc = new jsPDF();
@@ -242,638 +287,543 @@ const UnifiedPatientProfile = () => {
         
         // Title banner
         doc.setFillColor(99, 102, 241);
-        doc.rect(0, 0, 210, 40, 'F');
+        doc.rect(0, 0, 210, 42, 'F');
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(22);
+        doc.setFontSize(20);
         doc.setTextColor(255, 255, 255);
-        doc.text("HOSPITAL PATIENT PROFILE SUMMARY", 15, 26);
+        doc.text("HOSPITAL PATIENT CLINICAL SUMMARY", 15, 26);
 
-        // Patient details
+        // Demographics
         doc.setTextColor(15, 23, 42);
         doc.setFontSize(11);
         doc.setFont("helvetica", "bold");
-        doc.text("Patient Name:", 15, 55);
+        doc.text("Patient Name:", 15, 54);
         doc.setFont("helvetica", "normal");
-        doc.text(patientData.name || '—', 50, 55);
+        doc.text(patientData.name || '—', 50, 54);
 
         doc.setFont("helvetica", "bold");
-        doc.text("Patient ID (MRN):", 15, 63);
+        doc.text("MRN / Patient ID:", 15, 62);
         doc.setFont("helvetica", "normal");
-        doc.text(patientData.patientId || '—', 50, 63);
+        doc.text(patientData.patientId || '—', 50, 62);
 
         doc.setFont("helvetica", "bold");
-        doc.text("Phone Number:", 15, 71);
+        doc.text("Contact Phone:", 15, 70);
         doc.setFont("helvetica", "normal");
-        doc.text(patientData.phone || '—', 50, 71);
+        doc.text(patientData.phone || '—', 50, 70);
 
         doc.setFont("helvetica", "bold");
-        doc.text("Blood Group:", 115, 55);
+        doc.text("Blood Group:", 115, 54);
         doc.setFont("helvetica", "normal");
-        doc.text(patientData.bloodGroup || '—', 150, 55);
+        doc.text(patientData.bloodGroup || '—', 150, 54);
 
         doc.setFont("helvetica", "bold");
-        doc.text("Gender / DOB:", 115, 63);
+        doc.text("Gender / DOB:", 115, 62);
         doc.setFont("helvetica", "normal");
-        doc.text(`${patientData.gender || '—'} / ${patientData.dob ? new Date(patientData.dob).toLocaleDateString('en-IN') : '—'}`, 150, 63);
+        const dobStr = patientData.dob ? new Date(patientData.dob).toLocaleDateString('en-IN') : '—';
+        doc.text(`${patientData.gender || '—'} / ${dobStr}`, 150, 62);
 
         doc.setFont("helvetica", "bold");
-        doc.text("Allergies:", 115, 71);
+        doc.text("Known Allergies:", 115, 70);
         doc.setFont("helvetica", "normal");
-        doc.text(fp.allergies || 'None', 150, 71);
+        doc.text(fp.allergies || 'None', 150, 70);
 
-        // Vitals box (from latest consult or fertilityProfile)
+        // Vitals Section
         doc.setFillColor(248, 250, 252);
-        doc.rect(15, 80, 180, 26, 'F');
+        doc.rect(15, 80, 180, 24, 'F');
         doc.setFont("helvetica", "bold");
         doc.setFontSize(10);
         doc.setTextColor(99, 102, 241);
-        doc.text("LATEST RECORDED VITALS", 20, 88);
+        doc.text("LATEST RECORDED CLINICAL VITALS", 20, 88);
         doc.setTextColor(15, 23, 42);
         doc.setFont("helvetica", "normal");
-        
-        doc.text(`Weight: ${fp.weight || '—'} kg`, 20, 98);
-        doc.text(`Height: ${fp.height || '—'} cm`, 65, 98);
-        doc.text(`BP: ${fp.historyBp || '—'}`, 110, 98);
-        doc.text(`Pulse: ${fp.historyPulse || '—'} bpm`, 150, 98);
+        const vitals = fp.vitals || {};
+        doc.text(`Weight: ${vitals.weight || '—'} kg`, 20, 97);
+        doc.text(`Height: ${vitals.height || '—'} cm`, 65, 97);
+        doc.text(`BP: ${vitals.bloodPressure || vitals.bp || '—'}`, 110, 97);
+        doc.text(`Pulse: ${vitals.pulse || '—'} bpm`, 150, 97);
 
-        // Visits table
-        const appointments = timeline.filter(t => t.type === 'appointment');
-        const rows = appointments.map(a => [
-            new Date(a.date).toLocaleDateString('en-IN'),
-            a.data?.doctorName || 'Doctor',
-            a.data?.diagnosis || '—',
-            a.data?.doctorNotes || '—',
-            a.data?.status || 'Pending'
+        // Timeline table
+        const timelineRows = timeline.map(t => [
+            new Date(t.date).toLocaleDateString('en-IN'),
+            t.type.toUpperCase(),
+            t.data?.doctorName || t.data?.doctorConsultation?.doctorId || 'Staff',
+            t.summary?.primaryComplaint || t.data?.serviceName || t.data?.title || t.data?.testName || 'Clinical Event',
+            t.data?.status || t.data?.paymentStatus || 'Recorded'
         ]);
 
         autoTable(doc, {
-            startY: 115,
-            head: [['Date', 'Doctor', 'Diagnosis', 'Doctor Consultation Notes', 'Status']],
-            body: rows,
-            headStyles: { fillColor: [99, 102, 241] },
-            theme: 'striped',
-            margin: { horizontal: 15 }
+            startY: 112,
+            head: [['Date', 'Event Type', 'Provider', 'Description / Diagnosis', 'Status']],
+            body: timelineRows,
+            theme: 'grid',
+            headStyles: { fillColor: [99, 102, 241], textColor: [255, 255, 255] },
+            styles: { fontSize: 9 }
         });
 
-        doc.save(`Patient_Profile_${patientData.patientId || 'summary'}.pdf`);
+        doc.save(`Patient_Profile_${patientData.patientId || 'MRN'}.pdf`);
     };
 
     if (loading) {
         return (
-            <div className="upp-loading-screen">
-                <div className="upp-spinner"></div>
-                <p>Loading patient history details...</p>
+            <div className="upp-container">
+                <div className="upp-loading-screen">
+                    <div className="upp-spinner"></div>
+                    <p>Loading Hospital Patient Profile...</p>
+                </div>
             </div>
         );
     }
 
     if (error || !patientData) {
         return (
-            <div className="upp-loading-screen">
-                <FiAlertCircle size={48} color="#ef4444" />
-                <p>{error || 'Patient profile not found.'}</p>
-                <button className="upp-btn-action" onClick={() => navigate(-1)} style={{ background: '#64748b' }}>
-                    <FiArrowLeft /> Go Back
-                </button>
+            <div className="upp-container">
+                <div className="upp-top-nav">
+                    <button className="upp-back-btn" onClick={() => navigate(-1)}>
+                        <FiArrowLeft /> Back
+                    </button>
+                </div>
+                <div className="upp-empty-state" style={{ marginTop: '40px' }}>
+                    <FiAlertCircle style={{ fontSize: '36px', color: 'var(--upp-danger)', marginBottom: '12px' }} />
+                    <h3 style={{ margin: '0 0 8px 0' }}>Unable to access profile</h3>
+                    <p style={{ margin: 0 }}>{error || 'Patient record could not be retrieved.'}</p>
+                </div>
             </div>
         );
     }
 
     const metrics = calculateMetrics();
     const fp = patientData.fertilityProfile || {};
-    
-    // Spreading role check for booking modal view
-    const isStaff = ['reception', 'receptionist', 'admin', 'superadmin', 'hospitaladmin', 'cashier'].some(
-        r => (currentUser.role || '').toLowerCase().includes(r)
-    );
+    const vitals = fp.vitals || {};
+    const initials = (patientData.name || 'P').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-    // Medicines extraction
-    const getMedicinesList = () => {
-        const list = [];
-        timeline.forEach(t => {
-            if (t.type === 'appointment' && t.data?.pharmacy) {
-                t.data.pharmacy.forEach(m => {
-                    list.push({
-                        name: m.medicineName,
-                        salt: m.saltName || '—',
-                        frequency: m.frequency,
-                        duration: m.duration,
-                        date: t.date,
-                        source: 'Consultation'
-                    });
-                });
-            } else if (t.type === 'pharmacyOrder' && t.data?.items) {
-                t.data.items.forEach(m => {
-                    list.push({
-                        name: m.medicineName,
-                        salt: '—',
-                        frequency: '—',
-                        duration: `Qty: ${m.quantity}`,
-                        date: t.date,
-                        source: 'Pharmacy Order'
-                    });
-                });
-            }
-        });
-        return list;
-    };
-    const medicinesList = getMedicinesList();
+    // Compute age (checking registration age first, then calculating from dob)
+    let ageText = 'N/A';
+    const rawAge = patientData.age || patientData.fertilityProfile?.age;
+    if (rawAge !== undefined && rawAge !== null && rawAge !== '') {
+        ageText = `${rawAge} Years`;
+    } else {
+        const dobVal = patientData.dob || patientData.fertilityProfile?.dob;
+        if (dobVal) {
+            const diff = Date.now() - new Date(dobVal).getTime();
+            const ageYears = Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
+            if (ageYears >= 0 && ageYears <= 120) ageText = `${ageYears} Years`;
+        }
+    }
 
-    // Financials Billing extraction
-    const getInvoicesList = () => {
-        const list = [];
-        timeline.forEach(t => {
-            if (t.type === 'appointment' && t.data?.amount > 0) {
-                list.push({
-                    date: t.date,
-                    desc: 'Consultation Fee',
-                    amount: t.data.amount,
-                    method: t.data.paymentMethod || 'Cash',
-                    status: t.data.paymentStatus || 'Pending'
-                });
-            } else if (t.type === 'labReport' && t.data?.amount > 0) {
-                list.push({
-                    date: t.date,
-                    desc: `Lab Tests: ${(t.data.testNames || []).join(', ')}`,
-                    amount: t.data.amount,
-                    method: t.data.paymentMode || 'ONLINE',
-                    status: t.data.paymentStatus || 'PENDING'
-                });
-            } else if (t.type === 'pharmacyOrder' && t.data?.totalAmount > 0) {
-                list.push({
-                    date: t.date,
-                    desc: 'Pharmacy Prescription Order',
-                    amount: t.data.totalAmount,
-                    method: 'ONLINE',
-                    status: t.data.paymentStatus || 'PENDING'
-                });
-            }
-        });
-        return list;
-    };
-    const invoicesList = getInvoicesList();
+    let fullAddress = patientData.address || '';
+    if (!fullAddress) {
+        fullAddress = [patientData.houseNo, patientData.street, patientData.city, patientData.state, patientData.zipCode]
+            .map(s => String(s || '').trim())
+            .filter(Boolean)
+            .join(', ');
+    }
+
+    // Categorized timeline data for sidebar
+    const upcomingAppointments = timeline.filter(t => {
+        if (t.type !== 'appointment') return false;
+        const status = (t.data?.status || '').toLowerCase();
+        if (status !== 'pending' && status !== 'confirmed' && status !== 'scheduled') return false;
+        const apptTime = t.data?.appointmentTime || t.data?.visitTime || t.data?.time || '';
+        return !isAppointmentExpired(t.date, apptTime);
+    });
+
+    const recentLabs = timeline.filter(t => t.type === 'labReport');
+    const medications = timeline.filter(t => t.type === 'pharmacyOrder' || (t.type === 'clinicalVisit' && t.data?.prescriptions?.length > 0));
+    const financialTransactions = timeline.filter(t => t.data?.amount || t.data?.totalAmount || t.data?.fee);
 
     return (
         <div className="upp-container">
+            {/* Top Navigation Bar */}
+            <div className="upp-top-nav">
+                <button className="upp-back-btn" onClick={() => navigate(-1)}>
+                    <FiArrowLeft /> Back
+                </button>
+            </div>
+
             {/* Header Identity Card */}
             <div className="upp-header-card">
-                <div className="upp-identity">
+                <div className="upp-identity-wrapper">
                     <div className="upp-avatar">
-                        {(patientData.name || 'P')[0].toUpperCase()}
+                        {initials}
                     </div>
-                    <div className="upp-info">
+                    <div className="upp-header-info">
+                        {/* First Line: Patient Name only */}
                         <h1>{patientData.name}</h1>
-                        <div className="upp-tags">
-                            <span className="upp-tag upp-tag-primary">MRN: {patientData.patientId || 'N/A'}</span>
-                            <span className="upp-tag">📱 {patientData.phone}</span>
-                            <span className="upp-tag">🩸 Blood: {patientData.bloodGroup || '—'}</span>
-                            <span className="upp-tag">👤 {patientData.gender}</span>
+                        
+                        {/* Second Line: MRN, Mobile, Age chips */}
+                        <div className="upp-header-tags">
+                            <span className="upp-header-tag" style={{ color: 'var(--upp-primary)', fontWeight: '700', background: 'var(--upp-primary-light)' }}>
+                                MRN : {patientData.patientId || patientData.mrn || 'N/A'}
+                            </span>
+                            <span className="upp-header-tag">
+                                <FiPhone /> {patientData.phone || 'No contact provided'}
+                            </span>
+                            <span className="upp-header-tag">
+                                Age : {ageText}
+                            </span>
+                        </div>
+
+                        {/* Third Line: Full Address */}
+                        <div className="upp-header-address">
+                            <FiMapPin style={{ flexShrink: 0 }} /> {fullAddress || 'No address recorded'}
                         </div>
                     </div>
                 </div>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                    <button className="upp-btn-action" onClick={() => navigate(-1)} style={{ background: '#64748b' }}>
-                        <FiArrowLeft /> Back
+
+                {/* Rearranged Action Buttons (stacked vertically, Download above Edit) */}
+                <div className="upp-header-actions">
+                    <button className="upp-btn-action upp-btn-download" onClick={handleDownloadPDF} title="Download Complete Patient Clinical Profile">
+                        <FiDownload /> Download Profile
                     </button>
-                    {isStaff && (
-                        <button className="upp-btn-action" onClick={() => setBookingModalOpen(true)} style={{ background: '#6366f1' }}>
-                            <FiPlus /> Book Consult
+                    {isReception && (
+                        <button className="upp-btn-action upp-btn-edit" onClick={() => navigate('/reception/dashboard?view=intake', { state: { patient: patientData, isEditingExisting: true } })} title="Edit Patient Demographics & Intake Information">
+                            <FiEdit3 /> Edit Profile
                         </button>
                     )}
-                    <button className="upp-btn-action" onClick={handleDownloadPDF}>
-                        <FiDownload /> Export Summary
-                    </button>
                 </div>
             </div>
 
-            {/* Quick Metrics Cards Grid */}
+            {/* Statistics Cards Row */}
             <div className="upp-metrics">
                 <div className="upp-metric-card metric-visits">
                     <div className="upp-metric-info">
                         <span className="upp-metric-label">Total Visits</span>
                         <span className="upp-metric-val">{metrics.totalVisits}</span>
                     </div>
-                    <div className="upp-metric-icon"><FiUserCheck /></div>
+                    <FiActivity className="upp-metric-icon" style={{ color: '#3b82f6' }} />
                 </div>
+
                 <div className="upp-metric-card metric-upcoming">
                     <div className="upp-metric-info">
-                        <span className="upp-metric-label">Upcoming</span>
+                        <span className="upp-metric-label">Upcoming Appointments</span>
                         <span className="upp-metric-val">{metrics.upcomingCount}</span>
                     </div>
-                    <div className="upp-metric-icon"><FiCalendar /></div>
+                    <FiCalendar className="upp-metric-icon" style={{ color: '#0ea5e9' }} />
                 </div>
-                <div className="upp-metric-card metric-paid">
-                    <div className="upp-metric-info">
-                        <span className="upp-metric-label">Total Paid</span>
-                        <span className="upp-metric-val">₹{metrics.totalPaid}</span>
-                    </div>
-                    <div className="upp-metric-icon"><FiDollarSign /></div>
-                </div>
+
                 <div className="upp-metric-card metric-pending">
                     <div className="upp-metric-info">
                         <span className="upp-metric-label">Pending Dues</span>
-                        <span className="upp-metric-val">₹{metrics.pendingDues}</span>
+                        <span className="upp-metric-val">₹{metrics.pendingDues.toLocaleString('en-IN')}</span>
                     </div>
-                    <div className="upp-metric-icon"><FiAlertCircle /></div>
+                    <FiAlertCircle className="upp-metric-icon" style={{ color: '#f59e0b' }} />
+                </div>
+
+                <div className="upp-metric-card metric-paid">
+                    <div className="upp-metric-info">
+                        <span className="upp-metric-label">Total Paid</span>
+                        <span className="upp-metric-val">₹{metrics.totalPaid.toLocaleString('en-IN')}</span>
+                    </div>
+                    <FiDollarSign className="upp-metric-icon" style={{ color: '#10b981' }} />
                 </div>
             </div>
 
-            {/* Sidebar and content grid */}
-            <div className="upp-content-grid">
-                
-                {/* Left Sidebar Demographics */}
-                <div className="upp-sidebar">
-                    {/* Demographics Card */}
-                    <div className="upp-card">
-                        <h3 className="upp-card-title"><FiUserCheck /> Demographics</h3>
-                        <div className="upp-details-list">
-                            <div className="upp-detail-item">
-                                <span className="upp-detail-lbl">Full Name</span>
-                                <span className="upp-detail-val">{patientData.name}</span>
-                            </div>
-                            <div className="upp-detail-item">
-                                <span className="upp-detail-lbl">Email Address</span>
-                                <span className="upp-detail-val">{patientData.email || 'No email registered'}</span>
-                            </div>
-                            <div className="upp-detail-item">
-                                <span className="upp-detail-lbl">Date of Birth</span>
-                                <span className="upp-detail-val">
-                                    {patientData.dob ? new Date(patientData.dob).toLocaleDateString('en-IN') : '—'}
-                                </span>
-                            </div>
-                            <div className="upp-detail-item">
-                                <span className="upp-detail-lbl">Address</span>
-                                <span className="upp-detail-val">{patientData.address || fp.address || '—'}</span>
-                            </div>
+            {/* Two Column Main Layout */}
+            <div className="upp-main-layout">
+                {/* Left Panel (60%): Visit History */}
+                <div className="upp-col-left">
+                    <div className="upp-section-card">
+                        <div className="upp-section-header">
+                            <h2 className="upp-section-title">
+                                <FiActivity style={{ color: 'var(--upp-primary)' }} /> Chronological Visit History
+                            </h2>
+                            <span className="upp-section-count">{timeline.length} records</span>
                         </div>
-                    </div>
 
-                    {/* Clinical Profile Card */}
-                    <div className="upp-card">
-                        <h3 className="upp-card-title" style={{ color: '#f59e0b' }}><FiAlertCircle /> Clinical Profile</h3>
-                        <div className="upp-details-list">
-                            <div className="upp-detail-item">
-                                <span className="upp-detail-lbl">Allergies</span>
-                                <span className="upp-detail-val" style={{ color: fp.allergies ? '#ef4444' : 'inherit' }}>
-                                    {fp.allergies || 'No allergies recorded'}
-                                </span>
+                        {timeline.length === 0 ? (
+                            <div className="upp-empty-state">
+                                No clinical visits or history recorded yet for this patient.
                             </div>
-                            <div className="upp-detail-item">
-                                <span className="upp-detail-lbl">Chronic Conditions</span>
-                                <span className="upp-detail-val">
-                                    {fp.chronicConditions || 'No chronic conditions'}
-                                </span>
-                            </div>
-                            <div className="cpp-detail-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '10px 12px', background: '#f8fafc', borderRadius: '10px' }}>
-                                <span className="upp-detail-lbl">Clinical / General Notes</span>
-                                <span className="upp-detail-val">
-                                    {fp.doctorNotes || 'No clinical notes added'}
-                                </span>
-                            </div>
-                            <div className="cpp-detail-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '10px 12px', background: '#f8fafc', borderRadius: '10px' }}>
-                                <span className="upp-detail-lbl">Intake symptoms</span>
-                                <span className="upp-detail-val">
-                                    {fp.medicalNotes || fp.notes || 'No intake notes added'}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                        ) : (
+                            <div className="upp-timeline">
+                                {timeline.map((item, index) => {
+                                    const calendarDateOnly = new Date(item.date || Date.now()).toLocaleDateString('en-IN', {
+                                        day: '2-digit',
+                                        month: 'short',
+                                        year: 'numeric'
+                                    });
+                                    const exactTime = item.data?.appointmentTime || item.data?.visitTime || item.data?.time;
+                                    const dateStr = exactTime ? `${calendarDateOnly} • ${exactTime}` : calendarDateOnly;
+                                    const provider = item.data?.doctorName || item.data?.doctorConsultation?.doctorId || item.summary?.doctorSeen || 'Hospital Provider';
+                                    const titleText = item.summary?.primaryComplaint || item.data?.serviceName || item.data?.title || item.data?.testName || 'Clinical Consult';
+                                    const statusText = item.data?.status || item.data?.paymentStatus || 'Recorded';
+                                    const badgeClass = statusText.toLowerCase().includes('complete') || statusText.toLowerCase().includes('paid')
+                                        ? 'upp-badge-completed'
+                                        : statusText.toLowerCase().includes('confirm')
+                                        ? 'upp-badge-confirmed'
+                                        : statusText.toLowerCase().includes('cancel')
+                                        ? 'upp-badge-cancelled'
+                                        : 'upp-badge-pending';
 
-                {/* Right Panel Main Contents */}
-                <div className="upp-main-panel">
-                    
-                    {/* Horizontal Nav Tabs */}
-                    <div className="upp-tabs-bar">
-                        <button 
-                            className={`upp-tab-btn ${activeTab === 'timeline' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('timeline')}
-                        >
-                            📋 Visit History ({timeline.filter(t => t.type === 'appointment' || t.type === 'clinicalVisit').length})
-                        </button>
-                        <button 
-                            className={`upp-tab-btn ${activeTab === 'medicines' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('medicines')}
-                        >
-                            💊 Medicines ({medicinesList.length})
-                        </button>
-                        <button 
-                            className={`upp-tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('reports')}
-                        >
-                            🧪 Lab Reports ({timeline.filter(t => t.type === 'labReport').length})
-                        </button>
-                        <button 
-                            className={`upp-tab-btn ${activeTab === 'billing' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('billing')}
-                        >
-                            💰 Financials ({invoicesList.length})
-                        </button>
-                    </div>
-
-                    {/* Tab Panels */}
-                    {activeTab === 'timeline' && (
-                        <div className="upp-card">
-                            <h3 className="upp-card-title"><FiFileText /> Visit Consultation Log</h3>
-                            {timeline.filter(t => t.type === 'appointment' || t.type === 'clinicalVisit').length === 0 ? (
-                                <div className="upp-empty-state">No consult history logs recorded.</div>
-                            ) : (
-                                <div className="upp-timeline">
-                                    {timeline
-                                        .filter(t => t.type === 'appointment' || t.type === 'clinicalVisit')
-                                        .map((item, idx) => {
-                                            const dateStr = new Date(item.date).toLocaleDateString('en-IN', {
-                                                day: '2-digit', month: 'short', year: 'numeric'
-                                            });
-                                            const timeStr = item.data?.appointmentTime || '';
-                                            const diag = item.data?.diagnosis || 'No diagnosis logged';
-                                            const status = item.data?.status || 'completed';
-                                            
-                                            // Vitals mapping
-                                            const apptVitals = item.data?.vitals || {};
-                                            const hasVitals = apptVitals.weight || apptVitals.height || apptVitals.bp || apptVitals.temperature || apptVitals.pulse;
-
-                                            return (
-                                                <div key={idx} className="upp-timeline-item">
-                                                    <div className="upp-tl-head">
-                                                        <div className="upp-tl-meta">
-                                                            <span className="upp-tl-date">{dateStr} {timeStr && `• ${timeStr}`}</span>
-                                                            <span className="upp-tl-doctor">Dr. {item.data?.doctorName || 'Doctor'}</span>
-                                                        </div>
-                                                        <span className={`upp-tl-badge badge-${status.toLowerCase()}`}>
-                                                            {status}
-                                                        </span>
-                                                    </div>
-                                                    <div className="upp-tl-body">
-                                                        <div className="upp-tl-section">
-                                                            <span className="upp-tl-lbl">Diagnosis</span>
-                                                            <span className="upp-tl-val" style={{ fontWeight: '700' }}>{diag}</span>
-                                                        </div>
-                                                        {item.data?.notes && (
-                                                            <div className="upp-tl-section">
-                                                                <span className="upp-tl-lbl">Symptoms / Chief Complaint</span>
-                                                                <span className="upp-tl-val">{item.data.notes}</span>
-                                                            </div>
-                                                        )}
-                                                        {item.data?.doctorNotes && (
-                                                            <div className="upp-tl-section">
-                                                                <span className="upp-tl-lbl">Consultation notes</span>
-                                                                <span className="upp-tl-val">{item.data.doctorNotes}</span>
-                                                            </div>
-                                                        )}
-                                                        {/* Vitals summary */}
-                                                        {hasVitals && (
-                                                            <div className="upp-tl-section">
-                                                                <span className="upp-tl-lbl">Intake Vitals</span>
-                                                                <div className="upp-tl-vitals">
-                                                                    {apptVitals.weight && <span className="upp-tl-vital-pill">⚖️ Weight: {apptVitals.weight}kg</span>}
-                                                                    {apptVitals.height && <span className="upp-tl-vital-pill">📏 Height: {apptVitals.height}cm</span>}
-                                                                    {apptVitals.bp && <span className="upp-tl-vital-pill">🩸 BP: {apptVitals.bp}</span>}
-                                                                    {apptVitals.temperature && <span className="upp-tl-vital-pill">🌡️ Temp: {apptVitals.temperature}°F</span>}
-                                                                    {apptVitals.pulse && <span className="upp-tl-vital-pill">💓 Pulse: {apptVitals.pulse}</span>}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                    return (
+                                        <div key={index} className="upp-timeline-item">
+                                            <div className="upp-tl-top">
+                                                <div className="upp-tl-meta">
+                                                    <span className="upp-tl-date">{dateStr}</span>
+                                                    <span className="upp-tl-doc">Provider: {provider}</span>
                                                 </div>
-                                            );
-                                        })}
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                                <span className={`upp-badge ${badgeClass}`}>{statusText}</span>
+                                            </div>
 
-                    {activeTab === 'medicines' && (
-                        <div className="upp-card">
-                            <h3 className="upp-card-title"><FiActivity /> Prescribed Medicines Log</h3>
-                            {medicinesList.length === 0 ? (
-                                <div className="upp-empty-state">No prescribed medicines records found.</div>
-                            ) : (
-                                <div className="upp-table-wrap">
-                                    <table className="upp-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Date Prescribed</th>
-                                                <th>Medicine Name</th>
-                                                <th>Generic Salt</th>
-                                                <th>Frequency</th>
-                                                <th>Duration / Qty</th>
-                                                <th>Source</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {medicinesList.map((med, idx) => (
-                                                <tr key={idx}>
-                                                    <td><strong>{new Date(med.date).toLocaleDateString('en-IN')}</strong></td>
-                                                    <td style={{ color: 'var(--upp-primary)', fontWeight: '700' }}>{med.name}</td>
-                                                    <td>{med.salt}</td>
-                                                    <td><span style={{ background: 'var(--upp-secondary-light)', color: 'var(--upp-secondary)', padding: '2px 8px', borderRadius: '4px', fontWeight: '700' }}>{med.frequency}</span></td>
-                                                    <td>{med.duration}</td>
-                                                    <td><span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>{med.source}</span></td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                            <div className="upp-tl-body">
+                                                <div className="upp-tl-field">
+                                                    <span className="upp-tl-label">Clinical Description / Diagnosis</span>
+                                                    <span className="upp-tl-value">{titleText}</span>
+                                                </div>
 
-                    {activeTab === 'reports' && (
-                        <div className="upp-card">
-                            <h3 className="upp-card-title"><FiFileText /> Uploaded Documents & Reports</h3>
-                            {timeline.filter(t => t.type === 'labReport').length === 0 ? (
-                                <div className="upp-empty-state">No lab reports found.</div>
-                            ) : (
-                                <div className="upp-table-wrap">
-                                    <table className="upp-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Date</th>
-                                                <th>Test Names</th>
-                                                <th>Amount</th>
-                                                <th>Status</th>
-                                                <th>Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {timeline
-                                                .filter(t => t.type === 'labReport')
-                                                .map((rep, idx) => (
-                                                    <tr key={idx}>
-                                                        <td><strong>{new Date(rep.date).toLocaleDateString('en-IN')}</strong></td>
-                                                        <td>{(rep.data.testNames || []).join(', ') || 'Lab Report'}</td>
-                                                        <td style={{ fontWeight: 'bold' }}>₹{rep.data.amount || 0}</td>
-                                                        <td>
-                                                            <span className={`upp-tl-badge badge-${(rep.data.testStatus || 'pending').toLowerCase()}`}>
-                                                                {rep.data.testStatus}
-                                                            </span>
-                                                        </td>
-                                                        <td>
-                                                            {rep.data.reportFile?.url ? (
-                                                                <button 
-                                                                    className="upp-btn-action" 
-                                                                    style={{ padding: '6px 12px', fontSize: '12px' }}
-                                                                    onClick={() => window.open(rep.data.reportFile.url, '_blank')}
-                                                                >
-                                                                    <FiEye /> View Report
-                                                                </button>
-                                                            ) : (
-                                                                <span style={{ color: '#94a3b8', fontSize: '12px' }}>File Pending</span>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                                {item.summary?.outcome && item.summary.outcome !== 'Processing' && (
+                                                    <div className="upp-tl-field">
+                                                        <span className="upp-tl-label">Outcome / Assessment</span>
+                                                        <span className="upp-tl-value">{item.summary.outcome}</span>
+                                                    </div>
+                                                )}
 
-                    {activeTab === 'billing' && (
-                        <div className="upp-card">
-                            <h3 className="upp-card-title"><FiDollarSign /> Consultation Financial Details</h3>
-                            {invoicesList.length === 0 ? (
-                                <div className="upp-empty-state">No billing details logged yet.</div>
-                            ) : (
-                                <div className="upp-table-wrap">
-                                    <table className="upp-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Billing Date</th>
-                                                <th>Description</th>
-                                                <th>Amount</th>
-                                                <th>Payment Method</th>
-                                                <th>Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {invoicesList.map((inv, idx) => (
-                                                <tr key={idx}>
-                                                    <td><strong>{new Date(inv.date).toLocaleDateString('en-IN')}</strong></td>
-                                                    <td style={{ color: 'var(--upp-primary)', fontWeight: '600' }}>{inv.desc}</td>
-                                                    <td style={{ color: '#10b981', fontWeight: '800' }}>₹{inv.amount}</td>
-                                                    <td>{inv.method}</td>
-                                                    <td>
-                                                        <span className={`upp-tl-badge badge-${inv.status.toLowerCase()}`}>
-                                                            {inv.status}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
+                                                {item.data?.notes && (
+                                                    <div className="upp-tl-field">
+                                                        <span className="upp-tl-label">Clinical Notes</span>
+                                                        <span className="upp-tl-value">{item.data.notes}</span>
+                                                    </div>
+                                                )}
+
+                                                {item.data?.vitals && Object.keys(item.data.vitals).length > 0 && (
+                                                    <div className="upp-tl-vitals-grid">
+                                                        {item.data.vitals.weight && <span className="upp-vital-pill">Wt: {item.data.vitals.weight} kg</span>}
+                                                        {item.data.vitals.bp && <span className="upp-vital-pill">BP: {item.data.vitals.bp}</span>}
+                                                        {item.data.vitals.pulse && <span className="upp-vital-pill">Pulse: {item.data.vitals.pulse} bpm</span>}
+                                                        {item.data.vitals.temperature && <span className="upp-vital-pill">Temp: {item.data.vitals.temperature}°F</span>}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Right Panel (40%): Sidebar Sections */}
+                <div className="upp-col-right">
+                    {/* Upcoming Appointments Card */}
+                    <div className="upp-section-card">
+                        <div className="upp-section-header">
+                            <h3 className="upp-section-title">
+                                <FiCalendar style={{ color: '#0ea5e9' }} /> Upcoming Appointments
+                            </h3>
+                            <span className="upp-section-count">{upcomingAppointments.length}</span>
                         </div>
-                    )}
+                        {upcomingAppointments.length === 0 ? (
+                            <div className="upp-empty-state">No scheduled future appointments.</div>
+                        ) : (
+                            <div className="upp-list-items">
+                                {upcomingAppointments.map((appt, i) => (
+                                    <div key={i} className="upp-list-card">
+                                        <div className="upp-list-info">
+                                            <span className="upp-list-title">{appt.data?.serviceName || 'Hospital Visit'}</span>
+                                            <span className="upp-list-sub">
+                                                {new Date(appt.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} • {appt.data?.appointmentTime || appt.data?.visitTime || appt.data?.time || 'Scheduled'} with {appt.data?.doctorName || 'Doctor'}
+                                            </span>
+                                        </div>
+                                        <div className="upp-list-action">
+                                            <span className="upp-badge upp-badge-confirmed">{appt.data?.status || 'Confirmed'}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Recent Lab Tests Card */}
+                    <div className="upp-section-card">
+                        <div className="upp-section-header">
+                            <h3 className="upp-section-title">
+                                <FiFileText style={{ color: '#8b5cf6' }} /> Recent Lab Reports
+                            </h3>
+                            <span className="upp-section-count">{recentLabs.length}</span>
+                        </div>
+                        {recentLabs.length === 0 ? (
+                            <div className="upp-empty-state">No lab investigations recorded.</div>
+                        ) : (
+                            <div className="upp-list-items">
+                                {recentLabs.slice(0, 5).map((lab, i) => (
+                                    <div key={i} className="upp-list-card">
+                                        <div className="upp-list-info">
+                                            <span className="upp-list-title">{lab.data?.testName || lab.data?.reportName || 'Diagnostic Lab Test'}</span>
+                                            <span className="upp-list-sub">{new Date(lab.date).toLocaleDateString('en-IN')} • {lab.data?.reportStatus || 'Completed'}</span>
+                                        </div>
+                                        {lab.data?.fileUrl && (
+                                            <div className="upp-list-action">
+                                                <a href={lab.data.fileUrl} target="_blank" rel="noopener noreferrer" className="upp-mini-btn">
+                                                    <FiEye /> View
+                                                </a>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Medications Card */}
+                    <div className="upp-section-card">
+                        <div className="upp-section-header">
+                            <h3 className="upp-section-title">
+                                <FiPlus style={{ color: '#10b981' }} /> Medications & Prescriptions
+                            </h3>
+                            <span className="upp-section-count">{medications.length}</span>
+                        </div>
+                        {medications.length === 0 ? (
+                            <div className="upp-empty-state">No active medications or pharmacy prescriptions found.</div>
+                        ) : (
+                            <div className="upp-list-items">
+                                {medications.slice(0, 5).map((med, i) => {
+                                    const title = med.data?.medicineName || (med.data?.items ? `${med.data.items.length} Pharmacy Items` : 'Clinical Prescription');
+                                    return (
+                                        <div key={i} className="upp-list-card">
+                                            <div className="upp-list-info">
+                                                <span className="upp-list-title">{title}</span>
+                                                <span className="upp-list-sub">{new Date(med.date).toLocaleDateString('en-IN')} • {med.data?.dosage || med.data?.status || 'Dispensed'}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Patient Consent Information Card */}
+                    <div className="upp-section-card">
+                        <div className="upp-section-header">
+                            <h3 className="upp-section-title">
+                                <FiShield style={{ color: '#f59e0b' }} /> Patient Consent Forms
+                            </h3>
+                            <span className="upp-section-count">{consentList.length}</span>
+                        </div>
+
+                        {/* Upload box */}
+                        <form className="upp-consent-box" onSubmit={handleConsentUpload}>
+                            <div className="upp-consent-form">
+                                <span style={{ fontSize: '12.5px', fontWeight: '700', color: 'var(--upp-text-main)' }}>Upload New Consent Form (PDF/Img)</span>
+                                <input 
+                                    id="consent-file-input"
+                                    type="file" 
+                                    accept="application/pdf,image/*" 
+                                    onChange={(e) => setConsentFile(e.target.files[0])} 
+                                    className="upp-file-input"
+                                    required
+                                />
+                            </div>
+                            <button type="submit" className="upp-btn-submit-consent" disabled={!consentFile || uploadingConsent}>
+                                <FiUpload /> {uploadingConsent ? 'Uploading...' : 'Upload Consent Form'}
+                            </button>
+                        </form>
+
+                        {consentList.length === 0 ? (
+                            <div className="upp-empty-state">No consent forms uploaded yet.</div>
+                        ) : (
+                            <div className="upp-list-items">
+                                {consentList.map((c, i) => (
+                                    <div key={i} className="upp-list-card">
+                                        <div className="upp-list-info">
+                                            <span className="upp-list-title">{c.fileName || `Consent Form #${i + 1}`}</span>
+                                            <span className="upp-list-sub">{c.uploadedAt ? new Date(c.uploadedAt).toLocaleDateString('en-IN') : 'Saved'}</span>
+                                        </div>
+                                        <div className="upp-list-action">
+                                            {c.url && (
+                                                <>
+                                                    <a href={c.url} target="_blank" rel="noopener noreferrer" className="upp-icon-btn" title="View">
+                                                        <FiEye />
+                                                    </a>
+                                                    <a href={c.url} download target="_blank" rel="noopener noreferrer" className="upp-icon-btn upp-icon-btn-download" title="Download">
+                                                        <FiDownload />
+                                                    </a>
+                                                </>
+                                            )}
+                                            <button type="button" onClick={() => handleDeleteConsent(i, c.fileId)} className="upp-icon-btn upp-icon-btn-danger" title="Delete">
+                                                <FiTrash2 />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Reports & Documents Card */}
+                    <div className="upp-section-card">
+                        <div className="upp-section-header">
+                            <h3 className="upp-section-title">
+                                <FiFolder style={{ color: '#6366f1' }} /> Reports & Documents
+                            </h3>
+                            <span className="upp-section-count">{documentList.length}</span>
+                        </div>
+
+                        {documentList.length === 0 ? (
+                            <div className="upp-empty-state">No uploaded documents found.</div>
+                        ) : (
+                            <div className="upp-list-items">
+                                {documentList.map((doc, i) => (
+                                    <div key={i} className="upp-list-card">
+                                        <div className="upp-list-info">
+                                            <span className="upp-list-title">{doc.fileName || 'Hospital Document'}</span>
+                                            <span className="upp-list-sub">{doc.docType || 'General'} • {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('en-IN') : 'Saved'}</span>
+                                        </div>
+                                        <div className="upp-list-action">
+                                            {doc.url && (
+                                                <>
+                                                    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="upp-icon-btn" title="View">
+                                                        <FiEye />
+                                                    </a>
+                                                    <a href={doc.url} download target="_blank" rel="noopener noreferrer" className="upp-icon-btn upp-icon-btn-download" title="Download">
+                                                        <FiDownload />
+                                                    </a>
+                                                </>
+                                            )}
+                                            <button type="button" onClick={() => handleDeleteDocument(i, doc.fileId)} className="upp-icon-btn upp-icon-btn-danger" title="Delete">
+                                                <FiTrash2 />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Recent Finances Card */}
+                    <div className="upp-section-card">
+                        <div className="upp-section-header">
+                            <h3 className="upp-section-title">
+                                <FiDollarSign style={{ color: '#10b981' }} /> Recent Finances & Dues
+                            </h3>
+                            <span className="upp-section-count">{financialTransactions.length} items</span>
+                        </div>
+                        {financialTransactions.length === 0 ? (
+                            <div className="upp-empty-state">No financial transactions logged.</div>
+                        ) : (
+                            <div className="upp-list-items">
+                                {financialTransactions.slice(0, 5).map((t, i) => {
+                                    const amt = Number(t.data?.amount || t.data?.totalAmount || t.data?.fee || 0);
+                                    const pStatus = t.data?.paymentStatus || t.data?.status || 'recorded';
+                                    const badgeClass = pStatus.toLowerCase().includes('paid') ? 'upp-badge-completed' : 'upp-badge-pending';
+                                    return (
+                                        <div key={i} className="upp-list-card">
+                                            <div className="upp-list-info">
+                                                <span className="upp-list-title">{t.data?.serviceName || t.data?.title || 'Medical Service / Consult'}</span>
+                                                <span className="upp-list-sub">{new Date(t.date).toLocaleDateString('en-IN')} • {t.data?.paymentMethod || 'Cash'}</span>
+                                            </div>
+                                            <div className="upp-list-action" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                                <span style={{ fontWeight: '800', fontSize: '14px' }}>₹{amt.toLocaleString('en-IN')}</span>
+                                                <span className={`upp-badge ${badgeClass}`}>{pStatus}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
-            {/* BOOK AGAIN MODAL (PRESERVED FOR RECEPTION / STAFF ROLES) */}
-            {bookingModalOpen && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
-                }}>
-                    <div style={{ background: 'white', padding: '30px', borderRadius: '16px', width: '480px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-                        <h3 style={{ margin: '0 0 16px 0', fontSize: '1.25rem', fontWeight: 800 }}>Book Appointment</h3>
-                        <form onSubmit={handleBookingSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                            <div>
-                                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Date</label>
-                                <input 
-                                    type="date" 
-                                    style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }}
-                                    value={bookingForm.date}
-                                    onChange={e => setBookingForm(prev => ({ ...prev, date: e.target.value }))}
-                                />
-                            </div>
-
-                            <div>
-                                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Department</label>
-                                <select 
-                                    style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }}
-                                    value={bookingForm.department}
-                                    onChange={e => setBookingForm(prev => ({ ...prev, department: e.target.value, doctor: '' }))}
-                                >
-                                    <option value="">Select Department</option>
-                                    {departments.map((d, i) => <option key={i} value={d}>{d}</option>)}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Doctor</label>
-                                <select 
-                                    style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }}
-                                    value={bookingForm.doctor}
-                                    onChange={e => setBookingForm(prev => ({ ...prev, doctor: e.target.value, time: '' }))}
-                                    disabled={!bookingForm.department}
-                                >
-                                    <option value="">Select Doctor</option>
-                                    {doctorsList
-                                        .filter(d => (d.specialization || d.department) === bookingForm.department)
-                                        .map((d, i) => <option key={i} value={d._id}>{d.name}</option>)}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Time Slot</label>
-                                <select 
-                                    style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }}
-                                    value={bookingForm.time}
-                                    onChange={e => setBookingForm(prev => ({ ...prev, time: e.target.value }))}
-                                    disabled={!bookingForm.doctor}
-                                >
-                                    <option value="">Select Slot</option>
-                                    {timeSlots.map((slot, i) => {
-                                        const isBooked = bookedSlots.includes(slot);
-                                        return <option key={i} value={slot} disabled={isBooked}>{slot} {isBooked ? '(Booked)' : ''}</option>;
-                                    })}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Fee (INR)</label>
-                                <input 
-                                    type="text" 
-                                    style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', background: '#f8fafc' }}
-                                    value={`₹${bookingForm.fee}`}
-                                    readOnly
-                                />
-                                {followUpDaysMsg && <span style={{ fontSize: '11px', color: '#6366f1', marginTop: '4px', display: 'block' }}>{followUpDaysMsg}</span>}
-                            </div>
-
-                            <div>
-                                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Notes</label>
-                                <textarea 
-                                    style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', minHeight: '60px' }}
-                                    value={bookingForm.notes}
-                                    onChange={e => setBookingForm(prev => ({ ...prev, notes: e.target.value }))}
-                                />
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
-                                <button 
-                                    type="button" 
-                                    style={{ flex: 1, padding: '12px', background: '#f1f5f9', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
-                                    onClick={() => setBookingModalOpen(false)}
-                                >
-                                    Cancel
-                                </button>
-                                <button 
-                                    type="submit" 
-                                    style={{ flex: 1, padding: '12px', background: '#6366f1', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
-                                    disabled={bookingSaving}
-                                >
-                                    {bookingSaving ? 'Booking...' : 'Book'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
