@@ -129,6 +129,10 @@
 .erp-main-area {
   flex: 1;
   transition: padding-left 0.3s;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .erp-main-area.shifted {
@@ -334,7 +338,11 @@
 
 /* Content Area */
 .erp-page-content {
-  padding: 32px;
+  padding: 24px 28px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* Animation */

@@ -163,9 +163,6 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
     }
 });
 
-// 1.5 AADHAAR VERIFICATION (OTP FLOW - SIMULATED)
-// NOTE: In production, integrate with UIDAI / NSDL Aadhaar API.
-// Hardcoded OTP removed — this route is disabled until a real OTP provider is wired up.
 router.post('/send-aadhaar-otp', verifyToken, verifyReception, async (req, res) => {
     try {
         const { aadhaarNumber } = req.body;

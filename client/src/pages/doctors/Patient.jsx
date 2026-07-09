@@ -238,32 +238,32 @@ const Patient = () => {
 
     // ─── STYLES ─────────────────────────────────────────────────────
     const S = {
-        page: { minHeight: '100vh', background: 'transparent', fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" },
-        topbar: { background: '#ffffff', borderBottom: '1px solid #cbd5e1', padding: '16px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 100 },
+        page: { minHeight: '100vh', background: 'transparent', fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif", width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden' },
+        topbar: { background: '#ffffff', borderBottom: '1px solid #cbd5e1', padding: '16px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 100, boxSizing: 'border-box' },
         topLeft: { display: 'flex', alignItems: 'center', gap: '14px' },
         logo: { width: '44px', height: '44px', borderRadius: '14px', background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem' },
         title: { margin: 0, color: '#0f172a', fontSize: '1.25rem', fontWeight: '800', letterSpacing: '-0.02em' },
         subtitle: { margin: 0, color: '#475569', fontSize: '0.8rem', fontWeight: '500' },
         dateBadge: { background: '#ffffff', padding: '8px 16px', borderRadius: '10px', color: '#334155', fontSize: '0.82rem', border: '1px solid #cbd5e1' },
-        statsRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', padding: '20px 28px 0' },
+        statsRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', padding: '20px 28px 0', boxSizing: 'border-box' },
         statCard: (gradient) => ({ background: '#ffffff', borderRadius: '16px', padding: '18px 20px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '14px', transition: 'transform 0.2s', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }),
         statIcon: (gradient) => ({ width: '46px', height: '46px', borderRadius: '13px', background: gradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }),
         statNum: { color: '#0f172a', fontSize: '1.6rem', fontWeight: '800', lineHeight: 1.1 },
         statLabel: { color: '#475569', fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '2px' },
-        controls: { padding: '18px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', flexWrap: 'wrap' },
+        controls: { padding: '18px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', flexWrap: 'wrap', boxSizing: 'border-box' },
         searchWrap: { position: 'relative', flex: 1, maxWidth: '420px' },
-        searchInput: { width: '100%', padding: '11px 16px 11px 42px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px', color: '#0f172a', fontSize: '0.88rem', outline: 'none', transition: 'border 0.2s' },
+        searchInput: { width: '100%', padding: '11px 16px 11px 42px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px', color: '#0f172a', fontSize: '0.88rem', outline: 'none', transition: 'border 0.2s', boxSizing: 'border-box' },
         searchIcon: { position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', fontSize: '1rem' },
         tabsWrap: { display: 'flex', gap: '4px', background: '#f1f5f9', padding: '4px', borderRadius: '12px', border: '1px solid #cbd5e1' },
         tab: (active) => ({ padding: '8px 20px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '0.82rem', transition: 'all 0.25s', background: active ? 'linear-gradient(135deg, #3b82f6, #6366f1)' : 'transparent', color: active ? '#fff' : '#475569', boxShadow: active ? '0 2px 12px rgba(59,130,246,0.25)' : 'none' }),
-        content: { padding: '0 28px 40px' },
+        content: { padding: '0 28px 40px', boxSizing: 'border-box', width: '100%', maxWidth: '100%' },
         sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' },
         sectionTitle: { color: '#0f172a', fontSize: '1rem', fontWeight: '700', margin: 0 },
         sectionCount: { color: '#475569', fontSize: '0.82rem', fontWeight: '600' },
         table: { width: '100%', borderCollapse: 'collapse' },
-        th: { padding: '13px 16px', textAlign: 'left', color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.06em', borderBottom: '2px solid #cbd5e1' },
-        td: { padding: '13px 16px', borderBottom: '1px solid #e2e8f0' },
-        tableWrap: { background: '#ffffff', borderRadius: '16px', overflow: 'hidden', border: '1px solid #cbd5e1', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' },
+        th: { padding: '13px 16px', textAlign: 'left', color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.06em', borderBottom: '2px solid #cbd5e1', whiteSpace: 'nowrap' },
+        td: { padding: '13px 16px', borderBottom: '1px solid #e2e8f0', whiteSpace: 'nowrap' },
+        tableWrap: { background: '#ffffff', borderRadius: '16px', overflow: 'auto', border: '1px solid #cbd5e1', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', width: '100%', boxSizing: 'border-box' },
         avatar: (color) => ({ width: '36px', height: '36px', borderRadius: '10px', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '800', fontSize: '0.85rem', flexShrink: 0 }),
         btn: (bg, color = '#fff') => ({ padding: '7px 18px', borderRadius: '9px', border: 'none', background: bg, color: color, fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }),
         empty: { textAlign: 'center', padding: '60px 20px', background: '#ffffff', borderRadius: '16px', border: '1px dashed #cbd5e1' },
@@ -365,7 +365,7 @@ const Patient = () => {
                                         <th style={S.th}>#</th>
                                         <th style={S.th}>Patient</th>
                                         <th style={S.th}>Contact</th>
-                                        <th style={S.th}>Doctor (Referred To)</th>
+                                        <th style={S.th}>Doctor</th>
                                         <th style={S.th}>Time</th>
                                         <th style={S.th}>Date</th>
                                         <th style={S.th}>Status</th>
@@ -391,35 +391,7 @@ const Patient = () => {
                                                         </div>
                                                         <div>
                                                             <div style={{ color: '#0f172a', fontWeight: '700', fontSize: '0.88rem' }}>{apt.userId?.name || apt.clinicPatientId?.name || 'Walk-in'}</div>
-                                                            <div style={{ color: '#475569', fontSize: '0.75rem', marginBottom: '2px' }}>MRN: {apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || 'N/A'}</div>
-                                                            {(() => {
-                                                                const v = apt.vitals || {};
-                                                                const userVitals = apt.userId?.fertilityProfile?.vitals || {};
-                                                                const cpVitals = apt.clinicPatientId?.vitals || {};
-                                                                
-                                                                const weight = v.weight || cpVitals.weight || userVitals.weight;
-                                                                const height = v.height || cpVitals.height || userVitals.height;
-                                                                const bmi = v.bmi || cpVitals.bmi || userVitals.bmi;
-                                                                const bp = v.bp || cpVitals.bloodPressure || cpVitals.bp || userVitals.bloodPressure || userVitals.bp;
-                                                                const pulse = v.pulse || cpVitals.pulse || userVitals.pulse;
-                                                                const temp = v.temperature || cpVitals.temperature || userVitals.temperature;
-                                                                const spo2 = v.spo2 || cpVitals.spo2 || userVitals.spo2;
-
-                                                                const hasAny = weight || height || bmi || bp || pulse || temp || spo2;
-                                                                if (!hasAny) return null;
-
-                                                                return (
-                                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px', maxWidth: '350px' }}>
-                                                                        {height && <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>📏 Ht: {height}cm</span>}
-                                                                        {weight && <span style={{ background: '#f0fdf4', color: '#166534', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>⚖️ Wt: {weight}kg</span>}
-                                                                        {bmi && <span style={{ background: '#faf5ff', color: '#6b21a8', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>📊 BMI: {bmi}</span>}
-                                                                        {bp && <span style={{ background: '#fef2f2', color: '#991b1b', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>🩸 BP: {bp}</span>}
-                                                                        {pulse && <span style={{ background: '#fff1f2', color: '#9f1239', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>💓 Pulse: {pulse}</span>}
-                                                                        {temp && <span style={{ background: '#fff7ed', color: '#c2410c', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>🌡️ Temp: {temp}°F</span>}
-                                                                        {spo2 && <span style={{ background: '#ecfeff', color: '#0891b2', padding: '1px 5px', borderRadius: '4px', fontSize: '10px', fontWeight: '600' }}>🫁 SpO₂: {spo2}%</span>}
-                                                                    </div>
-                                                                );
-                                                            })()}
+                                                            <div style={{ color: '#475569', fontSize: '0.75rem' }}>MRN: {apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || 'N/A'}</div>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -462,6 +434,7 @@ const Patient = () => {
                                                         >
                                                             👁 Profile
                                                         </button>
+
                                                         <button
                                                             onClick={() => openVitalsForm(apt)}
                                                             style={{
@@ -471,6 +444,7 @@ const Patient = () => {
                                                         >
                                                             {hasVitals ? '✏️ Vitals' : '💉 Vitals'}
                                                         </button>
+
                                                         <button
                                                             onClick={() => setUploadPatient(apt)}
                                                             style={{

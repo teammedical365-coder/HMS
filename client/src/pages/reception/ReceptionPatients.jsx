@@ -297,17 +297,17 @@ const ReceptionPatients = () => {
                         <div style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>Loading appointments queue...</div>
                     ) : (
                         <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', boxSizing: 'border-box' }}>
                                 <thead>
                                     <tr style={{ background: '#f8fafc', borderBottom: '2px solid #edf2f7' }}>
-                                        <th style={{ padding: '12px 16px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase' }}>#</th>
-                                        <th style={{ padding: '12px 16px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase' }}>Patient</th>
-                                        <th style={{ padding: '12px 16px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase' }}>Contact</th>
-                                        <th style={{ padding: '12px 16px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase' }}>Doctor (Referred To)</th>
-                                        <th style={{ padding: '12px 16px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase' }}>Time</th>
-                                        <th style={{ padding: '12px 16px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase' }}>Date</th>
-                                        <th style={{ padding: '12px 16px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase' }}>Status</th>
-                                        <th style={{ padding: '12px 16px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'center' }}>Action</th>
+                                        <th style={{ padding: '12px 14px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>#</th>
+                                        <th style={{ padding: '12px 14px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Patient</th>
+                                        <th style={{ padding: '12px 14px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Contact</th>
+                                        <th style={{ padding: '12px 14px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Doctor</th>
+                                        <th style={{ padding: '12px 14px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Time</th>
+                                        <th style={{ padding: '12px 14px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Date</th>
+                                        <th style={{ padding: '12px 14px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Status</th>
+                                        <th style={{ padding: '12px 14px', color: '#475569', fontWeight: '800', fontSize: '0.75rem', textTransform: 'uppercase', textAlign: 'center', whiteSpace: 'nowrap' }}>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -331,8 +331,8 @@ const ReceptionPatients = () => {
                                         })
                                         .map((appt, idx) => (
                                             <tr key={appt._id} style={{ borderBottom: '1px solid #edf2f7', transition: 'background 0.2s' }}>
-                                                <td style={{ padding: '14px 16px', color: '#64748b', fontWeight: 600 }}>{idx + 1}</td>
-                                                <td style={{ padding: '14px 16px' }}>
+                                                <td style={{ padding: '14px 14px', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>{idx + 1}</td>
+                                                <td style={{ padding: '14px 14px' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                         <div style={{
                                                             width: '34px',
@@ -344,7 +344,8 @@ const ReceptionPatients = () => {
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
                                                             fontWeight: '800',
-                                                            fontSize: '0.9rem'
+                                                            fontSize: '0.9rem',
+                                                            flexShrink: 0
                                                         }}>
                                                             {(appt.userId?.name || 'P')[0].toUpperCase()}
                                                         </div>
@@ -356,29 +357,32 @@ const ReceptionPatients = () => {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '14px 16px', color: '#475569', fontWeight: 600 }}>{appt.userId?.phone || '-'}</td>
-                                                <td style={{ padding: '14px 16px' }}>
+                                                <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
+                                                    <span style={{ fontWeight: 600, color: '#334155' }}>{appt.userId?.phone || '-'}</span>
+                                                </td>
+                                                <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                         <div style={{
-                                                            width: '28px',
-                                                            height: '28px',
+                                                            width: '30px',
+                                                            height: '30px',
                                                             borderRadius: '50%',
-                                                            backgroundColor: '#10b981',
+                                                            backgroundColor: '#16a34a',
                                                             color: '#ffffff',
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
                                                             fontWeight: '800',
-                                                            fontSize: '0.8rem'
+                                                            fontSize: '0.8rem',
+                                                            flexShrink: 0
                                                         }}>
                                                             {(appt.doctorId?.name || 'D')[0].toUpperCase()}
                                                         </div>
                                                         <span style={{ fontWeight: 600, color: '#334155' }}>{appt.doctorId?.name || 'Not Assigned'}</span>
                                                     </div>
                                                 </td>
-                                                <td style={{ padding: '14px 16px', color: '#1e293b', fontWeight: 700 }}>{appt.appointmentTime}</td>
-                                                <td style={{ padding: '14px 16px', color: '#475569', fontWeight: 600 }}>{formatDate(appt.appointmentDate)}</td>
-                                                <td style={{ padding: '14px 16px' }}>
+                                                <td style={{ padding: '14px 14px', color: '#1e293b', fontWeight: 700, whiteSpace: 'nowrap' }}>{appt.appointmentTime}</td>
+                                                <td style={{ padding: '14px 14px', color: '#475569', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatDate(appt.appointmentDate)}</td>
+                                                <td style={{ padding: '14px 14px', whiteSpace: 'nowrap' }}>
                                                     <span style={{
                                                         display: 'inline-block',
                                                         padding: '4px 10px',
@@ -392,7 +396,7 @@ const ReceptionPatients = () => {
                                                         {appt.status}
                                                     </span>
                                                 </td>
-                                                <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                                                <td style={{ padding: '14px 14px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                     <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                                                         <button 
                                                             onClick={() => navigate(`/patient/${appt.userId?._id || appt.userId?.patientId || appt.patientId || appt._id}`)}

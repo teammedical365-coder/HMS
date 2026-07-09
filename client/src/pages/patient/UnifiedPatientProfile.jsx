@@ -184,12 +184,19 @@ const UnifiedPatientProfile = () => {
         }
     };
 
-    const handleDeleteDocument = async (index, fileId) => {
+    const handleDeleteDocument = async (index, doc) => {
         if (!window.confirm('Are you sure you want to delete this report/document?')) return;
+        const fileId = typeof doc === 'object' ? doc.fileId : doc;
+        const url = typeof doc === 'object' ? doc.url : null;
+        const fileName = typeof doc === 'object' ? doc.fileName : null;
         try {
-            const res = await patientAPI.deleteDocument(patientData._id, index, fileId);
+            const res = await patientAPI.deleteDocument(patientData._id, index, fileId, url, fileName);
             if (res.success) {
-                setDocumentList(prev => prev.filter((_, i) => i !== index));
+                if (Array.isArray(res.documents)) {
+                    setDocumentList(res.documents);
+                } else {
+                    setDocumentList(prev => prev.filter((_, i) => i !== index));
+                }
             } else {
                 alert(res.message || 'Failed to delete document.');
             }
@@ -536,7 +543,7 @@ const UnifiedPatientProfile = () => {
                             </div>
                         ) : (
                             <div className="upp-timeline">
-                                {timeline.map((item, index) => {
+                                {timeline.sort((a, b) => new Date(b.date) - new Date(a.date)).map((item, index) => {
                                     const calendarDateOnly = new Date(item.date || Date.now()).toLocaleDateString('en-IN', {
                                         day: '2-digit',
                                         month: 'short',
@@ -545,9 +552,17 @@ const UnifiedPatientProfile = () => {
                                     const exactTime = item.data?.appointmentTime || item.data?.visitTime || item.data?.time;
                                     const dateStr = exactTime ? `${calendarDateOnly} • ${exactTime}` : calendarDateOnly;
                                     const provider = item.data?.doctorName || item.data?.doctorConsultation?.doctorId || item.summary?.doctorSeen || 'Hospital Provider';
-                                    const titleText = item.summary?.primaryComplaint || item.data?.serviceName || item.data?.title || item.data?.testName || 'Clinical Consult';
-                                    const statusText = item.data?.status || item.data?.paymentStatus || 'Recorded';
-                                    const badgeClass = statusText.toLowerCase().includes('complete') || statusText.toLowerCase().includes('paid')
+                                    let titleText = item.summary?.primaryComplaint || item.data?.serviceName || item.data?.title || item.data?.testName || 'Clinical Consult';
+                                    let statusText = item.data?.status || item.data?.paymentStatus || 'Recorded';
+
+                                    if (item.type === 'labReport') {
+                                        titleText = `Diagnostic Lab Test${item.data?.testNames?.length > 0 ? ': ' + item.data.testNames.join(', ') : ''}`;
+                                        statusText = item.data?.reportStatus === 'UPLOADED' ? 'Completed' : (item.data?.reportStatus || 'Pending');
+                                    } else if (item.type === 'pharmacyOrder') {
+                                        titleText = 'Pharmacy / Prescription Order';
+                                    }
+
+                                    const badgeClass = statusText.toLowerCase().includes('complete') || statusText.toLowerCase().includes('paid') || statusText.toLowerCase() === 'uploaded'
                                         ? 'upp-badge-completed'
                                         : statusText.toLowerCase().includes('confirm')
                                         ? 'upp-badge-confirmed'
@@ -648,12 +663,12 @@ const UnifiedPatientProfile = () => {
                                 {recentLabs.slice(0, 5).map((lab, i) => (
                                     <div key={i} className="upp-list-card">
                                         <div className="upp-list-info">
-                                            <span className="upp-list-title">{lab.data?.testName || lab.data?.reportName || 'Diagnostic Lab Test'}</span>
-                                            <span className="upp-list-sub">{new Date(lab.date).toLocaleDateString('en-IN')} • {lab.data?.reportStatus || 'Completed'}</span>
+                                            <span className="upp-list-title">{lab.data?.testName || lab.data?.reportName || (lab.data?.testNames?.join(', ')) || 'Diagnostic Lab Test'}</span>
+                                            <span className="upp-list-sub">{new Date(lab.date).toLocaleDateString('en-IN')} • {lab.data?.reportStatus === 'UPLOADED' ? 'Completed' : (lab.data?.reportStatus || 'Pending')}</span>
                                         </div>
-                                        {lab.data?.fileUrl && (
+                                        {(lab.data?.reportFile?.url || lab.data?.fileUrl) && (
                                             <div className="upp-list-action">
-                                                <a href={lab.data.fileUrl} target="_blank" rel="noopener noreferrer" className="upp-mini-btn">
+                                                <a href={lab.data?.reportFile?.url || lab.data?.fileUrl} target="_blank" rel="noopener noreferrer" className="upp-mini-btn">
                                                     <FiEye /> View
                                                 </a>
                                             </div>
@@ -779,7 +794,7 @@ const UnifiedPatientProfile = () => {
                                                     </a>
                                                 </>
                                             )}
-                                            <button type="button" onClick={() => handleDeleteDocument(i, doc.fileId)} className="upp-icon-btn upp-icon-btn-danger" title="Delete">
+                                            <button type="button" onClick={() => handleDeleteDocument(i, doc)} className="upp-icon-btn upp-icon-btn-danger" title="Delete">
                                                 <FiTrash2 />
                                             </button>
                                         </div>

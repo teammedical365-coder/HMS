@@ -259,7 +259,7 @@ export const patientAPI = {
     deleteConsent: async (id, index, fileId) => (await apiClient.delete(`/api/patients/${id}/consent/${index}`, { data: { fileId } })).data,
     uploadDocument: async (id, formData) => (await apiClient.post(`/api/patients/${id}/documents`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })).data,
     getDocuments: async (id) => (await apiClient.get(`/api/patients/${id}/documents`)).data,
-    deleteDocument: async (id, index, fileId) => (await apiClient.delete(`/api/patients/${id}/documents/${index}`, { data: { fileId } })).data,
+    deleteDocument: async (id, index, fileId, url, fileName) => (await apiClient.delete(`/api/patients/${id}/documents/${index}`, { data: { fileId, url, fileName } })).data,
     updateProfile: async (id, data) => (await apiClient.put(`/api/reception/intake/${id}`, data)).data
 };
 

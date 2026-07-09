@@ -517,30 +517,32 @@ const RoleDashboard = () => {
                                                                 >
                                                                     Profile
                                                                 </button>
-                                                                <button 
-                                                                    onClick={() => {
-                                                                        setVitalsModal({ open: true, patient: appt.userId });
-                                                                        setVitalsForm({
-                                                                            height: appt.userId?.fertilityProfile?.height || '',
-                                                                            weight: appt.userId?.fertilityProfile?.weight || '',
-                                                                            bloodGroup: appt.userId?.fertilityProfile?.bloodGroup || '',
-                                                                            bp: appt.userId?.fertilityProfile?.historyBp || '',
-                                                                            temp: '', spo2: '', pulse: appt.userId?.fertilityProfile?.historyPulse || ''
-                                                                        });
-                                                                    }}
-                                                                    style={{
-                                                                        background: '#f0fdf4',
-                                                                        color: '#16a34a',
-                                                                        border: '1px solid #bbf7d0',
-                                                                        padding: '6px 10px',
-                                                                        borderRadius: '6px',
-                                                                        cursor: 'pointer',
-                                                                        fontSize: '0.75rem',
-                                                                        fontWeight: 600
-                                                                    }}
-                                                                >
-                                                                    Vitals
-                                                                </button>
+                                                                {!isReception && (
+                                                                    <button 
+                                                                        onClick={() => {
+                                                                            setVitalsModal({ open: true, patient: appt.userId });
+                                                                            setVitalsForm({
+                                                                                height: appt.userId?.fertilityProfile?.height || '',
+                                                                                weight: appt.userId?.fertilityProfile?.weight || '',
+                                                                                bloodGroup: appt.userId?.fertilityProfile?.bloodGroup || '',
+                                                                                bp: appt.userId?.fertilityProfile?.historyBp || '',
+                                                                                temp: '', spo2: '', pulse: appt.userId?.fertilityProfile?.historyPulse || ''
+                                                                            });
+                                                                        }}
+                                                                        style={{
+                                                                            background: '#f0fdf4',
+                                                                            color: '#16a34a',
+                                                                            border: '1px solid #bbf7d0',
+                                                                            padding: '6px 10px',
+                                                                            borderRadius: '6px',
+                                                                            cursor: 'pointer',
+                                                                            fontSize: '0.75rem',
+                                                                            fontWeight: 600
+                                                                        }}
+                                                                    >
+                                                                        Vitals
+                                                                    </button>
+                                                                )}
                                                                 <button 
                                                                     onClick={() => setUploadModal({ open: true, apptId: appt._id, patientName: appt.userId?.name || 'Patient' })}
                                                                     style={{

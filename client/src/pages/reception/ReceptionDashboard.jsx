@@ -1031,7 +1031,7 @@ const ReceptionDashboard = () => {
                             <tr>
                                 <th>Date</th>
                                 <th>Patient</th>
-                                <th>Doctor</th>
+                                <th style={{ whiteSpace: 'nowrap' }}>Doctor</th>
                                 <th>Method</th>
                                 <th>Status</th>
                                 <th>Amount</th>
@@ -1045,7 +1045,7 @@ const ReceptionDashboard = () => {
                                     <tr key={t._id}>
                                         <td>{new Date(t.createdAt).toLocaleDateString()}</td>
                                         <td>{t.userId?.name || 'Walk-in'}</td>
-                                        <td>{t.doctorName || '-'}</td>
+                                        <td style={{ whiteSpace: 'nowrap' }}>{t.doctorName || '-'}</td>
                                         <td>{t.paymentMethod || 'Cash'}</td>
                                         <td>
                                             <span style={{
@@ -1082,7 +1082,7 @@ const ReceptionDashboard = () => {
                     <thead>
                         <tr>
                             <th>Patient</th>
-                            <th>Assigned To</th>
+                            <th style={{ whiteSpace: 'nowrap' }}>Doctor</th>
                             <th>{hospitalContext?.appointmentMode === 'token' ? 'Token #' : 'Time'}</th>
                             <th>Status</th>
                             <th>Action</th>
@@ -1092,7 +1092,7 @@ const ReceptionDashboard = () => {
                         {appointments.map(apt => (
                             <tr key={apt._id}>
                                 <td>{apt.userId?.name}<br /><small>{apt.userId?.phone}</small></td>
-                                <td>{apt.doctorName}</td>
+                                <td style={{ whiteSpace: 'nowrap' }}>{apt.doctorName || '-'}</td>
                                 <td>
                                     {apt.tokenNumber != null
                                         ? <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#d97706' }}>#{apt.tokenNumber}</span>
