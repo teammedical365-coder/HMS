@@ -60,7 +60,7 @@ const CentralAdminDashboard = () => {
     const [clinics, setClinics] = useState([]);
     const [loadingClinics, setLoadingClinics] = useState(false);
     const [showClinicForm, setShowClinicForm] = useState(false);
-    const [clinicForm, setClinicForm] = useState({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', appointmentFee: 300 });
+    const [clinicForm, setClinicForm] = useState({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', defaultFee: 0 });
     const [editClinic, setEditClinic] = useState(null);
     const [savingClinic, setSavingClinic] = useState(false);
     const [deleteClinicConfirm, setDeleteClinicConfirm] = useState(null);
@@ -99,8 +99,8 @@ const CentralAdminDashboard = () => {
         if (parts.length > 2 && !host.includes('localhost')) {
             host = parts.slice(-2).join('.');
         } else if (host.includes('localhost')) {
-             const port = window.location.port ? `:${window.location.port}` : '';
-             host = `localhost${port}`;
+            const port = window.location.port ? `:${window.location.port}` : '';
+            host = `localhost${port}`;
         }
         return host;
     };
@@ -261,7 +261,7 @@ const CentralAdminDashboard = () => {
                 else setError(res.message || 'Failed to update clinic');
             } else {
                 const res = await simpleClinicAPI.createClinic(clinicForm);
-                if (res.success) { setSuccess('Clinic created successfully!'); fetchClinics(); setShowClinicForm(false); setClinicForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', appointmentFee: 300 }); }
+                if (res.success) { setSuccess('Clinic created successfully!'); fetchClinics(); setShowClinicForm(false); setClinicForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', defaultFee: 0 }); }
                 else setError(res.message || 'Failed to create clinic');
             }
         } catch (err) { setError(err.response?.data?.message || err.message); }
@@ -287,6 +287,7 @@ const CentralAdminDashboard = () => {
                 setShowClinicManagerForm(false);
                 setClinicManagerForm({ name: '', email: '', password: '', phone: '' });
                 // Refresh clinic list and re-open detail with fresh data
+                setSelectedClinic(prev => ({ ...prev, adminUserId: res.manager }));
                 await fetchClinics();
                 // Re-fetch stats so adminUserId populates
                 setLoadingClinicStats(true);
@@ -504,7 +505,7 @@ const CentralAdminDashboard = () => {
     const handleCreateStaff = async (e) => {
         e.preventDefault();
         if (!createStaffForm.hospitalId) { setError('You must select a hospital for this staff member.'); return; }
-        
+
         if (createStaffForm.phone && createStaffForm.phone.length !== 10) {
             setError('Mobile number must be exactly 10 digits.');
             return;
@@ -519,11 +520,11 @@ const CentralAdminDashboard = () => {
                 const uploadRes = await uploadAPI.uploadImages(formData);
                 if (uploadRes.success && uploadRes.files.length > 0) avatarUrl = uploadRes.files[0].url;
             }
-            const res = await adminAPI.createUser({ 
-                ...createStaffForm, 
-                avatar: avatarUrl, 
+            const res = await adminAPI.createUser({
+                ...createStaffForm,
+                avatar: avatarUrl,
                 hospitalId: createStaffForm.hospitalId,
-                departments: createStaffForm.department ? [createStaffForm.department] : [] 
+                departments: createStaffForm.department ? [createStaffForm.department] : []
             });
             if (res.success) {
                 setSuccess(`✅ Staff account created! Login: ${createStaffForm.email}`);
@@ -597,10 +598,10 @@ const CentralAdminDashboard = () => {
 
                             {/* Right Column: ACTIVE Badge */}
                             <div>
-                                <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`} style={{ 
-                                    padding: '6px 14px', 
-                                    fontSize: '12px', 
-                                    fontWeight: 700, 
+                                <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`} style={{
+                                    padding: '6px 14px',
+                                    fontSize: '12px',
+                                    fontWeight: 700,
                                     textTransform: 'uppercase',
                                     borderRadius: '20px',
                                     border: h.isActive ? '1px solid #15803d' : '1px solid #b91c1c',
@@ -867,22 +868,22 @@ const CentralAdminDashboard = () => {
                                 </div>
                             </div>
 
-                             {/* ---- STAFF LIST ---- */}
-                             <div className="admin-card">
-                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-                                     <h3 style={{ margin: 0 }}>👥 Staff Members ({hospitalStats.staffList?.length || 0})</h3>
-                                     <button
-                                         onClick={() => {
-                                             setActiveTab('staff');
-                                             setCreateStaffForm(prev => ({ ...prev, hospitalId: h._id }));
-                                             setShowCreateStaffForm(true);
-                                         }}
-                                         className="btn-save"
-                                         style={{ padding: '8px 16px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                                     >
-                                         + Add Staff
-                                     </button>
-                                 </div>
+                            {/* ---- STAFF LIST ---- */}
+                            <div className="admin-card">
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                                    <h3 style={{ margin: 0 }}>👥 Staff Members ({hospitalStats.staffList?.length || 0})</h3>
+                                    <button
+                                        onClick={() => {
+                                            setActiveTab('staff');
+                                            setCreateStaffForm(prev => ({ ...prev, hospitalId: h._id }));
+                                            setShowCreateStaffForm(true);
+                                        }}
+                                        className="btn-save"
+                                        style={{ padding: '8px 16px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                    >
+                                        + Add Staff
+                                    </button>
+                                </div>
                                 {!hospitalStats.staffList?.length ? (
                                     <p style={{ color: '#888', fontSize: '14px' }}>No staff assigned to this hospital yet.</p>
                                 ) : (
@@ -1115,16 +1116,16 @@ const CentralAdminDashboard = () => {
                                                     <span style={{ fontSize: '13px', color: '#888' }}>No departments found in Global Question Library.</span>
                                                 ) : availableDepartments.map(dept => (
                                                     <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '14px', cursor: 'pointer', background: '#f8fafc', padding: '6px 12px', border: '1px solid #e2e8f0', borderRadius: '4px' }}>
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={(hospitalForm.departments || []).includes(dept)} 
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={(hospitalForm.departments || []).includes(dept)}
                                                             onChange={(e) => {
                                                                 if (e.target.checked) {
                                                                     setHospitalForm({ ...hospitalForm, departments: [...hospitalForm.departments, dept] });
                                                                 } else {
                                                                     setHospitalForm({ ...hospitalForm, departments: hospitalForm.departments.filter(d => d !== dept) });
                                                                 }
-                                                            }} 
+                                                            }}
                                                         />
                                                         {dept}
                                                     </label>
@@ -1166,12 +1167,12 @@ const CentralAdminDashboard = () => {
                                                     {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
                                                     {h.phone && <span>📞 {h.phone}</span>}
                                                     {h.email && <span>✉️ {h.email}</span>}
-                                                    
+
                                                     <div className="domain-links" onClick={e => e.stopPropagation()}>
-                                                        {h.slug && <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" className="subdomain-link" style={{display: 'inline-block', marginTop: '6px', background: 'var(--brand-pink)', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none', marginRight: '6px'}}>🌐 {h.slug}.{getBaseHost()}</a>}
-                                                        {h.customDomain && <a href={`http://${h.customDomain}`} target="_blank" rel="noreferrer" className="customdomain-link" style={{display: 'inline-block', marginTop: '6px', background: '#3b82f6', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none'}}>🌐 {h.customDomain}</a>}
+                                                        {h.slug && <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" className="subdomain-link" style={{ display: 'inline-block', marginTop: '6px', background: 'var(--brand-pink)', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none', marginRight: '6px' }}>🌐 {h.slug}.{getBaseHost()}</a>}
+                                                        {h.customDomain && <a href={`http://${h.customDomain}`} target="_blank" rel="noreferrer" className="customdomain-link" style={{ display: 'inline-block', marginTop: '6px', background: '#3b82f6', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none' }}>🌐 {h.customDomain}</a>}
                                                     </div>
-                                                    
+
                                                     {(h.departments && h.departments.length > 0) && (
                                                         <div className="hospital-depts" style={{ marginTop: '8px', fontSize: '11px', color: '#64748b' }}>
                                                             <strong>Depts:</strong> {h.departments.join(', ')}
@@ -1224,24 +1225,24 @@ const CentralAdminDashboard = () => {
                                             </select>
                                         </div>
                                         <div className="form-group">
-                                             <label className="staff-label">Assign Role *</label>
-                                             <select value={createStaffForm.roleId} onChange={e => setCreateStaffForm({ ...createStaffForm, roleId: e.target.value })} required className="staff-input">
-                                                 <option value="">-- Select a Role --</option>
-                                                 {roles
-                                                     .filter(role => {
-                                                         const isFullHospitalSelected = hospitals.some(hospital => hospital._id === createStaffForm.hospitalId);
-                                                         if (isFullHospitalSelected && role.name.toLowerCase().includes('clinic')) {
-                                                             return false;
-                                                         }
-                                                         return true;
-                                                     })
-                                                     .map(role => (
-                                                         <option key={role._id} value={role._id}>
-                                                             {role.name}{role.description ? ` — ${role.description}` : ''}
-                                                         </option>
-                                                     ))}
-                                             </select>
-                                         </div>
+                                            <label className="staff-label">Assign Role *</label>
+                                            <select value={createStaffForm.roleId} onChange={e => setCreateStaffForm({ ...createStaffForm, roleId: e.target.value })} required className="staff-input">
+                                                <option value="">-- Select a Role --</option>
+                                                {roles
+                                                    .filter(role => {
+                                                        const isFullHospitalSelected = hospitals.some(hospital => hospital._id === createStaffForm.hospitalId);
+                                                        if (isFullHospitalSelected && role.name.toLowerCase().includes('clinic')) {
+                                                            return false;
+                                                        }
+                                                        return true;
+                                                    })
+                                                    .map(role => (
+                                                        <option key={role._id} value={role._id}>
+                                                            {role.name}{role.description ? ` — ${role.description}` : ''}
+                                                        </option>
+                                                    ))}
+                                            </select>
+                                        </div>
                                         {createStaffForm.hospitalId && (
                                             <div className="form-group">
                                                 <label className="staff-label">Assign Department</label>
@@ -1269,19 +1270,19 @@ const CentralAdminDashboard = () => {
                                             <label className="staff-label">Password *</label>
                                             <input type="text" placeholder="Temporary password" value={createStaffForm.password} onChange={e => setCreateStaffForm({ ...createStaffForm, password: e.target.value })} required className="staff-input" />
                                         </div>
-                                         <div className="form-group">
-                                             <label className="staff-label">Phone</label>
-                                             <input 
-                                                 type="text" 
-                                                 placeholder="e.g. 9876543210" 
-                                                 value={createStaffForm.phone || ''} 
-                                                 onChange={e => {
-                                                     const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                                     setCreateStaffForm({ ...createStaffForm, phone: cleanVal });
-                                                 }} 
-                                                 className="staff-input" 
-                                             />
-                                         </div>
+                                        <div className="form-group">
+                                            <label className="staff-label">Phone</label>
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. 9876543210"
+                                                value={createStaffForm.phone || ''}
+                                                onChange={e => {
+                                                    const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                    setCreateStaffForm({ ...createStaffForm, phone: cleanVal });
+                                                }}
+                                                className="staff-input"
+                                            />
+                                        </div>
                                     </div>
                                     <button type="submit" disabled={creatingStaff || !createStaffForm.hospitalId} className="submit-button">
                                         {creatingStaff ? 'Creating...' : '✅ Create Staff Account'}
@@ -1347,7 +1348,7 @@ const CentralAdminDashboard = () => {
                                     <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>Small clinics managed by 1–4 staff. All features included: patients, doctor, billing, analytics.</p>
                                 </div>
                                 <button className={showClinicForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '10px 18px' }}
-                                    onClick={() => { setShowClinicForm(!showClinicForm); setEditClinic(null); setClinicForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', appointmentFee: 300 }); }}>
+                                    onClick={() => { setShowClinicForm(!showClinicForm); setEditClinic(null); setClinicForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', defaultFee: 0 }); }}>
                                     {showClinicForm ? 'Cancel' : '+ Add Simple Clinic'}
                                 </button>
                             </div>
@@ -1404,8 +1405,8 @@ const CentralAdminDashboard = () => {
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Consultation Fee (₹)</label>
-                                                <input type="number" className="staff-input" placeholder="300" value={clinicForm.appointmentFee}
-                                                    onChange={e => setClinicForm({ ...clinicForm, appointmentFee: Number(e.target.value) })} />
+                                                <input type="number" className="staff-input" placeholder="300" value={clinicForm.defaultFee}
+                                                    onChange={e => setClinicForm({ ...clinicForm, defaultFee: Number(e.target.value) })} />
                                             </div>
                                         </div>
                                         <button type="submit" disabled={savingClinic} className="submit-button">
@@ -1440,7 +1441,7 @@ const CentralAdminDashboard = () => {
                                             <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '12px' }}>
                                                 {clinic.phone && <div>📞 {clinic.phone}</div>}
                                                 {clinic.email && <div>✉️ {clinic.email}</div>}
-                                                <div style={{ marginTop: '6px' }}>💰 Fee: {formatCurrency(clinic.appointmentFee)}</div>
+                                                <div style={{ marginTop: '6px' }}>💰 Fee: {formatCurrency(clinic.defaultFee)}</div>
                                                 {clinic.slug && <div style={{ marginTop: '4px', fontFamily: 'monospace', fontSize: '11px', color: '#94a3b8' }}>🔗 /{clinic.slug}</div>}
                                                 <div style={{ marginTop: '8px', padding: '6px 10px', borderRadius: '6px', background: clinic.adminUserId ? '#f0fdf4' : '#fff7ed', border: `1px solid ${clinic.adminUserId ? '#bbf7d0' : '#fed7aa'}` }}>
                                                     {clinic.adminUserId
@@ -1451,7 +1452,7 @@ const CentralAdminDashboard = () => {
                                             </div>
                                             <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }} onClick={e => e.stopPropagation()}>
                                                 <button className="btn-edit" style={{ flex: 1, fontSize: '12px', padding: '6px' }}
-                                                    onClick={() => { setEditClinic(clinic); setClinicForm({ name: clinic.name, slug: clinic.slug || '', address: clinic.address || '', city: clinic.city || '', state: clinic.state || '', phone: clinic.phone || '', email: clinic.email || '', website: clinic.website || '', appointmentFee: clinic.appointmentFee || 300 }); setShowClinicForm(true); }}>
+                                                    onClick={() => { setEditClinic(clinic); setClinicForm({ name: clinic.name, slug: clinic.slug || '', address: clinic.address || '', city: clinic.city || '', state: clinic.state || '', phone: clinic.phone || '', email: clinic.email || '', website: clinic.website || '', defaultFee: clinic.defaultFee || 0 }); setShowClinicForm(true); }}>
                                                     ✏️ Edit
                                                 </button>
                                                 <button className="btn-confirm-delete" style={{ flex: 1, fontSize: '12px', padding: '6px' }}
@@ -1596,7 +1597,7 @@ const CentralAdminDashboard = () => {
                                         <div>
                                             <h3 style={{ margin: 0 }}>👥 Additional Staff</h3>
                                             <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
-                                                Tier: {clinicStats.stats.staff?.filter(s=>s.role==='doctor').length||0}/{clinicStats.clinic?.tier?.maxDoctors||1} Doctors · {clinicStats.stats.staff?.filter(s=>s.role==='receptionist').length||0}/{clinicStats.clinic?.tier?.maxReceptionists||1} Receptionists · All login at <strong>/login</strong>
+                                                Tier: {clinicStats.stats.staff?.filter(s => s.role === 'doctor').length || 0}/{clinicStats.clinic?.tier?.maxDoctors || 1} Doctors · {clinicStats.stats.staff?.filter(s => s.role === 'receptionist').length || 0}/{clinicStats.clinic?.tier?.maxReceptionists || 1} Receptionists · All login at <strong>/login</strong>
                                             </p>
                                         </div>
                                         <button className="btn-edit" style={{ fontSize: '13px', padding: '8px 14px' }}
@@ -1756,9 +1757,11 @@ const CentralAdminDashboard = () => {
                                                             <td>₹{sub.ratePerPatient}</td>
                                                             <td style={{ fontWeight: 700 }}>₹{sub.totalAmount.toLocaleString('en-IN')}</td>
                                                             <td>
-                                                                <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700,
+                                                                <span style={{
+                                                                    padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700,
                                                                     background: sub.status === 'paid' ? '#dcfce7' : sub.status === 'waived' ? '#f1f5f9' : '#fef3c7',
-                                                                    color: sub.status === 'paid' ? '#16a34a' : sub.status === 'waived' ? '#64748b' : '#92400e' }}>
+                                                                    color: sub.status === 'paid' ? '#16a34a' : sub.status === 'waived' ? '#64748b' : '#92400e'
+                                                                }}>
                                                                     {sub.status.toUpperCase()}
                                                                 </span>
                                                             </td>

@@ -26,6 +26,7 @@ const getDescForLink = (label) => {
     if (text.includes('registration')) return 'Register and manage patient records';
     if (text.includes('search')) return 'Lookup patient files and history';
     if (text.includes('billing')) return 'View bills and process payments';
+    if (text.includes('patients')) return 'Access your patient queue and clinical workspace';
     return 'Access the modules of your workspace';
 };
 
@@ -203,12 +204,17 @@ const RoleDashboard = () => {
 
     // Override nav links for receptionist
     let navLinks = user.navLinks || [];
+    const isDoctor = (user.role || '').toLowerCase() === 'doctor' || (user.role || '').toLowerCase() === 'clinic doctor';
     if (isReception) {
         navLinks = [
             { label: 'Patient Registration', path: '/reception/dashboard' },
             { label: 'Patient Search', path: '/reception/patients' },
             { label: 'Patient Billing', path: '/billing/patient' }
         ];
+    } else if (isDoctor) {
+        navLinks = navLinks.map(link => 
+            (link.path === '/hospitaladmin' || link.path === '/doctor/dashboard') ? { ...link, path: '/doctor/dashboard', label: 'Patients' } : link
+        );
     }
 
     if (isReception) {

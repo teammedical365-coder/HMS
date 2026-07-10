@@ -667,12 +667,31 @@ router.post('/appointments', verifyClinicStaff, async (req, res) => {
             }
         }
 
+        // --- AUTOMATED SINGLE-DOCTOR LOOKUP ---
+        let finalDoctor = await User.findOne({
+            hospitalId: clinicId,
+            role: { $in: ['doctor', 'clinic doctor'] }
+        });
+
+        if (!finalDoctor) {
+            const Role = require('../models/role.model');
+            const roleDoc = await Role.findOne({ name: /clinic doctor/i });
+            if (roleDoc) {
+                finalDoctor = await User.findOne({ hospitalId: clinicId, role: roleDoc._id });
+            }
+        }
+
+        if (!finalDoctor) {
+            return res.status(400).json({ success: false, message: 'Clinic configuration error: No doctor account setup found.' });
+        }
+        // ---------------------------------------
+
         const appointment = new Appointment({
             clinicPatientId: patient._id,
             patientId:       patient.patientUid, // display ID
             hospitalId:      clinicId,
-            doctorUserId:    req.user._id,
-            doctorName:      req.user.name,
+            doctorUserId:    finalDoctor._id,
+            doctorName:      finalDoctor.name,
             serviceName:     serviceName || 'General Consultation',
             appointmentDate: startOfSelectedDay,
             appointmentTime: finalTime,

@@ -149,7 +149,7 @@ const MainRoutes = () => {
                             <Route path="pharmacy" element={<Pharmacy />} />
 
                             {/* Transitions between roles/admin */}
-                            <Route path="doctor/dashboard" element={<ProtectedRoute requiredPermissions={['visit_diagnose']}><Patient /></ProtectedRoute>} />
+                            <Route path="doctor/dashboard" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><Patient /></ProtectedRoute>} />
                             <Route path="doctor/patients" element={<Patient />} />
                             <Route path="doctor/patient/:appointmentId" element={<ProtectedRoute requiredPermissions={['visit_diagnose']}><DoctorPatientDetails /></ProtectedRoute>} />
 
