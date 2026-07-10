@@ -1256,18 +1256,31 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
 
     useEffect(() => {
         if (!patient?._id) return;
-        clinicAPI.checkFeeWaiver(patient._id)
+
+        console.log("Frontend Selected Date Value:", form.appointmentDate);
+
+        clinicAPI.checkFeeWaiver(patient._id, form.appointmentDate)
             .then(r => {
+                console.log("Waiver API Response:", r);
                 if (r.success && r.waived) {
                     setFeeWaived(true);
-                    setWaiverMessage(r.message || 'Registration fee waived (Registered yesterday)');
+                    setWaiverMessage(r.message || 'Registration fee waived');
                     setForm(f => ({ ...f, amount: '0', paymentMethod: 'Free' }));
+                } else {
+                    setFeeWaived(false);
+                    setWaiverMessage('');
+                    // Forcefully reset the fee back to the clinic's default if waiver is false
+                    setForm(prev => ({ 
+                        ...prev, 
+                        amount: String(defaultFee || 0), 
+                        paymentMethod: 'Cash' 
+                    }));
                 }
             })
             .catch(err => {
                 console.error('Waiver check error:', err);
             });
-    }, [patient]);
+    }, [patient, form.appointmentDate, defaultFee]);
 
     // Fetch appointments for selected date to find booked time slots
     useEffect(() => {
@@ -1303,13 +1316,13 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
     const fee = Number(form.amount) || 0;
     const isUpi = form.paymentMethod === 'UPI';
     const isCard = form.paymentMethod === 'Card';
-    // Date and time slot are required
-    const canSubmit = !booking && (fee === 0 || form.paymentMethod) && form.appointmentDate && form.appointmentTime;
+    // Date and time slot are required (time slot only for slot mode)
+    const canSubmit = !booking && (fee === 0 || form.paymentMethod) && form.appointmentDate && (!isSlotMode || form.appointmentTime);
 
     const submit = async (e) => {
         e.preventDefault();
         if (!form.appointmentDate) { flash('error', 'Please select an appointment date'); return; }
-        if (!form.appointmentTime) { flash('error', 'Please select an appointment time'); return; }
+        if (isSlotMode && !form.appointmentTime) { flash('error', 'Please select an appointment time'); return; }
         if (fee > 0 && !form.paymentMethod) { flash('error', 'Select a payment method to collect the fee'); return; }
         setBooking(true);
         try {
@@ -1331,7 +1344,7 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
                 notes: form.notes,
                 paymentMethod: fee > 0 ? form.paymentMethod : 'Free',
                 appointmentDate: form.appointmentDate || getTodayString(),
-                appointmentTime: form.appointmentTime,
+                ...(isSlotMode && { appointmentTime: form.appointmentTime }),
                 ...(form.cardRef && { cardRef: form.cardRef }),
                 ...(upiScreenshotUrl && { upiScreenshotUrl }),
             };
@@ -1341,7 +1354,7 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
                 if (isSlotMode) {
                     flash('success', `✅ Payment collected. Appointment at ${form.appointmentTime} confirmed for ${patient.name}`);
                 } else {
-                    flash('success', `✅ Payment collected. Token #${r.appointment.tokenNumber} assigned at ${form.appointmentTime} to ${patient.name}`);
+                    flash('success', `✅ Payment collected. Token #${r.appointment.tokenNumber} assigned to ${patient.name}`);
                     try {
                         const pdf = generateTokenReceiptPDF(patient, r.appointment);
                         if (setPendingDownload) {
@@ -1393,20 +1406,22 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
                         onChange={e => setForm(f => ({ ...f, appointmentDate: e.target.value, appointmentTime: '' }))} required />
                 </div>
 
-                <div style={{ flex: '1', minWidth: '120px' }}>
-                    <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Time Slot *</label>
-                    <select className="clinic-input" value={form.appointmentTime} onChange={e => setForm(f => ({ ...f, appointmentTime: e.target.value }))} required>
-                        <option value="">Select time…</option>
-                        {timeSlots.map(t => {
-                            const disabled = isSlotDisabled(t);
-                            return (
-                                <option key={t} value={t} disabled={disabled}>
-                                    {t} {disabled ? ' (Unavailable)' : ''}
-                                </option>
-                            );
-                        })}
-                    </select>
-                </div>
+                {isSlotMode && (
+                    <div style={{ flex: '1', minWidth: '120px' }}>
+                        <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Time Slot *</label>
+                        <select className="clinic-input" value={form.appointmentTime} onChange={e => setForm(f => ({ ...f, appointmentTime: e.target.value }))} required>
+                            <option value="">Select time…</option>
+                            {timeSlots.map(t => {
+                                const disabled = isSlotDisabled(t);
+                                return (
+                                    <option key={t} value={t} disabled={disabled}>
+                                        {t} {disabled ? ' (Unavailable)' : ''}
+                                    </option>
+                                );
+                            })}
+                        </select>
+                    </div>
+                )}
 
                 <div style={{ flex: '1', minWidth: '90px' }}>
                     <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Fee (₹) *</label>

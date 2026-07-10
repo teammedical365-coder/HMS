@@ -379,7 +379,7 @@ export const clinicAPI = {
     registerPatient: async (data) => (await apiClient.post('/api/clinic/patients', data)).data,
     updatePatient: async (id, data) => (await apiClient.put(`/api/clinic/patients/${id}`, data)).data,
     getPatientHistory: async (patientId) => (await apiClient.get(`/api/clinic/patients/${patientId}/history`)).data,
-    checkFeeWaiver: async (patientId) => (await apiClient.get(`/api/clinic/patients/${patientId}/check-fee-waiver`)).data,
+    checkFeeWaiver: async (patientId, date) => (await apiClient.get(`/api/clinic/patients/${patientId}/check-fee-waiver${date ? `?date=${date}` : ''}`)).data,
     uploadPatientReport: async (patientId, file, name) => {
         const fd = new FormData();
         fd.append('report', file);
