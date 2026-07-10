@@ -71,6 +71,7 @@ const hospitalSchema = new mongoose.Schema({
 
     // Default fee and service name pre-filled on reception booking form
     defaultFee: { type: Number, default: 0, min: 0 },
+    followUpDays: { type: Number, default: 0, min: 0 },
     defaultServiceName: { type: String, default: 'General Consultation', trim: true },
 
     // Staff tier limits (enforced at staff creation)

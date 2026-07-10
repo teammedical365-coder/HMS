@@ -520,7 +520,7 @@ router.get('/appointments', verifyClinicStaff, async (req, res) => {
 // ─────────────────────────────────────────────
 router.get('/config', verifyClinicStaff, async (req, res) => {
     try {
-        const clinic = await Hospital.findById(hid(req)).select('appointmentMode name clinicCode defaultFee defaultServiceName').lean();
+        const clinic = await Hospital.findById(hid(req)).select('appointmentMode name clinicCode defaultFee followUpDays defaultServiceName').lean();
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
         res.json({
             success: true,
@@ -528,6 +528,7 @@ router.get('/config', verifyClinicStaff, async (req, res) => {
             name: clinic.name,
             clinicCode: clinic.clinicCode,
             defaultFee: clinic.defaultFee ?? 0,
+            followUpDays: clinic.followUpDays ?? 0,
             defaultServiceName: clinic.defaultServiceName || 'General Consultation',
         });
     } catch (err) {
@@ -541,13 +542,18 @@ router.get('/config', verifyClinicStaff, async (req, res) => {
 // ─────────────────────────────────────────────
 router.put('/config', verifyClinicAdmin, async (req, res) => {
     try {
-        const { defaultFee, defaultServiceName, appointmentMode } = req.body;
+        const { defaultFee, followUpDays, defaultServiceName, appointmentMode } = req.body;
         const update = {};
 
         if (defaultFee !== undefined) {
             const fee = Number(defaultFee);
             if (isNaN(fee) || fee < 0) return res.status(400).json({ success: false, message: 'defaultFee must be a non-negative number' });
             update.defaultFee = fee;
+        }
+        if (followUpDays !== undefined) {
+            const days = Number(followUpDays);
+            if (isNaN(days) || days < 0) return res.status(400).json({ success: false, message: 'followUpDays must be a non-negative number' });
+            update.followUpDays = days;
         }
         if (defaultServiceName !== undefined) {
             const svc = String(defaultServiceName).trim().slice(0, 100);
@@ -562,7 +568,7 @@ router.put('/config', verifyClinicAdmin, async (req, res) => {
         if (Object.keys(update).length === 0) return res.status(400).json({ success: false, message: 'No valid fields to update' });
 
         const clinic = await Hospital.findByIdAndUpdate(hid(req), { $set: update }, { new: true })
-            .select('appointmentMode name clinicCode defaultFee defaultServiceName').lean();
+            .select('appointmentMode name clinicCode defaultFee followUpDays defaultServiceName').lean();
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
 
         res.json({
@@ -572,6 +578,7 @@ router.put('/config', verifyClinicAdmin, async (req, res) => {
             name: clinic.name,
             clinicCode: clinic.clinicCode,
             defaultFee: clinic.defaultFee ?? 0,
+            followUpDays: clinic.followUpDays ?? 0,
             defaultServiceName: clinic.defaultServiceName || 'General Consultation',
         });
     } catch (err) {

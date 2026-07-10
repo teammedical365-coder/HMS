@@ -328,7 +328,7 @@ const ClinicDashboard = () => {
 const OverviewMode = () => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [config, setConfig] = useState({ defaultFee: 0, defaultServiceName: 'General Consultation', appointmentMode: 'token' });
+    const [config, setConfig] = useState({ defaultFee: 0, followUpDays: 0, defaultServiceName: 'General Consultation', appointmentMode: 'token' });
     const [cfgSaving, setCfgSaving] = useState(false);
     const [cfgMsg, setCfgMsg] = useState('');
 
@@ -338,7 +338,7 @@ const OverviewMode = () => {
             .catch(console.error)
             .finally(() => setLoading(false));
         clinicAPI.getConfig().then(r => {
-            if (r.success) setConfig({ defaultFee: r.defaultFee ?? 0, defaultServiceName: r.defaultServiceName || 'General Consultation', appointmentMode: r.appointmentMode || 'token' });
+            if (r.success) setConfig({ defaultFee: r.defaultFee ?? 0, followUpDays: r.followUpDays ?? 0, defaultServiceName: r.defaultServiceName || 'General Consultation', appointmentMode: r.appointmentMode || 'token' });
         }).catch(() => {});
     }, []);
 
@@ -450,6 +450,11 @@ const OverviewMode = () => {
                         <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Default Fee (₹)</label>
                         <input className="clinic-input" type="number" min="0" value={config.defaultFee}
                             onChange={e => setConfig(c => ({ ...c, defaultFee: e.target.value }))} />
+                    </div>
+                    <div style={{ flex: '0 0 140px' }}>
+                        <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Follow-up Validity (Days)</label>
+                        <input className="clinic-input" type="number" min="0" value={config.followUpDays} placeholder="0"
+                            onChange={e => setConfig(c => ({ ...c, followUpDays: e.target.value }))} />
                     </div>
                     <div style={{ flex: '0 0 160px' }}>
                         <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px' }}>Appointment Mode</label>
