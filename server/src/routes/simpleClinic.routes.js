@@ -56,7 +56,8 @@ router.get('/', verifyCentralAdmin, async (req, res) => {
 // ==========================================
 router.post('/', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, slug, address, city, state, phone, email, website, appointmentFee } = req.body;
+        console.log("👉 RAW BACKEND POST BODY:", req.body);
+        const { name, slug, address, city, state, phone, email, website, defaultFee } = req.body;
         if (!name) return res.status(400).json({ success: false, message: 'Clinic name is required' });
 
         const finalSlug = slug
@@ -78,7 +79,7 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             phone: phone || '',
             email: email || '',
             website: website || '',
-            appointmentFee: appointmentFee || 300,
+            defaultFee: defaultFee !== undefined ? Number(defaultFee) : 0,
             isActive: true,
             clinicType: 'clinic',
             appointmentMode: 'token',
@@ -106,7 +107,7 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
 // ==========================================
 router.put('/:id', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, address, city, state, phone, email, website, appointmentFee, isActive,
+        const { name, address, city, state, phone, email, website, defaultFee, isActive,
                 maxDoctors, maxReceptionists, ratePerPatient, billingEnabled, appointmentMode } = req.body;
 
         const update = {};
@@ -117,7 +118,7 @@ router.put('/:id', verifyCentralAdmin, async (req, res) => {
         if (phone      !== undefined) update.phone      = phone;
         if (email      !== undefined) update.email      = email;
         if (website    !== undefined) update.website    = website;
-        if (appointmentFee !== undefined) update.appointmentFee = appointmentFee;
+        if (defaultFee !== undefined) update.defaultFee = defaultFee;
         if (isActive   !== undefined) update.isActive   = isActive;
 
         // Tier update
@@ -199,7 +200,7 @@ router.get('/:id/stats', verifyCentralAdmin, async (req, res) => {
         ]);
 
         // Staff (only login accounts, not patients)
-        const STAFF_ROLES_LEGACY = ['hospitaladmin', 'doctor', 'receptionist'];
+        const STAFF_ROLES_LEGACY = ['hospitaladmin', 'doctor', 'receptionist', 'clinic doctor'];
         const Role = require('../models/role.model');
         const staffRoleIds = await Role.find({
             hospitalId: { $in: [clinic._id, null] },

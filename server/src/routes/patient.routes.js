@@ -170,7 +170,7 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
             plans = await TreatmentPlan.find({ clinicPatientId: { $in: objectIdList }, ...hFilter }).lean();
 
             // Populate latest vitals fallback if patient document vitals are empty
-            if (!user.vitals || !Object.values(user.vitals).some(v => v !== '' && v !== null && v !== undefined)) {
+            if (!user.vitals || !Object.values(user.vitals || {}).some(v => v !== '' && v !== null && v !== undefined)) {
                 const latestApptWithVitals = appointments
                     .filter(a => a.vitals && (a.vitals.weight || a.vitals.height || a.vitals.bp || a.vitals.temperature || a.vitals.pulse))
                     .sort((a, b) => new Date(b.appointmentDate) - new Date(a.appointmentDate))[0];
@@ -229,7 +229,7 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
             let summary = {
                 primaryComplaint: v.intake?.chiefComplaint || 'No complaint recorded',
                 doctorSeen: v.doctorConsultation?.doctorId || 'Pending',
-                outcome: v.doctorConsultation?.diagnosis?.join(', ') || 'Processing'
+                outcome: Array.isArray(v.doctorConsultation?.diagnosis) ? v.doctorConsultation.diagnosis.join(', ') : (v.doctorConsultation?.diagnosis || 'Processing')
             };
             let item = { type: 'clinicalVisit', date: v.visitDate || v.createdAt, data: v, summary };
             if (isRestrictedRole && item.data.doctorConsultation) {
@@ -242,17 +242,17 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
         pharmacies.forEach(p => timeline.push({ type: 'pharmacyOrder', date: p.createdAt, data: p }));
         appointments.forEach(a => timeline.push({ type: 'appointment', date: a.appointmentDate, data: a }));
 
-        plans.forEach(tp => {
+        (plans || []).forEach(tp => {
             timeline.push({
                 type: 'treatmentPlan',
-                date: tp.createdAt,
+                date: tp.createdAt || new Date(),
                 data: {
-                    title: tp.title,
-                    description: tp.description,
-                    totalAmount: tp.totalAmount,
-                    totalPaid: tp.totalPaid,
-                    pendingBalance: tp.pendingBalance,
-                    status: tp.status,
+                    title: tp.title || 'Untitled Plan',
+                    description: tp.description || '',
+                    totalAmount: tp.totalAmount || 0,
+                    totalPaid: tp.totalPaid || 0,
+                    pendingBalance: tp.pendingBalance || 0,
+                    status: tp.status || 'Draft',
                     visits: tp.visits || []
                 }
             });
@@ -262,8 +262,8 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
 
         res.json({ success: true, user, timeline });
     } catch (error) {
-        console.error('patient full-history error:', error);
-        res.status(500).json({ success: false, message: 'An internal error occurred', error: error.message, stack: error.stack });
+        console.error("CRITICAL PROFILE ROUTE TRACE:", error.stack);
+        return res.status(500).json({ error: error.message, stack: error.stack });
     }
 });
 

@@ -423,7 +423,9 @@ const Patient = () => {
                                                     <div style={{ display: 'flex', gap: '8px' }}>
                                                         <button
                                                             onClick={() => {
-                                                                const pid = apt.userId?._id || apt.clinicPatientId?.patientUid || apt.clinicPatientId?._id || apt.patientId;
+                                                                const pid = apt.userId?._id || apt.clinicPatientId?._id || apt.clinicPatientId?.patientUid || apt.patientId;
+                                                                console.log("DEBUG PATIENT ID OBJECT:", apt);
+                                                                console.log("FINAL CHOSEN PID:", pid);
                                                                 if (pid) navigate(`/patient/${pid}`);
                                                             }}
                                                             style={{

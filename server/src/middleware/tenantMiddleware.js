@@ -47,7 +47,7 @@ exports.resolveTenant = async (req, res, next) => {
         req.hospitalId = hospitalId;
         next();
     } catch (err) {
-        console.error('Tenant resolution error:', err.message);
+        console.error("CRITICAL TENANT TRACE:", err.stack);
         return res.status(500).json({
             success: false,
             message: 'Failed to connect to hospital database. Please try again.',

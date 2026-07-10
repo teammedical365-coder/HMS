@@ -23,12 +23,25 @@ function getBaseClusterUri() {
     const fullUri = process.env.MONGODB_URL;
     if (!fullUri) throw new Error('MONGODB_URL is not defined in .env');
 
-    // Remove the database name and query params, keep the cluster URI
-    // Works for both mongodb+srv:// and mongodb:// formats
-    const url = new URL(fullUri);
-    // Return scheme + auth + host only (no path/database, no query)
-    const base = `${url.protocol}//${url.username}:${url.password}@${url.host}`;
-    return base;
+    try {
+        // Remove the database name and query params, keep the cluster URI
+        // Works for standard mongodb+srv:// and simple mongodb:// formats
+        const url = new URL(fullUri);
+        return `${url.protocol}//${url.username}:${url.password}@${url.host}`;
+    } catch (err) {
+        // Fallback for MongoDB replica set URLs containing commas (e.g. ac-0.net:27017,ac-1.net:27017)
+        // new URL() throws "Invalid URL" if the hostname contains commas.
+        // We will manually extract the base URI using string manipulation.
+        const protoIndex = fullUri.indexOf('://');
+        if (protoIndex === -1) return fullUri.split('?')[0];
+
+        const pathIndex = fullUri.indexOf('/', protoIndex + 3);
+        if (pathIndex === -1) {
+            return fullUri.split('?')[0]; // No database path, just strip query
+        }
+
+        return fullUri.substring(0, pathIndex);
+    }
 }
 
 /**
@@ -48,28 +61,28 @@ function sanitizeDbName(hospitalId) {
 async function getTenantConnection(hospitalId) {
     const dbName = sanitizeDbName(hospitalId);
 
-    // Return cached connection if already open
+    // Return cached connection if it already exists (whether connected or still connecting)
     if (connectionCache.has(dbName)) {
         const cached = connectionCache.get(dbName);
-        // Make sure the connection is still alive
-        if (cached.readyState === 1 /* connected */) {
+        if (cached.readyState !== 0) { // 0 = disconnected
             return cached;
         }
-        // Remove stale connection from cache
         connectionCache.delete(dbName);
     }
 
-    const baseUri = getBaseClusterUri();
-    const tenantUri = `${baseUri}/${dbName}?retryWrites=true&w=majority`;
-
     console.log(`🏥 Opening tenant DB connection: ${dbName}`);
 
-    const connection = mongoose.createConnection(tenantUri, {
-        serverSelectionTimeoutMS: 30000,
+    const connection = mongoose.createConnection(process.env.MONGODB_URL, {
+        dbName: dbName, // CRITICAL: Standard Mongoose way to isolate tenant databases dynamically
+        serverSelectionTimeoutMS: 15000,
         socketTimeoutMS: 45000,
         connectTimeoutMS: 30000,
-        maxPoolSize: 5,
+        retryWrites: true,
+        maxPoolSize: 10
     });
+
+    // CACHE IMMEDIATELY before awaiting to prevent connection race conditions
+    connectionCache.set(dbName, connection);
 
     // Wait for the connection to be established
     await new Promise((resolve, reject) => {
@@ -78,7 +91,6 @@ async function getTenantConnection(hospitalId) {
     });
 
     console.log(`✅ Tenant DB connected: ${dbName}`);
-    connectionCache.set(dbName, connection);
 
     return connection;
 }

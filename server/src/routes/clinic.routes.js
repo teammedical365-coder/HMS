@@ -398,24 +398,76 @@ router.put('/patients/:id', verifyClinicStaff, async (req, res) => {
 // ─────────────────────────────────────────────
 router.get('/patients/:id/check-fee-waiver', verifyClinicStaff, async (req, res) => {
     try {
-        const patient = await ClinicPatient.findOne({ _id: req.params.id, clinicId: hid(req) });
+        const clinicId = hid(req);
+        const [patient, clinic] = await Promise.all([
+            ClinicPatient.findOne({ _id: req.params.id, clinicId }),
+            Hospital.findById(clinicId).select('followUpDays').lean(),
+        ]);
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
+        console.log("Backend Received Date for Waiver Check:", req.query.date);
+        const parseDateSafe = (d) => {
+            if (!d) return new Date();
+            if (d instanceof Date) return d;
+            const str = String(d);
+            if (str.includes('/')) {
+                const parts = str.split('/');
+                if (parts.length === 3 && parts[2].length === 4) {
+                    return new Date(parts[2], parts[1] - 1, parts[0]);
+                }
+            } else if (str.includes('-')) {
+                const parts = str.split('-');
+                if (parts.length === 3) {
+                    if (parts[0].length === 4) {
+                        return new Date(parts[0], parts[1] - 1, parts[2]); // YYYY-MM-DD
+                    } else if (parts[2].length === 4) {
+                        return new Date(parts[2], parts[1] - 1, parts[0]); // DD-MM-YYYY
+                    }
+                }
+            }
+            return new Date(str);
+        };
+
+        const targetDate = req.query.date ? parseDateSafe(req.query.date) : new Date();
+        targetDate.setHours(0, 0, 0, 0);
+
+        // 1. Check if registered yesterday
         const createdAt = new Date(patient.createdAt);
-        const today = new Date();
-
-        // Calculate differences in calendar days
         const d1 = new Date(createdAt.getFullYear(), createdAt.getMonth(), createdAt.getDate());
-        const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const diffTime = d2 - d1;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const diffRegTime = targetDate - d1;
+        const diffRegDays = Math.round(diffRegTime / (1000 * 60 * 60 * 24));
 
-        if (diffDays === 1) {
+        if (diffRegDays === 1) {
             return res.json({
                 success: true,
                 waived: true,
                 message: 'Registration fee waived (Registered yesterday)'
             });
+        }
+
+        // 2. Check Free Follow-up Window
+        if (clinic.followUpDays > 0) {
+            const lastAppt = await Appointment.findOne({
+                hospitalId: clinicId,
+                clinicPatientId: patient._id,
+                status: 'completed'
+            }).sort({ appointmentDate: -1 }).lean();
+
+            if (lastAppt && lastAppt.appointmentDate) {
+                const lastDate = parseDateSafe(lastAppt.appointmentDate);
+                lastDate.setHours(0, 0, 0, 0);
+                
+                const diffTime = Math.abs(targetDate - lastDate);
+                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+                if (diffDays <= clinic.followUpDays) {
+                    return res.json({
+                        success: true,
+                        waived: true,
+                        message: 'Free Follow-up'
+                    });
+                }
+            }
         }
 
         res.json({ success: true, waived: false });
@@ -520,7 +572,7 @@ router.get('/appointments', verifyClinicStaff, async (req, res) => {
 // ─────────────────────────────────────────────
 router.get('/config', verifyClinicStaff, async (req, res) => {
     try {
-        const clinic = await Hospital.findById(hid(req)).select('appointmentMode name clinicCode defaultFee defaultServiceName').lean();
+        const clinic = await Hospital.findById(hid(req)).select('appointmentMode name clinicCode defaultFee followUpDays defaultServiceName').lean();
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
         res.json({
             success: true,
@@ -528,6 +580,7 @@ router.get('/config', verifyClinicStaff, async (req, res) => {
             name: clinic.name,
             clinicCode: clinic.clinicCode,
             defaultFee: clinic.defaultFee ?? 0,
+            followUpDays: clinic.followUpDays ?? 0,
             defaultServiceName: clinic.defaultServiceName || 'General Consultation',
         });
     } catch (err) {
@@ -541,13 +594,18 @@ router.get('/config', verifyClinicStaff, async (req, res) => {
 // ─────────────────────────────────────────────
 router.put('/config', verifyClinicAdmin, async (req, res) => {
     try {
-        const { defaultFee, defaultServiceName, appointmentMode } = req.body;
+        const { defaultFee, followUpDays, defaultServiceName, appointmentMode } = req.body;
         const update = {};
 
         if (defaultFee !== undefined) {
             const fee = Number(defaultFee);
             if (isNaN(fee) || fee < 0) return res.status(400).json({ success: false, message: 'defaultFee must be a non-negative number' });
             update.defaultFee = fee;
+        }
+        if (followUpDays !== undefined) {
+            const days = Number(followUpDays);
+            if (isNaN(days) || days < 0) return res.status(400).json({ success: false, message: 'followUpDays must be a non-negative number' });
+            update.followUpDays = days;
         }
         if (defaultServiceName !== undefined) {
             const svc = String(defaultServiceName).trim().slice(0, 100);
@@ -562,7 +620,7 @@ router.put('/config', verifyClinicAdmin, async (req, res) => {
         if (Object.keys(update).length === 0) return res.status(400).json({ success: false, message: 'No valid fields to update' });
 
         const clinic = await Hospital.findByIdAndUpdate(hid(req), { $set: update }, { new: true })
-            .select('appointmentMode name clinicCode defaultFee defaultServiceName').lean();
+            .select('appointmentMode name clinicCode defaultFee followUpDays defaultServiceName').lean();
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
 
         res.json({
@@ -572,6 +630,7 @@ router.put('/config', verifyClinicAdmin, async (req, res) => {
             name: clinic.name,
             clinicCode: clinic.clinicCode,
             defaultFee: clinic.defaultFee ?? 0,
+            followUpDays: clinic.followUpDays ?? 0,
             defaultServiceName: clinic.defaultServiceName || 'General Consultation',
         });
     } catch (err) {
@@ -589,23 +648,74 @@ router.post('/appointments', verifyClinicStaff, async (req, res) => {
         // patientId here is ClinicPatient._id
         if (!patientId) return res.status(400).json({ success: false, message: 'patientId is required' });
 
+        const clinicId = hid(req);
+        const [patient, clinic] = await Promise.all([
+            ClinicPatient.findOne({ _id: patientId, clinicId }),
+            Hospital.findById(clinicId).select('appointmentMode followUpDays defaultFee').lean(),
+        ]);
+        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found in this clinic' });
+
+        const parseDateSafe = (d) => {
+            if (!d) return new Date();
+            if (d instanceof Date) return d;
+            const str = String(d);
+            if (str.includes('/')) {
+                const parts = str.split('/');
+                if (parts.length === 3 && parts[2].length === 4) {
+                    return new Date(parts[2], parts[1] - 1, parts[0]);
+                }
+            } else if (str.includes('-')) {
+                const parts = str.split('-');
+                if (parts.length === 3) {
+                    if (parts[0].length === 4) {
+                        return new Date(parts[0], parts[1] - 1, parts[2]); // YYYY-MM-DD
+                    } else if (parts[2].length === 4) {
+                        return new Date(parts[2], parts[1] - 1, parts[0]); // DD-MM-YYYY
+                    }
+                }
+            }
+            return new Date(str);
+        };
+
+        // Dynamic Fee Logic: Free Follow-up Window
+        let fee = clinic.defaultFee || 0;
+        if (clinic.followUpDays > 0) {
+            const lastAppt = await Appointment.findOne({
+                hospitalId: clinicId,
+                clinicPatientId: patient._id,
+                status: 'completed'
+            }).sort({ appointmentDate: -1 }).lean();
+
+            if (lastAppt && lastAppt.appointmentDate) {
+                const newDate = parseDateSafe(appointmentDate);
+                newDate.setHours(0, 0, 0, 0);
+                
+                const lastDate = parseDateSafe(lastAppt.appointmentDate);
+                lastDate.setHours(0, 0, 0, 0);
+                
+                const diffTime = Math.abs(newDate - lastDate);
+                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                
+                console.log("Clinic Follow Up Days Limit:", clinic.followUpDays);
+                console.log("Calculated Difference in Days:", diffDays);
+
+                if (diffDays <= clinic.followUpDays) {
+                    fee = 0; // Free Follow-up
+                }
+            }
+        }
+        
+        console.log("Final Fee being saved to DB:", fee);
+
         // Payment must be confirmed upfront — no pending payments in clinic module
-        const fee = Number(amount) || 0;
         if (fee > 0 && !paymentMethod) {
             return res.status(400).json({ success: false, message: 'Payment method is required to collect the fee and assign a token' });
         }
 
-        const clinicId = hid(req);
-        const [patient, clinic] = await Promise.all([
-            ClinicPatient.findOne({ _id: patientId, clinicId }),
-            Hospital.findById(clinicId).select('appointmentMode').lean(),
-        ]);
-        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found in this clinic' });
-
         const isTokenMode = (clinic?.appointmentMode || 'token') === 'token';
         
         // Parse selected date or fallback to today
-        const dateObj = appointmentDate ? new Date(appointmentDate) : new Date();
+        const dateObj = parseDateSafe(appointmentDate);
         const startOfSelectedDay = new Date(dateObj);
         startOfSelectedDay.setHours(0, 0, 0, 0);
         const endOfSelectedDay = new Date(dateObj);
@@ -667,12 +777,31 @@ router.post('/appointments', verifyClinicStaff, async (req, res) => {
             }
         }
 
+        // --- AUTOMATED SINGLE-DOCTOR LOOKUP ---
+        let finalDoctor = await User.findOne({
+            hospitalId: clinicId,
+            role: { $in: ['doctor', 'clinic doctor'] }
+        });
+
+        if (!finalDoctor) {
+            const Role = require('../models/role.model');
+            const roleDoc = await Role.findOne({ name: /clinic doctor/i });
+            if (roleDoc) {
+                finalDoctor = await User.findOne({ hospitalId: clinicId, role: roleDoc._id });
+            }
+        }
+
+        if (!finalDoctor) {
+            return res.status(400).json({ success: false, message: 'Clinic configuration error: No doctor account setup found.' });
+        }
+        // ---------------------------------------
+
         const appointment = new Appointment({
             clinicPatientId: patient._id,
             patientId:       patient.patientUid, // display ID
             hospitalId:      clinicId,
-            doctorUserId:    req.user._id,
-            doctorName:      req.user.name,
+            doctorUserId:    finalDoctor._id,
+            doctorName:      finalDoctor.name,
             serviceName:     serviceName || 'General Consultation',
             appointmentDate: startOfSelectedDay,
             appointmentTime: finalTime,

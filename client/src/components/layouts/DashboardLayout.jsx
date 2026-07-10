@@ -46,7 +46,7 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
             const localUser = JSON.parse(localStorage.getItem('user') || '{}');
             if (user?.clinicType === 'clinic' || localUser?.clinicType === 'clinic') {
                 return [
-                    { label: 'Doctor Dashboard', path: '/hospitaladmin', icon: <FiHome /> },
+                    { label: 'Doctor Dashboard', path: '/doctor/dashboard', icon: <FiHome /> },
                 ];
             }
             return [
