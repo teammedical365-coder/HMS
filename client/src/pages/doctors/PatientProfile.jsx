@@ -357,11 +357,12 @@ const PatientProfile = () => {
                         <th style={C.th}>Payment</th>
                         <th style={C.th}>Amount</th>
                         <th style={C.th}>Notes</th>
+                        <th style={{...C.th, textAlign: 'center'}}>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {labReports.length === 0 ? (
-                        <tr><td colSpan={8} style={{ ...C.td, textAlign: 'center', color: '#64748b', padding: '40px' }}>No lab reports found</td></tr>
+                        <tr><td colSpan={9} style={{ ...C.td, textAlign: 'center', color: '#64748b', padding: '40px' }}>No lab reports found</td></tr>
                     ) : (
                         labReports.map((lr, i) => (
                             <tr key={lr._id} onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -379,6 +380,33 @@ const PatientProfile = () => {
                                 <td style={C.td}><span style={C.statusBadge(lr.paymentStatus)}>{lr.paymentStatus}</span></td>
                                 <td style={{ ...C.td, color: '#f8fafc', fontWeight: '600' }}>{lr.amount ? `₹${lr.amount}` : '—'}</td>
                                 <td style={{ ...C.td, color: '#94a3b8' }}>{lr.notes || '—'}</td>
+                                <td style={{ ...C.td, textAlign: 'center' }}>
+                                    {lr.reportFile?.url && (
+                                        <a 
+                                            href={lr.reportFile.url} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                padding: '6px 12px',
+                                                background: 'rgba(59, 130, 246, 0.15)',
+                                                color: '#60a5fa',
+                                                borderRadius: '6px',
+                                                textDecoration: 'none',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '700',
+                                                border: '1px solid rgba(59, 130, 246, 0.3)',
+                                                transition: 'all 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.25)' }}
+                                            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)' }}
+                                        >
+                                            👁️ View
+                                        </a>
+                                    )}
+                                </td>
                             </tr>
                         ))
                     )}
