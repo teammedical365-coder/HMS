@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doctorAPI, labTestAPI, questionLibraryAPI, hospitalAPI, patientAPI } from '../../utils/api';
+import { doctorAPI, labTestAPI, questionLibraryAPI, hospitalAPI, patientAPI, receptionAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './DoctorPatientDetails.css';
@@ -161,6 +161,9 @@ const DoctorPatientDetails = () => {
     // Patient Intake Profile (Left Panel - Editable by Doctor)
     const [intakeData, setIntakeData] = useState({});
 
+    // Follow-up status for Patient
+    const [currentFollowupStatus, setCurrentFollowupStatus] = useState(null);
+
     // Tab Scrolling Reference
     const tabsRef = useRef(null);
 
@@ -204,8 +207,8 @@ const DoctorPatientDetails = () => {
                         ...cp,
                         ...fert,
                         ...(cp.vitals || {}),
-                        age: cp.age || fert.age || '',
-                        gender: cp.gender || fert.gender || 'Male',
+                        age: cp.age || fert.age || res.appointment.userId?.age || '',
+                        gender: cp.gender || fert.gender || res.appointment.userId?.gender || '',
                         bloodGroup: cp.bloodGroup || fert.bloodGroup || '',
                         address: cp.address || fert.address || '',
                         allergies: cp.allergies || fert.allergies || '',
@@ -229,6 +232,11 @@ const DoctorPatientDetails = () => {
                     if (pId) {
                         const histRes = await doctorAPI.getPatientHistory(pId);
                         if (histRes.success) setHistory(histRes.history || histRes.data || []);
+                        
+                        try {
+                            const fRes = await receptionAPI.getFollowupStatus(pId, 'auto');
+                            if (fRes.success) setCurrentFollowupStatus(fRes);
+                        } catch(e) { console.error("Error fetching follow-up", e); }
                     }
 
                     setSessionData({
@@ -857,7 +865,7 @@ const DoctorPatientDetails = () => {
                                 <span className="dpd-tag tag-phone">📱 {patient.phone || '-'}</span>
                                 {profile.age && <span className="dpd-tag tag-age">Age: {profile.age}</span>}
                                 {profile.gender && <span className="dpd-tag tag-gender">{profile.gender}</span>}
-                                {profile.bloodGroup && <span className="dpd-tag tag-blood">🩸 {profile.bloodGroup}</span>}
+                                {profile.bloodGroup && <span className="dpd-tag tag-blood">{profile.bloodGroup}</span>}
                             </div>
                         </div>
                     </div>
@@ -881,6 +889,28 @@ const DoctorPatientDetails = () => {
                             <span className="dpd-appt-value">{appointment.serviceName || 'Consultation'}</span>
                         </div>
                     </div>
+                    {/* Follow-up Card from Reception Dashboard */}
+                    {currentFollowupStatus && (
+                        <div style={{
+                            display: 'flex', flexDirection: 'column',
+                            background: currentFollowupStatus.active ? '#f0fdf4' : '#fef2f2',
+                            border: '1px solid',
+                            borderColor: currentFollowupStatus.active ? '#bbf7d0' : '#fecaca',
+                            borderLeft: currentFollowupStatus.active ? '4px solid #22c55e' : '4px solid #ef4444',
+                            borderRadius: '12px', padding: '12px 16px', minWidth: '160px', marginLeft: '16px'
+                        }}>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: currentFollowupStatus.active ? '#166534' : '#991b1b', letterSpacing: '0.5px' }}>FOLLOW-UP</span>
+                            <span style={{ fontSize: '18px', fontWeight: 'bold', color: currentFollowupStatus.active ? '#15803d' : '#b91c1c', marginTop: '4px' }}>
+                                {currentFollowupStatus.active ? 'Active' : 'Expired'}
+                            </span>
+                            <span style={{ fontSize: '12px', color: currentFollowupStatus.active ? '#166534' : '#7f1d1d', marginTop: '6px' }}>
+                                {currentFollowupStatus.active ? (() => {
+                                    const remain = Math.max(0, Math.ceil((new Date(currentFollowupStatus.validUntil).getTime() - new Date().getTime()) / (1000 * 3600 * 24)));
+                                    return `Valid: ${remain} Day${remain > 1 ? 's' : ''}`;
+                                })() : `Last: ${currentFollowupStatus.lastConsultation ? new Date(currentFollowupStatus.lastConsultation).toLocaleDateString('en-IN') : 'N/A'}`}
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Tabs Navigation */}

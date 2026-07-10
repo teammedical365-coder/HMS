@@ -508,7 +508,7 @@ router.put('/my-hospital/department-fees', verifyHospitalAdmin, async (req, res)
             return res.status(403).json({ success: false, message: 'Only hospital admins manage their department fees this way' });
         }
         
-        const { departmentFees } = req.body;
+        const { departmentFees, departmentValidity } = req.body;
         if (!departmentFees || typeof departmentFees !== 'object') {
             return res.status(400).json({ success: false, message: 'Department fees data required' });
         }
@@ -517,6 +517,9 @@ router.put('/my-hospital/department-fees', verifyHospitalAdmin, async (req, res)
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
         hospital.departmentFees = departmentFees;
+        if (departmentValidity && typeof departmentValidity === 'object') {
+            hospital.departmentValidity = departmentValidity;
+        }
         await hospital.save();
 
         res.json({ success: true, message: 'Department fees updated successfully', hospital });

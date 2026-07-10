@@ -7,6 +7,7 @@ const { verifyToken } = require('../middleware/auth.middleware');
 const { resolveTenant } = require('../middleware/tenantMiddleware');
 const MasterAdmission = require('../models/admission.model');
 const { getTenantModels } = require('../db/tenantModels');
+const { sendAppointmentConfirmationEmail } = require('../services/email.service');
 
 const verifyReception = (req, res, next) => {
     if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
@@ -312,6 +313,9 @@ router.put('/intake/:userId', verifyToken, verifyReception, async (req, res) => 
         if (updates.zipCode) updateQuery.zipCode = updates.zipCode;
         if (updates.avatar) updateQuery.avatar = updates.avatar;
         if (updates.relationToPatient) updateQuery.relationToPatient = updates.relationToPatient;
+        if (updates.gender !== undefined) updateQuery.gender = updates.gender;
+        if (updates.dob !== undefined) updateQuery.dob = updates.dob;
+        if (updates.bloodGroup !== undefined) updateQuery.bloodGroup = updates.bloodGroup;
 
         // Update Root Aadhaar Fields
         if (updates.aadhaar) updateQuery.aadhaarNumber = updates.aadhaar;
@@ -417,11 +421,172 @@ router.patch('/appointments/:id/cancel', verifyToken, verifyReception, async (re
     if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found or unauthorized' });
     res.json({ success: true });
 });
+// 6. FOLLOW-UP VALIDITY
+router.get('/patients/:patientId/followup-status', verifyToken, verifyReception, async (req, res) => {
+    try {
+        const { patientId } = req.params;
+        const { department, auto, date } = req.query;
+        const patient = await User.findById(patientId);
+        if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
+        const hospitalId = req.user.hospitalId || patient.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital linked' });
 
-// 6. BOOK APPOINTMENT (NEW: Assign Doctor)
+        const Hospital = require('../models/hospital.model');
+        const hospital = await Hospital.findById(hospitalId).select('departmentFees departmentValidity appointmentFee');
+        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+
+        if (auto === 'true') {
+            const lastAppt = await Appointment.findOne({
+                userId: patient._id,
+                status: { $ne: 'cancelled' }
+            }).sort({ appointmentDate: -1 });
+
+            if (!lastAppt) {
+                return res.json({
+                    success: true,
+                    active: false,
+                    lastConsultation: null,
+                    fee: hospital.appointmentFee ?? 500,
+                    message: 'New Patient / First Visit',
+                    department: ''
+                });
+            }
+
+            if (!lastAppt.department) {
+                const lastDate = new Date(lastAppt.appointmentDate || lastAppt.createdAt || new Date());
+                return res.json({
+                    success: true,
+                    active: false,
+                    lastConsultation: lastDate.toISOString().split('T')[0],
+                    fee: hospital.appointmentFee ?? 500,
+                    message: 'Follow-up Expired',
+                    department: ''
+                });
+            }
+
+            const dept = lastAppt.department;
+            const validityDays = hospital.departmentValidity?.get(dept) || 0;
+            const deptFee = hospital.departmentFees?.get(dept) ?? hospital.appointmentFee ?? 500;
+
+            const lastDate = new Date(lastAppt.appointmentDate);
+            lastDate.setUTCHours(0, 0, 0, 0);
+            const validUntil = new Date(lastDate);
+            validUntil.setDate(validUntil.getDate() + validityDays);
+
+            const currentDate = date ? new Date(date) : new Date();
+            currentDate.setUTCHours(0, 0, 0, 0);
+
+            if (currentDate <= validUntil && validityDays > 0) {
+                return res.json({
+                    success: true,
+                    active: true,
+                    validUntil: validUntil.toISOString().split('T')[0],
+                    lastConsultation: lastDate.toISOString().split('T')[0],
+                    fee: 0,
+                    message: 'Follow-up Active',
+                    department: dept
+                });
+            } else {
+                return res.json({
+                    success: true,
+                    active: false,
+                    lastConsultation: lastDate.toISOString().split('T')[0],
+                    fee: deptFee,
+                    message: 'Follow-up Expired',
+                    department: dept
+                });
+            }
+        } else if (department) {
+            const validityDays = hospital.departmentValidity?.get(department) || 0;
+            const deptFee = hospital.departmentFees?.get(department) ?? hospital.appointmentFee ?? 500;
+
+            if (validityDays > 0) {
+                const lastAppt = await Appointment.findOne({
+                    userId: patient._id,
+                    department,
+                    status: { $ne: 'cancelled' }
+                }).sort({ appointmentDate: -1 });
+
+                if (lastAppt && lastAppt.appointmentDate) {
+                    const lastDate = new Date(lastAppt.appointmentDate);
+                    lastDate.setUTCHours(0, 0, 0, 0);
+                    const validUntil = new Date(lastDate);
+                    validUntil.setDate(validUntil.getDate() + validityDays);
+
+                    const currentDate = date ? new Date(date) : new Date();
+                    currentDate.setUTCHours(0, 0, 0, 0);
+
+                    if (currentDate <= validUntil) {
+                        return res.json({
+                            success: true,
+                            active: true,
+                            validUntil: validUntil.toISOString().split('T')[0],
+                            lastConsultation: lastDate.toISOString().split('T')[0],
+                            fee: 0,
+                            message: 'Follow-up Active'
+                        });
+                    } else {
+                        return res.json({
+                            success: true,
+                            active: false,
+                            lastConsultation: lastDate.toISOString().split('T')[0],
+                            fee: deptFee,
+                            message: 'Follow-up Expired'
+                        });
+                    }
+                }
+            }
+
+            return res.json({
+                success: true,
+                active: false,
+                lastConsultation: null,
+                fee: deptFee,
+                message: 'First Visit / No Active Follow-up'
+            });
+        } else {
+            // Return ALL active followups
+            const activeFollowups = [];
+            if (hospital.departmentValidity) {
+                const departments = Array.from(hospital.departmentValidity.keys());
+                for (const dept of departments) {
+                    const validityDays = hospital.departmentValidity.get(dept);
+                    if (validityDays > 0) {
+                        const lastAppt = await Appointment.findOne({
+                            userId: patient._id,
+                            department: dept,
+                            status: { $ne: 'cancelled' }
+                        }).sort({ appointmentDate: -1 });
+
+                        if (lastAppt && lastAppt.appointmentDate) {
+                            const lastDate = new Date(lastAppt.appointmentDate);
+                            lastDate.setUTCHours(0, 0, 0, 0);
+                            const validUntil = new Date(lastDate);
+                            validUntil.setDate(validUntil.getDate() + validityDays);
+        
+                            const currentDate = new Date();
+                            currentDate.setUTCHours(0, 0, 0, 0);
+        
+                            if (currentDate <= validUntil) {
+                                activeFollowups.push({
+                                    department: dept,
+                                    validUntil: validUntil.toISOString().split('T')[0],
+                                    lastConsultation: lastDate.toISOString().split('T')[0],
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            return res.json({ success: true, activeFollowups });
+        }
+    } catch (e) { res.status(500).json({ success: false, message: 'An internal error occurred' }); }
+});
+
+// 7. BOOK APPOINTMENT (NEW: Assign Doctor)
 router.post('/book-appointment', verifyToken, verifyReception, async (req, res) => {
     try {
-        const { patientId, doctorId, date, time, notes, paymentMethod, paymentStatus, amount } = req.body;
+        const { patientId, doctorId, date, time, notes, paymentMethod, paymentStatus, amount, department } = req.body;
 
         if (!patientId || !doctorId || !date) {
             return res.status(400).json({ success: false, message: 'Missing booking details' });
@@ -443,7 +608,7 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
 
         // Determine appointment mode
         const Hospital = require('../models/hospital.model');
-        const hospital = hospitalId ? await Hospital.findById(hospitalId).select('appointmentMode') : null;
+        const hospital = hospitalId ? await Hospital.findById(hospitalId).select('appointmentMode name address city state phone') : null;
         const isTokenMode = hospital?.appointmentMode === 'token';
 
         let finalTime = time;
@@ -479,6 +644,37 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             }
         }
 
+        // --- ENFORCE FOLLOW-UP VALIDITY FEE ---
+        let finalAmount = Number(amount) || doctor.consultationFee || 0;
+        if (department && hospital) {
+            const validityDays = hospital.departmentValidity?.get(department) || 0;
+            if (validityDays > 0) {
+                const lastAppt = await Appointment.findOne({
+                    userId: patient._id,
+                    department,
+                    status: { $ne: 'cancelled' }
+                }).sort({ appointmentDate: -1 });
+
+                if (lastAppt && lastAppt.appointmentDate) {
+                    const lastDate = new Date(lastAppt.appointmentDate);
+                    lastDate.setUTCHours(0, 0, 0, 0);
+                    const validUntil = new Date(lastDate);
+                    validUntil.setDate(validUntil.getDate() + validityDays);
+
+                    const currentDate = new Date(date);
+                    currentDate.setUTCHours(0, 0, 0, 0);
+
+                    if (currentDate <= validUntil) {
+                        finalAmount = 0; // Waive fee
+                    } else if (finalAmount === 0) {
+                        // If frontend sent 0 but expired, enforce department fee
+                        finalAmount = hospital.departmentFees?.get(department) ?? hospital.appointmentFee ?? 500;
+                    }
+                }
+            }
+        }
+        // --------------------------------------
+
         const newAppointment = new Appointment({
             userId: patient._id,
             hospitalId,
@@ -488,18 +684,38 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             doctorName: doctor.name,
             serviceId: doctor.services?.[0] || 'general',
             serviceName: 'Walk-in Visit',
+            department: department || doctor.departments?.[0] || 'General',
             appointmentDate: new Date(date),
             appointmentTime: finalTime || '',
             tokenNumber,
-            amount: Number(amount) || doctor.consultationFee || 0,
+            amount: finalAmount,
             status: 'confirmed',
-            paymentStatus: paymentStatus || 'Paid',
+            paymentStatus: finalAmount === 0 ? 'Paid' : (paymentStatus || 'Paid'),
             paymentMethod: paymentMethod || 'Cash',
             notes: notes || 'Walk-in created by reception',
             bookedBy: req.user._id
         });
 
         await newAppointment.save();
+
+        // Fire-and-forget: send appointment confirmation email (never blocks response)
+        const hospitalAddress = [hospital?.address, hospital?.city, hospital?.state].filter(Boolean).join(', ');
+        sendAppointmentConfirmationEmail({
+            patientName: patient.name,
+            patientEmail: patient.email,
+            mrn: patient.patientId || patient.mrn || 'N/A',
+            appointmentId: newAppointment._id.toString(),
+            doctorName: doctor.name,
+            department: doctor.departments?.[0] || 'General',
+            appointmentDate: date,
+            appointmentTime: isTokenMode ? `Token #${tokenNumber}` : (finalTime || ''),
+            consultationFee: newAppointment.amount,
+            paymentStatus: newAppointment.paymentStatus,
+            hospitalName: hospital?.name || 'Hospital',
+            hospitalAddress: hospitalAddress,
+            hospitalPhone: hospital?.phone || ''
+        }).catch(err => console.error('[book-appointment] Email send background error:', err.message));
+
         res.json({ success: true, message: 'Appointment booked successfully!', appointment: newAppointment, tokenNumber });
 
     } catch (error) {

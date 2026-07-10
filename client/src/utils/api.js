@@ -138,6 +138,18 @@ export const receptionAPI = {
         const response = await apiClient.put(`/api/reception/intake/${userId}`, data);
         return response.data;
     },
+    getFollowupStatus: async (patientId, department, date = '') => {
+        let url = department === 'auto'
+            ? `/api/reception/patients/${patientId}/followup-status?auto=true`
+            : department 
+                ? `/api/reception/patients/${patientId}/followup-status?department=${encodeURIComponent(department)}`
+                : `/api/reception/patients/${patientId}/followup-status`;
+        if (date) {
+            url += (url.includes('?') ? '&' : '?') + `date=${date}`;
+        }
+        const response = await apiClient.get(url);
+        return response.data;
+    },
     bookAppointment: async (data) => {
         const response = await apiClient.post('/api/reception/book-appointment', data);
         return response.data;

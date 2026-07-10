@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doctorAPI } from '../../utils/api';
+import { doctorAPI, receptionAPI } from '../../utils/api';
 
 const PatientProfile = () => {
     const { patientId } = useParams();
@@ -9,6 +9,7 @@ const PatientProfile = () => {
     const [appointments, setAppointments] = useState([]);
     const [labReports, setLabReports] = useState([]);
     const [pharmacyOrders, setPharmacyOrders] = useState([]);
+    const [currentFollowupStatus, setCurrentFollowupStatus] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('overview');
@@ -29,6 +30,16 @@ const PatientProfile = () => {
             } else {
                 setError(res.message || 'Failed to load profile');
             }
+
+            try {
+                const resAuto = await receptionAPI.getFollowupStatus(patientId, 'auto');
+                if (resAuto.success) {
+                    setCurrentFollowupStatus(resAuto);
+                }
+            } catch (err) {
+                console.warn("Could not fetch followup status:", err?.message);
+            }
+
         } catch (err) {
             setError(err.response?.data?.message || err.message);
         } finally {
@@ -129,14 +140,14 @@ const PatientProfile = () => {
     const renderOverview = () => (
         <>
             {/* Quick Stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px', marginBottom: '20px' }}>
                 {[
                     { label: 'Total Visits', value: appointments.length, icon: '📅', g: 'linear-gradient(135deg,#3b82f6,#6366f1)' },
                     { label: 'Completed', value: appointments.filter(a => a.status === 'completed').length, icon: '✅', g: 'linear-gradient(135deg,#10b981,#059669)' },
                     { label: 'Lab Tests', value: labReports.length, icon: '🧪', g: 'linear-gradient(135deg,#f59e0b,#d97706)' },
                     { label: 'Prescriptions', value: pharmacyOrders.length, icon: '💊', g: 'linear-gradient(135deg,#ef4444,#dc2626)' },
                 ].map((s, i) => (
-                    <div key={i} style={{ ...C.card, display: 'flex', alignItems: 'center', gap: '14px', padding: '18px' }}>
+                    <div key={i} style={{ ...C.card, display: 'flex', alignItems: 'center', gap: '14px', padding: '18px', marginBottom: 0 }}>
                         <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: s.g, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>{s.icon}</div>
                         <div>
                             <div style={{ color: '#f8fafc', fontSize: '1.5rem', fontWeight: '800', lineHeight: 1 }}>{s.value}</div>
@@ -144,6 +155,35 @@ const PatientProfile = () => {
                         </div>
                     </div>
                 ))}
+
+                {/* Follow-up Card */}
+                <div style={{ background: currentFollowupStatus?.active ? '#f0fdf4' : '#fef2f2', borderColor: currentFollowupStatus?.active ? '#bbf7d0' : '#fecaca', borderLeft: currentFollowupStatus?.active ? '4px solid #22c55e' : '4px solid #ef4444', borderStyle: 'solid', borderWidth: '1px 1px 1px 4px', gridColumn: 'span 1', padding: '16px', borderRadius: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div style={{ width: '100%', fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" }}>
+                        <span style={{ color: currentFollowupStatus?.active ? '#166534' : '#991b1b', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>Follow-up</span>
+                        <div style={{ marginTop: '4px' }}>
+                            <span style={{ color: currentFollowupStatus?.active ? '#15803d' : '#b91c1c', fontSize: '1.1rem', fontWeight: 800 }}>
+                                {(() => {
+                                    if (currentFollowupStatus?.active) return 'Active';
+                                    if (currentFollowupStatus?.message === 'New Patient / First Visit' && appointments.length === 0) return 'New Patient';
+                                    return 'Expired';
+                                })()}
+                            </span>
+                        </div>
+                        {currentFollowupStatus && !(currentFollowupStatus.message === 'New Patient / First Visit' && appointments.length === 0) && (
+                            <div style={{ fontSize: '0.75rem', color: currentFollowupStatus.active ? '#166534' : '#7f1d1d', marginTop: '4px', fontWeight: 500 }}>
+                                {(() => {
+                                    if (currentFollowupStatus.active) {
+                                        return <>Valid: {Math.max(0, Math.ceil((new Date(currentFollowupStatus.validUntil).getTime() - new Date().getTime()) / (1000 * 3600 * 24)))} Days</>;
+                                    } else {
+                                        const lastVisit = appointments.length > 0 ? appointments[0] : null;
+                                        const lastDate = currentFollowupStatus.lastConsultation || (lastVisit ? lastVisit.appointmentDate : null);
+                                        return <>{lastDate ? `Last: ${new Date(lastDate).toLocaleDateString('en-IN')}` : 'Fee Applicable'}</>;
+                                    }
+                                })()}
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Demographics */}
@@ -530,7 +570,7 @@ const PatientProfile = () => {
                             <span style={C.idBadge('rgba(59,130,246,0.15)', '#93c5fd')}>📞 {patient.phone || 'No Phone'}</span>
                             {patient.gender && <span style={C.idBadge('rgba(139,92,246,0.15)', '#c4b5fd')}>{patient.gender === 'male' ? '♂️' : '♀️'} {patient.gender}</span>}
                             {age && <span style={C.idBadge('rgba(16,185,129,0.15)', '#6ee7b7')}>{age} years</span>}
-                            {patient.bloodGroup && <span style={C.idBadge('rgba(239,68,68,0.15)', '#fca5a5')}>🩸 {patient.bloodGroup}</span>}
+                            {patient.bloodGroup && <span style={C.idBadge('rgba(239,68,68,0.15)', '#fca5a5')}>{patient.bloodGroup}</span>}
                             <span style={C.idBadge('rgba(255,255,255,0.06)', '#94a3b8')}>Since {formatDate(patient.createdAt)}</span>
                         </div>
                         <div style={C.idGrid}>

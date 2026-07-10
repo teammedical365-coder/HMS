@@ -45,6 +45,7 @@ const hospitalSchema = new mongoose.Schema({
     isActive: { type: Boolean, default: true },
     departments: [{ type: String }],
     departmentFees: { type: Map, of: Number, default: {} },
+    departmentValidity: { type: Map, of: Number, default: {} },
     facilities: [{
         name: { type: String, required: true },
         pricePerDay: { type: Number, required: true, min: 0 }
