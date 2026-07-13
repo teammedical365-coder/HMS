@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI, simpleClinicAPI, revenueAPI } from '../../utils/api';
+import AdminLabs from '../admin/AdminLabs';
+import AdminPharmacy from '../admin/AdminPharmacy';
 import HospitalBrandingEditor from '../../components/HospitalBrandingEditor';
 import '../administration/SuperAdmin.css';
 import './CentralAdminDashboard.css';
@@ -2128,10 +2130,10 @@ const CentralAdminDashboard = () => {
                                 { icon: '📦', label: 'Test Packages', desc: 'Bundle lab tests into packages', path: '/admin/test-packages', bg: '#f0fdf4', color: '#22c55e' },
                                 { icon: '💊', label: 'Medicine Catalog', desc: 'Global medicine library', path: '/admin/medicines', bg: '#fff7ed', color: '#f97316' },
                                 { icon: '🛠️', label: 'Services', desc: 'Hospital services & pricing', path: '/admin/services', bg: '#fefce8', color: '#eab308' },
-                                { icon: '🏥', label: 'Labs', desc: 'Manage lab departments', path: '/admin/labs', bg: '#f0f9ff', color: '#0ea5e9' },
-                                { icon: '💊', label: 'Pharmacy', desc: 'Manage pharmacy departments', path: '/admin/pharmacy', bg: '#fff1f2', color: '#f43f5e' },
+                                { icon: '🧪', label: 'Labs', desc: 'Manage lab departments', tab: 'labs', bg: '#f0f9ff', color: '#0ea5e9' },
+                                { icon: '🏥', label: 'Pharmacy', desc: 'Manage pharmacy departments', tab: 'pharmacy', bg: '#fff1f2', color: '#f43f5e' },
                             ].map((item, i) => (
-                                <div key={i} className="config-card" onClick={() => navigate(item.path)} style={{ background: item.bg }}>
+                                <div key={i} className="config-card" onClick={() => item.tab ? setActiveTab(item.tab) : navigate(item.path)} style={{ background: item.bg }}>
                                     <div className="config-icon" style={{ color: item.color }}>{item.icon}</div>
                                     <div>
                                         <h4 style={{ color: item.color, margin: '0 0 4px' }}>{item.label}</h4>
@@ -2140,6 +2142,22 @@ const CentralAdminDashboard = () => {
                                 </div>
                             ))}
                         </div>
+                    </div>
+                )}
+
+                {/* ========== LABS TAB ========== */}
+                {activeTab === 'labs' && (
+                    <div style={{ marginTop: '20px' }}>
+                        <button className="btn-cancel" style={{ marginBottom: '20px' }} onClick={() => setActiveTab('configurations')}>← Back to Configurations</button>
+                        <AdminLabs />
+                    </div>
+                )}
+
+                {/* ========== PHARMACY TAB ========== */}
+                {activeTab === 'pharmacy' && (
+                    <div style={{ marginTop: '20px' }}>
+                        <button className="btn-cancel" style={{ marginBottom: '20px' }} onClick={() => setActiveTab('configurations')}>← Back to Configurations</button>
+                        <AdminPharmacy />
                     </div>
                 )}
 

@@ -12,7 +12,8 @@ const PharmacyInventory = () => {
         name: '', category: '', stock: '', unit: 'Tablets',
         buyingPrice: '', sellingPrice: '', vendor: '',
         batchNumber: '', expiryDate: '',
-        purchaseDate: new Date().toISOString().split('T')[0]
+        purchaseDate: new Date().toISOString().split('T')[0],
+        isPriceFixed: false
     });
 
     useEffect(() => { fetchInventory(); }, []);
@@ -50,7 +51,8 @@ const PharmacyInventory = () => {
                     name: '', category: '', stock: '', unit: 'Tablets',
                     buyingPrice: '', sellingPrice: '', vendor: '',
                     batchNumber: '', expiryDate: '',
-                    purchaseDate: new Date().toISOString().split('T')[0]
+                    purchaseDate: new Date().toISOString().split('T')[0],
+                    isPriceFixed: false
                 });
             }
         } catch (error) {
@@ -131,9 +133,9 @@ const PharmacyInventory = () => {
            
 
             {showAddModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content inventory-modal">
-                        <div className="modal-header">
+                <div className="modal-overlay !fixed !inset-0 !z-[9999] !flex !items-center !justify-center !bg-black/50 !overflow-hidden">
+                    <div className="modal-content inventory-modal !bg-white !rounded-xl !shadow-xl !max-h-[85vh] !w-full !max-w-2xl !flex !flex-col !overflow-hidden" style={{ height: '85vh', display: 'flex', flexDirection: 'column' }}>
+                        <div className="modal-header !p-6 !border-b !flex !justify-between !items-center !bg-white">
                             <div>
                                 <h2>Add New Medication</h2>
                                 <p className="modal-subtitle">Enter details to update your stock levels</p>
@@ -141,7 +143,7 @@ const PharmacyInventory = () => {
                             <button className="close-btn" onClick={() => setShowAddModal(false)}>×</button>
                         </div>
 
-                        <form onSubmit={handleAddMedicine} className="pharma-form">
+                        <form onSubmit={handleAddMedicine} className="pharma-form !p-6 !overflow-y-auto !flex-1" style={{ flex: '1', overflowY: 'auto', overscrollBehavior: 'contain', zIndex: 10 }}>
                             {/* Section 1: Basic Information */}
                             <div className="form-section">
                                 <h3 className="section-title">General Information</h3>
@@ -189,14 +191,20 @@ const PharmacyInventory = () => {
                                     <div className="form-group">
                                         <label>Buying Price (₹)</label>
                                         <div className="input-with-icon">
-                                            <input required type="number" value={newMedicine.buyingPrice} onChange={(e) => setNewMedicine({ ...newMedicine, buyingPrice: e.target.value })} placeholder="0.00" />
+                                            <input required type="number" value={newMedicine.buyingPrice} onChange={(e) => setNewMedicine({ ...newMedicine, buyingPrice: e.target.value })} placeholder="0.00" readOnly={newMedicine.isPriceFixed} className={newMedicine.isPriceFixed ? "bg-gray-100 cursor-not-allowed" : ""} />
                                         </div>
                                     </div>
                                     <div className="form-group">
                                         <label>Selling Price (₹)</label>
                                         <div className="input-with-icon">
-                                            <input required type="number" value={newMedicine.sellingPrice} onChange={(e) => setNewMedicine({ ...newMedicine, sellingPrice: e.target.value })} placeholder="0.00" />
+                                            <input required type="number" value={newMedicine.sellingPrice} onChange={(e) => setNewMedicine({ ...newMedicine, sellingPrice: e.target.value })} placeholder="0.00" readOnly={newMedicine.isPriceFixed} className={newMedicine.isPriceFixed ? "bg-gray-100 cursor-not-allowed" : ""} />
                                         </div>
+                                    </div>
+                                </div>
+                                <div className="form-row">
+                                    <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+                                        <input type="checkbox" id="isPriceFixed" checked={newMedicine.isPriceFixed} onChange={(e) => setNewMedicine({ ...newMedicine, isPriceFixed: e.target.checked })} style={{ width: 'auto', marginBottom: 0 }} />
+                                        <label htmlFor="isPriceFixed" style={{ marginBottom: 0, fontWeight: 'normal' }}>Lock Prices (Fixed)</label>
                                     </div>
                                 </div>
                             </div>

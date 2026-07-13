@@ -1319,6 +1319,12 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
     // Date and time slot are required (time slot only for slot mode)
     const canSubmit = !booking && (fee === 0 || form.paymentMethod) && form.appointmentDate && (!isSlotMode || form.appointmentTime);
 
+    const normalizedService = (form.serviceName || '').toLowerCase().replace(/[\s-]/g, '');
+    const isFollowUp = normalizedService.includes('followup');
+    const isFixedFee = isFollowUp || feeWaived;
+    
+    console.log("DEBUG: feeWaived variable is currently:", feeWaived);
+
     const submit = async (e) => {
         e.preventDefault();
         if (!form.appointmentDate) { flash('error', 'Please select an appointment date'); return; }
@@ -1378,6 +1384,11 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
     const borderColor = isSlotMode ? '#bfdbfe' : '#bbf7d0';
     const bgColor = isSlotMode ? '#eff6ff' : '#f0fdf4';
 
+    console.log("DEBUG: Raw Service Name from form object:", form.serviceName);
+    console.log("DEBUG: Normalized Service Name:", (form.serviceName || '').toLowerCase().replace(/[\s-]/g, ''));
+    console.log("DEBUG: Entire Form Object:", form);
+    console.log('Is Fee Fixed?', isFixedFee);
+
     return (
         <form onSubmit={submit} style={{ background: bgColor, border: `1px solid ${borderColor}`, borderRadius: '10px', padding: '14px 16px', marginTop: '8px' }}>
             {/* Payment notice */}
@@ -1425,9 +1436,10 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
 
                 <div style={{ flex: '1', minWidth: '90px' }}>
                     <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Fee (₹) *</label>
-                    <input className="clinic-input" type="number" min="0" placeholder="0" value={form.amount}
-                        disabled={feeWaived}
-                        onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+                    <input className="clinic-input bg-gray-100 cursor-not-allowed" type="number" min="0" placeholder="0" 
+                        value={form.amount}
+                        disabled={true}
+                        style={{ opacity: 0.7, cursor: 'not-allowed' }} />
                 </div>
 
                 <div style={{ flex: '1', minWidth: '100px' }}>
