@@ -76,7 +76,10 @@ router.get('/active', verifyAdmissionAccess, async (req, res) => {
         const admissions = await Admission.find({
             status: 'Admitted',
             hospitalId: req.hospitalId || req.user.hospitalId,
-        }).populate('patientId', 'name phone patientId mrn').lean();
+        })
+        .populate('patientId', 'name phone patientId mrn gender dob')
+        .populate('appointmentId', 'doctorName')
+        .lean();
 
         res.json({ success: true, admissions });
     } catch (err) {

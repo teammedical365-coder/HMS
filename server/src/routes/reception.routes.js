@@ -24,6 +24,13 @@ const verifyReception = (req, res, next) => {
     if (ALLOWED_ROLES.has(roleStr) || ALLOWED_ROLES.has(dynRoleStr)) return next();
     if (permissions.includes('reception_access') || permissions.includes('*')) return next();
 
+    // Specific portal routes that patients are allowed to access via ReceptionDashboard
+    if (roleStr === 'patient') {
+        const allowedPatientPaths = ['/register', '/search-patients', '/appointments', '/book-appointment', '/transactions', '/send-aadhaar-otp', '/verify-aadhaar-otp'];
+        const isAllowedPath = allowedPatientPaths.some(p => req.path.startsWith(p));
+        if (isAllowedPath) return next();
+    }
+
     return res.status(403).json({ success: false, message: 'Access denied: Reception access only' });
 };
 
@@ -92,11 +99,21 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         if (name.length > 100) return res.status(400).json({ success: false, message: 'Name too long (max 100 chars)' });
         if (email && email.length > 200) return res.status(400).json({ success: false, message: 'Email too long (max 200 chars)' });
 
-        // Check if patient exists by Phone (or Email if provided)
-        const orClauses = [{ phone }];
-        if (email) orClauses.push({ email });
+        // Check if patient exists by Phone AND Name (case-insensitive) to prevent overwriting family members sharing a phone.
+        // We do NOT match by email because dummy emails are often shared.
+        let userQuery = { 
+            phone,
+            name: new RegExp('^' + String(name).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i')
+        };
 
-        let userQuery = { $or: orClauses };
+        if (req.user.role === 'patient') {
+            const PatientAuth = require('../models/patientAuth.model');
+            const authRecord = await PatientAuth.findById(req.user.patientId || req.user._id);
+            if (authRecord && authRecord.mobile !== phone) {
+                return res.status(403).json({ success: false, message: 'You can only register using your own mobile number.' });
+            }
+        }
+        
         if (req.user.hospitalId) {
             userQuery.hospitalId = req.user.hospitalId;
         }
@@ -104,8 +121,6 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         let user = await User.findOne(userQuery);
 
         if (user) {
-            // Update name if changed
-            user.name = name;
             // Only update email if provided and different (avoid overwriting with empty)
             if (email && email !== user.email) user.email = email;
 
@@ -369,11 +384,16 @@ router.get('/appointments', verifyToken, verifyReception, resolveTenant, async (
 
         // Default: today's active appointments only (reception queue view)
         // Pass ?all=true to get full history
-        if (req.query.all !== 'true') {
+        if (req.query.all !== 'true' && req.user.role !== 'patient') {
             const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
             const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999);
             queryFilter.appointmentDate = { $gte: todayStart, $lte: todayEnd };
             queryFilter.status = { $ne: 'cancelled' };
+        }
+
+        // SECURITY: If patient, ONLY return their own appointments
+        if (req.user.role === 'patient') {
+            queryFilter.userId = req.user._id;
         }
 
         const appointments = await Appointment.find(queryFilter)
@@ -699,6 +719,16 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
 
         await newAppointment.save();
 
+        // [MODULE 5] Automatically complete Hospital Registration by linking PatientAuth to User Profile
+        if (req.user.role === 'patient') {
+            const PatientAuth = require('../models/patientAuth.model');
+            const authRecord = await PatientAuth.findById(req.user.patientId || req.user._id);
+            if (authRecord && !authRecord.linkedPatientProfileId) {
+                authRecord.linkedPatientProfileId = patient._id;
+                await authRecord.save();
+            }
+        }
+
         // Fire-and-forget: send appointment confirmation email (never blocks response)
         const hospitalAddress = [hospital?.address, hospital?.city, hospital?.state].filter(Boolean).join(', ');
         sendAppointmentConfirmationEmail({
@@ -728,17 +758,40 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
 // 7b. CONFIRM PAYMENT for an existing appointment
 router.patch('/appointments/:id/confirm-payment', verifyToken, verifyReception, async (req, res) => {
     try {
-        const { paymentMethod, amount } = req.body;
+        const { paymentMethod, amount, transactionId, upiId, cardDetails, bankReference, proofUrl } = req.body;
         const findQuery = { _id: req.params.id };
         if (req.user.hospitalId) findQuery.hospitalId = req.user.hospitalId;
-        const appt = await Appointment.findOne(findQuery);
+        const appt = await Appointment.findOne(findQuery).populate('doctorId', 'name');
         if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found or unauthorized' });
+        
         appt.paymentStatus = 'Paid';
         appt.paymentMethod = paymentMethod || appt.paymentMethod || 'Cash';
         if (amount !== undefined) appt.amount = amount;
         await appt.save();
+
+        const PaymentTransaction = require('../models/paymentTransaction.model');
+        const pt = new PaymentTransaction({
+            hospitalId: req.hospitalId || req.user.hospitalId,
+            patientId: appt.userId,
+            paymentMode: appt.paymentMethod,
+            paymentStatus: 'Paid',
+            amount: Number(appt.amount) || 0,
+            transactionId,
+            upiId,
+            cardDetails,
+            bankReference,
+            proofUrl,
+            description: `OPD Consultation Payment - Dr. ${appt.doctorId?.name || 'Doctor'}`,
+            billedItems: {
+                appointments: [appt._id]
+            },
+            addedBy: req.user._id || req.user.userId
+        });
+        await pt.save();
+
         res.json({ success: true, appointment: appt });
     } catch (error) {
+        console.error('[confirm-payment-error]', error);
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });

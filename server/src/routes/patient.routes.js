@@ -434,8 +434,8 @@ router.post('/:id/documents', verifyToken, resolveTenant, consentUpload.single('
 
         res.json({ success: true, message: 'Document uploaded', document: docEntry });
     } catch (error) {
-        console.error('[document-upload]', error.message);
-        res.status(500).json({ success: false, message: 'Upload failed' });
+        console.error('[document-upload] FULL ERROR:', error);
+        res.status(500).json({ success: false, message: 'Upload failed', error: error.message, stack: error.stack });
     }
 });
 

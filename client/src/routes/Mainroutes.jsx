@@ -25,6 +25,13 @@ import Patient from '../pages/doctors/Patient';
 import AdminLabTests from '../pages/admin/AdminLabTests';
 import DoctorPatientDetails from '../pages/doctors/DoctorPatientDetails';
 import UnifiedPatientProfile from '../pages/patient/UnifiedPatientProfile';
+import PatientPortalLogin from '../pages/patient/PatientPortalLogin';
+import PatientSignup from '../pages/patient/PatientSignup';
+import PatientForgotPassword from '../pages/patient/PatientForgotPassword';
+import PatientResetPassword from '../pages/patient/PatientResetPassword';
+import PatientDashboard from '../pages/patient/PatientDashboard';
+import PatientBookPlaceholder from '../pages/patient/PatientBookPlaceholder';
+import PatientProtectedRoute from '../components/PatientProtectedRoute';
 
 // Hospital Admin (Tier 2) Pages
 import Admin from '../pages/admin/Admin';
@@ -128,7 +135,7 @@ const MainRoutes = () => {
     
     return (
         <>
-            {!isAuthenticated && <Navbar />}
+            {!isAuthenticated && !window.location.pathname.startsWith('/patient') && <Navbar />}
 
             {isAuthenticated ? (
                 <DashboardLayout>
@@ -215,6 +222,15 @@ const MainRoutes = () => {
                     <Route path="/signup" element={<Signup />} />
                     <Route path="/supremeadmin/signup" element={<CentralAdminSignup />} />
                     <Route path="/admin/signup" element={<AdminSignup />} />
+                    
+                    {/* Patient Portal UI */}
+                    <Route path="/patient" element={<PatientPortalLogin />} />
+                    <Route path="/patient/signup" element={<PatientSignup />} />
+                    <Route path="/patient/forgot-password" element={<PatientForgotPassword />} />
+                    <Route path="/patient/reset-password" element={<PatientResetPassword />} />
+                    <Route path="/patient/dashboard" element={<PatientProtectedRoute><PatientDashboard /></PatientProtectedRoute>} />
+                    <Route path="/patient/book-appointment" element={<PatientProtectedRoute><ReceptionDashboard isPatientPortal={true} /></PatientProtectedRoute>} />
+                    
                     <Route path="*" element={<Navigate to="/login" />} />
                 </Routes>
             )}

@@ -24,7 +24,7 @@ const isWithin24Hours = (dateString) => {
     return diffHours <= 24;
 };
 
-const ReceptionDashboard = () => {
+const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { user: currentUser } = useAuth();
@@ -39,6 +39,11 @@ const ReceptionDashboard = () => {
     const [profilePatient, setProfilePatient] = useState(null);
     const [profileAppointments, setProfileAppointments] = useState([]);
     const [transactions, setTransactions] = useState([]);
+    const [hospitalizedPatients, setHospitalizedPatients] = useState([]);
+    const [loadingHospitalized, setLoadingHospitalized] = useState(true);
+    const [hospitalizedSearch, setHospitalizedSearch] = useState('');
+    const [hospitalizedWardFilter, setHospitalizedWardFilter] = useState('');
+    const [hospitalizedDoctorFilter, setHospitalizedDoctorFilter] = useState('');
 
     // Token mode — next token preview
     const [nextToken, setNextToken] = useState(null);
@@ -98,14 +103,45 @@ const ReceptionDashboard = () => {
             } catch (err) { console.error('Error fetching hospital context:', err); }
         };
         fetchHospital();
-        fetchAppointments();
         fetchDoctors();
-    }, []);
+
+        if (!isPatientPortal) {
+            fetchAppointments();
+            fetchHospitalizedPatients();
+        }
+    }, [isPatientPortal]);
+
+    const fetchHospitalizedPatients = async () => {
+        try {
+            setLoadingHospitalized(true);
+            const res = await admissionAPI.getActiveAdmissions();
+            if (res.success) {
+                setHospitalizedPatients(res.admissions || []);
+            }
+        } catch (err) {
+            console.error('Error fetching hospitalized patients:', err);
+        } finally {
+            setLoadingHospitalized(false);
+        }
+    };
 
     const viewParam = new URLSearchParams(location.search).get('view');
     const patientStateId = location.state?.patient?._id || location.state?.patient?.patientId;
 
     useEffect(() => {
+        if (isPatientPortal) {
+            setViewMode('intake');
+            if (currentUser) {
+                setIntakeForm(prev => ({
+                    ...prev,
+                    firstName: currentUser.name?.split(' ')[0] || '',
+                    lastName: currentUser.name?.split(' ').slice(1).join(' ') || '',
+                    mobile: currentUser.mobile || '',
+                    email: currentUser.email || ''
+                }));
+            }
+            return;
+        }
         if (location.state?.patient) {
             handleEditPatient(location.state.patient);
         } else if (viewParam === 'intake') {
@@ -118,7 +154,7 @@ const ReceptionDashboard = () => {
         } else {
             setViewMode('welcome');
         }
-    }, [patientStateId, viewParam, hospitalContext]);
+    }, [patientStateId, viewParam, hospitalContext, isPatientPortal, currentUser]);
 
     useEffect(() => {
         if (availabilityCheck.doctorId && availabilityCheck.date) {
@@ -414,9 +450,9 @@ const ReceptionDashboard = () => {
 
     const handleConfirmPayment = async () => {
         setConfirmingPayment(true);
-        const { appointment, method } = paymentModal;
+        const { appointment, method, data } = paymentModal;
         try {
-            await receptionAPI.confirmPayment(appointment._id, method, appointment.amount);
+            await receptionAPI.confirmPayment(appointment._id, method, appointment.amount, data || {});
             const pdf = generateReceiptPDF({ ...appointment, paymentMethod: method, paymentStatus: 'Paid' }, method, false);
             setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Payment Receipt' });
             setPaymentModal({ open: false, appointment: null, method: 'Cash' });
@@ -568,17 +604,19 @@ const ReceptionDashboard = () => {
         try {
             let userId = selectedPatientId;
 
-            // 1. Register/Find User
-            const regRes = await receptionAPI.registerPatient({
-                name: `${intakeForm.firstName} ${intakeForm.lastName}`.trim(),
-                email: intakeForm.email,
-                phone: intakeForm.mobile,
-            });
+            // 1. Register/Find User (Only if it's a new walk-in)
+            if (!userId) {
+                const regRes = await receptionAPI.registerPatient({
+                    name: `${intakeForm.firstName} ${intakeForm.lastName}`.trim(),
+                    email: intakeForm.email,
+                    phone: intakeForm.mobile,
+                });
 
-            if (regRes.success && regRes.user) {
-                userId = regRes.user._id;
-            } else {
-                throw new Error(regRes.message || "Registration failed.");
+                if (regRes.success && regRes.user) {
+                    userId = regRes.user._id;
+                } else {
+                    throw new Error(regRes.message || "Registration failed.");
+                }
             }
 
             // 2. Upload profile photo if selected
@@ -677,7 +715,7 @@ const ReceptionDashboard = () => {
                         startY: y,
                         body: [
                             ['Patient Name', `${intakeForm.firstName} ${intakeForm.lastName}`],
-                            ['MRN / ID', regRes.user?.patientId || bookingRes.appointment?.patientId || 'N/A'],
+                            ['MRN / ID', bookingRes.appointment?.patientId || 'N/A'],
                             ['Phone', intakeForm.mobile || '-'],
                             ['Aadhaar Verified', intakeForm.isAadhaarVerified ? 'YES - Verified' : 'NO'],
                             ['Department', intakeForm.department || '-'],
@@ -703,16 +741,27 @@ const ReceptionDashboard = () => {
                     doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 196, y, { align: 'right' });
                     y += 5;
                     doc.text('Thank you for choosing ' + hName, 105, y, { align: 'center' });
-                    const receiptPatientId = regRes.user?.patientId || bookingRes.appointment?.patientId || 'Patient';
+                    const receiptPatientId = bookingRes.appointment?.patientId || 'Patient';
                     setPendingDownload({ doc, filename: `Receipt_${receiptPatientId}.pdf`, title: 'Registration Receipt' });
-
-                    const tokenMsg = bookingRes.appointment?.tokenNumber
-                        ? ` Token #${bookingRes.appointment.tokenNumber} assigned.` : '';
-                    alert(`Patient Registered & Assigned to Doctor!${tokenMsg}`);
 
                     setPaymentScreenshot(null);
                     fetchAppointments();
                     setViewMode('list');
+
+                    const tokenMsg = bookingRes.appointment?.tokenNumber
+                        ? ` Token #${bookingRes.appointment.tokenNumber} assigned.` : '';
+
+                    if (isPatientPortal) {
+                        alert(`Patient Registered & Assigned to Doctor!${tokenMsg}\n\nYour Patient Dashboard is now Activated!`);
+                        const localU = JSON.parse(localStorage.getItem('patientUser') || '{}');
+                        localU.registrationStatus = 'Completed';
+                        localU.linkedPatientProfileId = bookingRes.appointment?.userId;
+                        localU.mrn = receiptPatientId;
+                        localStorage.setItem('patientUser', JSON.stringify(localU));
+                        // Re-trigger the state update locally if possible, or they can just navigate back
+                    } else {
+                        alert(`Patient Registered & Assigned to Doctor!${tokenMsg}`);
+                    }
                 } else {
                     alert("Booking Failed: " + bookingRes.message);
                 }
@@ -1254,50 +1303,50 @@ const ReceptionDashboard = () => {
 
     const renderModals = () => (
         <>
-            {paymentModal.open && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-                    <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '440px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <div>
-                                <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>💰 Confirm Payment</h2>
-                                <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.88rem' }}>
-                                    {paymentModal.appointment?.userId?.name} — Rs. {Number(paymentModal.appointment?.amount || 0).toLocaleString('en-IN')}
-                                </p>
-                            </div>
-                            <button onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+        {paymentModal.open && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '440px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>💰 Confirm Payment</h2>
+                            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.88rem' }}>
+                                {paymentModal.appointment?.userId?.name} — Rs. {Number(paymentModal.appointment?.amount || 0).toLocaleString('en-IN')}
+                            </p>
                         </div>
-                        <div style={{ marginBottom: '18px' }}>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '7px' }}>Payment Method</label>
-                            <select
-                                value={paymentModal.method}
-                                onChange={e => setPaymentModal(p => ({ ...p, method: e.target.value }))}
-                                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
-                            >
-                                <option value="Cash">Cash</option>
-                                <option value="UPI">UPI</option>
-                                <option value="Card">Card</option>
-                                <option value="Cheque">Cheque</option>
-                                <option value="NEFT/RTGS">NEFT / RTGS</option>
-                            </select>
-                        </div>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <button
-                                onClick={handleConfirmPayment}
-                                disabled={confirmingPayment}
-                                style={{ flex: 1, padding: '11px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
-                            >
-                                {confirmingPayment ? 'Confirming...' : '✓ Confirm & Print Receipt'}
-                            </button>
-                            <button
-                                onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })}
-                                style={{ padding: '11px 18px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}
-                            >
-                                Cancel
-                            </button>
-                        </div>
+                        <button onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+                    </div>
+                    <div style={{ marginBottom: '18px' }}>
+                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '7px' }}>Payment Method</label>
+                        <select
+                            value={paymentModal.method}
+                            onChange={e => setPaymentModal(p => ({ ...p, method: e.target.value }))}
+                            style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
+                        >
+                            <option value="Cash">Cash</option>
+                            <option value="UPI">UPI</option>
+                            <option value="Card">Card</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="NEFT/RTGS">NEFT / RTGS</option>
+                        </select>
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button
+                            onClick={handleConfirmPayment}
+                            disabled={confirmingPayment}
+                            style={{ flex: 1, padding: '11px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
+                        >
+                            {confirmingPayment ? 'Confirming...' : '✓ Confirm & Print Receipt'}
+                        </button>
+                        <button
+                            onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })}
+                            style={{ padding: '11px 18px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}
+                        >
+                            Cancel
+                        </button>
                     </div>
                 </div>
-            )}
+            </div>
+        )}
 
             {hospitalizeModal.open && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
@@ -1637,12 +1686,49 @@ const ReceptionDashboard = () => {
                                 </div>
                             </div>
 
-
-
+                        {/* Card 4: Patient Billing */}
+                        <div
+                            onClick={() => navigate('/billing/patient')}
+                            style={{
+                                background: '#ffffff',
+                                borderRadius: '16px',
+                                padding: '26px',
+                                border: '1px solid #e2e8f0',
+                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '18px'
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(13, 148, 136, 0.12)'; e.currentTarget.style.borderColor = '#99f6e4'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                        >
+                            <div style={{
+                                width: '54px',
+                                height: '54px',
+                                borderRadius: '14px',
+                                background: '#f0fdf4',
+                                color: '#0d9488',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '1.6rem',
+                                flexShrink: 0
+                            }}>
+                                <FiFileText />
+                            </div>
+                            <div>
+                                <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Patient Billing</h4>
+                                <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
+                                    View and manage patient records
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
-                {renderModals()}
+            </div>
+            {renderModals()}
             </>
         );
     }
@@ -1690,79 +1776,79 @@ const ReceptionDashboard = () => {
                     </div>
                 )}
 
-                <div className="dashboard-header">
-                    <h1>Reception Desk</h1>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <button className="btn-cancel" onClick={() => { fetchTransactions(); setViewMode('transactions'); }} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1' }}>💰 Transactions</button>
-                        <button className="btn-cancel" onClick={() => navigate('/billing/patient')} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac' }}>🧾 Patient Billing</button>
-                        <button className="btn-save" onClick={handleNewWalkIn} style={{ padding: '10px 20px', fontSize: '1rem' }}>+ New Registration</button>
-                    </div>
+            <div className="dashboard-header">
+                <h1>Reception Desk</h1>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    <button className="btn-cancel" onClick={() => { fetchTransactions(); setViewMode('transactions'); }} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1' }}>💰 Transactions</button>
+                    <button className="btn-cancel" onClick={() => navigate('/billing/patient')} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac' }}>🧾 Patient Billing</button>
+                    <button className="btn-save" onClick={handleNewWalkIn} style={{ padding: '10px 20px', fontSize: '1rem' }}>+ New Registration</button>
                 </div>
-
-                {/* SEARCH SECTION */}
-                <div className="search-section card" style={{ padding: '20px', marginBottom: '20px', position: 'relative' }}>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <input
-                            type="text"
-                            placeholder="🔍 Search Patient by Name, Mobile or MRN..."
-                            value={searchQuery}
-                            onChange={handleSearch}
-                            style={{ flex: 1, padding: '12px', fontSize: '1rem', borderRadius: '6px', border: '1px solid #ddd' }}
-                        />
-                    </div>
-                    {searchResults.length > 0 && (
-                        <div className="search-results-dropdown" style={{
-                            position: 'absolute', top: '70px', left: '20px', right: '20px',
-                            background: 'white', border: '1px solid #eee', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                            zIndex: 1000, maxHeight: '300px', overflowY: 'auto', borderRadius: '8px'
-                        }}>
-                            {searchResults.map(p => (
-                                <div key={p._id} style={{ padding: '12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div>
-                                        <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>{p.name} <span style={{ color: '#666', fontSize: '0.9rem' }}>({p.patientId || 'N/A'})</span></div>
-                                        <div style={{ fontSize: '0.9rem', color: '#888' }}>📱 {p.phone}</div>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                        <button
-                                            onClick={() => handleSelectSearchResult(p)}
-                                            style={{ padding: '6px 14px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
-                                        >
-                                            📋 Book Appointment
-                                        </button>
-                                        <button
-                                            onClick={() => handleViewProfile(p)}
-                                            style={{ padding: '6px 14px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
-                                        >
-                                            👤 View Profile
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Widget Area */}
-                <div className="availability-widget card">
-                    <h3>📅 Quick Check Availability</h3>
-                    <div className="widget-controls">
-                        <select className="avail-select" onChange={(e) => setAvailabilityCheck({ ...availabilityCheck, doctorId: e.target.value })}>
-                            <option value="">Select Doctor</option>
-                            {doctorsList.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
-                        </select>
-                        <input type="date" value={availabilityCheck.date} onChange={(e) => setAvailabilityCheck({ ...availabilityCheck, date: e.target.value })} />
-                    </div>
-                    {availabilityCheck.doctorId && (
-                        <div className="slot-grid">
-                            {timeSlots.map(t => (
-                                <button key={t} className={`slot-btn ${availabilityCheck.bookedSlots.includes(t) ? 'booked' : ''}`} onClick={() => handleSlotClick(t)}>{t}</button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {renderTodaysQueue()}
             </div>
+
+            {/* SEARCH SECTION */}
+            <div className="search-section card" style={{ padding: '20px', marginBottom: '20px', position: 'relative' }}>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    <input
+                        type="text"
+                        placeholder="🔍 Search Patient by Name, Mobile or MRN..."
+                        value={searchQuery}
+                        onChange={handleSearch}
+                        style={{ flex: 1, padding: '12px', fontSize: '1rem', borderRadius: '6px', border: '1px solid #ddd' }}
+                    />
+                </div>
+                {searchResults.length > 0 && (
+                    <div className="search-results-dropdown" style={{
+                        position: 'absolute', top: '70px', left: '20px', right: '20px',
+                        background: 'white', border: '1px solid #eee', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                        zIndex: 1000, maxHeight: '300px', overflowY: 'auto', borderRadius: '8px'
+                    }}>
+                        {searchResults.map(p => (
+                            <div key={p._id} style={{ padding: '12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>{p.name} <span style={{ color: '#666', fontSize: '0.9rem' }}>({p.patientId || 'N/A'})</span></div>
+                                    <div style={{ fontSize: '0.9rem', color: '#888' }}>📱 {p.phone}</div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                        onClick={() => handleSelectSearchResult(p)}
+                                        style={{ padding: '6px 14px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+                                    >
+                                        📋 Book Appointment
+                                    </button>
+                                    <button
+                                        onClick={() => handleViewProfile(p)}
+                                        style={{ padding: '6px 14px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+                                    >
+                                        👤 View Profile
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Widget Area */}
+            <div className="availability-widget card">
+                <h3>📅 Quick Check Availability</h3>
+                <div className="widget-controls">
+                    <select className="avail-select" onChange={(e) => setAvailabilityCheck({ ...availabilityCheck, doctorId: e.target.value })}>
+                        <option value="">Select Doctor</option>
+                        {doctorsList.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+                    </select>
+                    <input type="date" value={availabilityCheck.date} onChange={(e) => setAvailabilityCheck({ ...availabilityCheck, date: e.target.value })} />
+                </div>
+                {availabilityCheck.doctorId && (
+                    <div className="slot-grid">
+                        {timeSlots.map(t => (
+                            <button key={t} className={`slot-btn ${availabilityCheck.bookedSlots.includes(t) ? 'booked' : ''}`} onClick={() => handleSlotClick(t)}>{t}</button>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {renderTodaysQueue()}
+        </div>
 
             {renderModals()}
         </>
