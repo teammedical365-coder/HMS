@@ -820,8 +820,11 @@ const HospitalAdminDashboard = () => {
                                 onClick={async () => {
                                     try {
                                         setError('');
-                                        await hospitalAPI.updateDepartmentFees({ departmentFees: hospitalInfo.departmentFees });
-                                        setSuccess('All department fees saved!');
+                                        await hospitalAPI.updateDepartmentFees({ 
+                                            departmentFees: hospitalInfo.departmentFees,
+                                            departmentValidity: hospitalInfo.departmentValidity 
+                                        });
+                                        setSuccess('All department fees and validity saved!');
                                         setTimeout(() => setSuccess(''), 3000);
                                     } catch (err) {
                                         setError('Error saving fees');
@@ -838,11 +841,12 @@ const HospitalAdminDashboard = () => {
                                     <tr>
                                         <th>Department</th>
                                         <th>Consultation Fee (₹)</th>
+                                        <th>Consultation Validity (Days)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {(hospitalInfo?.departments || []).length === 0 ? (
-                                        <tr><td colSpan="2" style={{ textAlign: 'center', color: '#666' }}>No departments assigned yet. Contact Central Admin.</td></tr>
+                                        <tr><td colSpan="3" style={{ textAlign: 'center', color: '#666' }}>No departments assigned yet. Contact Central Admin.</td></tr>
                                     ) : (
                                         hospitalInfo.departments.map(dept => (
                                             <tr key={dept}>
@@ -861,6 +865,24 @@ const HospitalAdminDashboard = () => {
                                                                 setHospitalInfo(prev => ({
                                                                     ...prev,
                                                                     departmentFees: { ...(prev.departmentFees || {}), [dept]: newFee }
+                                                                }));
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <input
+                                                            type="number"
+                                                            min="1"
+                                                            className="staff-input"
+                                                            style={{ width: '140px', padding: '8px 12px' }}
+                                                            value={hospitalInfo?.departmentValidity?.[dept] ?? 5}
+                                                            onChange={(e) => {
+                                                                const newValidity = Number(e.target.value);
+                                                                setHospitalInfo(prev => ({
+                                                                    ...prev,
+                                                                    departmentValidity: { ...(prev.departmentValidity || {}), [dept]: newValidity }
                                                                 }));
                                                             }}
                                                         />

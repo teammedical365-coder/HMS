@@ -46,6 +46,7 @@ const appointmentSchema = new mongoose.Schema({
 
     serviceId: { type: String, required: false },
     serviceName: { type: String, required: false },
+    department: { type: String, default: '' },
     appointmentDate: { type: Date, required: [true, 'Appointment date is required'] },
     appointmentTime: { type: String, required: false, default: '' },
     // Token-mode fields — only populated when hospital appointmentMode === 'token'

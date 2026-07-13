@@ -329,7 +329,7 @@ const ClinicPatientProfile = () => {
                 <div className="cpp-metric-card metric-paid">
                     <div className="cpp-metric-info">
                         <span className="cpp-metric-label">Total Paid</span>
-                        <span className="cpp-metric-val">₹{metrics.totalPaid}</span>
+                        <span className="cpp-metric-val">₹{metrics.totalPaid.toLocaleString('en-IN')}</span>
                     </div>
                     <div className="cpp-metric-icon"><FiDollarSign /></div>
                 </div>

@@ -51,7 +51,7 @@ const ReceptionDashboard = () => {
     const [intakeForm, setIntakeForm] = useState({
         // Identity
         title: 'Mrs.', firstName: '', middleName: '', lastName: '',
-        dob: '', age: '', gender: 'Female', mobile: '', email: '',
+        dob: '', age: '', gender: '', mobile: '', email: '',
         address: '', houseNo: '', street: '', city: '', state: '', zipCode: '',
         aadhaar: '', isAadhaarVerified: false,
         relationToPatient: '',
@@ -77,6 +77,7 @@ const ReceptionDashboard = () => {
     const [aadhaarOtp, setAadhaarOtp] = useState('');
     const [hospitalContext, setHospitalContext] = useState(null);
     const [pendingDownload, setPendingDownload] = useState(null);
+    const [followupStatus, setFollowupStatus] = useState(null);
 
     useEffect(() => {
         const fetchHospital = async () => {
@@ -137,6 +138,30 @@ const ReceptionDashboard = () => {
             .catch(() => setNextToken(null));
     }, [intakeForm.doctor, intakeForm.visitDate, hospitalContext]);
 
+    // Fetch followup status when department is selected for an existing patient
+    useEffect(() => {
+        if (!selectedPatientId || !intakeForm.department) {
+            setFollowupStatus(null);
+            return;
+        }
+        const fetchStatus = async () => {
+            try {
+                const res = await receptionAPI.getFollowupStatus(selectedPatientId, intakeForm.department, intakeForm.visitDate);
+                if (res.success) {
+                    setFollowupStatus(res);
+                    if (res.active) {
+                        setIntakeForm(prev => ({ ...prev, consultationFee: '0' }));
+                    } else if (res.fee !== undefined) {
+                        setIntakeForm(prev => ({ ...prev, consultationFee: res.fee.toString() }));
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch followup status", err);
+            }
+        };
+        fetchStatus();
+    }, [selectedPatientId, intakeForm.department, intakeForm.visitDate]);
+
     const fetchAppointments = async () => {
         setLoading(true);
         try {
@@ -195,7 +220,7 @@ const ReceptionDashboard = () => {
         setProfilePhotoPreview(null);
         setIntakeForm({
             title: 'Mrs.', firstName: '', middleName: '', lastName: '',
-            dob: '', age: '', gender: 'Female', mobile: '', email: '',
+            dob: '', age: '', gender: '', mobile: '', email: '',
             address: '', houseNo: '', street: '', city: '', state: '', zipCode: '',
             aadhaar: '', isAadhaarVerified: false, relationToPatient: '', avatar: '',
             partnerTitle: 'Mr.', partnerFirstName: '', partnerLastName: '', partnerMobile: '',
@@ -233,6 +258,10 @@ const ReceptionDashboard = () => {
             state: patient.state || '',
             zipCode: patient.zipCode || '',
             avatar: patient.avatar || '',
+            age: patient.age || patient.fertilityProfile?.age || '',
+            gender: patient.gender || patient.fertilityProfile?.gender || '',
+            bloodGroup: patient.bloodGroup || patient.fertilityProfile?.bloodGroup || '',
+            dob: patient.dob || patient.fertilityProfile?.dob || '',
             ...p,
             consultationFee: hospitalContext?.appointmentFee ?? '500',
             department: '', doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: ''
@@ -240,9 +269,18 @@ const ReceptionDashboard = () => {
         setViewMode('intake');
     };
 
-    const handleSelectSearchResult = (patient) => {
+    const handleSelectSearchResult = async (patient) => {
         handleEditPatient(patient);
         setSearchResults([]);
+        
+        try {
+            const res = await receptionAPI.getFollowupStatus(patient._id || patient.patientId, 'auto', new Date().toISOString().split('T')[0]);
+            if (res.success && res.department) {
+                setIntakeForm(prev => ({ ...prev, department: res.department }));
+            }
+        } catch (err) {
+            console.error("Failed to auto-fetch followup status", err);
+        }
     };
 
     const handleViewProfile = (patient) => {
@@ -498,6 +536,12 @@ const ReceptionDashboard = () => {
             setSaving(false); return;
         }
 
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!intakeForm.email || !emailRegex.test(intakeForm.email)) {
+            alert("Please enter a valid email address (e.g. patient@gmail.com).");
+            setSaving(false); return;
+        }
+
         // Compile full address
         const fullAddress = [intakeForm.houseNo, intakeForm.street, intakeForm.city, intakeForm.state, intakeForm.zipCode]
             .map(s => String(s || '').trim())
@@ -545,15 +589,20 @@ const ReceptionDashboard = () => {
             await receptionAPI.updateIntake(userId, intakePayload);
 
             if (selectedPatientId) {
-                alert("✅ Patient profile and demographics updated successfully!");
-                setSaving(false);
-                if (location.state?.isEditingExisting) {
-                    navigate(`/patient/${userId}`);
+                // If they are just editing profile (no doctor selected), return early
+                const isTokenMode = hospitalContext?.appointmentMode === 'token';
+                const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
+                if (!canBook) {
+                    alert("✅ Patient profile and demographics updated successfully!");
+                    setSaving(false);
+                    if (location.state?.isEditingExisting) {
+                        navigate(`/patient/${userId}`);
+                        return;
+                    }
+                    fetchRecentPatients?.();
+                    setViewMode('list');
                     return;
                 }
-                fetchRecentPatients();
-                setViewMode('list');
-                return;
             }
 
             // 3. Book Appointment (optional when editing existing patient)
@@ -577,6 +626,7 @@ const ReceptionDashboard = () => {
                     doctorId: intakeForm.doctor,
                     date: intakeForm.visitDate,
                     time: isTokenMode ? undefined : intakeForm.visitTime,
+                    department: intakeForm.department,
                     notes: `Walk-in. Vitals: ${intakeForm.height}cm/${intakeForm.weight}kg. Reason: ${intakeForm.reasonForVisit}${screenshotNote}`,
                     paymentMethod: intakeForm.paymentMethod,
                     paymentStatus: 'Paid',
@@ -651,14 +701,14 @@ const ReceptionDashboard = () => {
 
                     setPaymentScreenshot(null);
                     fetchAppointments();
-                    navigate('/reception/dashboard?view=list');
+                    setViewMode('list');
                 } else {
                     alert("Booking Failed: " + bookingRes.message);
                 }
             } else if (selectedPatientId) {
                 // Editing existing patient — profile saved, no appointment needed
                 alert("✅ Patient details updated successfully!");
-                navigate('/reception/dashboard?view=list');
+                setViewMode('list');
             } else {
                 alert("Please select a Doctor and Time Slot to complete the registration.");
             }
@@ -675,7 +725,7 @@ const ReceptionDashboard = () => {
             <div className="intake-full-page" data-lenis-prevent="true">
                 <div className="context-bar">
                     <h3>{selectedPatientId ? 'Edit Patient Details' : 'New Registration'}</h3>
-                    <button className="btn-cancel" onClick={() => navigate('/reception/dashboard?view=list')}>Close ✖</button>
+                    <button type="button" className="btn-cancel" onClick={() => setViewMode('list')}>Close ✖</button>
                 </div>
                 <div className="intake-container">
                     <form onSubmit={handleSave}>
@@ -755,6 +805,21 @@ const ReceptionDashboard = () => {
                                 <div className="field"><label>Last Name</label><input name="lastName" value={intakeForm.lastName} onChange={handleInputChange} /></div>
                                 <div className="field"><label>Mobile</label><input name="mobile" value={intakeForm.mobile} onChange={handleInputChange} /></div>
                                 <div className="field"><label>Age</label><input name="age" value={intakeForm.age} onChange={handleInputChange} /></div>
+                            </div>
+                            <div className="form-row" style={{ marginTop: '0px' }}>
+                                <div className="field" style={{ flex: '7' }}>
+                                    <label>Email Address <span style={{ color: '#ef4444', fontSize: '12px' }}>*</span></label>
+                                    <input name="email" type="email" placeholder="patient@gmail.com" value={intakeForm.email} onChange={handleInputChange} required />
+                                </div>
+                                <div className="field" style={{ flex: '3' }}>
+                                    <label>Gender <span style={{ color: '#ef4444', fontSize: '12px' }}>*</span></label>
+                                    <select name="gender" value={intakeForm.gender} onChange={handleInputChange} required>
+                                        <option value="">Select Gender</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Female">Female</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
                             </div>
                             <div className="form-row">
                                 <div className="field"><label>Relative Name</label><input name="partnerFirstName" placeholder="Relative Name" value={intakeForm.partnerFirstName} onChange={handleInputChange} /></div>
@@ -852,59 +917,86 @@ const ReceptionDashboard = () => {
                                 <div className="field"><label>Height (cm)</label><input name="height" value={intakeForm.height} onChange={handleInputChange} /></div>
                                 <div className="field"><label>Weight (kg)</label><input name="weight" value={intakeForm.weight} onChange={handleInputChange} /></div>
                                 <div className="field"><label>BMI</label><input name="bmi" value={intakeForm.bmi} readOnly /></div>
-                                {!selectedPatientId && (
-                                    <div className="field"><label>Consultation Fee</label><input name="consultationFee" value={intakeForm.consultationFee} readOnly style={{ backgroundColor: '#f1f5f9', color: '#475569', cursor: 'not-allowed' }} /></div>
-                                )}
+                                <div className="field">
+                                    <label>Consultation Fee</label>
+                                    <input name="consultationFee" value={intakeForm.consultationFee} readOnly style={{ backgroundColor: '#f1f5f9', color: '#475569', cursor: 'not-allowed' }} />
+                                </div>
                             </div>
-                            {!selectedPatientId ? (
-                                <>
-                                    <div className="form-row">
-                                        <div className="field">
-                                            <label>Payment Method</label>
-                                            <select name="paymentMethod" value={intakeForm.paymentMethod} onChange={handleInputChange}>
-                                                <option value="Cash">Cash</option>
-                                                <option value="UPI">UPI</option>
-                                                <option value="Card">Card</option>
-                                                <option value="Cheque">Cheque</option>
-                                                <option value="NEFT/RTGS">NEFT / RTGS</option>
-                                            </select>
-                                        </div>
-                                        <div className="field" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', marginTop: '22px' }}>
-                                            <span style={{ fontSize: '18px' }}>✅</span>
-                                            <span style={{ fontWeight: 600, color: '#15803d', fontSize: '14px' }}>Payment Confirmed — Paid</span>
-                                        </div>
-                                    </div>
-                                    {intakeForm.paymentMethod !== 'Cash' && (
-                                        <div className="form-row" style={{ marginTop: '6px' }}>
-                                            <div className="field" style={{ flex: 1 }}>
-                                                <label>Payment Screenshot / Proof <span style={{ color: '#ef4444', fontSize: '12px' }}>*Required for {intakeForm.paymentMethod}</span></label>
-                                                <input
-                                                    type="file"
-                                                    accept="image/*,application/pdf"
-                                                    onChange={e => setPaymentScreenshot(e.target.files[0])}
-                                                    style={{ padding: '8px', border: '2px dashed #6366f1', borderRadius: '8px', background: '#f5f3ff', width: '100%' }}
-                                                />
-                                                {paymentScreenshot && (
-                                                    <span style={{ fontSize: '12px', color: '#059669', marginTop: '4px', display: 'block' }}>
-                                                        ✅ {paymentScreenshot.name}
-                                                    </span>
+                            <div className="form-row">
+                                <div className="field">
+                                    <label>Payment Method</label>
+                                    <select name="paymentMethod" value={intakeForm.paymentMethod} onChange={handleInputChange}>
+                                        <option value="Cash">Cash</option>
+                                        <option value="UPI">UPI</option>
+                                        <option value="Card">Card</option>
+                                        <option value="Cheque">Cheque</option>
+                                        <option value="NEFT/RTGS">NEFT / RTGS</option>
+                                    </select>
+                                </div>
+                                <div className="field" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', marginTop: '22px' }}>
+                                    <span style={{ fontSize: '18px' }}>✅</span>
+                                    <span style={{ fontWeight: 600, color: '#15803d', fontSize: '14px' }}>Payment Confirmed — Paid</span>
+                                </div>
+                            </div>
+
+                            {/* FOLLOW UP STATUS CARD RELOCATED HERE */}
+                            {followupStatus && (
+                                <div className="form-row" style={{ marginTop: '0px' }}>
+                                    <div className="field" style={{ flex: 1 }}>
+                                        <div style={{
+                                            padding: '12px 16px', borderRadius: '8px', border: '1px solid',
+                                            backgroundColor: followupStatus.active ? '#f0fdf4' : '#fef2f2',
+                                            borderColor: followupStatus.active ? '#bbf7d0' : '#fecaca',
+                                            color: followupStatus.active ? '#15803d' : '#b91c1c',
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', fontSize: '14px' }}>
+                                                <span>{followupStatus.active ? '✓ Follow-up Active' : '⚠ Follow-up Expired'}</span>
+                                            </div>
+                                            <div style={{ fontSize: '13px', display: 'flex', gap: '24px', alignItems: 'center' }}>
+                                                {followupStatus.active ? (
+                                                    <>
+                                                        {(() => {
+                                                            const remaining = Math.max(0, Math.ceil((new Date(followupStatus.validUntil).getTime() - new Date(intakeForm.visitDate || new Date()).getTime()) / (1000 * 3600 * 24)));
+                                                            return <div>Validity: <strong>{remaining === 0 ? 'Expires Today' : `${remaining} Day${remaining > 1 ? 's' : ''} Left`}</strong></div>;
+                                                        })()}
+                                                        <div>Consultation Fee: <strong>₹0</strong></div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div>Last Visited: <strong>{followupStatus.lastConsultation ? new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN') : 'N/A'}</strong></div>
+                                                        <div>Fee Applicable: <strong>₹{followupStatus.fee || intakeForm.consultationFee}</strong></div>
+                                                    </>
                                                 )}
                                             </div>
                                         </div>
-                                    )}
-                                </>
-                            ) : (
-                                <div style={{ padding: '14px 18px', backgroundColor: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '10px', color: '#475569', fontSize: '0.85rem', marginTop: '12px' }}>
-                                    🔒 <strong>Payment Section Disabled:</strong> Consultation Fee, Payment Method, and Payment Status are hidden while editing an existing patient record to prevent duplicate charges.
+                                    </div>
+                                </div>
+                            )}
+
+                            {intakeForm.paymentMethod !== 'Cash' && (
+                                <div className="form-row" style={{ marginTop: '6px' }}>
+                                    <div className="field" style={{ flex: 1 }}>
+                                        <label>Payment Screenshot / Proof <span style={{ color: '#ef4444', fontSize: '12px' }}>*Required for {intakeForm.paymentMethod}</span></label>
+                                        <input
+                                            type="file"
+                                            accept="image/*,application/pdf"
+                                            onChange={e => setPaymentScreenshot(e.target.files[0])}
+                                            style={{ padding: '8px', border: '2px dashed #6366f1', borderRadius: '8px', background: '#f5f3ff', width: '100%' }}
+                                        />
+                                        {paymentScreenshot && (
+                                            <span style={{ fontSize: '12px', color: '#059669', marginTop: '4px', display: 'block' }}>
+                                                ✅ {paymentScreenshot.name}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
                             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
 
-                            {!selectedPatientId ? (
-                                /* 5. Assign to Doctor/Counselor nested styling */
-                                <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
-                                    <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px', borderBottom: '2px solid #bfdbfe', paddingBottom: '10px' }}>5. Assign to Doctor/Counselor</h4>
+                            <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
+                                <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px', borderBottom: '2px solid #bfdbfe', paddingBottom: '10px' }}>5. Assign to Doctor/Counselor</h4>
                                 <div className="form-row">
                                     <div className="field">
                                         <label>Department</label>
@@ -980,14 +1072,6 @@ const ReceptionDashboard = () => {
                                     )
                                 )}
                             </div>
-                            ) : (
-                                <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
-                                    <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 8px' }}>5. Assign to Doctor/Counselor</h4>
-                                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#1d4ed8' }}>
-                                        🔒 <strong>Appointment Booking Disabled:</strong> Department, Doctor, Date, and Time Slot are disabled when updating existing demographics to avoid generating duplicate appointments.
-                                    </p>
-                                </div>
-                            )}
                         </div>
 
                         <div className="form-footer">
@@ -997,8 +1081,9 @@ const ReceptionDashboard = () => {
                                     : (() => {
                                         const isTokenMode = hospitalContext?.appointmentMode === 'token';
                                         const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
-                                        if (selectedPatientId) return canBook ? (isTokenMode ? 'Save & Issue Token + Receipt' : 'Save & Generate Receipt') : 'Save Patient Details';
-                                        return canBook ? (isTokenMode ? 'Register & Issue Token + Receipt' : 'Register & Generate Receipt') : 'Save Patient Details';
+                                        const actionText = followupStatus?.active ? 'Re-Book Appointment' : (isTokenMode ? 'Issue Token' : 'Book Appointment');
+                                        if (selectedPatientId) return canBook ? `${actionText} & Receipt` : 'Save Patient Details';
+                                        return canBook ? `Register, ${actionText} & Receipt` : 'Save Patient Details';
                                     })()
                                 }
                             </button>

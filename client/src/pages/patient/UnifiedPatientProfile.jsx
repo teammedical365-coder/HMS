@@ -60,14 +60,32 @@ const UnifiedPatientProfile = () => {
     const [uploadingConsent, setUploadingConsent] = useState(false);
 
     const [documentList, setDocumentList] = useState([]);
-
+    const [activeFollowups, setActiveFollowups] = useState([]);
+    const [currentFollowupStatus, setCurrentFollowupStatus] = useState(null);
 
     useEffect(() => {
         if (patientId) {
             fetchProfile();
             fetchConsentAndDocs();
+            fetchFollowups();
         }
     }, [patientId]);
+
+    const fetchFollowups = async () => {
+        try {
+            const res = await receptionAPI.getFollowupStatus(patientId, '');
+            if (res.success && res.activeFollowups) {
+                setActiveFollowups(res.activeFollowups);
+            }
+
+            const resAuto = await receptionAPI.getFollowupStatus(patientId, 'auto');
+            if (resAuto.success) {
+                setCurrentFollowupStatus(resAuto);
+            }
+        } catch (err) {
+            console.warn("Could not fetch followups:", err?.message);
+        }
+    };
 
     const fetchProfile = async () => {
         setLoading(true);
@@ -521,7 +539,35 @@ const UnifiedPatientProfile = () => {
                         <span className="upp-metric-label">Total Paid</span>
                         <span className="upp-metric-val">₹{metrics.totalPaid.toLocaleString('en-IN')}</span>
                     </div>
-                    <FiDollarSign className="upp-metric-icon" style={{ color: '#10b981' }} />
+                    <div className="upp-metric-icon" style={{ color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold' }}>₹</div>
+                </div>
+
+                <div className="upp-metric-card" style={{ background: currentFollowupStatus?.active ? '#f0fdf4' : '#fef2f2', borderColor: currentFollowupStatus?.active ? '#bbf7d0' : '#fecaca', borderLeft: currentFollowupStatus?.active ? '4px solid #22c55e' : '4px solid #ef4444', gridColumn: 'span 1', padding: '12px' }}>
+                    <div className="upp-metric-info" style={{ width: '100%' }}>
+                        <span className="upp-metric-label" style={{ color: currentFollowupStatus?.active ? '#166534' : '#991b1b', fontSize: '0.75rem' }}>Follow-up</span>
+                        <div style={{ marginTop: '4px' }}>
+                            <span className="upp-metric-val" style={{ color: currentFollowupStatus?.active ? '#15803d' : '#b91c1c', fontSize: '1.05rem' }}>
+                                {(() => {
+                                    if (currentFollowupStatus?.active) return 'Active';
+                                    if (currentFollowupStatus?.message === 'New Patient / First Visit' && metrics.totalVisits === 0) return 'New Patient';
+                                    return 'Expired';
+                                })()}
+                            </span>
+                        </div>
+                        {currentFollowupStatus && !(currentFollowupStatus.message === 'New Patient / First Visit' && metrics.totalVisits === 0) && (
+                            <div style={{ fontSize: '0.75rem', color: currentFollowupStatus.active ? '#166534' : '#7f1d1d', marginTop: '4px', fontWeight: 500 }}>
+                                {(() => {
+                                    if (currentFollowupStatus.active) {
+                                        return <>Valid: {Math.max(0, Math.ceil((new Date(currentFollowupStatus.validUntil).getTime() - new Date().getTime()) / (1000 * 3600 * 24)))} Days</>;
+                                    } else {
+                                        const lastVisit = timeline.find(t => t.type === 'clinicalVisit' || t.type === 'appointment');
+                                        const lastDate = currentFollowupStatus.lastConsultation || (lastVisit ? lastVisit.date : null);
+                                        return <>{lastDate ? `Last: ${new Date(lastDate).toLocaleDateString('en-IN')}` : 'Fee Applicable'}</>;
+                                    }
+                                })()}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
