@@ -99,6 +99,7 @@ const facilityChargeSchema = new mongoose.Schema({
     totalAmount: { type: Number, required: true },
     paymentStatus: { type: String, enum: ['Pending', 'Paid', 'Waived'], default: 'Pending' },
     addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    collectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     hospitalId: { type: mongoose.Schema.Types.ObjectId },
     notes: String,
 }, { timestamps: true });

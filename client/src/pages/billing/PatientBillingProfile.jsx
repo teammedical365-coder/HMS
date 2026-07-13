@@ -347,38 +347,63 @@ const PatientBillingProfile = () => {
                         </div>
                     )}
 
-                    {/* OPD Consultations */}
-                    {billing.appointments.length > 0 && (
+                    {/* Consolidated Billing View (Appointments & Facility Charges) */}
+                    {(billing.appointments?.length > 0 || billing.facilityCharges?.length > 0) && (
                         <div className="billing-section">
                             <div className="section-header">
-                                <h3>OPD Consultations ({getSectionBadge(billing.appointments)})</h3>
-                                {billing.appointments.some(a => a.paymentStatus !== 'Paid') && (
-                                    <button className="btn-select-all" onClick={() => toggleAll('appointments', billing.appointments)}>
-                                        {billing.appointments.filter(a => a.paymentStatus !== 'Paid').every(a => selected.appointments.includes(a._id)) ? 'Deselect All' : 'Select All'}
+                                <h3>Consolidated Billing View (Consultations & ICU Charges)</h3>
+                                {billing.facilityCharges.some(f => f.paymentStatus !== 'Paid') && (
+                                    <button className="btn-select-all" onClick={() => toggleAll('facilityCharges', billing.facilityCharges)}>
+                                        {billing.facilityCharges.filter(f => f.paymentStatus !== 'Paid').every(f => selected.facilityCharges.includes(f._id)) ? 'Deselect All' : 'Select All Unpaid'}
                                     </button>
                                 )}
                             </div>
                             <table className="billing-table">
-                                <thead><tr><th></th><th>Date</th><th>Doctor</th><th>Service</th><th>Status</th><th>Amount</th></tr></thead>
+                                <thead><tr><th></th><th>Date</th><th>Type & Description</th><th>Collected By</th><th>Status</th><th>Amount</th></tr></thead>
                                 <tbody>
+                                    {/* Appointments - Read-Only Informational */}
                                     {billing.appointments.map(a => (
-                                        <tr key={a._id} className={selected.appointments.includes(a._id) ? 'selected-row' : ''}>
+                                        <tr key={a._id} className="readonly-row" style={{backgroundColor: '#f8fafc'}}>
                                             <td>
-                                                {a.paymentStatus === 'Paid' ? (
-                                                    <span className="paid-icon-check">✓</span>
-                                                ) : (
-                                                    <input type="checkbox" checked={selected.appointments.includes(a._id)} onChange={() => toggle('appointments', a._id)} />
-                                                )}
+                                                <span style={{color:'#94a3b8', fontSize:'0.8rem'}}>—</span>
                                             </td>
                                             <td>{fmtDate(a.appointmentDate)}{a.appointmentTime && ` ${a.appointmentTime}`}</td>
+                                            <td>
+                                                <strong>Appointment Fee</strong><br/>
+                                                <span style={{fontSize:'0.85rem', color:'#64748b'}}>{a.serviceName || 'Consultation'}</span>
+                                            </td>
                                             <td>{a.doctorName || '—'}</td>
-                                            <td>{a.serviceName || 'Consultation'}</td>
                                             <td>
                                                 <span className={`status-badge status-${a.paymentStatus === 'Paid' ? 'Confirmed' : (a.status || 'Pending')}`}>
                                                     {a.paymentStatus === 'Paid' ? 'PAID' : (a.status || 'Pending')}
                                                 </span>
                                             </td>
                                             <td className="amount-cell">{fmt(a.amount)}</td>
+                                        </tr>
+                                    ))}
+                                    
+                                    {/* Facility / ICU Charges - Actionable */}
+                                    {billing.facilityCharges.map(f => (
+                                        <tr key={f._id} className={selected.facilityCharges.includes(f._id) ? 'selected-row' : ''}>
+                                            <td>
+                                                {f.paymentStatus === 'Paid' ? (
+                                                    <span className="paid-icon-check">✓</span>
+                                                ) : (
+                                                    <input type="checkbox" checked={selected.facilityCharges.includes(f._id)} onChange={() => toggle('facilityCharges', f._id)} />
+                                                )}
+                                            </td>
+                                            <td>{fmtDate(f.createdAt)}</td>
+                                            <td>
+                                                <strong>ICU / Facility Charge</strong><br/>
+                                                <span style={{fontSize:'0.85rem', color:'#64748b'}}>{f.facilityName} ({f.daysUsed || f.days || 1} Days @ {fmt(f.pricePerDay)}/day)</span>
+                                            </td>
+                                            <td>{f.collectedBy?.name || f.addedBy?.name || '—'}</td>
+                                            <td>
+                                                <span className="status-badge">
+                                                    {f.paymentStatus === 'Paid' ? 'PAID' : 'Pending'}
+                                                </span>
+                                            </td>
+                                            <td className="amount-cell">{fmt(f.totalAmount)}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -462,40 +487,7 @@ const PatientBillingProfile = () => {
                         </div>
                     )}
 
-                    {/* Facility Charges */}
-                    {billing.facilityCharges.length > 0 && (
-                        <div className="billing-section">
-                            <div className="section-header">
-                                <h3>Facility Charges ({getSectionBadge(billing.facilityCharges)})</h3>
-                                {billing.facilityCharges.some(f => f.paymentStatus !== 'Paid') && (
-                                    <button className="btn-select-all" onClick={() => toggleAll('facilityCharges', billing.facilityCharges)}>
-                                        {billing.facilityCharges.filter(f => f.paymentStatus !== 'Paid').every(f => selected.facilityCharges.includes(f._id)) ? 'Deselect All' : 'Select All'}
-                                    </button>
-                                )}
-                            </div>
-                            <table className="billing-table">
-                                <thead><tr><th></th><th>Date</th><th>Facility</th><th>Rate/Day</th><th>Days</th><th>Amount</th></tr></thead>
-                                <tbody>
-                                    {billing.facilityCharges.map(f => (
-                                        <tr key={f._id} className={selected.facilityCharges.includes(f._id) ? 'selected-row' : ''}>
-                                            <td>
-                                                {f.paymentStatus === 'Paid' ? (
-                                                    <span className="paid-icon-check">✓</span>
-                                                ) : (
-                                                    <input type="checkbox" checked={selected.facilityCharges.includes(f._id)} onChange={() => toggle('facilityCharges', f._id)} />
-                                                )}
-                                            </td>
-                                            <td>{fmtDate(f.createdAt)}</td>
-                                            <td>{f.facilityName}</td>
-                                            <td>{fmt(f.pricePerDay)}</td>
-                                            <td>{f.daysUsed}</td>
-                                            <td className="amount-cell">{fmt(f.totalAmount)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+
 
                     {/* Past Admissions */}
                     {pastAdmissions.length > 0 && (

@@ -266,14 +266,22 @@ const DoctorPatientDetails = () => {
 
             // Immediately lock UI and update appointment status locally
             setIsLocked(true);
-            setToast({
-                show: true,
-                title: '✅ Session Completed Successfully',
-                message: 'This consultation has already been completed. This record is now read-only.'
-            });
-            setTimeout(() => {
-                setToast(prev => ({ ...prev, show: false }));
-            }, 3000);
+
+            // OPTION B FIX: State Reset / Navigation to Reception Dashboard
+            if (window.confirm("Consultation Completed. Do you want to transition to the Reception Desk to Admit/Hospitalize this patient?")) {
+                const patientData = appointment?.userId || appointment?.clinicPatientId || appointment;
+                navigate('/reception/dashboard?view=intake', { state: { patient: patientData } });
+                return;
+            } else {
+                setToast({
+                    show: true,
+                    title: '✅ Session Completed Successfully',
+                    message: 'This consultation has already been completed. This record is now read-only.'
+                });
+                setTimeout(() => {
+                    setToast(prev => ({ ...prev, show: false }));
+                }, 3000);
+            }
 
             setAppointment(prev => ({
                 ...prev,

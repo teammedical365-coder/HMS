@@ -95,10 +95,14 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
             ]
         } : {};
 
-        const fetchWithMasterFallback = async (Model, MasterModel, query, selectFields, sortFields = null) => {
-            let results = await (sortFields ? Model.find(query).sort(sortFields).lean() : Model.find(query).select(selectFields).lean());
+        const fetchWithMasterFallback = async (Model, MasterModel, query, selectFields, sortFields = null, populateArgs = null) => {
+            let q1 = sortFields ? Model.find(query).sort(sortFields) : Model.find(query).select(selectFields);
+            if (populateArgs) q1 = q1.populate(populateArgs);
+            let results = await q1.lean();
             if (Model !== MasterModel) {
-                const masterResults = await (sortFields ? MasterModel.find(query).sort(sortFields).lean() : MasterModel.find(query).select(selectFields).lean());
+                let q2 = sortFields ? MasterModel.find(query).sort(sortFields) : MasterModel.find(query).select(selectFields);
+                if (populateArgs) q2 = q2.populate(populateArgs);
+                const masterResults = await q2.lean();
                 const seen = new Set(results.map(r => r._id.toString()));
                 for (const mr of masterResults) {
                     if (!seen.has(mr._id.toString())) results.push(mr);
@@ -111,7 +115,7 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
             fetchWithMasterFallback(Appointment, MasterAppointment, { userId: patient._id, ...hFilter }, 'appointmentDate appointmentTime amount paymentStatus serviceName doctorName status createdAt'),
             fetchWithMasterFallback(LabReport, MasterLabReport, { userId: patient._id, ...hFilter }, 'testNames amount paymentStatus testStatus createdAt'),
             fetchWithMasterFallback(PharmacyOrder, MasterPharmacyOrder, { userId: patient._id, ...hFilter }, 'items totalAmount paymentStatus orderStatus createdAt'),
-            fetchWithMasterFallback(FacilityCharge, MasterFacilityCharge, { patientId: patient._id, ...hFilter }, 'facilityName pricePerDay days totalAmount paymentStatus createdAt'),
+            fetchWithMasterFallback(FacilityCharge, MasterFacilityCharge, { patientId: patient._id, ...hFilter }, 'facilityName pricePerDay days totalAmount paymentStatus createdAt addedBy collectedBy', null, [{path: 'collectedBy', select: 'name'}, {path: 'addedBy', select: 'name'}]),
             fetchWithMasterFallback(Admission, MasterAdmission, { patientId: patient._id, ...hFilter }, null, { admissionDate: -1 })
         ]);
 
@@ -179,7 +183,8 @@ router.post('/facility-charge', verifyBillingAccess, async (req, res) => {
             pricePerDay: Number(pricePerDay),
             days: Number(days),
             totalAmount: Number(pricePerDay) * Number(days),
-            addedBy: req.user._id || req.user.userId
+            addedBy: req.user._id || req.user.userId,
+            collectedBy: req.user._id || req.user.userId
         });
 
         await charge.save();

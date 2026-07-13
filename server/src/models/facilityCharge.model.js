@@ -8,7 +8,8 @@ const facilityChargeSchema = new mongoose.Schema({
     days: { type: Number, required: true },
     totalAmount: { type: Number, required: true },
     paymentStatus: { type: String, enum: ['Pending', 'Paid'], default: 'Pending' },
-    addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    collectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
 module.exports = mongoose.model('FacilityCharge', facilityChargeSchema);

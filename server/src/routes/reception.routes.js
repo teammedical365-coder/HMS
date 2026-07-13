@@ -199,7 +199,8 @@ router.get('/search-patients', verifyToken, verifyReception, async (req, res) =>
             $or: [
                 { name: { $regex: safeQuery, $options: 'i' } },
                 { phone: { $regex: safeQuery, $options: 'i' } },
-                { patientId: { $regex: safeQuery, $options: 'i' } }
+                { patientId: { $regex: safeQuery, $options: 'i' } },
+                { 'fertilityProfile.partnerFirstName': { $regex: safeQuery, $options: 'i' } }
             ]
         };
 
@@ -372,7 +373,7 @@ router.get('/appointments', verifyToken, verifyReception, resolveTenant, async (
             const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
             const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999);
             queryFilter.appointmentDate = { $gte: todayStart, $lte: todayEnd };
-            queryFilter.status = { $nin: ['cancelled', 'completed'] };
+            queryFilter.status = { $ne: 'cancelled' };
         }
 
         const appointments = await Appointment.find(queryFilter)

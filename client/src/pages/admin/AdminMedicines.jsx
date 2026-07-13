@@ -113,7 +113,7 @@ const AdminMedicines = () => {
                 {showForm && (
                     <div className="modal-overlay !fixed !inset-0 !z-50 !flex !items-center !justify-center !p-4 !bg-black/50 !overflow-hidden">
                         <div className="modal-content !bg-white !rounded-xl !shadow-xl !max-h-[80vh] !w-full !max-w-2xl !flex !flex-col !overflow-hidden">
-                            <div className="modal-header p-6 border-b border-gray-100 flex justify-between items-center bg-white">
+                            <div className="modal-header p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
                                 <h2>{editingId ? 'Edit Medicine ' : 'Add New Medication '}</h2>
                                 <button type="button" className="close-btn text-gray-500 hover:text-gray-700 text-2xl" onClick={() => { setShowForm(false); setEditingId(null); setFormData({ name: '', genericName: '', description: '', category: 'General' }); }}>×</button>
                             </div>

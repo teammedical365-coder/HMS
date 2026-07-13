@@ -8,11 +8,21 @@ import autoTable from 'jspdf-autotable';
 import { FiSearch, FiUserPlus, FiFileText, FiDollarSign, FiUsers, FiCalendar, FiHome, FiPlusSquare } from 'react-icons/fi';
 import './ReceptionDashboard.css';
 
+console.log("--- DASHBOARD FILE IS RUNNING ---");
+
 const timeSlots = [
     '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
     '12:00', '12:30', '14:00', '14:30', '15:00', '15:30',
     '16:00', '16:30', '17:00', '17:30'
 ];
+
+const isWithin24Hours = (dateString) => {
+    if (!dateString) return false;
+    const then = new Date(dateString).getTime();
+    const now = new Date().getTime();
+    const diffHours = (now - then) / (1000 * 60 * 60);
+    return diffHours <= 24;
+};
 
 const ReceptionDashboard = () => {
     const navigate = useNavigate();
@@ -92,22 +102,23 @@ const ReceptionDashboard = () => {
         fetchDoctors();
     }, []);
 
+    const viewParam = new URLSearchParams(location.search).get('view');
+    const patientStateId = location.state?.patient?._id || location.state?.patient?.patientId;
+
     useEffect(() => {
-        const searchParams = new URLSearchParams(location.search);
-        const view = searchParams.get('view');
         if (location.state?.patient) {
             handleEditPatient(location.state.patient);
-        } else if (view === 'intake') {
+        } else if (viewParam === 'intake') {
             handleNewWalkIn();
-        } else if (view === 'transactions') {
+        } else if (viewParam === 'transactions') {
             fetchTransactions();
             setViewMode('transactions');
-        } else if (view === 'list' || view === 'desk' || view === 'availability') {
+        } else if (viewParam === 'list' || viewParam === 'desk' || viewParam === 'availability') {
             setViewMode('list');
         } else {
             setViewMode('welcome');
         }
-    }, [location.state, location.search, hospitalContext]);
+    }, [patientStateId, viewParam, hospitalContext]);
 
     useEffect(() => {
         if (availabilityCheck.doctorId && availabilityCheck.date) {
@@ -1203,28 +1214,33 @@ const ReceptionDashboard = () => {
                                             🧾 Print Receipt
                                         </button>
                                     )}
-                                    {apt.status !== 'cancelled' && apt.status !== 'completed' && (
+                                    {apt.status !== 'cancelled' && (
                                         <>
-                                            <button
-                                                onClick={() => openHospitalizeModal(apt)}
-                                                disabled={false}
-                                                style={{
-                                                    padding: '4px 10px',
-                                                    fontSize: '12px',
-                                                    background: apt.isHospitalized ? '#fff1f2' : '#dbeafe',
-                                                    color: apt.isHospitalized ? '#be123c' : '#1d4ed8',
-                                                    border: apt.isHospitalized ? '1px solid #fda4af' : '1px solid #93c5fd',
-                                                    borderRadius: '5px',
-                                                    cursor: 'pointer',
-                                                    fontWeight: '600'
-                                                }}
-                                            >
-                                                {apt.isHospitalized ? '🏥 Hospitalized' : 'Hospitalize'}
-                                            </button>
-                                            <button
-                                                onClick={() => handleCancelAppointment(apt._id)}
-                                                style={{ padding: '4px 10px', fontSize: '12px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
-                                            >Cancel</button>
+                                            {console.log('DEBUG apt:', apt._id, 'createdAt:', apt.createdAt, 'isWithin24Hours:', isWithin24Hours(apt.createdAt))}
+                                            {isWithin24Hours(apt.createdAt) && (
+                                                <button
+                                                    onClick={() => openHospitalizeModal(apt)}
+                                                    disabled={false}
+                                                    style={{
+                                                        padding: '4px 10px',
+                                                        fontSize: '12px',
+                                                        background: apt.isHospitalized ? '#fff1f2' : '#dbeafe',
+                                                        color: apt.isHospitalized ? '#be123c' : '#1d4ed8',
+                                                        border: apt.isHospitalized ? '1px solid #fda4af' : '1px solid #93c5fd',
+                                                        borderRadius: '5px',
+                                                        cursor: 'pointer',
+                                                        fontWeight: '600'
+                                                    }}
+                                                >
+                                                    {apt.isHospitalized ? '🏥 Hospitalized' : 'Hospitalize'}
+                                                </button>
+                                            )}
+                                            {apt.status !== 'completed' && (
+                                                <button
+                                                    onClick={() => handleCancelAppointment(apt._id)}
+                                                    style={{ padding: '4px 10px', fontSize: '12px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
+                                                >Cancel</button>
+                                            )}
                                         </>
                                     )}
                                 </td>
@@ -1621,7 +1637,7 @@ const ReceptionDashboard = () => {
                                 </div>
                             </div>
 
-                            
+
 
                         </div>
                     </div>
