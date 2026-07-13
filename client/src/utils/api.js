@@ -227,6 +227,19 @@ export const publicAPI = {
     }
 };
 
+export const reportAPI = {
+    uploadReport: async (formData) => {
+        const response = await apiClient.post('/api/reports/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+    getReportsByAppointment: async (appointmentId) => {
+        const response = await apiClient.get(`/api/reports/${appointmentId}`);
+        return response.data;
+    }
+};
+
 export const uploadAPI = {
     uploadImages: async (formData) => {
         const response = await apiClient.post('/api/upload/images', formData, {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { receptionAPI, patientAPI } from '../../utils/api';
+import { receptionAPI, patientAPI, reportAPI } from '../../utils/api';
 import { FiSearch, FiUsers, FiCalendar, FiActivity } from 'react-icons/fi';
 
 const ReceptionPatients = () => {
@@ -76,18 +76,19 @@ const ReceptionPatients = () => {
             alert('Please select a file to upload!');
             return;
         }
-        if (!uploadModal.patientId) {
-            alert('Could not identify patient ID for report upload.');
+        if (!uploadModal.apptId) {
+            alert('Could not identify appointment ID for report upload.');
             return;
         }
         setUploadingReport(true);
         try {
             const formData = new FormData();
-            formData.append('document', selectedReportFile);
-            formData.append('docType', 'Medical Report');
-            const res = await patientAPI.uploadDocument(uploadModal.patientId, formData);
+            formData.append('reportFile', selectedReportFile);
+            formData.append('appointmentId', uploadModal.apptId);
+            
+            const res = await reportAPI.uploadReport(formData);
             if (res.success) {
-                alert(`Report file "${selectedReportFile.name}" uploaded successfully for ${uploadModal.patientName}! It is now synchronized and visible inside the Hospital Patient Profile under Reports & Documents.`);
+                alert(`Report file "${selectedReportFile.name}" uploaded successfully for ${uploadModal.patientName}!`);
                 setSelectedReportFile(null);
                 setUploadModal({ open: false, apptId: null, patientName: '', patientId: null });
             } else {

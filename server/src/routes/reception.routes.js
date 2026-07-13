@@ -422,7 +422,7 @@ router.patch('/appointments/:id/cancel', verifyToken, verifyReception, async (re
     res.json({ success: true });
 });
 // 6. FOLLOW-UP VALIDITY
-router.get('/patients/:patientId/followup-status', verifyToken, verifyReception, async (req, res) => {
+router.get('/patients/:patientId/followup-status', verifyToken, async (req, res) => {
     try {
         const { patientId } = req.params;
         const { department, auto, date } = req.query;

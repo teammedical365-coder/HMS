@@ -272,7 +272,7 @@ const ReceptionDashboard = () => {
     const handleSelectSearchResult = async (patient) => {
         handleEditPatient(patient);
         setSearchResults([]);
-        
+
         try {
             const res = await receptionAPI.getFollowupStatus(patient._id || patient.patientId, 'auto', new Date().toISOString().split('T')[0]);
             if (res.success && res.department) {
@@ -344,7 +344,7 @@ const ReceptionDashboard = () => {
         const hEmail = hospitalContext?.email || '';
         const issuedBy = currentUser?.name || 'Reception Staff';
         let y = 18;
- 
+
         doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
         doc.text(hName, 105, y, { align: 'center' }); y += 7;
         if (hAddr) {
@@ -361,10 +361,10 @@ const ReceptionDashboard = () => {
         doc.setDrawColor(41, 128, 185); doc.setLineWidth(0.5);
         doc.line(14, y, 196, y); y += 8;
         doc.setTextColor(0); doc.setFont('helvetica', 'normal');
- 
+
         const isToken = apt.tokenNumber != null;
         const dateDisplay = new Date(apt.appointmentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
- 
+
         autoTable(doc, {
             startY: y,
             body: [
@@ -385,7 +385,7 @@ const ReceptionDashboard = () => {
             bodyStyles: { fontSize: 10 },
             alternateRowStyles: { fillColor: [245, 249, 255] },
         });
- 
+
         y = doc.lastAutoTable.finalY + 10;
         doc.setDrawColor(200); doc.line(14, y, 196, y); y += 6;
         doc.setFontSize(8); doc.setTextColor(120);
@@ -736,16 +736,16 @@ const ReceptionDashboard = () => {
                             {/* PATIENT PROFILE PHOTO */}
                             <div style={{ marginBottom: '18px' }}>
                                 <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '6px' }}>Patient Photo</label>
-                                <div 
-                                    onClick={() => document.getElementById('avatarFileInput').click()} 
-                                    style={{ 
-                                        cursor: 'pointer', 
-                                        border: '1.5px dashed #cbd5e1', 
-                                        borderRadius: '8px', 
-                                        padding: '12px', 
-                                        display: 'inline-flex', 
-                                        alignItems: 'center', 
-                                        gap: '10px', 
+                                <div
+                                    onClick={() => document.getElementById('avatarFileInput').click()}
+                                    style={{
+                                        cursor: 'pointer',
+                                        border: '1.5px dashed #cbd5e1',
+                                        borderRadius: '8px',
+                                        padding: '12px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '10px',
                                         backgroundColor: '#f8fafc',
                                         transition: 'all 0.2s'
                                     }}
@@ -1009,9 +1009,9 @@ const ReceptionDashboard = () => {
                                     </div>
                                     <div className="field">
                                         <label>Select Specialist</label>
-                                        <select 
-                                            name="doctor" 
-                                            value={intakeForm.doctor} 
+                                        <select
+                                            name="doctor"
+                                            value={intakeForm.doctor}
                                             onChange={handleInputChange}
                                             disabled={!intakeForm.department}
                                             style={!intakeForm.department ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
@@ -1208,15 +1208,15 @@ const ReceptionDashboard = () => {
                                             <button
                                                 onClick={() => openHospitalizeModal(apt)}
                                                 disabled={false}
-                                                style={{ 
-                                                    padding: '4px 10px', 
-                                                    fontSize: '12px', 
-                                                    background: apt.isHospitalized ? '#fff1f2' : '#dbeafe', 
-                                                    color: apt.isHospitalized ? '#be123c' : '#1d4ed8', 
-                                                    border: apt.isHospitalized ? '1px solid #fda4af' : '1px solid #93c5fd', 
-                                                    borderRadius: '5px', 
-                                                    cursor: 'pointer', 
-                                                    fontWeight: '600' 
+                                                style={{
+                                                    padding: '4px 10px',
+                                                    fontSize: '12px',
+                                                    background: apt.isHospitalized ? '#fff1f2' : '#dbeafe',
+                                                    color: apt.isHospitalized ? '#be123c' : '#1d4ed8',
+                                                    border: apt.isHospitalized ? '1px solid #fda4af' : '1px solid #93c5fd',
+                                                    borderRadius: '5px',
+                                                    cursor: 'pointer',
+                                                    fontWeight: '600'
                                                 }}
                                             >
                                                 {apt.isHospitalized ? '🏥 Hospitalized' : 'Hospitalize'}
@@ -1238,169 +1238,169 @@ const ReceptionDashboard = () => {
 
     const renderModals = () => (
         <>
-        {paymentModal.open && (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-                <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '440px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                        <div>
-                            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>💰 Confirm Payment</h2>
-                            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.88rem' }}>
-                                {paymentModal.appointment?.userId?.name} — Rs. {Number(paymentModal.appointment?.amount || 0).toLocaleString('en-IN')}
-                            </p>
-                        </div>
-                        <button onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
-                    </div>
-                    <div style={{ marginBottom: '18px' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '7px' }}>Payment Method</label>
-                        <select
-                            value={paymentModal.method}
-                            onChange={e => setPaymentModal(p => ({ ...p, method: e.target.value }))}
-                            style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
-                        >
-                            <option value="Cash">Cash</option>
-                            <option value="UPI">UPI</option>
-                            <option value="Card">Card</option>
-                            <option value="Cheque">Cheque</option>
-                            <option value="NEFT/RTGS">NEFT / RTGS</option>
-                        </select>
-                    </div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <button
-                            onClick={handleConfirmPayment}
-                            disabled={confirmingPayment}
-                            style={{ flex: 1, padding: '11px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
-                        >
-                            {confirmingPayment ? 'Confirming...' : '✓ Confirm & Print Receipt'}
-                        </button>
-                        <button
-                            onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })}
-                            style={{ padding: '11px 18px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {hospitalizeModal.open && (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-                <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                        <div>
-                            <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700 }}>Hospitalize Patient</h2>
-                            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>
-                                {hospitalizeModal.appointment?.userId?.name} — {hospitalizeModal.appointment?.doctorName}
-                            </p>
-                        </div>
-                        <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Ward / Room</label>
-                            <input
-                                type="text"
-                                placeholder="e.g. General Ward, ICU"
-                                value={hospitalizeForm.ward}
-                                onChange={e => setHospitalizeForm(p => ({ ...p, ward: e.target.value }))}
-                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
-                            />
-                        </div>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Bed Number</label>
-                            <input
-                                type="text"
-                                placeholder="e.g. B-12"
-                                value={hospitalizeForm.bedNumber}
-                                onChange={e => setHospitalizeForm(p => ({ ...p, bedNumber: e.target.value }))}
-                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
-                            />
-                        </div>
-                    </div>
-
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Admission Date</label>
-                        <input
-                            type="date"
-                            value={hospitalizeForm.admissionDate}
-                            onChange={e => setHospitalizeForm(p => ({ ...p, admissionDate: e.target.value }))}
-                            style={{ padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
-                        />
-                    </div>
-
-                    {(hospitalContext?.facilities?.length > 0) ? (
-                        <div style={{ marginBottom: '16px' }}>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>
-                                Select Facilities &amp; Days
-                            </label>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {hospitalContext.facilities.map(f => (
-                                    <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{f.name}</div>
-                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>₹{f.pricePerDay}/day</div>
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <label style={{ fontSize: '0.82rem', color: '#475569' }}>Days:</label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                placeholder="0"
-                                                value={hospitalizeForm.facilityDays[f.name] || ''}
-                                                onChange={e => setHospitalizeForm(p => ({ ...p, facilityDays: { ...p.facilityDays, [f.name]: e.target.value } }))}
-                                                style={{ width: '70px', padding: '6px 10px', border: '1.5px solid #e2e8f0', borderRadius: '7px', fontSize: '0.9rem', textAlign: 'center' }}
-                                            />
-                                        </div>
-                                        {hospitalizeForm.facilityDays[f.name] > 0 && (
-                                            <div style={{ fontWeight: 700, color: '#1d4ed8', fontSize: '0.9rem', minWidth: '70px', textAlign: 'right' }}>
-                                                ₹{(f.pricePerDay * Number(hospitalizeForm.facilityDays[f.name])).toLocaleString('en-IN')}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+            {paymentModal.open && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                    <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '440px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <div>
+                                <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>💰 Confirm Payment</h2>
+                                <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.88rem' }}>
+                                    {paymentModal.appointment?.userId?.name} — Rs. {Number(paymentModal.appointment?.amount || 0).toLocaleString('en-IN')}
+                                </p>
                             </div>
-                            {Object.values(hospitalizeForm.facilityDays).some(d => d > 0) && (
-                                <div style={{ marginTop: '12px', padding: '10px 14px', background: '#eff6ff', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-                                    <span>Total Facility Cost:</span>
-                                    <span style={{ color: '#1d4ed8' }}>
-                                        ₹{(hospitalContext.facilities.reduce((sum, f) => sum + (f.pricePerDay * (Number(hospitalizeForm.facilityDays[f.name]) || 0)), 0)).toLocaleString('en-IN')}
-                                    </span>
-                                </div>
-                            )}
+                            <button onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
                         </div>
-                    ) : (
-                        <div style={{ padding: '12px 14px', background: '#fef9c3', borderRadius: '8px', fontSize: '0.88rem', color: '#92400e', marginBottom: '16px' }}>
-                            No facilities configured. Hospital admin can add facilities from the Hospital Admin Dashboard.
+                        <div style={{ marginBottom: '18px' }}>
+                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '7px' }}>Payment Method</label>
+                            <select
+                                value={paymentModal.method}
+                                onChange={e => setPaymentModal(p => ({ ...p, method: e.target.value }))}
+                                style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
+                            >
+                                <option value="Cash">Cash</option>
+                                <option value="UPI">UPI</option>
+                                <option value="Card">Card</option>
+                                <option value="Cheque">Cheque</option>
+                                <option value="NEFT/RTGS">NEFT / RTGS</option>
+                            </select>
                         </div>
-                    )}
-
-                    <div style={{ marginBottom: '20px' }}>
-                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Notes (optional)</label>
-                        <textarea
-                            placeholder="Any notes for admission..."
-                            value={hospitalizeForm.notes}
-                            onChange={e => setHospitalizeForm(p => ({ ...p, notes: e.target.value }))}
-                            rows={2}
-                            style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
-                        />
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                        <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleHospitalize}
-                            disabled={hospitalizingSaving}
-                            style={{ padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: hospitalizingSaving ? 0.6 : 1 }}
-                        >
-                            {hospitalizingSaving ? 'Admitting...' : 'Admit Patient'}
-                        </button>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                                onClick={handleConfirmPayment}
+                                disabled={confirmingPayment}
+                                style={{ flex: 1, padding: '11px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}
+                            >
+                                {confirmingPayment ? 'Confirming...' : '✓ Confirm & Print Receipt'}
+                            </button>
+                            <button
+                                onClick={() => setPaymentModal({ open: false, appointment: null, method: 'Cash' })}
+                                style={{ padding: '11px 18px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.9rem' }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        )}
+            )}
+
+            {hospitalizeModal.open && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                    <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <div>
+                                <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700 }}>Hospitalize Patient</h2>
+                                <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>
+                                    {hospitalizeModal.appointment?.userId?.name} — {hospitalizeModal.appointment?.doctorName}
+                                </p>
+                            </div>
+                            <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Ward / Room</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. General Ward, ICU"
+                                    value={hospitalizeForm.ward}
+                                    onChange={e => setHospitalizeForm(p => ({ ...p, ward: e.target.value }))}
+                                    style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Bed Number</label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. B-12"
+                                    value={hospitalizeForm.bedNumber}
+                                    onChange={e => setHospitalizeForm(p => ({ ...p, bedNumber: e.target.value }))}
+                                    style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                                />
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Admission Date</label>
+                            <input
+                                type="date"
+                                value={hospitalizeForm.admissionDate}
+                                onChange={e => setHospitalizeForm(p => ({ ...p, admissionDate: e.target.value }))}
+                                style={{ padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
+                            />
+                        </div>
+
+                        {(hospitalContext?.facilities?.length > 0) ? (
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>
+                                    Select Facilities &amp; Days
+                                </label>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {hospitalContext.facilities.map(f => (
+                                        <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{f.name}</div>
+                                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>₹{f.pricePerDay}/day</div>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <label style={{ fontSize: '0.82rem', color: '#475569' }}>Days:</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    placeholder="0"
+                                                    value={hospitalizeForm.facilityDays[f.name] || ''}
+                                                    onChange={e => setHospitalizeForm(p => ({ ...p, facilityDays: { ...p.facilityDays, [f.name]: e.target.value } }))}
+                                                    style={{ width: '70px', padding: '6px 10px', border: '1.5px solid #e2e8f0', borderRadius: '7px', fontSize: '0.9rem', textAlign: 'center' }}
+                                                />
+                                            </div>
+                                            {hospitalizeForm.facilityDays[f.name] > 0 && (
+                                                <div style={{ fontWeight: 700, color: '#1d4ed8', fontSize: '0.9rem', minWidth: '70px', textAlign: 'right' }}>
+                                                    ₹{(f.pricePerDay * Number(hospitalizeForm.facilityDays[f.name])).toLocaleString('en-IN')}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                {Object.values(hospitalizeForm.facilityDays).some(d => d > 0) && (
+                                    <div style={{ marginTop: '12px', padding: '10px 14px', background: '#eff6ff', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                                        <span>Total Facility Cost:</span>
+                                        <span style={{ color: '#1d4ed8' }}>
+                                            ₹{(hospitalContext.facilities.reduce((sum, f) => sum + (f.pricePerDay * (Number(hospitalizeForm.facilityDays[f.name]) || 0)), 0)).toLocaleString('en-IN')}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div style={{ padding: '12px 14px', background: '#fef9c3', borderRadius: '8px', fontSize: '0.88rem', color: '#92400e', marginBottom: '16px' }}>
+                                No facilities configured. Hospital admin can add facilities from the Hospital Admin Dashboard.
+                            </div>
+                        )}
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Notes (optional)</label>
+                            <textarea
+                                placeholder="Any notes for admission..."
+                                value={hospitalizeForm.notes}
+                                onChange={e => setHospitalizeForm(p => ({ ...p, notes: e.target.value }))}
+                                rows={2}
+                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                            <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleHospitalize}
+                                disabled={hospitalizingSaving}
+                                style={{ padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: hospitalizingSaving ? 0.6 : 1 }}
+                            >
+                                {hospitalizingSaving ? 'Admitting...' : 'Admit Patient'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 
@@ -1408,7 +1408,232 @@ const ReceptionDashboard = () => {
         const timeOfDay = new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening';
         return (
             <>
-            <div className="reception-dashboard" style={{ padding: '10px 0' }}>
+                <div className="reception-dashboard" style={{ padding: '10px 0' }}>
+                    {pendingDownload && (
+                        <div style={{
+                            margin: '0 0 20px 0',
+                            padding: '12px 20px',
+                            background: '#ecfdf5',
+                            border: '1.5px solid #a7f3d0',
+                            borderRadius: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            boxShadow: '0 4px 12px rgba(16, 185, 129, 0.05)',
+                            fontFamily: 'var(--font-primary)'
+                        }}>
+                            <span style={{ color: '#065f46', fontWeight: 600, fontSize: '0.95rem' }}>
+                                ✅ {pendingDownload.title || 'Document Generated'} — {pendingDownload.filename} is ready
+                            </span>
+                            <button
+                                onClick={() => {
+                                    pendingDownload.doc.save(pendingDownload.filename);
+                                    setPendingDownload(null);
+                                }}
+                                style={{
+                                    padding: '8px 16px',
+                                    background: '#059669',
+                                    color: '#fff',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontWeight: 700,
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                📥 Download
+                            </button>
+                        </div>
+                    )}
+
+                    {/* WELCOME BANNER (Matched to Reference Image) */}
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: '24px',
+                        padding: '44px 34px',
+                        marginBottom: '36px',
+                        boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.06), 0 4px 12px -2px rgba(0, 0, 0, 0.03)',
+                        border: '1px solid #f1f5f9',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                            <span style={{ fontSize: '2.2rem' }}>👋</span>
+                            <span style={{
+                                background: '#0d9488',
+                                color: '#ffffff',
+                                padding: '5px 14px',
+                                borderRadius: '20px',
+                                fontSize: '0.78rem',
+                                fontWeight: 800,
+                                letterSpacing: '0.06em',
+                                textTransform: 'uppercase',
+                                boxShadow: '0 4px 10px rgba(13, 148, 136, 0.2)'
+                            }}>
+                                RECEPTIONIST
+                            </span>
+                        </div>
+                        <h1 style={{ margin: '0 0 10px', fontSize: '2.4rem', fontWeight: 800, color: '#1e293b', letterSpacing: '-0.02em' }}>
+                            Good {timeOfDay.toLowerCase()}, <span style={{ color: '#0d9488' }}>{currentUser?.name || 'vedika singh'}</span>
+                        </h1>
+                        <p style={{ margin: 0, color: '#64748b', fontSize: '1.05rem', fontWeight: 500 }}>
+                            Here's your workspace. Pick any section to get started.
+                        </p>
+                    </div>
+
+                    {/* QUICK ACCESS CARDS */}
+                    <div style={{ marginBottom: '34px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                            <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>⚡ QUICK ACCESS</span>
+                            <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
+                        </div>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                            gap: '22px'
+                        }}>
+                            {/* Card 1: Patient Registration */}
+                            <div
+                                onClick={() => navigate('/reception/dashboard?view=intake')}
+                                style={{
+                                    background: '#ffffff',
+                                    borderRadius: '16px',
+                                    padding: '26px',
+                                    border: '1px solid #e2e8f0',
+                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '18px'
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(13, 148, 136, 0.12)'; e.currentTarget.style.borderColor = '#99f6e4'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                            >
+                                <div style={{
+                                    width: '54px',
+                                    height: '54px',
+                                    borderRadius: '14px',
+                                    background: '#f0fdf4',
+                                    color: '#16a34a',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '1.6rem',
+                                    flexShrink: 0
+                                }}>
+                                    <FiUserPlus />
+                                </div>
+                                <div>
+                                    <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Patient Registration</h4>
+                                    <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
+                                        View and manage patient records
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Card 2: Patient Search */}
+                            <div
+                                onClick={() => navigate('/reception/patients')}
+                                style={{
+                                    background: '#ffffff',
+                                    borderRadius: '16px',
+                                    padding: '26px',
+                                    border: '1px solid #e2e8f0',
+                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '18px'
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(37, 99, 235, 0.12)'; e.currentTarget.style.borderColor = '#bfdbfe'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                            >
+                                <div style={{
+                                    width: '54px',
+                                    height: '54px',
+                                    borderRadius: '14px',
+                                    background: '#eff6ff',
+                                    color: '#2563eb',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '1.6rem',
+                                    flexShrink: 0
+                                }}>
+                                    <FiSearch />
+                                </div>
+                                <div>
+                                    <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Patient Search</h4>
+                                    <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
+                                        View and manage patient records
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Card 3: Finance & Accounting */}
+                            <div
+                                onClick={() => {
+                                    fetchTransactions();
+                                    setViewMode('transactions');
+                                    navigate('/reception/dashboard?view=transactions');
+                                }}
+                                style={{
+                                    background: '#ffffff',
+                                    borderRadius: '16px',
+                                    padding: '26px',
+                                    border: '1px solid #e2e8f0',
+                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    gap: '18px'
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(217, 119, 6, 0.12)'; e.currentTarget.style.borderColor = '#fde68a'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                            >
+                                <div style={{
+                                    width: '54px',
+                                    height: '54px',
+                                    borderRadius: '14px',
+                                    background: '#fffbeb',
+                                    color: '#d97706',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '1.6rem',
+                                    flexShrink: 0
+                                }}>
+                                    <FiDollarSign />
+                                </div>
+                                <div>
+                                    <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Finance & Accounting</h4>
+                                    <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
+                                        Access Finance & Accounting
+                                    </p>
+                                </div>
+                            </div>
+
+                            
+
+                        </div>
+                    </div>
+                </div>
+                {renderModals()}
+            </>
+        );
+    }
+
+    return (
+        <>
+            <div className="reception-dashboard">
                 {pendingDownload && (
                     <div style={{
                         margin: '0 0 20px 0',
@@ -1449,343 +1674,81 @@ const ReceptionDashboard = () => {
                     </div>
                 )}
 
-                {/* WELCOME BANNER (Matched to Reference Image) */}
-                <div style={{
-                    background: '#ffffff',
-                    borderRadius: '24px',
-                    padding: '44px 34px',
-                    marginBottom: '36px',
-                    boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.06), 0 4px 12px -2px rgba(0, 0, 0, 0.03)',
-                    border: '1px solid #f1f5f9',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    textAlign: 'center'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                        <span style={{ fontSize: '2.2rem' }}>👋</span>
-                        <span style={{
-                            background: '#0d9488',
-                            color: '#ffffff',
-                            padding: '5px 14px',
-                            borderRadius: '20px',
-                            fontSize: '0.78rem',
-                            fontWeight: 800,
-                            letterSpacing: '0.06em',
-                            textTransform: 'uppercase',
-                            boxShadow: '0 4px 10px rgba(13, 148, 136, 0.2)'
+                <div className="dashboard-header">
+                    <h1>Reception Desk</h1>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button className="btn-cancel" onClick={() => { fetchTransactions(); setViewMode('transactions'); }} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1' }}>💰 Transactions</button>
+                        <button className="btn-cancel" onClick={() => navigate('/billing/patient')} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac' }}>🧾 Patient Billing</button>
+                        <button className="btn-save" onClick={handleNewWalkIn} style={{ padding: '10px 20px', fontSize: '1rem' }}>+ New Registration</button>
+                    </div>
+                </div>
+
+                {/* SEARCH SECTION */}
+                <div className="search-section card" style={{ padding: '20px', marginBottom: '20px', position: 'relative' }}>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <input
+                            type="text"
+                            placeholder="🔍 Search Patient by Name, Mobile or MRN..."
+                            value={searchQuery}
+                            onChange={handleSearch}
+                            style={{ flex: 1, padding: '12px', fontSize: '1rem', borderRadius: '6px', border: '1px solid #ddd' }}
+                        />
+                    </div>
+                    {searchResults.length > 0 && (
+                        <div className="search-results-dropdown" style={{
+                            position: 'absolute', top: '70px', left: '20px', right: '20px',
+                            background: 'white', border: '1px solid #eee', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                            zIndex: 1000, maxHeight: '300px', overflowY: 'auto', borderRadius: '8px'
                         }}>
-                            RECEPTIONIST
-                        </span>
-                    </div>
-                    <h1 style={{ margin: '0 0 10px', fontSize: '2.4rem', fontWeight: 800, color: '#1e293b', letterSpacing: '-0.02em' }}>
-                        Good {timeOfDay.toLowerCase()}, <span style={{ color: '#0d9488' }}>{currentUser?.name || 'vedika singh'}</span>
-                    </h1>
-                    <p style={{ margin: 0, color: '#64748b', fontSize: '1.05rem', fontWeight: 500 }}>
-                        Here's your workspace. Pick any section to get started.
-                    </p>
+                            {searchResults.map(p => (
+                                <div key={p._id} style={{ padding: '12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>{p.name} <span style={{ color: '#666', fontSize: '0.9rem' }}>({p.patientId || 'N/A'})</span></div>
+                                        <div style={{ fontSize: '0.9rem', color: '#888' }}>📱 {p.phone}</div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button
+                                            onClick={() => handleSelectSearchResult(p)}
+                                            style={{ padding: '6px 14px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+                                        >
+                                            📋 Book Appointment
+                                        </button>
+                                        <button
+                                            onClick={() => handleViewProfile(p)}
+                                            style={{ padding: '6px 14px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+                                        >
+                                            👤 View Profile
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                {/* QUICK ACCESS CARDS */}
-                <div style={{ marginBottom: '34px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-                        <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>⚡ QUICK ACCESS</span>
-                        <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
+                {/* Widget Area */}
+                <div className="availability-widget card">
+                    <h3>📅 Quick Check Availability</h3>
+                    <div className="widget-controls">
+                        <select className="avail-select" onChange={(e) => setAvailabilityCheck({ ...availabilityCheck, doctorId: e.target.value })}>
+                            <option value="">Select Doctor</option>
+                            {doctorsList.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+                        </select>
+                        <input type="date" value={availabilityCheck.date} onChange={(e) => setAvailabilityCheck({ ...availabilityCheck, date: e.target.value })} />
                     </div>
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                        gap: '22px'
-                    }}>
-                        {/* Card 1: Patient Registration */}
-                        <div
-                            onClick={() => navigate('/reception/dashboard?view=intake')}
-                            style={{
-                                background: '#ffffff',
-                                borderRadius: '16px',
-                                padding: '26px',
-                                border: '1px solid #e2e8f0',
-                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: '18px'
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(13, 148, 136, 0.12)'; e.currentTarget.style.borderColor = '#99f6e4'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
-                        >
-                            <div style={{
-                                width: '54px',
-                                height: '54px',
-                                borderRadius: '14px',
-                                background: '#f0fdf4',
-                                color: '#16a34a',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '1.6rem',
-                                flexShrink: 0
-                            }}>
-                                <FiUserPlus />
-                            </div>
-                            <div>
-                                <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Patient Registration</h4>
-                                <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
-                                    View and manage patient records
-                                </p>
-                            </div>
+                    {availabilityCheck.doctorId && (
+                        <div className="slot-grid">
+                            {timeSlots.map(t => (
+                                <button key={t} className={`slot-btn ${availabilityCheck.bookedSlots.includes(t) ? 'booked' : ''}`} onClick={() => handleSlotClick(t)}>{t}</button>
+                            ))}
                         </div>
-
-                        {/* Card 2: Patient Search */}
-                        <div
-                            onClick={() => navigate('/reception/patients')}
-                            style={{
-                                background: '#ffffff',
-                                borderRadius: '16px',
-                                padding: '26px',
-                                border: '1px solid #e2e8f0',
-                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: '18px'
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(37, 99, 235, 0.12)'; e.currentTarget.style.borderColor = '#bfdbfe'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
-                        >
-                            <div style={{
-                                width: '54px',
-                                height: '54px',
-                                borderRadius: '14px',
-                                background: '#eff6ff',
-                                color: '#2563eb',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '1.6rem',
-                                flexShrink: 0
-                            }}>
-                                <FiSearch />
-                            </div>
-                            <div>
-                                <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Patient Search</h4>
-                                <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
-                                    View and manage patient records
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Card 3: Finance & Accounting */}
-                        <div
-                            onClick={() => {
-                                fetchTransactions();
-                                setViewMode('transactions');
-                                navigate('/reception/dashboard?view=transactions');
-                            }}
-                            style={{
-                                background: '#ffffff',
-                                borderRadius: '16px',
-                                padding: '26px',
-                                border: '1px solid #e2e8f0',
-                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: '18px'
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(217, 119, 6, 0.12)'; e.currentTarget.style.borderColor = '#fde68a'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
-                        >
-                            <div style={{
-                                width: '54px',
-                                height: '54px',
-                                borderRadius: '14px',
-                                background: '#fffbeb',
-                                color: '#d97706',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '1.6rem',
-                                flexShrink: 0
-                            }}>
-                                <FiDollarSign />
-                            </div>
-                            <div>
-                                <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Finance & Accounting</h4>
-                                <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
-                                    Access Finance & Accounting
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Card 4: Patient Billing */}
-                        <div
-                            onClick={() => navigate('/billing/patient')}
-                            style={{
-                                background: '#ffffff',
-                                borderRadius: '16px',
-                                padding: '26px',
-                                border: '1px solid #e2e8f0',
-                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: '18px'
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(13, 148, 136, 0.12)'; e.currentTarget.style.borderColor = '#99f6e4'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
-                        >
-                            <div style={{
-                                width: '54px',
-                                height: '54px',
-                                borderRadius: '14px',
-                                background: '#f0fdf4',
-                                color: '#0d9488',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '1.6rem',
-                                flexShrink: 0
-                            }}>
-                                <FiFileText />
-                            </div>
-                            <div>
-                                <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Patient Billing</h4>
-                                <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
-                                    View and manage patient records
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                    )}
                 </div>
+
+                {renderTodaysQueue()}
             </div>
+
             {renderModals()}
-            </>
-        );
-    }
-
-    return (
-        <>
-        <div className="reception-dashboard">
-            {pendingDownload && (
-                <div style={{
-                    margin: '0 0 20px 0',
-                    padding: '12px 20px',
-                    background: '#ecfdf5',
-                    border: '1.5px solid #a7f3d0',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.05)',
-                    fontFamily: 'var(--font-primary)'
-                }}>
-                    <span style={{ color: '#065f46', fontWeight: 600, fontSize: '0.95rem' }}>
-                        ✅ {pendingDownload.title || 'Document Generated'} — {pendingDownload.filename} is ready
-                    </span>
-                    <button
-                        onClick={() => {
-                            pendingDownload.doc.save(pendingDownload.filename);
-                            setPendingDownload(null);
-                        }}
-                        style={{
-                            padding: '8px 16px',
-                            background: '#059669',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '8px',
-                            fontWeight: 700,
-                            fontSize: '0.85rem',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                        }}
-                    >
-                        📥 Download
-                    </button>
-                </div>
-            )}
-
-            <div className="dashboard-header">
-                <h1>Reception Desk</h1>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <button className="btn-cancel" onClick={() => { fetchTransactions(); setViewMode('transactions'); }} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1' }}>💰 Transactions</button>
-                    <button className="btn-cancel" onClick={() => navigate('/billing/patient')} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac' }}>🧾 Patient Billing</button>
-                    <button className="btn-save" onClick={handleNewWalkIn} style={{ padding: '10px 20px', fontSize: '1rem' }}>+ New Registration</button>
-                </div>
-            </div>
-
-            {/* SEARCH SECTION */}
-            <div className="search-section card" style={{ padding: '20px', marginBottom: '20px', position: 'relative' }}>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <input
-                        type="text"
-                        placeholder="🔍 Search Patient by Name, Mobile or MRN..."
-                        value={searchQuery}
-                        onChange={handleSearch}
-                        style={{ flex: 1, padding: '12px', fontSize: '1rem', borderRadius: '6px', border: '1px solid #ddd' }}
-                    />
-                </div>
-                {searchResults.length > 0 && (
-                    <div className="search-results-dropdown" style={{
-                        position: 'absolute', top: '70px', left: '20px', right: '20px',
-                        background: 'white', border: '1px solid #eee', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                        zIndex: 1000, maxHeight: '300px', overflowY: 'auto', borderRadius: '8px'
-                    }}>
-                        {searchResults.map(p => (
-                            <div key={p._id} style={{ padding: '12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div>
-                                    <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>{p.name} <span style={{ color: '#666', fontSize: '0.9rem' }}>({p.patientId || 'N/A'})</span></div>
-                                    <div style={{ fontSize: '0.9rem', color: '#888' }}>📱 {p.phone}</div>
-                                </div>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button
-                                        onClick={() => handleSelectSearchResult(p)}
-                                        style={{ padding: '6px 14px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
-                                    >
-                                        📋 Book Appointment
-                                    </button>
-                                    <button
-                                        onClick={() => handleViewProfile(p)}
-                                        style={{ padding: '6px 14px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
-                                    >
-                                        👤 View Profile
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {/* Widget Area */}
-            <div className="availability-widget card">
-                <h3>📅 Quick Check Availability</h3>
-                <div className="widget-controls">
-                    <select className="avail-select" onChange={(e) => setAvailabilityCheck({ ...availabilityCheck, doctorId: e.target.value })}>
-                        <option value="">Select Doctor</option>
-                        {doctorsList.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
-                    </select>
-                    <input type="date" value={availabilityCheck.date} onChange={(e) => setAvailabilityCheck({ ...availabilityCheck, date: e.target.value })} />
-                </div>
-                {availabilityCheck.doctorId && (
-                    <div className="slot-grid">
-                        {timeSlots.map(t => (
-                            <button key={t} className={`slot-btn ${availabilityCheck.bookedSlots.includes(t) ? 'booked' : ''}`} onClick={() => handleSlotClick(t)}>{t}</button>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {renderTodaysQueue()}
-        </div>
-
-        {renderModals()}
         </>
     );
 };

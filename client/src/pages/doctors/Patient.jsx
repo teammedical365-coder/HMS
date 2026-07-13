@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doctorAPI, uploadAPI } from '../../utils/api';
+import { doctorAPI, uploadAPI, reportAPI } from '../../utils/api';
 
 const Patient = () => {
     const navigate = useNavigate();
@@ -73,11 +73,12 @@ const Patient = () => {
 
         try {
             const formData = new FormData();
-            formData.append('images', uploadFile);
+            formData.append('reportFile', uploadFile);
+            formData.append('appointmentId', uploadPatient._id);
             
-            const res = await uploadAPI.uploadImages(formData);
-            if (res.success && res.files && res.files.length > 0) {
-                const uploadedFile = res.files[0];
+            const res = await reportAPI.uploadReport(formData);
+            if (res.success && res.report) {
+                const uploadedFile = res.report;
                 const patientId = uploadPatient.userId?._id || uploadPatient.clinicPatientId?.patientUid || uploadPatient.clinicPatientId?._id || uploadPatient.patientId;
                 
                 const isClinic = !!uploadPatient.clinicPatientId;
