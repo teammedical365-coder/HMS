@@ -37,7 +37,7 @@ const AdminLabs = () => {
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (user.role !== 'admin' && user.role !== 'hospitaladmin') {
+    if (!['admin', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(user.role)) {
       navigate('/');
     }
     fetchLabs();

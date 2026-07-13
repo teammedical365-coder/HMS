@@ -20,6 +20,8 @@ import {
 } from 'react-icons/fi';
 import './ClinicPatientProfile.css';
 
+import AppointmentReports from '../../components/AppointmentReports';
+
 const ClinicPatientProfile = () => {
     const { id: patientId } = useParams();
     const navigate = useNavigate();
@@ -509,6 +511,11 @@ const ClinicPatientProfile = () => {
                                                             </div>
                                                         </div>
                                                     )}
+                                                    
+                                                    {/* Reports & Prescriptions for this Appointment */}
+                                                    <div className="cpp-tl-section" style={{ marginTop: '12px' }}>
+                                                        <AppointmentReports appointmentId={item.data?._id} prescriptions={item.data?.prescriptions} />
+                                                    </div>
                                                 </div>
                                             </div>
                                         );

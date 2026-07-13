@@ -99,7 +99,7 @@ const AdminMedicines = () => {
             <div className="superadmin-container">
                 <div className="admin-header">
                     <div>
-                        <h1>Medicine Catalog</h1>
+                        <h1>Medicine Catalog </h1>
                         <p>Manage the global catalog of medicines available for doctors to prescribe</p>
                     </div>
                     <button onClick={() => { setShowForm(!showForm); setEditingId(null); setFormData({ name: '', genericName: '', description: '', category: 'General' }); }} className="btn btn-primary" style={{ padding: '8px 16px' }}>
@@ -111,11 +111,15 @@ const AdminMedicines = () => {
                 {success && <div className="success-message">{success}</div>}
 
                 {showForm && (
-                    <div className="admin-card" style={{ marginBottom: '20px' }}>
-                        <h2>{editingId ? 'Edit Medicine' : 'Add New Medicine'}</h2>
-                        <form onSubmit={handleSubmit} className="user-form">
-                            <div className="form-row">
-                                <div className="form-group">
+                    <div className="modal-overlay !fixed !inset-0 !z-50 !flex !items-center !justify-center !p-4 !bg-black/50 !overflow-hidden">
+                        <div className="modal-content !bg-white !rounded-xl !shadow-xl !max-h-[80vh] !w-full !max-w-2xl !flex !flex-col !overflow-hidden">
+                            <div className="modal-header p-6 border-b border-gray-100 flex justify-between items-center bg-white">
+                                <h2>{editingId ? 'Edit Medicine ' : 'Add New Medication '}</h2>
+                                <button type="button" className="close-btn text-gray-500 hover:text-gray-700 text-2xl" onClick={() => { setShowForm(false); setEditingId(null); setFormData({ name: '', genericName: '', description: '', category: 'General' }); }}>×</button>
+                            </div>
+                            <form onSubmit={handleSubmit} className="user-form !overflow-y-auto !flex-1 !p-6">
+                                <div className="form-row">
+                                    <div className="form-group">
                                     <label className="staff-label">Medicine Name *</label>
                                     <input type="text" name="name" value={formData.name} onChange={handleChange} required className="staff-input" placeholder="e.g. Paracetamol 500mg" />
                                 </div>
@@ -134,13 +138,17 @@ const AdminMedicines = () => {
                                 <label className="staff-label">Description / Instructions</label>
                                 <textarea name="description" value={formData.description} onChange={handleChange} className="staff-input" rows="3" placeholder="e.g. Take after meals"></textarea>
                             </div>
-                            <div style={{ marginTop: '20px' }}>
+                            <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
                                 <button type="submit" disabled={loading} className="submit-button" style={{ maxWidth: '200px' }}>
                                     {loading ? 'Saving...' : 'Save Medicine'}
+                                </button>
+                                <button type="button" onClick={() => { setShowForm(false); setEditingId(null); setFormData({ name: '', genericName: '', description: '', category: 'General' }); }} className="btn-cancel">
+                                    Cancel
                                 </button>
                             </div>
                         </form>
                     </div>
+                </div>
                 )}
 
                 <div className="admin-card">
