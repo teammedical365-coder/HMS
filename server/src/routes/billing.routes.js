@@ -12,6 +12,7 @@ const MasterLabReport = require('../models/labReport.model');
 const MasterPharmacyOrder = require('../models/pharmacyOrder.model');
 const MasterFacilityCharge = require('../models/facilityCharge.model');
 const MasterAdmission = require('../models/admission.model');
+const MasterPaymentTransaction = require('../models/paymentTransaction.model');
 
 // Billing access middleware — receptionist also gets billing view
 const verifyBillingAccess = async (req, res, next) => {
@@ -46,6 +47,7 @@ const getModels = (req) => {
         PharmacyOrder: MasterPharmacyOrder,
         FacilityCharge: MasterFacilityCharge,
         Admission: MasterAdmission,
+        PaymentTransaction: MasterPaymentTransaction,
     };
 };
 
@@ -53,7 +55,7 @@ const getModels = (req) => {
 router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
     try {
         const identifier = (req.params.identifier || '').trim();
-        const { User, Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission } = getModels(req);
+        const { User, Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission, PaymentTransaction } = getModels(req);
 
         // Scope patient lookup flexibly to requesting user's hospital or legacy records without hospitalId
         const hospitalFilter = req.user.hospitalId ? {
@@ -107,12 +109,13 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
             return results;
         };
 
-        const [appointments, labReports, pharmacyOrders, facilityCharges, admissions] = await Promise.all([
+        const [appointments, labReports, pharmacyOrders, facilityCharges, admissions, paymentTransactions] = await Promise.all([
             fetchWithMasterFallback(Appointment, MasterAppointment, { userId: patient._id, ...hFilter }, 'appointmentDate appointmentTime amount paymentStatus serviceName doctorName status createdAt'),
             fetchWithMasterFallback(LabReport, MasterLabReport, { userId: patient._id, ...hFilter }, 'testNames amount paymentStatus testStatus createdAt'),
             fetchWithMasterFallback(PharmacyOrder, MasterPharmacyOrder, { userId: patient._id, ...hFilter }, 'items totalAmount paymentStatus orderStatus createdAt'),
             fetchWithMasterFallback(FacilityCharge, MasterFacilityCharge, { patientId: patient._id, ...hFilter }, 'facilityName pricePerDay days totalAmount paymentStatus createdAt'),
-            fetchWithMasterFallback(Admission, MasterAdmission, { patientId: patient._id, ...hFilter }, null, { admissionDate: -1 })
+            fetchWithMasterFallback(Admission, MasterAdmission, { patientId: patient._id, ...hFilter }, null, { admissionDate: -1 }),
+            fetchWithMasterFallback(PaymentTransaction, MasterPaymentTransaction, { patientId: patient._id, ...hFilter }, null, { paymentDate: -1 })
         ]);
 
         // Calculate ICU charges dynamically for active/past admissions
@@ -154,7 +157,7 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
                 gender: patient.gender,
                 dob: patient.dob,
             },
-            billing: { appointments, labReports, pharmacyOrders, facilityCharges, admissions }
+            billing: { appointments, labReports, pharmacyOrders, facilityCharges, admissions, paymentTransactions }
         });
 
     } catch (error) {
@@ -199,10 +202,18 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
             pharmacyOrderIds = [],
             facilityChargeIds = [],
             admissionIds = [],
-            paymentMode = 'Cash'
+            paymentMode = 'Cash',
+            patientId,
+            amount,
+            transactionId,
+            upiId,
+            cardDetails,
+            bankReference,
+            proofUrl,
+            proofFileId
         } = req.body;
 
-        const { Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission } = getModels(req);
+        const { Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission, PaymentTransaction } = getModels(req);
 
         // Calculate and persist ICU charges for any admissions before marking Paid
         if (admissionIds.length > 0) {
@@ -248,6 +259,42 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
             facilityChargeIds.length > 0 && FacilityCharge.updateMany(
                 { _id: { $in: facilityChargeIds } }, { $set: { paymentStatus: 'Paid' } }),
         ].filter(Boolean));
+
+        if (patientId) {
+            // Build dynamic description
+            let descParts = [];
+            if (appointmentIds.length > 0) descParts.push(`${appointmentIds.length} Appointments`);
+            if (labReportIds.length > 0) descParts.push(`${labReportIds.length} Lab Tests`);
+            if (pharmacyOrderIds.length > 0) descParts.push(`${pharmacyOrderIds.length} Pharmacy Orders`);
+            if (facilityChargeIds.length > 0) descParts.push(`${facilityChargeIds.length} Facility Charges`);
+            if (admissionIds.length > 0) descParts.push(`${admissionIds.length} ICU/Admissions`);
+
+            const description = descParts.length > 0 ? `Payment for: ${descParts.join(', ')}` : 'General Payment';
+
+            const pt = new PaymentTransaction({
+                hospitalId: req.hospitalId || req.user.hospitalId,
+                patientId,
+                paymentMode,
+                paymentStatus: 'Paid',
+                amount: Number(amount) || 0,
+                transactionId,
+                upiId,
+                cardDetails,
+                bankReference,
+                proofUrl,
+                proofFileId,
+                description,
+                billedItems: {
+                    appointments: appointmentIds,
+                    labReports: labReportIds,
+                    pharmacyOrders: pharmacyOrderIds,
+                    facilityCharges: facilityChargeIds,
+                    admissions: admissionIds
+                },
+                addedBy: req.user._id || req.user.userId
+            });
+            await pt.save();
+        }
 
         res.json({ success: true, message: 'Billing settled successfully' });
     } catch (error) {

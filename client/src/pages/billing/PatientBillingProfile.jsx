@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { billingAPI, admissionAPI, patientAPI } from '../../utils/api';
+import { billingAPI, admissionAPI, patientAPI, uploadAPI } from '../../utils/api';
 import './PatientBillingProfile.css';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n || 0);
@@ -139,10 +139,47 @@ const PatientBillingProfile = () => {
         return `${pending} pending, ${paid} paid`;
     };
 
-    const handlePay = async () => {
+    const [paymentModal, setPaymentModal] = useState({ open: false, data: { transactionId: '', upiId: '', cardDetails: '', bankReference: '' } });
+    const [proofFile, setProofFile] = useState(null);
+    const [viewProofUrl, setViewProofUrl] = useState('');
+
+    const confirmPaymentWithProof = async (e) => {
+        e.preventDefault();
+        
+        let proofUrl = '';
+        let proofFileId = '';
+
+        setPaying(true);
+        try {
+            if (proofFile) {
+                const formData = new FormData();
+                formData.append('images', proofFile);
+                const uploadRes = await uploadAPI.uploadImages(formData);
+                if (uploadRes.success && uploadRes.files.length > 0) {
+                    proofUrl = uploadRes.files[0].url;
+                    proofFileId = uploadRes.files[0].fileId;
+                }
+            }
+
+            await executePayment({
+                transactionId: paymentModal.data.transactionId,
+                upiId: paymentModal.data.upiId,
+                cardDetails: paymentModal.data.cardDetails,
+                bankReference: paymentModal.data.bankReference,
+                proofUrl,
+                proofFileId
+            });
+            setPaymentModal({ open: false, data: {} });
+            setProofFile(null);
+        } catch (err) {
+            console.error('Proof upload failed:', err);
+            alert('Failed to process payment with proof');
+            setPaying(false);
+        }
+    };
+
+    const executePayment = async (extraData = {}) => {
         const total = totalSelected();
-        if (total === 0) return alert('Select at least one item to pay.');
-        if (!window.confirm(`Process payment of ${fmt(total)} via ${paymentMode}?`)) return;
         setPaying(true);
         try {
             await billingAPI.processPayment({
@@ -152,6 +189,9 @@ const PatientBillingProfile = () => {
                 facilityChargeIds: selected.facilityCharges,
                 admissionIds: selected.admissions,
                 paymentMode,
+                patientId: patient?._id,
+                amount: total,
+                ...extraData
             });
             setSuccessMsg(`Payment of ${fmt(total)} processed successfully via ${paymentMode}.`);
             const res = await billingAPI.getPatientBills(searchQuery.trim());
@@ -548,21 +588,144 @@ const PatientBillingProfile = () => {
                                     <strong>{fmt(pendingTotal())}</strong>
                                 </div>
                             </div>
-                            <div className="payment-controls">
-                                <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} className="payment-mode-select">
-                                    <option value="Cash">Cash</option>
-                                    <option value="UPI">UPI</option>
-                                    <option value="Card">Card</option>
-                                    <option value="NetBanking">Net Banking</option>
-                                    <option value="Insurance">Insurance</option>
-                                </select>
-                                <button className="btn-pay" onClick={handlePay} disabled={paying || totalSelected() === 0}>
+                            <form className="payment-controls" onSubmit={(e) => {
+                                if (paymentMode === 'Cash') {
+                                    e.preventDefault();
+                                    if (!window.confirm(`Process payment of ${fmt(totalSelected())} via Cash?`)) return;
+                                    executePayment({});
+                                } else {
+                                    confirmPaymentWithProof(e);
+                                }
+                            }}>
+                                <div className="payment-inline-inputs" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px', alignItems: 'center' }}>
+                                    <select value={paymentMode} onChange={e => { setPaymentMode(e.target.value); setPaymentModal({ ...paymentModal, data: {} }); setProofFile(null); }} className="payment-mode-select" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
+                                        <option value="Cash">Cash</option>
+                                        <option value="UPI">UPI</option>
+                                        <option value="Card">Card</option>
+                                        <option value="Cheque">Cheque</option>
+                                        <option value="NEFT/RTGS">NEFT / RTGS</option>
+                                    </select>
+
+                                    {paymentMode === 'UPI' && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', padding: '15px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '10px' }}>
+                                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                <div style={{ flex: 1, minWidth: '150px' }}>
+                                                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Hospital UPI ID <span style={{color: '#ef4444'}}>*</span></label>
+                                                    <input type="text" placeholder="e.g. hospital@upi" required value={paymentModal.data?.upiId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, upiId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%' }} />
+                                                </div>
+                                                <div style={{ flex: 1, minWidth: '150px' }}>
+                                                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>12-Digit Transaction Ref <span style={{color: '#ef4444'}}>*</span></label>
+                                                    <input type="text" placeholder="Transaction ID" required value={paymentModal.data?.transactionId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, transactionId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%' }} />
+                                                </div>
+                                            </div>
+                                            
+                                            {paymentModal.data?.upiId && totalSelected() > 0 && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fff', padding: '15px', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+                                                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>Scan to Pay {fmt(totalSelected())}</span>
+                                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('upi://pay?pa=' + (paymentModal.data.upiId).trim() + '&pn=Hospital&am=' + totalSelected() + '&cu=INR')}`} alt="UPI QR Code" style={{ border: '4px solid #fff', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} />
+                                                    <span style={{ fontSize: '11px', color: '#64748b', marginTop: '8px' }}>Ask patient to scan this QR code</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    {paymentMode === 'Card' && (
+                                        <>
+                                            <input type="text" placeholder="Card Details (Last 4)" required value={paymentModal.data?.cardDetails || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, cardDetails: e.target.value } })} className="inline-input" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
+                                            <input type="text" placeholder="Transaction ID" required value={paymentModal.data?.transactionId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, transactionId: e.target.value } })} className="inline-input" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
+                                        </>
+                                    )}
+                                    {['Cheque', 'NEFT/RTGS'].includes(paymentMode) && (
+                                        <input type="text" placeholder="Bank Ref / Cheque No" required value={paymentModal.data?.bankReference || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, bankReference: e.target.value } })} className="inline-input" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
+                                    )}
+                                    
+                                    {paymentMode !== 'Cash' && (
+                                        <div className="inline-file-upload" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                            <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>Payment Screenshot / Proof <span style={{ color: '#ef4444' }}>*Required</span></label>
+                                            <input type="file" accept="image/*,.pdf" onChange={e => setProofFile(e.target.files[0])} style={{ fontSize: '13px' }} required />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button type="submit" className="btn-pay" disabled={paying || totalSelected() === 0}>
                                     {paying ? 'Processing...' : `Pay ${fmt(totalSelected())}`}
                                 </button>
-                            </div>
+                            </form>
                         </div>
                     )}
+                    {/* Payment History */}
+                    <div className="billing-section payment-history">
+                        <div className="section-header">
+                            <h3>Payment History</h3>
+                        </div>
+                        {(!billing.paymentTransactions || billing.paymentTransactions.length === 0) ? (
+                            <div className="no-bills" style={{ padding: '20px', textAlign: 'center', background: '#f8fafc', borderRadius: '10px', color: '#64748b' }}>
+                                No past payments found for this patient. Select items above and make a payment to see the history here.
+                            </div>
+                        ) : (
+                            <table className="billing-table">
+                                <thead><tr><th>Date</th><th>Mode</th><th>Txn ID</th><th>Details</th><th>Amount</th><th>Status</th><th>Proof</th><th>Actions</th></tr></thead>
+                                <tbody>
+                                    {billing.paymentTransactions.map(pt => (
+                                        <tr key={pt._id}>
+                                            <td>{fmtDate(pt.paymentDate)}</td>
+                                            <td>{pt.paymentMode}</td>
+                                            <td>{pt.transactionId || pt.upiId || pt.bankReference || '—'}</td>
+                                            <td style={{ maxWidth: '250px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <span style={{ fontSize: '13px', color: '#475569', fontWeight: '500' }}>{pt.description || 'General Payment'}</span>
+                                                    {pt.billedItems && (
+                                                        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                                                            {pt.billedItems.appointments?.length > 0 && <span style={{ fontSize: '10px', background: '#e0e7ff', color: '#4f46e5', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>Appointment</span>}
+                                                            {pt.billedItems.labReports?.length > 0 && <span style={{ fontSize: '10px', background: '#dbeafe', color: '#2563eb', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>Lab</span>}
+                                                            {pt.billedItems.pharmacyOrders?.length > 0 && <span style={{ fontSize: '10px', background: '#dcfce7', color: '#16a34a', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>Medicine</span>}
+                                                            {pt.billedItems.facilityCharges?.length > 0 && <span style={{ fontSize: '10px', background: '#fef3c7', color: '#d97706', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>Facility</span>}
+                                                            {pt.billedItems.admissions?.length > 0 && <span style={{ fontSize: '10px', background: '#fee2e2', color: '#dc2626', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>ICU/Admission</span>}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="amount-cell">{fmt(pt.amount)}</td>
+                                            <td>
+                                                <span className={pt.paymentStatus === 'Paid' ? 'paid-icon-check' : 'status-badge'}>
+                                                    {pt.paymentStatus}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {pt.proofUrl ? (
+                                                    <div className="proof-thumbnail" onClick={() => setViewProofUrl(pt.proofUrl)}>
+                                                        {pt.proofUrl.endsWith('.pdf') ? '📄 PDF' : <img src={pt.proofUrl} alt="Proof" />}
+                                                    </div>
+                                                ) : '—'}
+                                            </td>
+                                            <td>
+                                                {pt.proofUrl && (
+                                                    <div className="action-buttons-proof">
+                                                        <button onClick={() => setViewProofUrl(pt.proofUrl)} className="btn-proof-view">👁 View</button>
+                                                        <button onClick={() => window.open(pt.proofUrl, '_blank')} className="btn-proof-dl">⬇ Download</button>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
                 </>
+            )}
+
+            {/* View Proof Modal */}
+            {viewProofUrl && (
+                <div className="modal-overlay" onClick={() => setViewProofUrl('')}>
+                    <div className="modal-content proof-view-modal" onClick={e => e.stopPropagation()}>
+                        <span className="close-btn" onClick={() => setViewProofUrl('')}>&times;</span>
+                        {viewProofUrl.endsWith('.pdf') ? (
+                            <iframe src={viewProofUrl} title="Payment Proof" width="100%" height="500px" />
+                        ) : (
+                            <img src={viewProofUrl} alt="Payment Proof" className="full-proof-image" />
+                        )}
+                    </div>
+                </div>
             )}
         </div>
     );

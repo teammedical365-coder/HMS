@@ -14,7 +14,7 @@ const timeSlots = [
     '16:00', '16:30', '17:00', '17:30'
 ];
 
-const ReceptionDashboard = () => {
+const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { user: currentUser } = useAuth();
@@ -29,6 +29,11 @@ const ReceptionDashboard = () => {
     const [profilePatient, setProfilePatient] = useState(null);
     const [profileAppointments, setProfileAppointments] = useState([]);
     const [transactions, setTransactions] = useState([]);
+    const [hospitalizedPatients, setHospitalizedPatients] = useState([]);
+    const [loadingHospitalized, setLoadingHospitalized] = useState(true);
+    const [hospitalizedSearch, setHospitalizedSearch] = useState('');
+    const [hospitalizedWardFilter, setHospitalizedWardFilter] = useState('');
+    const [hospitalizedDoctorFilter, setHospitalizedDoctorFilter] = useState('');
 
     // Token mode — next token preview
     const [nextToken, setNextToken] = useState(null);
@@ -88,11 +93,44 @@ const ReceptionDashboard = () => {
             } catch (err) { console.error('Error fetching hospital context:', err); }
         };
         fetchHospital();
-        fetchAppointments();
         fetchDoctors();
-    }, []);
+
+        if (!isPatientPortal) {
+            fetchAppointments();
+            fetchHospitalizedPatients();
+        }
+    }, [isPatientPortal]);
+
+    const fetchHospitalizedPatients = async () => {
+        try {
+            setLoadingHospitalized(true);
+            const res = await admissionAPI.getActiveAdmissions();
+            if (res.success) {
+                setHospitalizedPatients(res.admissions || []);
+            }
+        } catch (err) {
+            console.error('Error fetching hospitalized patients:', err);
+        } finally {
+            setLoadingHospitalized(false);
+        }
+    };
 
     useEffect(() => {
+        if (isPatientPortal) {
+            setViewMode('intake');
+            if (currentUser) {
+                // Pre-fill patient details
+                setIntakeForm(prev => ({
+                    ...prev,
+                    firstName: currentUser.name?.split(' ')[0] || '',
+                    lastName: currentUser.name?.split(' ').slice(1).join(' ') || '',
+                    mobile: currentUser.mobile || '',
+                    email: currentUser.email || ''
+                }));
+            }
+            return;
+        }
+
         const searchParams = new URLSearchParams(location.search);
         const view = searchParams.get('view');
         if (location.state?.patient) {
@@ -107,7 +145,7 @@ const ReceptionDashboard = () => {
         } else {
             setViewMode('welcome');
         }
-    }, [location.state, location.search, hospitalContext]);
+    }, [location.state, location.search, hospitalContext, isPatientPortal, currentUser]);
 
     useEffect(() => {
         if (availabilityCheck.doctorId && availabilityCheck.date) {
@@ -403,9 +441,9 @@ const ReceptionDashboard = () => {
 
     const handleConfirmPayment = async () => {
         setConfirmingPayment(true);
-        const { appointment, method } = paymentModal;
+        const { appointment, method, data } = paymentModal;
         try {
-            await receptionAPI.confirmPayment(appointment._id, method, appointment.amount);
+            await receptionAPI.confirmPayment(appointment._id, method, appointment.amount, data || {});
             const pdf = generateReceiptPDF({ ...appointment, paymentMethod: method, paymentStatus: 'Paid' }, method, false);
             setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Payment Receipt' });
             setPaymentModal({ open: false, appointment: null, method: 'Cash' });
@@ -557,17 +595,19 @@ const ReceptionDashboard = () => {
         try {
             let userId = selectedPatientId;
 
-            // 1. Register/Find User
-            const regRes = await receptionAPI.registerPatient({
-                name: `${intakeForm.firstName} ${intakeForm.lastName}`.trim(),
-                email: intakeForm.email,
-                phone: intakeForm.mobile,
-            });
+            // 1. Register/Find User (Only if it's a new walk-in)
+            if (!userId) {
+                const regRes = await receptionAPI.registerPatient({
+                    name: `${intakeForm.firstName} ${intakeForm.lastName}`.trim(),
+                    email: intakeForm.email,
+                    phone: intakeForm.mobile,
+                });
 
-            if (regRes.success && regRes.user) {
-                userId = regRes.user._id;
-            } else {
-                throw new Error(regRes.message || "Registration failed.");
+                if (regRes.success && regRes.user) {
+                    userId = regRes.user._id;
+                } else {
+                    throw new Error(regRes.message || "Registration failed.");
+                }
             }
 
             // 2. Upload profile photo if selected
@@ -666,7 +706,7 @@ const ReceptionDashboard = () => {
                         startY: y,
                         body: [
                             ['Patient Name', `${intakeForm.firstName} ${intakeForm.lastName}`],
-                            ['MRN / ID', regRes.user?.patientId || bookingRes.appointment?.patientId || 'N/A'],
+                            ['MRN / ID', bookingRes.appointment?.patientId || 'N/A'],
                             ['Phone', intakeForm.mobile || '-'],
                             ['Aadhaar Verified', intakeForm.isAadhaarVerified ? 'YES - Verified' : 'NO'],
                             ['Department', intakeForm.department || '-'],
@@ -692,16 +732,27 @@ const ReceptionDashboard = () => {
                     doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 196, y, { align: 'right' });
                     y += 5;
                     doc.text('Thank you for choosing ' + hName, 105, y, { align: 'center' });
-                    const receiptPatientId = regRes.user?.patientId || bookingRes.appointment?.patientId || 'Patient';
+                    const receiptPatientId = bookingRes.appointment?.patientId || 'Patient';
                     setPendingDownload({ doc, filename: `Receipt_${receiptPatientId}.pdf`, title: 'Registration Receipt' });
-
-                    const tokenMsg = bookingRes.appointment?.tokenNumber
-                        ? ` Token #${bookingRes.appointment.tokenNumber} assigned.` : '';
-                    alert(`Patient Registered & Assigned to Doctor!${tokenMsg}`);
 
                     setPaymentScreenshot(null);
                     fetchAppointments();
                     setViewMode('list');
+
+                    const tokenMsg = bookingRes.appointment?.tokenNumber
+                        ? ` Token #${bookingRes.appointment.tokenNumber} assigned.` : '';
+
+                    if (isPatientPortal) {
+                        alert(`Patient Registered & Assigned to Doctor!${tokenMsg}\n\nYour Patient Dashboard is now Activated!`);
+                        const localU = JSON.parse(localStorage.getItem('patientUser') || '{}');
+                        localU.registrationStatus = 'Completed';
+                        localU.linkedPatientProfileId = bookingRes.appointment?.userId;
+                        localU.mrn = receiptPatientId;
+                        localStorage.setItem('patientUser', JSON.stringify(localU));
+                        // Re-trigger the state update locally if possible, or they can just navigate back
+                    } else {
+                        alert(`Patient Registered & Assigned to Doctor!${tokenMsg}`);
+                    }
                 } else {
                     alert("Booking Failed: " + bookingRes.message);
                 }
@@ -1255,7 +1306,7 @@ const ReceptionDashboard = () => {
                         <select
                             value={paymentModal.method}
                             onChange={e => setPaymentModal(p => ({ ...p, method: e.target.value }))}
-                            style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
+                            style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', marginBottom: '15px' }}
                         >
                             <option value="Cash">Cash</option>
                             <option value="UPI">UPI</option>
@@ -1263,6 +1314,29 @@ const ReceptionDashboard = () => {
                             <option value="Cheque">Cheque</option>
                             <option value="NEFT/RTGS">NEFT / RTGS</option>
                         </select>
+
+                        {paymentModal.method === 'UPI' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', padding: '15px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                    <div style={{ flex: 1, minWidth: '150px' }}>
+                                        <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Hospital UPI ID <span style={{color: '#ef4444'}}>*</span></label>
+                                        <input type="text" placeholder="e.g. hospital@upi" required value={paymentModal.data?.upiId || ''} onChange={e => setPaymentModal(p => ({ ...p, data: { ...(p.data || {}), upiId: e.target.value } }))} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%' }} />
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: '150px' }}>
+                                        <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>12-Digit Transaction Ref <span style={{color: '#ef4444'}}>*</span></label>
+                                        <input type="text" placeholder="Transaction ID" required value={paymentModal.data?.transactionId || ''} onChange={e => setPaymentModal(p => ({ ...p, data: { ...(p.data || {}), transactionId: e.target.value } }))} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%' }} />
+                                    </div>
+                                </div>
+                                
+                                {paymentModal.data?.upiId && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fff', padding: '15px', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+                                        <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>Scan to Pay Rs. {Number(paymentModal.appointment?.amount || 0).toLocaleString('en-IN')}</span>
+                                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('upi://pay?pa=' + (paymentModal.data.upiId).trim() + '&pn=Hospital&am=' + (paymentModal.appointment?.amount || 0) + '&cu=INR')}`} alt="UPI QR Code" style={{ border: '4px solid #fff', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} />
+                                        <span style={{ fontSize: '11px', color: '#64748b', marginTop: '8px' }}>Ask patient to scan this QR code</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                     <div style={{ display: 'flex', gap: '10px' }}>
                         <button
@@ -1662,6 +1736,81 @@ const ReceptionDashboard = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* HOSPITALIZED PATIENTS SECTION */}
+                <div style={{ marginBottom: '34px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>🏥 HOSPITALIZED PATIENTS</span>
+                        <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
+                    </div>
+                    <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)', overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>Currently Admitted</h3>
+                                <span style={{ background: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 'bold' }}>{hospitalizedPatients.length} Patients</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                <input type="text" placeholder="Search name/mrn..." value={hospitalizedSearch} onChange={e => setHospitalizedSearch(e.target.value)} style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.9rem' }} />
+                                <input type="text" placeholder="Filter by Ward..." value={hospitalizedWardFilter} onChange={e => setHospitalizedWardFilter(e.target.value)} style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.9rem', width: '130px' }} />
+                                <input type="text" placeholder="Filter by Doctor..." value={hospitalizedDoctorFilter} onChange={e => setHospitalizedDoctorFilter(e.target.value)} style={{ padding: '6px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.9rem', width: '130px' }} />
+                            </div>
+                        </div>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="reception-table">
+                                <thead>
+                                    <tr>
+                                        <th>Patient Details</th>
+                                        <th>Ward & Bed</th>
+                                        <th>Admitting Doctor</th>
+                                        <th>Admission Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {loadingHospitalized ? (
+                                        <tr><td colSpan="4" style={{ textAlign: 'center', padding: '20px' }}>Loading...</td></tr>
+                                    ) : hospitalizedPatients.filter(p => {
+                                        const search = hospitalizedSearch.toLowerCase();
+                                        const ward = hospitalizedWardFilter.toLowerCase();
+                                        const doc = hospitalizedDoctorFilter.toLowerCase();
+                                        const name = (p.patientId?.name || '').toLowerCase();
+                                        const mrn = (p.patientId?.mrn || '').toLowerCase();
+                                        const pward = (p.ward || '').toLowerCase();
+                                        const pdoc = (p.appointmentId?.doctorName || '').toLowerCase();
+                                        return (name.includes(search) || mrn.includes(search)) && pward.includes(ward) && pdoc.includes(doc);
+                                    }).length === 0 ? (
+                                        <tr><td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>No admitted patients found.</td></tr>
+                                    ) : hospitalizedPatients.filter(p => {
+                                        const search = hospitalizedSearch.toLowerCase();
+                                        const ward = hospitalizedWardFilter.toLowerCase();
+                                        const doc = hospitalizedDoctorFilter.toLowerCase();
+                                        const name = (p.patientId?.name || '').toLowerCase();
+                                        const mrn = (p.patientId?.mrn || '').toLowerCase();
+                                        const pward = (p.ward || '').toLowerCase();
+                                        const pdoc = (p.appointmentId?.doctorName || '').toLowerCase();
+                                        return (name.includes(search) || mrn.includes(search)) && pward.includes(ward) && pdoc.includes(doc);
+                                    }).map(adm => (
+                                        <tr key={adm._id}>
+                                            <td>
+                                                <div style={{ fontWeight: 'bold', color: '#0f172a' }}>{adm.patientId?.name}</div>
+                                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>MRN: {adm.patientId?.mrn || '-'} | ID: {adm.patientId?.patientId || '-'}</div>
+                                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{adm.patientId?.gender} {adm.patientId?.dob ? `| ${new Date().getFullYear() - new Date(adm.patientId.dob).getFullYear()} yrs` : ''}</div>
+                                            </td>
+                                            <td>
+                                                <div style={{ fontWeight: '600' }}>{adm.ward || 'General'}</div>
+                                                <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Bed: {adm.bedNumber || 'Unassigned'}</div>
+                                            </td>
+                                            <td>{adm.appointmentId?.doctorName || 'Not Assigned'}</td>
+                                            <td>
+                                                <div>{new Date(adm.admissionDate).toLocaleDateString()}</div>
+                                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{new Date(adm.admissionDate).toLocaleTimeString()}</div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
             {renderModals()}
             </>
@@ -1711,60 +1860,65 @@ const ReceptionDashboard = () => {
                 </div>
             )}
 
-            <div className="dashboard-header">
-                <h1>Reception Desk</h1>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <button className="btn-cancel" onClick={() => { fetchTransactions(); setViewMode('transactions'); }} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1' }}>💰 Transactions</button>
-                    <button className="btn-cancel" onClick={() => navigate('/billing/patient')} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac' }}>🧾 Patient Billing</button>
-                    <button className="btn-save" onClick={handleNewWalkIn} style={{ padding: '10px 20px', fontSize: '1rem' }}>+ New Registration</button>
+            {!isPatientPortal && (
+                <div className="dashboard-header">
+                    <h1>Reception Desk</h1>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button className="btn-cancel" onClick={() => { fetchTransactions(); setViewMode('transactions'); }} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1' }}>💰 Transactions</button>
+                        <button className="btn-cancel" onClick={() => navigate('/billing/patient')} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac' }}>🧾 Patient Billing</button>
+                        <button className="btn-save" onClick={handleNewWalkIn} style={{ padding: '10px 20px', fontSize: '1rem' }}>+ New Registration</button>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* SEARCH SECTION */}
-            <div className="search-section card" style={{ padding: '20px', marginBottom: '20px', position: 'relative' }}>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <input
-                        type="text"
-                        placeholder="🔍 Search Patient by Name, Mobile or MRN..."
-                        value={searchQuery}
-                        onChange={handleSearch}
-                        style={{ flex: 1, padding: '12px', fontSize: '1rem', borderRadius: '6px', border: '1px solid #ddd' }}
-                    />
-                </div>
-                {searchResults.length > 0 && (
-                    <div className="search-results-dropdown" style={{
-                        position: 'absolute', top: '70px', left: '20px', right: '20px',
-                        background: 'white', border: '1px solid #eee', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                        zIndex: 1000, maxHeight: '300px', overflowY: 'auto', borderRadius: '8px'
-                    }}>
-                        {searchResults.map(p => (
-                            <div key={p._id} style={{ padding: '12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div>
-                                    <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>{p.name} <span style={{ color: '#666', fontSize: '0.9rem' }}>({p.patientId || 'N/A'})</span></div>
-                                    <div style={{ fontSize: '0.9rem', color: '#888' }}>📱 {p.phone}</div>
-                                </div>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button
-                                        onClick={() => handleSelectSearchResult(p)}
-                                        style={{ padding: '6px 14px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
-                                    >
-                                        📋 Book Appointment
-                                    </button>
-                                    <button
-                                        onClick={() => handleViewProfile(p)}
-                                        style={{ padding: '6px 14px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
-                                    >
-                                        👤 View Profile
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
+            {!isPatientPortal && (
+                <div className="search-section card" style={{ padding: '20px', marginBottom: '20px', position: 'relative' }}>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <input
+                            type="text"
+                            placeholder="🔍 Search Patient by Name, Mobile or MRN..."
+                            value={searchQuery}
+                            onChange={handleSearch}
+                            style={{ flex: 1, padding: '12px', fontSize: '1rem', borderRadius: '6px', border: '1px solid #ddd' }}
+                        />
                     </div>
-                )}
-            </div>
+                    {searchResults.length > 0 && (
+                        <div className="search-results-dropdown" style={{
+                            position: 'absolute', top: '70px', left: '20px', right: '20px',
+                            background: 'white', border: '1px solid #eee', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                            zIndex: 1000, maxHeight: '300px', overflowY: 'auto', borderRadius: '8px'
+                        }}>
+                            {searchResults.map(p => (
+                                <div key={p._id} style={{ padding: '12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>{p.name} <span style={{ color: '#666', fontSize: '0.9rem' }}>({p.patientId || 'N/A'})</span></div>
+                                        <div style={{ fontSize: '0.9rem', color: '#888' }}>📱 {p.phone}</div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button
+                                            onClick={() => handleSelectSearchResult(p)}
+                                            style={{ padding: '6px 14px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+                                        >
+                                            📋 Book Appointment
+                                        </button>
+                                        <button
+                                            onClick={() => handleViewProfile(p)}
+                                            style={{ padding: '6px 14px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+                                        >
+                                            👤 View Profile
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Widget Area */}
-            <div className="availability-widget card">
+            {!isPatientPortal && (
+                <div className="availability-widget card">
                 <h3>📅 Quick Check Availability</h3>
                 <div className="widget-controls">
                     <select className="avail-select" onChange={(e) => setAvailabilityCheck({ ...availabilityCheck, doctorId: e.target.value })}>
@@ -1781,8 +1935,9 @@ const ReceptionDashboard = () => {
                     </div>
                 )}
             </div>
+            )}
 
-            {renderTodaysQueue()}
+            {!isPatientPortal && renderTodaysQueue()}
         </div>
 
         {renderModals()}

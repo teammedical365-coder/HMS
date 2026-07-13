@@ -471,4 +471,59 @@ export const revenueAPI = {
     setHospitalPlan: async (id, data) => (await apiClient.put(`/api/revenue/hospital/${id}`, data)).data,
 };
 
+// Patient Auth Client (Keeps Patient Auth Separate from Staff Auth)
+const patientApiClient = axios.create({
+    baseURL: baseURL,
+    headers: { 'Content-Type': 'application/json' },
+});
+
+patientApiClient.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('patientToken');
+        if (token) config.headers.Authorization = `Bearer ${token}`;
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
+patientApiClient.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 401) {
+            localStorage.removeItem('patientToken');
+            localStorage.removeItem('patientUser');
+            if (!window.location.pathname.includes('/patient')) {
+                window.location.href = '/patient';
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
+export const patientAuthAPI = {
+    register: async (name, email, mobile, password, hospitalId) => {
+        const response = await patientApiClient.post('/api/patient-auth/register', { name, email, mobile, password, hospitalId });
+        return response.data;
+    },
+    login: async (loginId, password, hospitalId) => {
+        const response = await patientApiClient.post('/api/patient-auth/login', { loginId, password, hospitalId });
+        return response.data;
+    },
+    forgotPassword: async (email, hospitalId) => {
+        const response = await patientApiClient.post('/api/patient-auth/forgot-password', { email, hospitalId });
+        return response.data;
+    },
+    resetPassword: async (token, password) => {
+        const response = await patientApiClient.post('/api/patient-auth/reset-password', { token, password });
+        return response.data;
+    },
+    getMe: async () => (await patientApiClient.get('/api/patient-auth/me')).data,
+    getPatientAppointments: async () => (await patientApiClient.get('/api/patient-auth/appointments')).data,
+    getPatientProfile: async () => (await patientApiClient.get('/api/patient-auth/profile')).data,
+    cancelAppointment: async (id) => (await patientApiClient.put(`/api/patient-auth/appointments/${id}/cancel`)).data,
+    getPatientDocuments: async () => (await patientApiClient.get('/api/patient-auth/documents')).data,
+    getPatientBills: async () => (await patientApiClient.get('/api/patient-auth/bills')).data,
+    payPatientBills: async (data) => (await patientApiClient.post('/api/patient-auth/bills/pay', data)).data
+};
+
 export default apiClient;
