@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Base URL from Environment (Vercel / Local)
-const baseURL = import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com';
+const baseURL = import.meta.env.DEV ? 'http://localhost:3000' : (import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com');
 
 const apiClient = axios.create({
     baseURL: baseURL,
@@ -141,7 +141,7 @@ export const receptionAPI = {
     getFollowupStatus: async (patientId, department, date = '') => {
         let url = department === 'auto'
             ? `/api/reception/patients/${patientId}/followup-status?auto=true`
-            : department 
+            : department
                 ? `/api/reception/patients/${patientId}/followup-status?department=${encodeURIComponent(department)}`
                 : `/api/reception/patients/${patientId}/followup-status`;
         if (date) {

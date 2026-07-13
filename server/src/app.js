@@ -35,11 +35,12 @@ const billingRoutes = require('./routes/billing.routes');
 const admissionRoutes = require('./routes/admission.routes');
 const simpleClinicRoutes = require('./routes/simpleClinic.routes');
 const clinicRoutes = require('./routes/clinic.routes');
-const syncRoutes        = require('./routes/sync.routes');
-const patientAppRoutes  = require('./routes/patientApp.routes');
+const syncRoutes = require('./routes/sync.routes');
+const patientAuthRoutes = require('./routes/patientAuth.routes');
+app.use('/api/patient-auth', patientAuthRoutes);
 const patientLocalRoutes = require('./routes/patientLocal.routes');
-const revenueRoutes     = require('./routes/revenue.routes');
-const mfaRoutes         = require('./routes/mfa.routes');
+const revenueRoutes = require('./routes/revenue.routes');
+const mfaRoutes = require('./routes/mfa.routes');
 
 const app = express();
 

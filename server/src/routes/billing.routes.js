@@ -117,14 +117,9 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
             fetchWithMasterFallback(Appointment, MasterAppointment, { userId: patient._id, ...hFilter }, 'appointmentDate appointmentTime amount paymentStatus serviceName doctorName status createdAt'),
             fetchWithMasterFallback(LabReport, MasterLabReport, { userId: patient._id, ...hFilter }, 'testNames amount paymentStatus testStatus createdAt'),
             fetchWithMasterFallback(PharmacyOrder, MasterPharmacyOrder, { userId: patient._id, ...hFilter }, 'items totalAmount paymentStatus orderStatus createdAt'),
-<<<<<<< HEAD
             fetchWithMasterFallback(FacilityCharge, MasterFacilityCharge, { patientId: patient._id, ...hFilter }, 'facilityName pricePerDay days totalAmount paymentStatus createdAt addedBy collectedBy', null, [{path: 'collectedBy', select: 'name'}, {path: 'addedBy', select: 'name'}]),
-            fetchWithMasterFallback(Admission, MasterAdmission, { patientId: patient._id, ...hFilter }, null, { admissionDate: -1 })
-=======
-            fetchWithMasterFallback(FacilityCharge, MasterFacilityCharge, { patientId: patient._id, ...hFilter }, 'facilityName pricePerDay days totalAmount paymentStatus createdAt'),
             fetchWithMasterFallback(Admission, MasterAdmission, { patientId: patient._id, ...hFilter }, null, { admissionDate: -1 }),
             fetchWithMasterFallback(PaymentTransaction, MasterPaymentTransaction, { patientId: patient._id, ...hFilter }, null, { paymentDate: -1 })
->>>>>>> f536072030d4fe609daa903136ae7b1bce67c505
         ]);
 
         // Calculate ICU charges dynamically for active/past admissions
