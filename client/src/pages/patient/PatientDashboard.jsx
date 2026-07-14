@@ -49,6 +49,7 @@ const PatientDashboard = () => {
     // Modal State
     const [selectedAppt, setSelectedAppt] = useState(null);
     const [selectedDocPreview, setSelectedDocPreview] = useState(null);
+    const [followupData, setFollowupData] = useState(null);
 
     useEffect(() => {
         loadDashboardData();
@@ -63,6 +64,15 @@ const PatientDashboard = () => {
                 localStorage.setItem('patientUser', JSON.stringify(meRes.user));
 
                 if (meRes.user.registrationStatus === 'Completed') {
+                    // Fetch Followup status
+                    try {
+                        const followupRes = await patientAuthAPI.getFollowupStatus('auto');
+                        if (followupRes.success) {
+                            setFollowupData(followupRes);
+                        }
+                    } catch (err) {
+                        console.error('Failed to fetch followup status', err);
+                    }
                     // Fetch Appointments
                     const apptRes = await patientAuthAPI.getPatientAppointments();
                     if (apptRes.success) {
@@ -241,10 +251,132 @@ const PatientDashboard = () => {
         </div>
     );
 
+    const renderFollowupBanner = () => {
+        if (!followupData || !followupData.lastConsultation) return null;
+
+        const { active, validUntil, department, fee, lastConsultation } = followupData;
+        if (active) {
+            const remainingDays = validUntil
+                ? Math.max(0, Math.ceil((new Date(validUntil).getTime() - Date.now()) / (1000 * 3600 * 24)))
+                : 0;
+
+            if (remainingDays > 0 && remainingDays <= 3) {
+                return (
+                    <div className="followup-notification-banner warning">
+                        <div className="followup-notification-content">
+                            <span className="followup-notification-icon">⚠️</span>
+                            <span>
+                                Your free follow-up consultation in <strong>{department}</strong> expires in{' '}
+                                <strong>{remainingDays} day{remainingDays > 1 ? 's' : ''}</strong> ({new Date(validUntil).toLocaleDateString()}). Book now to keep your free consultation!
+                            </span>
+                        </div>
+                        <button
+                            className="btn-banner-action"
+                            onClick={() => navigate(`/patient/book-appointment?department=${encodeURIComponent(department)}`)}
+                        >
+                            Book Free Visit
+                        </button>
+                    </div>
+                );
+            }
+        } else if (lastConsultation && department) {
+            return (
+                <div className="followup-notification-banner expired">
+                    <div className="followup-notification-content">
+                        <span className="followup-notification-icon">⚠️</span>
+                        <span>
+                            Your follow-up window for <strong>{department}</strong> has expired. Next consultation fee is <strong>₹{fee}</strong>.
+                        </span>
+                    </div>
+                    <button
+                        className="btn-banner-action"
+                        onClick={() => navigate(`/patient/book-appointment?department=${encodeURIComponent(department)}`)}
+                    >
+                        Book Appointment
+                    </button>
+                </div>
+            );
+        }
+        return null;
+    };
+
+    const renderFollowupCard = () => {
+        if (!followupData || !followupData.lastConsultation) return null;
+
+        const { active, validUntil, department, fee, lastConsultation } = followupData;
+        const remainingDays = active && validUntil
+            ? Math.max(0, Math.ceil((new Date(validUntil).getTime() - Date.now()) / (1000 * 3600 * 24)))
+            : 0;
+
+        return (
+            <div className={`followup-status-card ${active ? 'status-active' : 'status-expired'}`}>
+                <div className="followup-card-header">
+                    <div className="followup-card-title">
+                        <span>🔄</span>
+                        <h3>Consultation Follow-up & Validity Status</h3>
+                    </div>
+                    <span className={`followup-status-badge ${active ? 'badge-active' : 'badge-expired'}`}>
+                        {active ? '✓ Active Follow-up' : lastConsultation ? '⚠️ Expired Follow-up' : 'New Patient'}
+                    </span>
+                </div>
+
+                <div className="followup-card-grid">
+                    <div className="followup-info-item">
+                        <div className="followup-info-label">Current Department</div>
+                        <div className="followup-info-value">{department || 'None'}</div>
+                    </div>
+                    <div className="followup-info-item">
+                        <div className="followup-info-label">Last Consultation</div>
+                        <div className="followup-info-value">
+                            {lastConsultation ? new Date(lastConsultation).toLocaleDateString('en-IN') : 'Never Visited'}
+                        </div>
+                    </div>
+                    <div className="followup-info-item">
+                        <div className="followup-info-label">Validity Remaining</div>
+                        <div className="followup-info-value">
+                            {active ? (remainingDays === 0 ? 'Expires Today' : `${remainingDays} Day${remainingDays > 1 ? 's' : ''} Left`) : 'No Active Follow-up'}
+                        </div>
+                    </div>
+                    <div className="followup-info-item">
+                        <div className="followup-info-label">Consultation Fee</div>
+                        <div className={`followup-info-value ${active ? 'free-fee' : ''}`}>
+                            {active ? '₹0 (Waived)' : `₹${fee}`}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="followup-card-actions">
+                    <span className="followup-action-note">
+                        {active
+                            ? 'Book within the validity window to consult with your doctor for free.'
+                            : 'Validity window has expired. Standard consultation fees apply.'}
+                    </span>
+                    {active ? (
+                        <button
+                            className="btn-rebook-primary"
+                            onClick={() => navigate(`/patient/book-appointment?department=${encodeURIComponent(department)}`)}
+                        >
+                            Re-Book Free Consultation
+                        </button>
+                    ) : (
+                        <button
+                            className="btn-book-new"
+                            onClick={() => navigate('/patient/book-appointment')}
+                        >
+                            Book Consultation
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     const renderDashboardHome = () => {
         const upcoming = getUpcomingAppt();
         return (
             <div className="activated-dashboard-container">
+                {renderFollowupBanner()}
+                
                 <div className="patient-profile-hero">
                     <div className="patient-hero-content">
                         <h2>Welcome back, {patient?.name?.split(' ')[0] || 'Patient'}!</h2>
@@ -281,6 +413,8 @@ const PatientDashboard = () => {
                     </div>
                 </div>
 
+                {renderFollowupCard()}
+
                 <div className="quick-actions-grid">
                     <div className="quick-action-card" onClick={() => setActiveTab('appointments')}>
                         <div className="qa-icon appointments">📅</div>
@@ -316,37 +450,49 @@ const PatientDashboard = () => {
     };
 
     const renderAppointmentsList = () => (
-        <div className="dashboard-card">
-            <div className="card-body">
-                <div className="section-header">
-                    <h2>My Appointments</h2>
-                    <button className="patient-btn-book" onClick={() => navigate('/patient/book-appointment')}>
-                        Book New
-                    </button>
-                </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {renderFollowupBanner()}
+            {renderFollowupCard()}
 
-                {appointments.length > 0 ? (
-                    <div className="appointment-list-full">
-                        {appointments.map(appt => {
-                            const d = new Date(appt.appointmentDate);
-                            return (
-                                <div key={appt._id} className="appointment-item-full">
-                                    <div className="appt-info-main">
-                                        <div className="appt-date-box">
-                                            <span className="month">{d.toLocaleString('default', { month: 'short' })}</span>
-                                            <span className="day">{d.getDate()}</span>
-                                        </div>
-                                        <div className="appt-details-full">
-                                            <h4>Dr. {appt.doctorName}</h4>
-                                            <div className="appt-meta">
-                                                <span>{appt.department || 'Consultation'}</span>
-                                                <span>•</span>
-                                                <span>{appt.appointmentTime}</span>
-                                                <span>•</span>
-                                                <span className={`appt-status ${appt.status.toLowerCase()}`}>{appt.status}</span>
+            <div className="dashboard-card">
+                <div className="card-body">
+                    <div className="section-header">
+                        <h2>My Appointments</h2>
+                        <button className="patient-btn-book" onClick={() => navigate('/patient/book-appointment')}>
+                            Book New
+                        </button>
+                    </div>
+
+                    {appointments.length > 0 ? (
+                        <div className="appointment-list-full">
+                            {appointments.map(appt => {
+                                const d = new Date(appt.appointmentDate);
+                                return (
+                                    <div key={appt._id} className="appointment-item-full">
+                                        <div className="appt-info-main">
+                                            <div className="appt-date-box">
+                                                <span className="month">{d.toLocaleString('default', { month: 'short' })}</span>
+                                                <span className="day">{d.getDate()}</span>
+                                            </div>
+                                            <div className="appt-details-full">
+                                                <h4>Dr. {appt.doctorName}</h4>
+                                                <div className="appt-meta">
+                                                    <span>{appt.department || 'Consultation'}</span>
+                                                    <span>•</span>
+                                                    <span>{appt.appointmentTime}</span>
+                                                    <span>•</span>
+                                                    <span className={`visit-type-badge ${appt.amount === 0 || appt.visitType === 'Follow-up' ? 'followup' : 'new-visit'}`}>
+                                                        {appt.amount === 0 || appt.visitType === 'Follow-up' ? '🔄 Follow-up' : '🆕 New Visit'}
+                                                    </span>
+                                                    <span>•</span>
+                                                    <span className={`fee-charged-badge ${appt.amount === 0 ? 'waived' : 'charged'}`}>
+                                                        {appt.amount === 0 ? '₹0 (Waived)' : `₹${appt.amount}`}
+                                                    </span>
+                                                    <span>•</span>
+                                                    <span className={`appt-status ${appt.status.toLowerCase()}`}>{appt.status}</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
                                     <div className="appt-actions">
                                         <button className="btn-secondary" onClick={() => setSelectedAppt(appt)}>
                                             View Details
@@ -369,6 +515,7 @@ const PatientDashboard = () => {
                     </div>
                 )}
             </div>
+        </div>
         </div>
     );
 
@@ -1035,8 +1182,11 @@ const PatientDashboard = () => {
                             </div>
                         </div>
                         <div className="patient-modal-footer">
-                            <button className="btn-secondary" onClick={() => alert('Re-book functionality will be implemented in a future module.')}>
-                                Re-book (Future)
+                            <button className="btn-primary" onClick={() => {
+                                setSelectedAppt(null);
+                                navigate(`/patient/book-appointment?department=${encodeURIComponent(selectedAppt.department || '')}`);
+                            }}>
+                                Re-Book Appointment
                             </button>
                             {(selectedAppt.status === 'pending' || selectedAppt.status === 'confirmed') && (
                                 <button className="btn-danger-outline" onClick={() => handleCancelAppointment(selectedAppt._id)}>

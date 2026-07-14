@@ -12,7 +12,12 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
-        if (token) config.headers.Authorization = `Bearer ${token}`;
+        const patientToken = localStorage.getItem('patientToken');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        } else if (patientToken) {
+            config.headers.Authorization = `Bearer ${patientToken}`;
+        }
         return config;
     },
     (error) => Promise.reject(error)
@@ -217,8 +222,14 @@ export const adminEntitiesAPI = {
 
 export const publicAPI = {
     getServices: async () => (await apiClient.get('/api/public/services')).data,
-    getDoctors: async (serviceId = null) => {
-        const url = serviceId ? `/api/doctor?serviceId=${serviceId}` : '/api/doctor';
+    getDoctors: async (serviceId = null, hospitalId = null) => {
+        let url = '/api/doctor';
+        const params = [];
+        if (serviceId) params.push(`serviceId=${encodeURIComponent(serviceId)}`);
+        if (hospitalId) params.push(`hospitalId=${encodeURIComponent(hospitalId)}`);
+        if (params.length > 0) {
+            url += '?' + params.join('&');
+        }
         return (await apiClient.get(url)).data;
     },
     getTenantConfig: async (domain) => {
@@ -539,7 +550,20 @@ export const patientAuthAPI = {
     cancelAppointment: async (id) => (await patientApiClient.put(`/api/patient-auth/appointments/${id}/cancel`)).data,
     getPatientDocuments: async () => (await patientApiClient.get('/api/patient-auth/documents')).data,
     getPatientBills: async () => (await patientApiClient.get('/api/patient-auth/bills')).data,
-    payPatientBills: async (data) => (await patientApiClient.post('/api/patient-auth/bills/pay', data)).data
+    payPatientBills: async (data) => (await patientApiClient.post('/api/patient-auth/bills/pay', data)).data,
+    getFollowupStatus: async (department, date = '') => {
+        let url = department === 'auto'
+            ? `/api/patient-auth/followup-status?auto=true`
+            : department
+                ? `/api/patient-auth/followup-status?department=${encodeURIComponent(department)}`
+                : `/api/patient-auth/followup-status`;
+        if (date) {
+            url += (url.includes('?') ? '&' : '?') + `date=${date}`;
+        }
+        const response = await patientApiClient.get(url);
+        return response.data;
+    },
+    bookAppointment: async (data) => (await patientApiClient.post('/api/patient-auth/book-appointment', data)).data
 };
 
 export default apiClient;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI } from '../../utils/api';
+import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI } from '../../utils/api';
 import { useAuth } from '../../store/hooks';
 import { getSubdomain } from '../../utils/subdomain';
 import jsPDF from 'jspdf';
@@ -99,11 +99,13 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             try {
                 const sub = getSubdomain();
                 const res = await hospitalAPI.resolveHospital(sub);
-                if (res.success) setHospitalContext(res.hospital);
+                if (res.success) {
+                    setHospitalContext(res.hospital);
+                    fetchDoctors(res.hospital._id);
+                }
             } catch (err) { console.error('Error fetching hospital context:', err); }
         };
         fetchHospital();
-        fetchDoctors();
 
         if (!isPatientPortal) {
             fetchAppointments();
@@ -131,14 +133,49 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     useEffect(() => {
         if (isPatientPortal) {
             setViewMode('intake');
-            if (currentUser) {
+            const pUserStr = localStorage.getItem('patientUser');
+            const pUser = pUserStr ? JSON.parse(pUserStr) : (currentUser || null);
+            if (pUser) {
+                if (pUser.linkedPatientProfileId) {
+                    setSelectedPatientId(pUser.linkedPatientProfileId);
+                }
+                const searchParams = new URLSearchParams(location.search);
+                const queryDept = searchParams.get('department') || '';
                 setIntakeForm(prev => ({
                     ...prev,
-                    firstName: currentUser.name?.split(' ')[0] || '',
-                    lastName: currentUser.name?.split(' ').slice(1).join(' ') || '',
-                    mobile: currentUser.mobile || '',
-                    email: currentUser.email || ''
+                    firstName: pUser.name?.split(' ')[0] || '',
+                    lastName: pUser.name?.split(' ').slice(1).join(' ') || '',
+                    mobile: pUser.mobile || '',
+                    email: pUser.email || '',
+                    ...(queryDept ? { department: queryDept } : {})
                 }));
+                if (pUser.linkedPatientProfileId) {
+                    patientAuthAPI.getPatientProfile().then(res => {
+                        if (res.success && res.profile) {
+                            const p = res.profile;
+                            setIntakeForm(prev => ({
+                                ...prev,
+                                title: p.title || prev.title,
+                                firstName: p.firstName || prev.firstName,
+                                middleName: p.middleName || prev.middleName,
+                                lastName: p.lastName || prev.lastName,
+                                dob: p.dob ? new Date(p.dob).toISOString().split('T')[0] : prev.dob,
+                                age: p.age || prev.age,
+                                gender: p.gender || prev.gender,
+                                mobile: p.mobile || prev.mobile,
+                                email: p.email || prev.email,
+                                address: p.address || prev.address,
+                                houseNo: p.houseNo || prev.houseNo,
+                                street: p.street || prev.street,
+                                city: p.city || prev.city,
+                                state: p.state || prev.state,
+                                zipCode: p.zipCode || prev.zipCode,
+                                aadhaar: p.aadhaar || prev.aadhaar,
+                                isAadhaarVerified: p.isAadhaarVerified || prev.isAadhaarVerified
+                            }));
+                        }
+                    }).catch(e => console.error("Error loading patient profile in portal:", e));
+                }
             }
             return;
         }
@@ -187,13 +224,15 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     // Fetch followup status when department is selected for an existing patient
     useEffect(() => {
-        if (!selectedPatientId || !intakeForm.department) {
+        if ((!selectedPatientId && !isPatientPortal) || !intakeForm.department) {
             setFollowupStatus(null);
             return;
         }
         const fetchStatus = async () => {
             try {
-                const res = await receptionAPI.getFollowupStatus(selectedPatientId, intakeForm.department, intakeForm.visitDate);
+                const res = isPatientPortal
+                    ? await patientAuthAPI.getFollowupStatus(intakeForm.department, intakeForm.visitDate)
+                    : await receptionAPI.getFollowupStatus(selectedPatientId, intakeForm.department, intakeForm.visitDate);
                 if (res.success) {
                     setFollowupStatus(res);
                     if (res.active) {
@@ -207,7 +246,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             }
         };
         fetchStatus();
-    }, [selectedPatientId, intakeForm.department, intakeForm.visitDate]);
+    }, [selectedPatientId, intakeForm.department, intakeForm.visitDate, isPatientPortal]);
 
     const fetchAppointments = async () => {
         setLoading(true);
@@ -224,9 +263,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         } catch (err) { console.error(err); }
     };
 
-    const fetchDoctors = async () => {
+    const fetchDoctors = async (hospitalId = '') => {
         try {
-            const response = await publicAPI.getDoctors();
+            const hid = hospitalId || hospitalContext?._id || '';
+            if (!hid) return;
+            const response = await publicAPI.getDoctors(null, hid);
             if (response.success && Array.isArray(response.doctors)) setDoctorsList(response.doctors);
         } catch (err) { console.error(err); }
     };
@@ -604,40 +645,68 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         try {
             let userId = selectedPatientId;
 
-            // 1. Register/Find User (Only if it's a new walk-in)
-            if (!userId) {
-                const regRes = await receptionAPI.registerPatient({
-                    name: `${intakeForm.firstName} ${intakeForm.lastName}`.trim(),
-                    email: intakeForm.email,
-                    phone: intakeForm.mobile,
-                });
+            if (!isPatientPortal) {
+                // 1. Register/Find User (Only if it's a new walk-in)
+                if (!userId) {
+                    const regRes = await receptionAPI.registerPatient({
+                        name: `${intakeForm.firstName} ${intakeForm.lastName}`.trim(),
+                        email: intakeForm.email,
+                        phone: intakeForm.mobile,
+                    });
 
-                if (regRes.success && regRes.user) {
-                    userId = regRes.user._id;
-                } else {
-                    throw new Error(regRes.message || "Registration failed.");
+                    if (regRes.success && regRes.user) {
+                        userId = regRes.user._id;
+                    } else {
+                        throw new Error(regRes.message || "Registration failed.");
+                    }
+                }
+
+                // 2. Upload profile photo if selected
+                let avatarUrl = null;
+                if (profilePhoto) {
+                    try {
+                        const photoFD = new FormData();
+                        photoFD.append('images', profilePhoto);
+                        const photoRes = await uploadAPI.uploadImages(photoFD);
+                        if (photoRes.success && photoRes.files?.length > 0) {
+                            avatarUrl = photoRes.files[0].url;
+                        }
+                    } catch { /* non-fatal */ }
+                }
+
+                // 3. Update Profile (Vitals + Basic Info + Aadhaar + Avatar)
+                const intakePayload = { ...intakeForm };
+                if (avatarUrl) intakePayload.avatar = avatarUrl;
+                await receptionAPI.updateIntake(userId, intakePayload);
+
+                if (selectedPatientId) {
+                    // If they are just editing profile (no doctor selected), return early
+                    const isTokenMode = hospitalContext?.appointmentMode === 'token';
+                    const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
+                    if (!canBook) {
+                        alert("✅ Patient profile and demographics updated successfully!");
+                        setSaving(false);
+                        if (location.state?.isEditingExisting) {
+                            navigate(`/patient/${userId}`);
+                            return;
+                        }
+                        fetchAppointments();
+                        setViewMode('list');
+                        return;
+                    }
+                }
+            } else {
+                if (!userId) {
+                    const pU = JSON.parse(localStorage.getItem('patientUser') || '{}');
+                    userId = pU.linkedPatientProfileId;
+                }
+                if (!userId) {
+                    alert("Error: Your profile is not linked yet. Please complete hospital registration or contact reception.");
+                    setSaving(false); return;
                 }
             }
 
-            // 2. Upload profile photo if selected
-            let avatarUrl = null;
-            if (profilePhoto) {
-                try {
-                    const photoFD = new FormData();
-                    photoFD.append('images', profilePhoto);
-                    const photoRes = await uploadAPI.uploadImages(photoFD);
-                    if (photoRes.success && photoRes.files?.length > 0) {
-                        avatarUrl = photoRes.files[0].url;
-                    }
-                } catch { /* non-fatal */ }
-            }
-
-            // 3. Update Profile (Vitals + Basic Info + Aadhaar + Avatar)
-            const intakePayload = { ...intakeForm };
-            if (avatarUrl) intakePayload.avatar = avatarUrl;
-            await receptionAPI.updateIntake(userId, intakePayload);
-
-            if (selectedPatientId) {
+            if (selectedPatientId && !isPatientPortal) {
                 // If they are just editing profile (no doctor selected), return early
                 const isTokenMode = hospitalContext?.appointmentMode === 'token';
                 const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
@@ -648,7 +717,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                         navigate(`/patient/${userId}`);
                         return;
                     }
-                    fetchRecentPatients?.();
+                    fetchAppointments();
                     setViewMode('list');
                     return;
                 }
@@ -752,13 +821,22 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                         ? ` Token #${bookingRes.appointment.tokenNumber} assigned.` : '';
 
                     if (isPatientPortal) {
-                        alert(`Patient Registered & Assigned to Doctor!${tokenMsg}\n\nYour Patient Dashboard is now Activated!`);
                         const localU = JSON.parse(localStorage.getItem('patientUser') || '{}');
+                        const isReBook = selectedPatientId || localU.linkedPatientProfileId;
+                        const msg = isReBook
+                            ? `✅ Appointment Booked Successfully!${tokenMsg}\n\nRedirecting to your Dashboard...`
+                            : `Patient Registered & Assigned to Doctor!${tokenMsg}\n\nYour Patient Dashboard is now Activated!`;
+                        alert(msg);
                         localU.registrationStatus = 'Completed';
-                        localU.linkedPatientProfileId = bookingRes.appointment?.userId;
-                        localU.mrn = receiptPatientId;
+                        if (bookingRes.appointment?.userId) {
+                            localU.linkedPatientProfileId = bookingRes.appointment.userId;
+                        }
+                        if (receiptPatientId) {
+                            localU.mrn = receiptPatientId;
+                        }
                         localStorage.setItem('patientUser', JSON.stringify(localU));
-                        // Re-trigger the state update locally if possible, or they can just navigate back
+                        navigate('/patient/dashboard');
+                        return;
                     } else {
                         alert(`Patient Registered & Assigned to Doctor!${tokenMsg}`);
                     }
@@ -784,8 +862,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         return (
             <div className="intake-full-page" data-lenis-prevent="true">
                 <div className="context-bar">
-                    <h3>{selectedPatientId ? 'Edit Patient Details' : 'New Registration'}</h3>
-                    <button type="button" className="btn-cancel" onClick={() => setViewMode('list')}>Close ✖</button>
+                    <h3>{isPatientPortal ? (followupStatus?.active ? 'Re-Book Appointment' : 'Book Appointment') : (selectedPatientId ? 'Edit Patient Details' : 'New Registration')}</h3>
+                    <button type="button" className="btn-cancel" onClick={() => isPatientPortal ? navigate('/patient/dashboard') : setViewMode('list')}>Close ✖</button>
                 </div>
                 <div className="intake-container">
                     <form onSubmit={handleSave}>
@@ -1000,7 +1078,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             </div>
 
                             {/* FOLLOW UP STATUS CARD RELOCATED HERE */}
-                            {followupStatus && (
+                            {followupStatus && followupStatus.lastConsultation && (
                                 <div className="form-row" style={{ marginTop: '0px' }}>
                                     <div className="field" style={{ flex: 1 }}>
                                         <div style={{
@@ -1011,20 +1089,23 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                                         }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', fontSize: '14px' }}>
-                                                <span>{followupStatus.active ? '✓ Follow-up Active' : '⚠ Follow-up Expired'}</span>
+                                                <span>{followupStatus.active ? '🟢 Follow-up Active' : '🔴 Follow-up Expired'}</span>
                                             </div>
                                             <div style={{ fontSize: '13px', display: 'flex', gap: '24px', alignItems: 'center' }}>
                                                 {followupStatus.active ? (
                                                     <>
+                                                        <div>Last Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
+                                                        <div>Valid Till: <strong>{new Date(followupStatus.validUntil).toLocaleDateString('en-IN')}</strong></div>
                                                         {(() => {
                                                             const remaining = Math.max(0, Math.ceil((new Date(followupStatus.validUntil).getTime() - new Date(intakeForm.visitDate || new Date()).getTime()) / (1000 * 3600 * 24)));
-                                                            return <div>Validity: <strong>{remaining === 0 ? 'Expires Today' : `${remaining} Day${remaining > 1 ? 's' : ''} Left`}</strong></div>;
+                                                            return <div>Remaining Days: <strong>{remaining === 0 ? 'Expires Today' : `${remaining} Day${remaining > 1 ? 's' : ''}`}</strong></div>;
                                                         })()}
-                                                        <div>Consultation Fee: <strong>₹0</strong></div>
+                                                        <div>Fee: <strong>₹0</strong></div>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <div>Last Visited: <strong>{followupStatus.lastConsultation ? new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN') : 'N/A'}</strong></div>
+                                                        <div>Last Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
+                                                        <div>Expired On: <strong>{new Date(followupStatus.validUntil).toLocaleDateString('en-IN')}</strong></div>
                                                         <div>Fee Applicable: <strong>₹{followupStatus.fee || intakeForm.consultationFee}</strong></div>
                                                     </>
                                                 )}
@@ -1141,7 +1222,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     : (() => {
                                         const isTokenMode = hospitalContext?.appointmentMode === 'token';
                                         const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
-                                        const actionText = followupStatus?.active ? 'Re-Book Appointment' : (isTokenMode ? 'Issue Token' : 'Book Appointment');
+                                        const actionText = followupStatus?.active ? 'Re-Book Appointment' : (isTokenMode && !isPatientPortal ? 'Issue Token' : 'Book Appointment');
+                                        if (isPatientPortal) return canBook ? actionText : 'Complete Profile & Continue';
                                         if (selectedPatientId) return canBook ? `${actionText} & Receipt` : 'Save Patient Details';
                                         return canBook ? `Register, ${actionText} & Receipt` : 'Save Patient Details';
                                     })()

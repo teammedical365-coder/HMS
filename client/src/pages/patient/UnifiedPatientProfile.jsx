@@ -29,15 +29,11 @@ import './UnifiedPatientProfile.css';
 
 import ClinicPatientProfile from './ClinicPatientProfile';
 
-const UnifiedPatientProfile = () => {
+const HospitalPatientProfileContent = () => {
     const { id: patientId } = useParams();
     const navigate = useNavigate();
 
-    // Check if the current user/tenant is Clinic -> immediately render Clinic profile
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-    if (currentUser?.clinicType === 'clinic') {
-        return <ClinicPatientProfile />;
-    }
 
     // Role check for Edit access (Only Reception/Admins can edit; Doctors see read-only + download)
     const userRole = String(currentUser.role || '').toLowerCase();
@@ -60,7 +56,7 @@ const UnifiedPatientProfile = () => {
     const [uploadingConsent, setUploadingConsent] = useState(false);
 
     const [documentList, setDocumentList] = useState([]);
-    const [activeFollowups, setActiveFollowups] = useState([]);
+    const [_activeFollowups, setActiveFollowups] = useState([]);
     const [currentFollowupStatus, setCurrentFollowupStatus] = useState(null);
 
     useEffect(() => {
@@ -417,8 +413,6 @@ const UnifiedPatientProfile = () => {
     }
 
     const metrics = calculateMetrics();
-    const fp = patientData.fertilityProfile || {};
-    const vitals = fp.vitals || {};
     const initials = (patientData.name || 'P').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
     // Compute age (checking registration age first, then calculating from dob)
@@ -887,6 +881,14 @@ const UnifiedPatientProfile = () => {
 
         </div>
     );
+};
+
+const UnifiedPatientProfile = () => {
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    if (currentUser?.clinicType === 'clinic') {
+        return <ClinicPatientProfile />;
+    }
+    return <HospitalPatientProfileContent />;
 };
 
 export default UnifiedPatientProfile;

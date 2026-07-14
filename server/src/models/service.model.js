@@ -47,7 +47,6 @@ const serviceSchema = new mongoose.Schema({
 
 // Add indexes for better query performance
 serviceSchema.index({ active: 1 }); // Index for filtering active services
-serviceSchema.index({ id: 1 }); // Index for service ID lookups (already unique, but explicit index helps)
 
 const Service = mongoose.model('Service', serviceSchema);
 

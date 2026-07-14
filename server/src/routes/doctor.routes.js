@@ -50,7 +50,7 @@ const getDoctorQuery = async (userId, hospitalId) => {
 // 0. GET ALL DOCTORS (Public)
 router.get('/', async (req, res) => {
     try {
-        const { serviceId } = req.query;
+        const { serviceId, department } = req.query;
         let query = {};
 
         // If serviceId filter is provided
@@ -58,10 +58,15 @@ router.get('/', async (req, res) => {
             query.services = serviceId;
         }
 
+        // If department filter is provided
+        if (department) {
+            query.departments = department;
+        }
+
         let hospitalIdFilter = req.query.hospitalId || null;
 
-        // If no explicit query param, check if they sent a valid token (e.g. Receptionist fetching doctors)
-        if (!hospitalIdFilter && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+        // Force hospitalIdFilter to match user token's hospitalId if authenticated (staff/patient)
+        if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
             try {
                 const token = req.headers.authorization.split(' ')[1];
                 const jwt = require('jsonwebtoken');
@@ -77,13 +82,17 @@ router.get('/', async (req, res) => {
 
         // Apply absolute hospital isolation filter if requested or inferred
         if (hospitalIdFilter) {
-            // Need mongoose to cast toObjectId sometimes, but usually string match works if schema defines it as ObjectId
             query.hospitalId = hospitalIdFilter;
         }
 
+        // Filter by Active status (matches true/Active and undefined fields in pre-existing records)
+        query.status = { $ne: 'Inactive' };
+        // Filter by availability (matches true/available and undefined fields in pre-existing records)
+        query.isAvailable = { $ne: false };
+
         const doctors = await Doctor.find(query)
             .populate('userId', 'name email phone role')
-            .select('name specialty services availability consultationFee image bio userId departments')
+            .select('name specialty services availability consultationFee image bio userId departments status isAvailable')
             .sort({ name: 1 })
             .lean();
 
@@ -750,17 +759,55 @@ router.get('/medicines-list', verifyToken, async (req, res) => {
     }
 });
 router.get('/:doctorId/booked-slots', async (req, res) => {
-    const query = {
-        $or: [{ doctorId: req.params.doctorId }, { doctorUserId: req.params.doctorId }],
-        appointmentDate: new Date(req.query.date),
-        status: { $ne: 'cancelled' }
-    };
-    // Hospital isolation: only show slots for this hospital's doctor
-    if (req.query.hospitalId) {
-        query.hospitalId = req.query.hospitalId;
+    try {
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(req.params.doctorId);
+        const doctorQuery = isObjectId
+            ? { _id: req.params.doctorId }
+            : { doctorId: req.params.doctorId };
+
+        const doctor = await Doctor.findOne(doctorQuery);
+        if (!doctor) {
+            return res.status(404).json({ success: false, message: 'Doctor not found' });
+        }
+
+        let hospitalIdFilter = req.query.hospitalId || null;
+
+        // Force hospitalIdFilter to match user token's hospitalId if authenticated (staff/patient)
+        if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+            try {
+                const token = req.headers.authorization.split(' ')[1];
+                const jwt = require('jsonwebtoken');
+                const { JWT_SECRET: _jwtSecret } = require('../config/jwt');
+                const decoded = jwt.verify(token, _jwtSecret);
+                if (decoded.hospitalId) {
+                    hospitalIdFilter = decoded.hospitalId;
+                }
+            } catch (err) {
+                // Ignore gracefully for public guests
+            }
+        }
+
+        if (hospitalIdFilter && String(doctor.hospitalId) !== String(hospitalIdFilter)) {
+            return res.status(403).json({ success: false, message: 'Unauthorized: Doctor belongs to another hospital.' });
+        }
+
+        const query = {
+            $or: [{ doctorId: doctor.doctorId }, { doctorUserId: doctor.userId }, { doctorId: req.params.doctorId }],
+            appointmentDate: new Date(req.query.date),
+            status: { $ne: 'cancelled' }
+        };
+
+        if (hospitalIdFilter) {
+            query.hospitalId = hospitalIdFilter;
+        }
+
+        const appointments = await Appointment.find(query);
+        res.json({ success: true, bookedSlots: appointments.map(app => app.appointmentTime) });
+    } catch (error) {
+        console.error('Error fetching booked slots:', error);
+        res.status(500).json({ success: false, message: 'Error fetching booked slots' });
     }
-    const appointments = await Appointment.find(query);
-    res.json({ success: true, bookedSlots: appointments.map(app => app.appointmentTime) });
 });
 
 // ─── Clinic Patient Reports — GET /api/doctor/clinic-patients/:clinicPatientId/reports

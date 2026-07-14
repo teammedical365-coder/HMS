@@ -77,6 +77,17 @@ const doctorSchema = new mongoose.Schema({
   consultationFee: {
     type: Number,
     default: 0
+  },
+  status: {
+    type: String,
+    enum: ['Active', 'Inactive'],
+    default: 'Active',
+    index: true
+  },
+  isAvailable: {
+    type: Boolean,
+    default: true,
+    index: true
   }
 }, {
   timestamps: true
@@ -84,8 +95,6 @@ const doctorSchema = new mongoose.Schema({
 
 // Add indexes for better query performance
 doctorSchema.index({ services: 1 }); // Index for filtering by services
-doctorSchema.index({ userId: 1 }); // Index for finding doctor by user
-doctorSchema.index({ doctorId: 1 }); // Index for finding by doctorId
 doctorSchema.index({ email: 1 }); // Index for email lookups
 
 const Doctor = mongoose.model('Doctor', doctorSchema);
