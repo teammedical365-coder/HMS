@@ -300,6 +300,272 @@ router.get('/appointments', verifyPatientToken, async (req, res) => {
     }
 });
 
+// GET /api/patient-auth/followup-status
+// Fetch follow-up status for the logged-in patient
+router.get('/followup-status', verifyPatientToken, async (req, res) => {
+    try {
+        if (!req.patient.linkedPatientProfileId) {
+            return res.json({
+                success: true,
+                active: false,
+                lastConsultation: null,
+                fee: 500,
+                message: 'Patient profile not linked / First Visit',
+                department: ''
+            });
+        }
+
+        const User = require('../models/user.model');
+        const patient = await User.findById(req.patient.linkedPatientProfileId);
+        if (!patient) {
+            return res.json({
+                success: true,
+                active: false,
+                lastConsultation: null,
+                fee: 500,
+                message: 'Patient profile not found / First Visit',
+                department: ''
+            });
+        }
+
+        const hospitalId = req.patient.hospitalId || patient.hospitalId;
+        if (!hospitalId) {
+            return res.status(400).json({ success: false, message: 'No hospital linked' });
+        }
+
+        const hospital = await Hospital.findById(hospitalId).select('departmentFees departmentValidity appointmentFee');
+        if (!hospital) {
+            return res.status(404).json({ success: false, message: 'Hospital not found' });
+        }
+
+        const { department, auto, date } = req.query;
+        let selectedDept = department;
+
+        if (auto === 'true' || !selectedDept) {
+            const lastAppt = await Appointment.findOne({
+                userId: patient._id,
+                status: { $ne: 'cancelled' }
+            }).sort({ appointmentDate: -1 });
+
+            if (!lastAppt) {
+                return res.json({
+                    success: true,
+                    active: false,
+                    lastConsultation: null,
+                    fee: hospital.appointmentFee ?? 500,
+                    message: 'First Consultation',
+                    department: ''
+                });
+            }
+            selectedDept = lastAppt.department || '';
+        }
+
+        if (!selectedDept) {
+            return res.json({
+                success: true,
+                active: false,
+                lastConsultation: null,
+                fee: hospital.appointmentFee ?? 500,
+                message: 'First Consultation',
+                department: ''
+            });
+        }
+
+        const validityDays = hospital.departmentValidity?.get(selectedDept) || 0;
+        const deptFee = hospital.departmentFees?.get(selectedDept) ?? hospital.appointmentFee ?? 500;
+
+        const lastApptForDept = await Appointment.findOne({
+            userId: patient._id,
+            department: selectedDept,
+            status: { $ne: 'cancelled' }
+        }).sort({ appointmentDate: -1 });
+
+        if (!lastApptForDept || !lastApptForDept.appointmentDate) {
+            return res.json({
+                success: true,
+                active: false,
+                lastConsultation: null,
+                fee: deptFee,
+                message: 'First Consultation',
+                department: selectedDept
+            });
+        }
+
+        const lastDate = new Date(lastApptForDept.appointmentDate);
+        lastDate.setUTCHours(0, 0, 0, 0);
+        const validUntil = new Date(lastDate);
+        validUntil.setDate(validUntil.getDate() + validityDays);
+
+        const currentDate = date ? new Date(date) : new Date();
+        currentDate.setUTCHours(0, 0, 0, 0);
+
+        if (currentDate <= validUntil && validityDays > 0) {
+            return res.json({
+                success: true,
+                active: true,
+                validUntil: validUntil.toISOString().split('T')[0],
+                lastConsultation: lastDate.toISOString().split('T')[0],
+                fee: 0,
+                message: 'Follow-up Active',
+                department: selectedDept
+            });
+        } else {
+            return res.json({
+                success: true,
+                active: false,
+                validUntil: validUntil.toISOString().split('T')[0],
+                lastConsultation: lastDate.toISOString().split('T')[0],
+                fee: deptFee,
+                message: 'Follow-up Expired',
+                department: selectedDept
+            });
+        }
+    } catch (error) {
+        console.error('Patient Followup Status Error:', error);
+        res.status(500).json({ success: false, message: 'Internal server error.' });
+    }
+});
+
+// POST /api/patient-auth/book-appointment
+// Book appointment specifically for the logged-in patient
+router.post('/book-appointment', verifyPatientToken, async (req, res) => {
+    try {
+        if (!req.patient.linkedPatientProfileId) {
+            return res.status(403).json({ success: false, message: 'Unauthorized: Profile not linked yet.' });
+        }
+
+        const { doctorId, date, time, notes, paymentMethod, paymentStatus, amount, department } = req.body;
+
+        if (!doctorId || !date) {
+            return res.status(400).json({ success: false, message: 'Doctor and date are required.' });
+        }
+
+        const reqDateMatch = String(date).split('T')[0];
+        const todayMatch = new Date().toISOString().split('T')[0];
+        if (reqDateMatch < todayMatch) {
+            return res.status(400).json({ success: false, message: 'Cannot book appointments in the past.' });
+        }
+
+        const User = require('../models/user.model');
+        const Doctor = require('../models/doctor.model');
+
+        const patient = await User.findById(req.patient.linkedPatientProfileId);
+        if (!patient) {
+            return res.status(404).json({ success: false, message: 'Linked patient profile not found.' });
+        }
+
+        const doctor = await Doctor.findById(doctorId);
+        if (!doctor) {
+            return res.status(404).json({ success: false, message: 'Doctor not found.' });
+        }
+
+        const hospitalId = req.patient.hospitalId || patient.hospitalId;
+
+        if (String(doctor.hospitalId) !== String(hospitalId)) {
+            return res.status(403).json({ success: false, message: 'Unauthorized: Doctor belongs to another hospital.' });
+        }
+
+        const hospital = hospitalId ? await Hospital.findById(hospitalId).select('appointmentMode name address city state phone departmentFees departmentValidity appointmentFee') : null;
+        const isTokenMode = hospital?.appointmentMode === 'token';
+
+        let finalTime = time;
+        let tokenNumber = null;
+
+        const startOfDay = new Date(date);
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const endOfDay = new Date(date);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+
+        if (isTokenMode) {
+            const count = await Appointment.countDocuments({
+                doctorId: doctor._id,
+                appointmentDate: { $gte: startOfDay, $lte: endOfDay },
+                status: { $ne: 'cancelled' }
+            });
+            tokenNumber = count + 1;
+            finalTime = `token-${tokenNumber}`;
+        } else {
+            if (!time) {
+                return res.status(400).json({ success: false, message: 'Appointment time is required for slot-based booking' });
+            }
+            const existing = await Appointment.findOne({
+                doctorId: doctor._id,
+                appointmentDate: { $gte: startOfDay, $lte: endOfDay },
+                appointmentTime: time,
+                status: { $ne: 'cancelled' }
+            });
+            if (existing) {
+                return res.status(400).json({ success: false, message: 'Slot already booked for this doctor at this time!' });
+            }
+        }
+
+        let finalAmount = Number(amount) || doctor.consultationFee || 0;
+        let visitType = 'New Consultation';
+
+        if (department && hospital) {
+            const validityDays = hospital.departmentValidity?.get(department) || 0;
+            if (validityDays > 0) {
+                const lastAppt = await Appointment.findOne({
+                    userId: patient._id,
+                    department,
+                    status: { $ne: 'cancelled' }
+                }).sort({ appointmentDate: -1 });
+
+                if (lastAppt && lastAppt.appointmentDate) {
+                    const lastDate = new Date(lastAppt.appointmentDate);
+                    lastDate.setUTCHours(0, 0, 0, 0);
+                    const validUntil = new Date(lastDate);
+                    validUntil.setDate(validUntil.getDate() + validityDays);
+
+                    const currentDate = new Date(date);
+                    currentDate.setUTCHours(0, 0, 0, 0);
+
+                    if (currentDate <= validUntil) {
+                        finalAmount = 0;
+                        visitType = 'Follow-up';
+                    } else if (finalAmount === 0) {
+                        finalAmount = hospital.departmentFees?.get(department) ?? hospital.appointmentFee ?? 500;
+                        visitType = 'New Consultation';
+                    } else {
+                        visitType = 'New Consultation';
+                    }
+                }
+            }
+        }
+        if (finalAmount === 0) {
+            visitType = 'Follow-up';
+        }
+
+        const newAppointment = new Appointment({
+            userId: patient._id,
+            hospitalId,
+            patientId: patient.patientId || 'WALK-IN',
+            doctorId: doctor._id,
+            doctorUserId: doctor.userId,
+            doctorName: doctor.name,
+            serviceId: doctor.services?.[0] || 'general',
+            serviceName: 'Patient Portal Booking',
+            department: department || doctor.departments?.[0] || 'General',
+            visitType,
+            appointmentDate: new Date(date),
+            appointmentTime: finalTime || '',
+            tokenNumber,
+            amount: finalAmount,
+            status: 'confirmed',
+            paymentStatus: finalAmount === 0 ? 'Paid' : (paymentStatus || 'Paid'),
+            paymentMethod: paymentMethod || 'Online',
+            notes: notes || 'Booked directly via Patient Portal'
+        });
+
+        await newAppointment.save();
+
+        res.json({ success: true, appointment: newAppointment });
+    } catch (error) {
+        console.error('Patient Book Appointment Error:', error);
+        res.status(500).json({ success: false, message: 'Internal server error while booking appointment.' });
+    }
+});
+
 // GET /api/patient-auth/profile
 // Fetch complete demographic profile for the logged-in patient
 router.get('/profile', verifyPatientToken, async (req, res) => {

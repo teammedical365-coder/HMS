@@ -456,40 +456,41 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
         const hospital = await Hospital.findById(hospitalId).select('departmentFees departmentValidity appointmentFee');
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
+        let selectedDept = department;
+
         if (auto === 'true') {
             const lastAppt = await Appointment.findOne({
                 userId: patient._id,
                 status: { $ne: 'cancelled' }
             }).sort({ appointmentDate: -1 });
 
-            if (!lastAppt) {
+            if (lastAppt) {
+                selectedDept = lastAppt.department || '';
+            }
+        }
+
+        if (selectedDept) {
+            const validityDays = hospital.departmentValidity?.get(selectedDept) || 0;
+            const deptFee = hospital.departmentFees?.get(selectedDept) ?? hospital.appointmentFee ?? 500;
+
+            const lastApptForDept = await Appointment.findOne({
+                userId: patient._id,
+                department: selectedDept,
+                status: { $ne: 'cancelled' }
+            }).sort({ appointmentDate: -1 });
+
+            if (!lastApptForDept || !lastApptForDept.appointmentDate) {
                 return res.json({
                     success: true,
                     active: false,
                     lastConsultation: null,
-                    fee: hospital.appointmentFee ?? 500,
-                    message: 'New Patient / First Visit',
-                    department: ''
+                    fee: deptFee,
+                    message: 'First Consultation',
+                    department: selectedDept
                 });
             }
 
-            if (!lastAppt.department) {
-                const lastDate = new Date(lastAppt.appointmentDate || lastAppt.createdAt || new Date());
-                return res.json({
-                    success: true,
-                    active: false,
-                    lastConsultation: lastDate.toISOString().split('T')[0],
-                    fee: hospital.appointmentFee ?? 500,
-                    message: 'Follow-up Expired',
-                    department: ''
-                });
-            }
-
-            const dept = lastAppt.department;
-            const validityDays = hospital.departmentValidity?.get(dept) || 0;
-            const deptFee = hospital.departmentFees?.get(dept) ?? hospital.appointmentFee ?? 500;
-
-            const lastDate = new Date(lastAppt.appointmentDate);
+            const lastDate = new Date(lastApptForDept.appointmentDate);
             lastDate.setUTCHours(0, 0, 0, 0);
             const validUntil = new Date(lastDate);
             validUntil.setDate(validUntil.getDate() + validityDays);
@@ -505,66 +506,19 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
                     lastConsultation: lastDate.toISOString().split('T')[0],
                     fee: 0,
                     message: 'Follow-up Active',
-                    department: dept
+                    department: selectedDept
                 });
             } else {
                 return res.json({
                     success: true,
                     active: false,
+                    validUntil: validUntil.toISOString().split('T')[0],
                     lastConsultation: lastDate.toISOString().split('T')[0],
                     fee: deptFee,
                     message: 'Follow-up Expired',
-                    department: dept
+                    department: selectedDept
                 });
             }
-        } else if (department) {
-            const validityDays = hospital.departmentValidity?.get(department) || 0;
-            const deptFee = hospital.departmentFees?.get(department) ?? hospital.appointmentFee ?? 500;
-
-            if (validityDays > 0) {
-                const lastAppt = await Appointment.findOne({
-                    userId: patient._id,
-                    department,
-                    status: { $ne: 'cancelled' }
-                }).sort({ appointmentDate: -1 });
-
-                if (lastAppt && lastAppt.appointmentDate) {
-                    const lastDate = new Date(lastAppt.appointmentDate);
-                    lastDate.setUTCHours(0, 0, 0, 0);
-                    const validUntil = new Date(lastDate);
-                    validUntil.setDate(validUntil.getDate() + validityDays);
-
-                    const currentDate = date ? new Date(date) : new Date();
-                    currentDate.setUTCHours(0, 0, 0, 0);
-
-                    if (currentDate <= validUntil) {
-                        return res.json({
-                            success: true,
-                            active: true,
-                            validUntil: validUntil.toISOString().split('T')[0],
-                            lastConsultation: lastDate.toISOString().split('T')[0],
-                            fee: 0,
-                            message: 'Follow-up Active'
-                        });
-                    } else {
-                        return res.json({
-                            success: true,
-                            active: false,
-                            lastConsultation: lastDate.toISOString().split('T')[0],
-                            fee: deptFee,
-                            message: 'Follow-up Expired'
-                        });
-                    }
-                }
-            }
-
-            return res.json({
-                success: true,
-                active: false,
-                lastConsultation: null,
-                fee: deptFee,
-                message: 'First Visit / No Active Follow-up'
-            });
         } else {
             // Return ALL active followups
             const activeFollowups = [];
@@ -601,7 +555,10 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
             }
             return res.json({ success: true, activeFollowups });
         }
-    } catch (e) { res.status(500).json({ success: false, message: 'An internal error occurred' }); }
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
 });
 
 // 7. BOOK APPOINTMENT (NEW: Assign Doctor)
@@ -706,6 +663,7 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             serviceId: doctor.services?.[0] || 'general',
             serviceName: 'Walk-in Visit',
             department: department || doctor.departments?.[0] || 'General',
+            visitType: finalAmount === 0 ? 'Follow-up' : 'New Consultation',
             appointmentDate: new Date(date),
             appointmentTime: finalTime || '',
             tokenNumber,
