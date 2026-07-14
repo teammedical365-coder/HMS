@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { billingAPI, admissionAPI, patientAPI, uploadAPI } from '../../utils/api';
+import { billingAPI, admissionAPI, patientAPI, uploadAPI, hospitalAPI } from '../../utils/api';
 import './PatientBillingProfile.css';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n || 0);
@@ -20,6 +20,18 @@ const PatientBillingProfile = () => {
     const [dischargingId, setDischargingId] = useState(null);
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const [upiOptions, setUpiOptions] = useState([]);
+    useEffect(() => {
+      hospitalAPI
+        .getUpiIds()
+        .then((res) => {
+          const data = res?.upiIds || [];
+          setUpiOptions(data);
+        })
+        .catch((err) => {
+          console.error('Failed to fetch UPI IDs', err);
+        });
+    }, []);
 
     const loadPatientBilling = async (identifier) => {
         setLoading(true);
@@ -599,27 +611,31 @@ const PatientBillingProfile = () => {
                                     </select>
 
                                     {paymentMode === 'UPI' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', padding: '15px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '10px' }}>
-                                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                                <div style={{ flex: 1, minWidth: '150px' }}>
-                                                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Hospital UPI ID <span style={{color: '#ef4444'}}>*</span></label>
-                                                    <input type="text" placeholder="e.g. hospital@upi" required value={paymentModal.data?.upiId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, upiId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%' }} />
-                                                </div>
-                                                <div style={{ flex: 1, minWidth: '150px' }}>
-                                                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>12-Digit Transaction Ref <span style={{color: '#ef4444'}}>*</span></label>
-                                                    <input type="text" placeholder="Transaction ID" required value={paymentModal.data?.transactionId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, transactionId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%' }} />
-                                                </div>
-                                            </div>
-                                            
-                                            {paymentModal.data?.upiId && totalSelected() > 0 && (
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fff', padding: '15px', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
-                                                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>Scan to Pay {fmt(totalSelected())}</span>
-                                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('upi://pay?pa=' + (paymentModal.data.upiId).trim() + '&pn=Hospital&am=' + totalSelected() + '&cu=INR')}`} alt="UPI QR Code" style={{ border: '4px solid #fff', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} />
-                                                    <span style={{ fontSize: '11px', color: '#64748b', marginTop: '8px' }}>Ask patient to scan this QR code</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', padding: '15px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '10px' }}>
+    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ flex: 1, minWidth: '150px' }}>
+        <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Hospital UPI ID <span style={{color: '#ef4444'}}>*</span></label>
+        <select value={paymentModal.data?.upiId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, upiId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%' }} required>
+          <option value="" disabled>Select Hospital UPI ID</option>
+          {upiOptions.map((opt, idx) => (
+            <option key={idx} value={opt.upiId}>{opt.label} ({opt.upiId})</option>
+          ))}
+        </select>
+      </div>
+      <div style={{ flex: 1, minWidth: '150px' }}>
+        <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>12-Digit Transaction Ref <span style={{color: '#ef4444'}}>*</span></label>
+        <input type="text" placeholder="Transaction ID" required value={paymentModal.data?.transactionId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, transactionId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%' }} />
+      </div>
+    </div>
+    {paymentModal.data?.upiId && totalSelected() > 0 && (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fff', padding: '15px', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+        <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>Scan to Pay {fmt(totalSelected())}</span>
+        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('upi://pay?pa=' + (paymentModal.data.upiId).trim() + '&pn=Hospital&am=' + totalSelected() + '&cu=INR')}`} alt="UPI QR Code" style={{ border: '4px solid #fff', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} />
+        <span style={{ fontSize: '11px', color: '#64748b', marginTop: '8px' }}>Ask patient to scan this QR code</span>
+      </div>
+    )}
+  </div>
+)}
                                     {paymentMode === 'Card' && (
                                         <>
                                             <input type="text" placeholder="Card Details (Last 4)" required value={paymentModal.data?.cardDetails || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, cardDetails: e.target.value } })} className="inline-input" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />

@@ -104,6 +104,12 @@
     box-shadow: var(--shadow-brand);
 }
 
+.ha-tab-active:hover {
+    background: var(--gradient-brand);
+    color: white !important;
+    opacity: 0.9;
+}
+
 /* Stats Grid */
 .ha-stats-grid {
     display: grid;

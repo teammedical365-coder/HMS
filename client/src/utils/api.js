@@ -332,6 +332,9 @@ export const hospitalAPI = {
     updateHospital: async (id, data) => (await apiClient.put(`/api/hospitals/${id}`, data)).data,
     deleteHospital: async (id) => (await apiClient.delete(`/api/hospitals/${id}`)).data,
     getMyHospital: async () => (await apiClient.get('/api/hospitals/my-hospital')).data,
+    // UPI management (Hospital Admin)
+    getUpiIds: async () => (await apiClient.get('/api/hospitals/my-hospital/upi-ids')).data,
+    updateUpiIds: async (upiIds) => (await apiClient.put('/api/hospitals/my-hospital/upi-ids', { upiIds })).data,
     updateFacilities: async (data) => (await apiClient.put('/api/hospitals/my-hospital/facilities', data)).data,
     updateDepartmentFees: async (data) => (await apiClient.put('/api/hospitals/my-hospital/department-fees', data)).data,
     // Hospital inventory

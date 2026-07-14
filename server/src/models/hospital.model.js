@@ -52,6 +52,8 @@ const hospitalSchema = new mongoose.Schema({
     }],
     // White-label branding config (per hospital)
     branding: { type: brandingSchema, default: () => ({}) },
+    // Hospital-managed UPI configurations
+    upiIds: [{ label: { type: String, required: true }, upiId: { type: String, required: true } }],
     // Appointment system mode — set by Supreme Admin per hospital
     // 'slot'  : patients/reception pick a specific time slot (09:00, 09:30, …)
     // 'token' : sequential daily token; resets to 1 at midnight; no time selection

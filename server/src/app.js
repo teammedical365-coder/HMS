@@ -37,12 +37,13 @@ const simpleClinicRoutes = require('./routes/simpleClinic.routes');
 const clinicRoutes = require('./routes/clinic.routes');
 const syncRoutes = require('./routes/sync.routes');
 const patientAuthRoutes = require('./routes/patientAuth.routes');
-app.use('/api/patient-auth', patientAuthRoutes);
 const patientLocalRoutes = require('./routes/patientLocal.routes');
 const revenueRoutes = require('./routes/revenue.routes');
 const mfaRoutes = require('./routes/mfa.routes');
+const patientAppRoutes = require('./routes/patientApp.routes');
 
 const app = express();
+app.use('/api/patient-auth', patientAuthRoutes);
 
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet({
