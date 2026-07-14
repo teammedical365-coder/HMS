@@ -67,6 +67,39 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
 
     await newReport.save();
 
+    // Auto-sync to Patient User profile documents so it immediately appears in Patient Portal
+    try {
+      const Appointment = require('../models/appointment.model');
+      const User = require('../models/user.model');
+      const appt = await Appointment.findById(appointmentId);
+      if (appt) {
+        let userDoc = null;
+        if (appt.userId) userDoc = await User.findById(appt.userId);
+        if (!userDoc && appt.patientId) {
+          const query = { patientId: appt.patientId };
+          if (appt.hospitalId) query.hospitalId = appt.hospitalId;
+          userDoc = await User.findOne(query) || await User.findOne({ patientId: appt.patientId });
+        }
+        if (userDoc) {
+          if (!userDoc.fertilityProfile) userDoc.fertilityProfile = {};
+          if (!Array.isArray(userDoc.fertilityProfile.documents)) userDoc.fertilityProfile.documents = [];
+          userDoc.fertilityProfile.documents.push({
+            fileName: file.originalname,
+            docType: 'Medical Report',
+            url: result.url,
+            fileId: result.fileId,
+            mimeType: file.mimetype,
+            uploadedAt: new Date(),
+            uploadedBy: uploaderRole
+          });
+          userDoc.markModified('fertilityProfile');
+          await userDoc.save();
+        }
+      }
+    } catch (syncErr) {
+      console.error('[Report Sync Error]:', syncErr.message);
+    }
+
     res.status(201).json({
       success: true,
       message: "Report uploaded successfully",

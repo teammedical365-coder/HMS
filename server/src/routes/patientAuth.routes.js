@@ -3,6 +3,38 @@ const router = express.Router();
 const PatientAuth = require('../models/patientAuth.model');
 const Hospital = require('../models/hospital.model');
 
+// Universal MRN Generator matching Hospital & Clinic exact formats
+async function generateUniversalMRN(hospitalId, hospital, User) {
+    if (hospital && hospital.clinicType === 'clinic') {
+        const prefix = hospital.clinicCode || hospital.slug?.toUpperCase() || 'MRN';
+        const count = await User.countDocuments({ hospitalId, role: 'patient' });
+        return `${prefix}-${String(count + 1).padStart(3, '0')}`;
+    }
+    const hospitalCode = await Hospital.ensureHospitalCode(hospital);
+    const count = await User.countDocuments({ hospitalId, role: 'patient' });
+    const escapedCode = hospitalCode.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`^${escapedCode}-M365-(\\d+)$`, 'i');
+    const existingPatients = await User.find({ hospitalId, mrn: regex }).select('mrn').lean();
+    let maxSeq = count;
+    for (const p of existingPatients) {
+        if (p.mrn) {
+            const match = p.mrn.match(regex);
+            if (match && match[1]) {
+                const num = parseInt(match[1], 10);
+                if (!isNaN(num) && num > maxSeq) maxSeq = num;
+            }
+        }
+    }
+    let nextNum = maxSeq + 1;
+    while (true) {
+        const runningStr = String(nextNum).padStart(3, '0');
+        const candidate = `${hospitalCode}-M365-${runningStr}`;
+        const exists = await User.findOne({ $or: [{ mrn: candidate }, { patientId: candidate }] });
+        if (!exists) return candidate;
+        nextNum++;
+    }
+}
+
 // POST /api/patient-auth/register
 // Register a new patient authentication account
 router.post('/register', async (req, res) => {
@@ -57,6 +89,29 @@ router.post('/register', async (req, res) => {
         });
 
         await newPatientAccount.save();
+
+        // Auto-link clinical User (Patient) profile ONLY if it already exists (e.g., from prior reception registration)
+        try {
+            const User = require('../models/user.model');
+            let user = await User.findOne({ hospitalId, role: 'patient', $or: [{ phone: mobile }, ...(email ? [{ email: email.toLowerCase() }] : [])] });
+            if (user) {
+                if (hospital && hospital.clinicType !== 'clinic') {
+                    const hospitalCode = await Hospital.ensureHospitalCode(hospital);
+                    const escapedCode = hospitalCode.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+                    const validRegex = new RegExp(`^${escapedCode}-M365-\\d+$`, 'i');
+                    if (!user.mrn || !validRegex.test(user.mrn)) {
+                        const newMrn = await generateUniversalMRN(hospitalId, hospital, User);
+                        user.mrn = newMrn;
+                        user.patientId = newMrn;
+                        await user.save();
+                    }
+                }
+                newPatientAccount.linkedPatientProfileId = user._id;
+                await newPatientAccount.save();
+            }
+        } catch (linkErr) {
+            console.error("Error auto-linking User profile during signup:", linkErr);
+        }
 
         res.status(201).json({
             success: true,
@@ -127,10 +182,38 @@ router.post('/login', async (req, res) => {
         );
 
         let mrn = null;
+        if (!patient.linkedPatientProfileId) {
+            try {
+                const User = require('../models/user.model');
+                let user = await User.findOne({ hospitalId: patient.hospitalId, role: 'patient', $or: [{ phone: patient.mobile }, ...(patient.email ? [{ email: patient.email.toLowerCase() }] : [])] });
+                if (user) {
+                    patient.linkedPatientProfileId = user._id;
+                    await patient.save();
+                }
+            } catch (err) {
+                console.error("Error linking patient during login:", err);
+            }
+        }
+
         if (patient.linkedPatientProfileId) {
             const User = require('../models/user.model');
-            const linkedProfile = await User.findById(patient.linkedPatientProfileId).select('patientId mrn');
-            mrn = linkedProfile?.patientId || linkedProfile?.mrn || null;
+            const Hospital = require('../models/hospital.model');
+            const linkedProfile = await User.findById(patient.linkedPatientProfileId);
+            if (linkedProfile) {
+                const hospital = await Hospital.findById(patient.hospitalId);
+                if (hospital && hospital.clinicType !== 'clinic') {
+                    const hospitalCode = await Hospital.ensureHospitalCode(hospital);
+                    const escapedCode = hospitalCode.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+                    const validRegex = new RegExp(`^${escapedCode}-M365-\\d+$`, 'i');
+                    if (!linkedProfile.mrn || !validRegex.test(linkedProfile.mrn)) {
+                        const newMrn = await generateUniversalMRN(patient.hospitalId, hospital, User);
+                        linkedProfile.mrn = newMrn;
+                        linkedProfile.patientId = newMrn;
+                        await linkedProfile.save();
+                    }
+                }
+                mrn = linkedProfile.mrn || linkedProfile.patientId || null;
+            }
         }
 
         res.json({
@@ -259,9 +342,38 @@ const User = require('../models/user.model'); // Added to fetch MRN
 
 router.get('/me', verifyPatientToken, async (req, res) => {
     let mrn = null;
+    if (!req.patient.linkedPatientProfileId) {
+        try {
+            const User = require('../models/user.model');
+            let user = await User.findOne({ hospitalId: req.patient.hospitalId, role: 'patient', $or: [{ phone: req.patient.mobile }, ...(req.patient.email ? [{ email: req.patient.email.toLowerCase() }] : [])] });
+            if (user) {
+                req.patient.linkedPatientProfileId = user._id;
+                await req.patient.save();
+            }
+        } catch (err) {
+            console.error("Error linking patient during /me:", err);
+        }
+    }
+
     if (req.patient.linkedPatientProfileId) {
-        const linkedProfile = await User.findById(req.patient.linkedPatientProfileId).select('patientId mrn');
-        mrn = linkedProfile?.patientId || linkedProfile?.mrn || null;
+        const User = require('../models/user.model');
+        const Hospital = require('../models/hospital.model');
+        const linkedProfile = await User.findById(req.patient.linkedPatientProfileId);
+        if (linkedProfile) {
+            const hospital = await Hospital.findById(req.patient.hospitalId);
+            if (hospital && hospital.clinicType !== 'clinic') {
+                const hospitalCode = await Hospital.ensureHospitalCode(hospital);
+                const escapedCode = hospitalCode.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+                const validRegex = new RegExp(`^${escapedCode}-M365-\\d+$`, 'i');
+                if (!linkedProfile.mrn || !validRegex.test(linkedProfile.mrn)) {
+                    const newMrn = await generateUniversalMRN(req.patient.hospitalId, hospital, User);
+                    linkedProfile.mrn = newMrn;
+                    linkedProfile.patientId = newMrn;
+                    await linkedProfile.save();
+                }
+            }
+            mrn = linkedProfile.mrn || linkedProfile.patientId || null;
+        }
     }
 
     res.json({
@@ -570,14 +682,26 @@ router.post('/book-appointment', verifyPatientToken, async (req, res) => {
 // Fetch complete demographic profile for the logged-in patient
 router.get('/profile', verifyPatientToken, async (req, res) => {
     try {
-        if (!req.patient.linkedPatientProfileId) {
-            return res.status(404).json({ success: false, message: 'Patient profile not linked yet.' });
+        let userDoc = null;
+        if (req.patient.linkedPatientProfileId) {
+            userDoc = await User.findById(req.patient.linkedPatientProfileId).select('-password -role').lean();
         }
 
-        const profile = await User.findById(req.patient.linkedPatientProfileId).select('-password -role');
-        if (!profile) {
-            return res.status(404).json({ success: false, message: 'Profile not found.' });
-        }
+        const mobileValue = userDoc?.phone || userDoc?.mobile || req.patient.mobile || '';
+        const profile = userDoc ? {
+            ...userDoc,
+            phone: mobileValue,
+            mobile: mobileValue
+        } : {
+            name: req.patient.name,
+            email: req.patient.email,
+            mobile: mobileValue,
+            phone: mobileValue,
+            gender: 'Not Specified',
+            age: 'Not Specified',
+            bloodGroup: 'Not Specified',
+            address: 'Not Specified'
+        };
 
         res.json({ success: true, profile });
     } catch (error) {
@@ -680,7 +804,25 @@ router.get('/documents', verifyPatientToken, async (req, res) => {
             hospital: hospitalName
         }));
 
-        const allCombined = [...baseDocs, ...prevReports, ...doctorReports, ...labDocs];
+        // Also fetch from standalone Report collection (for reports uploaded via /api/reports/upload)
+        const Appointment = require('../models/appointment.model');
+        const Report = require('../models/report.model');
+        const apptQuery = { $or: [{ userId: patientId }, { patientId: patientId }] };
+        if (hospitalId) apptQuery.hospitalId = hospitalId;
+        const patientAppts = await Appointment.find(apptQuery).select('_id').lean();
+        const apptIds = patientAppts.map(a => a._id);
+        const standaloneReports = await Report.find({ appointmentId: { $in: apptIds } }).lean();
+        const standaloneDocs = standaloneReports.map(r => ({
+            fileName: r.fileName || 'Medical Report',
+            docType: 'Medical Report',
+            url: r.url,
+            uploadedAt: r.uploadedAt || new Date(),
+            fileId: r.fileId || r._id,
+            uploadedBy: r.uploadedByRole || 'Doctor',
+            hospital: hospitalName
+        }));
+
+        const allCombined = [...baseDocs, ...prevReports, ...doctorReports, ...labDocs, ...standaloneDocs];
         
         // Deduplicate
         const seen = new Set();

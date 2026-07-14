@@ -51,7 +51,7 @@ const Appointment = () => {
   // --------------------------------
   
   // React Hook Form
-  const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm({
+  const { register, handleSubmit, watch, setValue, reset, formState: { errors: _errors } } = useForm({
     defaultValues: {
       serviceId: '',
       doctorId: '',
@@ -258,6 +258,9 @@ const Appointment = () => {
         setAvailableDoctors([]);
         setAvailableTimes([]);
         dispatch(fetchAppointments());
+        if (selectedDoctor && data.appointmentDate) {
+          dispatch(fetchBookedSlots({ doctorId: selectedDoctor, date: data.appointmentDate }));
+        }
       } else {
         setError(result.payload || 'Failed to book appointment.');
       }

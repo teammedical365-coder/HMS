@@ -151,7 +151,7 @@ const PatientDashboard = () => {
         );
     }
 
-    const isActivated = patient?.registrationStatus === 'Completed';
+    const isActivated = true; // Ensure identical full dashboard across all hospitals
 
     // Helpers
     const getUpcomingAppt = () => {
@@ -381,7 +381,7 @@ const PatientDashboard = () => {
                     <div className="patient-hero-content">
                         <h2>Welcome back, {patient?.name?.split(' ')[0] || 'Patient'}!</h2>
                         
-                        {upcoming ? (
+                        {upcoming && (
                             <div className="hero-upcoming-appt">
                                 <div>
                                     <span className="upcoming-label">Next Appointment</span>
@@ -395,16 +395,12 @@ const PatientDashboard = () => {
                                     {upcoming.status}
                                 </div>
                             </div>
-                        ) : (
-                            <div className="patient-hero-mrn">
-                                <span>MRN:</span> {patient?.mrn || 'Pending'}
-                            </div>
                         )}
                     </div>
                     <div className="patient-hero-actions">
-                        {!upcoming && (
+                        {patient?.mrn && (
                             <div className="patient-hero-mrn" style={{ marginBottom: '1rem' }}>
-                                <span>MRN:</span> {patient?.mrn || 'Pending'}
+                                <span>MRN:</span> {patient.mrn}
                             </div>
                         )}
                         <button className="btn-solid-white" onClick={() => navigate('/patient/book-appointment')}>
@@ -412,8 +408,6 @@ const PatientDashboard = () => {
                         </button>
                     </div>
                 </div>
-
-                {renderFollowupCard()}
 
                 <div className="quick-actions-grid">
                     <div className="quick-action-card" onClick={() => setActiveTab('appointments')}>
@@ -701,7 +695,7 @@ const PatientDashboard = () => {
                             <h3>Contact Information</h3>
                             <div className="profile-field">
                                 <label>Mobile Number</label>
-                                <div className="value">{profileData.mobile}</div>
+                                <div className="value">{profileData.mobile || profileData.phone || patient?.mobile || 'Not Provided'}</div>
                             </div>
                             <div className="profile-field">
                                 <label>Email Address</label>
@@ -1124,9 +1118,6 @@ const PatientDashboard = () => {
 
                         <div className="patient-user-info">
                             <span className="patient-user-name">{patient?.name || 'Patient'}</span>
-                            <span className="patient-user-role">
-                                {isActivated ? `MRN: ${patient?.mrn || '-'}` : 'Patient Access'}
-                            </span>
                         </div>
                     </div>
                 </header>

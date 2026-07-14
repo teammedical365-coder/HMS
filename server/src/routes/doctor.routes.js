@@ -792,9 +792,28 @@ router.get('/:doctorId/booked-slots', async (req, res) => {
             return res.status(403).json({ success: false, message: 'Unauthorized: Doctor belongs to another hospital.' });
         }
 
+        const startOfDay = new Date(req.query.date);
+        startOfDay.setUTCHours(0, 0, 0, 0);
+        const endOfDay = new Date(req.query.date);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+
+        const orConditions = [];
+        if (doctor._id && mongoose.Types.ObjectId.isValid(String(doctor._id))) {
+            orConditions.push({ doctorId: doctor._id });
+        }
+        if (doctor.userId && mongoose.Types.ObjectId.isValid(String(doctor.userId))) {
+            orConditions.push({ doctorUserId: doctor.userId });
+        }
+        if (mongoose.Types.ObjectId.isValid(String(req.params.doctorId))) {
+            orConditions.push({ doctorId: req.params.doctorId });
+        }
+        if (orConditions.length === 0) {
+            return res.json({ success: true, bookedSlots: [] });
+        }
+
         const query = {
-            $or: [{ doctorId: doctor.doctorId }, { doctorUserId: doctor.userId }, { doctorId: req.params.doctorId }],
-            appointmentDate: new Date(req.query.date),
+            $or: orConditions,
+            appointmentDate: { $gte: startOfDay, $lte: endOfDay },
             status: { $ne: 'cancelled' }
         };
 
@@ -803,7 +822,8 @@ router.get('/:doctorId/booked-slots', async (req, res) => {
         }
 
         const appointments = await Appointment.find(query);
-        res.json({ success: true, bookedSlots: appointments.map(app => app.appointmentTime) });
+        const slots = appointments.map(app => app.appointmentTime).filter(Boolean);
+        res.json({ success: true, bookedSlots: slots });
     } catch (error) {
         console.error('Error fetching booked slots:', error);
         res.status(500).json({ success: false, message: 'Error fetching booked slots' });
