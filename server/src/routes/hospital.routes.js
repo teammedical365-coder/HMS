@@ -205,14 +205,14 @@ const updateHospital = async (req, res) => {
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
         if (name !== undefined) hospital.name = name;
-        
+
         if (slug !== undefined) {
             const formattedSlug = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
             if (!formattedSlug) {
                 return res.status(400).json({ success: false, message: 'Subdomain prefix (slug) cannot be empty.' });
             }
-            const existingSlug = await Hospital.findOne({ 
-                slug: formattedSlug, 
+            const existingSlug = await Hospital.findOne({
+                slug: formattedSlug,
                 _id: { $ne: req.params.id }
             });
             if (existingSlug) {
@@ -225,8 +225,8 @@ const updateHospital = async (req, res) => {
             // strip protocol and trailing slash
             const formattedDomain = customDomain ? customDomain.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase() : undefined;
             if (formattedDomain) {
-                const existingDomain = await Hospital.findOne({ 
-                    customDomain: formattedDomain, 
+                const existingDomain = await Hospital.findOne({
+                    customDomain: formattedDomain,
                     _id: { $ne: req.params.id }
                 });
                 if (existingDomain) {
@@ -278,6 +278,8 @@ router.get('/:id/next-token', verifyToken, async (req, res) => {
         }
 
         // Count non-cancelled appointments for this doctor on this date
+        const [dischargingId, setDischargingId] = useState(null);
+        const [upiOptions, setUpiOptions] = useState([]);
         const startOfDay = new Date(date);
         startOfDay.setUTCHours(0, 0, 0, 0);
         const endOfDay = new Date(date);
@@ -479,13 +481,49 @@ router.get('/my-hospital', verifyToken, async (req, res) => {
     }
 });
 
+// Get UPI IDs for the current hospital (Hospital Admin)
+router.get('/my-hospital/upi-ids', verifyToken, async (req, res) => {
+    try {
+        const hospital = await Hospital.findById(req.user.hospitalId);
+        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+        res.json({ success: true, upiIds: hospital.upiIds || [] });
+    } catch (err) {
+        console.error('Error fetching UPI IDs:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// Update UPI IDs for the current hospital (Hospital Admin)
+router.put('/my-hospital/upi-ids', verifyHospitalAdmin, async (req, res) => {
+    try {
+        const { upiIds } = req.body;
+        if (!Array.isArray(upiIds)) {
+            return res.status(400).json({ success: false, message: 'upiIds must be an array' });
+        }
+        // Validate each entry
+        for (const item of upiIds) {
+            if (typeof item.label !== 'string' || typeof item.upiId !== 'string' || !item.label.trim() || !item.upiId.trim()) {
+                return res.status(400).json({ success: false, message: 'Each UPI entry must have non-empty label and upiId' });
+            }
+        }
+        const hospital = await Hospital.findById(req.user.hospitalId);
+        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+        hospital.upiIds = upiIds;
+        await hospital.save();
+        res.json({ success: true, message: 'UPI IDs updated', upiIds: hospital.upiIds });
+    } catch (err) {
+        console.error('Error updating UPI IDs:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
 // Update facilities (Hospital admin specific feature)
 router.put('/my-hospital/facilities', verifyHospitalAdmin, async (req, res) => {
     try {
         if (req.user.role === 'centraladmin' || req.user.role === 'superadmin') {
             return res.status(403).json({ success: false, message: 'Only hospital admins manage their facilities this way' });
         }
-        
+
         const { facilities } = req.body;
         if (!facilities) return res.status(400).json({ success: false, message: 'Facilities data required' });
 
@@ -507,7 +545,7 @@ router.put('/my-hospital/department-fees', verifyHospitalAdmin, async (req, res)
         if (req.user.role === 'centraladmin' || req.user.role === 'superadmin') {
             return res.status(403).json({ success: false, message: 'Only hospital admins manage their department fees this way' });
         }
-        
+
         const { departmentFees, departmentValidity } = req.body;
         if (!departmentFees || typeof departmentFees !== 'object') {
             return res.status(400).json({ success: false, message: 'Department fees data required' });
@@ -948,24 +986,24 @@ router.put('/:id/branding', verifyCentralAdmin, async (req, res) => {
 
         // Merge branding fields (only update what is provided)
         const branding = hospital.branding || {};
-        if (appName    !== undefined) branding.appName    = appName;
-        if (tagline    !== undefined) branding.tagline    = tagline;
-        if (logoUrl    !== undefined) branding.logoUrl    = logoUrl;
+        if (appName !== undefined) branding.appName = appName;
+        if (tagline !== undefined) branding.tagline = tagline;
+        if (logoUrl !== undefined) branding.logoUrl = logoUrl;
         if (faviconUrl !== undefined) branding.faviconUrl = faviconUrl;
-        if (primaryColor    !== undefined) branding.primaryColor    = primaryColor;
-        if (secondaryColor  !== undefined) branding.secondaryColor  = secondaryColor;
-        if (accentColor     !== undefined) branding.accentColor     = accentColor;
-        if (successColor    !== undefined) branding.successColor    = successColor;
+        if (primaryColor !== undefined) branding.primaryColor = primaryColor;
+        if (secondaryColor !== undefined) branding.secondaryColor = secondaryColor;
+        if (accentColor !== undefined) branding.accentColor = accentColor;
+        if (successColor !== undefined) branding.successColor = successColor;
         if (backgroundColor !== undefined) branding.backgroundColor = backgroundColor;
-        if (textColor       !== undefined) branding.textColor       = textColor;
+        if (textColor !== undefined) branding.textColor = textColor;
         if (supportEmail !== undefined) branding.supportEmail = supportEmail;
         if (supportPhone !== undefined) branding.supportPhone = supportPhone;
-        if (address      !== undefined) branding.address      = address;
-        if (websiteUrl   !== undefined) branding.websiteUrl   = websiteUrl;
+        if (address !== undefined) branding.address = address;
+        if (websiteUrl !== undefined) branding.websiteUrl = websiteUrl;
         if (instagramUrl !== undefined) branding.instagramUrl = instagramUrl;
-        if (facebookUrl  !== undefined) branding.facebookUrl  = facebookUrl;
-        if (twitterUrl   !== undefined) branding.twitterUrl   = twitterUrl;
-        if (footerText   !== undefined) branding.footerText   = footerText;
+        if (facebookUrl !== undefined) branding.facebookUrl = facebookUrl;
+        if (twitterUrl !== undefined) branding.twitterUrl = twitterUrl;
+        if (footerText !== undefined) branding.footerText = footerText;
 
         hospital.branding = branding;
         hospital.markModified('branding');

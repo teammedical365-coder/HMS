@@ -75,7 +75,7 @@ const Admin = () => {
             navigate('/');
         }
     }, [navigate]);
- 
+
     useEffect(() => {
         if (location.state?.openCreateForm) {
             setShowCreateForm(true);
@@ -94,8 +94,62 @@ const Admin = () => {
             if (res.success && res.hospital) {
                 setHospital(res.hospital);
             }
-        } catch(err) {
+        } catch (err) {
             console.error('Error fetching hospital:', err);
+        }
+    };
+
+    // UPI Management State & Functions
+    const [upiList, setUpiList] = useState([]);
+    const [newLabel, setNewLabel] = useState('');
+    const [newUpiId, setNewUpiId] = useState('');
+    const [upiLoading, setUpiLoading] = useState(false);
+    const [upiError, setUpiError] = useState('');
+    const [upiSuccess, setUpiSuccess] = useState('');
+
+    const fetchUpiIds = async () => {
+        try {
+            const res = await hospitalAPI.getUpiIds();
+            if (res.success) setUpiList(res.upiIds || []);
+        } catch (err) {
+            console.error('Error fetching UPI IDs:', err);
+        }
+    };
+
+    useEffect(() => {
+        if (hospital) fetchUpiIds();
+    }, [hospital]);
+
+    const handleAddUpi = () => {
+        if (!newLabel.trim() || !newUpiId.trim()) {
+            setUpiError('Both label and UPI ID are required');
+            return;
+        }
+        setUpiList(prev => [...prev, { label: newLabel.trim(), upiId: newUpiId.trim() }]);
+        setNewLabel('');
+        setNewUpiId('');
+        setUpiError('');
+    };
+
+    const handleDeleteUpi = (index) => {
+        setUpiList(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleSaveUpi = async () => {
+        setUpiLoading(true);
+        setUpiError('');
+        setUpiSuccess('');
+        try {
+            const res = await hospitalAPI.updateUpiIds(upiList);
+            if (res.success) {
+                setUpiSuccess('UPI IDs updated');
+            } else {
+                setUpiError('Failed to update UPI IDs');
+            }
+        } catch (err) {
+            setUpiError(err.response?.data?.message || 'Error updating UPI IDs');
+        } finally {
+            setUpiLoading(false);
         }
     };
 
@@ -362,18 +416,18 @@ const Admin = () => {
                                     <small className="form-hint">Share this password with the staff member</small>
                                 </div>
                                 <div className="form-group">
-                                     <label className="staff-label">Phone Number</label>
-                                     <input 
-                                         type="text" 
-                                         placeholder="e.g. 9876543210" 
-                                         value={createForm.phone || ''} 
-                                         onChange={e => {
-                                             const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                             setCreateForm({ ...createForm, phone: cleanVal });
-                                         }} 
-                                         className="staff-input" 
-                                     />
-                                 </div>
+                                    <label className="staff-label">Phone Number</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. 9876543210"
+                                        value={createForm.phone || ''}
+                                        onChange={e => {
+                                            const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                            setCreateForm({ ...createForm, phone: cleanVal });
+                                        }}
+                                        className="staff-input"
+                                    />
+                                </div>
                             </div>
 
                             <div className="form-row">
@@ -389,28 +443,28 @@ const Admin = () => {
                                 </div>
                                 <div className="form-group">
                                     <label className="staff-label">Assign Role * <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: '0.85rem', textTransform: 'none' }}>(Don't see your role? <a href="/admin/roles" style={{ color: '#0ea5e9' }}>Create one here</a>)</span></label>
-                                     <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
-                                         <option value="">-- Select a Role --</option>
-                                         {roles
-                                             .filter(r => !['patient', 'user'].includes(r.name.toLowerCase()))
-                                             .filter(r => {
-                                                 const isClinic = hospital?.clinicType === 'clinic';
-                                                 const name = r.name.toLowerCase();
-                                                 if (isClinic) {
-                                                     return name === 'clinic doctor';
-                                                 } else {
-                                                     return !name.includes('clinic');
-                                                 }
-                                             })
-                                             .map(role => (
-                                                 <option key={role._id} value={role._id}>
-                                                     {role.name} {role.description ? `— ${role.description}` : ''}
-                                                 </option>
-                                             ))}
-                                     </select>
+                                    <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
+                                        <option value="">-- Select a Role --</option>
+                                        {roles
+                                            .filter(r => !['patient', 'user'].includes(r.name.toLowerCase()))
+                                            .filter(r => {
+                                                const isClinic = hospital?.clinicType === 'clinic';
+                                                const name = r.name.toLowerCase();
+                                                if (isClinic) {
+                                                    return name === 'clinic doctor';
+                                                } else {
+                                                    return !name.includes('clinic');
+                                                }
+                                            })
+                                            .map(role => (
+                                                <option key={role._id} value={role._id}>
+                                                    {role.name} {role.description ? `— ${role.description}` : ''}
+                                                </option>
+                                            ))}
+                                    </select>
                                 </div>
                             </div>
-                            
+
                             {hospital && hospital.departments && hospital.departments.length > 0 && (
                                 <div className="form-row" style={{ marginTop: '10px' }}>
                                     <div className="form-group" style={{ gridColumn: '1 / -1' }}>
@@ -513,6 +567,7 @@ const Admin = () => {
                     )}
                 </div>
 
+
                 {/* EDIT USER MODAL */}
                 {editModal && (
                     <div className="modal-overlay">
@@ -547,41 +602,41 @@ const Admin = () => {
                                 </div>
 
                                 <div className="form-row">
-                                     <div className="form-group">
-                                         <label className="staff-label">Phone</label>
-                                         <input 
-                                             type="text" 
-                                             placeholder="e.g. 9876543210" 
-                                             value={editForm.phone || ''} 
-                                             onChange={e => {
-                                                 const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                                 setEditForm({ ...editForm, phone: cleanVal });
-                                             }} 
-                                             className="staff-input" 
-                                         />
-                                     </div>
-                                     <div className="form-group">
-                                         <label className="staff-label">Role</label>
-                                         <select value={editForm.roleId} onChange={e => setEditForm({ ...editForm, roleId: e.target.value })} required disabled className="staff-input">
-                                             {roles
-                                                 .filter(r => !['patient', 'user'].includes(r.name.toLowerCase()))
-                                                 .filter(r => {
-                                                     const isClinic = hospital?.clinicType === 'clinic';
-                                                     const name = r.name.toLowerCase();
-                                                     if (isClinic) {
-                                                         return name === 'clinic doctor';
-                                                     } else {
-                                                         return !name.includes('clinic');
-                                                     }
-                                                 })
-                                                 .map(role => (
-                                                     <option key={role._id} value={role._id}>{role.name}</option>
-                                                 ))}
-                                         </select>
-                                     </div>
-                                 </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Phone</label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. 9876543210"
+                                            value={editForm.phone || ''}
+                                            onChange={e => {
+                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                setEditForm({ ...editForm, phone: cleanVal });
+                                            }}
+                                            className="staff-input"
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Role</label>
+                                        <select value={editForm.roleId} onChange={e => setEditForm({ ...editForm, roleId: e.target.value })} required disabled className="staff-input">
+                                            {roles
+                                                .filter(r => !['patient', 'user'].includes(r.name.toLowerCase()))
+                                                .filter(r => {
+                                                    const isClinic = hospital?.clinicType === 'clinic';
+                                                    const name = r.name.toLowerCase();
+                                                    if (isClinic) {
+                                                        return name === 'clinic doctor';
+                                                    } else {
+                                                        return !name.includes('clinic');
+                                                    }
+                                                })
+                                                .map(role => (
+                                                    <option key={role._id} value={role._id}>{role.name}</option>
+                                                ))}
+                                        </select>
+                                    </div>
+                                </div>
 
-                                
+
                                 {hospital && hospital.departments && hospital.departments.length > 0 && (
                                     <div className="form-row" style={{ marginTop: '10px' }}>
                                         <div className="form-group" style={{ gridColumn: '1 / -1' }}>

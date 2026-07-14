@@ -41,8 +41,10 @@ const patientLocalRoutes = require('./routes/patientLocal.routes');
 const patientAppRoutes = require('./routes/patientApp.routes');
 const revenueRoutes = require('./routes/revenue.routes');
 const mfaRoutes = require('./routes/mfa.routes');
+const patientAppRoutes = require('./routes/patientApp.routes');
 
 const app = express();
+app.use('/api/patient-auth', patientAuthRoutes);
 
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet({

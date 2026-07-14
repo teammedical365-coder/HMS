@@ -47,6 +47,12 @@ const HospitalAdminDashboard = () => {
     const [hospitalStats, setHospitalStats] = useState(null);
     const [loadingStats, setLoadingStats] = useState(false);
 
+    // --- Accounts State ---
+    const [accountsSubTab, setAccountsSubTab] = useState('upi');
+    const [upiOptions, setUpiOptions] = useState([]);
+    const [newUpi, setNewUpi] = useState({ label: '', upiId: '' });
+    const [savingUpi, setSavingUpi] = useState(false);
+
     // --- Inventory State ---
     const [inventory, setInventory] = useState([]);
     const [loadingInventory, setLoadingInventory] = useState(false);
@@ -85,7 +91,48 @@ const HospitalAdminDashboard = () => {
     useEffect(() => {
         if (activeTab === 'inventory' && inventory.length === 0) fetchInventory();
         if (activeTab === 'labpricing' && labTests.length === 0) fetchLabTests();
+        if (activeTab === 'accounts' && upiOptions.length === 0) fetchUpiOptions();
     }, [activeTab]);
+
+    const fetchUpiOptions = async () => {
+        try {
+            const res = await hospitalAPI.getUpiIds();
+            setUpiOptions(res?.upiIds || []);
+        } catch (err) { console.error('Failed to fetch UPI IDs', err); }
+    };
+
+    const handleAddUpi = async (e) => {
+        e.preventDefault();
+        setSavingUpi(true);
+        try {
+            const updated = [...upiOptions, newUpi];
+            const res = await hospitalAPI.updateUpiIds(updated);
+            if (res.success) {
+                setUpiOptions(res.upiIds || []);
+                setNewUpi({ label: '', upiId: '' });
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to add UPI');
+        } finally {
+            setSavingUpi(false);
+        }
+    };
+
+    const handleDeleteUpi = async (index) => {
+        if (!window.confirm('Delete this UPI ID?')) return;
+        setSavingUpi(true);
+        try {
+            const updated = upiOptions.filter((_, i) => i !== index);
+            const res = await hospitalAPI.updateUpiIds(updated);
+            if (res.success) {
+                setUpiOptions(res.upiIds || []);
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to delete UPI');
+        } finally {
+            setSavingUpi(false);
+        }
+    };
 
     const fetchMyHospital = async () => {
         try {
@@ -435,6 +482,7 @@ const HospitalAdminDashboard = () => {
         { id: 'facilities', label: '🛏️ Facilities' },
         { id: 'inventory', label: '💊 Inventory' },
         { id: 'labpricing', label: '🧪 Lab Pricing' },
+        { id: 'accounts', label: '🏦 Accounts' },
     ];
 
     // Hospital Admin can navigate to operations but NOT to question library / test packages / medicines
@@ -467,7 +515,7 @@ const HospitalAdminDashboard = () => {
 
                 {/* Tab Nav */}
                 <div className="ha-tabs">
-                    {tabs.map(tab => (
+                    {tabs.filter(t => t.id !== 'accounts').map(tab => (
                         <button
                             key={tab.id}
                             className={`ha-tab ${activeTab === tab.id ? 'ha-tab-active' : ''}`}
@@ -476,6 +524,12 @@ const HospitalAdminDashboard = () => {
                             {tab.label}
                         </button>
                     ))}
+                    <button
+                        className={`ha-tab ${activeTab === 'accounts' ? 'ha-tab-active' : ''}`}
+                        onClick={() => setActiveTab('accounts')}
+                    >
+                        🏦 Accounts
+                    </button>
                 </div>
 
                 {/* ===================== OVERVIEW TAB ===================== */}
@@ -1276,6 +1330,77 @@ const HospitalAdminDashboard = () => {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ===================== ACCOUNTS TAB ===================== */}
+                {activeTab === 'accounts' && (
+                    <div className="tab-pane">
+                        <div className="section-header" style={{ marginBottom: '20px' }}>
+                            <h2>🏦 Accounts & Payments Configuration</h2>
+                            <p>Manage payment options, banking integrations, and gateways.</p>
+                        </div>
+                        
+                        <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
+                            <button onClick={() => setAccountsSubTab('upi')} className={`ha-tab ${accountsSubTab === 'upi' ? 'ha-tab-active' : ''}`}>UPI Settings</button>
+                            <button onClick={() => setAccountsSubTab('bank')} className={`ha-tab ${accountsSubTab === 'bank' ? 'ha-tab-active' : ''}`}>Bank Details (Coming Soon)</button>
+                            <button onClick={() => setAccountsSubTab('card')} className={`ha-tab ${accountsSubTab === 'card' ? 'ha-tab-active' : ''}`}>Card Payments (Coming Soon)</button>
+                        </div>
+
+                        {accountsSubTab === 'upi' && (
+                            <div className="admin-card" style={{ padding: '24px' }}>
+                                <h3 style={{ marginBottom: '20px', color: '#0f172a' }}>UPI Payment Configuration</h3>
+                                
+                                <form onSubmit={handleAddUpi} style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', marginBottom: '30px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                    <div style={{ flex: 1, minWidth: '200px' }}>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>Account Label / Counter Name</label>
+                                        <input type="text" value={newUpi.label} onChange={(e) => setNewUpi({ ...newUpi, label: e.target.value })} required placeholder="e.g. Main Counter, Lab Counter" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: '200px' }}>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>UPI ID</label>
+                                        <input type="text" value={newUpi.upiId} onChange={(e) => setNewUpi({ ...newUpi, upiId: e.target.value })} required placeholder="e.g. hospital@upi" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
+                                    </div>
+                                    <button type="submit" disabled={savingUpi} style={{ padding: '10px 20px', background: '#059669', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                        {savingUpi ? 'Saving...' : '+ Add UPI'}
+                                    </button>
+                                </form>
+        
+                                <h4 style={{ marginBottom: '15px', color: '#334155' }}>Configured UPI Accounts</h4>
+                                {upiOptions.length === 0 ? (
+                                    <p style={{ color: '#64748b' }}>No UPI accounts added yet.</p>
+                                ) : (
+                                    <div style={{ display: 'grid', gap: '12px' }}>
+                                        {upiOptions.map((upi, index) => (
+                                            <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{upi.label}</div>
+                                                    <div style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '4px' }}>{upi.upiId}</div>
+                                                </div>
+                                                <button type="button" onClick={() => handleDeleteUpi(index)} disabled={savingUpi} style={{ padding: '8px 16px', background: '#fee2e2', color: '#ef4444', border: '1px solid #f87171', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {accountsSubTab === 'bank' && (
+                            <div className="admin-card" style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                                <div style={{ fontSize: '3rem', marginBottom: '10px' }}>🏦</div>
+                                <h3>Bank Transfers Integration</h3>
+                                <p>This feature is coming soon.</p>
+                            </div>
+                        )}
+
+                        {accountsSubTab === 'card' && (
+                            <div className="admin-card" style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+                                <div style={{ fontSize: '3rem', marginBottom: '10px' }}>💳</div>
+                                <h3>Card Payment Gateways</h3>
+                                <p>This feature is coming soon.</p>
                             </div>
                         )}
                     </div>
