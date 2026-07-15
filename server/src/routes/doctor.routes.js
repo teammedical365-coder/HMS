@@ -708,6 +708,26 @@ router.get('/patients/:patientId/history', verifyToken, async (req, res) => {
             ]
         };
         if (req.user.hospitalId) histQuery.hospitalId = req.user.hospitalId;
+        
+        const department = req.query.department;
+        if (department && department !== 'Unassigned') {
+            histQuery.$and = [{
+                $or: [
+                    { department: { $regex: new RegExp(`^${department}$`, 'i') } },
+                    { serviceName: { $regex: new RegExp(`^${department}$`, 'i') } }
+                ]
+            }];
+        } else if (department === 'Unassigned') {
+            histQuery.$and = [{
+                $or: [
+                    { department: { $exists: false } },
+                    { department: '' },
+                    { serviceName: { $exists: false } },
+                    { serviceName: '' }
+                ]
+            }];
+        }
+
         const history = await Appointment.find(histQuery).sort({ appointmentDate: -1 });
         res.json({ success: true, history });
     } catch (error) { res.status(500).json({ success: false }); }

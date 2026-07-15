@@ -54,6 +54,9 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
       tags: ['appointment_report', file.mimetype]
     });
 
+    const Appointment = require('../models/appointment.model');
+    const appt = await Appointment.findById(appointmentId);
+
     const newReport = new Report({
       appointmentId: appointmentId,
       fileName: file.originalname,
@@ -62,17 +65,26 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
       mimeType: file.mimetype,
       size: result.size,
       uploadedByRole: uploaderRole,
+      hospitalId: (appt && appt.hospitalId) ? appt.hospitalId : (req.user ? req.user.hospitalId : undefined),
       uploadedAt: new Date()
     });
 
     await newReport.save();
 
-    // Auto-sync to Patient User profile documents so it immediately appears in Patient Portal
+    // Auto-sync to Patient User profile and Appointment prescriptions
     try {
-      const Appointment = require('../models/appointment.model');
-      const User = require('../models/user.model');
-      const appt = await Appointment.findById(appointmentId);
       if (appt) {
+        if (!Array.isArray(appt.prescriptions)) appt.prescriptions = [];
+        appt.prescriptions.push({
+          type: 'lab_report',
+          name: file.originalname || 'Medical Report',
+          url: result.url,
+          fileId: result.fileId,
+          uploadedAt: new Date()
+        });
+        await appt.save();
+
+        const User = require('../models/user.model');
         let userDoc = null;
         if (appt.userId) userDoc = await User.findById(appt.userId);
         if (!userDoc && appt.patientId) {
@@ -90,7 +102,9 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
             fileId: result.fileId,
             mimeType: file.mimetype,
             uploadedAt: new Date(),
-            uploadedBy: uploaderRole
+            uploadedBy: uploaderRole,
+            department: appt.department || appt.serviceName || 'General',
+            appointmentId: appt._id
           });
           userDoc.markModified('fertilityProfile');
           await userDoc.save();

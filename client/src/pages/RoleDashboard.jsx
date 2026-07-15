@@ -509,7 +509,7 @@ const RoleDashboard = () => {
                                                         <td style={{ padding: '14px 16px', textAlign: 'center' }}>
                                                             <div style={{ display: 'inline-flex', gap: '6px' }}>
                                                                 <button 
-                                                                    onClick={() => navigate(`/patient/${appt.userId?._id || appt.userId?.patientId || appt.patientId || appt._id}`)}
+                                                                    onClick={() => navigate(`/patient/${appt.userId?._id || appt.userId?.patientId || appt.patientId || appt._id}/department/${encodeURIComponent(appt.department || appt.serviceName || 'Unassigned')}`)}
                                                                     style={{
                                                                         background: '#eff6ff',
                                                                         color: '#2563eb',

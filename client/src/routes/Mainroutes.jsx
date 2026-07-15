@@ -147,7 +147,7 @@ const MainRoutes = () => {
                         <Route path="/services/:serviceId/doctors" element={<Navigate to="/" replace />} />
 
                         {/* Flat Architecture - Handled by Subdomains */}
-                        <Route path="patient/:id" element={<ProtectedRoute requiredPermissions={[]}><UnifiedPatientProfile /></ProtectedRoute>} />
+                        <Route path="patient/:id/department/:department" element={<ProtectedRoute requiredPermissions={[]}><UnifiedPatientProfile /></ProtectedRoute>} />
                             <Route path="my-dashboard" element={<ProtectedRoute requiredPermissions={[]}><RoleDashboard /></ProtectedRoute>} />
                             <Route path="appointment" element={<Appointment />} />
                             <Route path="appointment/success" element={<AppointmentSuccess />} />

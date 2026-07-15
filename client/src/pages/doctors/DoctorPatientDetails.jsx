@@ -63,6 +63,7 @@ const DoctorPatientDetails = () => {
 
     // Tab State for Left Panel
     const [activeTab, setActiveTab] = useState('overview');
+    const [showAllDeptHistory, setShowAllDeptHistory] = useState(false);
 
     // Time Machine Feature State
     const [viewingPastSession, setViewingPastSession] = useState(null);
@@ -143,8 +144,9 @@ const DoctorPatientDetails = () => {
                     }
 
                     const pId = res.appointment.clinicPatientId?._id || res.appointment.clinicPatientId || res.appointment.userId?._id;
+                    const deptContext = res.appointment.department || res.appointment.serviceName || 'Unassigned';
                     if (pId) {
-                        const histRes = await doctorAPI.getPatientHistory(pId);
+                        const histRes = await doctorAPI.getPatientHistory(pId, deptContext);
                         if (histRes.success) setHistory(histRes.history || histRes.data || []);
                         
                         try {
@@ -1034,16 +1036,41 @@ const DoctorPatientDetails = () => {
                     )}
 
                     {/* PAST VISITS HISTORY */}
-                    {activeTab === 'history' && (
-                        <div className="dpd-tab-panel">
-                            <h3 className="dpd-panel-title">📜 Previous Consultations ({history.length})</h3>
-                            {history.length === 0 ? (
-                                <div className="dpd-empty-hist">
-                                    <p>No previous visits recorded.</p>
+                    {activeTab === 'history' && (() => {
+                        const currentDept = (appointment?.department || appointment?.serviceName || '').toLowerCase();
+                        const filteredHistory = history.filter(h => {
+                            if (showAllDeptHistory || !currentDept) return true;
+                            if (h._id === appointmentId) return true;
+                            const hDept = (h.department || h.serviceName || h.doctorConsultation?.department || '').toLowerCase();
+                            return hDept === currentDept;
+                        });
+                        return (
+                            <div className="dpd-tab-panel">
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', padding: '10px 14px', background: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', flexWrap: 'wrap', gap: '8px' }}>
+                                    <div>
+                                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e3a8a' }}>
+                                            {showAllDeptHistory ? '🌐 Complete Hospital History across All Departments' : `📌 Showing Only ${appointment?.department || appointment?.serviceName || 'Current'} Department History`}
+                                        </div>
+                                        <div style={{ fontSize: '11px', color: '#3b82f6', marginTop: '2px' }}>
+                                            {showAllDeptHistory ? 'Viewing consultations from all departments.' : 'Other departments hidden per appointment context.'}
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAllDeptHistory(!showAllDeptHistory)}
+                                        style={{ padding: '6px 12px', background: showAllDeptHistory ? '#d97706' : '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}
+                                    >
+                                        {showAllDeptHistory ? '📌 Filter by Current Department' : '👁️ View Complete Medical History'}
+                                    </button>
                                 </div>
-                            ) : (
-                                <div className="dpd-history-list">
-                                    {history.map(h => (
+                                <h3 className="dpd-panel-title">📜 Previous Consultations ({filteredHistory.length})</h3>
+                                {filteredHistory.length === 0 ? (
+                                    <div className="dpd-empty-hist">
+                                        <p>No previous visits recorded in this department context.</p>
+                                    </div>
+                                ) : (
+                                    <div className="dpd-history-list">
+                                        {filteredHistory.map(h => (
                                         <div
                                             key={h._id}
                                             className={`dpd-history-card ${h._id === appointmentId ? 'current' : ''} ${viewingPastSession && viewingPastSession._id === h._id ? 'viewing-active' : ''}`}
@@ -1101,7 +1128,8 @@ const DoctorPatientDetails = () => {
                                 </div>
                             )}
                         </div>
-                    )}
+                    );
+                })()}
 
                     {/* REPORTS & FILES TAB */}
                     {activeTab === 'reports' && (

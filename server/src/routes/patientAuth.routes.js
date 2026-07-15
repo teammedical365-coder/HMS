@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const PatientAuth = require('../models/patientAuth.model');
 const Hospital = require('../models/hospital.model');
+const { checkPatientDoubleBooking } = require('../utils/appointmentValidator');
 
 // Universal MRN Generator matching Hospital & Clinic exact formats
 async function generateUniversalMRN(hospitalId, hospital, User) {
@@ -611,6 +612,16 @@ router.post('/book-appointment', verifyPatientToken, async (req, res) => {
             }
         }
 
+        const patientConflict = await checkPatientDoubleBooking({
+            userId: patient._id,
+            patientId: patient.patientId,
+            date,
+            time: finalTime || time
+        });
+        if (patientConflict && patientConflict.conflict) {
+            return res.status(400).json({ success: false, message: patientConflict.message });
+        }
+
         let finalAmount = Number(amount) || doctor.consultationFee || 0;
         let visitType = 'New Consultation';
 
@@ -765,62 +776,124 @@ router.get('/documents', verifyPatientToken, async (req, res) => {
 
         const hospitalName = user.hospitalId?.name || 'Our Hospital';
 
+        // Fetch all appointments for linking
+        const Appointment = require('../models/appointment.model');
+        const Report = require('../models/report.model');
+        const apptQuery = { $or: [{ userId: patientId }, { patientId: patientId }] };
+        if (hospitalId) apptQuery.hospitalId = hospitalId;
+        const patientAppts = await Appointment.find(apptQuery).sort({ appointmentDate: -1 }).lean();
+        const apptMap = {};
+        for (const a of patientAppts) {
+            apptMap[a._id.toString()] = a;
+        }
+
+        const findLinkedAppt = (item) => {
+            if (item.appointmentId && apptMap[item.appointmentId.toString()]) {
+                return apptMap[item.appointmentId.toString()];
+            }
+            if (patientAppts.length > 0) {
+                const itemDate = new Date(item.date || item.uploadedAt || item.createdAt);
+                if (!isNaN(itemDate.getTime())) {
+                    const itemDateStr = itemDate.toISOString().split('T')[0];
+                    const exactMatch = patientAppts.find(a => {
+                        const aDateStr = new Date(a.appointmentDate).toISOString().split('T')[0];
+                        const aDept = a.department || a.serviceName || '';
+                        return aDateStr === itemDateStr && (!item.department || aDept.toLowerCase() === item.department.toLowerCase());
+                    });
+                    if (exactMatch) return exactMatch;
+                    const dateMatch = patientAppts.find(a => {
+                        const aDateStr = new Date(a.appointmentDate).toISOString().split('T')[0];
+                        return aDateStr === itemDateStr;
+                    });
+                    if (dateMatch) return dateMatch;
+                }
+                if (item.department) {
+                    const deptMatch = patientAppts.find(a => (a.department || a.serviceName || '').toLowerCase() === item.department.toLowerCase());
+                    if (deptMatch) return deptMatch;
+                }
+                return patientAppts[0];
+            }
+            return null;
+        };
+
+        const enrichDoc = (docItem, defaultTitle, defaultType) => {
+            const appt = findLinkedAppt(docItem);
+            const dept = docItem.department || appt?.department || appt?.serviceName || 'General';
+            const rawDocName = docItem.doctorName || docItem.uploadedBy || appt?.doctorName || 'Doctor';
+            const docName = rawDocName.startsWith('Dr.') ? rawDocName : `Dr. ${rawDocName}`;
+            return {
+                fileName: docItem.fileName || docItem.name || defaultTitle,
+                docType: docItem.docType || defaultType,
+                url: docItem.url || docItem.fileUrl || docItem.filename || '',
+                uploadedAt: docItem.date || docItem.uploadedAt || appt?.appointmentDate || new Date(),
+                fileId: docItem.fileId || docItem._id || null,
+                uploadedBy: docName,
+                hospital: hospitalName,
+                department: dept,
+                appointmentDate: appt?.appointmentDate || docItem.date || docItem.uploadedAt || new Date(),
+                doctorName: docName,
+                appointmentStatus: appt?.status || (appt?.amount === 0 || appt?.visitType === 'Follow-up' ? 'Follow-up' : 'Completed'),
+                appointmentId: appt?._id || null
+            };
+        };
+
         const fp = user.fertilityProfile || {};
-        const baseDocs = Array.isArray(fp.documents) ? fp.documents.map(d => ({
-            ...d,
-            hospital: hospitalName
-        })) : [];
-        const prevReports = Array.isArray(fp.previousReports) ? fp.previousReports.map(r => ({
-            fileName: r.fileName || r.name || 'Medical Report',
-            docType: r.docType || 'Medical Report',
-            url: r.url || r.fileUrl || r.filename,
-            uploadedAt: r.date || r.uploadedAt || user.updatedAt || new Date(),
-            fileId: r.fileId || r._id || null,
-            uploadedBy: r.uploadedBy || 'Doctor',
-            hospital: hospitalName
-        })) : [];
-        const doctorReports = Array.isArray(fp.reports) ? fp.reports.map(r => ({
-            fileName: r.name || r.fileName || 'Medical Report',
-            docType: r.docType || 'Medical Report',
-            url: r.url || r.fileUrl || (r.filename ? ((r.filename || '').startsWith('http') ? r.filename : `/api/patients/reports/${encodeURIComponent(r.filename)}`) : null),
-            uploadedAt: r.uploadedAt || r.date || new Date(),
-            fileId: r.fileId || r._id || null,
-            uploadedBy: r.uploadedBy || 'Doctor',
-            hospital: hospitalName
-        })) : [];
+        const baseDocs = Array.isArray(fp.documents) ? fp.documents.map(d => enrichDoc(d, 'Hospital Document', 'Hospital Documents')) : [];
+        const prevReports = Array.isArray(fp.previousReports) ? fp.previousReports.map(r => enrichDoc(r, 'Medical Report', 'Medical Report')) : [];
+        const doctorReports = Array.isArray(fp.reports) ? fp.reports.map(r => enrichDoc({
+            ...r,
+            url: r.url || r.fileUrl || (r.filename ? ((r.filename || '').startsWith('http') ? r.filename : `/api/patients/reports/${encodeURIComponent(r.filename)}`) : null)
+        }, 'Medical Report', 'Medical Report')) : [];
 
         // Also fetch LabReports
         const LabReport = require('../models/labReport.model');
         const labQuery = { $or: [{ userId: patientId }, { patientId: patientId }] };
         if (hospitalId) labQuery.hospitalId = hospitalId;
         const labReports = await LabReport.find({ ...labQuery, 'data.fileUrl': { $ne: null } }).lean();
-        const labDocs = labReports.map(l => ({
-            fileName: l.data?.reportName || l.data?.testName || 'Lab Investigation Report',
-            docType: 'Lab Reports',
-            url: l.data.fileUrl,
-            uploadedAt: l.createdAt,
-            fileId: l._id,
-            uploadedBy: 'Lab',
-            hospital: hospitalName
-        }));
+        const labDocs = labReports.map(l => {
+            const appt = l.appointmentId ? apptMap[l.appointmentId.toString()] : null;
+            const dept = appt?.department || appt?.serviceName || l.department || 'General';
+            const rawDocName = appt?.doctorName || 'Doctor';
+            const docName = rawDocName.startsWith('Dr.') ? rawDocName : `Dr. ${rawDocName}`;
+            return {
+                fileName: l.data?.reportName || l.data?.testName || 'Lab Investigation Report',
+                docType: 'Lab Reports',
+                url: l.data.fileUrl,
+                uploadedAt: l.createdAt || appt?.appointmentDate || new Date(),
+                fileId: l._id,
+                uploadedBy: docName,
+                hospital: hospitalName,
+                department: dept,
+                appointmentDate: appt?.appointmentDate || l.createdAt || new Date(),
+                doctorName: docName,
+                appointmentStatus: appt?.status || (appt?.amount === 0 || appt?.visitType === 'Follow-up' ? 'Follow-up' : 'Completed'),
+                appointmentId: appt?._id || null
+            };
+        });
 
-        // Also fetch from standalone Report collection (for reports uploaded via /api/reports/upload)
-        const Appointment = require('../models/appointment.model');
-        const Report = require('../models/report.model');
-        const apptQuery = { $or: [{ userId: patientId }, { patientId: patientId }] };
-        if (hospitalId) apptQuery.hospitalId = hospitalId;
-        const patientAppts = await Appointment.find(apptQuery).select('_id').lean();
+        // Also fetch standalone Reports
         const apptIds = patientAppts.map(a => a._id);
         const standaloneReports = await Report.find({ appointmentId: { $in: apptIds } }).lean();
-        const standaloneDocs = standaloneReports.map(r => ({
-            fileName: r.fileName || 'Medical Report',
-            docType: 'Medical Report',
-            url: r.url,
-            uploadedAt: r.uploadedAt || new Date(),
-            fileId: r.fileId || r._id,
-            uploadedBy: r.uploadedByRole || 'Doctor',
-            hospital: hospitalName
-        }));
+        const standaloneDocs = standaloneReports.map(r => {
+            const appt = r.appointmentId ? apptMap[r.appointmentId.toString()] : null;
+            const dept = appt?.department || appt?.serviceName || 'General';
+            const rawDocName = appt?.doctorName || r.uploadedByRole || 'Doctor';
+            const docName = rawDocName.startsWith('Dr.') ? rawDocName : `Dr. ${rawDocName}`;
+            return {
+                fileName: r.fileName || 'Medical Report',
+                docType: 'Medical Report',
+                url: r.url,
+                uploadedAt: r.uploadedAt || appt?.appointmentDate || new Date(),
+                fileId: r.fileId || r._id,
+                uploadedBy: docName,
+                hospital: hospitalName,
+                department: dept,
+                appointmentDate: appt?.appointmentDate || r.uploadedAt || new Date(),
+                doctorName: docName,
+                appointmentStatus: appt?.status || (appt?.amount === 0 || appt?.visitType === 'Follow-up' ? 'Follow-up' : 'Completed'),
+                appointmentId: appt?._id || null
+            };
+        });
 
         const allCombined = [...baseDocs, ...prevReports, ...doctorReports, ...labDocs, ...standaloneDocs];
         

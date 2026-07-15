@@ -73,8 +73,10 @@ export const doctorAPI = {
         const response = await apiClient.get('/api/doctor/patients');
         return response.data;
     },
-    getPatientHistory: async (patientId) => {
-        const response = await apiClient.get(`/api/doctor/patients/${patientId}/history`);
+    getPatientHistory: async (patientId, department) => {
+        let url = `/api/doctor/patients/${patientId}/history`;
+        if (department) url += `?department=${encodeURIComponent(department)}`;
+        const response = await apiClient.get(url);
         return response.data;
     },
     getFullPatientProfile: async (patientId) => {
@@ -289,12 +291,24 @@ export const clinicalAPI = {
 
 export const patientAPI = {
     search: async (term) => (await apiClient.get(`/api/patients/search?term=${term}`)).data,
-    getFullHistory: async (id) => (await apiClient.get(`/api/patients/${id}/full-history`)).data,
+    getFullHistory: async (id, department) => {
+        let url = `/api/patients/${id}/full-history`;
+        const params = new URLSearchParams();
+        if (department) params.append('department', department);
+        if (params.toString()) url += `?${params.toString()}`;
+        return (await apiClient.get(url)).data;
+    },
     uploadConsent: async (id, formData) => (await apiClient.post(`/api/patients/${id}/consent`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })).data,
     getConsent: async (id) => (await apiClient.get(`/api/patients/${id}/consent`)).data,
     deleteConsent: async (id, index, fileId) => (await apiClient.delete(`/api/patients/${id}/consent/${index}`, { data: { fileId } })).data,
     uploadDocument: async (id, formData) => (await apiClient.post(`/api/patients/${id}/documents`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })).data,
-    getDocuments: async (id) => (await apiClient.get(`/api/patients/${id}/documents`)).data,
+    getDocuments: async (id, department) => {
+        let url = `/api/patients/${id}/documents`;
+        const params = new URLSearchParams();
+        if (department) params.append('department', department);
+        if (params.toString()) url += `?${params.toString()}`;
+        return (await apiClient.get(url)).data;
+    },
     deleteDocument: async (id, index, fileId, url, fileName) => (await apiClient.delete(`/api/patients/${id}/documents/${index}`, { data: { fileId, url, fileName } })).data,
     updateProfile: async (id, data) => (await apiClient.put(`/api/reception/intake/${id}`, data)).data
 };

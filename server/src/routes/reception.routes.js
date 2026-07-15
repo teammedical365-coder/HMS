@@ -8,6 +8,7 @@ const { resolveTenant } = require('../middleware/tenantMiddleware');
 const MasterAdmission = require('../models/admission.model');
 const { getTenantModels } = require('../db/tenantModels');
 const { sendAppointmentConfirmationEmail } = require('../services/email.service');
+const { checkPatientDoubleBooking } = require('../utils/appointmentValidator');
 
 const verifyReception = (req, res, next) => {
     if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
@@ -459,6 +460,18 @@ router.patch('/appointments/:id/reschedule', verifyToken, verifyReception, async
     if (req.user.hospitalId) reschQuery.hospitalId = req.user.hospitalId;
     const appt = await Appointment.findOne(reschQuery);
     if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found or unauthorized' });
+
+    const patientConflict = await checkPatientDoubleBooking({
+        userId: appt.userId,
+        patientId: appt.patientId,
+        date,
+        time,
+        excludeAppointmentId: appt._id
+    });
+    if (patientConflict && patientConflict.conflict) {
+        return res.status(400).json({ success: false, message: patientConflict.message });
+    }
+
     appt.appointmentDate = date;
     appt.appointmentTime = time;
     appt.status = 'confirmed';
@@ -650,6 +663,16 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             if (existing) {
                 return res.status(400).json({ success: false, message: 'Slot already booked for this doctor at this time!' });
             }
+        }
+
+        const patientConflict = await checkPatientDoubleBooking({
+            userId: patient._id,
+            patientId: patient.patientId,
+            date,
+            time: finalTime || time
+        });
+        if (patientConflict && patientConflict.conflict) {
+            return res.status(400).json({ success: false, message: patientConflict.message });
         }
 
         // --- ENFORCE FOLLOW-UP VALIDITY FEE ---

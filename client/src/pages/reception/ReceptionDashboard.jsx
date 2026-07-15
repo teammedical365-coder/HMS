@@ -372,7 +372,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     };
 
     const handleViewProfile = (patient) => {
-        navigate(`/patient/${patient._id || patient.patientId || patient.id}`);
+        const dept = patient.department || patient.serviceName || 'Unassigned';
+        navigate(`/patient/${patient._id || patient.patientId || patient.id}/department/${encodeURIComponent(dept)}`);
     };
 
     const openHospitalizeModal = (apt) => {

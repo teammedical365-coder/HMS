@@ -8,6 +8,7 @@ const MasterAppointment = require('../models/appointment.model');
 const MasterUser = require('../models/user.model');
 const Doctor = require('../models/doctor.model');
 const Hospital = require('../models/hospital.model');
+const { checkPatientDoubleBooking } = require('../utils/appointmentValidator');
 
 // Permission helper
 const checkAccess = (user, legacyRoles = [], requiredPermission = '') => {
@@ -99,6 +100,17 @@ router.patch('/reception/reschedule/:id', verifyToken, resolveTenant, async (req
             if (existingAppointment) {
                 return res.status(400).json({ success: false, message: 'This slot is already booked.' });
             }
+        }
+
+        const patientConflict = await checkPatientDoubleBooking({
+            userId: appointment.userId,
+            patientId: appointment.patientId,
+            date: reqDateStr,
+            time,
+            excludeAppointmentId: appointment._id
+        });
+        if (patientConflict && patientConflict.conflict) {
+            return res.status(400).json({ success: false, message: patientConflict.message });
         }
 
         appointment.appointmentDate = new Date(reqDateStr);
@@ -204,6 +216,16 @@ router.post('/create', verifyToken, resolveTenant, async (req, res) => {
             if (existingAppointment) {
                 return res.status(400).json({ success: false, message: 'This slot is already booked.' });
             }
+        }
+
+        const patientConflict = await checkPatientDoubleBooking({
+            userId,
+            patientId: user?.patientId || user?.mrn,
+            date: reqDateStr,
+            time: finalTime || appointmentTime
+        });
+        if (patientConflict && patientConflict.conflict) {
+            return res.status(400).json({ success: false, message: patientConflict.message });
         }
 
         const appointment = new Appointment({

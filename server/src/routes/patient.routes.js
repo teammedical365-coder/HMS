@@ -137,6 +137,8 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
         const realUserId = user._id;
         const patientIdStr = user.patientId || user.patientUid || userId;
 
+        let department = req.query.department;
+
         // HARD ISOLATION: Scope all data to the staff's hospital
         const hid = req.user.hospitalId;
         const hFilter = hid ? { hospitalId: hid } : {};
@@ -158,14 +160,31 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
         if (isClinicPatient) {
             const TreatmentPlan = require('../models/treatmentPlan.model');
             // Clinic patients store appointments with clinicPatientId field
-            appointments = await Appointment.find({ 
+            let clinicApptQuery = { 
                 $or: [
                     { clinicPatientId: { $in: objectIdList } }, 
                     { userId: { $in: objectIdList } }, 
                     { patientId: { $in: idList } }
                 ], 
                 ...hFilter 
-            }).lean();
+            };
+            if (department) {
+                clinicApptQuery.$and = [{
+                    $or: [
+                        { department: { $regex: new RegExp(`^${department}$`, 'i') } },
+                        { serviceName: { $regex: new RegExp(`^${department}$`, 'i') } }
+                    ]
+                }];
+            } else {
+                clinicApptQuery.$and = [{
+                    $or: [
+                        { department: { $in: [null, ''] } },
+                        { serviceName: { $in: [null, ''] } },
+                        { department: { $exists: false } }
+                    ]
+                }];
+            }
+            appointments = await Appointment.find(clinicApptQuery).lean();
             // Clinic treatment plans
             plans = await TreatmentPlan.find({ clinicPatientId: { $in: objectIdList }, ...hFilter }).lean();
 
@@ -210,16 +229,39 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
             };
         } else {
             // Hospital queries
-            const visitQuery = { $or: [{ patientId: { $in: idList } }], ...hFilter };
-            const labQuery = { $or: [{ userId: { $in: objectIdList } }, { patientId: { $in: idList } }], ...hFilter };
-            const pharmaQuery = { $or: [{ userId: { $in: objectIdList } }, { patientId: { $in: idList } }], ...hFilter };
-            const apptQuery = { $or: [{ userId: { $in: objectIdList } }, { patientId: { $in: idList } }], ...hFilter };
+            let visitQuery = { $or: [{ patientId: { $in: idList } }], ...hFilter };
+            let labQuery = { $or: [{ userId: { $in: objectIdList } }, { patientId: { $in: idList } }], ...hFilter };
+            let pharmaQuery = { $or: [{ userId: { $in: objectIdList } }, { patientId: { $in: idList } }], ...hFilter };
+            let apptQuery = { $or: [{ userId: { $in: objectIdList } }, { patientId: { $in: idList } }], ...hFilter };
 
-            [visits, labs, pharmacies, appointments] = await Promise.all([
+            if (department) {
+                apptQuery.$and = [{
+                    $or: [
+                        { department: { $regex: new RegExp(`^${department}$`, 'i') } },
+                        { serviceName: { $regex: new RegExp(`^${department}$`, 'i') } }
+                    ]
+                }];
+            } else {
+                apptQuery.$and = [{
+                    $or: [
+                        { department: { $in: [null, ''] } },
+                        { serviceName: { $in: [null, ''] } },
+                        { department: { $exists: false } }
+                    ]
+                }];
+            }
+
+            appointments = await Appointment.find(apptQuery).lean();
+
+            const deptApptIds = appointments.map(a => a._id);
+            visitQuery.appointmentId = { $in: deptApptIds };
+            labQuery.appointmentId = { $in: deptApptIds };
+            pharmaQuery.appointmentId = { $in: deptApptIds };
+
+            [visits, labs, pharmacies] = await Promise.all([
                 ClinicalVisit.find(visitQuery).lean(),
                 LabReport.find(labQuery).lean(),
-                PharmacyOrder.find(pharmaQuery).lean(),
-                Appointment.find(apptQuery).lean()
+                PharmacyOrder.find(pharmaQuery).lean()
             ]);
         }
 
@@ -470,10 +512,38 @@ router.get('/:id/documents', verifyToken, resolveTenant, async (req, res) => {
             uploadedBy: r.uploadedBy || 'Doctor'
         })) : [];
 
+        let department = req.query.department;
+        const mongoose = require('mongoose');
+
+        let deptApptIds = [];
+        const Appointment = require('../models/appointment.model');
+        let apptQuery = { $or: [{ userId: userId }, { patientId: userId }], hospitalId: hid };
+        
+        if (department) {
+            apptQuery.$and = [{
+                $or: [
+                    { department: { $regex: new RegExp(`^${department}$`, 'i') } },
+                    { serviceName: { $regex: new RegExp(`^${department}$`, 'i') } }
+                ]
+            }];
+        } else {
+            apptQuery.$and = [{
+                $or: [
+                    { department: { $in: [null, ''] } },
+                    { serviceName: { $in: [null, ''] } },
+                    { department: { $exists: false } }
+                ]
+            }];
+        }
+        
+        const appts = await Appointment.find(apptQuery).lean();
+        deptApptIds = appts.map(a => a._id);
+
         // Also check if any LabReports exist with fileUrl
         const LabReport = require('../models/labReport.model');
-        const labQuery = { $or: [{ userId: userId }, { patientId: userId }] };
+        let labQuery = { $or: [{ userId: userId }, { patientId: userId }] };
         if (hid) labQuery.hospitalId = hid;
+        labQuery.appointmentId = { $in: deptApptIds };
         const labReports = await LabReport.find({ ...labQuery, 'data.fileUrl': { $ne: null } }).lean();
         const labDocs = labReports.map(l => ({
             fileName: l.data?.reportName || l.data?.testName || 'Lab Investigation Report',

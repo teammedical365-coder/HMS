@@ -22,6 +22,7 @@ const PatientDashboard = () => {
     // Filter State
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
+    const [selectedDepartment, setSelectedDepartment] = useState('All Departments');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [selectedDoctor, setSelectedDoctor] = useState('All');
@@ -175,8 +176,21 @@ const PatientDashboard = () => {
         return ['All', ...new Set(doctors)];
     };
 
+    const getDepartmentsList = () => {
+        const deptsFromDocs = documents.map(d => d.department).filter(Boolean);
+        const deptsFromAppts = appointments.map(a => a.department || a.serviceName).filter(Boolean);
+        const unique = [...new Set([...deptsFromDocs, ...deptsFromAppts])];
+        if (!unique.includes('General')) unique.push('General');
+        return ['All Departments', ...unique.sort()];
+    };
+
     const getFilteredDocs = () => {
         let filtered = [...documents];
+
+        // Department Filter
+        if (selectedDepartment && selectedDepartment !== 'All Departments') {
+            filtered = filtered.filter(d => (d.department || 'General').toLowerCase() === selectedDepartment.toLowerCase());
+        }
 
         // Search Term
         if (searchTerm.trim()) {
@@ -553,6 +567,16 @@ const PatientDashboard = () => {
                             </select>
                         </div>
                         <div className="filter-item">
+                            <label>Department</label>
+                            <select 
+                                className="filter-select"
+                                value={selectedDepartment}
+                                onChange={(e) => setSelectedDepartment(e.target.value)}
+                            >
+                                {getDepartmentsList().map(dept => <option key={dept} value={dept}>{dept}</option>)}
+                            </select>
+                        </div>
+                        <div className="filter-item">
                             <label>Doctor/Uploaded By</label>
                             <select 
                                 className="filter-select"
@@ -594,65 +618,180 @@ const PatientDashboard = () => {
                     </div>
                 </div>
 
-                {/* Grid */}
+                {/* Grid or Grouped View */}
                 {filtered.length > 0 ? (
-                    <div className="documents-grid">
-                        {filtered.map((doc, idx) => {
-                            const mappedCat = mapCategory(doc.docType);
-                            const categoryClass = mappedCat.toLowerCase().replace(/\s+/g, '-');
-                            
-                            // Determine file icon
-                            let fileIcon = '📄';
-                            if (doc.mimeType?.includes('pdf') || doc.url?.endsWith('.pdf')) fileIcon = '📕';
-                            else if (doc.mimeType?.startsWith('image/') || doc.url?.match(/\.(jpeg|jpg|png|gif)$/i)) fileIcon = '🖼️';
-
+                    selectedDepartment !== 'All Departments' ? (
+                        (() => {
+                            const groupMap = {};
+                            filtered.forEach(doc => {
+                                const key = doc.appointmentId ? String(doc.appointmentId) : `${new Date(doc.appointmentDate || doc.uploadedAt).toISOString().split('T')[0]}_${doc.doctorName || doc.uploadedBy}`;
+                                if (!groupMap[key]) {
+                                    groupMap[key] = {
+                                        appointmentDate: doc.appointmentDate || doc.uploadedAt,
+                                        doctorName: doc.doctorName || doc.uploadedBy || 'Assigned Doctor',
+                                        status: doc.appointmentStatus || 'Completed',
+                                        docs: []
+                                    };
+                                }
+                                groupMap[key].docs.push(doc);
+                            });
+                            const groups = Object.values(groupMap);
+                            groups.sort((a, b) => {
+                                const dA = new Date(a.appointmentDate || 0);
+                                const dB = new Date(b.appointmentDate || 0);
+                                return sortOrder === 'newest' ? dB - dA : dA - dB;
+                            });
                             return (
-                                <div key={doc.fileId || idx} className="document-card">
-                                    <div>
-                                        <div className="doc-header">
-                                            <div className="doc-type-icon">{fileIcon}</div>
-                                            <div className="doc-title-area">
-                                                <h4>{doc.fileName || 'Unnamed Document'}</h4>
-                                                <span className={`doc-category-badge ${categoryClass}`}>
-                                                    {mappedCat}
-                                                </span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                    {groups.map((group, gIdx) => (
+                                        <div key={gIdx} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', background: '#ffffff', boxShadow: '0 2px 6px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
+                                            <div style={{ background: '#f8fafc', padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                    <div style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span>📅</span>
+                                                        <span>Appointment: {group.appointmentDate ? new Date(group.appointmentDate).toLocaleDateString('default', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}</span>
+                                                    </div>
+                                                    <div style={{ fontSize: '14px', color: '#475569', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span>👨‍⚕️</span>
+                                                        <span>Doctor: {group.doctorName}</span>
+                                                    </div>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                    <span style={{ fontSize: '13px', fontWeight: '600', padding: '4px 12px', borderRadius: '20px', background: group.status === 'Completed' ? '#dcfce7' : '#fef9c3', color: group.status === 'Completed' ? '#166534' : '#854d0e', border: group.status === 'Completed' ? '1px solid #bbf7d0' : '1px solid #fde047' }}>
+                                                        Status: {group.status}
+                                                    </span>
+                                                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#3b82f6', background: '#eff6ff', padding: '4px 12px', borderRadius: '20px', border: '1px solid #dbeafe' }}>
+                                                        Reports ({group.docs.length})
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="documents-grid" style={{ padding: '20px' }}>
+                                                {group.docs.map((doc, idx) => {
+                                                    const mappedCat = mapCategory(doc.docType);
+                                                    const categoryClass = mappedCat.toLowerCase().replace(/\s+/g, '-');
+                                                    let fileIcon = '📄';
+                                                    if (doc.mimeType?.includes('pdf') || doc.url?.endsWith('.pdf')) fileIcon = '📕';
+                                                    else if (doc.mimeType?.startsWith('image/') || doc.url?.match(/\.(jpeg|jpg|png|gif)$/i)) fileIcon = '🖼️';
+
+                                                    return (
+                                                        <div key={doc.fileId || idx} className="document-card">
+                                                            <div>
+                                                                <div className="doc-header">
+                                                                    <div className="doc-type-icon">{fileIcon}</div>
+                                                                    <div className="doc-title-area">
+                                                                        <h4>{doc.fileName || 'Unnamed Document'}</h4>
+                                                                        <span className={`doc-category-badge ${categoryClass}`}>
+                                                                            {mappedCat}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="doc-metadata-fields">
+                                                                    <div className="doc-meta-row">
+                                                                        <span className="label">Department:</span>
+                                                                        <span className="value">{doc.department || 'General'}</span>
+                                                                    </div>
+                                                                    <div className="doc-meta-row">
+                                                                        <span className="label">Uploaded By:</span>
+                                                                        <span className="value">{doc.uploadedBy || 'Hospital Staff'}</span>
+                                                                    </div>
+                                                                    <div className="doc-meta-row">
+                                                                        <span className="label">Upload Date:</span>
+                                                                        <span className="value">
+                                                                            {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : 'N/A'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="doc-meta-row">
+                                                                        <span className="label">Hospital:</span>
+                                                                        <span className="value">{doc.hospital || hospitalName || 'Our Hospital'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="doc-card-actions">
+                                                                <button 
+                                                                    className="doc-btn-view" 
+                                                                    onClick={() => setSelectedDocPreview(doc)}
+                                                                >
+                                                                    👁️ View
+                                                                </button>
+                                                                <button 
+                                                                    className="doc-btn-download" 
+                                                                    onClick={() => triggerDownload(doc.url, doc.fileName)}
+                                                                >
+                                                                    📥 Download
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
-                                        <div className="doc-metadata-fields">
-                                            <div className="doc-meta-row">
-                                                <span className="label">Uploaded By:</span>
-                                                <span className="value">{doc.uploadedBy || 'Hospital Staff'}</span>
-                                            </div>
-                                            <div className="doc-meta-row">
-                                                <span className="label">Upload Date:</span>
-                                                <span className="value">
-                                                    {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : 'N/A'}
-                                                </span>
-                                            </div>
-                                            <div className="doc-meta-row">
-                                                <span className="label">Hospital:</span>
-                                                <span className="value">{doc.hospital || hospitalName || 'Our Hospital'}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="doc-card-actions">
-                                        <button 
-                                            className="doc-btn-view" 
-                                            onClick={() => setSelectedDocPreview(doc)}
-                                        >
-                                            👁️ View
-                                        </button>
-                                        <button 
-                                            className="doc-btn-download" 
-                                            onClick={() => triggerDownload(doc.url, doc.fileName)}
-                                        >
-                                            📥 Download
-                                        </button>
-                                    </div>
+                                    ))}
                                 </div>
                             );
-                        })}
-                    </div>
+                        })()
+                    ) : (
+                        <div className="documents-grid">
+                            {filtered.map((doc, idx) => {
+                                const mappedCat = mapCategory(doc.docType);
+                                const categoryClass = mappedCat.toLowerCase().replace(/\s+/g, '-');
+                                
+                                // Determine file icon
+                                let fileIcon = '📄';
+                                if (doc.mimeType?.includes('pdf') || doc.url?.endsWith('.pdf')) fileIcon = '📕';
+                                else if (doc.mimeType?.startsWith('image/') || doc.url?.match(/\.(jpeg|jpg|png|gif)$/i)) fileIcon = '🖼️';
+
+                                return (
+                                    <div key={doc.fileId || idx} className="document-card">
+                                        <div>
+                                            <div className="doc-header">
+                                                <div className="doc-type-icon">{fileIcon}</div>
+                                                <div className="doc-title-area">
+                                                    <h4>{doc.fileName || 'Unnamed Document'}</h4>
+                                                    <span className={`doc-category-badge ${categoryClass}`}>
+                                                        {mappedCat}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="doc-metadata-fields">
+                                                <div className="doc-meta-row">
+                                                    <span className="label">Department:</span>
+                                                    <span className="value">{doc.department || 'General'}</span>
+                                                </div>
+                                                <div className="doc-meta-row">
+                                                    <span className="label">Uploaded By:</span>
+                                                    <span className="value">{doc.uploadedBy || 'Hospital Staff'}</span>
+                                                </div>
+                                                <div className="doc-meta-row">
+                                                    <span className="label">Upload Date:</span>
+                                                    <span className="value">
+                                                        {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : 'N/A'}
+                                                    </span>
+                                                </div>
+                                                <div className="doc-meta-row">
+                                                    <span className="label">Hospital:</span>
+                                                    <span className="value">{doc.hospital || hospitalName || 'Our Hospital'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="doc-card-actions">
+                                            <button 
+                                                className="doc-btn-view" 
+                                                onClick={() => setSelectedDocPreview(doc)}
+                                            >
+                                                👁️ View
+                                            </button>
+                                            <button 
+                                                className="doc-btn-download" 
+                                                onClick={() => triggerDownload(doc.url, doc.fileName)}
+                                            >
+                                                📥 Download
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )
                 ) : (
                     <div className="empty-state-large">
                         <div className="icon">📄</div>

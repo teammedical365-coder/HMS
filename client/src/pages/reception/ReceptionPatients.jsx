@@ -400,7 +400,7 @@ const ReceptionPatients = () => {
                                                 <td style={{ padding: '14px 14px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                     <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                                                         <button 
-                                                            onClick={() => navigate(`/patient/${appt.userId?._id || appt.userId?.patientId || appt.patientId || appt._id}`)}
+                                                            onClick={() => navigate(`/patient/${appt.userId?._id || appt.userId?.patientId || appt.patientId || appt._id}/department/${encodeURIComponent(appt.department || appt.serviceName || 'Unassigned')}`)}
                                                             style={{
                                                                 background: '#eff6ff',
                                                                 color: '#2563eb',
