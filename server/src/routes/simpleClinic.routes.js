@@ -43,7 +43,8 @@ const verifyCentralAdmin = async (req, res, next) => {
 // ==========================================
 router.get('/', verifyCentralAdmin, async (req, res) => {
     try {
-        const clinics = await Hospital.find({ clinicType: 'clinic' }).populate('adminUserId', 'name email phone');
+        const plan = req.query.plan || 'starter';
+        const clinics = await Hospital.find({ clinicType: 'clinic', subscriptionPlan: plan }).populate('adminUserId', 'name email phone');
         res.json({ success: true, clinics });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
@@ -83,13 +84,11 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             isActive: true,
             clinicType: 'clinic',
             appointmentMode: 'token',
+            subscriptionPlan: 'starter',
             tier: { maxDoctors: 1, maxReceptionists: 1, maxStaff: 0 },
         };
 
-        if (plan === 'basic') {
-            clinicData.subscriptionPlan = 'clinic_basic';
-            clinicData.tier = { maxDoctors: 5, maxReceptionists: 1, maxStaff: 3 };
-        }
+
 
         const clinic = new Hospital(clinicData);
 

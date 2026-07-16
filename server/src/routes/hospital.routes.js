@@ -61,7 +61,8 @@ const verifyHospitalAdmin = async (req, res, next) => {
 // Get all hospitals
 router.get('/', verifyCentralAdmin, async (req, res) => {
     try {
-        const hospitals = await Hospital.find({ clinicType: { $ne: 'clinic' } }).populate('adminUserId', 'name email');
+        const plan = req.query.plan || 'enterprise';
+        const hospitals = await Hospital.find({ clinicType: { $ne: 'clinic' }, subscriptionPlan: plan }).populate('adminUserId', 'name email');
         res.json({ success: true, hospitals });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
@@ -122,6 +123,11 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
         if (plan === 'multi_speciality_starter') {
             hospitalData.subscriptionPlan = 'multi_speciality_starter';
             hospitalData.tier = { maxDoctors: 15, maxStaff: 14 };
+        } else if (plan === 'clinic_basic') {
+            hospitalData.subscriptionPlan = 'clinic_basic';
+            hospitalData.tier = { maxDoctors: 5, maxStaff: 3 };
+        } else {
+            hospitalData.subscriptionPlan = 'enterprise';
         }
         
         const hospital = new Hospital(hospitalData);
@@ -206,7 +212,7 @@ router.get('/tenant-status', verifyCentralAdmin, async (req, res) => {
 // Update a hospital
 const updateHospital = async (req, res) => {
     try {
-        const { name, address, city, state, phone, email, website, logo, isActive, departments, slug, appointmentMode, customDomain } = req.body;
+        const { name, address, city, state, phone, email, website, logo, isActive, departments, slug, appointmentMode, customDomain, plan } = req.body;
         const hospital = await Hospital.findOne({ _id: req.params.id, clinicType: { $ne: 'clinic' } });
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
@@ -252,6 +258,17 @@ const updateHospital = async (req, res) => {
         if (isActive !== undefined) hospital.isActive = isActive;
         if (departments !== undefined) hospital.departments = departments;
         if (appointmentMode !== undefined && ['slot', 'token'].includes(appointmentMode)) hospital.appointmentMode = appointmentMode;
+
+        if (plan === 'multi_speciality_starter') {
+            hospital.subscriptionPlan = 'multi_speciality_starter';
+            hospital.tier = { maxDoctors: 15, maxStaff: 14 };
+        } else if (plan === 'clinic_basic') {
+            hospital.subscriptionPlan = 'clinic_basic';
+            hospital.tier = { maxDoctors: 5, maxStaff: 3 };
+        } else if (plan === 'enterprise') {
+            hospital.subscriptionPlan = 'enterprise';
+            hospital.tier = undefined; // unlimited
+        }
 
         await hospital.save();
         res.json({ success: true, message: 'Hospital updated successfully', hospital });

@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAuth, useAdminEntities } from '../../store/hooks';
 import { fetchAdminDoctors, createDoctor, updateDoctor, deleteDoctor } from '../../store/slices/adminEntitiesSlice';
-import { adminEntitiesAPI } from '../../utils/api';
+import { adminEntitiesAPI, hospitalAPI } from '../../utils/api';
+import { getSubscriptionLimits } from '../../utils/subscriptionPlans';
 import '../administration/SuperAdmin.css';
 
 const AdminDoctors = () => {
@@ -19,6 +20,23 @@ const AdminDoctors = () => {
     const [success, setSuccess] = useState('');
     const [editingDoctor, setEditingDoctor] = useState(null);
     const [showForm, setShowForm] = useState(false);
+    const [hospital, setHospital] = useState(null);
+
+    useEffect(() => {
+        const fetchHospital = async () => {
+            try {
+                const res = await hospitalAPI.getMyHospital();
+                if (res.success && res.hospital) {
+                    setHospital(res.hospital);
+                }
+            } catch (err) {
+                console.error('Error fetching hospital:', err);
+            }
+        };
+        if (user?.role === 'hospitaladmin') {
+            fetchHospital();
+        }
+    }, [user]);
 
     // Viewing doctor details modal state
     const [viewingDoctor, setViewingDoctor] = useState(null);
@@ -41,10 +59,12 @@ const AdminDoctors = () => {
         email: '',
         phone: '',
         password: '',
+        gender: '',
         specialty: '',
         experience: '',
         education: '',
         services: [],
+        departments: [],
         availability: defaultAvailability,
         successRate: '90%',
         patientsCount: '100+',
@@ -215,10 +235,12 @@ const AdminDoctors = () => {
             email: doctor.email,
             phone: doctor.phone || '',
             password: '', // Password not shown
+            gender: doctor.userId?.gender || '',
             specialty: doctor.specialty || '',
             experience: doctor.experience || '',
             education: doctor.education || '',
             services: doctor.services || [],
+            departments: doctor.departments || [],
             availability: mergedAvailability,
             successRate: doctor.successRate || '90%',
             patientsCount: doctor.patientsCount || '100+',
@@ -258,16 +280,64 @@ const AdminDoctors = () => {
                         <h1>Manage Doctors</h1>
                         <p>Add and manage doctor profiles for the user platform.</p>
                     </div>
-                    <button onClick={() => setShowForm(!showForm)} className="btn btn-primary">
-                        {showForm ? 'Cancel' : '+ Add Doctor'}
-                    </button>
+                    
+                    {/* Quota Card */}
+                    {(() => {
+                        if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
+                            const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                            const maxDoctors = limits.maxDoctors;
+                            const doctorCount = doctors.length;
+                            const remaining = Math.max(0, maxDoctors - doctorCount);
+                            
+                            return (
+                                <div style={{ display: 'flex', gap: '20px', marginLeft: 'auto', marginRight: '20px', minWidth: '300px' }}>
+                                    <div style={{ background: '#fff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', flex: 1 }}>
+                                        <div style={{ color: '#64748b', fontSize: '11px', fontWeight: 600 }}>Doctors</div>
+                                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#334155' }}>{doctorCount} / {maxDoctors} Used</div>
+                                    </div>
+                                    <div style={{ background: remaining === 0 ? '#fee2e2' : '#f0fdf4', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${remaining === 0 ? '#fecaca' : '#bbf7d0'}`, flex: 1 }}>
+                                        <div style={{ color: remaining === 0 ? '#dc2626' : '#16a34a', fontSize: '11px', fontWeight: 600 }}>Remaining</div>
+                                        <div style={{ fontSize: '16px', fontWeight: 700, color: remaining === 0 ? '#dc2626' : '#16a34a' }}>{remaining}</div>
+                                    </div>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
+
+                    <div>
+                        <button 
+                            onClick={() => setShowForm(!showForm)} 
+                            className="btn btn-primary"
+                            disabled={(() => {
+                                if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
+                                    const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                                    return doctors.length >= limits.maxDoctors;
+                                }
+                                return false;
+                            })()}
+                        >
+                            {showForm ? 'Cancel' : '+ Add Doctor'}
+                        </button>
+                        {hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter') && (() => {
+                            const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                            if (doctors.length >= limits.maxDoctors && !showForm) {
+                                return (
+                                    <div style={{ color: '#be123c', fontSize: '12px', fontWeight: 'bold', marginTop: '8px', textAlign: 'right' }}>
+                                        ⚠️ Doctor quota reached.<br/>Upgrade to add more.
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()}
+                    </div>
                 </div>
 
                 {error && <div className="error-message">{error}</div>}
                 {success && <div className="success-message">{success}</div>}
 
                 {showForm && (
-                    <div className="form-card animate-on-scroll slide-up">
+                    <div className="form-card">
                         <h2>{editingDoctor ? `Edit: ${editingDoctor.name || editingDoctor.userId?.name}` : 'Add New Doctor'}</h2>
                         <form onSubmit={handleSubmit}>
                             {/* Basic Info */}
@@ -294,6 +364,18 @@ const AdminDoctors = () => {
                                 </div>
                             </div>
 
+                            <div className="form-row">
+                                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                    <label htmlFor="gender">Gender</label>
+                                    <select name="gender" value={formData.gender} onChange={handleChange} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                        <option value="">Select Gender</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Female">Female</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             {/* Professional Details */}
                             <div className="form-row">
                                 <div className="form-group">
@@ -317,6 +399,23 @@ const AdminDoctors = () => {
                                 </div>
                             </div>
 
+                            {hospital && hospital.departments && hospital.departments.length > 0 && (
+                                <div className="form-group" style={{ marginBottom: '15px' }}>
+                                    <label htmlFor="departments">Assign Department (Optional - Leave blank to allow all)</label>
+                                    <select 
+                                        name="departments" 
+                                        value={formData.departments && formData.departments.length > 0 ? formData.departments[0] : ''} 
+                                        onChange={(e) => setFormData({ ...formData, departments: e.target.value ? [e.target.value] : [] })}
+                                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+                                    >
+                                        <option value="">All Departments</option>
+                                        {hospital.departments.map(dept => (
+                                            <option key={dept} value={dept}>{dept}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
                             <div className="form-group">
                                 <label htmlFor="services">Services (Hold Ctrl/Cmd to select multiple) *</label>
                                 <select name="services" multiple value={formData.services} onChange={handleServiceChange} required className="services-multiselect" size={5}>
@@ -336,7 +435,7 @@ const AdminDoctors = () => {
                                                 <input
                                                     type="checkbox"
                                                     id={`check-${day}`}
-                                                    checked={formData.availability[day]?.available || false}
+                                                    checked={formData.availability?.[day]?.available || false}
                                                     onChange={(e) => handleAvailabilityChange(day, 'available', e.target.checked)}
                                                     style={{ marginRight: '10px', width: '18px', height: '18px' }}
                                                 />
@@ -345,13 +444,13 @@ const AdminDoctors = () => {
                                                 </label>
                                             </div>
 
-                                            {formData.availability[day]?.available && (
+                                            {formData.availability?.[day]?.available && (
                                                 <div className="time-inputs" style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '30px' }}>
                                                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                         <small>Start</small>
                                                         <input
                                                             type="time"
-                                                            value={formData.availability[day].startTime}
+                                                            value={formData.availability?.[day]?.startTime || ''}
                                                             onChange={(e) => handleAvailabilityChange(day, 'startTime', e.target.value)}
                                                             style={{ padding: '5px' }}
                                                         />
@@ -361,7 +460,7 @@ const AdminDoctors = () => {
                                                         <small>End</small>
                                                         <input
                                                             type="time"
-                                                            value={formData.availability[day].endTime}
+                                                            value={formData.availability?.[day]?.endTime || ''}
                                                             onChange={(e) => handleAvailabilityChange(day, 'endTime', e.target.value)}
                                                             style={{ padding: '5px' }}
                                                         />
@@ -594,6 +693,13 @@ const AdminDoctors = () => {
                                             <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>Registration Number / Doc ID</label>
                                             <span style={{ fontSize: '13.5px', color: '#0f172a', fontWeight: 700, fontFamily: 'monospace' }}>
                                                 {viewingDoctor.doctorId || '—'}
+                                            </span>
+                                        </div>
+
+                                        <div>
+                                            <label style={{ fontSize: '10px', color: '#94a3b8', display: 'block', fontWeight: 700, textTransform: 'uppercase' }}>Department</label>
+                                            <span style={{ fontSize: '13.5px', color: '#0f172a', fontWeight: 700 }}>
+                                                {viewingDoctor.departments && viewingDoctor.departments.length > 0 ? viewingDoctor.departments[0] : 'All Departments'}
                                             </span>
                                         </div>
 

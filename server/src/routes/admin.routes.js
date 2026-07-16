@@ -111,7 +111,13 @@ router.get('/roles', verifyToken, async (req, res) => {
             const hid = req.user.hospitalId;
             query = { $or: [{ hospitalId: hid }, { hospitalId: null }] };
         }
-        // Central admin: see everything
+        // Central admin: see everything (or filter by plan if requested)
+        if (isCentral && req.query.plan) {
+            const hospitals = await Hospital.find({ subscriptionPlan: req.query.plan }).select('_id');
+            const hospitalIds = hospitals.map(h => h._id);
+            // Include plan-specific roles AND global roles (null)
+            query = { $or: [{ hospitalId: { $in: hospitalIds } }, { hospitalId: null }] };
+        }
 
         const roles = await Role.find(query).sort({ hospitalId: 1, name: 1 });
 
@@ -333,14 +339,16 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         const patientRole = await Role.findOne({ name: { $regex: /^patient$/i } });
         const patientRoleId = patientRole ? patientRole._id : null;
 
-        // Build exclusion filter
-        const roleExclude = { $nin: systemRoles };
-        // Note: We can't easily combine string roles and ObjectId exclusion in one $nin
-        // So we do a two-step: filter by hospitalId, then exclude by role
-        const users = await User.find(
-            { ...filter, role: { $nin: systemRoles } },
-            { password: 0 }
-        ).sort({ createdAt: -1 });
+        let planFilter = {};
+        if (isCentral && req.query.plan) {
+            const hospitals = await Hospital.find({ subscriptionPlan: req.query.plan }).select('_id');
+            const hospitalIds = hospitals.map(h => h._id);
+            planFilter = { hospitalId: { $in: hospitalIds } };
+        }
+
+        const finalFilter = { ...filter, ...planFilter, role: { $nin: systemRoles } };
+
+        const users = await User.find(finalFilter, { password: 0 }).sort({ createdAt: -1 });
 
         // Build full response and filter out patients
         const usersWithRoles = await Promise.all(users.map(async (u) => {
@@ -411,10 +419,19 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
                 const assignedRoleNameLower = (roleDoc.name || '').toLowerCase();
                 const subscriptionPlan = hospitalDoc.subscriptionPlan || 'none';
                 
+                // NEW: Reject Doctors from Staff Management
+                if (assignedRoleNameLower.includes('doctor')) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'Doctors cannot be created from Staff Management. Please use the Doctors Feed.'
+                    });
+                }
+                
                 // NEW SUBSCRIPTION VALIDATION (Basic & Multi-Speciality)
                 if (subscriptionPlan === 'clinic_basic' || subscriptionPlan === 'multi_speciality_starter') {
-                    const maxDoctors = hospitalDoc.tier?.maxDoctors ?? 99999;
-                    const maxStaff = hospitalDoc.tier?.maxStaff ?? 99999;
+                    const limits = SUBSCRIPTION_PLANS[subscriptionPlan] || { maxDoctors: Infinity, maxStaff: Infinity };
+                    const maxDoctors = limits.maxDoctors;
+                    const maxStaff = limits.maxStaff;
                     
                     const existingStaff = await User.find({ hospitalId: assignedHospitalId }).populate('role');
                     let doctorCount = 0;
@@ -434,16 +451,16 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
                     const isDoctorRole = assignedRoleNameLower.includes('doctor');
                     if (isDoctorRole) {
                         if (doctorCount >= maxDoctors) {
-                            return res.status(400).json({
+                            return res.status(403).json({
                                 success: false,
-                                message: `Doctor quota reached.\n\nMaximum ${maxDoctors} doctors are allowed in your current subscription.\n\nPlease contact Medical365 to upgrade your plan.`
+                                message: `Doctor quota reached.\n\nYour current subscription allows a maximum of ${maxDoctors} doctor accounts.\n\nPlease upgrade your subscription to add more doctors.`
                             });
                         }
                     } else {
                         if (staffCount >= maxStaff) {
-                            return res.status(400).json({
+                            return res.status(403).json({
                                 success: false,
-                                message: `Your staff quota is full.\n\nMaximum ${maxStaff} staff members are allowed in your current subscription.\n\nPlease contact Medical365 to upgrade your plan.`
+                                message: `Staff quota reached.\n\nYour current subscription allows a maximum of ${maxStaff} staff accounts.\n\nPlease upgrade your subscription to add more staff.`
                             });
                         }
                     }

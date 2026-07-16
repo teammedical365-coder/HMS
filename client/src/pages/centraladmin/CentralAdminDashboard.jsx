@@ -107,6 +107,14 @@ const CentralAdminDashboard = () => {
         return host;
     };
 
+    const getActivePlanName = (tab = activeTab) => {
+        if (tab === 'hospitals') return 'enterprise';
+        if (tab === 'multi-speciality') return 'multi_speciality_starter';
+        if (tab === 'clinic-basic') return 'clinic_basic';
+        if (tab === 'simple-clinics') return 'starter';
+        return 'enterprise';
+    };
+
     useEffect(() => {
         const role = currentUser?.role;
         // Only redirect if user is logged in but has the wrong role (not during logout)
@@ -114,11 +122,12 @@ const CentralAdminDashboard = () => {
     }, [navigate]);
 
     useEffect(() => {
-        fetchHospitals();
-        fetchRoles();
-        fetchAllStaff();
+        const plan = getActivePlanName();
+        fetchHospitals(plan);
+        fetchRoles(plan);
+        fetchAllStaff(plan);
         fetchDepartments();
-        fetchClinics();
+        fetchClinics(plan);
     }, []);
 
     // Handle navigation state from SystemRevenueDashboard "Manage Plan" button
@@ -128,14 +137,43 @@ const CentralAdminDashboard = () => {
         }
     }, [location.state]);
 
+    // Handle auto-clearing success/error notifications after 5 seconds
+    useEffect(() => {
+        if (success || error) {
+            const timer = setTimeout(() => {
+                setSuccess('');
+                setError('');
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [success, error]);
+
     // Auto-load revenue plans when the tab becomes active
     useEffect(() => {
+        const plan = getActivePlanName();
+        
+        // Clear global notifications and UI states when switching tabs
+        setSuccess('');
+        setError('');
+        setShowHospitalForm(false);
+        setShowHospitalAdminForm(false);
+        setEditHospital(null);
+        setSelectedHospital(null);
+        setShowClinicForm(false);
+        setShowClinicManagerForm(false);
+        setEditClinic(null);
+        setSelectedClinic(null);
+
         if (activeTab === 'revenue-plans' && revenuePlans.length === 0) {
             fetchRevenuePlans();
-        } else if (activeTab === 'simple-clinics' || activeTab === 'clinic-basic') {
-            fetchClinics();
-        } else if (activeTab === 'hospitals' || activeTab === 'multi-speciality') {
-            fetchHospitals();
+        } else if (activeTab === 'simple-clinics') {
+            fetchClinics(plan);
+            fetchAllStaff(plan);
+            fetchRoles(plan);
+        } else if (activeTab === 'hospitals' || activeTab === 'multi-speciality' || activeTab === 'clinic-basic') {
+            fetchHospitals(plan);
+            fetchAllStaff(plan);
+            fetchRoles(plan);
         }
     }, [activeTab]);
 
@@ -190,10 +228,10 @@ const CentralAdminDashboard = () => {
     // ==========================================
     // SIMPLE CLINIC HANDLERS
     // ==========================================
-    const fetchClinics = async () => {
+    const fetchClinics = async (plan = getActivePlanName()) => {
         try {
             setLoadingClinics(true);
-            const res = await simpleClinicAPI.getClinics();
+            const res = await simpleClinicAPI.getClinics(plan);
             if (res.success) setClinics(res.clinics);
         } catch (err) { console.error('Failed to load clinics:', err); }
         finally { setLoadingClinics(false); }
@@ -332,25 +370,25 @@ const CentralAdminDashboard = () => {
         } catch (err) { setError(err.response?.data?.message || err.message); }
     };
 
-    const fetchHospitals = async () => {
+    const fetchHospitals = async (plan = getActivePlanName()) => {
         try {
             setLoadingHospitals(true);
-            const res = await hospitalAPI.getHospitals();
+            const res = await hospitalAPI.getHospitals(plan);
             if (res.success) setHospitals(res.hospitals);
         } catch (err) { console.error(err); } finally { setLoadingHospitals(false); }
     };
 
-    const fetchRoles = async () => {
+    const fetchRoles = async (plan = getActivePlanName()) => {
         try {
-            const res = await adminAPI.getRoles();
+            const res = await adminAPI.getRoles(plan);
             if (res.success) setRoles(res.data.filter(r => !['patient'].includes(r.name?.toLowerCase())));
         } catch (err) { console.error(err); }
     };
 
-    const fetchAllStaff = async () => {
+    const fetchAllStaff = async (plan = getActivePlanName()) => {
         try {
             setLoadingStaff(true);
-            const res = await adminAPI.getUsers();
+            const res = await adminAPI.getUsers(plan);
             if (res.success) {
                 // Filter out patients, centraladmin, superadmin, hospitaladmin — only show real staff
                 const staff = res.users.filter(u => {
@@ -450,7 +488,10 @@ const CentralAdminDashboard = () => {
         e.preventDefault();
         setSavingHospital(true); setError(''); setSuccess('');
         try {
-            const plan = activeTab === 'multi-speciality' ? 'multi_speciality_starter' : 'enterprise';
+            let plan = 'enterprise';
+            if (activeTab === 'multi-speciality') plan = 'multi_speciality_starter';
+            else if (activeTab === 'clinic-basic') plan = 'clinic_basic';
+
             if (editHospital) {
                 const res = await hospitalAPI.updateHospital(editHospital._id, { ...hospitalForm, plan });
                 if (res.success) { setSuccess('Hospital updated!'); setEditHospital(null); setShowHospitalForm(false); fetchHospitals(); }
@@ -996,17 +1037,25 @@ const CentralAdminDashboard = () => {
                     ))}
                 </div>
 
-                {/* ========== HOSPITALS & MULTI-SPECIALITY TAB ========== */}
-                {(activeTab === 'hospitals' || activeTab === 'multi-speciality') && (
+                {/* ========== HOSPITALS TAB (Enterprise, Multi-Speciality, Clinic Basic) ========== */}
+                {(activeTab === 'hospitals' || activeTab === 'multi-speciality' || activeTab === 'clinic-basic') && (
                     <div>
                         <div className="admin-card">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                                 <div>
-                                    <h2>{activeTab === 'hospitals' ? '🏥 Enterprise Plan' : '🏥 Multi-Speciality Starter Plan'}</h2>
+                                    <h2>
+                                        {activeTab === 'hospitals' 
+                                            ? '🏥 Enterprise Plan' 
+                                            : activeTab === 'multi-speciality' 
+                                                ? '🏥 Multi-Speciality Starter Plan' 
+                                                : '🩺 Clinic Basic Plan'}
+                                    </h2>
                                     <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
                                         {activeTab === 'hospitals' 
                                             ? 'Click any hospital card to view full analytics' 
-                                            : 'Optimized for Multi-Speciality Hospitals and Diagnostic Centers.'}
+                                            : activeTab === 'multi-speciality'
+                                                ? 'Optimized for Multi-Speciality Hospitals and Diagnostic Centers.'
+                                                : 'Advanced clinics supporting up to 5 Doctors & 3 Staff.'}
                                     </p>
                                 </div>
                                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -1016,36 +1065,77 @@ const CentralAdminDashboard = () => {
                                     </button>
                                     <button className={showHospitalForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '10px 18px' }}
                                         onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] }); }}>
-                                        {showHospitalForm ? 'Cancel' : (activeTab === 'hospitals' ? '+ Add Enterprise Hospital' : '+ Add Multi-Speciality')}
+                                        {showHospitalForm 
+                                            ? 'Cancel' 
+                                            : activeTab === 'hospitals' 
+                                                ? '+ Add Enterprise Hospital' 
+                                                : activeTab === 'multi-speciality' 
+                                                    ? '+ Add Multi-Speciality' 
+                                                    : '+ Add Clinic Basic'}
                                     </button>
                                 </div>
                             </div>
 
-                            {activeTab === 'multi-speciality' && (
+                            {(activeTab === 'hospitals' || activeTab === 'multi-speciality' || activeTab === 'clinic-basic') && (
                                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '24px', display: 'flex', flexWrap: 'wrap', gap: '24px' }}>
                                     <div style={{ flex: '1 1 300px' }}>
-                                        <h3 style={{ color: '#0f172a', margin: '0 0 8px 0' }}>Multi-Speciality Starter Plan <span style={{ color: '#10b981', fontSize: '1.2rem', marginLeft: '8px' }}>₹30,000 / Year</span></h3>
+                                        <h3 style={{ color: '#0f172a', margin: '0 0 8px 0' }}>
+                                            {activeTab === 'hospitals' ? 'Enterprise Plan' : activeTab === 'multi-speciality' ? 'Multi-Speciality Starter Plan' : 'Clinic Basic Plan'}
+                                            <span style={{ color: '#10b981', fontSize: '1.2rem', marginLeft: '8px' }}>
+                                                {activeTab === 'hospitals' ? 'Custom Quote' : activeTab === 'multi-speciality' ? '₹30,000 / Year' : '₹15,000 / Year'}
+                                            </span>
+                                        </h3>
                                         <h4 style={{ margin: '16px 0 8px 0', color: '#334155' }}>Operational Provision</h4>
                                         <ul style={{ listStyle: 'none', padding: 0, margin: 0, color: '#475569', fontSize: '14px', lineHeight: '1.8' }}>
-                                            <li>✔ 1 Hospital Admin (Included)</li>
-                                            <li>✔ Up to 15 Doctor Accounts</li>
-                                            <li>✔ Up to 14 Staff Accounts</li>
-                                            <li>✔ 1 Branch Location</li>
-                                            <li>✔ Unlimited Patients</li>
-                                            <li>✔ All Core HMS Facilities Included</li>
-                                            <li>✔ Dedicated Support</li>
+                                            {activeTab === 'hospitals' && (
+                                                <>
+                                                    <li>✔ Unlimited Hospital Admins</li>
+                                                    <li>✔ Unlimited Doctor Accounts</li>
+                                                    <li>✔ Unlimited Staff Accounts</li>
+                                                    <li>✔ Unlimited Branch Locations</li>
+                                                    <li>✔ Unlimited Patients</li>
+                                                    <li>✔ All HMS Modules Included</li>
+                                                    <li>✔ Advanced Role & Permissions</li>
+                                                    <li>✔ Multi-Branch Management</li>
+                                                    <li>✔ Dedicated Account Manager</li>
+                                                    <li>✔ Priority Support</li>
+                                                    <li>✔ SLA Support</li>
+                                                </>
+                                            )}
+                                            {activeTab === 'multi-speciality' && (
+                                                <>
+                                                    <li>✔ 1 Hospital Admin (Included)</li>
+                                                    <li>✔ Up to 15 Doctor Accounts</li>
+                                                    <li>✔ Up to 25 Staff Accounts</li>
+                                                    <li>✔ 1 Branch Location</li>
+                                                    <li>✔ Unlimited Patients</li>
+                                                    <li>✔ All Facilities Included*</li>
+                                                    <li>✔ Dedicated Support</li>
+                                                </>
+                                            )}
+                                            {activeTab === 'clinic-basic' && (
+                                                <>
+                                                    <li>✔ 1 Hospital Admin (Included)</li>
+                                                    <li>✔ Up to 5 Doctor Accounts</li>
+                                                    <li>✔ Up to 3 Staff Accounts</li>
+                                                    <li>✔ 1 Branch Location</li>
+                                                    <li>✔ Unlimited Patients</li>
+                                                    <li>✔ All Core HMS Facilities Included</li>
+                                                    <li>✔ Dedicated Support</li>
+                                                </>
+                                            )}
                                         </ul>
                                     </div>
                                     <div style={{ flex: '1 1 300px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '16px' }}>
                                         <h4 style={{ margin: '0 0 12px 0', color: '#f59e0b' }}>✨ DIGITAL PRESENCE ADD-ON (₹5,000 EXTRA)</h4>
                                         <ul style={{ listStyle: 'none', padding: 0, margin: 0, color: '#475569', fontSize: '14px', lineHeight: '1.8' }}>
                                             <li>✔ 5-Page Custom Website</li>
-                                            <li>✔ 100% Responsive Modern UI/UX</li>
+                                            <li>✔ 100% Responsive & Modern UI/UX</li>
                                             <li>✔ Free Hosting (1 Year)</li>
                                             <li>✔ .in Domain (1 Year)</li>
                                             <li>✔ WhatsApp Integration</li>
                                             <li>✔ On-Page SEO</li>
-                                            <li>✔ Lead Generation Forms</li>
+                                            <li>✔ Lead Gen (Forms, Click-to-call)</li>
                                         </ul>
                                     </div>
                                 </div>
@@ -1058,8 +1148,6 @@ const CentralAdminDashboard = () => {
                                     <p style={{ color: '#888', fontSize: '13px', marginBottom: '16px' }}>
                                         This admin will login at <strong>/login</strong> and see only their hospital's data.
                                     </p>
-                                    {error && <div className="error-message">{error}</div>}
-                                    {success && <div className="success-message">{success}</div>}
                                     <form onSubmit={handleCreateHospitalAdmin} className="user-form">
                                         <div className="form-row">
                                             <div className="form-group">
@@ -1104,8 +1192,6 @@ const CentralAdminDashboard = () => {
                             {showHospitalForm && (
                                 <div ref={hospitalFormRef} className="ca-form-box" style={{ marginBottom: '24px' }}>
                                     <h3>{editHospital ? '✏️ Edit Hospital' : '🏥 Add New Hospital'}</h3>
-                                    {error && <div className="error-message">{error}</div>}
-                                    {success && <div className="success-message">{success}</div>}
                                     <form onSubmit={handleSaveHospital} className="user-form">
                                         <div className="form-row">
                                             <div className="form-group">
@@ -1189,7 +1275,9 @@ const CentralAdminDashboard = () => {
                                 const filteredHospitals = hospitals.filter(h => 
                                     activeTab === 'multi-speciality' 
                                         ? h.subscriptionPlan === 'multi_speciality_starter' 
-                                        : h.subscriptionPlan !== 'multi_speciality_starter'
+                                        : activeTab === 'clinic-basic'
+                                            ? h.subscriptionPlan === 'clinic_basic'
+                                            : (h.subscriptionPlan !== 'multi_speciality_starter' && h.subscriptionPlan !== 'clinic_basic')
                                 );
                                 
                                 if (filteredHospitals.length === 0) {
@@ -1266,8 +1354,6 @@ const CentralAdminDashboard = () => {
                                     {showCreateStaffForm ? 'Cancel' : '+ New Staff'}
                                 </button>
                             </div>
-                            {error && <div className="error-message">{error}</div>}
-                            {success && <div className="success-message">{success}</div>}
                             {showCreateStaffForm && (
                                 <form onSubmit={handleCreateStaff} className="user-form">
                                     <div className="form-row">
@@ -1393,31 +1479,55 @@ const CentralAdminDashboard = () => {
                     </div>
                 )}
 
-                {/* ========== CLINICS TAB (Starter & Basic) ========== */}
-                {(activeTab === 'simple-clinics' || activeTab === 'clinic-basic') && !selectedClinic && (
+                {/* ========== CLINICS TAB (Starter) ========== */}
+                {activeTab === 'simple-clinics' && !selectedClinic && (
                     <div>
                         <div className="admin-card">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                                 <div>
-                                    <h2>{activeTab === 'simple-clinics' ? '🏪 Starter Plan' : '🩺 Clinic Basic Plan'}</h2>
+                                    <h2>🏪 Starter Plan</h2>
                                     <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
-                                        {activeTab === 'simple-clinics' 
-                                            ? 'Small clinics managed by 1 doctor. All features included.'
-                                            : 'Advanced clinics supporting up to 5 Doctors & 3 Staff.'}
+                                        Small clinics managed by 1 doctor. All features included.
                                     </p>
                                 </div>
                                 <button className={showClinicForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '10px 18px' }}
                                     onClick={() => { setShowClinicForm(!showClinicForm); setEditClinic(null); setClinicForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', defaultFee: 0 }); }}>
-                                    {showClinicForm ? 'Cancel' : (activeTab === 'simple-clinics' ? '+ Add Starter Clinic' : '+ Add Basic Clinic')}
+                                    {showClinicForm ? 'Cancel' : '+ Add Starter Clinic'}
                                 </button>
                             </div>
+
+                            {activeTab === 'simple-clinics' && (
+                                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '24px', display: 'flex', flexWrap: 'wrap', gap: '24px' }}>
+                                    <div style={{ flex: '1 1 300px' }}>
+                                        <h3 style={{ color: '#0f172a', margin: '0 0 8px 0' }}>Starter Plan <span style={{ color: '#10b981', fontSize: '1.2rem', marginLeft: '8px' }}>₹6,000 / Year</span></h3>
+                                        <h4 style={{ margin: '16px 0 8px 0', color: '#334155' }}>Operational Provision</h4>
+                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, color: '#475569', fontSize: '14px', lineHeight: '1.8' }}>
+                                            <li>✔ 1 Doctor Account</li>
+                                            <li>✔ 1 Receptionist Account</li>
+                                            <li>✔ Unlimited Patients</li>
+                                            <li>✔ All Facilities Included</li>
+                                            <li>✔ Dedicated Support</li>
+                                        </ul>
+                                    </div>
+                                    <div style={{ flex: '1 1 300px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '16px' }}>
+                                        <h4 style={{ margin: '0 0 12px 0', color: '#f59e0b' }}>✨ DIGITAL PRESENCE ADD-ON (₹5,000 EXTRA)</h4>
+                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, color: '#475569', fontSize: '14px', lineHeight: '1.8' }}>
+                                            <li>✔ 5-Page Custom Website</li>
+                                            <li>✔ 100% Responsive & Modern UI/UX</li>
+                                            <li>✔ Free Hosting (1 Year)</li>
+                                            <li>✔ .in Domain (1 Year)</li>
+                                            <li>✔ WhatsApp Integration</li>
+                                            <li>✔ On-Page SEO</li>
+                                            <li>✔ Lead Gen (Forms, Click-to-call)</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Add / Edit Clinic Form */}
                             {showClinicForm && (
                                 <div className="ca-form-box" style={{ marginBottom: '24px' }}>
-                                    <h3>{editClinic ? '✏️ Edit Clinic' : (activeTab === 'simple-clinics' ? '🏪 Add Starter Clinic' : '🩺 Add Basic Clinic')}</h3>
-                                    {error && <div className="error-message">{error}</div>}
-                                    {success && <div className="success-message">{success}</div>}
+                                    <h3>{editClinic ? '✏️ Edit Clinic' : '🏪 Add Starter Clinic'}</h3>
                                     <form onSubmit={handleSaveClinic} className="user-form">
                                         <div className="form-row">
                                             <div className="form-group">
@@ -1557,9 +1667,6 @@ const CentralAdminDashboard = () => {
                             </div>
                         </div>
 
-                        {error && <div className="error-message" style={{ marginBottom: '16px' }}>⚠️ {error}</div>}
-                        {success && <div className="success-message" style={{ marginBottom: '16px' }}>✅ {success}</div>}
-
                         {loadingClinicStats ? (
                             <div className="loading-message">Loading analytics...</div>
                         ) : clinicStats ? (
@@ -1624,7 +1731,6 @@ const CentralAdminDashboard = () => {
                                         <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '20px', border: '1px solid #e2e8f0' }}>
                                             <h4 style={{ margin: '0 0 4px', color: '#1e293b' }}>Create Clinic Admin Account</h4>
                                             <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 16px' }}>This person will have full access — patients, appointments, billing, pharmacy, analytics.</p>
-                                            {error && <div className="error-message">{error}</div>}
                                             <form onSubmit={handleCreateClinicManager} className="user-form">
                                                 <div className="form-row">
                                                     <div className="form-group">

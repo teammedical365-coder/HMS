@@ -37,7 +37,7 @@ function getHospitalId(req) {
 // Create doctor
 router.post('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
-    const { name, email, phone, specialty, experience, education, services, availability, successRate, patientsCount, image, bio, consultationFee, password } = req.body;
+    const { name, email, phone, specialty, experience, education, services, availability, successRate, patientsCount, image, bio, consultationFee, password, gender } = req.body;
 
     // Validate required fields
     if (!name || !email) {
@@ -71,6 +71,7 @@ router.post('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
       password: defaultPassword,
       phone: phone || '',
       role: 'doctor',
+      gender: gender || '',
       services: services || [],
       hospitalId: getHospitalId(req)
     });
@@ -187,7 +188,7 @@ router.get('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
 // Update doctor
 router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
-    const { name, email, phone, specialty, experience, education, services, availability, successRate, patientsCount, image, bio, consultationFee, departments } = req.body;
+    const { name, email, phone, specialty, experience, education, services, availability, successRate, patientsCount, image, bio, consultationFee, departments, gender } = req.body;
 
     const doctor = await Doctor.findById(req.params.id);
     if (!doctor) {
@@ -243,6 +244,7 @@ router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
         if (email) user.email = email.toLowerCase();
         if (phone !== undefined) user.phone = phone;
         if (services !== undefined) user.services = services;
+        if (gender !== undefined) user.gender = gender;
         await user.save();
       }
     }

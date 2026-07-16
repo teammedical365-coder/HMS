@@ -192,11 +192,19 @@ export const receptionAPI = {
 export const adminAPI = {
     login: async (email, password) => (await apiClient.post('/api/admin/login', { email, password })).data,
     signup: async (name, email, password, phone) => (await apiClient.post('/api/admin/signup', { name, email, password, phone })).data,
-    getUsers: async () => (await apiClient.get('/api/admin/users')).data,
+    getUsers: async (plan) => {
+        let url = '/api/admin/users';
+        if (plan) url += `?plan=${encodeURIComponent(plan)}`;
+        return (await apiClient.get(url)).data;
+    },
     createUser: async (data) => (await apiClient.post('/api/admin/users', data)).data,
     deleteUser: async (id) => (await apiClient.delete(`/api/admin/users/${id}`)).data,
     updateUser: async (id, data) => (await apiClient.put(`/api/admin/users/${id}`, data)).data,
-    getRoles: async () => (await apiClient.get('/api/admin/roles')).data,
+    getRoles: async (plan) => {
+        let url = '/api/admin/roles';
+        if (plan) url += `?plan=${encodeURIComponent(plan)}`;
+        return (await apiClient.get(url)).data;
+    },
     createRole: async (data) => (await apiClient.post('/api/admin/roles', data)).data,
     updateRole: async (id, data) => (await apiClient.put(`/api/admin/roles/${id}`, data)).data,
     deleteRole: async (id) => (await apiClient.delete(`/api/admin/roles/${id}`)).data,
@@ -352,7 +360,11 @@ export const testPackageAPI = {
 
 export const hospitalAPI = {
     resolveHospital: async (slug) => (await apiClient.get(`/api/hospitals/resolve/${slug}`)).data,
-    getHospitals: async () => (await apiClient.get('/api/hospitals')).data,
+    getHospitals: async (plan) => {
+        let url = '/api/hospitals';
+        if (plan) url += `?plan=${encodeURIComponent(plan)}`;
+        return (await apiClient.get(url)).data;
+    },
     createHospital: async (data) => (await apiClient.post('/api/hospitals', data)).data,
     updateHospital: async (id, data) => (await apiClient.put(`/api/hospitals/${id}`, data)).data,
     deleteHospital: async (id) => (await apiClient.delete(`/api/hospitals/${id}`)).data,
@@ -475,7 +487,11 @@ export const clinicAPI = {
 };
 
 export const simpleClinicAPI = {
-    getClinics: async () => (await apiClient.get('/api/simple-clinics')).data,
+    getClinics: async (plan) => {
+        let url = '/api/simple-clinics';
+        if (plan) url += `?plan=${encodeURIComponent(plan)}`;
+        return (await apiClient.get(url)).data;
+    },
     createClinic: async (data) => (await apiClient.post('/api/simple-clinics', data)).data,
     updateClinic: async (id, data) => (await apiClient.put(`/api/simple-clinics/${id}`, data)).data,
     deleteClinic: async (id) => (await apiClient.delete(`/api/simple-clinics/${id}`)).data,
