@@ -2,10 +2,10 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    email: { type: String, required: false, unique: true, sparse: true },
+    name: { type: String, required: true, minlength: 2 },
+    email: { type: String, required: true, match: /^\S+@\S+\.\S+$/ },
     password: { type: String, required: false },
-    phone: { type: String, default: '' },
+    phone: { type: String, required: true, match: /^\d{10}$/ },
 
     // Dynamic role reference — points to a Role document in the DB
     // Special string roles: 'centraladmin' (top-level), 'hospitaladmin' (hospital-level), 'superadmin' (legacy)
@@ -35,8 +35,9 @@ const userSchema = new mongoose.Schema({
     zipCode: String,
 
     // Identity Verification (KYC)
-    aadhaarNumber: { type: String, unique: true, sparse: true, trim: true },
+    aadhaarNumber: { type: String, required: true, match: /^\d{12}$/, unique: true, trim: true },
     isAadhaarVerified: { type: Boolean, default: false },
+    age: { type: Number, required: true, min: 1 },
 
     // Clinical Profile
     patientType: { type: String, enum: ['Primary', 'Partner'], default: 'Primary' },

@@ -13,7 +13,7 @@ const SuperAdmin = () => {
 
     const [editModal, setEditModal] = useState(false);
     const [editForm, setEditForm] = useState({
-        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: ''
+        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: '', age: '', aadhaarNumber: ''
     });
     const [updating, setUpdating] = useState(false);
 
@@ -22,7 +22,7 @@ const SuperAdmin = () => {
     // Create Staff Form state
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [createForm, setCreateForm] = useState({
-        name: '', email: '', password: '', phone: '', roleId: '', file: null
+        name: '', email: '', password: '', phone: '', roleId: '', file: null, age: '', aadhaarNumber: ''
     });
     const [creating, setCreating] = useState(false);
 
@@ -75,7 +75,9 @@ const SuperAdmin = () => {
             roleId: userItem.roleId || userItem.role, // Assuming roleId is available or can be derived from role name
             currentAvatar: userItem.avatar,
             newAvatarFile: null,
-            specialty: userItem.specialty || ''
+            specialty: userItem.specialty || '',
+            age: userItem.age || '',
+            aadhaarNumber: userItem.aadhaarNumber || ''
         });
         setEditModal(true);
         setError('');
@@ -109,7 +111,9 @@ const SuperAdmin = () => {
                 phone: editForm.phone,
                 roleId: editForm.roleId,
                 avatar: avatarUrl,
-                specialty: editForm.specialty
+                specialty: editForm.specialty,
+                age: editForm.age,
+                aadhaarNumber: editForm.aadhaarNumber
             };
 
             const response = await adminAPI.updateUser(editForm.id, updateData);
@@ -256,7 +260,7 @@ const SuperAdmin = () => {
                             <div className="form-row">
                                 <div className="form-group">
                                     <label className="staff-label">Full Name *</label>
-                                    <input type="text" placeholder="e.g. Dr. Sharma" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} required className="staff-input" />
+                                    <input type="text" placeholder="e.g. Dr. Sharma" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} required minLength={2} className="staff-input" />
                                 </div>
                                 <div className="form-group">
                                     <label className="staff-label">Email Address *</label>
@@ -271,8 +275,19 @@ const SuperAdmin = () => {
                                     <small className="form-hint">Share this password with the staff member</small>
                                 </div>
                                 <div className="form-group">
-                                    <label className="staff-label">Phone Number</label>
-                                    <input type="text" placeholder="e.g. 9876543210" value={createForm.phone} onChange={e => setCreateForm({ ...createForm, phone: e.target.value })} className="staff-input" />
+                                    <label className="staff-label">Phone Number *</label>
+                                    <input type="text" placeholder="e.g. 9876543210" value={createForm.phone} onChange={e => setCreateForm({ ...createForm, phone: e.target.value })} required pattern="^\d{10}$" title="Phone number must be exactly 10 digits" className="staff-input" />
+                                </div>
+                            </div>
+
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label className="staff-label">Age *</label>
+                                    <input type="number" placeholder="Age" value={createForm.age} onChange={e => setCreateForm({ ...createForm, age: e.target.value })} required min="1" className="staff-input" />
+                                </div>
+                                <div className="form-group">
+                                    <label className="staff-label">Aadhaar Number *</label>
+                                    <input type="text" placeholder="12-digit Aadhaar" value={createForm.aadhaarNumber} onChange={e => setCreateForm({ ...createForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" className="staff-input" />
                                 </div>
                             </div>
 
@@ -400,8 +415,8 @@ const SuperAdmin = () => {
 
                                 <div className="form-row">
                                     <div className="form-group">
-                                        <label className="staff-label">Name</label>
-                                        <input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} required className="staff-input" />
+                                        <label className="staff-label">Name *</label>
+                                        <input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} required minLength={2} className="staff-input" />
                                     </div>
                                     <div className="form-group">
                                         <label className="staff-label">Email</label>
@@ -411,8 +426,8 @@ const SuperAdmin = () => {
 
                                 <div className="form-row">
                                     <div className="form-group">
-                                        <label className="staff-label">Phone</label>
-                                        <input type="text" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} className="staff-input" />
+                                        <label className="staff-label">Phone *</label>
+                                        <input type="text" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} required pattern="^\d{10}$" title="Phone number must be exactly 10 digits" className="staff-input" />
                                     </div>
                                     <div className="form-group">
                                         <label className="staff-label">Role</label>
@@ -421,6 +436,17 @@ const SuperAdmin = () => {
                                                 <option key={role._id} value={role._id}>{role.name}</option>
                                             ))}
                                         </select>
+                                    </div>
+                                </div>
+
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="staff-label">Age *</label>
+                                        <input type="number" value={editForm.age} onChange={e => setEditForm({ ...editForm, age: e.target.value })} required min="1" className="staff-input" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Aadhaar Number *</label>
+                                        <input type="text" value={editForm.aadhaarNumber} onChange={e => setEditForm({ ...editForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" className="staff-input" />
                                     </div>
                                 </div>
 

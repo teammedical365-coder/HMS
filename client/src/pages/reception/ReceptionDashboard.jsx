@@ -619,6 +619,21 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             setSaving(false); return;
         }
 
+        if (intakeForm.firstName.trim().length < 2) {
+            alert("Name must be at least 2 characters.");
+            setSaving(false); return;
+        }
+
+        if (!intakeForm.age || intakeForm.age < 1) {
+            alert("Age is required and must be a positive number greater than 0.");
+            setSaving(false); return;
+        }
+
+        if (!intakeForm.aadhaar || !/^\d{12}$/.test(intakeForm.aadhaar)) {
+            alert("Aadhaar Number is required and must be exactly 12 digits.");
+            setSaving(false); return;
+        }
+
         if (!/^\d{10}$/.test(intakeForm.mobile)) {
             alert("Mobile number must be exactly 10 digits.");
             setSaving(false); return;
@@ -930,6 +945,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         placeholder="Enter 12-digit Aadhaar"
                                         value={intakeForm.aadhaar || ''}
                                         onChange={handleInputChange}
+                                        required
+                                        pattern="^\d{12}$"
+                                        title="Aadhaar number must be exactly 12 digits"
                                         style={{
                                             borderColor: '#ccc',
                                             fontWeight: 'bold'
@@ -939,10 +957,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             </div>
 
                             <div className="form-row" style={{ marginTop: '14px' }}>
-                                <div className="field"><label>First Name</label><input name="firstName" value={intakeForm.firstName} onChange={handleInputChange} /></div>
+                                <div className="field"><label>First Name <span style={{ color: '#ef4444', fontSize: '12px' }}>*</span></label><input name="firstName" value={intakeForm.firstName} onChange={handleInputChange} required minLength={2} /></div>
                                 <div className="field"><label>Last Name</label><input name="lastName" value={intakeForm.lastName} onChange={handleInputChange} /></div>
-                                <div className="field"><label>Mobile</label><input name="mobile" value={intakeForm.mobile} onChange={handleInputChange} /></div>
-                                <div className="field"><label>Age</label><input name="age" value={intakeForm.age} onChange={handleInputChange} /></div>
+                                <div className="field"><label>Mobile <span style={{ color: '#ef4444', fontSize: '12px' }}>*</span></label><input name="mobile" value={intakeForm.mobile} onChange={handleInputChange} required pattern="^\d{10}$" title="Phone number must be exactly 10 digits" /></div>
+                                <div className="field"><label>Age <span style={{ color: '#ef4444', fontSize: '12px' }}>*</span></label><input type="number" name="age" value={intakeForm.age} onChange={handleInputChange} required min="1" /></div>
                             </div>
                             <div className="form-row" style={{ marginTop: '0px' }}>
                                 <div className="field" style={{ flex: '7' }}>

@@ -2,9 +2,11 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const patientAuthSchema = new mongoose.Schema({
-    name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, trim: true, lowercase: true },
-    mobile: { type: String, required: true, trim: true },
+    name: { type: String, required: true, trim: true, minlength: 2 },
+    email: { type: String, required: true, trim: true, lowercase: true, match: /^\S+@\S+\.\S+$/ },
+    mobile: { type: String, required: true, trim: true, match: /^\d{10}$/ },
+    age: { type: Number, required: true, min: 1 },
+    aadhaarNumber: { type: String, required: true, match: /^\d{12}$/ },
     password: { type: String, required: true },
     
     // Multi-tenant context (must belong to a specific hospital)

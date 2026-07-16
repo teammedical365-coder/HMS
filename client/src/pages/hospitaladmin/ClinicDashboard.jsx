@@ -705,7 +705,7 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [patientHistory, setPatientHistory] = useState(null);
     const [loadingHistory, setLoadingHistory] = useState(false);
-    const [form, setForm] = useState({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '', relatives: [] });
+    const [form, setForm] = useState({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '', relatives: [], age: '', aadhaarNumber: '' });
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState({ type: '', text: '' });
     const [justRegistered, setJustRegistered] = useState(null);
@@ -803,13 +803,17 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
 
     const handleRegister = async (e) => {
         e.preventDefault();
+        if (form.name.trim().length < 2) return flash('error', 'Name must be at least 2 characters');
+        if (!/^\d{10}$/.test(form.phone)) return flash('error', 'Phone number must be exactly 10 digits');
+        if (!form.age || form.age < 1) return flash('error', 'Age is required and must be greater than 0');
+        if (!form.aadhaarNumber || !/^\d{12}$/.test(form.aadhaarNumber)) return flash('error', 'Aadhaar Number is required and must be exactly 12 digits');
         setSaving(true);
         try {
             const r = await clinicAPI.registerPatient(form);
             if (r.success) {
                 if (!r.existing) setPatients(prev => [r.patient, ...prev]);
                 setJustRegistered(r.patient);
-                setForm({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '', relatives: [] });
+                setForm({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '', relatives: [], age: '', aadhaarNumber: '' });
                 try {
                     const pdf = generateRegistrationSlipPDF(r.patient);
                     if (setPendingDownload) {
@@ -1113,14 +1117,22 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                             <form onSubmit={handleRegister} className="clinic-form-grid">
                                 <div className="clinic-form-group">
                                     <label>Full Name *</label>
-                                    <input className="clinic-input" placeholder="Patient's full name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+                                    <input className="clinic-input" placeholder="Patient's full name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required minLength={2} />
                                 </div>
                                 <div className="clinic-form-group">
                                     <label>Phone *</label>
                                     <input className="clinic-input" type="tel" placeholder="10-digit mobile number" maxLength={10}
                                         value={form.phone}
                                         onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
-                                        pattern="[0-9]{10}" title="Enter a valid 10-digit mobile number" required />
+                                        pattern="^\d{10}$" title="Enter a valid 10-digit mobile number" required />
+                                </div>
+                                <div className="clinic-form-group">
+                                    <label>Age *</label>
+                                    <input className="clinic-input" type="number" placeholder="Age" value={form.age} onChange={e => setForm(f => ({ ...f, age: e.target.value }))} required min="1" />
+                                </div>
+                                <div className="clinic-form-group">
+                                    <label>Aadhaar Number *</label>
+                                    <input className="clinic-input" type="text" placeholder="12-digit Aadhaar" value={form.aadhaarNumber} onChange={e => setForm(f => ({ ...f, aadhaarNumber: e.target.value }))} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
                                 </div>
                                 <div className="clinic-form-group">
                                     <label>Email</label>

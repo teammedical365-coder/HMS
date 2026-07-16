@@ -29,7 +29,7 @@ const CentralAdminDashboard = () => {
 
     // Hospital Admin creation
     const [showHospitalAdminForm, setShowHospitalAdminForm] = useState(false);
-    const [hospitalAdminForm, setHospitalAdminForm] = useState({ name: '', email: '', password: '', phone: '', hospitalId: '', file: null });
+    const [hospitalAdminForm, setHospitalAdminForm] = useState({ name: '', email: '', password: '', phone: '', hospitalId: '', file: null, age: '', aadhaarNumber: '' });
     const [creatingHospitalAdmin, setCreatingHospitalAdmin] = useState(false);
 
     // Hospital Detail View
@@ -49,7 +49,7 @@ const CentralAdminDashboard = () => {
     // Staff
     const [roles, setRoles] = useState([]);
     const [showCreateStaffForm, setShowCreateStaffForm] = useState(false);
-    const [createStaffForm, setCreateStaffForm] = useState({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', department: '', file: null });
+    const [createStaffForm, setCreateStaffForm] = useState({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', department: '', file: null, age: '', aadhaarNumber: '' });
     const [creatingStaff, setCreatingStaff] = useState(false);
     const [staffHospitalFilter, setStaffHospitalFilter] = useState('');
     const [allStaff, setAllStaff] = useState([]);
@@ -70,10 +70,10 @@ const CentralAdminDashboard = () => {
     const [clinicStats, setClinicStats] = useState(null);
     const [loadingClinicStats, setLoadingClinicStats] = useState(false);
     const [showClinicManagerForm, setShowClinicManagerForm] = useState(false);
-    const [clinicManagerForm, setClinicManagerForm] = useState({ name: '', email: '', password: '', phone: '' });
+    const [clinicManagerForm, setClinicManagerForm] = useState({ name: '', email: '', password: '', phone: '', age: '', aadhaarNumber: '' });
     const [savingClinicManager, setSavingClinicManager] = useState(false);
     const [showClinicStaffForm, setShowClinicStaffForm] = useState(false);
-    const [clinicStaffForm, setClinicStaffForm] = useState({ name: '', email: '', password: '', phone: '', staffRole: 'doctor' });
+    const [clinicStaffForm, setClinicStaffForm] = useState({ name: '', email: '', password: '', phone: '', staffRole: 'doctor', age: '', aadhaarNumber: '' });
     const [savingClinicStaff, setSavingClinicStaff] = useState(false);
     const [clinicSubscriptions, setClinicSubscriptions] = useState([]);
     const [subscriptionRateForm, setSubscriptionRateForm] = useState({ ratePerPatient: '', billingEnabled: false });
@@ -286,8 +286,8 @@ const CentralAdminDashboard = () => {
             const res = await simpleClinicAPI.createManager(selectedClinic._id, clinicManagerForm);
             if (res.success) {
                 setSuccess(`Admin created! ${res.manager.name} can now login at /login with email: ${res.manager.email}`);
+                setClinicManagerForm({ name: '', email: '', password: '', phone: '', age: '', aadhaarNumber: '' });
                 setShowClinicManagerForm(false);
-                setClinicManagerForm({ name: '', email: '', password: '', phone: '' });
                 // Refresh clinic list and re-open detail with fresh data
                 setSelectedClinic(prev => ({ ...prev, adminUserId: res.manager }));
                 await fetchClinics();
@@ -309,8 +309,8 @@ const CentralAdminDashboard = () => {
             const res = await simpleClinicAPI.createStaff(selectedClinic._id, clinicStaffForm);
             if (res.success) {
                 setSuccess('Staff member added!');
+                setClinicStaffForm({ name: '', email: '', password: '', phone: '', staffRole: 'doctor', age: '', aadhaarNumber: '' });
                 setShowClinicStaffForm(false);
-                setClinicStaffForm({ name: '', email: '', password: '', phone: '', roleId: '' });
                 openClinicDetail(selectedClinic);
             } else setError(res.message);
         } catch (err) { setError(err.response?.data?.message || err.message); }
@@ -494,8 +494,8 @@ const CentralAdminDashboard = () => {
                         }
                     } catch { /* avatar upload failure is non-fatal */ }
                 }
-                setSuccess(`✅ Hospital Admin created! Login: ${hospitalAdminForm.email}`);
-                setHospitalAdminForm({ name: '', email: '', password: '', phone: '', hospitalId: '', file: null });
+                setSuccess(`✅ Hospital Admin account created! Login: ${hospitalAdminForm.email}`);
+                setHospitalAdminForm({ name: '', email: '', password: '', phone: '', hospitalId: '', file: null, age: '', aadhaarNumber: '' });
                 setShowHospitalAdminForm(false);
                 fetchHospitals();
             }
@@ -530,7 +530,7 @@ const CentralAdminDashboard = () => {
             });
             if (res.success) {
                 setSuccess(`✅ Staff account created! Login: ${createStaffForm.email}`);
-                setCreateStaffForm({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', file: null });
+                setCreateStaffForm({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', file: null, age: '', aadhaarNumber: '' });
                 setShowCreateStaffForm(false);
                 fetchAllStaff();
             }
@@ -1021,7 +1021,7 @@ const CentralAdminDashboard = () => {
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label className="staff-label">Full Name *</label>
-                                                <input type="text" className="staff-input" placeholder="e.g. Dr. Ramesh Kumar" value={hospitalAdminForm.name} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, name: e.target.value })} required />
+                                                <input type="text" className="staff-input" placeholder="e.g. Dr. Ramesh Kumar" value={hospitalAdminForm.name} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, name: e.target.value })} required minLength={2} />
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Email *</label>
@@ -1034,8 +1034,21 @@ const CentralAdminDashboard = () => {
                                                 <input type="text" className="staff-input" placeholder="Temporary password" value={hospitalAdminForm.password} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, password: e.target.value })} required />
                                             </div>
                                             <div className="form-group">
-                                                <label className="staff-label">Phone</label>
-                                                <input type="text" className="staff-input" placeholder="Phone number" maxLength={10} value={hospitalAdminForm.phone} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, phone: e.target.value })} />
+                                                <label className="staff-label">Phone *</label>
+                                                <input type="tel" className="staff-input" placeholder="Phone number" maxLength={10} value={hospitalAdminForm.phone} onChange={e => {
+                                                    const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                    setHospitalAdminForm({ ...hospitalAdminForm, phone: cleanVal });
+                                                }} required pattern="\d{10}" title="Phone number must be exactly 10 digits" />
+                                            </div>
+                                        </div>
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label className="staff-label">Age *</label>
+                                                <input type="number" className="staff-input" placeholder="Age" value={hospitalAdminForm.age} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, age: e.target.value })} required min="1" />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Aadhaar Number *</label>
+                                                <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={hospitalAdminForm.aadhaarNumber} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
                                             </div>
                                         </div>
                                         <div className="form-row">
@@ -1093,14 +1106,17 @@ const CentralAdminDashboard = () => {
                                                 <input type="text" className="staff-input" placeholder="e.g. Maharashtra" value={hospitalForm.state} onChange={e => setHospitalForm({ ...hospitalForm, state: e.target.value })} />
                                             </div>
                                             <div className="form-group">
-                                                <label className="staff-label">Phone</label>
-                                                <input type="text" className="staff-input" placeholder="Hospital contact number" maxLength={10} value={hospitalForm.phone} onChange={e => setHospitalForm({ ...hospitalForm, phone: e.target.value })} />
+                                                <label className="staff-label">Phone *</label>
+                                                <input type="tel" className="staff-input" placeholder="Hospital contact number" maxLength={10} value={hospitalForm.phone} onChange={e => {
+                                                    const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                    setHospitalForm({ ...hospitalForm, phone: cleanVal });
+                                                }} required pattern="\d{10}" title="Phone number must be exactly 10 digits" />
                                             </div>
                                         </div>
                                         <div className="form-row">
                                             <div className="form-group">
-                                                <label className="staff-label">Email</label>
-                                                <input type="email" className="staff-input" value={hospitalForm.email} onChange={e => setHospitalForm({ ...hospitalForm, email: e.target.value })} />
+                                                <label className="staff-label">Email *</label>
+                                                <input type="email" className="staff-input" placeholder="example@gmail.com" value={hospitalForm.email} onChange={e => setHospitalForm({ ...hospitalForm, email: e.target.value })} required />
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Website</label>
@@ -1260,7 +1276,7 @@ const CentralAdminDashboard = () => {
                                     <div className="form-row">
                                         <div className="form-group">
                                             <label className="staff-label">Full Name *</label>
-                                            <input type="text" placeholder="e.g. Dr. Sharma" value={createStaffForm.name} onChange={e => setCreateStaffForm({ ...createStaffForm, name: e.target.value })} required className="staff-input" />
+                                            <input type="text" placeholder="e.g. Dr. Sharma" value={createStaffForm.name} onChange={e => setCreateStaffForm({ ...createStaffForm, name: e.target.value })} required minLength={2} className="staff-input" />
                                         </div>
                                         <div className="form-group">
                                             <label className="staff-label">Email Address *</label>
@@ -1273,17 +1289,31 @@ const CentralAdminDashboard = () => {
                                             <input type="text" placeholder="Temporary password" value={createStaffForm.password} onChange={e => setCreateStaffForm({ ...createStaffForm, password: e.target.value })} required className="staff-input" />
                                         </div>
                                         <div className="form-group">
-                                            <label className="staff-label">Phone</label>
+                                            <label className="staff-label">Phone *</label>
                                             <input
-                                                type="text"
+                                                type="tel"
                                                 placeholder="e.g. 9876543210"
+                                                maxLength={10}
                                                 value={createStaffForm.phone || ''}
                                                 onChange={e => {
                                                     const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
                                                     setCreateStaffForm({ ...createStaffForm, phone: cleanVal });
                                                 }}
+                                                required
+                                                pattern="\d{10}"
+                                                title="Phone number must be exactly 10 digits"
                                                 className="staff-input"
                                             />
+                                        </div>
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label className="staff-label">Age *</label>
+                                            <input type="number" placeholder="Age" value={createStaffForm.age} onChange={e => setCreateStaffForm({ ...createStaffForm, age: e.target.value })} required min="1" className="staff-input" />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="staff-label">Aadhaar Number *</label>
+                                            <input type="text" placeholder="12-digit Aadhaar" value={createStaffForm.aadhaarNumber} onChange={e => setCreateStaffForm({ ...createStaffForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" className="staff-input" />
                                         </div>
                                     </div>
                                     <button type="submit" disabled={creatingStaff || !createStaffForm.hospitalId} className="submit-button">
@@ -1394,16 +1424,19 @@ const CentralAdminDashboard = () => {
                                                     onChange={e => setClinicForm({ ...clinicForm, state: e.target.value })} />
                                             </div>
                                             <div className="form-group">
-                                                <label className="staff-label">Phone</label>
-                                                <input type="text" className="staff-input" placeholder="Clinic contact number" maxLength={10} value={clinicForm.phone}
-                                                    onChange={e => setClinicForm({ ...clinicForm, phone: e.target.value })} />
+                                                <label className="staff-label">Phone *</label>
+                                                <input type="tel" className="staff-input" placeholder="Clinic contact number" maxLength={10} value={clinicForm.phone}
+                                                    onChange={e => {
+                                                        const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                        setClinicForm({ ...clinicForm, phone: cleanVal });
+                                                    }} required pattern="\d{10}" title="Phone number must be exactly 10 digits" />
                                             </div>
                                         </div>
                                         <div className="form-row">
                                             <div className="form-group">
-                                                <label className="staff-label">Email</label>
+                                                <label className="staff-label">Email *</label>
                                                 <input type="email" className="staff-input" placeholder="clinic@email.com" value={clinicForm.email}
-                                                    onChange={e => setClinicForm({ ...clinicForm, email: e.target.value })} />
+                                                    onChange={e => setClinicForm({ ...clinicForm, email: e.target.value })} required />
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Consultation Fee (₹)</label>
@@ -1565,7 +1598,7 @@ const CentralAdminDashboard = () => {
                                                     <div className="form-group">
                                                         <label className="staff-label">Full Name *</label>
                                                         <input type="text" className="staff-input" placeholder="e.g. Dr. Ramesh Sharma" value={clinicManagerForm.name}
-                                                            onChange={e => setClinicManagerForm({ ...clinicManagerForm, name: e.target.value })} required />
+                                                            onChange={e => setClinicManagerForm({ ...clinicManagerForm, name: e.target.value })} required minLength={2} />
                                                     </div>
                                                     <div className="form-group">
                                                         <label className="staff-label">Email Address *</label>
@@ -1580,9 +1613,22 @@ const CentralAdminDashboard = () => {
                                                             onChange={e => setClinicManagerForm({ ...clinicManagerForm, password: e.target.value })} required />
                                                     </div>
                                                     <div className="form-group">
-                                                        <label className="staff-label">Phone</label>
-                                                        <input type="text" className="staff-input" placeholder="Phone number" maxLength={10} value={clinicManagerForm.phone}
-                                                            onChange={e => setClinicManagerForm({ ...clinicManagerForm, phone: e.target.value })} />
+                                                        <label className="staff-label">Phone *</label>
+                                                        <input type="tel" className="staff-input" placeholder="Phone number" maxLength={10} value={clinicManagerForm.phone}
+                                                            onChange={e => {
+                                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                                setClinicManagerForm({ ...clinicManagerForm, phone: cleanVal });
+                                                            }} required pattern="\d{10}" title="Phone number must be exactly 10 digits" />
+                                                    </div>
+                                                </div>
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Age *</label>
+                                                        <input type="number" className="staff-input" placeholder="Age" value={clinicManagerForm.age} onChange={e => setClinicManagerForm({ ...clinicManagerForm, age: e.target.value })} required min="1" />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Aadhaar Number *</label>
+                                                        <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={clinicManagerForm.aadhaarNumber} onChange={e => setClinicManagerForm({ ...clinicManagerForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
                                                     </div>
                                                 </div>
                                                 <button type="submit" disabled={savingClinicManager} className="submit-button" style={{ marginTop: '4px' }}>
@@ -1620,7 +1666,7 @@ const CentralAdminDashboard = () => {
                                                     <div className="form-group">
                                                         <label className="staff-label">Full Name *</label>
                                                         <input type="text" className="staff-input" placeholder="Staff name" value={clinicStaffForm.name}
-                                                            onChange={e => setClinicStaffForm({ ...clinicStaffForm, name: e.target.value })} required />
+                                                            onChange={e => setClinicStaffForm({ ...clinicStaffForm, name: e.target.value })} required minLength={2} />
                                                     </div>
                                                     <div className="form-group">
                                                         <label className="staff-label">Email *</label>
@@ -1635,9 +1681,22 @@ const CentralAdminDashboard = () => {
                                                             onChange={e => setClinicStaffForm({ ...clinicStaffForm, password: e.target.value })} required />
                                                     </div>
                                                     <div className="form-group">
-                                                        <label className="staff-label">Phone</label>
-                                                        <input type="text" className="staff-input" placeholder="Phone number" maxLength={10} value={clinicStaffForm.phone}
-                                                            onChange={e => setClinicStaffForm({ ...clinicStaffForm, phone: e.target.value })} />
+                                                        <label className="staff-label">Phone *</label>
+                                                        <input type="tel" className="staff-input" placeholder="Phone number" maxLength={10} value={clinicStaffForm.phone}
+                                                            onChange={e => {
+                                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                                setClinicStaffForm({ ...clinicStaffForm, phone: cleanVal });
+                                                            }} required pattern="\d{10}" title="Phone number must be exactly 10 digits" />
+                                                    </div>
+                                                </div>
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Age *</label>
+                                                        <input type="number" className="staff-input" placeholder="Age" value={clinicStaffForm.age} onChange={e => setClinicStaffForm({ ...clinicStaffForm, age: e.target.value })} required min="1" />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Aadhaar Number *</label>
+                                                        <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={clinicStaffForm.aadhaarNumber} onChange={e => setClinicStaffForm({ ...clinicStaffForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
                                                     </div>
                                                 </div>
                                                 <div className="form-group">

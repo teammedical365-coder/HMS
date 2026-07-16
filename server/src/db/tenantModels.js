@@ -17,10 +17,10 @@ const bcrypt = require('bcryptjs');
 // ─── Schema Definitions (reusable, not bound to any connection) ───────────────
 
 const userSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    email: { type: String, required: false, unique: true, sparse: true },
+    name: { type: String, required: true, minlength: 2 },
+    email: { type: String, required: true, match: /^\S+@\S+\.\S+$/ },
     password: { type: String, required: false },
-    phone: { type: String, default: '' },
+    phone: { type: String, required: true, match: /^\d{10}$/ },
     role: { type: mongoose.Schema.Types.Mixed, default: 'patient' },
     hospitalId: { type: mongoose.Schema.Types.ObjectId, default: null },
     patientId: { type: String, unique: true, sparse: true },
@@ -34,8 +34,9 @@ const userSchema = new mongoose.Schema({
     state: String,
     zipCode: String,
     mrn: { type: String, unique: true, sparse: true },
-    aadhaarNumber: { type: String, unique: true, sparse: true, trim: true },
+    aadhaarNumber: { type: String, required: true, match: /^\d{12}$/, unique: true, trim: true },
     isAadhaarVerified: { type: Boolean, default: false },
+    age: { type: Number, required: true, min: 1 },
     patientType: { type: String, enum: ['Primary', 'Partner'], default: 'Primary' },
     departments: [{ type: String }],
     avatar: { type: String, default: null }

@@ -21,15 +21,28 @@ const doctorSchema = new mongoose.Schema({
   },
   name: {
     type: String,
-    required: [true, 'Doctor name is required']
+    required: [true, 'Doctor name is required'],
+    minlength: 2
   },
   email: {
     type: String,
-    required: [true, 'Email is required']
+    required: [true, 'Email is required'],
+    match: /^\S+@\S+\.\S+$/
   },
   phone: {
     type: String,
-    default: ''
+    required: [true, 'Phone number is required'],
+    match: /^\d{10}$/
+  },
+  age: {
+    type: Number,
+    required: [true, 'Age is required'],
+    min: 1
+  },
+  aadhaarNumber: {
+    type: String,
+    required: [true, 'Aadhaar number is required'],
+    match: /^\d{12}$/
   },
   specialty: {
     type: String,
