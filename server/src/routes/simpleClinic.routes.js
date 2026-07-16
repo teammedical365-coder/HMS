@@ -57,7 +57,7 @@ router.get('/', verifyCentralAdmin, async (req, res) => {
 router.post('/', verifyCentralAdmin, async (req, res) => {
     try {
         console.log("👉 RAW BACKEND POST BODY:", req.body);
-        const { name, slug, address, city, state, phone, email, website, defaultFee } = req.body;
+        const { name, slug, address, city, state, phone, email, website, defaultFee, plan } = req.body;
         if (!name) return res.status(400).json({ success: false, message: 'Clinic name is required' });
 
         const finalSlug = slug
@@ -69,7 +69,7 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
 
         const clinicCode = await generateClinicCode(name);
 
-        const clinic = new Hospital({
+        const clinicData = {
             name,
             slug: finalSlug,
             clinicCode,
@@ -83,8 +83,15 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             isActive: true,
             clinicType: 'clinic',
             appointmentMode: 'token',
-            tier: { maxDoctors: 1, maxReceptionists: 1 },
-        });
+            tier: { maxDoctors: 1, maxReceptionists: 1, maxStaff: 0 },
+        };
+
+        if (plan === 'basic') {
+            clinicData.subscriptionPlan = 'clinic_basic';
+            clinicData.tier = { maxDoctors: 5, maxReceptionists: 1, maxStaff: 3 };
+        }
+
+        const clinic = new Hospital(clinicData);
 
         await clinic.save();
 

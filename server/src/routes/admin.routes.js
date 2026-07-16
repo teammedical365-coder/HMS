@@ -405,38 +405,87 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
 
         // Validate clinic vs hospital role mapping
         if (assignedHospitalId && !isPatientRole) {
-            const hospitalDoc = await Hospital.findById(assignedHospitalId).select('clinicType tier');
+            const hospitalDoc = await Hospital.findById(assignedHospitalId).select('clinicType subscriptionPlan tier');
             if (hospitalDoc) {
                 const isClinic = hospitalDoc.clinicType === 'clinic';
                 const assignedRoleNameLower = (roleDoc.name || '').toLowerCase();
+                const subscriptionPlan = hospitalDoc.subscriptionPlan || 'none';
                 
-                if (isClinic) {
-                    if (assignedRoleNameLower !== 'clinic doctor') {
-                        return res.status(400).json({
-                            success: false,
-                            message: 'Clinics only support the "Clinic Doctor" role for staff. Other roles are not allowed.'
-                        });
-                    }
-                    const maxForRole = hospitalDoc.tier?.maxDoctors || 1;
-                    const currentCount = await User.countDocuments({
-                        hospitalId: assignedHospitalId,
-                        $or: [
-                            { role: 'doctor' },
-                            { role: roleDoc._id }
-                        ]
+                // NEW SUBSCRIPTION VALIDATION (Basic & Multi-Speciality)
+                if (subscriptionPlan === 'clinic_basic' || subscriptionPlan === 'multi_speciality_starter') {
+                    const maxDoctors = hospitalDoc.tier?.maxDoctors ?? 99999;
+                    const maxStaff = hospitalDoc.tier?.maxStaff ?? 99999;
+                    
+                    const existingStaff = await User.find({ hospitalId: assignedHospitalId }).populate('role');
+                    let doctorCount = 0;
+                    let staffCount = 0;
+                    
+                    existingStaff.forEach(u => {
+                        const rName = (u.role?.name || u.role || '').toLowerCase();
+                        if (rName === 'patient' || rName === 'hospitaladmin' || rName === 'centraladmin' || rName === 'superadmin') return;
+                        
+                        if (rName.includes('doctor')) {
+                            doctorCount++;
+                        } else {
+                            staffCount++;
+                        }
                     });
-                    if (currentCount >= maxForRole) {
-                        return res.status(400).json({
-                            success: false,
-                            message: 'This clinic already has an assigned Clinic Doctor.'
-                        });
+
+                    const isDoctorRole = assignedRoleNameLower.includes('doctor');
+                    if (isDoctorRole) {
+                        if (doctorCount >= maxDoctors) {
+                            return res.status(400).json({
+                                success: false,
+                                message: `Doctor quota reached.\n\nMaximum ${maxDoctors} doctors are allowed in your current subscription.\n\nPlease contact Medical365 to upgrade your plan.`
+                            });
+                        }
+                    } else {
+                        if (staffCount >= maxStaff) {
+                            return res.status(400).json({
+                                success: false,
+                                message: `Your staff quota is full.\n\nMaximum ${maxStaff} staff members are allowed in your current subscription.\n\nPlease contact Medical365 to upgrade your plan.`
+                            });
+                        }
                     }
-                } else {
-                    if (assignedRoleNameLower === 'clinic doctor') {
+                    
+                    // Restrict "Clinic Doctor" role strictly to Clinics
+                    if (!isClinic && assignedRoleNameLower === 'clinic doctor') {
                         return res.status(400).json({
                             success: false,
                             message: 'Hospital users cannot be assigned the "Clinic Doctor" role.'
                         });
+                    }
+                } 
+                // LEGACY LOGIC (Starter & Enterprise)
+                else {
+                    if (isClinic) {
+                        if (assignedRoleNameLower !== 'clinic doctor') {
+                            return res.status(400).json({
+                                success: false,
+                                message: 'Clinics only support the "Clinic Doctor" role for staff. Other roles are not allowed.'
+                            });
+                        }
+                        const maxForRole = hospitalDoc.tier?.maxDoctors || 1;
+                        const currentCount = await User.countDocuments({
+                            hospitalId: assignedHospitalId,
+                            $or: [
+                                { role: 'doctor' },
+                                { role: roleDoc._id }
+                            ]
+                        });
+                        if (currentCount >= maxForRole) {
+                            return res.status(400).json({
+                                success: false,
+                                message: 'This clinic already has an assigned Clinic Doctor.'
+                            });
+                        }
+                    } else {
+                        if (assignedRoleNameLower === 'clinic doctor') {
+                            return res.status(400).json({
+                                success: false,
+                                message: 'Hospital users cannot be assigned the "Clinic Doctor" role.'
+                            });
+                        }
                     }
                 }
             }

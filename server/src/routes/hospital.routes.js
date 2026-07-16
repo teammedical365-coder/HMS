@@ -91,7 +91,7 @@ router.get('/resolve/:slug', async (req, res) => {
 // Create a new hospital
 router.post('/', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, address, city, state, phone, email, website, logo, departments, slug: customSlug } = req.body;
+        const { name, address, city, state, phone, email, website, logo, departments, slug: customSlug, plan } = req.body;
         if (!name) return res.status(400).json({ success: false, message: 'Hospital name is required' });
 
         const RESERVED_SLUGS = ['api', 'admin', 'login', 'logout', 'signup', 'register', 'uploads',
@@ -118,7 +118,13 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             slug = `${baseSlug}-${counter++}`;
         }
 
-        const hospital = new Hospital({ name, slug, address, city, state, phone, email, website, logo, departments: departments || [] });
+        const hospitalData = { name, slug, address, city, state, phone, email, website, logo, departments: departments || [] };
+        if (plan === 'multi_speciality_starter') {
+            hospitalData.subscriptionPlan = 'multi_speciality_starter';
+            hospitalData.tier = { maxDoctors: 15, maxStaff: 14 };
+        }
+        
+        const hospital = new Hospital(hospitalData);
         await hospital.save();
 
 
