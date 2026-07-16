@@ -8,6 +8,7 @@ const { resolveTenant } = require('../middleware/tenantMiddleware');
 const MasterAdmission = require('../models/admission.model');
 const { getTenantModels } = require('../db/tenantModels');
 const { sendAppointmentConfirmationEmail } = require('../services/email.service');
+const { checkPatientDoubleBooking } = require('../utils/appointmentValidator');
 
 const verifyReception = (req, res, next) => {
     if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
@@ -26,7 +27,7 @@ const verifyReception = (req, res, next) => {
 
     // Specific portal routes that patients are allowed to access via ReceptionDashboard
     if (roleStr === 'patient') {
-        const allowedPatientPaths = ['/register', '/search-patients', '/appointments', '/book-appointment', '/transactions', '/send-aadhaar-otp', '/verify-aadhaar-otp'];
+        const allowedPatientPaths = ['/register', '/intake', '/search-patients', '/appointments', '/book-appointment', '/transactions', '/send-aadhaar-otp', '/verify-aadhaar-otp'];
         const isAllowedPath = allowedPatientPaths.some(p => req.path.startsWith(p));
         if (isAllowedPath) return next();
     }
@@ -124,17 +125,37 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
             // Only update email if provided and different (avoid overwriting with empty)
             if (email && email !== user.email) user.email = email;
 
-            // Backfill PatientId/MRN for legacy walk-ins that were created without one
-            if (!user.patientId) {
-                const hospitalId = req.user.hospitalId || user.hospitalId;
-                const Hospital = require('../models/hospital.model');
-                const hospital = hospitalId ? await Hospital.findById(hospitalId) : null;
+            const hospitalId = req.user.hospitalId || user.hospitalId;
+            const Hospital = require('../models/hospital.model');
+            const hospital = hospitalId ? await Hospital.findById(hospitalId) : null;
+
+            let needsMrnUpgrade = !user.patientId || !user.mrn;
+            if (hospital && hospital.clinicType !== 'clinic') {
+                const hospitalCode = await Hospital.ensureHospitalCode(hospital);
+                const escapedCode = hospitalCode.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+                const validRegex = new RegExp(`^${escapedCode}-M365-\\d+$`, 'i');
+                if (!user.mrn || !validRegex.test(user.mrn)) {
+                    needsMrnUpgrade = true;
+                }
+            }
+
+            if (needsMrnUpgrade) {
                 const patientId = await generateSmartMRN(hospitalId, hospital, User);
                 user.patientId = patientId;
                 user.mrn = patientId;
             }
 
             await user.save();
+
+            if (req.user.role === 'patient') {
+                const PatientAuth = require('../models/patientAuth.model');
+                const authRecord = await PatientAuth.findById(req.user.patientId || req.user._id);
+                if (authRecord && !authRecord.linkedPatientProfileId) {
+                    authRecord.linkedPatientProfileId = user._id;
+                    await authRecord.save();
+                }
+            }
+
             return res.status(200).json({ success: true, message: 'Patient record updated!', user });
         }
 
@@ -160,6 +181,16 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         const newUser = new User(userData);
 
         await newUser.save();
+
+        if (req.user.role === 'patient') {
+            const PatientAuth = require('../models/patientAuth.model');
+            const authRecord = await PatientAuth.findById(req.user.patientId || req.user._id);
+            if (authRecord && !authRecord.linkedPatientProfileId) {
+                authRecord.linkedPatientProfileId = newUser._id;
+                await authRecord.save();
+            }
+        }
+
         res.status(201).json({ success: true, message: 'Patient registered successfully!', user: newUser });
     } catch (error) {
         console.error("Register Error:", error);
@@ -429,6 +460,18 @@ router.patch('/appointments/:id/reschedule', verifyToken, verifyReception, async
     if (req.user.hospitalId) reschQuery.hospitalId = req.user.hospitalId;
     const appt = await Appointment.findOne(reschQuery);
     if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found or unauthorized' });
+
+    const patientConflict = await checkPatientDoubleBooking({
+        userId: appt.userId,
+        patientId: appt.patientId,
+        date,
+        time,
+        excludeAppointmentId: appt._id
+    });
+    if (patientConflict && patientConflict.conflict) {
+        return res.status(400).json({ success: false, message: patientConflict.message });
+    }
+
     appt.appointmentDate = date;
     appt.appointmentTime = time;
     appt.status = 'confirmed';
@@ -620,6 +663,16 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             if (existing) {
                 return res.status(400).json({ success: false, message: 'Slot already booked for this doctor at this time!' });
             }
+        }
+
+        const patientConflict = await checkPatientDoubleBooking({
+            userId: patient._id,
+            patientId: patient.patientId,
+            date,
+            time: finalTime || time
+        });
+        if (patientConflict && patientConflict.conflict) {
+            return res.status(400).json({ success: false, message: patientConflict.message });
         }
 
         // --- ENFORCE FOLLOW-UP VALIDITY FEE ---

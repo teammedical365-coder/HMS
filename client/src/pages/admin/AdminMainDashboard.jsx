@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { adminAPI } from '../../utils/api';
+import { adminAPI, hospitalAPI } from '../../utils/api';
+import { getSubscriptionLimits } from '../../utils/subscriptionPlans';
 import './AdminMainDashboard.css';
 
 const AdminMainDashboard = () => {
@@ -14,6 +15,8 @@ const AdminMainDashboard = () => {
         totalPatients: 0,
     });
     const [loading, setLoading] = useState(true);
+    const [hospital, setHospital] = useState(null);
+    const [staffCount, setStaffCount] = useState(0);
 
     useEffect(() => {
         fetchStats();
@@ -22,9 +25,10 @@ const AdminMainDashboard = () => {
     const fetchStats = async () => {
         try {
             setLoading(true);
-            const [usersRes, rolesRes] = await Promise.all([
+            const [usersRes, rolesRes, hospitalRes] = await Promise.all([
                 adminAPI.getUsers().catch(() => ({ success: false, users: [] })),
-                adminAPI.getRoles().catch(() => ({ success: false, data: [] }))
+                adminAPI.getRoles().catch(() => ({ success: false, data: [] })),
+                hospitalAPI.getMyHospital().catch(() => ({ success: false, hospital: null }))
             ]);
             const users = usersRes.success ? usersRes.users : [];
             const roles = rolesRes.success ? rolesRes.data : [];
@@ -34,6 +38,15 @@ const AdminMainDashboard = () => {
                 totalDoctors: users.filter(u => (u.role || '').toLowerCase().includes('doctor')).length,
                 totalPatients: users.filter(u => (u.role || '').toLowerCase() === 'patient').length,
             });
+            
+            setStaffCount(users.filter(u => {
+                const rName = (u.role?.name || u.role || '').toLowerCase();
+                return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+            }).length);
+
+            if (hospitalRes.success && hospitalRes.hospital) {
+                setHospital(hospitalRes.hospital);
+            }
         } catch (err) {
             console.error('Error fetching stats:', err);
         } finally {
@@ -88,6 +101,34 @@ const AdminMainDashboard = () => {
                         <p style={{ color: '#64748b', fontSize: '0.9rem' }}>{dateString} · Here's a snapshot of your hospital.</p>
                     </div>
                 </div>
+
+                {/* Subscription Usage Overview */}
+                {hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter') && (() => {
+                    const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                    const remainingDoctors = Math.max(0, limits.maxDoctors - stats.totalDoctors);
+                    const remainingStaff = Math.max(0, limits.maxStaff - staffCount);
+                    
+                    return (
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '24px', display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center' }}>
+                            <div style={{ flex: '1 1 200px' }}>
+                                <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>Current Subscription</div>
+                                <div style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{limits.name}</div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '20px', flex: '2 1 400px' }}>
+                                <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '12px 16px', flex: 1 }}>
+                                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Doctors</div>
+                                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#334155', marginTop: '2px' }}>{stats.totalDoctors} / {limits.maxDoctors}</div>
+                                    <div style={{ fontSize: '11px', color: remainingDoctors === 0 ? '#dc2626' : '#10b981', marginTop: '4px', fontWeight: 600 }}>{remainingDoctors} Remaining</div>
+                                </div>
+                                <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '12px 16px', flex: 1 }}>
+                                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Staff</div>
+                                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#334155', marginTop: '2px' }}>{staffCount} / {limits.maxStaff}</div>
+                                    <div style={{ fontSize: '11px', color: remainingStaff === 0 ? '#dc2626' : '#10b981', marginTop: '4px', fontWeight: 600 }}>{remainingStaff} Remaining</div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 {/* Stats */}
                 <div className="stats-grid">

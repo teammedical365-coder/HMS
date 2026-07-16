@@ -372,7 +372,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     };
 
     const handleViewProfile = (patient) => {
-        navigate(`/patient/${patient._id || patient.patientId || patient.id}`);
+        const dept = patient.department || patient.serviceName || 'Unassigned';
+        navigate(`/patient/${patient._id || patient.patientId || patient.id}/department/${encodeURIComponent(dept)}`);
     };
 
     const openHospitalizeModal = (apt) => {
@@ -660,72 +661,65 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         try {
             let userId = selectedPatientId;
 
-            if (!isPatientPortal) {
-                // 1. Register/Find User (Only if it's a new walk-in)
-                if (!userId) {
-                    const regRes = await receptionAPI.registerPatient({
-                        name: `${intakeForm.firstName} ${intakeForm.lastName}`.trim(),
-                        email: intakeForm.email,
-                        phone: intakeForm.mobile,
-                    });
+            if (isPatientPortal && !userId) {
+                const pU = JSON.parse(localStorage.getItem('patientUser') || '{}');
+                userId = pU.linkedPatientProfileId;
+            }
 
-                    if (regRes.success && regRes.user) {
-                        userId = regRes.user._id;
-                    } else {
-                        throw new Error(regRes.message || "Registration failed.");
+            // 1. Register/Find User (If new walk-in OR new patient portal onboarding)
+            if (!userId) {
+                const regRes = await receptionAPI.registerPatient({
+                    name: `${intakeForm.firstName} ${intakeForm.lastName}`.trim(),
+                    email: intakeForm.email,
+                    phone: intakeForm.mobile,
+                });
+
+                if (regRes.success && regRes.user) {
+                    userId = regRes.user._id;
+                    if (isPatientPortal) {
+                        const pU = JSON.parse(localStorage.getItem('patientUser') || '{}');
+                        pU.linkedPatientProfileId = userId;
+                        pU.mrn = regRes.user.patientId || regRes.user.mrn;
+                        localStorage.setItem('patientUser', JSON.stringify(pU));
+                        setSelectedPatientId(userId);
                     }
-                }
-
-                // 2. Upload profile photo if selected
-                let avatarUrl = null;
-                if (profilePhoto) {
-                    try {
-                        const photoFD = new FormData();
-                        photoFD.append('images', profilePhoto);
-                        const photoRes = await uploadAPI.uploadImages(photoFD);
-                        if (photoRes.success && photoRes.files?.length > 0) {
-                            avatarUrl = photoRes.files[0].url;
-                        }
-                    } catch { /* non-fatal */ }
-                }
-
-                // 3. Update Profile (Vitals + Basic Info + Aadhaar + Avatar)
-                const intakePayload = { ...intakeForm };
-                if (avatarUrl) intakePayload.avatar = avatarUrl;
-                await receptionAPI.updateIntake(userId, intakePayload);
-
-                if (selectedPatientId) {
-                    // If they are just editing profile (no doctor selected), return early
-                    const isTokenMode = hospitalContext?.appointmentMode === 'token';
-                    const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
-                    if (!canBook) {
-                        alert("✅ Patient profile and demographics updated successfully!");
-                        setSaving(false);
-                        if (location.state?.isEditingExisting) {
-                            navigate(`/patient/${userId}`);
-                            return;
-                        }
-                        fetchAppointments();
-                        setViewMode('list');
-                        return;
-                    }
-                }
-            } else {
-                if (!userId) {
-                    const pU = JSON.parse(localStorage.getItem('patientUser') || '{}');
-                    userId = pU.linkedPatientProfileId;
-                }
-                if (!userId) {
-                    alert("Error: Your profile is not linked yet. Please complete hospital registration or contact reception.");
-                    setSaving(false); return;
+                } else {
+                    throw new Error(regRes.message || "Registration failed.");
                 }
             }
 
-            if (selectedPatientId && !isPatientPortal) {
-                // If they are just editing profile (no doctor selected), return early
-                const isTokenMode = hospitalContext?.appointmentMode === 'token';
-                const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
-                if (!canBook) {
+            // 2. Upload profile photo if selected
+            let avatarUrl = null;
+            if (profilePhoto) {
+                try {
+                    const photoFD = new FormData();
+                    photoFD.append('images', profilePhoto);
+                    const photoRes = await uploadAPI.uploadImages(photoFD);
+                    if (photoRes.success && photoRes.files?.length > 0) {
+                        avatarUrl = photoRes.files[0].url;
+                    }
+                } catch { /* non-fatal */ }
+            }
+
+            // 3. Update Profile (Vitals + Basic Info + Aadhaar + Avatar)
+            const intakePayload = { ...intakeForm };
+            if (avatarUrl) intakePayload.avatar = avatarUrl;
+            await receptionAPI.updateIntake(userId, intakePayload);
+
+            const isTokenMode = hospitalContext?.appointmentMode === 'token';
+            const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
+
+            if (!canBook) {
+                if (isPatientPortal) {
+                    const localU = JSON.parse(localStorage.getItem('patientUser') || '{}');
+                    alert("✅ Patient Profile Registered Successfully!\n\nRedirecting to your Dashboard...");
+                    localU.registrationStatus = 'Completed';
+                    if (userId) localU.linkedPatientProfileId = userId;
+                    localStorage.setItem('patientUser', JSON.stringify(localU));
+                    navigate('/patient/dashboard');
+                    return;
+                }
+                if (selectedPatientId) {
                     alert("✅ Patient profile and demographics updated successfully!");
                     setSaving(false);
                     if (location.state?.isEditingExisting) {
@@ -739,7 +733,6 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             }
 
             // 3. Book Appointment (optional when editing existing patient)
-            const isTokenMode = hospitalContext?.appointmentMode === 'token';
             if (intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode)) {
                 // Upload payment screenshot if non-cash and screenshot provided
                 let screenshotNote = '';
@@ -830,6 +823,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
                     setPaymentScreenshot(null);
                     fetchAppointments();
+                    if (intakeForm.doctor && intakeForm.visitDate) {
+                        fetchBookedSlots(intakeForm.doctor, intakeForm.visitDate);
+                    }
                     setViewMode('list');
 
                     const tokenMsg = bookingRes.appointment?.tokenNumber

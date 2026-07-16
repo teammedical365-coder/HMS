@@ -427,7 +427,7 @@ const Patient = () => {
                                                                 const pid = apt.userId?._id || apt.clinicPatientId?._id || apt.clinicPatientId?.patientUid || apt.patientId;
                                                                 console.log("DEBUG PATIENT ID OBJECT:", apt);
                                                                 console.log("FINAL CHOSEN PID:", pid);
-                                                                if (pid) navigate(`/patient/${pid}`);
+                                                                if (pid) navigate(`/patient/${pid}/department/${encodeURIComponent(apt.department || apt.serviceName || 'Unassigned')}`);
                                                             }}
                                                             style={{
                                                                 ...S.btn('rgba(59,130,246,0.1)'),

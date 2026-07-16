@@ -65,6 +65,12 @@ const hospitalSchema = new mongoose.Schema({
     // Entity type — 'hospital' for full hospitals, 'clinic' for small simple clinics
     clinicType: { type: String, enum: ['hospital', 'clinic'], default: 'hospital' },
 
+    // Subscription plan specific to clinics
+    clinicPlan: { type: String, enum: ['starter', 'basic'], default: 'starter' },
+
+    // Global subscription plan (for new backend quotas)
+    subscriptionPlan: { type: String, enum: ['multi_speciality_starter', 'clinic_basic', 'none'], default: 'none' },
+
     // Permanent unique Hospital Code (e.g. "APL", "APL1", "FOR") — never auto-regenerated once set
     hospitalCode: { type: String, uppercase: true, trim: true, unique: true, sparse: true },
 
@@ -81,6 +87,7 @@ const hospitalSchema = new mongoose.Schema({
     tier: {
         maxDoctors:       { type: Number, default: 1 },
         maxReceptionists: { type: Number, default: 1 },
+        maxStaff:         { type: Number, default: Infinity },
     },
 
     // Subscription / billing config (set by centraladmin)

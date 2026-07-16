@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { adminAPI, uploadAPI, hospitalAPI } from '../../utils/api';
+import { getSubscriptionLimits } from '../../utils/subscriptionPlans';
 import '../administration/SuperAdmin.css';
 
 const Admin = () => {
@@ -371,6 +372,36 @@ const Admin = () => {
                 {error && <div className="error-message">{error}</div>}
                 {success && <div className="success-message">{success}</div>}
 
+                {/* Quota Card */}
+                {(() => {
+                    if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
+                        const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                        const maxStaff = limits.maxStaff;
+                        const staffCount = users.filter(u => {
+                            const rName = (u.role?.name || u.role || '').toLowerCase();
+                            return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+                        }).length;
+                        const remaining = Math.max(0, maxStaff - staffCount);
+                        
+                        return (
+                            <div className="admin-card" style={{ marginBottom: '20px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                <h3 style={{ margin: '0 0 12px 0', fontSize: '15px' }}>📊 Subscription Quota (Staff)</h3>
+                                <div style={{ display: 'flex', gap: '20px' }}>
+                                    <div style={{ background: '#fff', padding: '12px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', flex: 1 }}>
+                                        <div style={{ color: '#64748b', fontSize: '12px', fontWeight: 600 }}>Staff Accounts</div>
+                                        <div style={{ fontSize: '20px', fontWeight: 700, color: '#334155' }}>{staffCount} / {maxStaff} Used</div>
+                                    </div>
+                                    <div style={{ background: remaining === 0 ? '#fee2e2' : '#f0fdf4', padding: '12px 16px', borderRadius: '8px', border: `1px solid ${remaining === 0 ? '#fecaca' : '#bbf7d0'}`, flex: 1 }}>
+                                        <div style={{ color: remaining === 0 ? '#dc2626' : '#16a34a', fontSize: '12px', fontWeight: 600 }}>Remaining</div>
+                                        <div style={{ fontSize: '20px', fontWeight: 700, color: remaining === 0 ? '#dc2626' : '#16a34a' }}>{remaining}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    }
+                    return null;
+                })()}
+
                 {/* CREATE STAFF ACCOUNT SECTION */}
                 <div className="admin-card" style={{ marginBottom: '20px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -379,11 +410,39 @@ const Admin = () => {
                             onClick={handleToggleCreateForm}
                             className={showCreateForm ? 'btn-cancel' : 'btn-save'}
                             style={{ padding: '8px 20px', fontSize: '14px' }}
-                            disabled={checkingDocLimit}
+                            disabled={checkingDocLimit || (() => {
+                                if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
+                                    const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                                    const maxStaff = limits.maxStaff;
+                                    const staffCount = users.filter(u => {
+                                        const rName = (u.role?.name || u.role || '').toLowerCase();
+                                        return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+                                    }).length;
+                                    return staffCount >= maxStaff;
+                                }
+                                return false;
+                            })()}
                         >
                             {checkingDocLimit ? 'Checking...' : showCreateForm ? 'Cancel' : '+ New Staff'}
                         </button>
                     </div>
+
+                    {hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter') && (() => {
+                        const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                        const maxStaff = limits.maxStaff;
+                        const staffCount = users.filter(u => {
+                            const rName = (u.role?.name || u.role || '').toLowerCase();
+                            return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+                        }).length;
+                        if (staffCount >= maxStaff && !showCreateForm) {
+                            return (
+                                <div style={{ color: '#be123c', background: '#fff1f2', border: '1px solid #fda4af', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontWeight: 'bold', fontSize: '14px' }}>
+                                    ⚠️ Staff quota reached. Upgrade your subscription to add more staff.
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
 
                     {!showCreateForm && (
                         <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>
@@ -446,15 +505,10 @@ const Admin = () => {
                                     <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
                                         <option value="">-- Select a Role --</option>
                                         {roles
-                                            .filter(r => !['patient', 'user'].includes(r.name.toLowerCase()))
                                             .filter(r => {
-                                                const isClinic = hospital?.clinicType === 'clinic';
                                                 const name = r.name.toLowerCase();
-                                                if (isClinic) {
-                                                    return name === 'clinic doctor';
-                                                } else {
-                                                    return !name.includes('clinic');
-                                                }
+                                                if (name.includes('doctor')) return false; // Exclude doctors
+                                                return !['patient', 'user', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(name);
                                             })
                                             .map(role => (
                                                 <option key={role._id} value={role._id}>

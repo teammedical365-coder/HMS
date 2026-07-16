@@ -26,6 +26,11 @@ const reportSchema = new mongoose.Schema({
         enum: ['Doctor', 'Receptionist', 'Admin', 'Other'],
         default: 'Other'
     },
+    hospitalId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Hospital',
+        index: true
+    },
     uploadedAt: {
         type: Date,
         default: Date.now

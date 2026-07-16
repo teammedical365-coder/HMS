@@ -43,7 +43,8 @@ const verifyCentralAdmin = async (req, res, next) => {
 // ==========================================
 router.get('/', verifyCentralAdmin, async (req, res) => {
     try {
-        const clinics = await Hospital.find({ clinicType: 'clinic' }).populate('adminUserId', 'name email phone');
+        const plan = req.query.plan || 'starter';
+        const clinics = await Hospital.find({ clinicType: 'clinic', subscriptionPlan: plan }).populate('adminUserId', 'name email phone');
         res.json({ success: true, clinics });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
@@ -57,7 +58,7 @@ router.get('/', verifyCentralAdmin, async (req, res) => {
 router.post('/', verifyCentralAdmin, async (req, res) => {
     try {
         console.log("👉 RAW BACKEND POST BODY:", req.body);
-        const { name, slug, address, city, state, phone, email, website, defaultFee } = req.body;
+        const { name, slug, address, city, state, phone, email, website, defaultFee, plan } = req.body;
         if (!name) return res.status(400).json({ success: false, message: 'Clinic name is required' });
 
         const finalSlug = slug
@@ -69,7 +70,7 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
 
         const clinicCode = await generateClinicCode(name);
 
-        const clinic = new Hospital({
+        const clinicData = {
             name,
             slug: finalSlug,
             clinicCode,
@@ -83,8 +84,13 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             isActive: true,
             clinicType: 'clinic',
             appointmentMode: 'token',
-            tier: { maxDoctors: 1, maxReceptionists: 1 },
-        });
+            subscriptionPlan: 'starter',
+            tier: { maxDoctors: 1, maxReceptionists: 1, maxStaff: 0 },
+        };
+
+
+
+        const clinic = new Hospital(clinicData);
 
         await clinic.save();
 

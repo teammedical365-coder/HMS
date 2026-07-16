@@ -17,6 +17,7 @@ const publicRoutes = require('./routes/public.routes');
 const adminEntitiesRoutes = require('./routes/admin-entities.routes');
 const labRoutes = require('./routes/lab.routes');
 const uploadRoutes = require('./routes/upload.routes');
+const reportRoutes = require('./routes/report.routes');
 const pharmacyRoutes = require('./routes/pharmacy.routes');
 const pharmacyOrdersRoutes = require('./routes/pharmacyOrders.routes');
 const receptionRoutes = require('./routes/reception.routes');
@@ -43,7 +44,6 @@ const revenueRoutes = require('./routes/revenue.routes');
 const mfaRoutes = require('./routes/mfa.routes');
 
 const app = express();
-app.use('/api/patient-auth', patientAuthRoutes);
 
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet({
@@ -127,6 +127,7 @@ app.use('/api/public', publicRoutes);
 app.use('/api/admin-entities', adminEntitiesRoutes);
 app.use('/api/lab', labRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/reports', reportRoutes);
 app.use('/api/pharmacy', pharmacyRoutes);
 app.use('/api/pharmacy/orders', pharmacyOrdersRoutes);
 app.use('/api/reception', receptionRoutes);
@@ -145,6 +146,7 @@ app.use('/api/simple-clinics', simpleClinicRoutes);
 app.use('/api/clinic', clinicRoutes);
 app.use('/api/revenue', revenueRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/patient-auth', patientAuthRoutes);
 app.use('/api/patient-app', patientAppRoutes);
 app.use('/api/patient-local', patientLocalRoutes);
 app.use('/api/mfa', mfaRoutes);

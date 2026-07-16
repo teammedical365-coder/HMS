@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { patientAPI, receptionAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -30,7 +30,8 @@ import './UnifiedPatientProfile.css';
 import ClinicPatientProfile from './ClinicPatientProfile';
 
 const HospitalPatientProfileContent = () => {
-    const { id: patientId } = useParams();
+    const { id: patientId, department: deptParam } = useParams();
+    const departmentParam = deptParam && deptParam !== 'undefined' ? deptParam : 'Unassigned';
     const navigate = useNavigate();
 
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -58,6 +59,7 @@ const HospitalPatientProfileContent = () => {
     const [documentList, setDocumentList] = useState([]);
     const [_activeFollowups, setActiveFollowups] = useState([]);
     const [currentFollowupStatus, setCurrentFollowupStatus] = useState(null);
+    const [searchParams] = useSearchParams();
 
     useEffect(() => {
         if (patientId) {
@@ -65,11 +67,12 @@ const HospitalPatientProfileContent = () => {
             fetchConsentAndDocs();
             fetchFollowups();
         }
-    }, [patientId]);
+    }, [patientId, departmentParam]);
 
     const fetchFollowups = async () => {
         try {
-            const res = await receptionAPI.getFollowupStatus(patientId, '');
+            const targetDept = departmentParam || '';
+            const res = await receptionAPI.getFollowupStatus(patientId, targetDept);
             if (res.success && res.activeFollowups) {
                 setActiveFollowups(res.activeFollowups);
             }
@@ -86,7 +89,7 @@ const HospitalPatientProfileContent = () => {
     const fetchProfile = async () => {
         setLoading(true);
         try {
-            const res = await patientAPI.getFullHistory(patientId);
+            const res = await patientAPI.getFullHistory(patientId, departmentParam);
             if (res.success && res.user) {
                 setPatientData(res.user);
                 setTimeline(res.timeline || []);
@@ -146,7 +149,7 @@ const HospitalPatientProfileContent = () => {
         }
 
         try {
-            const docRes = await patientAPI.getDocuments(patientId);
+            const docRes = await patientAPI.getDocuments(patientId, departmentParam);
             if (docRes.success && Array.isArray(docRes.documents)) {
                 setDocumentList(docRes.documents);
             }
@@ -270,8 +273,8 @@ const HospitalPatientProfileContent = () => {
 
     // Calculate Metrics
     const calculateMetrics = () => {
-        const appointments = timeline.filter(t => t.type === 'appointment' || t.type === 'clinicalVisit') || [];
-        const upcoming = timeline.filter(t => {
+        const appointments = displayTimeline.filter(t => t.type === 'appointment' || t.type === 'clinicalVisit') || [];
+        const upcoming = displayTimeline.filter(t => {
             if (t.type !== 'appointment') return false;
             const status = (t.data?.status || '').toLowerCase();
             if (status !== 'pending' && status !== 'confirmed' && status !== 'scheduled') return false;
@@ -412,7 +415,6 @@ const HospitalPatientProfileContent = () => {
         );
     }
 
-    const metrics = calculateMetrics();
     const initials = (patientData.name || 'P').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
     // Compute age (checking registration age first, then calculating from dob)
@@ -437,8 +439,13 @@ const HospitalPatientProfileContent = () => {
             .join(', ');
     }
 
+    const displayTimeline = timeline;
+    const displayDocuments = documentList;
+
+    const metrics = calculateMetrics();
+
     // Categorized timeline data for sidebar
-    const upcomingAppointments = timeline.filter(t => {
+    const upcomingAppointments = displayTimeline.filter(t => {
         if (t.type !== 'appointment') return false;
         const status = (t.data?.status || '').toLowerCase();
         if (status !== 'pending' && status !== 'confirmed' && status !== 'scheduled') return false;
@@ -446,9 +453,9 @@ const HospitalPatientProfileContent = () => {
         return !isAppointmentExpired(t.date, apptTime);
     });
 
-    const recentLabs = timeline.filter(t => t.type === 'labReport');
-    const medications = timeline.filter(t => t.type === 'pharmacyOrder' || (t.type === 'clinicalVisit' && t.data?.prescriptions?.length > 0));
-    const financialTransactions = timeline.filter(t => t.data?.amount || t.data?.totalAmount || t.data?.fee);
+    const recentLabs = displayTimeline.filter(t => t.type === 'labReport');
+    const medications = displayTimeline.filter(t => t.type === 'pharmacyOrder' || (t.type === 'clinicalVisit' && t.data?.prescriptions?.length > 0));
+    const financialTransactions = displayTimeline.filter(t => t.data?.amount || t.data?.totalAmount || t.data?.fee);
 
     return (
         <div className="upp-container">
@@ -458,6 +465,8 @@ const HospitalPatientProfileContent = () => {
                     <FiArrowLeft /> Back
                 </button>
             </div>
+
+
 
             {/* Header Identity Card */}
             <div className="upp-header-card">
@@ -574,16 +583,16 @@ const HospitalPatientProfileContent = () => {
                             <h2 className="upp-section-title">
                                 <FiActivity style={{ color: 'var(--upp-primary)' }} /> Chronological Visit History
                             </h2>
-                            <span className="upp-section-count">{timeline.length} records</span>
+                            <span className="upp-section-count">{displayTimeline.length} records</span>
                         </div>
 
-                        {timeline.length === 0 ? (
+                        {displayTimeline.length === 0 ? (
                             <div className="upp-empty-state">
-                                No clinical visits or history recorded yet for this patient.
+                                No clinical visits or history recorded yet for the {departmentParam || 'Hospital'} department.
                             </div>
                         ) : (
                             <div className="upp-timeline">
-                                {timeline.sort((a, b) => new Date(b.date) - new Date(a.date)).map((item, index) => {
+                                {displayTimeline.sort((a, b) => new Date(b.date) - new Date(a.date)).map((item, index) => {
                                     const calendarDateOnly = new Date(item.date || Date.now()).toLocaleDateString('en-IN', {
                                         day: '2-digit',
                                         month: 'short',
@@ -810,14 +819,14 @@ const HospitalPatientProfileContent = () => {
                             <h3 className="upp-section-title">
                                 <FiFolder style={{ color: '#6366f1' }} /> Reports & Documents
                             </h3>
-                            <span className="upp-section-count">{documentList.length}</span>
+                            <span className="upp-section-count">{displayDocuments.length}</span>
                         </div>
 
-                        {documentList.length === 0 ? (
-                            <div className="upp-empty-state">No uploaded documents found.</div>
+                        {displayDocuments.length === 0 ? (
+                            <div className="upp-empty-state">No uploaded documents found for the {departmentParam || 'Hospital'} department.</div>
                         ) : (
                             <div className="upp-list-items">
-                                {documentList.map((doc, i) => (
+                                {displayDocuments.map((doc, i) => (
                                     <div key={i} className="upp-list-card">
                                         <div className="upp-list-info">
                                             <span className="upp-list-title">{doc.fileName || 'Hospital Document'}</span>

@@ -54,6 +54,9 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
       tags: ['appointment_report', file.mimetype]
     });
 
+    const Appointment = require('../models/appointment.model');
+    const appt = await Appointment.findById(appointmentId);
+
     const newReport = new Report({
       appointmentId: appointmentId,
       fileName: file.originalname,
@@ -62,10 +65,54 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
       mimeType: file.mimetype,
       size: result.size,
       uploadedByRole: uploaderRole,
+      hospitalId: (appt && appt.hospitalId) ? appt.hospitalId : (req.user ? req.user.hospitalId : undefined),
       uploadedAt: new Date()
     });
 
     await newReport.save();
+
+    // Auto-sync to Patient User profile and Appointment prescriptions
+    try {
+      if (appt) {
+        if (!Array.isArray(appt.prescriptions)) appt.prescriptions = [];
+        appt.prescriptions.push({
+          type: 'lab_report',
+          name: file.originalname || 'Medical Report',
+          url: result.url,
+          fileId: result.fileId,
+          uploadedAt: new Date()
+        });
+        await appt.save();
+
+        const User = require('../models/user.model');
+        let userDoc = null;
+        if (appt.userId) userDoc = await User.findById(appt.userId);
+        if (!userDoc && appt.patientId) {
+          const query = { patientId: appt.patientId };
+          if (appt.hospitalId) query.hospitalId = appt.hospitalId;
+          userDoc = await User.findOne(query) || await User.findOne({ patientId: appt.patientId });
+        }
+        if (userDoc) {
+          if (!userDoc.fertilityProfile) userDoc.fertilityProfile = {};
+          if (!Array.isArray(userDoc.fertilityProfile.documents)) userDoc.fertilityProfile.documents = [];
+          userDoc.fertilityProfile.documents.push({
+            fileName: file.originalname,
+            docType: 'Medical Report',
+            url: result.url,
+            fileId: result.fileId,
+            mimeType: file.mimetype,
+            uploadedAt: new Date(),
+            uploadedBy: uploaderRole,
+            department: appt.department || appt.serviceName || 'General',
+            appointmentId: appt._id
+          });
+          userDoc.markModified('fertilityProfile');
+          await userDoc.save();
+        }
+      }
+    } catch (syncErr) {
+      console.error('[Report Sync Error]:', syncErr.message);
+    }
 
     res.status(201).json({
       success: true,

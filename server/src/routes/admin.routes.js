@@ -111,7 +111,13 @@ router.get('/roles', verifyToken, async (req, res) => {
             const hid = req.user.hospitalId;
             query = { $or: [{ hospitalId: hid }, { hospitalId: null }] };
         }
-        // Central admin: see everything
+        // Central admin: see everything (or filter by plan if requested)
+        if (isCentral && req.query.plan) {
+            const hospitals = await Hospital.find({ subscriptionPlan: req.query.plan }).select('_id');
+            const hospitalIds = hospitals.map(h => h._id);
+            // Include plan-specific roles AND global roles (null)
+            query = { $or: [{ hospitalId: { $in: hospitalIds } }, { hospitalId: null }] };
+        }
 
         const roles = await Role.find(query).sort({ hospitalId: 1, name: 1 });
 
@@ -333,14 +339,16 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         const patientRole = await Role.findOne({ name: { $regex: /^patient$/i } });
         const patientRoleId = patientRole ? patientRole._id : null;
 
-        // Build exclusion filter
-        const roleExclude = { $nin: systemRoles };
-        // Note: We can't easily combine string roles and ObjectId exclusion in one $nin
-        // So we do a two-step: filter by hospitalId, then exclude by role
-        const users = await User.find(
-            { ...filter, role: { $nin: systemRoles } },
-            { password: 0 }
-        ).sort({ createdAt: -1 });
+        let planFilter = {};
+        if (isCentral && req.query.plan) {
+            const hospitals = await Hospital.find({ subscriptionPlan: req.query.plan }).select('_id');
+            const hospitalIds = hospitals.map(h => h._id);
+            planFilter = { hospitalId: { $in: hospitalIds } };
+        }
+
+        const finalFilter = { ...filter, ...planFilter, role: { $nin: systemRoles } };
+
+        const users = await User.find(finalFilter, { password: 0 }).sort({ createdAt: -1 });
 
         // Build full response and filter out patients
         const usersWithRoles = await Promise.all(users.map(async (u) => {
@@ -405,38 +413,96 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
 
         // Validate clinic vs hospital role mapping
         if (assignedHospitalId && !isPatientRole) {
-            const hospitalDoc = await Hospital.findById(assignedHospitalId).select('clinicType tier');
+            const hospitalDoc = await Hospital.findById(assignedHospitalId).select('clinicType subscriptionPlan tier');
             if (hospitalDoc) {
                 const isClinic = hospitalDoc.clinicType === 'clinic';
                 const assignedRoleNameLower = (roleDoc.name || '').toLowerCase();
+                const subscriptionPlan = hospitalDoc.subscriptionPlan || 'none';
                 
-                if (isClinic) {
-                    if (assignedRoleNameLower !== 'clinic doctor') {
-                        return res.status(400).json({
-                            success: false,
-                            message: 'Clinics only support the "Clinic Doctor" role for staff. Other roles are not allowed.'
-                        });
-                    }
-                    const maxForRole = hospitalDoc.tier?.maxDoctors || 1;
-                    const currentCount = await User.countDocuments({
-                        hospitalId: assignedHospitalId,
-                        $or: [
-                            { role: 'doctor' },
-                            { role: roleDoc._id }
-                        ]
+                // NEW: Reject Doctors from Staff Management
+                if (assignedRoleNameLower.includes('doctor')) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'Doctors cannot be created from Staff Management. Please use the Doctors Feed.'
                     });
-                    if (currentCount >= maxForRole) {
-                        return res.status(400).json({
-                            success: false,
-                            message: 'This clinic already has an assigned Clinic Doctor.'
-                        });
+                }
+                
+                // NEW SUBSCRIPTION VALIDATION (Basic & Multi-Speciality)
+                if (subscriptionPlan === 'clinic_basic' || subscriptionPlan === 'multi_speciality_starter') {
+                    const limits = SUBSCRIPTION_PLANS[subscriptionPlan] || { maxDoctors: Infinity, maxStaff: Infinity };
+                    const maxDoctors = limits.maxDoctors;
+                    const maxStaff = limits.maxStaff;
+                    
+                    const existingStaff = await User.find({ hospitalId: assignedHospitalId }).populate('role');
+                    let doctorCount = 0;
+                    let staffCount = 0;
+                    
+                    existingStaff.forEach(u => {
+                        const rName = (u.role?.name || u.role || '').toLowerCase();
+                        if (rName === 'patient' || rName === 'hospitaladmin' || rName === 'centraladmin' || rName === 'superadmin') return;
+                        
+                        if (rName.includes('doctor')) {
+                            doctorCount++;
+                        } else {
+                            staffCount++;
+                        }
+                    });
+
+                    const isDoctorRole = assignedRoleNameLower.includes('doctor');
+                    if (isDoctorRole) {
+                        if (doctorCount >= maxDoctors) {
+                            return res.status(403).json({
+                                success: false,
+                                message: `Doctor quota reached.\n\nYour current subscription allows a maximum of ${maxDoctors} doctor accounts.\n\nPlease upgrade your subscription to add more doctors.`
+                            });
+                        }
+                    } else {
+                        if (staffCount >= maxStaff) {
+                            return res.status(403).json({
+                                success: false,
+                                message: `Staff quota reached.\n\nYour current subscription allows a maximum of ${maxStaff} staff accounts.\n\nPlease upgrade your subscription to add more staff.`
+                            });
+                        }
                     }
-                } else {
-                    if (assignedRoleNameLower === 'clinic doctor') {
+                    
+                    // Restrict "Clinic Doctor" role strictly to Clinics
+                    if (!isClinic && assignedRoleNameLower === 'clinic doctor') {
                         return res.status(400).json({
                             success: false,
                             message: 'Hospital users cannot be assigned the "Clinic Doctor" role.'
                         });
+                    }
+                } 
+                // LEGACY LOGIC (Starter & Enterprise)
+                else {
+                    if (isClinic) {
+                        if (assignedRoleNameLower !== 'clinic doctor') {
+                            return res.status(400).json({
+                                success: false,
+                                message: 'Clinics only support the "Clinic Doctor" role for staff. Other roles are not allowed.'
+                            });
+                        }
+                        const maxForRole = hospitalDoc.tier?.maxDoctors || 1;
+                        const currentCount = await User.countDocuments({
+                            hospitalId: assignedHospitalId,
+                            $or: [
+                                { role: 'doctor' },
+                                { role: roleDoc._id }
+                            ]
+                        });
+                        if (currentCount >= maxForRole) {
+                            return res.status(400).json({
+                                success: false,
+                                message: 'This clinic already has an assigned Clinic Doctor.'
+                            });
+                        }
+                    } else {
+                        if (assignedRoleNameLower === 'clinic doctor') {
+                            return res.status(400).json({
+                                success: false,
+                                message: 'Hospital users cannot be assigned the "Clinic Doctor" role.'
+                            });
+                        }
                     }
                 }
             }
