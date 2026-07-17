@@ -29,7 +29,7 @@ const CentralAdminDashboard = () => {
 
     // Hospital Admin creation
     const [showHospitalAdminForm, setShowHospitalAdminForm] = useState(false);
-    const [hospitalAdminForm, setHospitalAdminForm] = useState({ name: '', email: '', password: '', phone: '', hospitalId: '', file: null });
+    const [hospitalAdminForm, setHospitalAdminForm] = useState({ name: '', email: '', password: '', phone: '', hospitalId: '', file: null, age: '', aadhaarNumber: '' });
     const [creatingHospitalAdmin, setCreatingHospitalAdmin] = useState(false);
 
     // Hospital Detail View
@@ -49,7 +49,7 @@ const CentralAdminDashboard = () => {
     // Staff
     const [roles, setRoles] = useState([]);
     const [showCreateStaffForm, setShowCreateStaffForm] = useState(false);
-    const [createStaffForm, setCreateStaffForm] = useState({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', department: '', file: null });
+    const [createStaffForm, setCreateStaffForm] = useState({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', department: '', file: null, age: '', aadhaarNumber: '' });
     const [creatingStaff, setCreatingStaff] = useState(false);
     const [staffHospitalFilter, setStaffHospitalFilter] = useState('');
     const [allStaff, setAllStaff] = useState([]);
@@ -70,10 +70,10 @@ const CentralAdminDashboard = () => {
     const [clinicStats, setClinicStats] = useState(null);
     const [loadingClinicStats, setLoadingClinicStats] = useState(false);
     const [showClinicManagerForm, setShowClinicManagerForm] = useState(false);
-    const [clinicManagerForm, setClinicManagerForm] = useState({ name: '', email: '', password: '', phone: '' });
+    const [clinicManagerForm, setClinicManagerForm] = useState({ name: '', email: '', password: '', phone: '', age: '', aadhaarNumber: '' });
     const [savingClinicManager, setSavingClinicManager] = useState(false);
     const [showClinicStaffForm, setShowClinicStaffForm] = useState(false);
-    const [clinicStaffForm, setClinicStaffForm] = useState({ name: '', email: '', password: '', phone: '', staffRole: 'doctor' });
+    const [clinicStaffForm, setClinicStaffForm] = useState({ name: '', email: '', password: '', phone: '', staffRole: 'doctor', age: '', aadhaarNumber: '' });
     const [savingClinicStaff, setSavingClinicStaff] = useState(false);
     const [clinicSubscriptions, setClinicSubscriptions] = useState([]);
     const [subscriptionRateForm, setSubscriptionRateForm] = useState({ ratePerPatient: '', billingEnabled: false });
@@ -330,7 +330,7 @@ const CentralAdminDashboard = () => {
             const res = await simpleClinicAPI.createManager(selectedClinic._id, clinicManagerForm);
             if (res.success) {
                 setSuccess(`Admin created! ${res.manager.name} can now login at /login with email: ${res.manager.email}`);
-                setClinicManagerForm({ name: '', email: '', password: '', phone: '' });
+                setClinicManagerForm({ name: '', email: '', password: '', phone: '', age: '', aadhaarNumber: '' });
                 setShowClinicManagerForm(false);
                 // Refresh clinic list and re-open detail with fresh data
                 setSelectedClinic(prev => ({ ...prev, adminUserId: res.manager }));
@@ -353,7 +353,7 @@ const CentralAdminDashboard = () => {
             const res = await simpleClinicAPI.createStaff(selectedClinic._id, clinicStaffForm);
             if (res.success) {
                 setSuccess('Staff member added!');
-                setClinicStaffForm({ name: '', email: '', password: '', phone: '', staffRole: 'doctor' });
+                setClinicStaffForm({ name: '', email: '', password: '', phone: '', staffRole: 'doctor', age: '', aadhaarNumber: '' });
                 setShowClinicStaffForm(false);
                 openClinicDetail(selectedClinic);
             } else setError(res.message);
@@ -543,7 +543,7 @@ const CentralAdminDashboard = () => {
                     } catch { /* avatar upload failure is non-fatal */ }
                 }
                 setSuccess(`✅ Hospital Admin account created! Login: ${hospitalAdminForm.email}`);
-                setHospitalAdminForm({ name: '', email: '', password: '', phone: '', hospitalId: '', file: null });
+                setHospitalAdminForm({ name: '', email: '', password: '', phone: '', hospitalId: '', file: null, age: '', aadhaarNumber: '' });
                 setShowHospitalAdminForm(false);
                 fetchHospitals();
             }
@@ -578,7 +578,7 @@ const CentralAdminDashboard = () => {
             });
             if (res.success) {
                 setSuccess(`✅ Staff account created! Login: ${createStaffForm.email}`);
-                setCreateStaffForm({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', file: null });
+                setCreateStaffForm({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', file: null, age: '', aadhaarNumber: '' });
                 setShowCreateStaffForm(false);
                 fetchAllStaff();
             }
@@ -1172,7 +1172,16 @@ const CentralAdminDashboard = () => {
                                                 }} required pattern="\d{10}" title="Phone number must be exactly 10 digits" />
                                             </div>
                                         </div>
-
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label className="staff-label">Age *</label>
+                                                <input type="number" className="staff-input" placeholder="Age" value={hospitalAdminForm.age} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, age: e.target.value })} required min="1" />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Aadhaar Number *</label>
+                                                <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={hospitalAdminForm.aadhaarNumber} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
+                                            </div>
+                                        </div>
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label className="staff-label">Profile Photo</label>
@@ -1436,7 +1445,16 @@ const CentralAdminDashboard = () => {
                                             />
                                         </div>
                                     </div>
-
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label className="staff-label">Age *</label>
+                                            <input type="number" placeholder="Age" value={createStaffForm.age} onChange={e => setCreateStaffForm({ ...createStaffForm, age: e.target.value })} required min="1" className="staff-input" />
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="staff-label">Aadhaar Number *</label>
+                                            <input type="text" placeholder="12-digit Aadhaar" value={createStaffForm.aadhaarNumber} onChange={e => setCreateStaffForm({ ...createStaffForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" className="staff-input" />
+                                        </div>
+                                    </div>
                                     <button type="submit" disabled={creatingStaff || !createStaffForm.hospitalId} className="submit-button">
                                         {creatingStaff ? 'Creating...' : '✅ Create Staff Account'}
                                     </button>
@@ -1774,7 +1792,16 @@ const CentralAdminDashboard = () => {
                                                             }} required pattern="\d{10}" title="Phone number must be exactly 10 digits" />
                                                     </div>
                                                 </div>
-
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Age *</label>
+                                                        <input type="number" className="staff-input" placeholder="Age" value={clinicManagerForm.age} onChange={e => setClinicManagerForm({ ...clinicManagerForm, age: e.target.value })} required min="1" />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Aadhaar Number *</label>
+                                                        <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={clinicManagerForm.aadhaarNumber} onChange={e => setClinicManagerForm({ ...clinicManagerForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
+                                                    </div>
+                                                </div>
                                                 <button type="submit" disabled={savingClinicManager} className="submit-button" style={{ marginTop: '4px' }}>
                                                     {savingClinicManager ? 'Creating...' : '✅ Create Clinic Admin'}
                                                 </button>
@@ -1833,7 +1860,16 @@ const CentralAdminDashboard = () => {
                                                             }} required pattern="\d{10}" title="Phone number must be exactly 10 digits" />
                                                     </div>
                                                 </div>
-
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Age *</label>
+                                                        <input type="number" className="staff-input" placeholder="Age" value={clinicStaffForm.age} onChange={e => setClinicStaffForm({ ...clinicStaffForm, age: e.target.value })} required min="1" />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Aadhaar Number *</label>
+                                                        <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={clinicStaffForm.aadhaarNumber} onChange={e => setClinicStaffForm({ ...clinicStaffForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
+                                                    </div>
+                                                </div>
                                                 <div className="form-group">
                                                     <label className="staff-label">Role *</label>
                                                     <select className="staff-input" value={clinicStaffForm.staffRole}
