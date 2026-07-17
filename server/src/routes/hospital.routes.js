@@ -62,8 +62,30 @@ const verifyHospitalAdmin = async (req, res, next) => {
 router.get('/', verifyCentralAdmin, async (req, res) => {
     try {
         const plan = req.query.plan || 'enterprise';
-        const hospitals = await Hospital.find({ clinicType: { $ne: 'clinic' }, subscriptionPlan: plan }).populate('adminUserId', 'name email');
-        res.json({ success: true, hospitals });
+        
+        let filter = { clinicType: { $ne: 'clinic' } };
+        if (plan === 'enterprise') {
+            filter.$or = [
+                { subscriptionPlan: 'enterprise' },
+                { subscriptionPlan: 'none' },
+                { subscriptionPlan: { $exists: false } }
+            ];
+        } else {
+            filter.subscriptionPlan = plan;
+        }
+
+        const hospitals = await Hospital.find(filter).populate('adminUserId', 'name email');
+        
+        // Map legacy data so frontend receives expected plan names
+        const mappedHospitals = hospitals.map(h => {
+            const hospital = h.toObject();
+            if (!hospital.subscriptionPlan || hospital.subscriptionPlan === 'none') {
+                hospital.subscriptionPlan = 'enterprise';
+            }
+            return hospital;
+        });
+
+        res.json({ success: true, hospitals: mappedHospitals });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }

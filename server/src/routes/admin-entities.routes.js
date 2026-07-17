@@ -712,7 +712,7 @@ router.get('/services', verifyAdminOrSuperAdmin, async (req, res) => {
 
 router.put('/services/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
-    const service = await Service.findOne({ id: req.params.id });
+    const service = await Service.findById(req.params.id);
     if (!service) {
       return res.status(404).json({ success: false, message: 'Service not found' });
     }
@@ -728,7 +728,7 @@ router.put('/services/:id', verifyAdminOrSuperAdmin, async (req, res) => {
 
 router.delete('/services/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
-    const service = await Service.findOneAndDelete({ id: req.params.id });
+    const service = await Service.findByIdAndDelete(req.params.id);
     if (!service) {
       return res.status(404).json({ success: false, message: 'Service not found' });
     }

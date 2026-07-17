@@ -44,8 +44,36 @@ const verifyCentralAdmin = async (req, res, next) => {
 router.get('/', verifyCentralAdmin, async (req, res) => {
     try {
         const plan = req.query.plan || 'starter';
-        const clinics = await Hospital.find({ clinicType: 'clinic', subscriptionPlan: plan }).populate('adminUserId', 'name email phone');
-        res.json({ success: true, clinics });
+        
+        let filter = { clinicType: 'clinic' };
+        if (plan === 'starter') {
+            filter.$or = [
+                { subscriptionPlan: 'starter' },
+                { subscriptionPlan: 'none' },
+                { subscriptionPlan: { $exists: false } },
+                { clinicPlan: 'starter' }
+            ];
+        } else if (plan === 'clinic_basic') {
+            filter.$or = [
+                { subscriptionPlan: 'clinic_basic' },
+                { clinicPlan: 'basic' }
+            ];
+        } else {
+            filter.subscriptionPlan = plan;
+        }
+
+        const clinics = await Hospital.find(filter).populate('adminUserId', 'name email phone');
+
+        // Map legacy data so frontend receives expected plan names
+        const mappedClinics = clinics.map(c => {
+            const clinic = c.toObject();
+            if (!clinic.subscriptionPlan || clinic.subscriptionPlan === 'none' || clinic.subscriptionPlan === 'starter') {
+                clinic.subscriptionPlan = clinic.clinicPlan === 'basic' ? 'clinic_basic' : 'starter';
+            }
+            return clinic;
+        });
+
+        res.json({ success: true, clinics: mappedClinics });
     } catch (err) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }

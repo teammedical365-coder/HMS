@@ -75,18 +75,6 @@ const AdminDoctors = () => {
 
     const [formData, setFormData] = useState(initialFormState);
 
-    const availableServices = [
-        { id: 'ivf', name: 'In Vitro Fertilization (IVF)' },
-        { id: 'iui', name: 'Intrauterine Insemination (IUI)' },
-        { id: 'icsi', name: 'Intracytoplasmic Sperm Injection' },
-        { id: 'egg-freezing', name: 'Egg Freezing & Preservation' },
-        { id: 'genetic-testing', name: 'Genetic Testing & Screening' },
-        { id: 'donor-program', name: 'Egg & Sperm Donor Program' },
-        { id: 'male-fertility', name: 'Male Fertility Treatment' },
-        { id: 'surrogacy', name: 'Surrogacy Services' },
-        { id: 'fertility-surgery', name: 'Fertility Surgery' }
-    ];
-
     const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
     const isHospitalAdmin = user?.role === 'hospitaladmin';
@@ -152,11 +140,6 @@ const AdminDoctors = () => {
                 }
                 if (!formData.password || formData.password.length < 6) {
                     setError('Password is required and must be at least 6 characters');
-                    setLoading(false);
-                    return;
-                }
-                if (!formData.services || formData.services.length === 0) {
-                    setError('Please select at least one service');
                     setLoading(false);
                     return;
                 }
@@ -281,50 +264,55 @@ const AdminDoctors = () => {
                         <p>Add and manage doctor profiles for the user platform.</p>
                     </div>
                     
-                    {/* Quota Card */}
-                    {(() => {
-                        if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
-                            const limits = getSubscriptionLimits(hospital.subscriptionPlan);
-                            const maxDoctors = limits.maxDoctors;
-                            const doctorCount = doctors.length;
-                            const remaining = Math.max(0, maxDoctors - doctorCount);
-                            
-                            return (
-                                <div style={{ display: 'flex', gap: '20px', marginLeft: 'auto', marginRight: '20px', minWidth: '300px' }}>
-                                    <div style={{ background: '#fff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', flex: 1 }}>
-                                        <div style={{ color: '#64748b', fontSize: '11px', fontWeight: 600 }}>Doctors</div>
-                                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#334155' }}>{doctorCount} / {maxDoctors} Used</div>
-                                    </div>
-                                    <div style={{ background: remaining === 0 ? '#fee2e2' : '#f0fdf4', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${remaining === 0 ? '#fecaca' : '#bbf7d0'}`, flex: 1 }}>
-                                        <div style={{ color: remaining === 0 ? '#dc2626' : '#16a34a', fontSize: '11px', fontWeight: 600 }}>Remaining</div>
-                                        <div style={{ fontSize: '16px', fontWeight: 700, color: remaining === 0 ? '#dc2626' : '#16a34a' }}>{remaining}</div>
-                                    </div>
-                                </div>
-                            );
-                        }
-                        return null;
-                    })()}
-
-                    <div>
-                        <button 
-                            onClick={() => setShowForm(!showForm)} 
-                            className="btn btn-primary"
-                            disabled={(() => {
+                    {/* Right Side Controls (Quota + Button + Warning) */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            {/* Quota Card */}
+                            {(() => {
                                 if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
                                     const limits = getSubscriptionLimits(hospital.subscriptionPlan);
-                                    return doctors.length >= limits.maxDoctors;
+                                    const maxDoctors = limits.maxDoctors;
+                                    const doctorCount = doctors.length;
+                                    const remaining = Math.max(0, maxDoctors - doctorCount);
+                                    
+                                    return (
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            <div style={{ background: '#fff', padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                                                <div style={{ color: '#64748b', fontSize: '10px', fontWeight: 600 }}>Doctors</div>
+                                                <div style={{ fontSize: '14px', fontWeight: 700, color: '#334155' }}>{doctorCount} / {maxDoctors} Used</div>
+                                            </div>
+                                            <div style={{ background: remaining === 0 ? '#fee2e2' : '#f0fdf4', padding: '6px 12px', borderRadius: '6px', border: `1px solid ${remaining === 0 ? '#fecaca' : '#bbf7d0'}` }}>
+                                                <div style={{ color: remaining === 0 ? '#dc2626' : '#16a34a', fontSize: '10px', fontWeight: 600 }}>Remaining</div>
+                                                <div style={{ fontSize: '14px', fontWeight: 700, color: remaining === 0 ? '#dc2626' : '#16a34a' }}>{remaining}</div>
+                                            </div>
+                                        </div>
+                                    );
                                 }
-                                return false;
+                                return null;
                             })()}
-                        >
-                            {showForm ? 'Cancel' : '+ Add Doctor'}
-                        </button>
+
+                            <button 
+                                onClick={() => setShowForm(!showForm)} 
+                                className="btn btn-primary"
+                                disabled={(() => {
+                                    if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
+                                        const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                                        return doctors.length >= limits.maxDoctors;
+                                    }
+                                    return false;
+                                })()}
+                            >
+                                {showForm ? 'Cancel' : '+ Add Doctor'}
+                            </button>
+                        </div>
+                        
+                        {/* Warning Message below the group */}
                         {hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter') && (() => {
                             const limits = getSubscriptionLimits(hospital.subscriptionPlan);
                             if (doctors.length >= limits.maxDoctors && !showForm) {
                                 return (
-                                    <div style={{ color: '#be123c', fontSize: '12px', fontWeight: 'bold', marginTop: '8px', textAlign: 'right' }}>
-                                        ⚠️ Doctor quota reached.<br/>Upgrade to add more.
+                                    <div style={{ color: '#be123c', fontSize: '12px', fontWeight: 'bold' }}>
+                                        ⚠️ Doctor quota reached. Upgrade to add more.
                                     </div>
                                 );
                             }
@@ -356,7 +344,20 @@ const AdminDoctors = () => {
                             <div className="form-row">
                                 <div className="form-group">
                                     <label htmlFor="phone">Phone</label>
+
                                     <input pattern="\\d{10}" maxLength={10} required type="tel" name="phone" value={formData.phone} onChange={handleChange} />
+
+                                    <input 
+                                        type="tel" 
+                                        name="phone" 
+                                        value={formData.phone} 
+                                        maxLength="10"
+                                        onChange={(e) => {
+                                            e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                            handleChange(e);
+                                        }} 
+                                    />
+            31d2b1cbd9389f472e758da88a829582d73e22d4
                                 </div>
                                 <div className="form-group">
                                     <label htmlFor="password">{editingDoctor ? 'New Password' : 'Password *'}</label>
@@ -415,15 +416,6 @@ const AdminDoctors = () => {
                                     </select>
                                 </div>
                             )}
-
-                            <div className="form-group">
-                                <label htmlFor="services">Services (Hold Ctrl/Cmd to select multiple) *</label>
-                                <select name="services" multiple value={formData.services} onChange={handleServiceChange} required className="services-multiselect" size={5}>
-                                    {availableServices.map(service => (
-                                        <option key={service.id} value={service.id}>{service.name}</option>
-                                    ))}
-                                </select>
-                            </div>
 
                             {/* --- AVAILABILITY SECTION --- */}
                             <div className="form-group availability-section">
@@ -528,7 +520,6 @@ const AdminDoctors = () => {
                                     <th>Email</th>
                                     <th>Specialty</th>
                                     <th>Departments</th>
-                                    <th>Services</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -551,7 +542,6 @@ const AdminDoctors = () => {
                                                 ))
                                                 : <span style={{ color: '#94a3b8' }}>—</span>}
                                         </td>
-                                        <td>{doctor.services?.length || 0}</td>
                                         <td>
                                             <div className="action-buttons" style={{ display: 'flex', gap: '8px' }}>
                                                 <button
@@ -559,7 +549,14 @@ const AdminDoctors = () => {
                                                     className="btn-edit"
                                                     style={{ backgroundColor: '#1976d2', color: 'white' }}
                                                 >
-                                                    ℹ️ Personal Info
+                                                    ℹ️ View Profile
+                                                </button>
+                                                <button
+                                                    onClick={() => handleEdit(doctor)}
+                                                    className="btn-edit"
+                                                    style={{ backgroundColor: '#f59e0b', color: 'white' }}
+                                                >
+                                                    Edit
                                                 </button>
                                                 <button onClick={() => handleDelete(doctor._id)} className="btn-delete">Delete</button>
                                             </div>

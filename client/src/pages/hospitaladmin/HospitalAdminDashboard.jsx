@@ -568,7 +568,7 @@ const HospitalAdminDashboard = () => {
                                     <div className="kpi-icon">👩‍⚕️</div>
                                     <div className="kpi-value">{hospitalStats.stats.totalStaff}</div>
                                     <div className="kpi-label">Total Staff</div>
-                                    <div className="kpi-sub">{hospitalStats.stats.doctorCount} doctors · {hospitalStats.stats.labCount} labs </div>
+                                    <div className="kpi-sub">Active staff members</div>
                                 </div>
                                 <div className="kpi-card kpi-green">
                                     <div className="kpi-icon">🧑‍🤝‍🧑</div>
@@ -607,16 +607,6 @@ const HospitalAdminDashboard = () => {
                         <div className="admin-card">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
                                 <h2 style={{ margin: 0 }}>⚡ Quick Operations</h2>
-                                <button
-                                    onClick={() => {
-                                        setActiveTab('staff');
-                                        setShowCreateForm(true);
-                                    }}
-                                    className="btn-save"
-                                    style={{ padding: '8px 20px', fontSize: '14px' }}
-                                >
-                                    + Add Staff
-                                </button>
                             </div>
                             <p style={{ color: '#888', fontSize: '14px', margin: '0 0 20px' }}>
                                 Jump to the areas you manage most frequently. Contact your Central Admin to manage question libraries, test packages, or medicine catalogs.
@@ -808,9 +798,10 @@ const HospitalAdminDashboard = () => {
                             )}
                         </div>
 
+         31d2b1cbd9389f472e758da88a829582d73e22d4
                         {/* Users Table */}
                         <div className="admin-card">
-                            <h2>All Staff & Users</h2>
+                            <h2>All Staff & Doctors</h2>
                             {loadingUsers ? (
                                 <div className="loading-message">Loading users...</div>
                             ) : users.length === 0 ? (

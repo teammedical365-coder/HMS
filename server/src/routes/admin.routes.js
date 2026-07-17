@@ -16,6 +16,7 @@ const Reception = require('../models/reception.model');
 
 const { JWT_SECRET } = require('../config/jwt');
 const validatePassword = require('../utils/validatePassword');
+const SUBSCRIPTION_PLANS = require('../utils/subscriptionPlans');
 
 // ==========================================
 // HELPERS
@@ -299,13 +300,15 @@ router.post('/login', async (req, res) => {
         const user = await User.findOne({ email });
         if (!user) return res.status(401).json({ success: false, message: 'Invalid email or password' });
 
-        let roleName = user.role;
-        let userRoleObj = null;
-
+        let roleDoc = null;
         if (mongoose.Types.ObjectId.isValid(user.role)) {
-            userRoleObj = await Role.findById(user.role);
-            if (userRoleObj) roleName = userRoleObj.name.toLowerCase();
-        } else if (typeof user.role === 'string') {
+            roleDoc = await Role.findById(user.role);
+        }
+
+        let roleName = null;
+        if (roleDoc && typeof roleDoc.name === 'string') {
+            roleName = roleDoc.name.toLowerCase();
+        } else if (typeof user.role === 'string' && user.role) {
             roleName = user.role.toLowerCase();
         }
 
@@ -373,7 +376,7 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
 
         // Filter patients out of staff list
         const staffOnly = usersWithRoles.filter(u =>
-            !['patient'].includes((u.role || '').toLowerCase())
+            !['patient'].includes((typeof u.role === 'string' ? u.role : (u.role?.name || '')).toLowerCase())
         );
 
         res.json({ success: true, users: staffOnly });
@@ -406,7 +409,7 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         }
 
         // Patients don't need hospital assignment
-        const isPatientRole = roleDoc.name.toLowerCase() === 'patient';
+        const isPatientRole = (roleDoc.name || '').toLowerCase() === 'patient';
 
         // Determine hospitalId
         const isCentral = req.user.role === 'centraladmin' || req.user.role === 'superadmin';
@@ -449,15 +452,26 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
                     const maxDoctors = limits.maxDoctors;
                     const maxStaff = limits.maxStaff;
                     
-                    const existingStaff = await User.find({ hospitalId: assignedHospitalId }).populate('role');
+                    const systemRoles = ['centraladmin', 'superadmin', 'hospitaladmin'];
+                    const existingStaffDocs = await User.find({ 
+                        hospitalId: assignedHospitalId,
+                        role: { $nin: systemRoles }
+                    });
+
+                    const usersWithRoles = await Promise.all(existingStaffDocs.map(async (u) => {
+                        return await buildUserResponse(u);
+                    }));
+
                     let doctorCount = 0;
                     let staffCount = 0;
                     
-                    existingStaff.forEach(u => {
-                        const rName = (u.role?.name || u.role || '').toLowerCase();
-                        if (rName === 'patient' || rName === 'hospitaladmin' || rName === 'centraladmin' || rName === 'superadmin') return;
+                    usersWithRoles.forEach(u => {
+                        const rName = (typeof u.role === 'string' ? u.role : (u.role?.name || '')).toLowerCase();
                         
-                        if (rName.includes('doctor')) {
+                        // Exact same exclusion logic as UI and GET /users
+                        if (['patient', 'user', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName)) return;
+                        
+                        if (rName.includes('doctor') || rName === 'clinic doctor') {
                             doctorCount++;
                         } else {
                             staffCount++;
@@ -534,7 +548,7 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
             phone: phone || '',
             role: roleId,
             hospitalId: assignedHospitalId,
-            services: roleDoc.name.toLowerCase() === 'doctor' ? services : [],
+            services: (roleDoc.name || '').toLowerCase() === 'doctor' ? services : [],
             departments: departments || [],
             avatar: avatar || null
         });
@@ -542,7 +556,7 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         await user.save();
 
         // Auto-create linked entity profiles with hospitalId
-        const roleName = roleDoc.name.toLowerCase();
+        const roleName = (roleDoc.name || '').toLowerCase();
         try {
             if (roleName === 'doctor') {
                 let doctorId = nanoid(10);
@@ -588,7 +602,8 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
             user: userData
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error creating user' });
+        console.error('POST /users error:', error);
+        res.status(500).json({ success: false, message: 'Error creating user: ' + error.message });
     }
 });
 
@@ -633,7 +648,7 @@ router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
         let roleChanged = false;
         if (user.role && !['centraladmin', 'superadmin', 'hospitaladmin'].includes(user.role)) {
             const roleDoc = await Role.findById(user.role);
-            newRoleName = roleDoc ? roleDoc.name.toLowerCase() : null;
+            newRoleName = (roleDoc && typeof roleDoc.name === 'string') ? roleDoc.name.toLowerCase() : null;
         }
 
         await user.save();
@@ -717,7 +732,7 @@ router.delete('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
         let roleName = null;
         if (user.role && !['centraladmin', 'superadmin', 'hospitaladmin'].includes(user.role)) {
             const roleDoc = await Role.findById(user.role);
-            roleName = roleDoc ? roleDoc.name.toLowerCase() : null;
+            roleName = (roleDoc && typeof roleDoc.name === 'string') ? roleDoc.name.toLowerCase() : null;
         }
 
         if (roleName === 'doctor' || roleName === 'clinic doctor') await Doctor.findOneAndDelete({ userId: user._id });
