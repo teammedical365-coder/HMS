@@ -485,15 +485,6 @@ const HospitalAdminDashboard = () => {
         { id: 'accounts', label: '🏦 Accounts' },
     ];
 
-    // Hospital Admin can navigate to operations but NOT to question library / test packages / medicines
-    const operationLinks = [
-        { icon: '👨‍⚕️', label: 'Doctors', desc: 'Manage doctor profiles & schedules', path: '/admin/doctors', bg: '#dbeafe', color: '#2563eb' },
-        { icon: '🧪', label: 'Labs', desc: 'Configure lab departments', path: '/admin/labs', bg: '#f3e8ff', color: '#9333ea' },
-        { icon: '💊', label: 'Pharmacy', desc: 'Pharmacy inventory & orders', path: '/admin/pharmacy', bg: '#ffedd5', color: '#ea580c' },
-        { icon: '🛠️', label: 'Services', desc: 'Hospital services & pricing', path: '/admin/services', bg: '#fefce8', color: '#ca8a04' },
-        { icon: '👥', label: 'Manage Users', desc: 'View and manage all staff', path: '/admin/users', bg: '#f0f9ff', color: '#0284c7' },
-        { icon: '📝', label: 'Question Library', desc: 'Manage diagnostic questions', path: '/hospitaladmin/question-library', bg: '#fdf2f8', color: '#be185d' },
-    ];
 
     return (
         <div className="hospitaladmin-page">
@@ -600,32 +591,6 @@ const HospitalAdminDashboard = () => {
                                 </div>
                             </div>
                         ) : null}
-
-                        {/* Quick Operations */}
-                        <div className="admin-card">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-                                <h2 style={{ margin: 0 }}>⚡ Quick Operations</h2>
-                            </div>
-                            <p style={{ color: '#888', fontSize: '14px', margin: '0 0 20px' }}>
-                                Jump to the areas you manage most frequently. Contact your Central Admin to manage question libraries, test packages, or medicine catalogs.
-                            </p>
-                            <div className="ha-ops-grid">
-                                {operationLinks.map((item, i) => (
-                                    <div
-                                        key={i}
-                                        className="ha-op-card"
-                                        onClick={() => navigate(item.path)}
-                                        style={{ background: item.bg, borderColor: item.color + '30' }}
-                                    >
-                                        <span className="ha-op-icon" style={{ color: item.color }}>{item.icon}</span>
-                                        <div>
-                                            <h4 style={{ color: item.color }}>{item.label}</h4>
-                                            <p>{item.desc}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
 
                         {/* My Profile Card */}
                         <div className="admin-card" style={{ marginTop: '24px' }}>

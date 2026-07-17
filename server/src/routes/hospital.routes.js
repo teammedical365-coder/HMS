@@ -144,7 +144,7 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
         const hospitalData = { name, slug, address, city, state, phone, email, website, logo, departments: departments || [] };
         if (plan === 'multi_speciality_starter') {
             hospitalData.subscriptionPlan = 'multi_speciality_starter';
-            hospitalData.tier = { maxDoctors: 15, maxStaff: 14 };
+            hospitalData.tier = { maxDoctors: 15, maxStaff: 25 };
         } else if (plan === 'clinic_basic') {
             hospitalData.subscriptionPlan = 'clinic_basic';
             hospitalData.tier = { maxDoctors: 5, maxStaff: 3 };
@@ -283,7 +283,7 @@ const updateHospital = async (req, res) => {
 
         if (plan === 'multi_speciality_starter') {
             hospital.subscriptionPlan = 'multi_speciality_starter';
-            hospital.tier = { maxDoctors: 15, maxStaff: 14 };
+            hospital.tier = { maxDoctors: 15, maxStaff: 25 };
         } else if (plan === 'clinic_basic') {
             hospital.subscriptionPlan = 'clinic_basic';
             hospital.tier = { maxDoctors: 5, maxStaff: 3 };

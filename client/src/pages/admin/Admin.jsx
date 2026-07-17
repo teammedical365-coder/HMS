@@ -25,7 +25,7 @@ const Admin = () => {
     // Create Staff Form state
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [createForm, setCreateForm] = useState({
-        name: '', email: '', password: '', phone: '', roleId: '', file: null, department: ''
+        name: '', email: '', password: '', phone: '', age: '', aadhaar: '', roleId: '', file: null, department: ''
     });
     const [creating, setCreating] = useState(false);
     const [clinicDoctorExists, setClinicDoctorExists] = useState(false);
@@ -316,11 +316,16 @@ const Admin = () => {
             if (createForm.file) {
                 const formData = new FormData();
                 formData.append('images', createForm.file);
-
-                // Use generic upload utility
-                const uploadRes = await uploadAPI.uploadImages(formData);
-                if (uploadRes.success && uploadRes.files.length > 0) {
-                    avatarUrl = uploadRes.files[0].url;
+                try {
+                    const uploadRes = await uploadAPI.uploadImages(formData);
+                    if (uploadRes.success && uploadRes.urls && uploadRes.urls.length > 0) {
+                        avatarUrl = uploadRes.urls[0];
+                    } else if (uploadRes.success && uploadRes.files && uploadRes.files.length > 0) {
+                        avatarUrl = uploadRes.files[0].url;
+                    }
+                } catch (uploadErr) {
+                    console.error("Image upload failed:", uploadErr);
+                    // continue without image if upload fails or notify user
                 }
             }
 
@@ -333,8 +338,8 @@ const Admin = () => {
 
             const response = await adminAPI.createUser(userData);
             if (response.success) {
-                setSuccess(`✅ ${response.user?.role || 'Staff'} account created! They can log in with: ${createForm.email}`);
-                setCreateForm({ name: '', email: '', password: '', phone: '', roleId: '', file: null, department: '' });
+                setSuccess(`✅ ${response.user?.role?.name || 'Staff'} account created! They can log in with: ${createForm.email}`);
+                setCreateForm({ name: '', email: '', password: '', phone: '', age: '', aadhaar: '', roleId: '', file: null, department: '' });
                 setShowCreateForm(false);
                 fetchUsers();
             }
@@ -460,44 +465,60 @@ const Admin = () => {
                                 </div>
                                 <div className="form-row">
                                     <div className="form-group">
-                                        <label className="staff-label">Password</label>
-                                        <input type="text" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} required className="staff-input" placeholder="Set a temporary password" />
+                                        <label className="staff-label">Password *</label>
+                                        <input type="text" placeholder="Set a temporary password" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} required className="staff-input" />
                                         <small className="form-hint">Share this password with the staff member</small>
                                     </div>
                                     <div className="form-group">
                                         <label className="staff-label">Phone</label>
-                                        <input
-                                            type="text"
-                                            value={createForm.phone || ''}
+                                        <input 
+                                            type="text" 
+                                            placeholder="e.g. 9876543210" 
+                                            value={createForm.phone || ''} 
                                             onChange={e => {
                                                 const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
                                                 setCreateForm({ ...createForm, phone: cleanVal });
-                                            }}
-                                            className="staff-input"
-                                            required
-                                            maxLength="10"  pattern="\d{10}"  title="Phone number must be exactly 10 digits" />
+                                            }} 
+                                            className="staff-input" 
+                                        />
                                     </div>
                                 </div>
+
                                 <div className="form-row">
                                     <div className="form-group">
-                                        <label className="staff-label">Profile Image</label>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={e => setCreateForm({ ...createForm, file: e.target.files[0] })}
-                                            className="staff-input"
-                                            style={{ padding: '10px' }}
+                                        <label className="staff-label">Age</label>
+                                        <input type="number" placeholder="e.g. 30" value={createForm.age || ''} onChange={e => setCreateForm({ ...createForm, age: e.target.value })} className="staff-input" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Aadhaar Number</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="12-digit Aadhaar" 
+                                            maxLength="12"
+                                            value={createForm.aadhaar || ''} 
+                                            onChange={e => {
+                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 12);
+                                                setCreateForm({ ...createForm, aadhaar: cleanVal });
+                                            }} 
+                                            className="staff-input" 
                                         />
+                                    </div>
+                                </div>
+
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="staff-label">Profile Image Upload</label>
+                                        <input type="file" accept="image/*" onChange={e => setCreateForm({ ...createForm, file: e.target.files[0] })} className="staff-input" style={{ padding: '8px' }} />
                                     </div>
                                     <div className="form-group">
                                         <label className="staff-label">Assign Role * <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: '0.85rem', textTransform: 'none' }}>(Don't see your role? <a href="/admin/roles" style={{ color: '#0ea5e9' }}>Create one here</a>)</span></label>
                                         <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
-                                            <option value="">-- Select a Role --</option>
+                                            <option value="">Select Role</option>
                                             {roles
                                                 .filter(r => {
-                                                    const name = (r.name || '').toLowerCase();
-                                                    if (name.includes('doctor')) return false; // Exclude doctors
-                                                    return !['patient', 'user', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(name);
+                                                    const name = r.name.toLowerCase();
+                                                    if (name.includes('doctor')) return false;
+                                                    return !['patient', 'user', 'admin', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(name);
                                                 })
                                                 .map(role => (
                                                     <option key={role._id} value={role._id}>
@@ -512,22 +533,23 @@ const Admin = () => {
                                     <div className="form-row" style={{ marginTop: '10px' }}>
                                         <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                                             <label className="staff-label">Assign Department (Optional - Leave blank to allow all)</label>
-                                            <select
-                                                value={createForm.department}
+                                            <select 
+                                                value={createForm.department} 
                                                 onChange={(e) => setCreateForm(prev => ({ ...prev, department: e.target.value }))}
                                                 className="staff-input"
                                                 style={{ marginTop: '8px' }}
                                             >
-                                                <option value="">-- Select Department --</option>
-                                                {hospital.departments.map(dept => (
-                                                    <option key={dept} value={dept}>{dept}</option>
+                                                <option value="">-- All Departments --</option>
+                                                {hospital.departments.map((dept, i) => (
+                                                    <option key={i} value={dept}>{dept}</option>
                                                 ))}
                                             </select>
                                         </div>
                                     </div>
                                 )}
-                                <button type="submit" className="btn-save" disabled={creating} style={{ marginTop: '10px' }}>
-                                    {creating ? 'Creating Account...' : '✅ Create Staff Account'}
+
+                                <button type="submit" disabled={creating} className="btn-save" style={{ marginTop: '20px', width: '100%' }}>
+                                    {creating ? 'Creating...' : 'Create Staff Account'}
                                 </button>
                             </form>
                         </div>
