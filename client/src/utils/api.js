@@ -284,6 +284,7 @@ export const labAPI = {
 export const pharmacyAPI = {
     getInventory: async () => (await apiClient.get('/api/pharmacy/inventory')).data,
     addMedicine: async (data) => (await apiClient.post('/api/pharmacy/inventory', data)).data,
+    updateMedicine: async (id, data) => (await apiClient.put(`/api/pharmacy/inventory/${id}`, data)).data,
     deleteMedicine: async (id) => (await apiClient.delete(`/api/pharmacy/inventory/${id}`)).data
 };
 

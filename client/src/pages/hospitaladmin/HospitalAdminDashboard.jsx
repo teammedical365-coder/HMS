@@ -665,7 +665,6 @@ const HospitalAdminDashboard = () => {
                             </div>
                         </div>
 
-<<<<<<< HEAD
                         {/* Create Staff Form */}
                         <div className="admin-card" style={{ marginBottom: '20px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -745,9 +744,12 @@ const HospitalAdminDashboard = () => {
                                             </div>
                                         </div>
                                     )}
-=======
->>>>>>> 18fc42a9d9c9afe595a86261fb866fe2211545da
-
+                                    <button type="submit" disabled={creating} className="submit-button" style={{ marginTop: '20px', maxWidth: '200px' }}>
+                                        {creating ? 'Creating...' : 'Create Account'}
+                                    </button>
+                                </form>
+                            )}
+                        </div>
 
                         {/* Users Table */}
                         <div className="admin-card">

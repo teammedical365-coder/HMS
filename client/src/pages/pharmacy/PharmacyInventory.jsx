@@ -16,6 +16,7 @@ const PharmacyInventory = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
     const [formError, setFormError] = useState('');
+    const [editId, setEditId] = useState(null);
 
     const [newMedicine, setNewMedicine] = useState(EMPTY_FORM);
 
@@ -65,7 +66,7 @@ const PharmacyInventory = () => {
     };
 
     // ── Submit ───────────────────────────────────────────────────────────────
-    const handleAddMedicine = async (e) => {
+    const handleSubmitMedicine = async (e) => {
         e.preventDefault();
         setFormError('');
 
@@ -104,9 +105,15 @@ const PharmacyInventory = () => {
         };
 
         try {
-            const response = await pharmacyAPI.addMedicine(cleanedData);
+            let response;
+            if (editId) {
+                response = await pharmacyAPI.updateMedicine(editId, cleanedData);
+            } else {
+                response = await pharmacyAPI.addMedicine(cleanedData);
+            }
             if (response.success) {
                 setShowAddModal(false);
+                setEditId(null);
                 fetchInventory();
                 setNewMedicine(EMPTY_FORM);
             }
@@ -114,6 +121,26 @@ const PharmacyInventory = () => {
             const msg = error.response?.data?.message || 'Check fields and try again.';
             setFormError('Error: ' + msg);
         }
+    };
+
+    // ── Edit ───────────────────────────────────────────────────────────────
+    const handleEditClick = (med) => {
+        setNewMedicine({
+            name: med.name,
+            category: med.category,
+            stock: med.stock,
+            unit: med.unit,
+            buyingPrice: med.buyingPrice,
+            sellingPrice: med.sellingPrice,
+            vendor: med.vendor || '',
+            batchNumber: med.batchNumber || '',
+            expiryDate: med.expiryDate ? med.expiryDate.split('T')[0] : '',
+            purchaseDate: med.purchaseDate ? med.purchaseDate.split('T')[0] : new Date().toISOString().split('T')[0],
+            isPriceFixed: med.isPriceFixed || false
+        });
+        setEditId(med._id);
+        setFormError('');
+        setShowAddModal(true);
     };
 
     // ── Delete ───────────────────────────────────────────────────────────────
@@ -143,7 +170,7 @@ const PharmacyInventory = () => {
                     <span className="search-icon">🔍</span>
                     <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
-                <button className="btn-add" onClick={() => { setNewMedicine(EMPTY_FORM); setFormError(''); setShowAddModal(true); }}>+ Add Stock</button>
+                <button className="btn-add" onClick={() => { setNewMedicine(EMPTY_FORM); setEditId(null); setFormError(''); setShowAddModal(true); }}>+ Add Stock</button>
             </div>
 
             <div className="inventory-table-wrapper">
@@ -174,6 +201,7 @@ const PharmacyInventory = () => {
                                     <td>{med.vendor}</td>
                                     <td>{new Date(med.expiryDate).toLocaleDateString()}</td>
                                     <td>
+                                        <button className="pharma-action-btn edit" onClick={() => handleEditClick(med)}>✏️</button>
                                         <button className="pharma-action-btn delete" onClick={() => handleDelete(med._id)}>🗑</button>
                                     </td>
                                 </tr>
@@ -188,13 +216,13 @@ const PharmacyInventory = () => {
                     <div className="modal-content inventory-modal !bg-white !rounded-xl !shadow-xl !max-h-[85vh] !w-full !max-w-2xl !flex !flex-col !overflow-hidden" style={{ height: '85vh', display: 'flex', flexDirection: 'column' }}>
                         <div className="modal-header !p-6 !border-b !flex !justify-between !items-center !bg-white">
                             <div>
-                                <h2>Add New Medication</h2>
-                                <p className="modal-subtitle">Enter details to update your stock levels</p>
+                                <h2>{editId ? 'Edit Medication' : 'Add New Medication'}</h2>
+                                <p className="modal-subtitle">{editId ? 'Update details and stock levels' : 'Enter details to update your stock levels'}</p>
                             </div>
                             <button className="close-btn" onClick={() => setShowAddModal(false)}>×</button>
                         </div>
 
-                        <form onSubmit={handleAddMedicine} className="pharma-form !p-6 !overflow-y-auto !flex-1" style={{ flex: '1', overflowY: 'auto', overscrollBehavior: 'contain', zIndex: 10 }}>
+                        <form onSubmit={handleSubmitMedicine} className="pharma-form !p-6 !overflow-y-auto !flex-1" style={{ flex: '1', overflowY: 'auto', overscrollBehavior: 'contain', zIndex: 10 }}>
 
                             {/* Inline validation alert */}
                             {formError && (
@@ -328,7 +356,7 @@ const PharmacyInventory = () => {
 
                             <div className="modal-actions">
                                 <button type="button" className="btn-cancel" onClick={() => setShowAddModal(false)}>Discard</button>
-                                <button type="submit" className="btn-save">Save to Inventory</button>
+                                <button type="submit" className="btn-save">{editId ? 'Update Stock' : 'Save to Inventory'}</button>
                             </div>
                         </form>
                     </div>

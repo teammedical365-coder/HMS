@@ -2,6 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { pharmacyOrderAPI } from '../../utils/api';
 import './PharmacyInventory.css';
 
+const getPharmacyTotal = (order, isChecked) => {
+    if (order.totalAmount && Number(order.totalAmount) > 0) return Number(order.totalAmount);
+    if (!order.items || !order.items.length) return 0;
+    
+    let sum = 0;
+    order.items.forEach((item, idx) => {
+        const includeItem = order.orderStatus === 'Upcoming' ? isChecked(order._id, idx) : item.purchased;
+        if (includeItem) {
+            sum += (Number(item.price) || 50);
+        }
+    });
+    return sum;
+};
+
 const PharmacyOrders = () => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -121,21 +135,19 @@ const PharmacyOrders = () => {
                                         </ul>
                                     </td>
                                     <td style={{ fontWeight: '700', color: '#0f172a' }}>
-                                        {order.totalAmount > 0
-                                            ? `₹${order.totalAmount}`
-                                            : order.orderStatus === 'Upcoming' ? '—' : '₹0'}
+                                        ₹{getPharmacyTotal(order, isChecked)}
                                     </td>
                                     <td>
                                         <span className={`status-badge ${order.orderStatus === 'Completed' ? 'status-active' : 'status-low'}`}>
-                                            {order.orderStatus}
+                                            {order.orderStatus === 'Upcoming' ? 'Pending' : order.orderStatus}
                                         </span>
                                     </td>
                                     <td>
                                         <span style={{
-                                            color: order.paymentStatus === 'Paid' ? '#166534' : (order.orderStatus === 'Completed' && order.paymentStatus === 'Pending' ? '#000' : '#991b1b'),
+                                            color: order.paymentStatus === 'Paid' ? '#166534' : '#991b1b',
                                             fontWeight: 'bold'
                                         }}>
-                                            {order.orderStatus === 'Completed' && order.paymentStatus === 'Pending' ? '-' : order.paymentStatus}
+                                            {order.paymentStatus}
                                         </span>
                                     </td>
                                     <td>

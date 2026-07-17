@@ -256,11 +256,11 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
 
         await Promise.all([
             appointmentIds.length > 0 && Appointment.updateMany(
-                { _id: { $in: appointmentIds } }, { $set: { paymentStatus: 'Paid', paymentMode } }),
+                { _id: { $in: appointmentIds } }, { $set: { paymentStatus: 'Paid', paymentMode, status: 'completed' } }),
             labReportIds.length > 0 && LabReport.updateMany(
                 { _id: { $in: labReportIds } }, { $set: { paymentStatus: 'Paid', paymentMode } }),
             pharmacyOrderIds.length > 0 && PharmacyOrder.updateMany(
-                { _id: { $in: pharmacyOrderIds } }, { $set: { paymentStatus: 'Paid' } }),
+                { _id: { $in: pharmacyOrderIds } }, { $set: { paymentStatus: 'Paid', orderStatus: 'Completed' } }),
             facilityChargeIds.length > 0 && FacilityCharge.updateMany(
                 { _id: { $in: facilityChargeIds } }, { $set: { paymentStatus: 'Paid' } }),
         ].filter(Boolean));
