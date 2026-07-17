@@ -7,6 +7,12 @@ const paymentTransactionSchema = new mongoose.Schema({
     paymentStatus: { type: String, enum: ['Pending', 'Paid', 'Failed', 'Refunded'], default: 'Paid' },
     amount: { type: Number, required: true, default: 0 },
     
+    // Split Payments
+    splitPayments: [{
+        method: { type: String },
+        amount: { type: Number, default: 0 }
+    }],
+    
     // Payment Details
     transactionId: { type: String, default: '' },
     upiId: { type: String, default: '' },

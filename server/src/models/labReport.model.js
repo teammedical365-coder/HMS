@@ -51,6 +51,10 @@ const labReportSchema = new mongoose.Schema({
     default: 'PENDING',
     index: true
   },
+  splitPayments: [{
+    method: { type: String },
+    amount: { type: Number, default: 0 }
+  }],
   paymentMode: {
     type: String,
     enum: ['CASH', 'ONLINE', 'UPI', 'CARD', 'NONE'],

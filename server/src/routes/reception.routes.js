@@ -241,7 +241,7 @@ router.post('/verify-aadhaar-otp', verifyToken, verifyReception, async (req, res
 router.get('/search-patients', verifyToken, verifyReception, async (req, res) => {
     try {
         const { query } = req.query;
-        if (!query || typeof query !== 'string' || query.trim().length < 2) return res.json({ success: true, patients: [] });
+        if (!query || typeof query !== 'string' || query.trim().length === 0) return res.json({ success: true, patients: [] });
 
         const safeQuery = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const queryFilter = {
@@ -446,7 +446,7 @@ router.get('/appointments', verifyToken, verifyReception, resolveTenant, async (
             status: 'Admitted'
         }).select('patientId').lean();
 
-        const activeAdmittedPatientIds = new Set(activeAdmissions.map(adm => adm.patientId.toString()));
+        const activeAdmittedPatientIds = new Set(activeAdmissions.filter(adm => adm.patientId).map(adm => adm.patientId.toString()));
 
         const appointmentsWithHospitalized = appointments.map(apt => ({
             ...apt,
@@ -454,7 +454,10 @@ router.get('/appointments', verifyToken, verifyReception, resolveTenant, async (
         }));
 
         res.json({ success: true, appointments: appointmentsWithHospitalized });
-    } catch (e) { res.status(500).json({ success: false, message: 'An internal error occurred' }); }
+    } catch (e) {
+        console.error('[GET /appointments Error]:', e);
+        res.status(500).json({ success: false, message: 'An internal error occurred' }); 
+    }
 });
 
 // 5. RESCHEDULE & CANCEL
@@ -611,7 +614,7 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
 // 7. BOOK APPOINTMENT (NEW: Assign Doctor)
 router.post('/book-appointment', verifyToken, verifyReception, async (req, res) => {
     try {
-        const { patientId, doctorId, date, time, notes, paymentMethod, paymentStatus, amount, department } = req.body;
+        const { patientId, doctorId, date, time, notes, paymentMethod, paymentStatus, amount, department, splitPayments = [] } = req.body;
 
         if (!patientId || !doctorId || !date) {
             return res.status(400).json({ success: false, message: 'Missing booking details' });
@@ -727,7 +730,8 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             amount: finalAmount,
             status: 'confirmed',
             paymentStatus: finalAmount === 0 ? 'Paid' : (paymentStatus || 'Paid'),
-            paymentMethod: paymentMethod || 'Cash',
+            paymentMethod: splitPayments.length > 0 ? splitPayments[0].method : (paymentMethod || 'Cash'),
+            splitPayments,
             notes: notes || 'Walk-in created by reception',
             bookedBy: req.user._id
         });
@@ -774,22 +778,24 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
 // 7b. CONFIRM PAYMENT for an existing appointment
 router.patch('/appointments/:id/confirm-payment', verifyToken, verifyReception, async (req, res) => {
     try {
-        const { paymentMethod, amount, transactionId, upiId, cardDetails, bankReference, proofUrl } = req.body;
+        const { paymentMethod, amount, transactionId, upiId, cardDetails, bankReference, proofUrl, splitPayments = [] } = req.body;
         const findQuery = { _id: req.params.id };
         if (req.user.hospitalId) findQuery.hospitalId = req.user.hospitalId;
         const appt = await Appointment.findOne(findQuery).populate('doctorId', 'name');
         if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found or unauthorized' });
         
         appt.paymentStatus = 'Paid';
-        appt.paymentMethod = paymentMethod || appt.paymentMethod || 'Cash';
+        appt.paymentMethod = splitPayments.length > 0 ? splitPayments[0].method : (paymentMethod || appt.paymentMethod || 'Cash');
+        appt.splitPayments = splitPayments;
         if (amount !== undefined) appt.amount = amount;
         await appt.save();
 
         const PaymentTransaction = require('../models/paymentTransaction.model');
         const pt = new PaymentTransaction({
-            hospitalId: req.hospitalId || req.user.hospitalId,
+            hospitalId: req.user.hospitalId || appt.hospitalId,
             patientId: appt.userId,
             paymentMode: appt.paymentMethod,
+            splitPayments,
             paymentStatus: 'Paid',
             amount: Number(appt.amount) || 0,
             transactionId,

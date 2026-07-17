@@ -82,9 +82,18 @@ const HospitalAdminDashboard = () => {
     }, [navigate]);
 
     useEffect(() => {
-        fetchMyHospital();
-        fetchUsers();
-        fetchRoles();
+        const initDashboard = async () => {
+            try {
+                await Promise.all([
+                    fetchMyHospital(),
+                    fetchUsers(),
+                    fetchRoles()
+                ]);
+            } catch (err) {
+                console.error('Failed to initialize dashboard:', err);
+            }
+        };
+        initDashboard();
     }, []);
 
     // Fetch data when switching to inventory or lab pricing tabs
@@ -550,8 +559,21 @@ const HospitalAdminDashboard = () => {
 
                         {/* Stats Grid */}
                         {loadingStats ? (
-                            <div className="loading-message" style={{ padding: '60px', textAlign: 'center', fontSize: '18px' }}>
-                                ⏳ Loading hospital analytics...
+                            <div className="hospital-kpi-grid">
+                                {[1, 2, 3, 4, 5, 6].map((i) => (
+                                    <div key={i} style={{ 
+                                        padding: '24px', 
+                                        borderRadius: '16px', 
+                                        background: '#f8fafc', 
+                                        border: '1px solid #e2e8f0',
+                                        animation: 'pulse 1.5s infinite ease-in-out' 
+                                    }}>
+                                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#e2e8f0', marginBottom: '16px' }}></div>
+                                        <div style={{ width: '60%', height: '24px', background: '#e2e8f0', borderRadius: '4px', marginBottom: '12px' }}></div>
+                                        <div style={{ width: '40%', height: '14px', background: '#e2e8f0', borderRadius: '4px', marginBottom: '8px' }}></div>
+                                        <div style={{ width: '80%', height: '12px', background: '#e2e8f0', borderRadius: '4px' }}></div>
+                                    </div>
+                                ))}
                             </div>
                         ) : hospitalStats?.stats ? (
                             <div className="hospital-kpi-grid">

@@ -210,6 +210,7 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
             paymentMode = 'Cash',
             patientId,
             amount,
+            splitPayments = [],
             transactionId,
             upiId,
             cardDetails,
@@ -217,6 +218,9 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
             proofUrl,
             proofFileId
         } = req.body;
+
+        const actualPaymentMode = splitPayments.length > 0 ? splitPayments[0].method : paymentMode;
+        const totalAmount = splitPayments.length > 0 ? splitPayments.reduce((acc, p) => acc + Number(p.amount), 0) : amount;
 
         const { Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission, PaymentTransaction } = getModels(req);
 
@@ -256,13 +260,13 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
 
         await Promise.all([
             appointmentIds.length > 0 && Appointment.updateMany(
-                { _id: { $in: appointmentIds } }, { $set: { paymentStatus: 'Paid', paymentMode } }),
+                { _id: { $in: appointmentIds } }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments } }),
             labReportIds.length > 0 && LabReport.updateMany(
-                { _id: { $in: labReportIds } }, { $set: { paymentStatus: 'Paid', paymentMode } }),
+                { _id: { $in: labReportIds } }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments } }),
             pharmacyOrderIds.length > 0 && PharmacyOrder.updateMany(
-                { _id: { $in: pharmacyOrderIds } }, { $set: { paymentStatus: 'Paid' } }),
+                { _id: { $in: pharmacyOrderIds } }, { $set: { paymentStatus: 'Paid', splitPayments } }),
             facilityChargeIds.length > 0 && FacilityCharge.updateMany(
-                { _id: { $in: facilityChargeIds } }, { $set: { paymentStatus: 'Paid' } }),
+                { _id: { $in: facilityChargeIds } }, { $set: { paymentStatus: 'Paid', splitPayments } }),
         ].filter(Boolean));
 
         if (patientId) {
@@ -279,9 +283,10 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
             const pt = new PaymentTransaction({
                 hospitalId: req.hospitalId || req.user.hospitalId,
                 patientId,
-                paymentMode,
+                paymentMode: actualPaymentMode,
+                splitPayments,
                 paymentStatus: 'Paid',
-                amount: Number(amount) || 0,
+                amount: Number(totalAmount) || 0,
                 transactionId,
                 upiId,
                 cardDetails,

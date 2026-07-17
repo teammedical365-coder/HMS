@@ -175,8 +175,8 @@ export const receptionAPI = {
         const response = await apiClient.patch(`/api/reception/appointments/${id}/cancel`);
         return response.data;
     },
-    confirmPayment: async (id, paymentMethod, amount) => {
-        const response = await apiClient.patch(`/api/reception/appointments/${id}/confirm-payment`, { paymentMethod, amount });
+    confirmPayment: async (id, paymentMethod, amount, data = {}) => {
+        const response = await apiClient.patch(`/api/reception/appointments/${id}/confirm-payment`, { paymentMethod, amount, ...data });
         return response.data;
     },
     sendAadhaarOTP: async (aadhaarNumber) => {

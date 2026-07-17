@@ -18,6 +18,10 @@ const admissionSchema = new mongoose.Schema({
     }],
     totalAmount: { type: Number, default: 0 },
     paymentStatus: { type: String, enum: ['Pending', 'Paid'], default: 'Pending' },
+    splitPayments: [{
+        method: { type: String },
+        amount: { type: Number, default: 0 }
+    }],
     notes: String,
 }, { timestamps: true });
 

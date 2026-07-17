@@ -207,7 +207,7 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
 
             <div className="topbar-right">
                 <div className="user-profile-widget">
-                    {((user?.role || '').toLowerCase() !== 'centraladmin' && (user?.role || '').toLowerCase() !== 'superadmin') && (
+                    {((user?.role || '').toLowerCase() !== 'centraladmin' && (user?.role || '').toLowerCase() !== 'superadmin' && (user?.role || '').toLowerCase() !== 'reception' && (user?.role || '').toLowerCase() !== 'receptionist') && (
                         <button 
                             onClick={() => {
                                 if ((user?.role || '').toLowerCase() === 'reception' || (user?.role || '').toLowerCase() === 'receptionist') {
