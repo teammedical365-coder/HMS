@@ -63,14 +63,23 @@ router.get('/', verifyCentralAdmin, async (req, res) => {
     try {
         const plan = req.query.plan || 'enterprise';
         
-        let filter = { clinicType: { $ne: 'clinic' } };
+        let filter = {};
         if (plan === 'enterprise') {
+            filter.clinicType = { $ne: 'clinic' };
             filter.$or = [
                 { subscriptionPlan: 'enterprise' },
                 { subscriptionPlan: 'none' },
                 { subscriptionPlan: { $exists: false } }
             ];
-        } else {
+        } else if (plan === 'starter') {
+            filter.clinicType = 'clinic';
+            filter.$or = [
+                { subscriptionPlan: 'starter' },
+                { subscriptionPlan: 'none' },
+                { subscriptionPlan: { $exists: false } }
+            ];
+        } else if (plan && plan !== 'all') {
+            filter.clinicType = { $ne: 'clinic' };
             filter.subscriptionPlan = plan;
         }
 
@@ -80,7 +89,11 @@ router.get('/', verifyCentralAdmin, async (req, res) => {
         const mappedHospitals = hospitals.map(h => {
             const hospital = h.toObject();
             if (!hospital.subscriptionPlan || hospital.subscriptionPlan === 'none') {
-                hospital.subscriptionPlan = 'enterprise';
+                if (hospital.clinicType === 'clinic') {
+                    hospital.subscriptionPlan = 'starter';
+                } else {
+                    hospital.subscriptionPlan = 'enterprise';
+                }
             }
             return hospital;
         });

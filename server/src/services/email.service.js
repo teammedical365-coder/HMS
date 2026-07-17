@@ -41,6 +41,7 @@ async function sendAppointmentConfirmationEmail({
     appointmentTime,
     consultationFee,
     paymentStatus,
+    paymentMode,
     hospitalName,
     hospitalAddress,
     hospitalPhone
@@ -146,6 +147,10 @@ async function sendAppointmentConfirmationEmail({
                                             ${paymentStatus || 'Pending'}
                                         </span>
                                     </td>
+                                </tr>
+                                <tr style="background-color:#f8fafc;">
+                                    <td style="padding:8px 0 8px 8px;font-weight:600;color:#64748b;">Payment Mode</td>
+                                    <td style="padding:8px 0;font-weight:700;">${paymentMode || 'Not Available'}</td>
                                 </tr>
                             </table>
                         </td>

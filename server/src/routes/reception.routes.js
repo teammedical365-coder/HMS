@@ -83,7 +83,7 @@ async function generateSmartMRN(hospitalId, hospital, User) {
 // 1. REGISTER (WALK-IN)
 router.post('/register', verifyToken, verifyReception, async (req, res) => {
     try {
-        let { name, email, phone } = req.body;
+        let { name, email, phone, age, aadhaarNumber } = req.body;
 
         // Sanitize — trim whitespace and convert empty strings to undefined
         name = name ? String(name).trim() : undefined;
@@ -122,8 +122,10 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         let user = await User.findOne(userQuery);
 
         if (user) {
-            // Only update email if provided and different (avoid overwriting with empty)
+            // Only update fields if provided and different
             if (email && email !== user.email) user.email = email;
+            if (age && user.age !== age) user.age = age;
+            if (aadhaarNumber && user.aadhaarNumber !== aadhaarNumber) user.aadhaarNumber = aadhaarNumber;
 
             const hospitalId = req.user.hospitalId || user.hospitalId;
             const Hospital = require('../models/hospital.model');
@@ -172,7 +174,9 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
             patientId,
             mrn: patientId,
             fertilityProfile: {},
-            hospitalId: hospitalId || undefined
+            hospitalId: hospitalId || undefined,
+            age,
+            aadhaarNumber
         };
 
         // Only attach email if it actually exists, to prevent duplicate sparse index errors
@@ -753,6 +757,7 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             appointmentTime: isTokenMode ? `Token #${tokenNumber}` : (finalTime || ''),
             consultationFee: newAppointment.amount,
             paymentStatus: newAppointment.paymentStatus,
+            paymentMode: newAppointment.paymentMethod || paymentMethod || 'Not Available',
             hospitalName: hospital?.name || 'Hospital',
             hospitalAddress: hospitalAddress,
             hospitalPhone: hospital?.phone || ''
