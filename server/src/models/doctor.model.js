@@ -28,12 +28,10 @@ const doctorSchema = new mongoose.Schema({
   phone: { type: String, required: true, match: /^\d{10}$/ },
   age: {
     type: Number,
-    required: [true, 'Age is required'],
     min: 1
   },
   aadhaarNumber: {
     type: String,
-    required: [true, 'Aadhaar number is required'],
     match: /^\d{12}$/
   },
   specialty: {

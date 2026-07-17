@@ -345,19 +345,17 @@ const AdminDoctors = () => {
                                 <div className="form-group">
                                     <label htmlFor="phone">Phone</label>
 
-                                    <input pattern="\\d{10}" maxLength={10} required type="tel" name="phone" value={formData.phone} onChange={handleChange} />
-
                                     <input 
                                         type="tel" 
                                         name="phone" 
                                         value={formData.phone} 
                                         maxLength="10"
+                                        required
                                         onChange={(e) => {
                                             e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
                                             handleChange(e);
                                         }} 
                                     />
-            31d2b1cbd9389f472e758da88a829582d73e22d4
                                 </div>
                                 <div className="form-group">
                                     <label htmlFor="password">{editingDoctor ? 'New Password' : 'Password *'}</label>

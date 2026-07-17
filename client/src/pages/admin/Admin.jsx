@@ -461,94 +461,77 @@ const Admin = () => {
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="staff-label">Password</label>
-                                        <input type="text" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} required className="staff-input" />
+                                        <input type="text" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} required className="staff-input" placeholder="Set a temporary password" />
+                                        <small className="form-hint">Share this password with the staff member</small>
                                     </div>
                                     <div className="form-group">
                                         <label className="staff-label">Phone</label>
-                                        <input type="text" value={createForm.phone} onChange={e => setCreateForm({ ...createForm, phone: e.target.value })} className="staff-input" />
-                                    </div>
-</div>
-                                <div className="form-group">
-                                    <label className="staff-label">Email Address *</label>
-                                    <input type="email" placeholder="e.g. dr.sharma@hospital.com" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} required className="staff-input" />
-                                </div>
-                            </div>
-
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="staff-label">Password *</label>
-                                    <input type="text" placeholder="Set a temporary password" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} required className="staff-input" />
-                                    <small className="form-hint">Share this password with the staff member</small>
-                                </div>
-                                <div className="form-group">
-                                    <label className="staff-label">Phone Number</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. 9876543210"
-                                        value={createForm.phone || ''}
-                                        onChange={e => {
-                                            const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                            setCreateForm({ ...createForm, phone: cleanVal });
-                                        }}
-                                        className="staff-input"
-                                        maxLength="10"  pattern="\d{10}"  title="Phone number must be exactly 10 digits" />
-                                </div>
-                            </div>
-
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="staff-label">Profile Image</label>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={e => setCreateForm({ ...createForm, file: e.target.files[0] })}
-                                        className="staff-input"
-                                        style={{ padding: '10px' }}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label className="staff-label">Assign Role * <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: '0.85rem', textTransform: 'none' }}>(Don't see your role? <a href="/admin/roles" style={{ color: '#0ea5e9' }}>Create one here</a>)</span></label>
-                                    <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
-                                        <option value="">-- Select a Role --</option>
-                                        {roles
-                                            .filter(r => {
-                                                const name = (r.name || '').toLowerCase();
-                                                if (name.includes('doctor')) return false; // Exclude doctors
-                                                return !['patient', 'user', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(name);
-                                            })
-                                            .map(role => (
-                                                <option key={role._id} value={role._id}>
-                                                    {role.name} {role.description ? `— ${role.description}` : ''}
-                                                </option>
-                                            ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {hospital && hospital.departments && hospital.departments.length > 0 && (
-                                <div className="form-row" style={{ marginTop: '10px' }}>
-                                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                        <label className="staff-label">Assign Department (Optional - Leave blank to allow all)</label>
-                                        <select
-                                            value={createForm.department}
-                                            onChange={(e) => setCreateForm(prev => ({ ...prev, department: e.target.value }))}
+                                        <input
+                                            type="text"
+                                            value={createForm.phone || ''}
+                                            onChange={e => {
+                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                setCreateForm({ ...createForm, phone: cleanVal });
+                                            }}
                                             className="staff-input"
-                                            style={{ marginTop: '8px' }}
-                                        >
-                                            <option value="">-- Select Department --</option>
-                                            {hospital.departments.map(dept => (
-                                                <option key={dept} value={dept}>{dept}</option>
-                                            ))}
+                                            required
+                                            maxLength="10"  pattern="\d{10}"  title="Phone number must be exactly 10 digits" />
+                                    </div>
+                                </div>
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="staff-label">Profile Image</label>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={e => setCreateForm({ ...createForm, file: e.target.files[0] })}
+                                            className="staff-input"
+                                            style={{ padding: '10px' }}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Assign Role * <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: '0.85rem', textTransform: 'none' }}>(Don't see your role? <a href="/admin/roles" style={{ color: '#0ea5e9' }}>Create one here</a>)</span></label>
+                                        <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
+                                            <option value="">-- Select a Role --</option>
+                                            {roles
+                                                .filter(r => {
+                                                    const name = (r.name || '').toLowerCase();
+                                                    if (name.includes('doctor')) return false; // Exclude doctors
+                                                    return !['patient', 'user', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(name);
+                                                })
+                                                .map(role => (
+                                                    <option key={role._id} value={role._id}>
+                                                        {role.name} {role.description ? `— ${role.description}` : ''}
+                                                    </option>
+                                                ))}
                                         </select>
                                     </div>
                                 </div>
-                            )}
-                            <button type="submit" className="btn-save" disabled={creating} style={{ marginTop: '10px' }}>
-                                {creating ? 'Creating Account...' : '✅ Create Staff Account'}
-                            </button>
-                        </form>
-                    </div>
-                )}
+
+                                {hospital && hospital.departments && hospital.departments.length > 0 && (
+                                    <div className="form-row" style={{ marginTop: '10px' }}>
+                                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                            <label className="staff-label">Assign Department (Optional - Leave blank to allow all)</label>
+                                            <select
+                                                value={createForm.department}
+                                                onChange={(e) => setCreateForm(prev => ({ ...prev, department: e.target.value }))}
+                                                className="staff-input"
+                                                style={{ marginTop: '8px' }}
+                                            >
+                                                <option value="">-- Select Department --</option>
+                                                {hospital.departments.map(dept => (
+                                                    <option key={dept} value={dept}>{dept}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+                                <button type="submit" className="btn-save" disabled={creating} style={{ marginTop: '10px' }}>
+                                    {creating ? 'Creating Account...' : '✅ Create Staff Account'}
+                                </button>
+                            </form>
+                        </div>
+                    )}
                 {loadingUsers ? (
                         <div className="loading-message">Loading users...</div>
                     ) : users.length === 0 ? (
