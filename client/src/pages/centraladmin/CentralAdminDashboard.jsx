@@ -48,13 +48,7 @@ const CentralAdminDashboard = () => {
 
     // Staff
     const [roles, setRoles] = useState([]);
-    const [showCreateStaffForm, setShowCreateStaffForm] = useState(false);
-    const [createStaffForm, setCreateStaffForm] = useState({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', department: '', file: null, age: '', aadhaarNumber: '' });
-    const [creatingStaff, setCreatingStaff] = useState(false);
-    const [staffHospitalFilter, setStaffHospitalFilter] = useState('');
-    const [allStaff, setAllStaff] = useState([]);
-    const [loadingStaff, setLoadingStaff] = useState(false);
-
+    const [hospitalSubs, setHospitalSubs] = useState([]);
     // Dynamic Departments (derived from Master Question Library keys)
     const [availableDepartments, setAvailableDepartments] = useState([]);
 
@@ -125,7 +119,6 @@ const CentralAdminDashboard = () => {
         const plan = getActivePlanName();
         fetchHospitals(plan);
         fetchRoles(plan);
-        fetchAllStaff(plan);
         fetchDepartments();
         fetchClinics(plan);
     }, []);
@@ -168,11 +161,9 @@ const CentralAdminDashboard = () => {
             fetchRevenuePlans();
         } else if (activeTab === 'simple-clinics') {
             fetchClinics(plan);
-            fetchAllStaff(plan);
             fetchRoles(plan);
         } else if (activeTab === 'hospitals' || activeTab === 'multi-speciality' || activeTab === 'clinic-basic') {
             fetchHospitals(plan);
-            fetchAllStaff(plan);
             fetchRoles(plan);
         }
     }, [activeTab]);
@@ -385,20 +376,6 @@ const CentralAdminDashboard = () => {
         } catch (err) { console.error(err); }
     };
 
-    const fetchAllStaff = async (plan = getActivePlanName()) => {
-        try {
-            setLoadingStaff(true);
-            const res = await adminAPI.getUsers(plan);
-            if (res.success) {
-                // Filter out patients, centraladmin, superadmin, hospitaladmin — only show real staff
-                const staff = res.users.filter(u => {
-                    const role = (u.role || '').toLowerCase();
-                    return !['centraladmin', 'superadmin', 'hospitaladmin', 'patient'].includes(role);
-                });
-                setAllStaff(staff);
-            }
-        } catch (err) { console.error(err); } finally { setLoadingStaff(false); }
-    };
 
     const fetchHospitalStats = async (hospitalId, preset = datePreset, start = customStartDate, end = customEndDate) => {
         try {
@@ -551,48 +528,9 @@ const CentralAdminDashboard = () => {
         finally { setCreatingHospitalAdmin(false); }
     };
 
-    // --- Staff Creation — hospital required ---
-    const handleCreateStaff = async (e) => {
-        e.preventDefault();
-        if (!createStaffForm.hospitalId) { setError('You must select a hospital for this staff member.'); return; }
-
-        if (createStaffForm.phone && createStaffForm.phone.length !== 10) {
-            setError('Mobile number must be exactly 10 digits.');
-            return;
-        }
-
-        setCreatingStaff(true); setError(''); setSuccess('');
-        try {
-            let avatarUrl = null;
-            if (createStaffForm.file) {
-                const formData = new FormData();
-                formData.append('images', createStaffForm.file);
-                const uploadRes = await uploadAPI.uploadImages(formData);
-                if (uploadRes.success && uploadRes.files.length > 0) avatarUrl = uploadRes.files[0].url;
-            }
-            const res = await adminAPI.createUser({
-                ...createStaffForm,
-                avatar: avatarUrl,
-                hospitalId: createStaffForm.hospitalId,
-                departments: createStaffForm.department ? [createStaffForm.department] : []
-            });
-            if (res.success) {
-                setSuccess(`✅ Staff account created! Login: ${createStaffForm.email}`);
-                setCreateStaffForm({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', file: null, age: '', aadhaarNumber: '' });
-                setShowCreateStaffForm(false);
-                fetchAllStaff();
-            }
-        } catch (err) { setError(err.response?.data?.message || 'Error creating staff.'); }
-        finally { setCreatingStaff(false); }
-    };
 
 
     const formatCurrency = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
-    const getHospitalName = (hid) => hospitals.find(h => h._id === hid)?.name || 'Unknown';
-
-    const filteredStaff = staffHospitalFilter
-        ? allStaff.filter(u => String(u.hospitalId) === staffHospitalFilter)
-        : allStaff;
 
     const MODEL_LABELS = {
         per_patient: { label: 'Model B — Per Patient', color: '#6366f1', bg: '#ede9fe', icon: '👤' },
@@ -605,7 +543,6 @@ const CentralAdminDashboard = () => {
         { id: 'multi-speciality', label: '🏥 Multi-Speciality Starter', desc: 'Up to 15 Doctors & 14 Staff' },
         { id: 'clinic-basic', label: '🩺 Clinic Basic Plan', desc: 'Up to 5 Doctors & 3 Staff' },
         { id: 'simple-clinics', label: '🏪 Starter Plan', desc: 'Small clinic management' },
-        { id: 'staff', label: '👥 All Staff', desc: 'Global staff management' },
         { id: 'revenue-plans', label: '💰 Revenue Plans', desc: 'Set billing models' },
         { id: 'configurations', label: '⚙️ Configurations', desc: 'Roles, tests, questions' },
     ];
@@ -924,17 +861,6 @@ const CentralAdminDashboard = () => {
                             <div className="admin-card">
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
                                     <h3 style={{ margin: 0 }}>👥 Staff Members ({hospitalStats.staffList?.length || 0})</h3>
-                                    <button
-                                        onClick={() => {
-                                            setActiveTab('staff');
-                                            setCreateStaffForm(prev => ({ ...prev, hospitalId: h._id }));
-                                            setShowCreateStaffForm(true);
-                                        }}
-                                        className="btn-save"
-                                        style={{ padding: '8px 16px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                                    >
-                                        + Add Staff
-                                    </button>
                                 </div>
                                 {!hospitalStats.staffList?.length ? (
                                     <p style={{ color: '#888', fontSize: '14px' }}>No staff assigned to this hospital yet.</p>
@@ -1192,7 +1118,7 @@ const CentralAdminDashboard = () => {
                                                 <label className="staff-label">Assign Hospital *</label>
                                                 <select className="staff-input" value={hospitalAdminForm.hospitalId} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, hospitalId: e.target.value })} required>
                                                     <option value="">-- Select Hospital --</option>
-                                                    {hospitals.map(h => <option key={h._id} value={h._id}>{h.name}{h.city ? ` — ${h.city}` : ''}</option>)}
+                                                    {[...hospitals].sort((a, b) => (a.name || '').trim().toLowerCase().localeCompare((b.name || '').trim().toLowerCase())).map(h => <option key={h._id} value={h._id}>{h.name}{h.city ? ` — ${h.city}` : ''}</option>)}
                                                 </select>
                                             </div>
                                         </div>
@@ -1355,159 +1281,6 @@ const CentralAdminDashboard = () => {
                     </div>
                 )}
 
-                {/* ========== STAFF TAB ========== */}
-                {activeTab === 'staff' && (
-                    <div>
-                        <div className="admin-card" style={{ marginBottom: '20px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <div>
-                                    <h2>👥 Add New Staff Member</h2>
-                                    <p style={{ color: '#e53935', fontSize: '13px', fontWeight: 600, margin: '4px 0 0' }}>
-                                        ⚠️ Every staff member must be linked to a specific hospital
-                                    </p>
-                                </div>
-                                <button onClick={() => setShowCreateStaffForm(!showCreateStaffForm)} className={showCreateStaffForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '8px 20px' }}>
-                                    {showCreateStaffForm ? 'Cancel' : '+ New Staff'}
-                                </button>
-                            </div>
-                            {showCreateStaffForm && (
-                                <form onSubmit={handleCreateStaff} className="user-form">
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Assign Hospital *</label>
-                                            <select className="staff-input" value={createStaffForm.hospitalId} onChange={e => setCreateStaffForm({ ...createStaffForm, hospitalId: e.target.value })} required
-                                                style={{ borderColor: !createStaffForm.hospitalId ? '#e53935' : undefined }}>
-                                                <option value="">-- Select Hospital (Required) --</option>
-                                                {hospitals.map(h => <option key={h._id} value={h._id}>{h.name}{h.city ? ` — ${h.city}` : ''}</option>)}
-                                            </select>
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Assign Role *</label>
-                                            <select value={createStaffForm.roleId} onChange={e => setCreateStaffForm({ ...createStaffForm, roleId: e.target.value })} required className="staff-input">
-                                                <option value="">-- Select a Role --</option>
-                                                {roles
-                                                    .filter(role => {
-                                                        const isFullHospitalSelected = hospitals.some(hospital => hospital._id === createStaffForm.hospitalId);
-                                                        if (isFullHospitalSelected && role.name.toLowerCase().includes('clinic')) {
-                                                            return false;
-                                                        }
-                                                        return true;
-                                                    })
-                                                    .map(role => (
-                                                        <option key={role._id} value={role._id}>
-                                                            {role.name}{role.description ? ` — ${role.description}` : ''}
-                                                        </option>
-                                                    ))}
-                                            </select>
-                                        </div>
-                                        {createStaffForm.hospitalId && (
-                                            <div className="form-group">
-                                                <label className="staff-label">Assign Department</label>
-                                                <select value={createStaffForm.department} onChange={e => setCreateStaffForm({ ...createStaffForm, department: e.target.value })} className="staff-input">
-                                                    <option value="">-- No Department --</option>
-                                                    {hospitals.find(h => h._id === createStaffForm.hospitalId)?.departments?.map(dept => (
-                                                        <option key={dept} value={dept}>{dept}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Full Name *</label>
-                                            <input type="text" placeholder="e.g. Dr. Sharma" value={createStaffForm.name} onChange={e => setCreateStaffForm({ ...createStaffForm, name: e.target.value })} required minLength={2} className="staff-input" />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Email Address *</label>
-                                            <input type="email" placeholder="staff@hospital.com" value={createStaffForm.email} onChange={e => setCreateStaffForm({ ...createStaffForm, email: e.target.value })} required className="staff-input" />
-                                        </div>
-                                    </div>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Password *</label>
-                                            <input type="text" placeholder="Temporary password" value={createStaffForm.password} onChange={e => setCreateStaffForm({ ...createStaffForm, password: e.target.value })} required className="staff-input" />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Phone *</label>
-                                            <input
-                                                type="tel"
-                                                placeholder="e.g. 9876543210"
-                                                maxLength={10}
-                                                value={createStaffForm.phone || ''}
-                                                onChange={e => {
-                                                    const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                                    setCreateStaffForm({ ...createStaffForm, phone: cleanVal });
-                                                }}
-                                                required
-                                                pattern="\d{10}"
-                                                title="Phone number must be exactly 10 digits"
-                                                className="staff-input"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Age *</label>
-                                            <input type="number" placeholder="Age" value={createStaffForm.age} onChange={e => setCreateStaffForm({ ...createStaffForm, age: e.target.value })} required min="1" className="staff-input" />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Aadhaar Number *</label>
-                                            <input type="text" placeholder="12-digit Aadhaar" value={createStaffForm.aadhaarNumber} onChange={e => setCreateStaffForm({ ...createStaffForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" className="staff-input" />
-                                        </div>
-                                    </div>
-                                    <button type="submit" disabled={creatingStaff || !createStaffForm.hospitalId} className="submit-button">
-                                        {creatingStaff ? 'Creating...' : '✅ Create Staff Account'}
-                                    </button>
-                                </form>
-                            )}
-                        </div>
-
-                        {/* Staff list with hospital filter */}
-                        <div className="admin-card">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <h2>All Staff ({filteredStaff.length})</h2>
-                                <select className="staff-input" style={{ width: '240px' }} value={staffHospitalFilter} onChange={e => setStaffHospitalFilter(e.target.value)}>
-                                    <option value="">All Hospitals</option>
-                                    {hospitals.map(h => <option key={h._id} value={h._id}>{h.name}</option>)}
-                                </select>
-                            </div>
-                            {loadingStaff ? (
-                                <div className="loading-message">Loading staff...</div>
-                            ) : filteredStaff.length === 0 ? (
-                                <div className="ca-empty"><p>No staff found{staffHospitalFilter ? ' for this hospital' : ''}.</p></div>
-                            ) : (
-                                <div className="users-table">
-                                    <table>
-                                        <thead>
-                                            <tr>
-                                                <th>Avatar</th><th>Name</th><th>Hospital</th><th>Role</th><th>Email</th><th>Phone</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {filteredStaff.map(u => (
-                                                <tr key={u.id || u._id}>
-                                                    <td>{u.avatar
-                                                        ? <img src={u.avatar} alt={u.name} style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
-                                                        : <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#6366f1', fontSize: '14px' }}>{u.name?.charAt(0)?.toUpperCase()}</div>
-                                                    }</td>
-                                                    <td style={{ fontWeight: 500 }}>{u.name}</td>
-                                                    <td>
-                                                        <span style={{ background: '#f0f9ff', color: '#0284c7', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>
-                                                            {u.hospitalId ? getHospitalName(u.hospitalId) : '⚠️ No hospital'}
-                                                        </span>
-                                                    </td>
-                                                    <td><span className={`role-badge role-${(u.role || '').toLowerCase()}`}>{(u.role || 'No Role').toUpperCase()}</span></td>
-                                                    <td>{u.email}</td>
-                                                    <td>{u.phone || '—'}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
 
                 {/* ========== CLINICS TAB (Starter) ========== */}
                 {activeTab === 'simple-clinics' && !selectedClinic && (

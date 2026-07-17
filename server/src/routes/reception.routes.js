@@ -122,10 +122,15 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         let user = await User.findOne(userQuery);
 
         if (user) {
-            // Only update email if provided and different (avoid overwriting with empty)
+            // Only update fields if provided and different
             if (email && email !== user.email) user.email = email;
+<<<<<<< HEAD
             if (age && age !== user.age) user.age = age;
             if (aadhaarNumber && aadhaarNumber !== user.aadhaarNumber) user.aadhaarNumber = aadhaarNumber;
+=======
+            if (age && user.age !== age) user.age = age;
+            if (aadhaarNumber && user.aadhaarNumber !== aadhaarNumber) user.aadhaarNumber = aadhaarNumber;
+>>>>>>> 18fc42a9d9c9afe595a86261fb866fe2211545da
 
             const hospitalId = req.user.hospitalId || user.hospitalId;
             const Hospital = require('../models/hospital.model');
@@ -757,6 +762,7 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             appointmentTime: isTokenMode ? `Token #${tokenNumber}` : (finalTime || ''),
             consultationFee: newAppointment.amount,
             paymentStatus: newAppointment.paymentStatus,
+            paymentMode: newAppointment.paymentMethod || paymentMethod || 'Not Available',
             hospitalName: hospital?.name || 'Hospital',
             hospitalAddress: hospitalAddress,
             hospitalPhone: hospital?.phone || ''

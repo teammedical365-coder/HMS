@@ -69,7 +69,7 @@ const hospitalSchema = new mongoose.Schema({
     clinicPlan: { type: String, enum: ['starter', 'basic'], default: 'starter' },
 
     // Global subscription plan (for new backend quotas)
-    subscriptionPlan: { type: String, enum: ['multi_speciality_starter', 'clinic_basic', 'none'], default: 'none' },
+    subscriptionPlan: { type: String, enum: ['multi_speciality_starter', 'clinic_basic', 'enterprise', 'starter', 'none'], default: 'none' },
 
     // Permanent unique Hospital Code (e.g. "APL", "APL1", "FOR") — never auto-regenerated once set
     hospitalCode: { type: String, uppercase: true, trim: true, unique: true, sparse: true },

@@ -192,9 +192,10 @@ export const receptionAPI = {
 export const adminAPI = {
     login: async (email, password) => (await apiClient.post('/api/admin/login', { email, password })).data,
     signup: async (name, email, password, phone) => (await apiClient.post('/api/admin/signup', { name, email, password, phone })).data,
-    getUsers: async (plan) => {
-        let url = '/api/admin/users';
-        if (plan) url += `?plan=${encodeURIComponent(plan)}`;
+    getUsers: async (plan, hospitalId) => {
+        let url = '/api/admin/users?';
+        if (plan) url += `plan=${encodeURIComponent(plan)}&`;
+        if (hospitalId) url += `hospitalId=${encodeURIComponent(hospitalId)}&`;
         return (await apiClient.get(url)).data;
     },
     createUser: async (data) => (await apiClient.post('/api/admin/users', data)).data,
@@ -558,8 +559,8 @@ patientApiClient.interceptors.response.use(
 );
 
 export const patientAuthAPI = {
-    register: async (name, email, mobile, password, hospitalId) => {
-        const response = await patientApiClient.post('/api/patient-auth/register', { name, email, mobile, password, hospitalId });
+    register: async (name, email, mobile, password, hospitalId, age, aadhaarNumber) => {
+        const response = await patientApiClient.post('/api/patient-auth/register', { name, email, mobile, password, hospitalId, age, aadhaarNumber });
         return response.data;
     },
     login: async (loginId, password, hospitalId) => {

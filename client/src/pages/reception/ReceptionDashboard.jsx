@@ -693,7 +693,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             // 1. Register/Find User (If new walk-in OR new patient portal onboarding)
             if (!userId) {
                 const regRes = await receptionAPI.registerPatient({
-                    name: `${intakeForm.firstName} ${intakeForm.lastName}`.trim(),
+                    name: `${intakeForm.firstName || ''} ${intakeForm.lastName || ''}`.trim(),
                     email: intakeForm.email,
                     phone: intakeForm.mobile,
                     age: intakeForm.age,

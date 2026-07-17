@@ -31,6 +31,10 @@ const Admin = () => {
     const [clinicDoctorExists, setClinicDoctorExists] = useState(false);
     const [checkingDocLimit, setCheckingDocLimit] = useState(false);
 
+    const [hospitals, setHospitals] = useState([]);
+    const [staffHospitalFilter, setStaffHospitalFilter] = useState('');
+    const [staffPlanFilter, setStaffPlanFilter] = useState('');
+
     const handleToggleCreateForm = async () => {
         const nextState = !showCreateForm;
         if (nextState && hospital?.clinicType === 'clinic') {
@@ -87,7 +91,19 @@ const Admin = () => {
         fetchUsers();
         fetchRoles();
         fetchHospital();
+        
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (['superadmin', 'centraladmin'].includes(user.role)) {
+            fetchHospitals();
+        }
     }, []);
+
+    const fetchHospitals = async (plan = staffPlanFilter) => {
+        try {
+            const res = await hospitalAPI.getHospitals(plan === '' ? 'all' : plan);
+            if (res.success) setHospitals(res.hospitals || []);
+        } catch (err) { console.error('Error fetching hospitals:', err); }
+    };
 
     const fetchHospital = async () => {
         try {
@@ -163,15 +179,18 @@ const Admin = () => {
         }
     };
 
-    const fetchUsers = async () => {
+    const fetchUsers = async (plan = staffPlanFilter, hospitalId = staffHospitalFilter) => {
         try {
             setLoadingUsers(true);
-            const response = await adminAPI.getUsers();
+            const response = await adminAPI.getUsers(plan, hospitalId);
             if (response.success) {
-                // Filter out 'patient', 'user', and any 'doctor' roles to show only non-doctor Staff
+                const userObj = JSON.parse(localStorage.getItem('user') || '{}');
+                const isCentral = ['superadmin', 'centraladmin'].includes(userObj.role);
                 const staffUsers = response.users.filter(u => {
                     const r = (u.role || '').toLowerCase();
-                    return !['patient', 'user'].includes(r) && !r.includes('doctor');
+                    if (['patient', 'user'].includes(r)) return false;
+                    if (!isCentral && r.includes('doctor')) return false;
+                    return true;
                 });
                 setUsers(staffUsers);
             }
@@ -339,7 +358,7 @@ const Admin = () => {
             const response = await adminAPI.createUser(userData);
             if (response.success) {
                 setSuccess(`✅ ${response.user?.role?.name || 'Staff'} account created! They can log in with: ${createForm.email}`);
-                setCreateForm({ name: '', email: '', password: '', phone: '', age: '', aadhaar: '', roleId: '', file: null, department: '' });
+                setCreateForm({ name: '', email: '', password: '', phone: '', age: '', aadhaar: '', roleId: '', file: null, department: '', hospitalId: '' });
                 setShowCreateForm(false);
                 fetchUsers();
             }
@@ -413,7 +432,12 @@ const Admin = () => {
                 {/* Users List */}
                 <div className="admin-card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h2 style={{ margin: 0 }}>All Staff</h2>
+                        <div>
+                            <h2 style={{ margin: 0 }}>👥 Add New Staff Member</h2>
+                            <p style={{ color: '#e53935', fontSize: '13px', fontWeight: 600, margin: '4px 0 0' }}>
+                                ⚠️ Every staff member must be linked to a specific hospital
+                            </p>
+                        </div>
                         <button
                             onClick={handleToggleCreateForm}
                             className={showCreateForm ? 'btn-cancel' : 'btn-save'}
@@ -451,6 +475,18 @@ const Admin = () => {
                                 {hospital?.clinicType === 'clinic' && clinicDoctorExists && (
                                     <div style={{ color: '#be123c', background: '#fff1f2', border: '1px solid #fda4af', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', fontWeight: 'bold', fontSize: '14px', width: '100%', boxSizing: 'border-box' }}>
                                         ⚠️ This clinic already has an assigned Clinic Doctor.
+                                    </div>
+                                )}
+                                {['superadmin', 'centraladmin'].includes(JSON.parse(localStorage.getItem('user') || '{}').role) && (
+                                    <div className="form-row">
+                                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                            <label className="staff-label">Assign Hospital *</label>
+                                            <select className="staff-input" value={createForm.hospitalId} onChange={e => setCreateForm({ ...createForm, hospitalId: e.target.value })} required
+                                                style={{ borderColor: !createForm.hospitalId ? '#e53935' : undefined }}>
+                                                <option value="">-- Select Hospital (Required) --</option>
+                                                {[...hospitals].sort((a, b) => (a.name || '').trim().toLowerCase().localeCompare((b.name || '').trim().toLowerCase())).map(h => <option key={h._id} value={h._id}>{h.name}{h.city ? ` — ${h.city}` : ''}</option>)}
+                                            </select>
+                                        </div>
                                     </div>
                                 )}
                                 <div className="form-row">
@@ -554,10 +590,44 @@ const Admin = () => {
                             </form>
                         </div>
                     )}
-                {loadingUsers ? (
+                </div>
+
+                {/* Staff list with hospital filter */}
+                <div className="admin-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                        <h2>All Staff ({users.length})</h2>
+                        {['superadmin', 'centraladmin'].includes(JSON.parse(localStorage.getItem('user') || '{}').role) && (
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <select className="staff-input" style={{ width: '200px' }} value={staffPlanFilter} onChange={e => { 
+                                    const newPlan = e.target.value;
+                                    setStaffPlanFilter(newPlan); 
+                                    setStaffHospitalFilter(''); 
+                                    fetchUsers(newPlan, '');
+                                    fetchHospitals(newPlan);
+                                }}>
+                                    <option value="">All Plans</option>
+                                    <option value="starter">Simple Clinics (Starter)</option>
+                                    <option value="clinic_basic">Clinic Basic</option>
+                                    <option value="multi_speciality_starter">Multi-Speciality Starter</option>
+                                    <option value="enterprise">Enterprise</option>
+                                </select>
+                                <select className="staff-input" style={{ width: '240px' }} value={staffHospitalFilter} onChange={e => {
+                                    const newHosp = e.target.value;
+                                    setStaffHospitalFilter(newHosp);
+                                    fetchUsers(staffPlanFilter, newHosp);
+                                }}>
+                                    <option value="">All Hospitals</option>
+                                    {[...hospitals]
+                                        .sort((a, b) => (a.name || '').trim().toLowerCase().localeCompare((b.name || '').trim().toLowerCase()))
+                                        .map(h => <option key={h._id} value={h._id}>{h.name}</option>)}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                    {loadingUsers ? (
                         <div className="loading-message">Loading users...</div>
                     ) : users.length === 0 ? (
-                        <div className="empty-message">No users found</div>
+                        <div className="empty-message">No users found for this selection</div>
                     ) : (
                         <div className="users-table">
                             <table>
@@ -565,53 +635,56 @@ const Admin = () => {
                                     <tr>
                                         <th>Avatar</th>
                                         <th>Name</th>
-                                        <th>Email</th>
+                                        <th>Hospital</th>
                                         <th>Role</th>
+                                        <th>Email</th>
                                         <th>Phone</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {users.map((userItem) => {
-                                        const isCurrentUser = (userItem.id || userItem._id) === user.id;
-                                        const canModify = !isCurrentUser;
+                                    {users
+                                        .map((userItem) => {
+                                            const isCurrentUser = (userItem.id || userItem._id) === JSON.parse(localStorage.getItem('user') || '{}').id;
+                                            const canModify = !isCurrentUser;
 
-                                        return (
-                                            <tr key={userItem.id || userItem._id}>
-                                                <td>
-                                                    {userItem.avatar ? (
-                                                        <img
-                                                            src={userItem.avatar}
-                                                            alt={userItem.name}
-                                                            style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
-                                                        />
-                                                    ) : (
-                                                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>
-                                                            {userItem.name?.charAt(0).toUpperCase()}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td>{userItem.name}</td>
-                                                <td>{userItem.email}</td>
-                                                <td>
-                                                    <span className={`role-badge role-${(userItem.role || '').toLowerCase()}`}>
-                                                        {(userItem.role || 'No Role').toUpperCase()}
-                                                    </span>
-                                                </td>
-                                                <td>{userItem.phone || '-'}</td>
-                                                <td>
-                                                    <div className="action-buttons">
-                                                        {canModify && (
-                                                            <>
-                                                                <button onClick={() => openEditModal(userItem)} className="btn-edit">Edit</button>
-                                                                <button onClick={() => setDeleteConfirm(userItem.id || userItem._id)} className="btn-delete">Delete</button>
-                                                            </>
+                                            return (
+                                                <tr key={userItem.id || userItem._id}>
+                                                    <td>
+                                                        {userItem.avatar ? (
+                                                            <img src={userItem.avatar} alt={userItem.name} style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+                                                        ) : (
+                                                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#6366f1', fontSize: '14px' }}>
+                                                                {userItem.name?.charAt(0).toUpperCase()}
+                                                            </div>
                                                         )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
+                                                    </td>
+                                                    <td style={{ fontWeight: 500 }}>{userItem.name}</td>
+                                                    <td>
+                                                        <span style={{ background: '#f0f9ff', color: '#0284c7', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>
+                                                            {userItem.hospitalId ? (hospitals.find(h => h._id === String(userItem.hospitalId))?.name || hospital?.name || 'Unknown') : '⚠️ No hospital'}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span className={`role-badge role-${(userItem.role || '').toLowerCase()}`}>
+                                                            {(userItem.role || 'No Role').toUpperCase()}
+                                                        </span>
+                                                    </td>
+                                                    <td>{userItem.email}</td>
+                                                    <td>{userItem.phone || '—'}</td>
+                                                    <td>
+                                                        <div className="action-buttons">
+                                                            {canModify && (
+                                                                <>
+                                                                    <button onClick={() => openEditModal(userItem)} className="btn-edit">Edit</button>
+                                                                    <button onClick={() => setDeleteConfirm(userItem.id || userItem._id)} className="btn-delete">Delete</button>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                 </tbody>
                             </table>
                         </div>

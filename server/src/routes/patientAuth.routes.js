@@ -40,7 +40,7 @@ async function generateUniversalMRN(hospitalId, hospital, User) {
 // Register a new patient authentication account
 router.post('/register', async (req, res) => {
     try {
-        let { name, email, mobile, password, hospitalId } = req.body;
+        let { name, email, mobile, password, hospitalId, age, aadhaarNumber } = req.body;
 
         let sanitizedPhone = mobile ? String(mobile).trim() : '';
         if (sanitizedPhone.startsWith('+91') && sanitizedPhone.length > 10) sanitizedPhone = sanitizedPhone.substring(3);
@@ -58,7 +58,7 @@ router.post('/register', async (req, res) => {
         mobile = sanitizedPhone;
 
         // Basic validations
-        if (!name || !email || !mobile || !password || !hospitalId) {
+        if (!name || !email || !mobile || !password || !hospitalId || !age || !aadhaarNumber) {
             return res.status(400).json({ success: false, message: 'All fields are required.' });
         }
 
@@ -97,7 +97,9 @@ router.post('/register', async (req, res) => {
             email,
             mobile,
             password,
-            hospitalId
+            hospitalId,
+            age,
+            aadhaarNumber
         });
 
         await newPatientAccount.save();

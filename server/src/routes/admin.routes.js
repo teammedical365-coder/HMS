@@ -359,10 +359,33 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         const patientRoleId = patientRole ? patientRole._id : null;
 
         let planFilter = {};
-        if (isCentral && req.query.plan) {
-            const hospitals = await Hospital.find({ subscriptionPlan: req.query.plan }).select('_id');
-            const hospitalIds = hospitals.map(h => h._id);
-            planFilter = { hospitalId: { $in: hospitalIds } };
+        if (isCentral) {
+            if (req.query.hospitalId) {
+                planFilter = { hospitalId: req.query.hospitalId };
+            } else if (req.query.plan && req.query.plan !== 'all') {
+                const hFilter = {};
+                if (req.query.plan === 'enterprise') {
+                    hFilter.clinicType = { $ne: 'clinic' };
+                    hFilter.$or = [
+                        { subscriptionPlan: 'enterprise' },
+                        { subscriptionPlan: 'none' },
+                        { subscriptionPlan: { $exists: false } }
+                    ];
+                } else if (req.query.plan === 'starter') {
+                    hFilter.clinicType = 'clinic';
+                    hFilter.$or = [
+                        { subscriptionPlan: 'starter' },
+                        { subscriptionPlan: 'none' },
+                        { subscriptionPlan: { $exists: false } }
+                    ];
+                } else {
+                    hFilter.clinicType = { $ne: 'clinic' };
+                    hFilter.subscriptionPlan = req.query.plan;
+                }
+                const hospitals = await Hospital.find(hFilter).select('_id');
+                const hospitalIds = hospitals.map(h => h._id);
+                planFilter = { hospitalId: { $in: hospitalIds } };
+            }
         }
 
         const finalFilter = { ...filter, ...planFilter, role: { $nin: systemRoles } };
