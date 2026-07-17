@@ -749,10 +749,9 @@ const HospitalAdminDashboard = () => {
                                                     setCreateForm({ ...createForm, phone: cleanVal });
                                                 }} 
                                                 required
-                                                pattern="^\d{10}$"
                                                 title="Phone number must be exactly 10 digits"
                                                 className="staff-input" 
-                                            />
+                                             maxLength="10"  pattern="\d{10}" />
                                         </div>
                                     </div>
                                     <div className="form-row">
@@ -1464,10 +1463,9 @@ const HospitalAdminDashboard = () => {
                                                 setEditForm({ ...editForm, phone: cleanVal });
                                             }} 
                                             required
-                                            pattern="^\d{10}$"
                                             title="Phone number must be exactly 10 digits"
                                             className="staff-input" 
-                                        />
+                                         maxLength="10"  pattern="\d{10}" />
                                     </div>
                                     <div className="form-group">
                                         <label className="staff-label">Role</label>

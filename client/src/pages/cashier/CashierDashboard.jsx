@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { billingAPI, hospitalAPI } from '../../utils/api';
 import './CashierDashboard.css';
@@ -30,6 +30,25 @@ const CashierDashboard = () => {
 
     const [processingPayment, setProcessingPayment] = useState(false);
     const [paymentMode, setPaymentMode] = useState('Cash');
+
+    const processFormChange = useCallback((e, formSetter) => {
+        const { name, value } = e.target;
+        if (name === 'phone') {
+            const cleanVal = value.replace(/\D/g, '').slice(0, 10);
+            formSetter(prev => ({ ...prev, [name]: cleanVal }));
+        } else if (name === 'aadhaarNumber') {
+            const cleanVal = value.replace(/\D/g, '').slice(0, 12);
+            formSetter(prev => ({ ...prev, [name]: cleanVal }));
+        } else {
+            formSetter(prev => ({ ...prev, [name]: value }));
+        }
+    }, []);
+
+    const handleFacilityFormChange = useCallback(
+        (e) => processFormChange(e, setFacilityForm), 
+        [processFormChange]
+    );
+
 
     // Auth & Permission Check
     useEffect(() => {

@@ -225,13 +225,12 @@ const AdminReception = () => {
               <div className="form-row">
                 <div className="form-group">
                   <label htmlFor="phone">Phone</label>
-                  <input
+                  <input pattern="\d{10}" maxLength={10} required
                     type="tel"
                     id="phone"
                     name="phone"
                     value={formData.phone}
-                    onChange={handleChange}
-                  />
+                    onChange={handleChange} />
                 </div>
                 <div className="form-group">
                   <label htmlFor="password">{editingReception ? 'New Password (leave blank to keep current)' : 'Password *'}</label>

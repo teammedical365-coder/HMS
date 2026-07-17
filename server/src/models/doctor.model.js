@@ -24,16 +24,8 @@ const doctorSchema = new mongoose.Schema({
     required: [true, 'Doctor name is required'],
     minlength: 2
   },
-  email: {
-    type: String,
-    required: [true, 'Email is required'],
-    match: /^\S+@\S+\.\S+$/
-  },
-  phone: {
-    type: String,
-    required: [true, 'Phone number is required'],
-    match: /^\d{10}$/
-  },
+  email: { type: String, required: true, lowercase: true, trim: true, match: /^\S+@\S+\.\S+$/ },
+  phone: { type: String, required: true, match: /^\d{10}$/ },
   age: {
     type: Number,
     required: [true, 'Age is required'],

@@ -21,8 +21,8 @@ const clinicPatientSchema = new mongoose.Schema({
 
     // Core identity
     name:   { type: String, required: true, trim: true, minlength: 2 },
-    phone:  { type: String, required: true, trim: true, match: /^\d{10}$/ },
-    email:  { type: String, required: true, trim: true, match: /^\S+@\S+\.\S+$/ },
+    phone: { type: String, required: true, match: /^\d{10}$/ },
+    email: { type: String, required: true, lowercase: true, trim: true, match: /^\S+@\S+\.\S+$/ },
     age:    { type: Number, required: true, min: 1 },
     aadhaarNumber: { type: String, required: true, match: /^\d{12}$/ },
     gender: { type: String, enum: ['Male', 'Female', 'Other'], default: 'Male' },
@@ -51,7 +51,7 @@ const clinicPatientSchema = new mongoose.Schema({
     relatives: [{
         name:     { type: String, trim: true, default: '' },
         relation: { type: String, trim: true, default: '' },
-        phone:    { type: String, trim: true, default: '' },
+        phone: { type: String, required: true, match: /^\d{10}$/ },
     }],
 
     // Uploaded medical reports (PDFs / images)

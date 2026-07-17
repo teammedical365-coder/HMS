@@ -123,14 +123,13 @@ const AdminSignup = () => {
 
             <div className="form-group">
               <label htmlFor="phone">Phone Number</label>
-              <input
+              <input pattern="\d{10}" maxLength={10} required
                 type="tel"
                 id="phone"
                 name="phone"
                 value={formData.phone}
                 onChange={handleChange}
-                placeholder="Enter your phone number (optional)"
-              />
+                placeholder="Enter your phone number (optional)" />
             </div>
 
             <div className="form-group">

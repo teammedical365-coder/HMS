@@ -234,7 +234,22 @@ router.delete('/roles/:roleId', verifyAdminOrSuperAdmin, async (req, res) => {
 // Central Admin Signup — creates centraladmin account
 router.post('/signup', async (req, res) => {
     try {
-        const { name, email, password, phone } = req.body;
+        let { name, email, password, phone } = req.body;
+
+        let sanitizedPhone = phone ? String(phone).trim() : '';
+        if (sanitizedPhone.startsWith('+91') && sanitizedPhone.length > 10) sanitizedPhone = sanitizedPhone.substring(3);
+        else if (sanitizedPhone.startsWith('91') && sanitizedPhone.length > 10) sanitizedPhone = sanitizedPhone.substring(2);
+        else if (sanitizedPhone.startsWith('0') && sanitizedPhone.length > 10) sanitizedPhone = sanitizedPhone.substring(1);
+        sanitizedPhone = sanitizedPhone.replace(/\D/g, '').slice(0, 10);
+        
+        if (!sanitizedPhone || !/^\d{10}$/.test(sanitizedPhone)) {
+            return res.status(400).json({
+                success: false,
+                message: "Validation Error",
+                errors: { phone: "Phone number must be exactly 10 digits." }
+            });
+        }
+        phone = sanitizedPhone;
 
         if (!name || !email || !password) {
             return res.status(400).json({ success: false, message: 'Name, email, and password are required' });
@@ -270,6 +285,7 @@ router.post('/signup', async (req, res) => {
             token
         });
     } catch (error) {
+        console.error("ADMIN SIGNUP ERROR:", error);
         res.status(500).json({ success: false, message: 'Error creating admin' });
     }
 });

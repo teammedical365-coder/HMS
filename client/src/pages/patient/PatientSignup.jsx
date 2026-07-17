@@ -174,7 +174,7 @@ const PatientSignup = () => {
                         </div>
                         <div className="input-group" style={{ flex: 1 }}>
                             <label>Aadhaar Number</label>
-                            <input type="text" name="aadhaarNumber" placeholder="12-digit Aadhaar" value={formData.aadhaarNumber} onChange={handleChange} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
+                            <input type="text" name="aadhaarNumber" placeholder="12-digit Aadhaar" value={formData.aadhaarNumber} onChange={handleChange} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" maxLength={12} />
                         </div>
                     </div>
                     

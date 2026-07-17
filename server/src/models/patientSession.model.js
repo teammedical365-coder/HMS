@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
  * Stored on CLOUD. Local servers verify JWTs using shared JWT_SECRET.
  */
 const patientSessionSchema = new mongoose.Schema({
-    phone:     { type: String, required: true, index: true },
+    phone: { type: String, required: true, match: /^\d{10}$/ },
     clinicId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', default: null },
 
     // OTP flow

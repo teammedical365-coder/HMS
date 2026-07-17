@@ -14,8 +14,8 @@ const brandingSchema = new mongoose.Schema({
     backgroundColor: { type: String, default: '#f8fafc' },
     textColor:       { type: String, default: '#1e293b' },
     // Contact
-    supportEmail:  { type: String, default: '' },
-    supportPhone:  { type: String, default: '' },
+    supportEmail: { type: String, trim: true, lowercase: true, match: /^\S+@\S+\.\S+$/ },
+    supportPhone: { type: String, match: /^\d{10}$/ },
     address:       { type: String, default: '' },
     // Social / Links
     websiteUrl:    { type: String, default: '' },
@@ -38,8 +38,8 @@ const hospitalSchema = new mongoose.Schema({
     address: { type: String, default: '' },
     city: { type: String, default: '' },
     state: { type: String, default: '' },
-    phone: { type: String, default: '' },
-    email: { type: String, default: '' },
+    phone: { type: String, required: true, match: /^\d{10}$/ },
+    email: { type: String, required: true, lowercase: true, trim: true, match: /^\S+@\S+\.\S+$/ },
     website: { type: String, default: '' },
     logo: { type: String, default: null },
     isActive: { type: Boolean, default: true },

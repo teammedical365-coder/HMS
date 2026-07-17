@@ -78,11 +78,20 @@ const CentralAdminSignup = () => {
                         </div>
                         <div className="form-group">
                             <label htmlFor="phone">Phone Number</label>
-                            <input type="tel" id="phone" name="phone" value={formData.phone} onChange={handleChange} placeholder="Enter your phone number (optional)" />
-                        </div>
+                            <input type="tel" id="phone" name="phone" pattern="^\d{10}$" maxLength={10} value={formData.phone} onChange={handleChange} placeholder="Enter your phone number (optional)"  />
+                            </div>
                         <div className="form-group">
-                            <label htmlFor="password">Password *</label>
-                            <input type="password" id="password" name="password" value={formData.password} onChange={handleChange} placeholder="Enter your password (min 6 characters)" required />
+                            <label htmlFor="phone">Phone Number</label>
+                            <input 
+                                type="tel" 
+                                id="phone" 
+                                name="phone" 
+                                pattern="^\d{10}$" 
+                                maxLength={10} 
+                                value={formData.phone} 
+                                onChange={handleChange} 
+                                placeholder="Enter your phone number (optional)"  
+                            />
                         </div>
                         <div className="form-group">
                             <label htmlFor="confirmPassword">Confirm Password *</label>

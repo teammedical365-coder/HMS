@@ -100,7 +100,7 @@ const Signup = () => {
                 <label>Phone Number</label>
                 <div className="input-wrapper">
                   <i className="fa-solid fa-phone"></i>
-                  <input
+                  <input maxLength={10}
                     type="tel"
                     name="phone"
                     placeholder="Your contact number"
@@ -108,8 +108,7 @@ const Signup = () => {
                     onChange={handleChange}
                     required
                     pattern="^\d{10}$"
-                    title="Phone number must be exactly 10 digits"
-                  />
+                    title="Phone number must be exactly 10 digits" />
                 </div>
               </div>
 
@@ -142,6 +141,7 @@ const Signup = () => {
                     required
                     pattern="^\d{12}$"
                     title="Aadhaar number must be exactly 12 digits"
+                    maxLength={12}
                   />
                 </div>
               </div>

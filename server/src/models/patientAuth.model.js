@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 
 const patientAuthSchema = new mongoose.Schema({
     name: { type: String, required: true, trim: true, minlength: 2 },
-    email: { type: String, required: true, trim: true, lowercase: true, match: /^\S+@\S+\.\S+$/ },
+    email: { type: String, required: true, lowercase: true, trim: true, match: /^\S+@\S+\.\S+$/ },
     mobile: { type: String, required: true, trim: true, match: /^\d{10}$/ },
     age: { type: Number, required: true, min: 1 },
     aadhaarNumber: { type: String, required: true, match: /^\d{12}$/ },

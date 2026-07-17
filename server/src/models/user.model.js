@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
     name: { type: String, required: true, minlength: 2 },
-    email: { type: String, required: true, match: /^\S+@\S+\.\S+$/ },
+    email: { type: String, required: true, lowercase: true, trim: true, match: /^\S+@\S+\.\S+$/ },
     password: { type: String, required: false },
     phone: { type: String, required: true, match: /^\d{10}$/ },
 
@@ -35,9 +35,20 @@ const userSchema = new mongoose.Schema({
     zipCode: String,
 
     // Identity Verification (KYC)
-    aadhaarNumber: { type: String, required: true, match: /^\d{12}$/, unique: true, trim: true },
+    aadhaarNumber: { 
+        type: String, 
+        required: function() { return !!this.patientId; }, 
+        match: /^\d{12}$/, 
+        unique: true, 
+        sparse: true, 
+        trim: true 
+    },
     isAadhaarVerified: { type: Boolean, default: false },
-    age: { type: Number, required: true, min: 1 },
+    age: { 
+        type: Number, 
+        required: function() { return !!this.patientId; }, 
+        min: 1 
+    },
 
     // Clinical Profile
     patientType: { type: String, enum: ['Primary', 'Partner'], default: 'Primary' },

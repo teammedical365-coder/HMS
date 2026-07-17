@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { receptionAPI, publicAPI } from '../utils/api';
 import './RoleDashboard.css';
@@ -60,6 +60,25 @@ const RoleDashboard = () => {
     const [selectedReportFile, setSelectedReportFile] = useState(null);
 
     const [consultModal, setConsultModal] = useState({ open: false, patient: null, sessions: [] });
+
+    const processFormChange = useCallback((e, formSetter) => {
+        const { name, value } = e.target;
+        if (name === 'phone') {
+            const cleanVal = value.replace(/\D/g, '').slice(0, 10);
+            formSetter(prev => ({ ...prev, [name]: cleanVal }));
+        } else if (name === 'aadhaarNumber') {
+            const cleanVal = value.replace(/\D/g, '').slice(0, 12);
+            formSetter(prev => ({ ...prev, [name]: cleanVal }));
+        } else {
+            formSetter(prev => ({ ...prev, [name]: value }));
+        }
+    }, []);
+
+    const handleVitalsFormChange = useCallback(
+        (e) => processFormChange(e, setVitalsForm), 
+        [processFormChange]
+    );
+
 
     useEffect(() => {
         if (isReception) {
@@ -665,27 +684,27 @@ const RoleDashboard = () => {
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
                                     <div>
                                         <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '4px' }}>Height (cm)</label>
-                                        <input type="number" value={vitalsForm.height} onChange={e => setVitalsForm({...vitalsForm, height: e.target.value})} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }} />
+                                        <input type="number" value={vitalsForm.height} name="height" onChange={handleVitalsFormChange} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }} />
                                     </div>
                                     <div>
                                         <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '4px' }}>Weight (kg)</label>
-                                        <input type="number" value={vitalsForm.weight} onChange={e => setVitalsForm({...vitalsForm, weight: e.target.value})} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }} />
+                                        <input type="number" value={vitalsForm.weight} name="weight" onChange={handleVitalsFormChange} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }} />
                                     </div>
                                     <div>
                                         <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '4px' }}>Blood Group</label>
-                                        <input type="text" value={vitalsForm.bloodGroup} onChange={e => setVitalsForm({...vitalsForm, bloodGroup: e.target.value})} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }} />
+                                        <input type="text" value={vitalsForm.bloodGroup} name="bloodGroup" onChange={handleVitalsFormChange} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }} />
                                     </div>
                                     <div>
                                         <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '4px' }}>Blood Pressure</label>
-                                        <input type="text" placeholder="120/80" value={vitalsForm.bp} onChange={e => setVitalsForm({...vitalsForm, bp: e.target.value})} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }} />
+                                        <input type="text" placeholder="120/80" value={vitalsForm.bp} name="bp" onChange={handleVitalsFormChange} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }} />
                                     </div>
                                     <div>
                                         <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '4px' }}>Pulse (bpm)</label>
-                                        <input type="number" value={vitalsForm.pulse} onChange={e => setVitalsForm({...vitalsForm, pulse: e.target.value})} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }} />
+                                        <input type="number" value={vitalsForm.pulse} name="pulse" onChange={handleVitalsFormChange} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }} />
                                     </div>
                                     <div>
                                         <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '4px' }}>Temp (°F)</label>
-                                        <input type="number" step="0.1" value={vitalsForm.temp} onChange={e => setVitalsForm({...vitalsForm, temp: e.target.value})} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }} />
+                                        <input type="number" step="0.1" value={vitalsForm.temp} name="temp" onChange={handleVitalsFormChange} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px' }} />
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>

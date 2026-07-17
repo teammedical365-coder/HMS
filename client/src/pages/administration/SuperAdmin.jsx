@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminAPI, uploadAPI } from '../../utils/api';
 import './SuperAdmin.css';
@@ -25,6 +25,32 @@ const SuperAdmin = () => {
         name: '', email: '', password: '', phone: '', roleId: '', file: null, age: '', aadhaarNumber: ''
     });
     const [creating, setCreating] = useState(false);
+
+    const processFormChange = useCallback((e, formSetter) => {
+        const { name, value } = e.target;
+        
+        if (name === 'phone') {
+            const cleanVal = value.replace(/\D/g, '').slice(0, 10);
+            formSetter(prev => ({ ...prev, [name]: cleanVal }));
+        } 
+        else if (name === 'aadhaarNumber') {
+            const cleanVal = value.replace(/\D/g, '').slice(0, 12);
+            formSetter(prev => ({ ...prev, [name]: cleanVal }));
+        }
+        else {
+            formSetter(prev => ({ ...prev, [name]: value }));
+        }
+    }, []);
+
+    const handleCreateFormChange = useCallback(
+        (e) => processFormChange(e, setCreateForm), 
+        [processFormChange]
+    );
+
+    const handleEditFormChange = useCallback(
+        (e) => processFormChange(e, setEditForm), 
+        [processFormChange]
+    );
 
     // Check auth
     useEffect(() => {
@@ -260,34 +286,34 @@ const SuperAdmin = () => {
                             <div className="form-row">
                                 <div className="form-group">
                                     <label className="staff-label">Full Name *</label>
-                                    <input type="text" placeholder="e.g. Dr. Sharma" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} required minLength={2} className="staff-input" />
+                                    <input type="text" name="name" placeholder="e.g. Dr. Sharma" value={createForm.name} onChange={handleCreateFormChange} required minLength={2} className="staff-input" />
                                 </div>
                                 <div className="form-group">
                                     <label className="staff-label">Email Address *</label>
-                                    <input type="email" placeholder="e.g. dr.sharma@hospital.com" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} required className="staff-input" />
+                                    <input type="email" name="email" placeholder="e.g. dr.sharma@hospital.com" value={createForm.email} onChange={handleCreateFormChange} required className="staff-input" />
                                 </div>
                             </div>
 
                             <div className="form-row">
                                 <div className="form-group">
                                     <label className="staff-label">Password *</label>
-                                    <input type="text" placeholder="Set a temporary password" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} required className="staff-input" />
+                                    <input type="text" name="password" placeholder="Set a temporary password" value={createForm.password} onChange={handleCreateFormChange} required className="staff-input" />
                                     <small className="form-hint">Share this password with the staff member</small>
                                 </div>
                                 <div className="form-group">
                                     <label className="staff-label">Phone Number *</label>
-                                    <input type="text" placeholder="e.g. 9876543210" value={createForm.phone} onChange={e => setCreateForm({ ...createForm, phone: e.target.value })} required pattern="^\d{10}$" title="Phone number must be exactly 10 digits" className="staff-input" />
+                                    <input type="tel" name="phone" placeholder="Enter 10-digit phone number" value={createForm.phone} onChange={handleCreateFormChange} pattern="^\d{10}$" title="Phone number must be exactly 10 digits" maxLength={10} required className="staff-input" />
                                 </div>
                             </div>
 
                             <div className="form-row">
                                 <div className="form-group">
                                     <label className="staff-label">Age *</label>
-                                    <input type="number" placeholder="Age" value={createForm.age} onChange={e => setCreateForm({ ...createForm, age: e.target.value })} required min="1" className="staff-input" />
+                                    <input type="number" name="age" placeholder="Age" value={createForm.age} onChange={handleCreateFormChange} required min="1" className="staff-input" />
                                 </div>
                                 <div className="form-group">
                                     <label className="staff-label">Aadhaar Number *</label>
-                                    <input type="text" placeholder="12-digit Aadhaar" value={createForm.aadhaarNumber} onChange={e => setCreateForm({ ...createForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" className="staff-input" />
+                                    <input type="text" name="aadhaarNumber" placeholder="12-digit Aadhaar" value={createForm.aadhaarNumber} onChange={handleCreateFormChange} pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" maxLength={12} required className="staff-input" />
                                 </div>
                             </div>
 
@@ -304,7 +330,7 @@ const SuperAdmin = () => {
                                 </div>
                                 <div className="form-group">
                                     <label className="staff-label">Assign Role * <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: '0.85rem', textTransform: 'none' }}>(Don't see your role? <a href="/admin/roles" style={{ color: '#0ea5e9' }}>Create one here</a>)</span></label>
-                                    <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
+                                    <select name="roleId" value={createForm.roleId} onChange={handleCreateFormChange} required className="staff-input">
                                         <option value="">-- Select a Role --</option>
                                         {roles.map(role => (
                                             <option key={role._id} value={role._id}>
@@ -416,22 +442,22 @@ const SuperAdmin = () => {
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="staff-label">Name *</label>
-                                        <input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} required minLength={2} className="staff-input" />
+                                        <input type="text" name="name" value={editForm.name} onChange={handleEditFormChange} required minLength={2} className="staff-input" />
                                     </div>
                                     <div className="form-group">
                                         <label className="staff-label">Email</label>
-                                        <input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} required className="staff-input" />
+                                        <input type="email" name="email" value={editForm.email} onChange={handleEditFormChange} required className="staff-input" />
                                     </div>
                                 </div>
 
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="staff-label">Phone *</label>
-                                        <input type="text" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} required pattern="^\d{10}$" title="Phone number must be exactly 10 digits" className="staff-input" />
+                                        <input type="tel" name="phone" placeholder="Enter 10-digit phone number" value={editForm.phone} onChange={handleEditFormChange} pattern="^\d{10}$" title="Phone number must be exactly 10 digits" maxLength={10} required className="staff-input" />
                                     </div>
                                     <div className="form-group">
                                         <label className="staff-label">Role</label>
-                                        <select value={editForm.roleId} onChange={e => setEditForm({ ...editForm, roleId: e.target.value })} required disabled className="staff-input">
+                                        <select name="roleId" value={editForm.roleId} onChange={handleEditFormChange} required disabled className="staff-input">
                                             {roles.map(role => (
                                                 <option key={role._id} value={role._id}>{role.name}</option>
                                             ))}
@@ -442,11 +468,11 @@ const SuperAdmin = () => {
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="staff-label">Age *</label>
-                                        <input type="number" value={editForm.age} onChange={e => setEditForm({ ...editForm, age: e.target.value })} required min="1" className="staff-input" />
+                                        <input type="number" name="age" value={editForm.age} onChange={handleEditFormChange} required min="1" className="staff-input" />
                                     </div>
                                     <div className="form-group">
                                         <label className="staff-label">Aadhaar Number *</label>
-                                        <input type="text" value={editForm.aadhaarNumber} onChange={e => setEditForm({ ...editForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" className="staff-input" />
+                                        <input type="text" name="aadhaarNumber" placeholder="12-digit Aadhaar" value={editForm.aadhaarNumber} onChange={handleEditFormChange} pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" maxLength={12} required className="staff-input" />
                                     </div>
                                 </div>
 

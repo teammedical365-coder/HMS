@@ -356,7 +356,7 @@ const AdminDoctors = () => {
                             <div className="form-row">
                                 <div className="form-group">
                                     <label htmlFor="phone">Phone</label>
-                                    <input type="tel" name="phone" value={formData.phone} onChange={handleChange} />
+                                    <input pattern="\\d{10}" maxLength={10} required type="tel" name="phone" value={formData.phone} onChange={handleChange} />
                                 </div>
                                 <div className="form-group">
                                     <label htmlFor="password">{editingDoctor ? 'New Password' : 'Password *'}</label>
