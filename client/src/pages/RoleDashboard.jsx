@@ -30,6 +30,15 @@ const getDescForLink = (label) => {
     return 'Access the modules of your workspace';
 };
 
+const operationLinks = [
+    { icon: '👨‍⚕️', label: 'Doctors', desc: 'Manage doctor profiles & schedules', path: '/admin/doctors', bg: '#dbeafe', color: '#2563eb' },
+    { icon: '🧪', label: 'Labs', desc: 'Configure lab departments', path: '/admin/labs', bg: '#f3e8ff', color: '#9333ea' },
+    { icon: '💊', label: 'Pharmacy', desc: 'Pharmacy inventory & orders', path: '/admin/pharmacy', bg: '#ffedd5', color: '#ea580c' },
+    { icon: '🛠️', label: 'Services', desc: 'Hospital services & pricing', path: '/admin/services', bg: '#fefce8', color: '#ca8a04' },
+    { icon: '👥', label: 'Manage Users', desc: 'View and manage all staff', path: '/admin/users', bg: '#f0f9ff', color: '#0284c7' },
+    { icon: '📝', label: 'Question Library', desc: 'Manage diagnostic questions', path: '/hospitaladmin/question-library', bg: '#fdf2f8', color: '#be185d' },
+];
+
 const RoleDashboard = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -626,6 +635,31 @@ const RoleDashboard = () => {
                                     ))}
                                 </div>
                             </>
+                        ) : (roleName || '').toLowerCase() === 'hospitaladmin' || (roleName || '').toLowerCase() === 'hospital admin' ? (
+                            <div className="admin-card" style={{ marginTop: '24px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+                                    <h2 style={{ margin: 0 }}>⚡ Quick Operations</h2>
+                                </div>
+                                <p style={{ color: '#888', fontSize: '14px', margin: '0 0 20px' }}>
+                                    Jump to the areas you manage most frequently. Contact your Central Admin to manage question libraries, test packages, or medicine catalogs.
+                                </p>
+                                <div className="ha-ops-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px' }}>
+                                    {operationLinks.map((item, i) => (
+                                        <div
+                                            key={i}
+                                            className="ha-op-card"
+                                            onClick={() => navigate(item.path)}
+                                            style={{ background: item.bg, border: '1px solid ' + item.color + '30', display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                                        >
+                                            <span className="ha-op-icon" style={{ color: item.color, fontSize: '28px' }}>{item.icon}</span>
+                                            <div>
+                                                <h4 style={{ color: item.color, margin: '0 0 4px', fontSize: '1rem', fontWeight: 'bold' }}>{item.label}</h4>
+                                                <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>{item.desc}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         ) : (
                             <div className="empty-state">
                                 <span className="empty-icon">📭</span>
