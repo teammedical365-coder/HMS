@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI, simpleClinicAPI, revenueAPI } from '../../utils/api';
 import AdminLabs from '../admin/AdminLabs';
@@ -107,14 +107,6 @@ const CentralAdminDashboard = () => {
         return host;
     };
 
-    const getActivePlanName = (tab = activeTab) => {
-        if (tab === 'hospitals') return 'enterprise';
-        if (tab === 'multi-speciality') return 'multi_speciality_starter';
-        if (tab === 'clinic-basic') return 'clinic_basic';
-        if (tab === 'simple-clinics') return 'starter';
-        return 'enterprise';
-    };
-
     useEffect(() => {
         const role = currentUser?.role;
         // Only redirect if user is logged in but has the wrong role (not during logout)
@@ -122,12 +114,11 @@ const CentralAdminDashboard = () => {
     }, [navigate]);
 
     useEffect(() => {
-        const plan = getActivePlanName();
-        fetchHospitals(plan);
-        fetchRoles(plan);
-        fetchAllStaff(plan);
+        fetchHospitals();
+        fetchRoles();
+        fetchAllStaff();
         fetchDepartments();
-        fetchClinics(plan);
+        fetchClinics();
     }, []);
 
     // Handle navigation state from SystemRevenueDashboard "Manage Plan" button
@@ -137,43 +128,10 @@ const CentralAdminDashboard = () => {
         }
     }, [location.state]);
 
-    // Handle auto-clearing success/error notifications after 5 seconds
-    useEffect(() => {
-        if (success || error) {
-            const timer = setTimeout(() => {
-                setSuccess('');
-                setError('');
-            }, 5000);
-            return () => clearTimeout(timer);
-        }
-    }, [success, error]);
-
     // Auto-load revenue plans when the tab becomes active
     useEffect(() => {
-        const plan = getActivePlanName();
-        
-        // Clear global notifications and UI states when switching tabs
-        setSuccess('');
-        setError('');
-        setShowHospitalForm(false);
-        setShowHospitalAdminForm(false);
-        setEditHospital(null);
-        setSelectedHospital(null);
-        setShowClinicForm(false);
-        setShowClinicManagerForm(false);
-        setEditClinic(null);
-        setSelectedClinic(null);
-
         if (activeTab === 'revenue-plans' && revenuePlans.length === 0) {
             fetchRevenuePlans();
-        } else if (activeTab === 'simple-clinics') {
-            fetchClinics(plan);
-            fetchAllStaff(plan);
-            fetchRoles(plan);
-        } else if (activeTab === 'hospitals' || activeTab === 'multi-speciality' || activeTab === 'clinic-basic') {
-            fetchHospitals(plan);
-            fetchAllStaff(plan);
-            fetchRoles(plan);
         }
     }, [activeTab]);
 
@@ -228,10 +186,10 @@ const CentralAdminDashboard = () => {
     // ==========================================
     // SIMPLE CLINIC HANDLERS
     // ==========================================
-    const fetchClinics = async (plan = getActivePlanName()) => {
+    const fetchClinics = async () => {
         try {
             setLoadingClinics(true);
-            const res = await simpleClinicAPI.getClinics(plan);
+            const res = await simpleClinicAPI.getClinics();
             if (res.success) setClinics(res.clinics);
         } catch (err) { console.error('Failed to load clinics:', err); }
         finally { setLoadingClinics(false); }
@@ -299,13 +257,12 @@ const CentralAdminDashboard = () => {
         setSavingClinic(true);
         setError(''); setSuccess('');
         try {
-            const plan = activeTab === 'clinic-basic' ? 'basic' : 'starter';
             if (editClinic) {
-                const res = await simpleClinicAPI.updateClinic(editClinic._id, { ...clinicForm, plan });
+                const res = await simpleClinicAPI.updateClinic(editClinic._id, clinicForm);
                 if (res.success) { setSuccess('Clinic updated.'); fetchClinics(); setEditClinic(null); setShowClinicForm(false); }
                 else setError(res.message || 'Failed to update clinic');
             } else {
-                const res = await simpleClinicAPI.createClinic({ ...clinicForm, plan });
+                const res = await simpleClinicAPI.createClinic(clinicForm);
                 if (res.success) { setSuccess('Clinic created successfully!'); fetchClinics(); setShowClinicForm(false); setClinicForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', defaultFee: 0 }); }
                 else setError(res.message || 'Failed to create clinic');
             }
@@ -315,7 +272,6 @@ const CentralAdminDashboard = () => {
 
     const handleDeleteClinic = async (id) => {
         try {
-            const plan = activeTab === 'clinic-basic' ? 'basic' : 'starter';
             const res = await simpleClinicAPI.deleteClinic(id);
             if (res.success) { setSuccess('Clinic deleted.'); fetchClinics(); setDeleteClinicConfirm(null); }
             else setError(res.message);
@@ -370,27 +326,27 @@ const CentralAdminDashboard = () => {
         } catch (err) { setError(err.response?.data?.message || err.message); }
     };
 
-    const fetchHospitals = async (plan = getActivePlanName()) => {
+    const fetchHospitals = async () => {
         try {
             setLoadingHospitals(true);
-            const res = await hospitalAPI.getHospitals(plan);
+            const res = await hospitalAPI.getHospitals();
             if (res.success) setHospitals(res.hospitals);
         } catch (err) { console.error(err); } finally { setLoadingHospitals(false); }
     };
 
-    const fetchRoles = async (plan = getActivePlanName()) => {
+    const fetchRoles = async () => {
         try {
-            const res = await adminAPI.getRoles(plan);
+            const res = await adminAPI.getRoles();
             if (res.success) setRoles(res.data.filter(r => !['patient'].includes(r.name?.toLowerCase())));
         } catch (err) { console.error(err); }
     };
 
-    const fetchAllStaff = async (plan = getActivePlanName()) => {
+    const fetchAllStaff = async () => {
         try {
             setLoadingStaff(true);
-            const res = await adminAPI.getUsers(plan);
+            const res = await adminAPI.getUsers();
             if (res.success) {
-                // Filter out patients, centraladmin, superadmin, hospitaladmin — only show real staff
+                // Filter out patients, centraladmin, superadmin, hospitaladmin ΓÇö only show real staff
                 const staff = res.users.filter(u => {
                     const role = (u.role || '').toLowerCase();
                     return !['centraladmin', 'superadmin', 'hospitaladmin', 'patient'].includes(role);
@@ -488,15 +444,11 @@ const CentralAdminDashboard = () => {
         e.preventDefault();
         setSavingHospital(true); setError(''); setSuccess('');
         try {
-            let plan = 'enterprise';
-            if (activeTab === 'multi-speciality') plan = 'multi_speciality_starter';
-            else if (activeTab === 'clinic-basic') plan = 'clinic_basic';
-
             if (editHospital) {
-                const res = await hospitalAPI.updateHospital(editHospital._id, { ...hospitalForm, plan });
+                const res = await hospitalAPI.updateHospital(editHospital._id, hospitalForm);
                 if (res.success) { setSuccess('Hospital updated!'); setEditHospital(null); setShowHospitalForm(false); fetchHospitals(); }
             } else {
-                const res = await hospitalAPI.createHospital({ ...hospitalForm, plan });
+                const res = await hospitalAPI.createHospital(hospitalForm);
                 if (res.success) { setSuccess('Hospital created!'); setShowHospitalForm(false); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] }); fetchHospitals(); }
             }
         } catch (err) { setError(err.response?.data?.message || 'Error saving hospital.'); }
@@ -542,7 +494,7 @@ const CentralAdminDashboard = () => {
                         }
                     } catch { /* avatar upload failure is non-fatal */ }
                 }
-                setSuccess(`✅ Hospital Admin created! Login: ${hospitalAdminForm.email}`);
+                setSuccess(`Γ£à Hospital Admin created! Login: ${hospitalAdminForm.email}`);
                 setHospitalAdminForm({ name: '', email: '', password: '', phone: '', hospitalId: '', file: null });
                 setShowHospitalAdminForm(false);
                 fetchHospitals();
@@ -551,7 +503,7 @@ const CentralAdminDashboard = () => {
         finally { setCreatingHospitalAdmin(false); }
     };
 
-    // --- Staff Creation — hospital required ---
+    // --- Staff Creation ΓÇö hospital required ---
     const handleCreateStaff = async (e) => {
         e.preventDefault();
         if (!createStaffForm.hospitalId) { setError('You must select a hospital for this staff member.'); return; }
@@ -577,7 +529,7 @@ const CentralAdminDashboard = () => {
                 departments: createStaffForm.department ? [createStaffForm.department] : []
             });
             if (res.success) {
-                setSuccess(`✅ Staff account created! Login: ${createStaffForm.email}`);
+                setSuccess(`Γ£à Staff account created! Login: ${createStaffForm.email}`);
                 setCreateStaffForm({ name: '', email: '', password: '', phone: '', roleId: '', hospitalId: '', file: null });
                 setShowCreateStaffForm(false);
                 fetchAllStaff();
@@ -587,7 +539,7 @@ const CentralAdminDashboard = () => {
     };
 
 
-    const formatCurrency = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
+    const formatCurrency = (n) => `Γé╣${(n || 0).toLocaleString('en-IN')}`;
     const getHospitalName = (hid) => hospitals.find(h => h._id === hid)?.name || 'Unknown';
 
     const filteredStaff = staffHospitalFilter
@@ -595,19 +547,17 @@ const CentralAdminDashboard = () => {
         : allStaff;
 
     const MODEL_LABELS = {
-        per_patient: { label: 'Model B — Per Patient', color: '#6366f1', bg: '#ede9fe', icon: '👤' },
-        fixed_monthly: { label: 'Model A — Fixed Monthly', color: '#10b981', bg: '#d1fae5', icon: '📅' },
-        per_login: { label: 'Model C — Per Login', color: '#f59e0b', bg: '#fef3c7', icon: '🔑' },
+        per_patient: { label: 'Model B ΓÇö Per Patient', color: '#6366f1', bg: '#ede9fe', icon: '≡ƒæñ' },
+        fixed_monthly: { label: 'Model A ΓÇö Fixed Monthly', color: '#10b981', bg: '#d1fae5', icon: '≡ƒôà' },
+        per_login: { label: 'Model C ΓÇö Per Login', color: '#f59e0b', bg: '#fef3c7', icon: '≡ƒöæ' },
     };
 
     const tabs = [
-        { id: 'hospitals', label: '🏥 Enterprise Plan', desc: 'Manage hospitals' },
-        { id: 'multi-speciality', label: '🏥 Multi-Speciality Starter', desc: 'Up to 15 Doctors & 14 Staff' },
-        { id: 'clinic-basic', label: '🩺 Clinic Basic Plan', desc: 'Up to 5 Doctors & 3 Staff' },
-        { id: 'simple-clinics', label: '🏪 Starter Plan', desc: 'Small clinic management' },
-        { id: 'staff', label: '👥 All Staff', desc: 'Global staff management' },
-        { id: 'revenue-plans', label: '💰 Revenue Plans', desc: 'Set billing models' },
-        { id: 'configurations', label: '⚙️ Configurations', desc: 'Roles, tests, questions' },
+        { id: 'hospitals', label: '≡ƒÅÑ Hospitals', desc: 'Manage hospitals' },
+        { id: 'simple-clinics', label: '≡ƒÅ¬ Simple Clinics', desc: 'Small clinic management' },
+        { id: 'staff', label: '≡ƒæÑ All Staff', desc: 'Global staff management' },
+        { id: 'revenue-plans', label: '≡ƒÆ░ Revenue Plans', desc: 'Set billing models' },
+        { id: 'configurations', label: 'ΓÜÖ∩╕Å Configurations', desc: 'Roles, tests, questions' },
     ];
 
     // ==========================================
@@ -624,7 +574,7 @@ const CentralAdminDashboard = () => {
                         {/* Top Row: Back Button */}
                         <div style={{ marginBottom: '16px' }}>
                             <button onClick={closeHospitalDetail} className="back-btn-light" style={{ display: 'inline-flex', alignItems: 'center', margin: 0 }}>
-                                ← Back to Hospitals
+                                ΓåÉ Back to Hospitals
                             </button>
                         </div>
 
@@ -635,15 +585,15 @@ const CentralAdminDashboard = () => {
                                 {h.branding?.logoUrl ? (
                                     <img src={h.branding.logoUrl} alt="Logo" style={{ width: '48px', height: '48px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '4px' }} />
                                 ) : (
-                                    <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', border: '1px solid #cbd5e1' }}>🏥</div>
+                                    <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', border: '1px solid #cbd5e1' }}>≡ƒÅÑ</div>
                                 )}
                                 <div>
                                     <h1 style={{ fontSize: '1.6rem', fontWeight: 850, color: '#1e293b', margin: 0 }}>
                                         {h.name}
                                     </h1>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: '#64748b', fontSize: '0.92rem', marginTop: '6px', flexWrap: 'wrap' }}>
-                                        {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
-                                        {h.phone && <span>📞 {h.phone}</span>}
+                                        {h.city && <span>≡ƒôì {h.city}{h.state ? `, ${h.state}` : ''}</span>}
+                                        {h.phone && <span>≡ƒô₧ {h.phone}</span>}
                                     </div>
                                 </div>
                             </div>
@@ -671,13 +621,13 @@ const CentralAdminDashboard = () => {
 
                     {loadingStats ? (
                         <div className="loading-message" style={{ padding: '60px', textAlign: 'center', fontSize: '18px' }}>
-                            ⏳ Loading hospital analytics...
+                            ΓÅ│ Loading hospital analytics...
                         </div>
                     ) : s ? (
                         <>
                             {/* ---- DATE FILTER BAR ---- */}
                             <div className="admin-card date-filter-card">
-                                <h3>📅 Analytics Timeframe</h3>
+                                <h3>≡ƒôà Analytics Timeframe</h3>
                                 <div className="date-filter-controls">
                                     <div className="preset-buttons">
                                         <button className={datePreset === 'all' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('all')}>All Time</button>
@@ -698,58 +648,58 @@ const CentralAdminDashboard = () => {
                             {/* ---- KPI STATS ROW ---- */}
                             <div className="hospital-kpi-grid">
                                 <div className="kpi-card kpi-blue">
-                                    <div className="kpi-icon">👩‍⚕️</div>
+                                    <div className="kpi-icon">≡ƒæ⌐ΓÇìΓÜò∩╕Å</div>
                                     <div className="kpi-value">{s.totalStaff}</div>
                                     <div className="kpi-label">Total Staff</div>
-                                    <div className="kpi-sub">Active staff members</div>
+                                    <div className="kpi-sub">{s.doctorCount} doctors ┬╖ {s.labCount} labs ┬╖ {s.pharmacyCount} pharmacy</div>
                                 </div>
                                 <div className="kpi-card kpi-green">
-                                    <div className="kpi-icon">🧑‍🤝‍🧑</div>
+                                    <div className="kpi-icon">≡ƒºæΓÇì≡ƒñ¥ΓÇì≡ƒºæ</div>
                                     <div className="kpi-value">{s.totalPatients}</div>
                                     <div className="kpi-label">Unique Patients</div>
                                     <div className="kpi-sub">In selected period</div>
                                 </div>
                                 <div className="kpi-card kpi-purple">
-                                    <div className="kpi-icon">📅</div>
+                                    <div className="kpi-icon">≡ƒôà</div>
                                     <div className="kpi-value">{s.totalAppointments}</div>
                                     <div className="kpi-label">Total Appointments</div>
                                     <div className="kpi-sub">In selected period</div>
                                 </div>
                                 <div className="kpi-card kpi-orange">
-                                    <div className="kpi-icon">💰</div>
+                                    <div className="kpi-icon">≡ƒÆ░</div>
                                     <div className="kpi-value">{formatCurrency(s.totalRevenue)}</div>
                                     <div className="kpi-label">Total Revenue</div>
                                     <div className="kpi-sub">From paid appointments</div>
                                 </div>
                                 <div className="kpi-card kpi-teal">
-                                    <div className="kpi-icon">✅</div>
+                                    <div className="kpi-icon">Γ£à</div>
                                     <div className="kpi-value">{s.completedAppointments}</div>
                                     <div className="kpi-label">Completed</div>
                                     <div className="kpi-sub">{s.pendingAppointments} pending/upcoming</div>
                                 </div>
                                 <div className="kpi-card kpi-pink">
-                                    <div className="kpi-icon">🧪</div>
+                                    <div className="kpi-icon">≡ƒº¬</div>
                                     <div className="kpi-value">{s.labReportCount}</div>
                                     <div className="kpi-label">Lab Reports</div>
-                                    <div className="kpi-sub">{s.pendingLabReports} pending · {s.pharmacyOrderCount} pharmacy orders</div>
+                                    <div className="kpi-sub">{s.pendingLabReports} pending ┬╖ {s.pharmacyOrderCount} pharmacy orders</div>
                                 </div>
                             </div>
 
                             {/* ---- FEATURE QUICK ACTIONS ---- */}
                             <div className="admin-card" style={{ marginBottom: '24px' }}>
-                                <h3 style={{ marginBottom: '8px' }}>⚡ Quick Feature Management</h3>
+                                <h3 style={{ marginBottom: '8px' }}>ΓÜí Quick Feature Management</h3>
                                 <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>Jump to manage specific features for this hospital.</p>
                                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                                     {[
-                                        { icon: '👨‍⚕️', label: 'Doctors', path: '/admin/doctors', bg: '#dbeafe', color: '#2563eb', border: '#bfdbfe' },
-                                        { icon: '👥', label: 'Staff', path: '/admin/users', bg: '#f0f9ff', color: '#0284c7', border: '#bae6fd' },
-                                        { icon: '🔑', label: 'Roles', path: '/admin/roles', bg: '#f3e8ff', color: '#9333ea', border: '#e9d5ff' },
-                                        { icon: '🧪', label: 'Labs', path: '/admin/labs', bg: '#faf5ff', color: '#7c3aed', border: '#ddd6fe' },
-                                        { icon: '📋', label: 'Lab Tests', path: '/admin/lab-tests', bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' },
-                                        { icon: '💊', label: 'Pharmacy', path: '/admin/pharmacy', bg: '#ffedd5', color: '#ea580c', border: '#fed7aa' },
-                                        { icon: '🏥', label: 'Reception', path: '/admin/reception', bg: '#dcfce7', color: '#16a34a', border: '#bbf7d0' },
-                                        { icon: '🛠️', label: 'Services', path: '/admin/services', bg: '#fefce8', color: '#ca8a04', border: '#fef08a' },
-                                        { icon: '💉', label: 'Medicines', path: '/admin/medicines', bg: '#fdf2f8', color: '#be185d', border: '#fbcfe8' },
+                                        { icon: '≡ƒæ¿ΓÇìΓÜò∩╕Å', label: 'Doctors', path: '/admin/doctors', bg: '#dbeafe', color: '#2563eb', border: '#bfdbfe' },
+                                        { icon: '≡ƒæÑ', label: 'Staff', path: '/admin/users', bg: '#f0f9ff', color: '#0284c7', border: '#bae6fd' },
+                                        { icon: '≡ƒöæ', label: 'Roles', path: '/admin/roles', bg: '#f3e8ff', color: '#9333ea', border: '#e9d5ff' },
+                                        { icon: '≡ƒº¬', label: 'Labs', path: '/admin/labs', bg: '#faf5ff', color: '#7c3aed', border: '#ddd6fe' },
+                                        { icon: '≡ƒôï', label: 'Lab Tests', path: '/admin/lab-tests', bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' },
+                                        { icon: '≡ƒÆè', label: 'Pharmacy', path: '/admin/pharmacy', bg: '#ffedd5', color: '#ea580c', border: '#fed7aa' },
+                                        { icon: '≡ƒÅÑ', label: 'Reception', path: '/admin/reception', bg: '#dcfce7', color: '#16a34a', border: '#bbf7d0' },
+                                        { icon: '≡ƒ¢á∩╕Å', label: 'Services', path: '/admin/services', bg: '#fefce8', color: '#ca8a04', border: '#fef08a' },
+                                        { icon: '≡ƒÆë', label: 'Medicines', path: '/admin/medicines', bg: '#fdf2f8', color: '#be185d', border: '#fbcfe8' },
                                     ].map((item, i) => (
                                         <button
                                             key={i}
@@ -765,7 +715,7 @@ const CentralAdminDashboard = () => {
                             {/* ---- APPOINTMENT MODE CUSTOMIZATION ---- */}
                             <div className="admin-card" style={{ marginBottom: '24px', border: '2px solid #e0f2fe' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                                    <h3 style={{ margin: 0 }}>🎟️ Appointment System Mode</h3>
+                                    <h3 style={{ margin: 0 }}>≡ƒÄƒ∩╕Å Appointment System Mode</h3>
                                     <span style={{ fontSize: '0.75rem', background: h.appointmentMode === 'token' ? '#fef3c7' : '#dbeafe', color: h.appointmentMode === 'token' ? '#92400e' : '#1d4ed8', padding: '2px 10px', borderRadius: '20px', fontWeight: 700 }}>
                                         Current: {h.appointmentMode === 'token' ? 'Token Queue' : 'Time Slots'}
                                     </span>
@@ -784,14 +734,14 @@ const CentralAdminDashboard = () => {
                                     }}>
                                         <input type="radio" name="apptMode" value="slot" checked={apptMode === 'slot'} onChange={() => setApptMode('slot')} style={{ display: 'none' }} />
                                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                                            <span style={{ fontSize: '2rem', lineHeight: 1 }}>🕐</span>
+                                            <span style={{ fontSize: '2rem', lineHeight: 1 }}>≡ƒòÉ</span>
                                             <div>
                                                 <div style={{ fontWeight: 700, fontSize: '1rem', color: apptMode === 'slot' ? '#1d4ed8' : '#1e293b', marginBottom: '4px' }}>
                                                     Time Slot Booking
                                                     {apptMode === 'slot' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#3b82f6', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
                                                 </div>
                                                 <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
-                                                    Patients pick a specific time (09:00, 09:30…). Doctor slots are fixed. Standard OPD scheduling.
+                                                    Patients pick a specific time (09:00, 09:30ΓÇª). Doctor slots are fixed. Standard OPD scheduling.
                                                 </div>
                                             </div>
                                         </div>
@@ -806,14 +756,14 @@ const CentralAdminDashboard = () => {
                                     }}>
                                         <input type="radio" name="apptMode" value="token" checked={apptMode === 'token'} onChange={() => setApptMode('token')} style={{ display: 'none' }} />
                                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                                            <span style={{ fontSize: '2rem', lineHeight: 1 }}>🎟️</span>
+                                            <span style={{ fontSize: '2rem', lineHeight: 1 }}>≡ƒÄƒ∩╕Å</span>
                                             <div>
                                                 <div style={{ fontWeight: 700, fontSize: '1rem', color: apptMode === 'token' ? '#92400e' : '#1e293b', marginBottom: '4px' }}>
                                                     Token Queue System
                                                     {apptMode === 'token' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#f59e0b', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
                                                 </div>
                                                 <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
-                                                    Sequential tokens (1, 2, 3…) per doctor per day. Auto-resets to 1 at midnight. No time-slot picking needed.
+                                                    Sequential tokens (1, 2, 3ΓÇª) per doctor per day. Auto-resets to 1 at midnight. No time-slot picking needed.
                                                 </div>
                                             </div>
                                         </div>
@@ -822,7 +772,7 @@ const CentralAdminDashboard = () => {
 
                                 {apptMode !== (h.appointmentMode || 'slot') && (
                                     <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: '8px', padding: '10px 14px', fontSize: '0.85rem', color: '#713f12', marginBottom: '14px' }}>
-                                        ⚠️ You are changing the appointment mode. Existing appointments will not be affected — only new bookings will follow the new mode.
+                                        ΓÜá∩╕Å You are changing the appointment mode. Existing appointments will not be affected ΓÇö only new bookings will follow the new mode.
                                     </div>
                                 )}
 
@@ -836,7 +786,7 @@ const CentralAdminDashboard = () => {
                                             opacity: (savingApptMode || apptMode === (h.appointmentMode || 'slot')) ? 0.5 : 1
                                         }}
                                     >
-                                        {savingApptMode ? 'Saving…' : 'Save Mode'}
+                                        {savingApptMode ? 'SavingΓÇª' : 'Save Mode'}
                                     </button>
                                     {apptMode === (h.appointmentMode || 'slot') && (
                                         <span style={{ fontSize: '0.85rem', color: '#64748b' }}>No changes to save</span>
@@ -848,7 +798,7 @@ const CentralAdminDashboard = () => {
                             <div className="detail-two-col">
                                 {/* Staff breakdown */}
                                 <div className="admin-card">
-                                    <h3>👥 Staff Breakdown</h3>
+                                    <h3>≡ƒæÑ Staff Breakdown</h3>
                                     {s.staffBreakdown.length === 0 ? (
                                         <p style={{ color: '#888', fontSize: '14px' }}>No staff assigned yet.</p>
                                     ) : (
@@ -869,7 +819,7 @@ const CentralAdminDashboard = () => {
 
                                     {/* Hospital Info */}
                                     <div style={{ marginTop: '24px', borderTop: '1px solid #f0f0f0', paddingTop: '16px' }}>
-                                        <h4 style={{ margin: '0 0 12px', color: '#555' }}>🏥 Hospital Info</h4>
+                                        <h4 style={{ margin: '0 0 12px', color: '#555' }}>≡ƒÅÑ Hospital Info</h4>
                                         {[
                                             { label: 'Email', value: h.email },
                                             { label: 'Website', value: h.website },
@@ -898,7 +848,7 @@ const CentralAdminDashboard = () => {
 
                                 {/* Revenue chart */}
                                 <div className="admin-card">
-                                    <h3>💰 Monthly Revenue (Last 6 Months)</h3>
+                                    <h3>≡ƒÆ░ Monthly Revenue (Last 6 Months)</h3>
                                     {s.monthlyRevenue.length === 0 ? (
                                         <p style={{ color: '#888', fontSize: '14px' }}>No revenue data yet.</p>
                                     ) : (
@@ -923,7 +873,7 @@ const CentralAdminDashboard = () => {
                             {/* ---- STAFF LIST ---- */}
                             <div className="admin-card">
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-                                    <h3 style={{ margin: 0 }}>👥 Staff Members ({hospitalStats.staffList?.length || 0})</h3>
+                                    <h3 style={{ margin: 0 }}>≡ƒæÑ Staff Members ({hospitalStats.staffList?.length || 0})</h3>
                                     <button
                                         onClick={() => {
                                             setActiveTab('staff');
@@ -956,7 +906,7 @@ const CentralAdminDashboard = () => {
                                                         </div></td>
                                                         <td><span className="role-badge">{u.roleName || u.role}</span></td>
                                                         <td>{u.email}</td>
-                                                        <td>{u.phone || '—'}</td>
+                                                        <td>{u.phone || 'ΓÇö'}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -967,7 +917,7 @@ const CentralAdminDashboard = () => {
 
                             {/* ---- RECENT APPOINTMENTS ---- */}
                             <div className="admin-card">
-                                <h3>📋 Recent Appointments ({hospitalStats.recentAppointments?.length || 0} latest)</h3>
+                                <h3>≡ƒôï Recent Appointments ({hospitalStats.recentAppointments?.length || 0} latest)</h3>
                                 {!hospitalStats.recentAppointments?.length ? (
                                     <p style={{ color: '#888', fontSize: '14px' }}>No appointments yet.</p>
                                 ) : (
@@ -979,9 +929,9 @@ const CentralAdminDashboard = () => {
                                             <tbody>
                                                 {hospitalStats.recentAppointments.map(a => (
                                                     <tr key={a._id}>
-                                                        <td>{a.userId?.name || '—'}</td>
-                                                        <td>{a.doctorId?.name || a.doctorName || '—'}</td>
-                                                        <td>{a.appointmentDate ? new Date(a.appointmentDate).toLocaleDateString('en-IN') : '—'}</td>
+                                                        <td>{a.userId?.name || 'ΓÇö'}</td>
+                                                        <td>{a.doctorId?.name || a.doctorName || 'ΓÇö'}</td>
+                                                        <td>{a.appointmentDate ? new Date(a.appointmentDate).toLocaleDateString('en-IN') : 'ΓÇö'}</td>
                                                         <td><span className={`status-badge status-${a.status}`}>{a.status}</span></td>
                                                         <td style={{ fontWeight: 600 }}>{formatCurrency(a.amount)}</td>
                                                     </tr>
@@ -994,7 +944,7 @@ const CentralAdminDashboard = () => {
                         </>
                     ) : (
                         <div className="ca-empty">
-                            <p>⚠️ Could not load hospital stats. The hospital may have no data yet.</p>
+                            <p>ΓÜá∩╕Å Could not load hospital stats. The hospital may have no data yet.</p>
                         </div>
                     )}
                 </div>
@@ -1014,19 +964,19 @@ const CentralAdminDashboard = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: 800, background: 'var(--brand-50, #f0fdfa)', color: 'var(--brand-600, #14b8a6)', padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.05em' }}>CENTRAL ADMIN</span>
                         </div>
-                        <h1 className="ca-dashboard-title" style={{ fontSize: '1.8rem', fontWeight: 850, margin: '8px 0 4px' }}>🏛️ Central Administration Dashboard</h1>
+                        <h1 className="ca-dashboard-title" style={{ fontSize: '1.8rem', fontWeight: 850, margin: '8px 0 4px' }}>≡ƒÅ¢∩╕Å Central Administration Dashboard</h1>
                         <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Manage all hospitals, staff, and system configurations</p>
                     </div>
                     <button
                         onClick={() => navigate('/supremeadmin/revenue')}
                         style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(99,102,241,0.3)', whiteSpace: 'nowrap' }}
                     >
-                        📊 System Revenue Analytics
+                        ≡ƒôè System Revenue Analytics
                     </button>
                 </div>
 
-                {error && <div className="error-message">⚠️ {error}</div>}
-                {success && <div className="success-message">✅ {success}</div>}
+                {error && <div className="error-message">ΓÜá∩╕Å {error}</div>}
+                {success && <div className="success-message">Γ£à {success}</div>}
 
                 {/* Tabs */}
                 <div className="ca-tabs">
@@ -1037,117 +987,36 @@ const CentralAdminDashboard = () => {
                     ))}
                 </div>
 
-                {/* ========== HOSPITALS TAB (Enterprise, Multi-Speciality, Clinic Basic) ========== */}
-                {(activeTab === 'hospitals' || activeTab === 'multi-speciality' || activeTab === 'clinic-basic') && !selectedHospital && (
+                {/* ========== HOSPITALS TAB ========== */}
+                {activeTab === 'hospitals' && (
                     <div>
                         <div className="admin-card">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                                 <div>
-                                    <h2>
-                                        {activeTab === 'hospitals' 
-                                            ? '🏥 Enterprise Plan' 
-                                            : activeTab === 'multi-speciality' 
-                                                ? '🏥 Multi-Speciality Starter Plan' 
-                                                : '🩺 Clinic Basic Plan'}
-                                    </h2>
-                                    <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
-                                        {activeTab === 'hospitals' 
-                                            ? 'Click any hospital card to view full analytics' 
-                                            : activeTab === 'multi-speciality'
-                                                ? 'Optimized for Multi-Speciality Hospitals and Diagnostic Centers.'
-                                                : 'Advanced clinics supporting up to 5 Doctors & 3 Staff.'}
-                                    </p>
+                                    <h2>≡ƒÅÑ Registered Hospitals</h2>
+                                    <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>Click any hospital card to view full analytics</p>
                                 </div>
                                 <div style={{ display: 'flex', gap: '10px' }}>
                                     <button className={showHospitalAdminForm ? 'btn-cancel' : 'btn-edit'} style={{ padding: '10px 18px' }}
                                         onClick={() => { setShowHospitalAdminForm(!showHospitalAdminForm); setShowHospitalForm(false); setEditHospital(null); }}>
-                                        {showHospitalAdminForm ? 'Cancel' : '👤 Add Hospital Admin'}
+                                        {showHospitalAdminForm ? 'Cancel' : '≡ƒæñ Add Hospital Admin'}
                                     </button>
                                     <button className={showHospitalForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '10px 18px' }}
                                         onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] }); }}>
-                                        {showHospitalForm 
-                                            ? 'Cancel' 
-                                            : activeTab === 'hospitals' 
-                                                ? '+ Add Enterprise Hospital' 
-                                                : activeTab === 'multi-speciality' 
-                                                    ? '+ Add Multi-Speciality' 
-                                                    : '+ Add Clinic Basic'}
+                                        {showHospitalForm ? 'Cancel' : '+ Add Hospital'}
                                     </button>
                                 </div>
                             </div>
 
-                            {(activeTab === 'hospitals' || activeTab === 'multi-speciality' || activeTab === 'clinic-basic') && (
-                                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '24px', display: 'flex', flexWrap: 'wrap', gap: '24px' }}>
-                                    <div style={{ flex: '1 1 300px' }}>
-                                        <h3 style={{ color: '#0f172a', margin: '0 0 8px 0' }}>
-                                            {activeTab === 'hospitals' ? 'Enterprise Plan' : activeTab === 'multi-speciality' ? 'Multi-Speciality Starter Plan' : 'Clinic Basic Plan'}
-                                            <span style={{ color: '#10b981', fontSize: '1.2rem', marginLeft: '8px' }}>
-                                                {activeTab === 'hospitals' ? 'Custom Quote' : activeTab === 'multi-speciality' ? '₹30,000 / Year' : '₹15,000 / Year'}
-                                            </span>
-                                        </h3>
-                                        <h4 style={{ margin: '16px 0 8px 0', color: '#334155' }}>Operational Provision</h4>
-                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, color: '#475569', fontSize: '14px', lineHeight: '1.8' }}>
-                                            {activeTab === 'hospitals' && (
-                                                <>
-                                                    <li>✔ Unlimited Hospital Admins</li>
-                                                    <li>✔ Unlimited Doctor Accounts</li>
-                                                    <li>✔ Unlimited Staff Accounts</li>
-                                                    <li>✔ Unlimited Branch Locations</li>
-                                                    <li>✔ Unlimited Patients</li>
-                                                    <li>✔ All HMS Modules Included</li>
-                                                    <li>✔ Advanced Role & Permissions</li>
-                                                    <li>✔ Multi-Branch Management</li>
-                                                    <li>✔ Dedicated Account Manager</li>
-                                                    <li>✔ Priority Support</li>
-                                                    <li>✔ SLA Support</li>
-                                                </>
-                                            )}
-                                            {activeTab === 'multi-speciality' && (
-                                                <>
-                                                    <li>✔ 1 Hospital Admin (Included)</li>
-                                                    <li>✔ Up to 15 Doctor Accounts</li>
-                                                    <li>✔ Up to 25 Staff Accounts</li>
-                                                    <li>✔ 1 Branch Location</li>
-                                                    <li>✔ Unlimited Patients</li>
-                                                    <li>✔ All Facilities Included*</li>
-                                                    <li>✔ Dedicated Support</li>
-                                                </>
-                                            )}
-                                            {activeTab === 'clinic-basic' && (
-                                                <>
-                                                    <li>✔ 1 Hospital Admin (Included)</li>
-                                                    <li>✔ Up to 5 Doctor Accounts</li>
-                                                    <li>✔ Up to 3 Staff Accounts</li>
-                                                    <li>✔ 1 Branch Location</li>
-                                                    <li>✔ Unlimited Patients</li>
-                                                    <li>✔ All Core HMS Facilities Included</li>
-                                                    <li>✔ Dedicated Support</li>
-                                                </>
-                                            )}
-                                        </ul>
-                                    </div>
-                                    <div style={{ flex: '1 1 300px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '16px' }}>
-                                        <h4 style={{ margin: '0 0 12px 0', color: '#f59e0b' }}>✨ DIGITAL PRESENCE ADD-ON (₹5,000 EXTRA)</h4>
-                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, color: '#475569', fontSize: '14px', lineHeight: '1.8' }}>
-                                            <li>✔ 5-Page Custom Website</li>
-                                            <li>✔ 100% Responsive & Modern UI/UX</li>
-                                            <li>✔ Free Hosting (1 Year)</li>
-                                            <li>✔ .in Domain (1 Year)</li>
-                                            <li>✔ WhatsApp Integration</li>
-                                            <li>✔ On-Page SEO</li>
-                                            <li>✔ Lead Gen (Forms, Click-to-call)</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            )}
-
                             {/* Hospital Admin Form */}
                             {showHospitalAdminForm && (
                                 <div className="ca-form-box" style={{ marginBottom: '24px' }}>
-                                    <h3>👤 Create Hospital Admin Account</h3>
+                                    <h3>≡ƒæñ Create Hospital Admin Account</h3>
                                     <p style={{ color: '#888', fontSize: '13px', marginBottom: '16px' }}>
                                         This admin will login at <strong>/login</strong> and see only their hospital's data.
                                     </p>
+                                    {error && <div className="error-message">{error}</div>}
+                                    {success && <div className="success-message">{success}</div>}
                                     <form onSubmit={handleCreateHospitalAdmin} className="user-form">
                                         <div className="form-row">
                                             <div className="form-group">
@@ -1179,11 +1048,11 @@ const CentralAdminDashboard = () => {
                                                 <label className="staff-label">Assign Hospital *</label>
                                                 <select className="staff-input" value={hospitalAdminForm.hospitalId} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, hospitalId: e.target.value })} required>
                                                     <option value="">-- Select Hospital --</option>
-                                                    {hospitals.map(h => <option key={h._id} value={h._id}>{h.name}{h.city ? ` — ${h.city}` : ''}</option>)}
+                                                    {hospitals.map(h => <option key={h._id} value={h._id}>{h.name}{h.city ? ` ΓÇö ${h.city}` : ''}</option>)}
                                                 </select>
                                             </div>
                                         </div>
-                                        <button type="submit" disabled={creatingHospitalAdmin} className="submit-button">{creatingHospitalAdmin ? 'Creating...' : '✅ Create Hospital Admin'}</button>
+                                        <button type="submit" disabled={creatingHospitalAdmin} className="submit-button">{creatingHospitalAdmin ? 'Creating...' : 'Γ£à Create Hospital Admin'}</button>
                                     </form>
                                 </div>
                             )}
@@ -1191,7 +1060,9 @@ const CentralAdminDashboard = () => {
                             {/* Hospital Add/Edit Form */}
                             {showHospitalForm && (
                                 <div ref={hospitalFormRef} className="ca-form-box" style={{ marginBottom: '24px' }}>
-                                    <h3>{editHospital ? '✏️ Edit Hospital' : '🏥 Add New Hospital'}</h3>
+                                    <h3>{editHospital ? 'Γ£Å∩╕Å Edit Hospital' : '≡ƒÅÑ Add New Hospital'}</h3>
+                                    {error && <div className="error-message">{error}</div>}
+                                    {success && <div className="success-message">{success}</div>}
                                     <form onSubmit={handleSaveHospital} className="user-form">
                                         <div className="form-row">
                                             <div className="form-group">
@@ -1263,7 +1134,7 @@ const CentralAdminDashboard = () => {
                                                 ))}
                                             </div>
                                         </div>
-                                        <button type="submit" disabled={savingHospital} className="submit-button">{savingHospital ? 'Saving...' : editHospital ? '✅ Update Hospital' : '✅ Create Hospital'}</button>
+                                        <button type="submit" disabled={savingHospital} className="submit-button">{savingHospital ? 'Saving...' : editHospital ? 'Γ£à Update Hospital' : 'Γ£à Create Hospital'}</button>
                                     </form>
                                 </div>
                             )}
@@ -1271,29 +1142,18 @@ const CentralAdminDashboard = () => {
                             {/* Hospital Cards */}
                             {loadingHospitals ? (
                                 <div className="loading-message">Loading hospitals...</div>
-                            ) : (() => {
-                                const filteredHospitals = hospitals.filter(h => 
-                                    activeTab === 'multi-speciality' 
-                                        ? h.subscriptionPlan === 'multi_speciality_starter' 
-                                        : activeTab === 'clinic-basic'
-                                            ? h.subscriptionPlan === 'clinic_basic'
-                                            : (h.subscriptionPlan !== 'multi_speciality_starter' && h.subscriptionPlan !== 'clinic_basic')
-                                );
-                                
-                                if (filteredHospitals.length === 0) {
-                                    return <div className="ca-empty"><p>🏥 No hospitals found for this plan. Add your first hospital above.</p></div>;
-                                }
-
-                                return (
-                                    <div className="hospitals-grid">
-                                        {filteredHospitals.map(h => (
-                                            <div key={h._id} className={`hospital-card clickable-card ${!h.isActive ? 'hospital-inactive' : ''}`} onClick={() => openHospitalDetail(h)}>
+                            ) : hospitals.length === 0 ? (
+                                <div className="ca-empty"><p>≡ƒÅÑ No hospitals registered yet. Add your first hospital above.</p></div>
+                            ) : (
+                                <div className="hospitals-grid">
+                                    {hospitals.map(h => (
+                                        <div key={h._id} className={`hospital-card clickable-card ${!h.isActive ? 'hospital-inactive' : ''}`} onClick={() => openHospitalDetail(h)}>
                                             <div className="hospital-card-content">
                                                 <div className="hospital-card-header">
                                                     <div className="hospital-logo-container">
                                                         {h.branding?.logoUrl
                                                             ? <img src={h.branding.logoUrl} alt={h.name} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 6 }} />
-                                                            : <span>🏥</span>
+                                                            : <span>≡ƒÅÑ</span>
                                                         }
                                                     </div>
                                                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -1306,13 +1166,13 @@ const CentralAdminDashboard = () => {
                                                 <h3 className="hospital-name">{h.branding?.appName || h.name}</h3>
                                                 {h.branding?.tagline && <p className="hospital-tagline" style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 6px', fontStyle: 'italic' }}>{h.branding.tagline}</p>}
                                                 <div className="hospital-meta">
-                                                    {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
-                                                    {h.phone && <span>📞 {h.phone}</span>}
-                                                    {h.email && <span>✉️ {h.email}</span>}
+                                                    {h.city && <span>≡ƒôì {h.city}{h.state ? `, ${h.state}` : ''}</span>}
+                                                    {h.phone && <span>≡ƒô₧ {h.phone}</span>}
+                                                    {h.email && <span>Γ£ë∩╕Å {h.email}</span>}
 
                                                     <div className="domain-links" onClick={e => e.stopPropagation()}>
-                                                        {h.slug && <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" className="subdomain-link" style={{ display: 'inline-block', marginTop: '6px', background: 'var(--brand-pink)', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none', marginRight: '6px' }}>🌐 {h.slug}.{getBaseHost()}</a>}
-                                                        {h.customDomain && <a href={`http://${h.customDomain}`} target="_blank" rel="noreferrer" className="customdomain-link" style={{ display: 'inline-block', marginTop: '6px', background: '#3b82f6', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none' }}>🌐 {h.customDomain}</a>}
+                                                        {h.slug && <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" className="subdomain-link" style={{ display: 'inline-block', marginTop: '6px', background: 'var(--brand-pink)', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none', marginRight: '6px' }}>≡ƒîÉ {h.slug}.{getBaseHost()}</a>}
+                                                        {h.customDomain && <a href={`http://${h.customDomain}`} target="_blank" rel="noreferrer" className="customdomain-link" style={{ display: 'inline-block', marginTop: '6px', background: '#3b82f6', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none' }}>≡ƒîÉ {h.customDomain}</a>}
                                                     </div>
 
                                                     {(h.departments && h.departments.length > 0) && (
@@ -1323,18 +1183,17 @@ const CentralAdminDashboard = () => {
                                                 </div>
                                             </div>
                                             <div className="hospital-card-footer">
-                                                <div className="hospital-click-hint">📊 Click to view full analytics →</div>
+                                                <div className="hospital-click-hint">≡ƒôè Click to view full analytics ΓåÆ</div>
                                                 <div className="hospital-actions" onClick={e => e.stopPropagation()}>
-                                                    <button className="btn-branding" onClick={() => setBrandingHospital(h)}>🎨 Branding</button>
+                                                    <button className="btn-branding" onClick={() => setBrandingHospital(h)}>≡ƒÄ¿ Branding</button>
                                                     <button className="btn-edit" onClick={() => openEditHospital(h)}>Edit</button>
                                                     <button className="btn-delete" onClick={() => setDeleteHospitalConfirm(h._id)}>Delete</button>
                                                 </div>
                                             </div>
                                         </div>
-                                        ))}
-                                    </div>
-                                );
-                            })()}
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -1345,15 +1204,17 @@ const CentralAdminDashboard = () => {
                         <div className="admin-card" style={{ marginBottom: '20px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                 <div>
-                                    <h2>👥 Add New Staff Member</h2>
+                                    <h2>≡ƒæÑ Add New Staff Member</h2>
                                     <p style={{ color: '#e53935', fontSize: '13px', fontWeight: 600, margin: '4px 0 0' }}>
-                                        ⚠️ Every staff member must be linked to a specific hospital
+                                        ΓÜá∩╕Å Every staff member must be linked to a specific hospital
                                     </p>
                                 </div>
                                 <button onClick={() => setShowCreateStaffForm(!showCreateStaffForm)} className={showCreateStaffForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '8px 20px' }}>
                                     {showCreateStaffForm ? 'Cancel' : '+ New Staff'}
                                 </button>
                             </div>
+                            {error && <div className="error-message">{error}</div>}
+                            {success && <div className="success-message">{success}</div>}
                             {showCreateStaffForm && (
                                 <form onSubmit={handleCreateStaff} className="user-form">
                                     <div className="form-row">
@@ -1362,7 +1223,7 @@ const CentralAdminDashboard = () => {
                                             <select className="staff-input" value={createStaffForm.hospitalId} onChange={e => setCreateStaffForm({ ...createStaffForm, hospitalId: e.target.value })} required
                                                 style={{ borderColor: !createStaffForm.hospitalId ? '#e53935' : undefined }}>
                                                 <option value="">-- Select Hospital (Required) --</option>
-                                                {hospitals.map(h => <option key={h._id} value={h._id}>{h.name}{h.city ? ` — ${h.city}` : ''}</option>)}
+                                                {hospitals.map(h => <option key={h._id} value={h._id}>{h.name}{h.city ? ` ΓÇö ${h.city}` : ''}</option>)}
                                             </select>
                                         </div>
                                         <div className="form-group">
@@ -1379,7 +1240,7 @@ const CentralAdminDashboard = () => {
                                                     })
                                                     .map(role => (
                                                         <option key={role._id} value={role._id}>
-                                                            {role.name}{role.description ? ` — ${role.description}` : ''}
+                                                            {role.name}{role.description ? ` ΓÇö ${role.description}` : ''}
                                                         </option>
                                                     ))}
                                             </select>
@@ -1426,7 +1287,7 @@ const CentralAdminDashboard = () => {
                                         </div>
                                     </div>
                                     <button type="submit" disabled={creatingStaff || !createStaffForm.hospitalId} className="submit-button">
-                                        {creatingStaff ? 'Creating...' : '✅ Create Staff Account'}
+                                        {creatingStaff ? 'Creating...' : 'Γ£à Create Staff Account'}
                                     </button>
                                 </form>
                             )}
@@ -1463,12 +1324,12 @@ const CentralAdminDashboard = () => {
                                                     <td style={{ fontWeight: 500 }}>{u.name}</td>
                                                     <td>
                                                         <span style={{ background: '#f0f9ff', color: '#0284c7', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>
-                                                            {u.hospitalId ? getHospitalName(u.hospitalId) : '⚠️ No hospital'}
+                                                            {u.hospitalId ? getHospitalName(u.hospitalId) : 'ΓÜá∩╕Å No hospital'}
                                                         </span>
                                                     </td>
                                                     <td><span className={`role-badge role-${(u.role || '').toLowerCase()}`}>{(u.role || 'No Role').toUpperCase()}</span></td>
                                                     <td>{u.email}</td>
-                                                    <td>{u.phone || '—'}</td>
+                                                    <td>{u.phone || 'ΓÇö'}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -1479,55 +1340,27 @@ const CentralAdminDashboard = () => {
                     </div>
                 )}
 
-                {/* ========== CLINICS TAB (Starter) ========== */}
+                {/* ========== SIMPLE CLINICS TAB ========== */}
                 {activeTab === 'simple-clinics' && !selectedClinic && (
                     <div>
                         <div className="admin-card">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                                 <div>
-                                    <h2>🏪 Starter Plan</h2>
-                                    <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
-                                        Small clinics managed by 1 doctor. All features included.
-                                    </p>
+                                    <h2>≡ƒÅ¬ Simple Clinics</h2>
+                                    <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>Small clinics managed by 1ΓÇô4 staff. All features included: patients, doctor, billing, analytics.</p>
                                 </div>
                                 <button className={showClinicForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '10px 18px' }}
                                     onClick={() => { setShowClinicForm(!showClinicForm); setEditClinic(null); setClinicForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', defaultFee: 0 }); }}>
-                                    {showClinicForm ? 'Cancel' : '+ Add Starter Clinic'}
+                                    {showClinicForm ? 'Cancel' : '+ Add Simple Clinic'}
                                 </button>
                             </div>
-
-                            {activeTab === 'simple-clinics' && (
-                                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '24px', display: 'flex', flexWrap: 'wrap', gap: '24px' }}>
-                                    <div style={{ flex: '1 1 300px' }}>
-                                        <h3 style={{ color: '#0f172a', margin: '0 0 8px 0' }}>Starter Plan <span style={{ color: '#10b981', fontSize: '1.2rem', marginLeft: '8px' }}>₹6,000 / Year</span></h3>
-                                        <h4 style={{ margin: '16px 0 8px 0', color: '#334155' }}>Operational Provision</h4>
-                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, color: '#475569', fontSize: '14px', lineHeight: '1.8' }}>
-                                            <li>✔ 1 Doctor Account</li>
-                                            <li>✔ 1 Receptionist Account</li>
-                                            <li>✔ Unlimited Patients</li>
-                                            <li>✔ All Facilities Included</li>
-                                            <li>✔ Dedicated Support</li>
-                                        </ul>
-                                    </div>
-                                    <div style={{ flex: '1 1 300px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '16px' }}>
-                                        <h4 style={{ margin: '0 0 12px 0', color: '#f59e0b' }}>✨ DIGITAL PRESENCE ADD-ON (₹5,000 EXTRA)</h4>
-                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, color: '#475569', fontSize: '14px', lineHeight: '1.8' }}>
-                                            <li>✔ 5-Page Custom Website</li>
-                                            <li>✔ 100% Responsive & Modern UI/UX</li>
-                                            <li>✔ Free Hosting (1 Year)</li>
-                                            <li>✔ .in Domain (1 Year)</li>
-                                            <li>✔ WhatsApp Integration</li>
-                                            <li>✔ On-Page SEO</li>
-                                            <li>✔ Lead Gen (Forms, Click-to-call)</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            )}
 
                             {/* Add / Edit Clinic Form */}
                             {showClinicForm && (
                                 <div className="ca-form-box" style={{ marginBottom: '24px' }}>
-                                    <h3>{editClinic ? '✏️ Edit Clinic' : '🏪 Add Starter Clinic'}</h3>
+                                    <h3>{editClinic ? 'Γ£Å∩╕Å Edit Clinic' : '≡ƒÅ¬ Add New Simple Clinic'}</h3>
+                                    {error && <div className="error-message">{error}</div>}
+                                    {success && <div className="success-message">{success}</div>}
                                     <form onSubmit={handleSaveClinic} className="user-form">
                                         <div className="form-row">
                                             <div className="form-group">
@@ -1573,13 +1406,13 @@ const CentralAdminDashboard = () => {
                                                     onChange={e => setClinicForm({ ...clinicForm, email: e.target.value })} />
                                             </div>
                                             <div className="form-group">
-                                                <label className="staff-label">Consultation Fee (₹)</label>
+                                                <label className="staff-label">Consultation Fee (Γé╣)</label>
                                                 <input type="number" className="staff-input" placeholder="300" value={clinicForm.defaultFee}
                                                     onChange={e => setClinicForm({ ...clinicForm, defaultFee: Number(e.target.value) })} />
                                             </div>
                                         </div>
                                         <button type="submit" disabled={savingClinic} className="submit-button">
-                                            {savingClinic ? 'Saving...' : editClinic ? '✅ Update Clinic' : '✅ Create Clinic'}
+                                            {savingClinic ? 'Saving...' : editClinic ? 'Γ£à Update Clinic' : 'Γ£à Create Clinic'}
                                         </button>
                                     </form>
                                 </div>
@@ -1588,24 +1421,17 @@ const CentralAdminDashboard = () => {
                             {/* Clinics List */}
                             {loadingClinics ? (
                                 <div className="loading-message">Loading clinics...</div>
-                            ) : (() => {
-                                const filteredClinics = clinics.filter(clinic => 
-                                    activeTab === 'clinic-basic' 
-                                        ? clinic.subscriptionPlan === 'clinic_basic'
-                                        : clinic.subscriptionPlan !== 'clinic_basic'
-                                );
-
-                                if (filteredClinics.length === 0) {
-                                    return <div className="ca-empty"><p>No clinics found in this plan. Click <strong>+ Add Clinic</strong> to get started.</p></div>;
-                                }
-
-                                return (
-                                    <div className="hospital-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-                                        {filteredClinics.map(clinic => (
+                            ) : clinics.length === 0 ? (
+                                <div className="ca-empty">
+                                    <p>No simple clinics yet. Click <strong>+ Add Simple Clinic</strong> to get started.</p>
+                                </div>
+                            ) : (
+                                <div className="hospital-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                                    {clinics.map(clinic => (
                                         <div key={clinic._id} className="hospital-card" style={{ cursor: 'pointer', border: '2px solid #e2e8f0', borderRadius: '12px', padding: '20px', background: '#fff', transition: 'box-shadow 0.2s' }}
                                             onClick={() => openClinicDetail(clinic)}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                                                <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>🏪</div>
+                                                <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>≡ƒÅ¬</div>
                                                 <div>
                                                     <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{clinic.name}</h3>
                                                     <span style={{ fontSize: '12px', color: '#64748b' }}>{clinic.city}{clinic.state ? `, ${clinic.state}` : ''}</span>
@@ -1615,32 +1441,31 @@ const CentralAdminDashboard = () => {
                                                 </span>
                                             </div>
                                             <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '12px' }}>
-                                                {clinic.phone && <div>📞 {clinic.phone}</div>}
-                                                {clinic.email && <div>✉️ {clinic.email}</div>}
-                                                <div style={{ marginTop: '6px' }}>💰 Fee: {formatCurrency(clinic.defaultFee)}</div>
-                                                {clinic.slug && <div style={{ marginTop: '4px', fontFamily: 'monospace', fontSize: '11px', color: '#94a3b8' }}>🔗 /{clinic.slug}</div>}
+                                                {clinic.phone && <div>≡ƒô₧ {clinic.phone}</div>}
+                                                {clinic.email && <div>Γ£ë∩╕Å {clinic.email}</div>}
+                                                <div style={{ marginTop: '6px' }}>≡ƒÆ░ Fee: {formatCurrency(clinic.defaultFee)}</div>
+                                                {clinic.slug && <div style={{ marginTop: '4px', fontFamily: 'monospace', fontSize: '11px', color: '#94a3b8' }}>≡ƒöù /{clinic.slug}</div>}
                                                 <div style={{ marginTop: '8px', padding: '6px 10px', borderRadius: '6px', background: clinic.adminUserId ? '#f0fdf4' : '#fff7ed', border: `1px solid ${clinic.adminUserId ? '#bbf7d0' : '#fed7aa'}` }}>
                                                     {clinic.adminUserId
-                                                        ? <span style={{ color: '#16a34a', fontSize: '12px', fontWeight: 600 }}>👤 Admin: {clinic.adminUserId.name}</span>
-                                                        : <span style={{ color: '#d97706', fontSize: '12px', fontWeight: 600 }}>⚠️ No admin assigned</span>
+                                                        ? <span style={{ color: '#16a34a', fontSize: '12px', fontWeight: 600 }}>≡ƒæñ Admin: {clinic.adminUserId.name}</span>
+                                                        : <span style={{ color: '#d97706', fontSize: '12px', fontWeight: 600 }}>ΓÜá∩╕Å No admin assigned</span>
                                                     }
                                                 </div>
                                             </div>
                                             <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }} onClick={e => e.stopPropagation()}>
                                                 <button className="btn-edit" style={{ flex: 1, fontSize: '12px', padding: '6px' }}
                                                     onClick={() => { setEditClinic(clinic); setClinicForm({ name: clinic.name, slug: clinic.slug || '', address: clinic.address || '', city: clinic.city || '', state: clinic.state || '', phone: clinic.phone || '', email: clinic.email || '', website: clinic.website || '', defaultFee: clinic.defaultFee || 0 }); setShowClinicForm(true); }}>
-                                                    ✏️ Edit
+                                                    Γ£Å∩╕Å Edit
                                                 </button>
                                                 <button className="btn-confirm-delete" style={{ flex: 1, fontSize: '12px', padding: '6px' }}
                                                     onClick={() => setDeleteClinicConfirm(clinic._id)}>
-                                                    🗑️ Delete
+                                                    ≡ƒùæ∩╕Å Delete
                                                 </button>
                                             </div>
                                         </div>
-                                        ))}
-                                    </div>
-                                );
-                            })()}
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -1650,15 +1475,15 @@ const CentralAdminDashboard = () => {
                     <div>
                         {/* Header */}
                         <div className="admin-card" style={{ marginBottom: '16px' }}>
-                            <button onClick={closeClinicDetail} className="back-btn" style={{ marginBottom: '12px' }}>← Back to All Clinics</button>
+                            <button onClick={closeClinicDetail} className="back-btn" style={{ marginBottom: '12px' }}>ΓåÉ Back to All Clinics</button>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                <div style={{ fontSize: '40px' }}>🏪</div>
+                                <div style={{ fontSize: '40px' }}>≡ƒÅ¬</div>
                                 <div>
                                     <h2 style={{ margin: 0 }}>{selectedClinic.name}</h2>
                                     <p style={{ color: '#64748b', margin: '4px 0 0' }}>
                                         {selectedClinic.city}{selectedClinic.state ? `, ${selectedClinic.state}` : ''}
-                                        {selectedClinic.phone ? ` · 📞 ${selectedClinic.phone}` : ''}
-                                        {selectedClinic.slug ? ` · 🔗 /${selectedClinic.slug}` : ''}
+                                        {selectedClinic.phone ? ` ┬╖ ≡ƒô₧ ${selectedClinic.phone}` : ''}
+                                        {selectedClinic.slug ? ` ┬╖ ≡ƒöù /${selectedClinic.slug}` : ''}
                                     </p>
                                 </div>
                                 <span style={{ marginLeft: 'auto', padding: '4px 12px', borderRadius: '6px', fontWeight: 600, fontSize: '13px', background: selectedClinic.isActive ? '#dcfce7' : '#fee2e2', color: selectedClinic.isActive ? '#16a34a' : '#dc2626' }}>
@@ -1667,6 +1492,9 @@ const CentralAdminDashboard = () => {
                             </div>
                         </div>
 
+                        {error && <div className="error-message" style={{ marginBottom: '16px' }}>ΓÜá∩╕Å {error}</div>}
+                        {success && <div className="success-message" style={{ marginBottom: '16px' }}>Γ£à {success}</div>}
+
                         {loadingClinicStats ? (
                             <div className="loading-message">Loading analytics...</div>
                         ) : clinicStats ? (
@@ -1674,11 +1502,11 @@ const CentralAdminDashboard = () => {
                                 {/* KPI Stats */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>
                                     {[
-                                        { label: 'Total Patients', value: clinicStats.stats.totalPatients, icon: '👤', color: '#0ea5e9', bg: '#f0f9ff' },
-                                        { label: 'Total Appointments', value: clinicStats.stats.totalAppointments, icon: '📅', color: '#8b5cf6', bg: '#f5f3ff' },
-                                        { label: 'Completed', value: clinicStats.stats.completedAppointments, icon: '✅', color: '#10b981', bg: '#f0fdf4' },
-                                        { label: 'Revenue', value: formatCurrency(clinicStats.stats.revenue), icon: '💰', color: '#f59e0b', bg: '#fffbeb' },
-                                        { label: 'Staff Members', value: clinicStats.stats.staff?.length || 0, icon: '👥', color: '#6366f1', bg: '#eef2ff' },
+                                        { label: 'Total Patients', value: clinicStats.stats.totalPatients, icon: '≡ƒæñ', color: '#0ea5e9', bg: '#f0f9ff' },
+                                        { label: 'Total Appointments', value: clinicStats.stats.totalAppointments, icon: '≡ƒôà', color: '#8b5cf6', bg: '#f5f3ff' },
+                                        { label: 'Completed', value: clinicStats.stats.completedAppointments, icon: 'Γ£à', color: '#10b981', bg: '#f0fdf4' },
+                                        { label: 'Revenue', value: formatCurrency(clinicStats.stats.revenue), icon: '≡ƒÆ░', color: '#f59e0b', bg: '#fffbeb' },
+                                        { label: 'Staff Members', value: clinicStats.stats.staff?.length || 0, icon: '≡ƒæÑ', color: '#6366f1', bg: '#eef2ff' },
                                     ].map((kpi, i) => (
                                         <div key={i} className="admin-card" style={{ background: kpi.bg, border: `1px solid ${kpi.color}22`, textAlign: 'center', padding: '18px' }}>
                                             <div style={{ fontSize: '28px', marginBottom: '6px' }}>{kpi.icon}</div>
@@ -1692,14 +1520,14 @@ const CentralAdminDashboard = () => {
                                 <div className="admin-card" style={{ marginBottom: '20px', border: '2px solid #e0e7ff' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                         <div>
-                                            <h3 style={{ margin: 0 }}>👤 Clinic Admin Account</h3>
+                                            <h3 style={{ margin: 0 }}>≡ƒæñ Clinic Admin Account</h3>
                                             <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
                                                 The admin has full access to this clinic. Login at <strong>/login</strong>
                                             </p>
                                         </div>
                                         <button className={showClinicManagerForm ? 'btn-cancel' : 'btn-save'} style={{ fontSize: '13px', padding: '8px 16px' }}
                                             onClick={() => { setShowClinicManagerForm(!showClinicManagerForm); setShowClinicStaffForm(false); setClinicManagerForm({ name: '', email: '', password: '', phone: '' }); }}>
-                                            {showClinicManagerForm ? 'Cancel' : clinicStats.clinic?.adminUserId ? '🔄 Add Another Admin' : '+ Add Clinic Admin'}
+                                            {showClinicManagerForm ? 'Cancel' : clinicStats.clinic?.adminUserId ? '≡ƒöä Add Another Admin' : '+ Add Clinic Admin'}
                                         </button>
                                     </div>
 
@@ -1712,7 +1540,7 @@ const CentralAdminDashboard = () => {
                                             <div>
                                                 <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '15px' }}>{clinicStats.clinic.adminUserId.name}</div>
                                                 <div style={{ color: '#64748b', fontSize: '13px' }}>{clinicStats.clinic.adminUserId.email}</div>
-                                                {clinicStats.clinic.adminUserId.phone && <div style={{ color: '#64748b', fontSize: '13px' }}>📞 {clinicStats.clinic.adminUserId.phone}</div>}
+                                                {clinicStats.clinic.adminUserId.phone && <div style={{ color: '#64748b', fontSize: '13px' }}>≡ƒô₧ {clinicStats.clinic.adminUserId.phone}</div>}
                                             </div>
                                             <span style={{ marginLeft: 'auto', background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700 }}>CLINIC ADMIN</span>
                                         </div>
@@ -1720,7 +1548,7 @@ const CentralAdminDashboard = () => {
 
                                     {!clinicStats.clinic?.adminUserId && !showClinicManagerForm && (
                                         <div style={{ textAlign: 'center', padding: '24px', background: '#fff7ed', borderRadius: '10px', border: '1px dashed #fed7aa' }}>
-                                            <div style={{ fontSize: '32px', marginBottom: '8px' }}>⚠️</div>
+                                            <div style={{ fontSize: '32px', marginBottom: '8px' }}>ΓÜá∩╕Å</div>
                                             <p style={{ color: '#92400e', fontWeight: 600, margin: '0 0 4px' }}>No admin assigned yet</p>
                                             <p style={{ color: '#b45309', fontSize: '13px', margin: 0 }}>Click <strong>+ Add Clinic Admin</strong> to create login credentials for this clinic.</p>
                                         </div>
@@ -1730,7 +1558,8 @@ const CentralAdminDashboard = () => {
                                     {showClinicManagerForm && (
                                         <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '20px', border: '1px solid #e2e8f0' }}>
                                             <h4 style={{ margin: '0 0 4px', color: '#1e293b' }}>Create Clinic Admin Account</h4>
-                                            <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 16px' }}>This person will have full access — patients, appointments, billing, pharmacy, analytics.</p>
+                                            <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 16px' }}>This person will have full access ΓÇö patients, appointments, billing, pharmacy, analytics.</p>
+                                            {error && <div className="error-message">{error}</div>}
                                             <form onSubmit={handleCreateClinicManager} className="user-form">
                                                 <div className="form-row">
                                                     <div className="form-group">
@@ -1757,7 +1586,7 @@ const CentralAdminDashboard = () => {
                                                     </div>
                                                 </div>
                                                 <button type="submit" disabled={savingClinicManager} className="submit-button" style={{ marginTop: '4px' }}>
-                                                    {savingClinicManager ? 'Creating...' : '✅ Create Clinic Admin'}
+                                                    {savingClinicManager ? 'Creating...' : 'Γ£à Create Clinic Admin'}
                                                 </button>
                                             </form>
                                         </div>
@@ -1768,9 +1597,9 @@ const CentralAdminDashboard = () => {
                                 <div className="admin-card" style={{ marginBottom: '20px' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                         <div>
-                                            <h3 style={{ margin: 0 }}>👥 Additional Staff</h3>
+                                            <h3 style={{ margin: 0 }}>≡ƒæÑ Additional Staff</h3>
                                             <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
-                                                Tier: {clinicStats.stats.staff?.filter(s => s.role === 'doctor').length || 0}/{clinicStats.clinic?.tier?.maxDoctors || 1} Doctors · {clinicStats.stats.staff?.filter(s => s.role === 'receptionist').length || 0}/{clinicStats.clinic?.tier?.maxReceptionists || 1} Receptionists · All login at <strong>/login</strong>
+                                                Tier: {clinicStats.stats.staff?.filter(s => s.role === 'doctor').length || 0}/{clinicStats.clinic?.tier?.maxDoctors || 1} Doctors ┬╖ {clinicStats.stats.staff?.filter(s => s.role === 'receptionist').length || 0}/{clinicStats.clinic?.tier?.maxReceptionists || 1} Receptionists ┬╖ All login at <strong>/login</strong>
                                             </p>
                                         </div>
                                         <button className="btn-edit" style={{ fontSize: '13px', padding: '8px 14px' }}
@@ -1815,11 +1644,11 @@ const CentralAdminDashboard = () => {
                                                     <label className="staff-label">Role *</label>
                                                     <select className="staff-input" value={clinicStaffForm.staffRole}
                                                         onChange={e => setClinicStaffForm({ ...clinicStaffForm, staffRole: e.target.value })}>
-                                                        <option value="doctor">🩺 Clinic Doctor</option>
+                                                        <option value="doctor">≡ƒ⌐║ Clinic Doctor</option>
                                                     </select>
                                                 </div>
                                                 <button type="submit" disabled={savingClinicStaff} className="submit-button">
-                                                    {savingClinicStaff ? 'Adding...' : '✅ Add Staff'}
+                                                    {savingClinicStaff ? 'Adding...' : 'Γ£à Add Staff'}
                                                 </button>
                                             </form>
                                         </div>
@@ -1844,11 +1673,11 @@ const CentralAdminDashboard = () => {
                                                                 </div>
                                                             </td>
                                                             <td>{s.email}</td>
-                                                            <td>{s.phone || '—'}</td>
+                                                            <td>{s.phone || 'ΓÇö'}</td>
                                                             <td>
                                                                 <span className="role-badge">{String(s.role).toUpperCase()}</span>
                                                             </td>
-                                                            <td style={{ color: '#94a3b8', fontSize: '12px' }}>{s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN') : '—'}</td>
+                                                            <td style={{ color: '#94a3b8', fontSize: '12px' }}>{s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN') : 'ΓÇö'}</td>
                                                             <td>
                                                                 <button className="btn-confirm-delete" style={{ fontSize: '11px', padding: '4px 8px' }}
                                                                     onClick={() => handleDeleteClinicStaff(s._id)}>Remove</button>
@@ -1866,7 +1695,7 @@ const CentralAdminDashboard = () => {
                                 {/* Recent Appointments */}
                                 {clinicStats.stats.recentAppointments?.length > 0 && (
                                     <div className="admin-card">
-                                        <h3>📅 Recent Appointments</h3>
+                                        <h3>≡ƒôà Recent Appointments</h3>
                                         <div className="users-table">
                                             <table>
                                                 <thead>
@@ -1875,9 +1704,9 @@ const CentralAdminDashboard = () => {
                                                 <tbody>
                                                     {clinicStats.stats.recentAppointments.map((a, i) => (
                                                         <tr key={i}>
-                                                            <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{a.clinicPatientId?.patientUid || a.patientId || '—'}</td>
-                                                            <td>{a.doctorName || '—'}</td>
-                                                            <td>{a.appointmentDate ? new Date(a.appointmentDate).toLocaleDateString('en-IN') : '—'}</td>
+                                                            <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{a.clinicPatientId?.patientUid || a.patientId || 'ΓÇö'}</td>
+                                                            <td>{a.doctorName || 'ΓÇö'}</td>
+                                                            <td>{a.appointmentDate ? new Date(a.appointmentDate).toLocaleDateString('en-IN') : 'ΓÇö'}</td>
                                                             <td><span className={`status-badge status-${a.status}`}>{a.status}</span></td>
                                                             <td>{formatCurrency(a.amount)}</td>
                                                             <td><span style={{ color: a.paymentStatus === 'paid' ? '#16a34a' : '#dc2626', fontWeight: 600, fontSize: '12px' }}>{a.paymentStatus}</span></td>
@@ -1889,17 +1718,17 @@ const CentralAdminDashboard = () => {
                                     </div>
                                 )}
 
-                                {/* ── Subscription / Billing Management ── */}
+                                {/* ΓöÇΓöÇ Subscription / Billing Management ΓöÇΓöÇ */}
                                 <div className="admin-card" style={{ marginTop: '20px', border: '2px solid #e0e7ff' }}>
-                                    <h3 style={{ marginBottom: '4px' }}>💳 Billing &amp; Subscription</h3>
+                                    <h3 style={{ marginBottom: '4px' }}>≡ƒÆ│ Billing &amp; Subscription</h3>
                                     <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>
-                                        Patient code: <strong style={{ color: '#6366f1' }}>{clinicStats.clinic?.clinicCode || '—'}</strong> · Rate per new patient this month
+                                        Patient code: <strong style={{ color: '#6366f1' }}>{clinicStats.clinic?.clinicCode || 'ΓÇö'}</strong> ┬╖ Rate per new patient this month
                                     </p>
 
                                     {/* Set rate form */}
                                     <form onSubmit={handleSaveRate} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '20px', padding: '14px', background: '#f8fafc', borderRadius: '8px' }}>
                                         <div>
-                                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '4px' }}>Rate per New Patient (₹)</label>
+                                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '4px' }}>Rate per New Patient (Γé╣)</label>
                                             <input type="number" min="0" style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '14px', width: '160px' }}
                                                 placeholder="e.g. 50" value={subscriptionRateForm.ratePerPatient}
                                                 onChange={e => setSubscriptionRateForm(f => ({ ...f, ratePerPatient: e.target.value }))} />
@@ -1910,7 +1739,7 @@ const CentralAdminDashboard = () => {
                                             <label htmlFor="billingEnabled" style={{ fontSize: '13px', color: '#475569', cursor: 'pointer' }}>Enable billing</label>
                                         </div>
                                         <button type="submit" className="btn-save" style={{ fontSize: '13px', padding: '8px 16px' }} disabled={savingRate}>
-                                            {savingRate ? 'Saving...' : '💾 Save Rate'}
+                                            {savingRate ? 'Saving...' : '≡ƒÆ╛ Save Rate'}
                                         </button>
                                     </form>
 
@@ -1927,8 +1756,8 @@ const CentralAdminDashboard = () => {
                                                             <td style={{ fontWeight: 600 }}>{new Date(sub.year, sub.month - 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</td>
                                                             <td style={{ color: '#6366f1', fontWeight: 600 }}>{sub.newPatientCount}</td>
                                                             <td>{sub.totalPatientCount}</td>
-                                                            <td>₹{sub.ratePerPatient}</td>
-                                                            <td style={{ fontWeight: 700 }}>₹{sub.totalAmount.toLocaleString('en-IN')}</td>
+                                                            <td>Γé╣{sub.ratePerPatient}</td>
+                                                            <td style={{ fontWeight: 700 }}>Γé╣{sub.totalAmount.toLocaleString('en-IN')}</td>
                                                             <td>
                                                                 <span style={{
                                                                     padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700,
@@ -1958,10 +1787,10 @@ const CentralAdminDashboard = () => {
                                     )}
                                 </div>
 
-                                {/* ── Appointment System Mode ── */}
+                                {/* ΓöÇΓöÇ Appointment System Mode ΓöÇΓöÇ */}
                                 <div className="admin-card" style={{ marginTop: '20px', border: '2px solid #e0f2fe' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                                        <h3 style={{ margin: 0 }}>🎟️ Appointment System Mode</h3>
+                                        <h3 style={{ margin: 0 }}>≡ƒÄƒ∩╕Å Appointment System Mode</h3>
                                         <span style={{ fontSize: '0.75rem', background: selectedClinic.appointmentMode === 'token' ? '#fef3c7' : '#dbeafe', color: selectedClinic.appointmentMode === 'token' ? '#92400e' : '#1d4ed8', padding: '2px 10px', borderRadius: '20px', fontWeight: 700 }}>
                                             Current: {selectedClinic.appointmentMode === 'token' ? 'Token Queue' : 'Time Slots'}
                                         </span>
@@ -1979,14 +1808,14 @@ const CentralAdminDashboard = () => {
                                         }}>
                                             <input type="radio" name="clinicApptMode" value="token" checked={clinicApptMode === 'token'} onChange={() => setClinicApptMode('token')} style={{ display: 'none' }} />
                                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                                                <span style={{ fontSize: '2rem', lineHeight: 1 }}>🎟️</span>
+                                                <span style={{ fontSize: '2rem', lineHeight: 1 }}>≡ƒÄƒ∩╕Å</span>
                                                 <div>
                                                     <div style={{ fontWeight: 700, fontSize: '1rem', color: clinicApptMode === 'token' ? '#92400e' : '#1e293b', marginBottom: '4px' }}>
                                                         Token Queue System
                                                         {clinicApptMode === 'token' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#f59e0b', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
                                                     </div>
                                                     <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
-                                                        Sequential tokens (1, 2, 3…) per day. Auto-resets at midnight. No time-slot picking needed. Best for walk-in clinics.
+                                                        Sequential tokens (1, 2, 3ΓÇª) per day. Auto-resets at midnight. No time-slot picking needed. Best for walk-in clinics.
                                                     </div>
                                                 </div>
                                             </div>
@@ -2000,14 +1829,14 @@ const CentralAdminDashboard = () => {
                                         }}>
                                             <input type="radio" name="clinicApptMode" value="slot" checked={clinicApptMode === 'slot'} onChange={() => setClinicApptMode('slot')} style={{ display: 'none' }} />
                                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                                                <span style={{ fontSize: '2rem', lineHeight: 1 }}>🕐</span>
+                                                <span style={{ fontSize: '2rem', lineHeight: 1 }}>≡ƒòÉ</span>
                                                 <div>
                                                     <div style={{ fontWeight: 700, fontSize: '1rem', color: clinicApptMode === 'slot' ? '#1d4ed8' : '#1e293b', marginBottom: '4px' }}>
                                                         Time Slot Booking
                                                         {clinicApptMode === 'slot' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#3b82f6', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
                                                     </div>
                                                     <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
-                                                        Patients pick a specific time (09:00, 09:30…). Fixed scheduling with conflict prevention. Best for planned appointments.
+                                                        Patients pick a specific time (09:00, 09:30ΓÇª). Fixed scheduling with conflict prevention. Best for planned appointments.
                                                     </div>
                                                 </div>
                                             </div>
@@ -2016,7 +1845,7 @@ const CentralAdminDashboard = () => {
 
                                     {clinicApptMode !== (selectedClinic.appointmentMode || 'token') && (
                                         <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: '8px', padding: '10px 14px', fontSize: '0.85rem', color: '#713f12', marginBottom: '14px' }}>
-                                            ⚠️ You are changing the appointment mode. Existing appointments will not be affected — only new bookings will follow the new mode.
+                                            ΓÜá∩╕Å You are changing the appointment mode. Existing appointments will not be affected ΓÇö only new bookings will follow the new mode.
                                         </div>
                                     )}
 
@@ -2030,7 +1859,7 @@ const CentralAdminDashboard = () => {
                                                 opacity: (savingClinicApptMode || clinicApptMode === (selectedClinic.appointmentMode || 'token')) ? 0.5 : 1
                                             }}
                                         >
-                                            {savingClinicApptMode ? 'Saving…' : 'Save Mode'}
+                                            {savingClinicApptMode ? 'SavingΓÇª' : 'Save Mode'}
                                         </button>
                                         {clinicApptMode === (selectedClinic.appointmentMode || 'token') && (
                                             <span style={{ fontSize: '0.85rem', color: '#64748b' }}>No changes to save</span>
@@ -2040,16 +1869,16 @@ const CentralAdminDashboard = () => {
 
                                 {/* Quick Access Links */}
                                 <div className="admin-card" style={{ marginTop: '20px' }}>
-                                    <h3>🚀 Clinic Features</h3>
+                                    <h3>≡ƒÜÇ Clinic Features</h3>
                                     <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>Staff can access these modules after logging in at <strong>/login</strong></p>
                                     <div className="config-grid">
                                         {[
-                                            { icon: '👤', label: 'Patient Registration', desc: 'Register & search patients', bg: '#f0f9ff', color: '#0ea5e9' },
-                                            { icon: '🩺', label: 'Doctor Consultation', desc: 'Appointments & prescriptions', bg: '#f5f3ff', color: '#8b5cf6' },
-                                            { icon: '💊', label: 'Pharmacy', desc: 'Medicine orders & inventory', bg: '#fff7ed', color: '#f97316' },
-                                            { icon: '🧾', label: 'Billing & Payments', desc: 'Invoice & collect payments', bg: '#fefce8', color: '#eab308' },
-                                            { icon: '🧪', label: 'Lab Reports', desc: 'Upload & share lab results', bg: '#fdf4ff', color: '#d946ef' },
-                                            { icon: '📊', label: 'Analytics', desc: 'Revenue, patients & reports', bg: '#f0fdf4', color: '#22c55e' },
+                                            { icon: '≡ƒæñ', label: 'Patient Registration', desc: 'Register & search patients', bg: '#f0f9ff', color: '#0ea5e9' },
+                                            { icon: '≡ƒ⌐║', label: 'Doctor Consultation', desc: 'Appointments & prescriptions', bg: '#f5f3ff', color: '#8b5cf6' },
+                                            { icon: '≡ƒÆè', label: 'Pharmacy', desc: 'Medicine orders & inventory', bg: '#fff7ed', color: '#f97316' },
+                                            { icon: '≡ƒº╛', label: 'Billing & Payments', desc: 'Invoice & collect payments', bg: '#fefce8', color: '#eab308' },
+                                            { icon: '≡ƒº¬', label: 'Lab Reports', desc: 'Upload & share lab results', bg: '#fdf4ff', color: '#d946ef' },
+                                            { icon: '≡ƒôè', label: 'Analytics', desc: 'Revenue, patients & reports', bg: '#f0fdf4', color: '#22c55e' },
                                         ].map((item, i) => (
                                             <div key={i} className="config-card" style={{ background: item.bg, cursor: 'default' }}>
                                                 <div className="config-icon" style={{ color: item.color }}>{item.icon}</div>
@@ -2063,7 +1892,7 @@ const CentralAdminDashboard = () => {
                                 </div>
                             </>
                         ) : (
-                            <div className="ca-empty"><p>⚠️ Could not load clinic analytics. The clinic may have no data yet.</p></div>
+                            <div className="ca-empty"><p>ΓÜá∩╕Å Could not load clinic analytics. The clinic may have no data yet.</p></div>
                         )}
                     </div>
                 )}
@@ -2088,7 +1917,7 @@ const CentralAdminDashboard = () => {
                         <div className="admin-card">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                                 <div>
-                                    <h2>💰 Revenue Plans</h2>
+                                    <h2>≡ƒÆ░ Revenue Plans</h2>
                                     <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>Assign a billing model to each hospital or clinic</p>
                                 </div>
                                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -2096,10 +1925,10 @@ const CentralAdminDashboard = () => {
                                         onClick={() => navigate('/supremeadmin/revenue')}
                                         style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', border: 'none', padding: '9px 18px', borderRadius: '9px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}
                                     >
-                                        📊 View System Analytics
+                                        ≡ƒôè View System Analytics
                                     </button>
                                     <button className="btn-edit" onClick={fetchRevenuePlans} style={{ padding: '9px 18px' }}>
-                                        ↻ Refresh
+                                        Γå╗ Refresh
                                     </button>
                                 </div>
                             </div>
@@ -2123,17 +1952,17 @@ const CentralAdminDashboard = () => {
 
                             {/* Search */}
                             <input
-                                placeholder="Search hospital or clinic name…"
+                                placeholder="Search hospital or clinic nameΓÇª"
                                 value={revenuePlanSearch}
                                 onChange={e => setRevenuePlanSearch(e.target.value)}
                                 style={{ width: '100%', padding: '9px 14px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', marginBottom: '16px', boxSizing: 'border-box', outline: 'none' }}
                             />
 
                             {loadingRevenuePlans ? (
-                                <p style={{ textAlign: 'center', color: '#888', padding: '24px' }}>Loading revenue plans…</p>
+                                <p style={{ textAlign: 'center', color: '#888', padding: '24px' }}>Loading revenue plansΓÇª</p>
                             ) : revenuePlans.length === 0 ? (
                                 <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
-                                    <p style={{ fontSize: '32px', marginBottom: '8px' }}>💰</p>
+                                    <p style={{ fontSize: '32px', marginBottom: '8px' }}>≡ƒÆ░</p>
                                     <p>No hospitals found. Add hospitals first, then assign revenue plans.</p>
                                     <button className="btn-save" style={{ marginTop: '12px' }} onClick={fetchRevenuePlans}>Load Plans</button>
                                 </div>
@@ -2156,22 +1985,22 @@ const CentralAdminDashboard = () => {
                                                 .map((h, i) => {
                                                     const meta = MODEL_LABELS[h.revenueModel] || MODEL_LABELS.per_patient;
                                                     const rateLabel = h.revenueModel === 'per_patient'
-                                                        ? `₹${h.subscription?.ratePerPatient || 0}/patient`
+                                                        ? `Γé╣${h.subscription?.ratePerPatient || 0}/patient`
                                                         : h.revenueModel === 'fixed_monthly'
-                                                            ? `₹${h.revenueConfig?.monthlyFee || 0}/month`
-                                                            : `₹${h.revenueConfig?.ratePerLogin || 0}/login`;
+                                                            ? `Γé╣${h.revenueConfig?.monthlyFee || 0}/month`
+                                                            : `Γé╣${h.revenueConfig?.ratePerLogin || 0}/login`;
                                                     return (
                                                         <tr key={h._id}>
                                                             <td style={{ color: '#94a3b8' }}>{i + 1}</td>
                                                             <td><strong>{h.name}</strong></td>
                                                             <td>
                                                                 <span style={{ padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, background: h.clinicType === 'hospital' ? '#eff6ff' : '#f5f3ff', color: h.clinicType === 'hospital' ? '#3b82f6' : '#8b5cf6' }}>
-                                                                    {h.clinicType === 'hospital' ? '🏥 Hospital' : '🏪 Clinic'}
+                                                                    {h.clinicType === 'hospital' ? '≡ƒÅÑ Hospital' : '≡ƒÅ¬ Clinic'}
                                                                 </span>
                                                             </td>
                                                             <td>
                                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, background: meta.bg, color: meta.color }}>
-                                                                    {meta.icon} {meta.label.split(' — ')[0]}
+                                                                    {meta.icon} {meta.label.split(' ΓÇö ')[0]}
                                                                 </span>
                                                             </td>
                                                             <td style={{ fontWeight: 600, color: '#374151' }}>{rateLabel}</td>
@@ -2190,11 +2019,11 @@ const CentralAdminDashboard = () => {
                             )}
                         </div>
 
-                        {/* ── Plan Editor Modal ── */}
+                        {/* ΓöÇΓöÇ Plan Editor Modal ΓöÇΓöÇ */}
                         {editingPlan && (
                             <div className="modal-overlay">
                                 <div className="modal-content" style={{ maxWidth: '480px', width: '90%' }}>
-                                    <h3>💰 Set Revenue Plan — {editingPlan.name}</h3>
+                                    <h3>≡ƒÆ░ Set Revenue Plan ΓÇö {editingPlan.name}</h3>
                                     <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 20px' }}>
                                         Choose a billing model and set the rate. This determines how your system charges this {editingPlan.clinicType}.
                                     </p>
@@ -2208,8 +2037,8 @@ const CentralAdminDashboard = () => {
                                                     style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `2px solid ${planForm.revenueModel === key ? m.color : '#e2e8f0'}`, background: planForm.revenueModel === key ? m.bg : '#f8fafc', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}
                                                 >
                                                     <div style={{ fontSize: '20px', marginBottom: '4px' }}>{m.icon}</div>
-                                                    <div style={{ fontSize: '11px', fontWeight: 700, color: planForm.revenueModel === key ? m.color : '#64748b' }}>{m.label.split(' — ')[0]}</div>
-                                                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>{m.label.split(' — ')[1]}</div>
+                                                    <div style={{ fontSize: '11px', fontWeight: 700, color: planForm.revenueModel === key ? m.color : '#64748b' }}>{m.label.split(' ΓÇö ')[0]}</div>
+                                                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>{m.label.split(' ΓÇö ')[1]}</div>
                                                 </div>
                                             ))}
                                         </div>
@@ -2217,7 +2046,7 @@ const CentralAdminDashboard = () => {
                                         {/* Rate fields based on model */}
                                         {planForm.revenueModel === 'per_patient' && (
                                             <div style={{ marginBottom: '16px' }}>
-                                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#374151' }}>Rate per Patient (₹)</label>
+                                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#374151' }}>Rate per Patient (Γé╣)</label>
                                                 <input
                                                     type="number"
                                                     min="0"
@@ -2232,7 +2061,7 @@ const CentralAdminDashboard = () => {
                                         {planForm.revenueModel === 'fixed_monthly' && (
                                             <>
                                                 <div style={{ marginBottom: '16px' }}>
-                                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#374151' }}>Monthly Fee (₹)</label>
+                                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#374151' }}>Monthly Fee (Γé╣)</label>
                                                     <input
                                                         type="number"
                                                         min="0"
@@ -2258,7 +2087,7 @@ const CentralAdminDashboard = () => {
                                         )}
                                         {planForm.revenueModel === 'per_login' && (
                                             <div style={{ marginBottom: '16px' }}>
-                                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#374151' }}>Rate per Login (₹)</label>
+                                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: '#374151' }}>Rate per Login (Γé╣)</label>
                                                 <input
                                                     type="number"
                                                     min="0"
@@ -2268,14 +2097,14 @@ const CentralAdminDashboard = () => {
                                                     style={{ width: '100%', padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }}
                                                 />
                                                 <div style={{ padding: '10px 14px', borderRadius: '8px', background: '#fef3c7', border: '1px solid #fde68a', marginTop: '8px' }}>
-                                                    <p style={{ margin: 0, fontSize: '12px', color: '#92400e', fontWeight: 600 }}>⚠️ Coming Soon — Per Login tracking is not yet active. You can pre-configure the rate.</p>
+                                                    <p style={{ margin: 0, fontSize: '12px', color: '#92400e', fontWeight: 600 }}>ΓÜá∩╕Å Coming Soon ΓÇö Per Login tracking is not yet active. You can pre-configure the rate.</p>
                                                 </div>
                                             </div>
                                         )}
 
                                         <div className="modal-buttons">
                                             <button type="submit" className="btn-save" disabled={savingPlan}>
-                                                {savingPlan ? 'Saving…' : '✓ Save Plan'}
+                                                {savingPlan ? 'SavingΓÇª' : 'Γ£ô Save Plan'}
                                             </button>
                                             <button type="button" className="btn-cancel" onClick={() => setEditingPlan(null)}>Cancel</button>
                                         </div>
@@ -2289,20 +2118,20 @@ const CentralAdminDashboard = () => {
                 {/* ========== CONFIGURATIONS TAB ========== */}
                 {activeTab === 'configurations' && (
                     <div className="admin-card">
-                        <h2>⚙️ System Configurations</h2>
+                        <h2>ΓÜÖ∩╕Å System Configurations</h2>
                         <p style={{ color: '#888', fontSize: '14px', margin: '5px 0 20px' }}>
-                            Manage global settings — roles, question libraries, lab tests, medicines, services, and test packages.
+                            Manage global settings ΓÇö roles, question libraries, lab tests, medicines, services, and test packages.
                         </p>
                         <div className="config-grid">
                             {[
-                                { icon: '🔑', label: 'Roles & Permissions', desc: 'Create and manage user roles', path: '/admin/roles', bg: '#eff6ff', color: '#3b82f6' },
-                                { icon: '❓', label: 'Question Library', desc: 'Configure assessment forms', path: '/admin/question-library', bg: '#f5f3ff', color: '#8b5cf6' },
-                                { icon: '🧪', label: 'Lab Tests', desc: 'Manage lab test catalog', path: '/admin/lab-tests', bg: '#fdf4ff', color: '#d946ef' },
-                                { icon: '📦', label: 'Test Packages', desc: 'Bundle lab tests into packages', path: '/admin/test-packages', bg: '#f0fdf4', color: '#22c55e' },
-                                { icon: '💊', label: 'Medicine Catalog', desc: 'Global medicine library', path: '/admin/medicines', bg: '#fff7ed', color: '#f97316' },
-                                { icon: '🛠️', label: 'Services', desc: 'Hospital services & pricing', path: '/admin/services', bg: '#fefce8', color: '#eab308' },
-                                { icon: '🧪', label: 'Labs', desc: 'Manage lab departments', tab: 'labs', bg: '#f0f9ff', color: '#0ea5e9' },
-                                { icon: '🏥', label: 'Pharmacy', desc: 'Manage pharmacy departments', tab: 'pharmacy', bg: '#fff1f2', color: '#f43f5e' },
+                                { icon: '≡ƒöæ', label: 'Roles & Permissions', desc: 'Create and manage user roles', path: '/admin/roles', bg: '#eff6ff', color: '#3b82f6' },
+                                { icon: 'Γ¥ô', label: 'Question Library', desc: 'Configure assessment forms', path: '/admin/question-library', bg: '#f5f3ff', color: '#8b5cf6' },
+                                { icon: '≡ƒº¬', label: 'Lab Tests', desc: 'Manage lab test catalog', path: '/admin/lab-tests', bg: '#fdf4ff', color: '#d946ef' },
+                                { icon: '≡ƒôª', label: 'Test Packages', desc: 'Bundle lab tests into packages', path: '/admin/test-packages', bg: '#f0fdf4', color: '#22c55e' },
+                                { icon: '≡ƒÆè', label: 'Medicine Catalog', desc: 'Global medicine library', path: '/admin/medicines', bg: '#fff7ed', color: '#f97316' },
+                                { icon: '≡ƒ¢á∩╕Å', label: 'Services', desc: 'Hospital services & pricing', path: '/admin/services', bg: '#fefce8', color: '#eab308' },
+                                { icon: '≡ƒº¬', label: 'Labs', desc: 'Manage lab departments', tab: 'labs', bg: '#f0f9ff', color: '#0ea5e9' },
+                                { icon: '≡ƒÅÑ', label: 'Pharmacy', desc: 'Manage pharmacy departments', tab: 'pharmacy', bg: '#fff1f2', color: '#f43f5e' },
                             ].map((item, i) => (
                                 <div key={i} className="config-card" onClick={() => item.tab ? setActiveTab(item.tab) : navigate(item.path)} style={{ background: item.bg }}>
                                     <div className="config-icon" style={{ color: item.color }}>{item.icon}</div>
@@ -2319,7 +2148,7 @@ const CentralAdminDashboard = () => {
                 {/* ========== LABS TAB ========== */}
                 {activeTab === 'labs' && (
                     <div style={{ marginTop: '20px' }}>
-                        <button className="btn-cancel" style={{ marginBottom: '20px' }} onClick={() => setActiveTab('configurations')}>← Back to Configurations</button>
+                        <button className="btn-cancel" style={{ marginBottom: '20px' }} onClick={() => setActiveTab('configurations')}>ΓåÉ Back to Configurations</button>
                         <AdminLabs />
                     </div>
                 )}
@@ -2327,7 +2156,7 @@ const CentralAdminDashboard = () => {
                 {/* ========== PHARMACY TAB ========== */}
                 {activeTab === 'pharmacy' && (
                     <div style={{ marginTop: '20px' }}>
-                        <button className="btn-cancel" style={{ marginBottom: '20px' }} onClick={() => setActiveTab('configurations')}>← Back to Configurations</button>
+                        <button className="btn-cancel" style={{ marginBottom: '20px' }} onClick={() => setActiveTab('configurations')}>ΓåÉ Back to Configurations</button>
                         <AdminPharmacy />
                     </div>
                 )}
@@ -2347,7 +2176,7 @@ const CentralAdminDashboard = () => {
                 )}
             </div>
 
-            {/* 🎨 Branding Editor Modal */}
+            {/* ≡ƒÄ¿ Branding Editor Modal */}
             {brandingHospital && (
                 <HospitalBrandingEditor
                     hospital={brandingHospital}

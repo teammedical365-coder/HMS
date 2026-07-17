@@ -168,10 +168,11 @@ const Admin = () => {
             setLoadingUsers(true);
             const response = await adminAPI.getUsers();
             if (response.success) {
-                // Filter out 'patient' and 'user' roles to show only Staff
-                const staffUsers = response.users.filter(u =>
-                    !['patient', 'user'].includes((u.role || '').toLowerCase())
-                );
+                // Filter out 'patient', 'user', and any 'doctor' roles to show only non-doctor Staff
+                const staffUsers = response.users.filter(u => {
+                    const r = (u.role || '').toLowerCase();
+                    return !['patient', 'user'].includes(r) && !r.includes('doctor');
+                });
                 setUsers(staffUsers);
             }
         } catch (err) {
@@ -402,10 +403,12 @@ const Admin = () => {
                     return null;
                 })()}
 
-                {/* CREATE STAFF ACCOUNT SECTION */}
-                <div className="admin-card" style={{ marginBottom: '20px' }}>
+
+
+                {/* Users List */}
+                <div className="admin-card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h2>👤 Create Staff Account</h2>
+                        <h2 style={{ margin: 0 }}>All Staff</h2>
                         <button
                             onClick={handleToggleCreateForm}
                             className={showCreateForm ? 'btn-cancel' : 'btn-save'}
@@ -414,11 +417,7 @@ const Admin = () => {
                                 if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
                                     const limits = getSubscriptionLimits(hospital.subscriptionPlan);
                                     const maxStaff = limits.maxStaff;
-                                    const staffCount = users.filter(u => {
-                                        const rName = (u.role?.name || u.role || '').toLowerCase();
-                                        return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
-                                    }).length;
-                                    return staffCount >= maxStaff;
+                                    return users.length >= maxStaff;
                                 }
                                 return false;
                             })()}
@@ -426,15 +425,11 @@ const Admin = () => {
                             {checkingDocLimit ? 'Checking...' : showCreateForm ? 'Cancel' : '+ New Staff'}
                         </button>
                     </div>
-
+                    
                     {hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter') && (() => {
                         const limits = getSubscriptionLimits(hospital.subscriptionPlan);
                         const maxStaff = limits.maxStaff;
-                        const staffCount = users.filter(u => {
-                            const rName = (u.role?.name || u.role || '').toLowerCase();
-                            return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
-                        }).length;
-                        if (staffCount >= maxStaff && !showCreateForm) {
+                        if (users.length >= maxStaff && !showCreateForm) {
                             return (
                                 <div style={{ color: '#be123c', background: '#fff1f2', border: '1px solid #fda4af', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontWeight: 'bold', fontSize: '14px' }}>
                                     ⚠️ Staff quota reached. Upgrade your subscription to add more staff.
@@ -444,119 +439,55 @@ const Admin = () => {
                         return null;
                     })()}
 
-                    {!showCreateForm && (
-                        <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>
-                            Create login credentials for doctors, lab technicians, pharmacists, or any custom role.
-                        </p>
-                    )}
-
+                    {/* Move the Create Form here, just below the header */}
                     {showCreateForm && (
-                        <form onSubmit={handleCreateStaff} className="user-form">
-                            {hospital?.clinicType === 'clinic' && clinicDoctorExists && (
-                                <div style={{ color: '#be123c', background: '#fff1f2', border: '1px solid #fda4af', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', fontWeight: 'bold', fontSize: '14px', width: '100%', boxSizing: 'border-box' }}>
-                                    ⚠️ This clinic already has an assigned Clinic Doctor.
+                        <div style={{ marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid #e2e8f0' }}>
+                            <form onSubmit={handleCreateStaff} className="user-form">
+                                {hospital?.clinicType === 'clinic' && clinicDoctorExists && (
+                                    <div style={{ color: '#be123c', background: '#fff1f2', border: '1px solid #fda4af', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', fontWeight: 'bold', fontSize: '14px', width: '100%', boxSizing: 'border-box' }}>
+                                        ⚠️ This clinic already has an assigned Clinic Doctor.
+                                    </div>
+                                )}
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="staff-label">Name</label>
+                                        <input type="text" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} required className="staff-input" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Email</label>
+                                        <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} required className="staff-input" />
+                                    </div>
                                 </div>
-                            )}
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="staff-label">Full Name *</label>
-                                    <input type="text" placeholder="e.g. Dr. Sharma" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} required className="staff-input" />
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="staff-label">Password</label>
+                                        <input type="text" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} required className="staff-input" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Phone</label>
+                                        <input type="text" value={createForm.phone} onChange={e => setCreateForm({ ...createForm, phone: e.target.value })} className="staff-input" />
+                                    </div>
                                 </div>
-                                <div className="form-group">
-                                    <label className="staff-label">Email Address *</label>
-                                    <input type="email" placeholder="e.g. dr.sharma@hospital.com" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} required className="staff-input" />
-                                </div>
-                            </div>
-
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="staff-label">Password *</label>
-                                    <input type="text" placeholder="Set a temporary password" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} required className="staff-input" />
-                                    <small className="form-hint">Share this password with the staff member</small>
-                                </div>
-                                <div className="form-group">
-                                    <label className="staff-label">Phone Number</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. 9876543210"
-                                        value={createForm.phone || ''}
-                                        onChange={e => {
-                                            const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                            setCreateForm({ ...createForm, phone: cleanVal });
-                                        }}
-                                        className="staff-input"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="staff-label">Profile Image</label>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={e => setCreateForm({ ...createForm, file: e.target.files[0] })}
-                                        className="staff-input"
-                                        style={{ padding: '10px' }}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label className="staff-label">Assign Role * <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: '0.85rem', textTransform: 'none' }}>(Don't see your role? <a href="/admin/roles" style={{ color: '#0ea5e9' }}>Create one here</a>)</span></label>
-                                    <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
-                                        <option value="">-- Select a Role --</option>
-                                        {roles
-                                            .filter(r => {
-                                                const name = r.name.toLowerCase();
-                                                if (name.includes('doctor')) return false; // Exclude doctors
-                                                return !['patient', 'user', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(name);
-                                            })
-                                            .map(role => (
-                                                <option key={role._id} value={role._id}>
-                                                    {role.name} {role.description ? `— ${role.description}` : ''}
-                                                </option>
-                                            ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {hospital && hospital.departments && hospital.departments.length > 0 && (
-                                <div className="form-row" style={{ marginTop: '10px' }}>
-                                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                        <label className="staff-label">Assign Department (Optional - Leave blank to allow all)</label>
-                                        <select
-                                            value={createForm.department}
-                                            onChange={(e) => setCreateForm(prev => ({ ...prev, department: e.target.value }))}
-                                            className="staff-input"
-                                            style={{ marginTop: '8px' }}
-                                        >
-                                            <option value="">-- Select Department --</option>
-                                            {hospital.departments.map(dept => (
-                                                <option key={dept} value={dept}>{dept}</option>
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="staff-label">Assign Role</label>
+                                        <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
+                                            <option value="">Select Role</option>
+                                            {roles.filter(r => {
+                                                const rName = (r.name || '').toLowerCase();
+                                                return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+                                            }).map(role => (
+                                                <option key={role._id} value={role._id}>{role.name}</option>
                                             ))}
                                         </select>
                                     </div>
                                 </div>
-                            )}
-
-                            <button
-                                type="submit"
-                                disabled={creating || (hospital?.clinicType === 'clinic' && clinicDoctorExists)}
-                                className="submit-button"
-                                style={{
-                                    marginTop: '20px',
-                                    cursor: (hospital?.clinicType === 'clinic' && clinicDoctorExists) ? 'not-allowed' : 'pointer',
-                                    opacity: (hospital?.clinicType === 'clinic' && clinicDoctorExists) ? 0.65 : 1
-                                }}
-                            >
-                                {creating ? 'Creating Account...' : '✅ Create Staff Account'}
-                            </button>
-                        </form>
+                                <button type="submit" className="btn-save" disabled={creating} style={{ marginTop: '10px' }}>
+                                    {creating ? 'Creating Account...' : '✅ Create Staff Account'}
+                                </button>
+                            </form>
+                        </div>
                     )}
-                </div>
-
-                {/* Users List */}
-                <div className="admin-card">
-                    <h2>All Staff & Users</h2>
                     {loadingUsers ? (
                         <div className="loading-message">Loading users...</div>
                     ) : users.length === 0 ? (
