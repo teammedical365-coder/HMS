@@ -18,9 +18,7 @@ const PatientSignup = () => {
         mobile: '',
         email: '',
         password: '',
-        confirmPassword: '',
-        age: '',
-        aadhaarNumber: ''
+        confirmPassword: ''
     });
 
     useEffect(() => {
@@ -51,10 +49,13 @@ const PatientSignup = () => {
     }, []);
 
     const handleChange = (e) => {
-        setFormData(prev => ({
-            ...prev,
-            [e.target.name]: e.target.value
-        }));
+        const { name, value } = e.target;
+        if (name === 'mobile') {
+            const clean = value.replace(/\D/g, '').slice(0, 10);
+            setFormData(prev => ({ ...prev, mobile: clean }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
         setErrorMsg(''); // Clear error on typing
     };
 
@@ -64,10 +65,6 @@ const PatientSignup = () => {
         if (!formData.mobile.trim()) return "Mobile Number is required.";
         if (!/^\d{10}$/.test(formData.mobile)) return "Mobile number must be exactly 10 digits.";
         if (!formData.email.trim()) return "Email Address is required.";
-        if (!formData.age) return "Age is required.";
-        if (formData.age < 1) return "Age must be a positive number greater than 0.";
-        if (!formData.aadhaarNumber.trim()) return "Aadhaar Number is required.";
-        if (!/^\d{12}$/.test(formData.aadhaarNumber)) return "Aadhaar number must be exactly 12 digits.";
         if (!formData.password) return "Password is required.";
         if (!formData.confirmPassword) return "Confirm Password is required.";
         
@@ -102,9 +99,7 @@ const PatientSignup = () => {
                 formData.email,
                 formData.mobile,
                 formData.password,
-                hospital.id,
-                formData.age,
-                formData.aadhaarNumber
+                hospital.id
             );
 
             if (response.success) {
@@ -159,7 +154,7 @@ const PatientSignup = () => {
                     <div style={{ display: 'flex', gap: '1rem' }}>
                         <div className="input-group" style={{ flex: 1 }}>
                             <label>Mobile Number</label>
-                            <input type="text" name="mobile" placeholder="9876543210" value={formData.mobile} onChange={handleChange} required pattern="^\d{10}$" title="Phone number must be exactly 10 digits" />
+                            <input type="tel" name="mobile" placeholder="9876543210" value={formData.mobile} onChange={handleChange} required maxLength={10} pattern="^\d{10}$" title="Phone number must be exactly 10 digits" inputMode="numeric" />
                         </div>
                         <div className="input-group" style={{ flex: 1 }}>
                             <label>Email Address</label>
@@ -167,17 +162,7 @@ const PatientSignup = () => {
                         </div>
                     </div>
                     
-                    <div style={{ display: 'flex', gap: '1rem' }}>
-                        <div className="input-group" style={{ flex: 1 }}>
-                            <label>Age</label>
-                            <input type="number" name="age" placeholder="Age" value={formData.age} onChange={handleChange} required min="1" />
-                        </div>
-                        <div className="input-group" style={{ flex: 1 }}>
-                            <label>Aadhaar Number</label>
-                            <input type="text" name="aadhaarNumber" placeholder="12-digit Aadhaar" value={formData.aadhaarNumber} onChange={handleChange} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" maxLength={12} />
-                        </div>
-                    </div>
-                    
+
                     <div style={{ display: 'flex', gap: '1rem' }}>
                         <div className="input-group" style={{ flex: 1 }}>
                             <label>Password</label>

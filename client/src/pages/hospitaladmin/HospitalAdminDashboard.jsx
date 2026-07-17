@@ -26,12 +26,12 @@ const HospitalAdminDashboard = () => {
     const [roles, setRoles] = useState([]);
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [createForm, setCreateForm] = useState({
-        name: '', email: '', password: '', phone: '', roleId: '', file: null, department: '', age: '', aadhaarNumber: ''
+        name: '', email: '', password: '', phone: '', roleId: '', file: null, department: ''
     });
     const [creating, setCreating] = useState(false);
     const [editModal, setEditModal] = useState(false);
     const [editForm, setEditForm] = useState({
-        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: '', department: '', age: '', aadhaarNumber: ''
+        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: '', department: ''
     });
     const [updating, setUpdating] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -261,7 +261,7 @@ const HospitalAdminDashboard = () => {
             const res = await adminAPI.createUser(userData);
             if (res.success) {
                 setSuccess(`✅ ${res.user?.role || 'Staff'} account created! Login: ${createForm.email}`);
-                setCreateForm({ name: '', email: '', password: '', phone: '', roleId: '', file: null, department: '', age: '', aadhaarNumber: '' });
+                setCreateForm({ name: '', email: '', password: '', phone: '', roleId: '', file: null, department: '' });
                 setShowCreateForm(false);
                 fetchUsers();
             }
@@ -295,8 +295,7 @@ const HospitalAdminDashboard = () => {
             const updateData = {
                 name: editForm.name, email: editForm.email, phone: editForm.phone,
                 roleId: editForm.roleId, avatar: avatarUrl, specialty: editForm.specialty,
-                departments: editForm.department ? [editForm.department] : [],
-                age: editForm.age, aadhaarNumber: editForm.aadhaarNumber
+                departments: editForm.department ? [editForm.department] : []
             };
             const res = await adminAPI.updateUser(editForm.id, updateData);
             if (res.success) {
@@ -331,8 +330,7 @@ const HospitalAdminDashboard = () => {
             name: userItem.name, email: userItem.email, phone: userItem.phone || '',
             roleId: userItem.roleId || userItem.role,
             currentAvatar: userItem.avatar, newAvatarFile: null, specialty: userItem.specialty || '',
-            department: (userItem.departments && userItem.departments.length > 0) ? userItem.departments[0] : '',
-            age: userItem.age || '', aadhaarNumber: userItem.aadhaarNumber || ''
+            department: (userItem.departments && userItem.departments.length > 0) ? userItem.departments[0] : ''
         });
         setEditModal(true);
         setError('');
@@ -744,16 +742,7 @@ const HospitalAdminDashboard = () => {
                                              maxLength="10"  pattern="\d{10}" />
                                         </div>
                                     </div>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Age *</label>
-                                            <input type="number" placeholder="Age" value={createForm.age} onChange={e => setCreateForm({ ...createForm, age: e.target.value })} required min="1" className="staff-input" />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Aadhaar Number *</label>
-                                            <input type="text" placeholder="12-digit Aadhaar" value={createForm.aadhaarNumber} onChange={e => setCreateForm({ ...createForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" className="staff-input" />
-                                        </div>
-                                    </div>
+
                                     <div className="form-row">
                                         <div className="form-group">
                                             <label className="staff-label">Profile Image</label>
@@ -1469,16 +1458,7 @@ const HospitalAdminDashboard = () => {
                                     </div>
                                 </div>
 
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label className="staff-label">Age *</label>
-                                        <input type="number" value={editForm.age} onChange={e => setEditForm({ ...editForm, age: e.target.value })} required min="1" className="staff-input" />
-                                    </div>
-                                    <div className="form-group">
-                                        <label className="staff-label">Aadhaar Number *</label>
-                                        <input type="text" value={editForm.aadhaarNumber} onChange={e => setEditForm({ ...editForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" className="staff-input" />
-                                    </div>
-                                </div>
+
 
                                 {hospitalInfo && hospitalInfo.departments && hospitalInfo.departments.length > 0 && (
                                     <div className="form-row" style={{ marginTop: '10px' }}>

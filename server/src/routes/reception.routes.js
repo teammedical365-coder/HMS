@@ -83,7 +83,7 @@ async function generateSmartMRN(hospitalId, hospital, User) {
 // 1. REGISTER (WALK-IN)
 router.post('/register', verifyToken, verifyReception, async (req, res) => {
     try {
-        let { name, email, phone } = req.body;
+        let { name, email, phone, age, aadhaarNumber } = req.body;
 
         // Sanitize — trim whitespace and convert empty strings to undefined
         name = name ? String(name).trim() : undefined;
@@ -124,6 +124,8 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         if (user) {
             // Only update email if provided and different (avoid overwriting with empty)
             if (email && email !== user.email) user.email = email;
+            if (age && age !== user.age) user.age = age;
+            if (aadhaarNumber && aadhaarNumber !== user.aadhaarNumber) user.aadhaarNumber = aadhaarNumber;
 
             const hospitalId = req.user.hospitalId || user.hospitalId;
             const Hospital = require('../models/hospital.model');
@@ -172,7 +174,9 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
             patientId,
             mrn: patientId,
             fertilityProfile: {},
-            hospitalId: hospitalId || undefined
+            hospitalId: hospitalId || undefined,
+            age,
+            aadhaarNumber
         };
 
         // Only attach email if it actually exists, to prevent duplicate sparse index errors

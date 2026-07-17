@@ -696,6 +696,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     name: `${intakeForm.firstName} ${intakeForm.lastName}`.trim(),
                     email: intakeForm.email,
                     phone: intakeForm.mobile,
+                    age: intakeForm.age,
+                    aadhaarNumber: intakeForm.aadhaar
                 });
 
                 if (regRes.success && regRes.user) {
