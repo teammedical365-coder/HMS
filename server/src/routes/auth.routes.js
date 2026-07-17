@@ -57,8 +57,6 @@ router.post('/signup', signupLimiter, async (req, res) => {
   try {
     let { name, email, password } = req.body;
 
-    const validatedAge = req.body.age ? parseInt(req.body.age, 10) : null;
-    const validatedAadhaar = req.body.aadhaarNumber ? String(req.body.aadhaarNumber).trim() : '';
     let cleanPhone = req.body.phone ? String(req.body.phone).trim() : '';
 
     if (cleanPhone) {
@@ -135,8 +133,6 @@ router.post('/signup', signupLimiter, async (req, res) => {
       email,
       password,
       phone: cleanPhone,
-      age: validatedAge,
-      aadhaarNumber: validatedAadhaar,
       role: defaultRole._id, // ObjectId reference to Role
       patientId: patientId
     });

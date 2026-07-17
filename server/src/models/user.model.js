@@ -37,7 +37,6 @@ const userSchema = new mongoose.Schema({
     // Identity Verification (KYC)
     aadhaarNumber: { 
         type: String, 
-        required: function() { return !!this.patientId; }, 
         match: /^\d{12}$/, 
         unique: true, 
         sparse: true, 
@@ -46,7 +45,6 @@ const userSchema = new mongoose.Schema({
     isAadhaarVerified: { type: Boolean, default: false },
     age: { 
         type: Number, 
-        required: function() { return !!this.patientId; }, 
         min: 1 
     },
 

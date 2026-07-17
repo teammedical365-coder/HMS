@@ -14,9 +14,7 @@ const Signup = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    phone: '',
-    age: '',
-    aadhaarNumber: ''
+    phone: ''
   });
 
   useEffect(() => {
@@ -27,17 +25,32 @@ const Signup = () => {
     dispatch(clearError());
   }, [dispatch]);
 
+  const [localError, setLocalError] = useState('');
+
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === 'phone') {
+      const clean = value.replace(/\D/g, '').slice(0, 10);
+      setFormData(prev => ({ ...prev, phone: clean }));
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
     dispatch(clearError());
+    setLocalError('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     dispatch(clearError());
+    setLocalError('');
 
     if (formData.password !== formData.confirmPassword) {
-      // You might want to dispatch a local error here
+      setLocalError('Passwords do not match.');
+      return;
+    }
+
+    if (formData.phone && !/^\d{10}$/.test(formData.phone)) {
+      setLocalError('Mobile number must be exactly 10 digits.');
       return;
     }
 
@@ -45,9 +58,7 @@ const Signup = () => {
       name: formData.name,
       email: formData.email,
       password: formData.password,
-      phone: formData.phone,
-      age: formData.age,
-      aadhaarNumber: formData.aadhaarNumber
+      phone: formData.phone
     }));
   };
 
@@ -62,7 +73,7 @@ const Signup = () => {
             <h2 style={{ marginBottom: '5px' }}>Start Your Journey</h2>
             <p style={{ color: '#666', marginBottom: '30px' }}>Create an account to book and track appointments.</p>
 
-            {error && <div className="error-message" style={{ marginBottom: '20px' }}>{error}</div>}
+            {(error || localError) && <div className="error-message" style={{ marginBottom: '20px' }}>{localError || error}</div>}
 
             <form onSubmit={handleSubmit}>
               <div className="input-group">
@@ -100,7 +111,8 @@ const Signup = () => {
                 <label>Phone Number</label>
                 <div className="input-wrapper">
                   <i className="fa-solid fa-phone"></i>
-                  <input maxLength={10}
+                  <input
+                    maxLength={10}
                     type="tel"
                     name="phone"
                     placeholder="Your contact number"
@@ -108,43 +120,11 @@ const Signup = () => {
                     onChange={handleChange}
                     required
                     pattern="^\d{10}$"
+                    inputMode="numeric"
                     title="Phone number must be exactly 10 digits" />
                 </div>
               </div>
 
-              <div className="input-group">
-                <label>Age</label>
-                <div className="input-wrapper">
-                  <i className="fa-solid fa-calendar"></i>
-                  <input
-                    type="number"
-                    name="age"
-                    placeholder="Your age"
-                    value={formData.age}
-                    onChange={handleChange}
-                    required
-                    min="1"
-                  />
-                </div>
-              </div>
-
-              <div className="input-group">
-                <label>Aadhaar Number</label>
-                <div className="input-wrapper">
-                  <i className="fa-solid fa-id-card"></i>
-                  <input
-                    type="text"
-                    name="aadhaarNumber"
-                    placeholder="12-digit Aadhaar"
-                    value={formData.aadhaarNumber}
-                    onChange={handleChange}
-                    required
-                    pattern="^\d{12}$"
-                    title="Aadhaar number must be exactly 12 digits"
-                    maxLength={12}
-                  />
-                </div>
-              </div>
 
               <div className="input-group">
                 <label>Create Password</label>

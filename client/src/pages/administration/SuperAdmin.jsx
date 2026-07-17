@@ -13,7 +13,7 @@ const SuperAdmin = () => {
 
     const [editModal, setEditModal] = useState(false);
     const [editForm, setEditForm] = useState({
-        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: '', age: '', aadhaarNumber: ''
+        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: ''
     });
     const [updating, setUpdating] = useState(false);
 
@@ -22,7 +22,7 @@ const SuperAdmin = () => {
     // Create Staff Form state
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [createForm, setCreateForm] = useState({
-        name: '', email: '', password: '', phone: '', roleId: '', file: null, age: '', aadhaarNumber: ''
+        name: '', email: '', password: '', phone: '', roleId: '', file: null
     });
     const [creating, setCreating] = useState(false);
 
@@ -31,10 +31,6 @@ const SuperAdmin = () => {
         
         if (name === 'phone') {
             const cleanVal = value.replace(/\D/g, '').slice(0, 10);
-            formSetter(prev => ({ ...prev, [name]: cleanVal }));
-        } 
-        else if (name === 'aadhaarNumber') {
-            const cleanVal = value.replace(/\D/g, '').slice(0, 12);
             formSetter(prev => ({ ...prev, [name]: cleanVal }));
         }
         else {
@@ -101,9 +97,7 @@ const SuperAdmin = () => {
             roleId: userItem.roleId || userItem.role, // Assuming roleId is available or can be derived from role name
             currentAvatar: userItem.avatar,
             newAvatarFile: null,
-            specialty: userItem.specialty || '',
-            age: userItem.age || '',
-            aadhaarNumber: userItem.aadhaarNumber || ''
+            specialty: userItem.specialty || ''
         });
         setEditModal(true);
         setError('');
@@ -137,9 +131,7 @@ const SuperAdmin = () => {
                 phone: editForm.phone,
                 roleId: editForm.roleId,
                 avatar: avatarUrl,
-                specialty: editForm.specialty,
-                age: editForm.age,
-                aadhaarNumber: editForm.aadhaarNumber
+                specialty: editForm.specialty
             };
 
             const response = await adminAPI.updateUser(editForm.id, updateData);
@@ -306,16 +298,7 @@ const SuperAdmin = () => {
                                 </div>
                             </div>
 
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="staff-label">Age *</label>
-                                    <input type="number" name="age" placeholder="Age" value={createForm.age} onChange={handleCreateFormChange} required min="1" className="staff-input" />
-                                </div>
-                                <div className="form-group">
-                                    <label className="staff-label">Aadhaar Number *</label>
-                                    <input type="text" name="aadhaarNumber" placeholder="12-digit Aadhaar" value={createForm.aadhaarNumber} onChange={handleCreateFormChange} pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" maxLength={12} required className="staff-input" />
-                                </div>
-                            </div>
+
 
                             <div className="form-row">
                                 <div className="form-group">
@@ -465,16 +448,7 @@ const SuperAdmin = () => {
                                     </div>
                                 </div>
 
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label className="staff-label">Age *</label>
-                                        <input type="number" name="age" value={editForm.age} onChange={handleEditFormChange} required min="1" className="staff-input" />
-                                    </div>
-                                    <div className="form-group">
-                                        <label className="staff-label">Aadhaar Number *</label>
-                                        <input type="text" name="aadhaarNumber" placeholder="12-digit Aadhaar" value={editForm.aadhaarNumber} onChange={handleEditFormChange} pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" maxLength={12} required className="staff-input" />
-                                    </div>
-                                </div>
+
 
 
                                 <div className="modal-buttons" style={{ marginTop: '20px' }}>
