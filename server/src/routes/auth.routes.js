@@ -55,7 +55,26 @@ async function buildUserResponse(user) {
 // Signup Route
 router.post('/signup', signupLimiter, async (req, res) => {
   try {
-    const { name, email, password, phone } = req.body;
+    let { name, email, password } = req.body;
+
+    const validatedAge = req.body.age ? parseInt(req.body.age, 10) : null;
+    const validatedAadhaar = req.body.aadhaarNumber ? String(req.body.aadhaarNumber).trim() : '';
+    let cleanPhone = req.body.phone ? String(req.body.phone).trim() : '';
+
+    if (cleanPhone) {
+        if (cleanPhone.startsWith('+91') && cleanPhone.length > 10) cleanPhone = cleanPhone.substring(3);
+        else if (cleanPhone.startsWith('91') && cleanPhone.length > 10) cleanPhone = cleanPhone.substring(2);
+        else if (cleanPhone.startsWith('0') && cleanPhone.length > 10) cleanPhone = cleanPhone.substring(1);
+        cleanPhone = cleanPhone.replace(/\D/g, '').slice(0, 10);
+        
+        if (!/^\d{10}$/.test(cleanPhone)) {
+            return res.status(400).json({
+                success: false,
+                message: "Validation Error",
+                errors: { phone: "Phone number must be exactly 10 digits." }
+            });
+        }
+    }
 
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: 'Name, email, and password are required' });
@@ -115,7 +134,9 @@ router.post('/signup', signupLimiter, async (req, res) => {
       name,
       email,
       password,
-      phone: phone || '',
+      phone: cleanPhone,
+      age: validatedAge,
+      aadhaarNumber: validatedAadhaar,
       role: defaultRole._id, // ObjectId reference to Role
       patientId: patientId
     });
@@ -220,8 +241,8 @@ router.post('/login', loginLimiter, async (req, res) => {
         }
         // Auto-migrate to ObjectId
         if (roleData) {
+          await User.updateOne({ _id: user._id }, { role: roleData._id });
           user.role = roleData._id;
-          await user.save();
         }
       }
     }

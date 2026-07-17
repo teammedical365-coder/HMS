@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI } from '../../utils/api';
 import { useAuth } from '../../store/hooks';
@@ -93,6 +93,30 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const [hospitalContext, setHospitalContext] = useState(null);
     const [pendingDownload, setPendingDownload] = useState(null);
     const [followupStatus, setFollowupStatus] = useState(null);
+
+    const processFormChange = useCallback((e, formSetter) => {
+        const { name, value } = e.target;
+        if (name === 'phone') {
+            const cleanVal = value.replace(/\D/g, '').slice(0, 10);
+            formSetter(prev => ({ ...prev, [name]: cleanVal }));
+        } else if (name === 'aadhaarNumber') {
+            const cleanVal = value.replace(/\D/g, '').slice(0, 12);
+            formSetter(prev => ({ ...prev, [name]: cleanVal }));
+        } else {
+            formSetter(prev => ({ ...prev, [name]: value }));
+        }
+    }, []);
+
+    const handleHospitalizeFormChange = useCallback(
+        (e) => processFormChange(e, setHospitalizeForm), 
+        [processFormChange]
+    );
+
+    const handleIntakeFormChange = useCallback(
+        (e) => processFormChange(e, setIntakeForm), 
+        [processFormChange]
+    );
+
 
     useEffect(() => {
         const fetchHospital = async () => {
@@ -620,6 +644,21 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             setSaving(false); return;
         }
 
+        if (intakeForm.firstName.trim().length < 2) {
+            alert("Name must be at least 2 characters.");
+            setSaving(false); return;
+        }
+
+        if (!intakeForm.age || intakeForm.age < 1) {
+            alert("Age is required and must be a positive number greater than 0.");
+            setSaving(false); return;
+        }
+
+        if (!intakeForm.aadhaar || !/^\d{12}$/.test(intakeForm.aadhaar)) {
+            alert("Aadhaar Number is required and must be exactly 12 digits.");
+            setSaving(false); return;
+        }
+
         if (!/^\d{10}$/.test(intakeForm.mobile)) {
             alert("Mobile number must be exactly 10 digits.");
             setSaving(false); return;
@@ -922,10 +961,13 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     <label>Aadhaar Number</label>
                                     <input
                                         name="aadhaar"
-                                        maxLength="12"
+                                        maxLength={12}
                                         placeholder="Enter 12-digit Aadhaar"
                                         value={intakeForm.aadhaar || ''}
                                         onChange={handleInputChange}
+                                        required
+                                        pattern="^\d{12}$"
+                                        title="Aadhaar number must be exactly 12 digits"
                                         style={{
                                             borderColor: '#ccc',
                                             fontWeight: 'bold'
@@ -935,10 +977,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             </div>
 
                             <div className="form-row" style={{ marginTop: '14px' }}>
-                                <div className="field"><label>First Name</label><input name="firstName" value={intakeForm.firstName} onChange={handleInputChange} /></div>
+                                <div className="field"><label>First Name <span style={{ color: '#ef4444', fontSize: '12px' }}>*</span></label><input name="firstName" value={intakeForm.firstName} onChange={handleInputChange} required minLength={2} /></div>
                                 <div className="field"><label>Last Name</label><input name="lastName" value={intakeForm.lastName} onChange={handleInputChange} /></div>
-                                <div className="field"><label>Mobile</label><input name="mobile" value={intakeForm.mobile} onChange={handleInputChange} /></div>
-                                <div className="field"><label>Age</label><input name="age" value={intakeForm.age} onChange={handleInputChange} /></div>
+                                <div className="field"><label>Mobile <span style={{ color: '#ef4444', fontSize: '12px' }}>*</span></label><input name="mobile" value={intakeForm.mobile} onChange={handleInputChange} required pattern="^\d{10}$" title="Phone number must be exactly 10 digits" /></div>
+                                <div className="field"><label>Age <span style={{ color: '#ef4444', fontSize: '12px' }}>*</span></label><input type="number" name="age" value={intakeForm.age} onChange={handleInputChange} required min="1" /></div>
                             </div>
                             <div className="form-row" style={{ marginTop: '0px' }}>
                                 <div className="field" style={{ flex: '7' }}>
@@ -1446,7 +1488,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     type="text"
                                     placeholder="e.g. General Ward, ICU"
                                     value={hospitalizeForm.ward}
-                                    onChange={e => setHospitalizeForm(p => ({ ...p, ward: e.target.value }))}
+                                    name="ward" onChange={handleHospitalizeFormChange}
                                     style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
                                 />
                             </div>
@@ -1456,7 +1498,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     type="text"
                                     placeholder="e.g. B-12"
                                     value={hospitalizeForm.bedNumber}
-                                    onChange={e => setHospitalizeForm(p => ({ ...p, bedNumber: e.target.value }))}
+                                    name="bedNumber" onChange={handleHospitalizeFormChange}
                                     style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
                                 />
                             </div>
@@ -1467,7 +1509,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             <input
                                 type="date"
                                 value={hospitalizeForm.admissionDate}
-                                onChange={e => setHospitalizeForm(p => ({ ...p, admissionDate: e.target.value }))}
+                                name="admissionDate" onChange={handleHospitalizeFormChange}
                                 style={{ padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
                             />
                         </div>
@@ -1523,7 +1565,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             <textarea
                                 placeholder="Any notes for admission..."
                                 value={hospitalizeForm.notes}
-                                onChange={e => setHospitalizeForm(p => ({ ...p, notes: e.target.value }))}
+                                name="notes" onChange={handleHospitalizeFormChange}
                                 rows={2}
                                 style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
                             />

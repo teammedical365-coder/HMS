@@ -14,7 +14,9 @@ const Signup = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    phone: ''
+    phone: '',
+    age: '',
+    aadhaarNumber: ''
   });
 
   useEffect(() => {
@@ -43,7 +45,9 @@ const Signup = () => {
       name: formData.name,
       email: formData.email,
       password: formData.password,
-      phone: formData.phone
+      phone: formData.phone,
+      age: formData.age,
+      aadhaarNumber: formData.aadhaarNumber
     }));
   };
 
@@ -72,6 +76,7 @@ const Signup = () => {
                     value={formData.name}
                     onChange={handleChange}
                     required
+                    minLength={2}
                   />
                 </div>
               </div>
@@ -95,12 +100,48 @@ const Signup = () => {
                 <label>Phone Number</label>
                 <div className="input-wrapper">
                   <i className="fa-solid fa-phone"></i>
-                  <input
+                  <input maxLength={10}
                     type="tel"
                     name="phone"
                     placeholder="Your contact number"
                     value={formData.phone}
                     onChange={handleChange}
+                    required
+                    pattern="^\d{10}$"
+                    title="Phone number must be exactly 10 digits" />
+                </div>
+              </div>
+
+              <div className="input-group">
+                <label>Age</label>
+                <div className="input-wrapper">
+                  <i className="fa-solid fa-calendar"></i>
+                  <input
+                    type="number"
+                    name="age"
+                    placeholder="Your age"
+                    value={formData.age}
+                    onChange={handleChange}
+                    required
+                    min="1"
+                  />
+                </div>
+              </div>
+
+              <div className="input-group">
+                <label>Aadhaar Number</label>
+                <div className="input-wrapper">
+                  <i className="fa-solid fa-id-card"></i>
+                  <input
+                    type="text"
+                    name="aadhaarNumber"
+                    placeholder="12-digit Aadhaar"
+                    value={formData.aadhaarNumber}
+                    onChange={handleChange}
+                    required
+                    pattern="^\d{12}$"
+                    title="Aadhaar number must be exactly 12 digits"
+                    maxLength={12}
                   />
                 </div>
               </div>

@@ -344,11 +344,13 @@ const AdminDoctors = () => {
                             <div className="form-row">
                                 <div className="form-group">
                                     <label htmlFor="phone">Phone</label>
+
                                     <input 
                                         type="tel" 
                                         name="phone" 
                                         value={formData.phone} 
                                         maxLength="10"
+                                        required
                                         onChange={(e) => {
                                             e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
                                             handleChange(e);

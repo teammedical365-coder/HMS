@@ -705,7 +705,7 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [patientHistory, setPatientHistory] = useState(null);
     const [loadingHistory, setLoadingHistory] = useState(false);
-    const [form, setForm] = useState({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '', relatives: [] });
+    const [form, setForm] = useState({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '', relatives: [], age: '', aadhaarNumber: '' });
     const [saving, setSaving] = useState(false);
     const [msg, setMsg] = useState({ type: '', text: '' });
     const [justRegistered, setJustRegistered] = useState(null);
@@ -803,13 +803,17 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
 
     const handleRegister = async (e) => {
         e.preventDefault();
+        if (form.name.trim().length < 2) return flash('error', 'Name must be at least 2 characters');
+        if (!/^\d{10}$/.test(form.phone)) return flash('error', 'Phone number must be exactly 10 digits');
+        if (!form.age || form.age < 1) return flash('error', 'Age is required and must be greater than 0');
+        if (!form.aadhaarNumber || !/^\d{12}$/.test(form.aadhaarNumber)) return flash('error', 'Aadhaar Number is required and must be exactly 12 digits');
         setSaving(true);
         try {
             const r = await clinicAPI.registerPatient(form);
             if (r.success) {
                 if (!r.existing) setPatients(prev => [r.patient, ...prev]);
                 setJustRegistered(r.patient);
-                setForm({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '', relatives: [] });
+                setForm({ name: '', phone: '', email: '', dob: '', gender: 'Male', address: '', bloodGroup: '', allergies: '', chronicConditions: '', relatives: [], age: '', aadhaarNumber: '' });
                 try {
                     const pdf = generateRegistrationSlipPDF(r.patient);
                     if (setPendingDownload) {
@@ -1051,7 +1055,7 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                         <input className="clinic-input" style={{ flex: 1 }} placeholder="Search by name, phone or patient ID..."
                             value={search} onChange={e => setSearch(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && handleSearch()} />
+                            onKeyDown={e => e.key === 'Enter' && handleSearch()}  maxLength="10"  pattern="\d{10}"  title="Phone number must be exactly 10 digits" />
                         <button className="clinic-btn-secondary" onClick={handleSearch} disabled={searching}>
                             {searching ? '...' : '🔍 Search'}
                         </button>
@@ -1113,14 +1117,21 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                             <form onSubmit={handleRegister} className="clinic-form-grid">
                                 <div className="clinic-form-group">
                                     <label>Full Name *</label>
-                                    <input className="clinic-input" placeholder="Patient's full name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+                                    <input className="clinic-input" placeholder="Patient's full name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required minLength={2} />
                                 </div>
                                 <div className="clinic-form-group">
                                     <label>Phone *</label>
                                     <input className="clinic-input" type="tel" placeholder="10-digit mobile number" maxLength={10}
                                         value={form.phone}
-                                        onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
-                                        pattern="[0-9]{10}" title="Enter a valid 10-digit mobile number" required />
+                                        onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} required  pattern="\d{10}"  title="Phone number must be exactly 10 digits" />
+                                </div>
+                                <div className="clinic-form-group">
+                                    <label>Age *</label>
+                                    <input className="clinic-input" type="number" placeholder="Age" value={form.age} onChange={e => setForm(f => ({ ...f, age: e.target.value }))} required min="1" />
+                                </div>
+                                <div className="clinic-form-group">
+                                    <label>Aadhaar Number *</label>
+                                    <input className="clinic-input" type="text" placeholder="12-digit Aadhaar" value={form.aadhaarNumber} onChange={e => setForm(f => ({ ...f, aadhaarNumber: e.target.value }))} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
                                 </div>
                                 <div className="clinic-form-group">
                                     <label>Email</label>
@@ -1199,7 +1210,7 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                                                             <td style={{ padding: '5px 8px', borderBottom: '1px solid #f1f5f9' }}>
                                                                 <input value={rel.phone} onChange={e => setForm(f => { const r = [...f.relatives]; r[idx] = { ...r[idx], phone: e.target.value.replace(/\D/g, '').slice(0, 10) }; return { ...f, relatives: r }; })}
                                                                     placeholder="10-digit number" maxLength={10} type="tel"
-                                                                    style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box' }} />
+                                                                    style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box' }}  pattern="\d{10}"  title="Phone number must be exactly 10 digits" />
                                                             </td>
                                                             <td style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>
                                                                 <button type="button" onClick={() => setForm(f => ({ ...f, relatives: f.relatives.filter((_, i) => i !== idx) }))}
@@ -1611,7 +1622,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected, setPendingDownloa
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <input className="clinic-input" style={{ flex: 1 }} placeholder="Search patient by name, phone or ID..."
-                        value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} />
+                        value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()}  maxLength="10"  pattern="\d{10}"  title="Phone number must be exactly 10 digits" />
                     <button className="clinic-btn-secondary" onClick={handleSearch} disabled={searching}>{searching ? '...' : '🔍'}</button>
                     <button className="clinic-btn-primary" onClick={() => { setShowQuickReg(!showQuickReg); }}
                         style={{ whiteSpace: 'nowrap', padding: '8px 14px', fontSize: '13px' }}>
@@ -1633,8 +1644,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected, setPendingDownloa
                                 <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Phone (10 digits) *</label>
                                 <input className="clinic-input" type="tel" placeholder="10-digit number" maxLength={10}
                                     value={qrForm.phone}
-                                    onChange={e => setQrForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))}
-                                    pattern="[0-9]{10}" required />
+                                    onChange={e => setQrForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} required  pattern="\d{10}"  title="Phone number must be exactly 10 digits" />
                             </div>
                             <div style={{ flex: '1', minWidth: '100px' }}>
                                 <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Gender</label>

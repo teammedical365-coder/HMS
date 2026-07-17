@@ -40,7 +40,22 @@ async function generateUniversalMRN(hospitalId, hospital, User) {
 // Register a new patient authentication account
 router.post('/register', async (req, res) => {
     try {
-        const { name, email, mobile, password, hospitalId } = req.body;
+        let { name, email, mobile, password, hospitalId } = req.body;
+
+        let sanitizedPhone = mobile ? String(mobile).trim() : '';
+        if (sanitizedPhone.startsWith('+91') && sanitizedPhone.length > 10) sanitizedPhone = sanitizedPhone.substring(3);
+        else if (sanitizedPhone.startsWith('91') && sanitizedPhone.length > 10) sanitizedPhone = sanitizedPhone.substring(2);
+        else if (sanitizedPhone.startsWith('0') && sanitizedPhone.length > 10) sanitizedPhone = sanitizedPhone.substring(1);
+        sanitizedPhone = sanitizedPhone.replace(/\D/g, '').slice(0, 10);
+        
+        if (!sanitizedPhone || !/^\d{10}$/.test(sanitizedPhone)) {
+            return res.status(400).json({
+                success: false,
+                message: "Validation Error",
+                errors: { mobile: "Mobile number must be exactly 10 digits." }
+            });
+        }
+        mobile = sanitizedPhone;
 
         // Basic validations
         if (!name || !email || !mobile || !password || !hospitalId) {
@@ -57,11 +72,7 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid email format.' });
         }
 
-        // Mobile format validation (basic 10 digits for India/general)
-        const mobileRegex = /^[0-9]{10,15}$/;
-        if (!mobileRegex.test(mobile)) {
-            return res.status(400).json({ success: false, message: 'Invalid mobile number.' });
-        }
+        // Mobile validation handled above
 
         // Check if hospital exists
         const hospital = await Hospital.findById(hospitalId);

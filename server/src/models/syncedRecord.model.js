@@ -11,7 +11,7 @@ const syncedRecordSchema = new mongoose.Schema({
     type:         { type: String, enum: ['prescription', 'bill'], required: true },
 
     // Used to link to patient without storing patient _id (phone is the identity in patient app)
-    patientPhone: { type: String, required: true, index: true },
+    patientPhone: { type: String, required: true, index: true, match: /^\d{10}$/ },
     patientUid:   { type: String, default: '' },
 
     // Record content — fields vary by type

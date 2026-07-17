@@ -17,11 +17,8 @@ const labSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Lab name is required']
   },
-  email: {
-    type: String,
-    required: [true, 'Email is required']
-  },
-  phone: { type: String, default: '' },
+  email: { type: String, required: true, lowercase: true, trim: true, match: /^\S+@\S+\.\S+$/ },
+  phone: { type: String, required: true, match: /^\d{10}$/ },
   address: { type: String, default: '' },
   services: [{ type: String }],
   availability: {

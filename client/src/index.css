@@ -385,3 +385,9 @@ a:hover {
   padding: 0 var(--space-6);
   width: 100%;
 }
+
+/* Global Form Validation Visualization */
+input:user-invalid, select:user-invalid, textarea:user-invalid {
+    border: 2px solid #ef4444 !important;
+    background-color: #fef2f2 !important;
+}
