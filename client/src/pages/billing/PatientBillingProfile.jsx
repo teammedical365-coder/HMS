@@ -11,7 +11,10 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-dig
 const getPharmacyTotal = (p) => {
     if (p.totalAmount && Number(p.totalAmount) > 0) return Number(p.totalAmount);
     if (!p.items || !p.items.length) return 0;
-    return p.items.reduce((sum, item) => sum + (Number(item.price) || 50), 0); // 50 as fallback if price missing
+    return p.items.reduce((sum, item) => {
+        const qty = parseInt(item.quantity) || parseInt(item.duration) || parseInt(item.days) || 1;
+        return sum + (Number(item.price) || 50) * qty;
+    }, 0);
 };
 
 const PatientBillingProfile = () => {
@@ -22,6 +25,12 @@ const PatientBillingProfile = () => {
     const [patient, setPatient] = useState(null);
     const [billing, setBilling] = useState(null);
     const [selected, setSelected] = useState({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [] });
+
+    const [expandedRows, setExpandedRows] = useState({});
+
+    const toggleExpand = (id) => {
+        setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
+    };
     const [paymentMode, setPaymentMode] = useState('Cash'); // Kept for backward compatibility
     const [splitPayments, setSplitPayments] = useState([{ method: 'Cash', amount: '' }]);
     const [paying, setPaying] = useState(false);
@@ -31,15 +40,15 @@ const PatientBillingProfile = () => {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [upiOptions, setUpiOptions] = useState([]);
     useEffect(() => {
-      hospitalAPI
-        .getUpiIds()
-        .then((res) => {
-          const data = res?.upiIds || [];
-          setUpiOptions(data);
-        })
-        .catch((err) => {
-          console.error('Failed to fetch UPI IDs', err);
-        });
+        hospitalAPI
+            .getUpiIds()
+            .then((res) => {
+                const data = res?.upiIds || [];
+                setUpiOptions(data);
+            })
+            .catch((err) => {
+                console.error('Failed to fetch UPI IDs', err);
+            });
     }, []);
 
     const loadPatientBilling = async (identifier) => {
@@ -172,7 +181,7 @@ const PatientBillingProfile = () => {
 
     const confirmPaymentWithProof = async (e) => {
         e.preventDefault();
-        
+
         let proofUrl = '';
         let proofFileId = '';
 
@@ -296,8 +305,8 @@ const PatientBillingProfile = () => {
                     fontWeight: 'bold',
                     transition: 'all 0.3s'
                 }}
-                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)'}
-                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'}
+                    onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)'}
+                    onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'}
                 >← Back</button>
             </div>
 
@@ -321,8 +330,8 @@ const PatientBillingProfile = () => {
                     <button type="submit" disabled={loading} style={{
                         padding: '0 32px', background: 'linear-gradient(to right, #0ea5e9, #2563eb)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.1rem', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.4)', transition: 'transform 0.1s'
                     }}
-                    onMouseDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
-                    onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                        onMouseDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                        onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
                     >
                         {loading ? 'Searching...' : 'Search'}
                     </button>
@@ -469,7 +478,7 @@ const PatientBillingProfile = () => {
 
                     {/* Consolidated Billing View (Appointments & Facility Charges) */}
                     {(billing.appointments?.length > 0 || billing.facilityCharges?.length > 0) && (
-                        <div className="billing-section">                        
+                        <div className="billing-section">
                             <div className="section-header">
                                 <h3>Consolidated Billing View (Consultations & ICU Charges)</h3>
                                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -500,8 +509,8 @@ const PatientBillingProfile = () => {
                                             </td>
                                             <td>{fmtDate(a.appointmentDate)}{a.appointmentTime && ` ${a.appointmentTime}`}</td>
                                             <td>
-                                                <strong>Appointment Fee</strong><br/>
-                                                <span style={{fontSize:'0.85rem', color:'#64748b'}}>{a.serviceName || 'Consultation'}</span>
+                                                <strong>Appointment Fee</strong><br />
+                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{a.serviceName || 'Consultation'}</span>
                                             </td>
                                             <td>{a.doctorName || '—'}</td>
                                             <td>
@@ -512,7 +521,7 @@ const PatientBillingProfile = () => {
                                             <td className="amount-cell">{fmt(a.amount)}</td>
                                         </tr>
                                     ))}
-                                    
+
                                     {/* Facility / ICU Charges - Actionable */}
                                     {billing.facilityCharges.map(f => (
                                         <tr key={f._id} className={selected.facilityCharges.includes(f._id) ? 'selected-row' : ''}>
@@ -525,8 +534,8 @@ const PatientBillingProfile = () => {
                                             </td>
                                             <td>{fmtDate(f.createdAt)}</td>
                                             <td>
-                                                <strong>ICU / Facility Charge</strong><br/>
-                                                <span style={{fontSize:'0.85rem', color:'#64748b'}}>{f.facilityName} ({f.daysUsed || f.days || 1} Days @ {fmt(f.pricePerDay)}/day)</span>
+                                                <strong>ICU / Facility Charge</strong><br />
+                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{f.facilityName} ({f.daysUsed || f.days || 1} Days @ {fmt(f.pricePerDay)}/day)</span>
                                             </td>
                                             <td>{f.collectedBy?.name || f.addedBy?.name || '—'}</td>
                                             <td>
@@ -604,7 +613,40 @@ const PatientBillingProfile = () => {
                                                 )}
                                             </td>
                                             <td>{fmtDate(p.createdAt)}</td>
-                                            <td>{Array.isArray(p.items) ? p.items.map(i => i.medicineName || i.name).filter(Boolean).join(', ') : '—'}</td>
+                                            <td>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span style={{ fontWeight: '500', fontSize: '0.9rem', color: '#334155' }}>
+                                                        📦 {p.items?.length || 0} Items
+                                                    </span>
+                                                    <button
+                                                        onClick={() => toggleExpand(p._id)}
+                                                        style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500', padding: 0 }}
+                                                    >
+                                                        {expandedRows[p._id] ? 'Hide Details ↑' : 'View Details ↓'}
+                                                    </button>
+                                                </div>
+                                                {expandedRows[p._id] && Array.isArray(p.items) && (
+                                                    <div className="bg-gray-50/50 p-2 rounded mt-1" style={{ backgroundColor: '#f8fafc', padding: '8px', borderRadius: '6px', marginTop: '8px', border: '1px solid #e2e8f0' }}>
+                                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.9rem' }}>
+                                                            {p.items.map((item, idx) => {
+                                                                const name = item.medicineName || item.name;
+                                                                const freq = item.frequency ? ` (${item.frequency})` : '';
+                                                                const qty = parseInt(item.quantity) || parseInt(item.duration) || parseInt(item.days) || 1;
+                                                                const itemTotal = (Number(item.price) || 50) * qty;
+                                                                if (!name) return null;
+                                                                const durationText = item.duration ? `${item.duration}` : item.quantity ? `${item.quantity} Qty` : item.days ? `${item.days} Days` : '1 Qty';
+                                                                return (
+                                                                    <li key={idx} style={{ marginBottom: '4px' }}>
+                                                                        <span style={{ color: '#000' }}>{name}{freq}</span>
+                                                                        <span style={{ marginLeft: '6px', color: '#475569', fontSize: '0.85rem' }}>[{durationText}]</span>
+                                                                        <span style={{ marginLeft: '6px', color: '#059669', fontWeight: '600', fontSize: '0.8rem' }}>- ₹{itemTotal}</span>
+                                                                    </li>
+                                                                );
+                                                            })}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td>
                                                 <span className="status-badge">
                                                     {p.paymentStatus === 'Paid' ? 'PAID' : 'Pending'}
@@ -655,8 +697,8 @@ const PatientBillingProfile = () => {
                     {billing.appointments.length === 0 && billing.labReports.length === 0 &&
                         billing.pharmacyOrders.length === 0 && billing.facilityCharges.length === 0 &&
                         activeAdmissions.length === 0 && pastAdmissions.length === 0 && (
-                        <div className="no-bills">No billing items found for this patient.</div>
-                    )}
+                            <div className="no-bills">No billing items found for this patient.</div>
+                        )}
 
                     {/* Payment Panel */}
                     {pendingTotal() > 0 && (
@@ -699,6 +741,67 @@ const PatientBillingProfile = () => {
                                 />
 
                                 <button type="submit" className="btn-pay" disabled={paying || totalSelected() === 0 || totalSplitAmount !== totalSelected()} style={{ marginTop: '20px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '20px' }}>
+                                    {splitPayments.map((split, index) => (
+                                        <div key={index} className="payment-inline-inputs" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                            <select value={split.method} onChange={e => handleSplitPaymentChange(index, 'method', e.target.value)} className="payment-mode-select" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', minWidth: '150px' }}>
+                                                <option value="Cash">Cash</option>
+                                                <option value="UPI">UPI</option>
+                                                <option value="Card">Card</option>
+                                                <option value="Cheque">Cheque</option>
+                                                <option value="NEFT/RTGS">NEFT / RTGS</option>
+                                            </select>
+
+                                            <input
+                                                type="number"
+                                                placeholder="Amount"
+                                                value={split.amount}
+                                                onChange={e => handleSplitPaymentChange(index, 'amount', e.target.value)}
+                                                style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '120px' }}
+                                                min="1"
+                                                required
+                                            />
+
+                                            {splitPayments.length > 1 && (
+                                                <button type="button" onClick={() => removeSplitPayment(index)} style={{ padding: '8px 12px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+                                            )}
+
+                                            {split.method === 'UPI' && (
+                                                <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                                    <select value={paymentModal.data?.upiId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, upiId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} required>
+                                                        <option value="" disabled>Select Hospital UPI ID</option>
+                                                        {upiOptions.map((opt, idx) => (
+                                                            <option key={idx} value={opt.upiId}>{opt.label} ({opt.upiId})</option>
+                                                        ))}
+                                                    </select>
+                                                    <input type="text" placeholder="Txn Ref" required value={paymentModal.data?.transactionId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, transactionId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} />
+                                                </div>
+                                            )}
+                                            {split.method === 'Card' && (
+                                                <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                                    <input type="text" placeholder="Card (Last 4)" required value={paymentModal.data?.cardDetails || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, cardDetails: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} />
+                                                    <input type="text" placeholder="Txn Ref" required value={paymentModal.data?.transactionId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, transactionId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} />
+                                                </div>
+                                            )}
+                                            {['Cheque', 'NEFT/RTGS'].includes(split.method) && (
+                                                <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                                    <input type="text" placeholder="Bank Ref / Cheque No" required value={paymentModal.data?.bankReference || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, bankReference: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} />
+                                                </div>
+                                            )}
+
+                                            {split.method !== 'Cash' && !proofFile && (
+                                                <div className="inline-file-upload" style={{ flexBasis: '100%', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '10px' }}>
+                                                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>Payment Proof <span style={{ color: '#ef4444' }}>*Required once for all non-cash</span></label>
+                                                    <input type="file" accept="image/*,.pdf" onChange={e => setProofFile(e.target.files[0])} style={{ fontSize: '13px' }} required />
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+
+                                    <button type="button" onClick={addSplitPayment} style={{ alignSelf: 'flex-start', padding: '8px 16px', background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>+ Add Payment Method</button>
+                                </div>
+
+                                <button type="submit" className="btn-pay" disabled={paying || totalSelected() === 0 || totalSplitAmount !== totalSelected()}>
                                     {paying ? 'Processing...' : `Pay ${fmt(totalSelected())} (Split: ${fmt(totalSplitAmount)})`}
                                 </button>
                             </form>
