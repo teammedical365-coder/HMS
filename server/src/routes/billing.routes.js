@@ -219,7 +219,7 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
             proofFileId
         } = req.body;
 
-        const actualPaymentMode = splitPayments.length > 0 ? splitPayments[0].method : paymentMode;
+        const actualPaymentMode = splitPayments.length > 0 ? [...new Set(splitPayments.map(p => p.method))].join(' / ') : paymentMode;
         const totalAmount = splitPayments.length > 0 ? splitPayments.reduce((acc, p) => acc + Number(p.amount), 0) : amount;
 
         const { Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission, PaymentTransaction } = getModels(req);
@@ -260,13 +260,11 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
 
         await Promise.all([
             appointmentIds.length > 0 && Appointment.updateMany(
-                { _id: { $in: appointmentIds } }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments } }),
-                { _id: { $in: appointmentIds } }, { $set: { paymentStatus: 'Paid', paymentMode, status: 'completed' } }),
+                { _id: { $in: appointmentIds } }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments, status: 'completed' } }),
             labReportIds.length > 0 && LabReport.updateMany(
                 { _id: { $in: labReportIds } }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments } }),
             pharmacyOrderIds.length > 0 && PharmacyOrder.updateMany(
-                { _id: { $in: pharmacyOrderIds } }, { $set: { paymentStatus: 'Paid', splitPayments } }),
-                { _id: { $in: pharmacyOrderIds } }, { $set: { paymentStatus: 'Paid', orderStatus: 'Completed' } }),
+                { _id: { $in: pharmacyOrderIds } }, { $set: { paymentStatus: 'Paid', splitPayments, orderStatus: 'Completed' } }),
             facilityChargeIds.length > 0 && FacilityCharge.updateMany(
                 { _id: { $in: facilityChargeIds } }, { $set: { paymentStatus: 'Paid', splitPayments } }),
         ].filter(Boolean));

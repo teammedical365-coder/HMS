@@ -274,14 +274,14 @@ const PatientDashboard = () => {
                 ? Math.max(0, Math.ceil((new Date(validUntil).getTime() - Date.now()) / (1000 * 3600 * 24)))
                 : 0;
 
-            if (remainingDays > 0 && remainingDays <= 3) {
+            if (remainingDays === 1) {
                 return (
                     <div className="followup-notification-banner warning">
                         <div className="followup-notification-content">
                             <span className="followup-notification-icon">⚠️</span>
                             <span>
                                 Your free follow-up consultation in <strong>{department}</strong> expires in{' '}
-                                <strong>{remainingDays} day{remainingDays > 1 ? 's' : ''}</strong> ({new Date(validUntil).toLocaleDateString()}). Book now to keep your free consultation!
+                                <strong>1 day</strong> ({new Date(validUntil).toLocaleDateString()}). Book now to keep your free consultation!
                             </span>
                         </div>
                         <button
@@ -417,9 +417,6 @@ const PatientDashboard = () => {
                                 <span>MRN:</span> {patient.mrn}
                             </div>
                         )}
-                        <button className="btn-solid-white" onClick={() => navigate('/patient/book-appointment')}>
-                            + New Appointment
-                        </button>
                     </div>
                 </div>
 
@@ -811,25 +808,43 @@ const PatientDashboard = () => {
                 </div>
                 {profileData ? (
                     <div className="profile-grid">
+                        {/* Personal Information */}
                         <div className="profile-section">
-                            <h3>Basic Information</h3>
+                            <h3>Personal Information</h3>
                             <div className="profile-field">
                                 <label>Patient Name</label>
-                                <div className="value">{profileData.name}</div>
+                                <div className="value">{profileData.name || 'Not Provided'}</div>
                             </div>
                             <div className="profile-field">
-                                <label>MRN (Medical Record Number)</label>
-                                <div className="value">{profileData.mrn || profileData.patientId}</div>
+                                <label>Date of Birth / Age</label>
+                                <div className="value">
+                                    {profileData.dob ? new Date(profileData.dob).toLocaleDateString('en-IN') : 'Not Provided'} 
+                                    {profileData.age ? ` (${profileData.age} Years)` : ''}
+                                </div>
                             </div>
                             <div className="profile-field">
-                                <label>Age & Gender</label>
-                                <div className="value">{profileData.age} Years • {profileData.gender}</div>
+                                <label>Gender</label>
+                                <div className="value" style={{ textTransform: 'capitalize' }}>{profileData.gender || 'Not Specified'}</div>
                             </div>
                             <div className="profile-field">
                                 <label>Blood Group</label>
                                 <div className="value">{profileData.bloodGroup || 'Not Specified'}</div>
                             </div>
+                            <div className="profile-field">
+                                <label>Aadhaar Number</label>
+                                <div className="value">
+                                    {profileData.aadhaarNumber 
+                                        ? `XXXX-XXXX-${String(profileData.aadhaarNumber).slice(-4)}` 
+                                        : (profileData.aadhaar ? `XXXX-XXXX-${String(profileData.aadhaar).slice(-4)}` : 'Not Provided')}
+                                </div>
+                            </div>
+                            <div className="profile-field">
+                                <label>Marital Status</label>
+                                <div className="value" style={{ textTransform: 'capitalize' }}>{profileData.maritalStatus || 'Not Specified'}</div>
+                            </div>
                         </div>
+
+                        {/* Contact Information */}
                         <div className="profile-section">
                             <h3>Contact Information</h3>
                             <div className="profile-field">
@@ -841,14 +856,91 @@ const PatientDashboard = () => {
                                 <div className="value">{profileData.email || 'Not Provided'}</div>
                             </div>
                             <div className="profile-field">
-                                <label>Address</label>
-                                <div className="value">{profileData.address || 'Not Provided'}</div>
-                            </div>
-                            <div className="profile-field">
                                 <label>Emergency Contact</label>
                                 <div className="value">
                                     {profileData.emergencyContact?.name || 'Not Provided'} 
                                     {profileData.emergencyContact?.phone ? ` (${profileData.emergencyContact.phone})` : ''}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Address */}
+                        <div className="profile-section">
+                            <h3>Address</h3>
+                            <div className="profile-field">
+                                <label>House/Flat No.</label>
+                                <div className="value">{profileData.houseNo || 'Not Provided'}</div>
+                            </div>
+                            <div className="profile-field">
+                                <label>Street / Area</label>
+                                <div className="value">{profileData.street || 'Not Provided'}</div>
+                            </div>
+                            <div className="profile-field">
+                                <label>City & State</label>
+                                <div className="value">
+                                    {profileData.city || 'Not Provided'}
+                                    {profileData.state ? `, ${profileData.state}` : ''}
+                                </div>
+                            </div>
+                            <div className="profile-field">
+                                <label>Pincode / Zip Code</label>
+                                <div className="value">{profileData.zipCode || 'Not Provided'}</div>
+                            </div>
+                        </div>
+
+                        {/* Medical Information */}
+                        <div className="profile-section">
+                            <h3>Medical Information</h3>
+                            <div className="profile-field">
+                                <label>Height & Weight (BMI)</label>
+                                <div className="value">
+                                    {profileData.fertilityProfile?.height ? `${profileData.fertilityProfile.height} cm, ` : ''}
+                                    {profileData.fertilityProfile?.weight ? `${profileData.fertilityProfile.weight} kg` : ''}
+                                    {profileData.fertilityProfile?.bmi ? ` (BMI: ${profileData.fertilityProfile.bmi})` : 'Not Provided'}
+                                </div>
+                            </div>
+                            <div className="profile-field">
+                                <label>Allergies</label>
+                                <div className="value">
+                                    {profileData.fertilityProfile?.allergies?.length > 0 
+                                        ? profileData.fertilityProfile.allergies.join(', ') 
+                                        : 'None Reported'}
+                                </div>
+                            </div>
+                            <div className="profile-field">
+                                <label>Medical History</label>
+                                <div className="value">
+                                    {profileData.fertilityProfile?.medicalHistory?.length > 0 
+                                        ? profileData.fertilityProfile.medicalHistory.join(', ') 
+                                        : 'None Reported'}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Patient Source & Hospital */}
+                        <div className="profile-section">
+                            <h3>Patient Source & Hospital</h3>
+                            <div className="profile-field">
+                                <label>Hospital Name</label>
+                                <div className="value">{profileData.hospitalName || hospitalName || 'Not Specified'}</div>
+                            </div>
+                            <div className="profile-field">
+                                <label>MRN (Medical Record Number)</label>
+                                <div className="value" style={{ fontWeight: 'bold', color: '#0369a1' }}>
+                                    {profileData.mrn || profileData.patientId || 'Pending Validation'}
+                                </div>
+                            </div>
+                            <div className="profile-field">
+                                <label>Referral Type</label>
+                                <div className="value" style={{ textTransform: 'capitalize' }}>
+                                    {profileData.sourceType || 'Self Registration'}
+                                    {profileData.sourceDetails ? ` (${profileData.sourceDetails})` : ''}
+                                </div>
+                            </div>
+                            <div className="profile-field">
+                                <label>Registration Date</label>
+                                <div className="value">
+                                    {profileData.registrationDate ? new Date(profileData.registrationDate).toLocaleDateString('en-IN') : 'Not Provided'}
                                 </div>
                             </div>
                         </div>

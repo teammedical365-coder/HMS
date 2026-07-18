@@ -49,6 +49,7 @@ router.get('/search', verifyToken, resolveTenant, async (req, res) => {
         const patients = await MasterUser.find({
             $and: [
                 hFilter,
+                { role: 'patient' },
                 {
                     $or: [
                         { phone: regexTerm },
@@ -58,7 +59,7 @@ router.get('/search', verifyToken, resolveTenant, async (req, res) => {
                     ]
                 }
             ]
-        }).select('name phone patientId mrn dob gender city').limit(50);
+        }).select('name phone patientId mrn dob gender city avatar').limit(20).lean();
 
         res.json({ success: true, data: patients });
     } catch (error) {

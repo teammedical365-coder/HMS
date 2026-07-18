@@ -58,9 +58,11 @@ router.post('/register', async (req, res) => {
         mobile = sanitizedPhone;
 
         // Basic validations
-        if (!name || !email || !mobile || !password || !hospitalId || !age || !aadhaarNumber) {
-            return res.status(400).json({ success: false, message: 'All fields are required.' });
-        }
+        if (!name) return res.status(400).json({ success: false, message: 'Full Name is required.' });
+        if (!email) return res.status(400).json({ success: false, message: 'Email Address is required.' });
+        if (!mobile) return res.status(400).json({ success: false, message: 'Mobile Number is required.' });
+        if (!password) return res.status(400).json({ success: false, message: 'Password is required.' });
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'Hospital context is required.' });
 
         if (password.length < 8) {
             return res.status(400).json({ success: false, message: 'Password must be at least 8 characters long.' });
@@ -711,20 +713,42 @@ router.get('/profile', verifyPatientToken, async (req, res) => {
             userDoc = await User.findById(req.patient.linkedPatientProfileId).select('-password -role').lean();
         }
 
-        const mobileValue = userDoc?.phone || userDoc?.mobile || req.patient.mobile || '';
+        const authDoc = await PatientAuth.findById(req.patient.id).lean();
+        
+        let hospitalName = 'Not Specified';
+        if (userDoc?.hospitalId || authDoc?.hospitalId) {
+            const hosp = await Hospital.findById(userDoc?.hospitalId || authDoc?.hospitalId).select('name').lean();
+            if (hosp) hospitalName = hosp.name;
+        }
+
+        const mobileValue = userDoc?.phone || userDoc?.mobile || authDoc?.mobile || req.patient.mobile || '';
+        const emailValue = userDoc?.email || authDoc?.email || req.patient.email || '';
+        const nameValue = userDoc?.name || authDoc?.name || req.patient.name || '';
+        const aadhaarValue = userDoc?.aadhaarNumber || authDoc?.aadhaarNumber || '';
+        const ageValue = userDoc?.age || authDoc?.age || 'Not Specified';
+
         const profile = userDoc ? {
             ...userDoc,
+            name: nameValue,
+            email: emailValue,
             phone: mobileValue,
-            mobile: mobileValue
+            mobile: mobileValue,
+            aadhaarNumber: aadhaarValue,
+            age: ageValue,
+            hospitalName: hospitalName,
+            registrationDate: authDoc?.createdAt || userDoc?.createdAt || new Date()
         } : {
-            name: req.patient.name,
-            email: req.patient.email,
+            name: nameValue,
+            email: emailValue,
             mobile: mobileValue,
             phone: mobileValue,
+            aadhaarNumber: aadhaarValue,
             gender: 'Not Specified',
-            age: 'Not Specified',
+            age: ageValue,
             bloodGroup: 'Not Specified',
-            address: 'Not Specified'
+            address: 'Not Specified',
+            hospitalName: hospitalName,
+            registrationDate: authDoc?.createdAt || new Date()
         };
 
         res.json({ success: true, profile });
