@@ -741,67 +741,6 @@ const PatientBillingProfile = () => {
                                 />
 
                                 <button type="submit" className="btn-pay" disabled={paying || totalSelected() === 0 || totalSplitAmount !== totalSelected()} style={{ marginTop: '20px' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '20px' }}>
-                                    {splitPayments.map((split, index) => (
-                                        <div key={index} className="payment-inline-inputs" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                            <select value={split.method} onChange={e => handleSplitPaymentChange(index, 'method', e.target.value)} className="payment-mode-select" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', minWidth: '150px' }}>
-                                                <option value="Cash">Cash</option>
-                                                <option value="UPI">UPI</option>
-                                                <option value="Card">Card</option>
-                                                <option value="Cheque">Cheque</option>
-                                                <option value="NEFT/RTGS">NEFT / RTGS</option>
-                                            </select>
-
-                                            <input
-                                                type="number"
-                                                placeholder="Amount"
-                                                value={split.amount}
-                                                onChange={e => handleSplitPaymentChange(index, 'amount', e.target.value)}
-                                                style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '120px' }}
-                                                min="1"
-                                                required
-                                            />
-
-                                            {splitPayments.length > 1 && (
-                                                <button type="button" onClick={() => removeSplitPayment(index)} style={{ padding: '8px 12px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
-                                            )}
-
-                                            {split.method === 'UPI' && (
-                                                <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
-                                                    <select value={paymentModal.data?.upiId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, upiId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} required>
-                                                        <option value="" disabled>Select Hospital UPI ID</option>
-                                                        {upiOptions.map((opt, idx) => (
-                                                            <option key={idx} value={opt.upiId}>{opt.label} ({opt.upiId})</option>
-                                                        ))}
-                                                    </select>
-                                                    <input type="text" placeholder="Txn Ref" required value={paymentModal.data?.transactionId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, transactionId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} />
-                                                </div>
-                                            )}
-                                            {split.method === 'Card' && (
-                                                <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
-                                                    <input type="text" placeholder="Card (Last 4)" required value={paymentModal.data?.cardDetails || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, cardDetails: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} />
-                                                    <input type="text" placeholder="Txn Ref" required value={paymentModal.data?.transactionId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, transactionId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} />
-                                                </div>
-                                            )}
-                                            {['Cheque', 'NEFT/RTGS'].includes(split.method) && (
-                                                <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
-                                                    <input type="text" placeholder="Bank Ref / Cheque No" required value={paymentModal.data?.bankReference || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, bankReference: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} />
-                                                </div>
-                                            )}
-
-                                            {split.method !== 'Cash' && !proofFile && (
-                                                <div className="inline-file-upload" style={{ flexBasis: '100%', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '10px' }}>
-                                                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>Payment Proof <span style={{ color: '#ef4444' }}>*Required once for all non-cash</span></label>
-                                                    <input type="file" accept="image/*,.pdf" onChange={e => setProofFile(e.target.files[0])} style={{ fontSize: '13px' }} required />
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-
-                                    <button type="button" onClick={addSplitPayment} style={{ alignSelf: 'flex-start', padding: '8px 16px', background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>+ Add Payment Method</button>
-                                </div>
-
-                                <button type="submit" className="btn-pay" disabled={paying || totalSelected() === 0 || totalSplitAmount !== totalSelected()}>
                                     {paying ? 'Processing...' : `Pay ${fmt(totalSelected())} (Split: ${fmt(totalSplitAmount)})`}
                                 </button>
                             </form>
