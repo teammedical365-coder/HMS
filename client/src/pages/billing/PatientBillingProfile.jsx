@@ -23,12 +23,14 @@ const PatientBillingProfile = () => {
     const [patient, setPatient] = useState(null);
     const [billing, setBilling] = useState(null);
     const [selected, setSelected] = useState({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [] });
+
     const [expandedRows, setExpandedRows] = useState({});
 
     const toggleExpand = (id) => {
         setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
     };
-    const [paymentMode, setPaymentMode] = useState('Cash');
+    const [paymentMode, setPaymentMode] = useState('Cash'); // Kept for backward compatibility
+    const [splitPayments, setSplitPayments] = useState([{ method: 'Cash', amount: '' }]);
     const [paying, setPaying] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
     const [dischargingId, setDischargingId] = useState(null);
@@ -36,15 +38,15 @@ const PatientBillingProfile = () => {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [upiOptions, setUpiOptions] = useState([]);
     useEffect(() => {
-      hospitalAPI
-        .getUpiIds()
-        .then((res) => {
-          const data = res?.upiIds || [];
-          setUpiOptions(data);
-        })
-        .catch((err) => {
-          console.error('Failed to fetch UPI IDs', err);
-        });
+        hospitalAPI
+            .getUpiIds()
+            .then((res) => {
+                const data = res?.upiIds || [];
+                setUpiOptions(data);
+            })
+            .catch((err) => {
+                console.error('Failed to fetch UPI IDs', err);
+            });
     }, []);
 
     const loadPatientBilling = async (identifier) => {
@@ -171,7 +173,7 @@ const PatientBillingProfile = () => {
 
     const confirmPaymentWithProof = async (e) => {
         e.preventDefault();
-        
+
         let proofUrl = '';
         let proofFileId = '';
 
@@ -214,7 +216,7 @@ const PatientBillingProfile = () => {
                 pharmacyOrderIds: selected.pharmacyOrders,
                 facilityChargeIds: selected.facilityCharges,
                 admissionIds: selected.admissions,
-                paymentMode,
+                splitPayments,
                 patientId: patient?._id,
                 amount: total,
                 ...extraData
@@ -247,29 +249,80 @@ const PatientBillingProfile = () => {
     const activeAdmissions = billing?.admissions?.filter(a => a.status === 'Admitted') || [];
     const pastAdmissions = billing?.admissions?.filter(a => a.status === 'Discharged') || [];
 
+    const handleSplitPaymentChange = (index, field, value) => {
+        const newSplits = [...splitPayments];
+        newSplits[index][field] = value;
+        if (field === 'method' && value === 'Cash') {
+            setPaymentModal({ open: false, data: {} });
+            setProofFile(null);
+        }
+        setSplitPayments(newSplits);
+    };
+
+    const addSplitPayment = () => setSplitPayments([...splitPayments, { method: 'Cash', amount: '' }]);
+    const removeSplitPayment = (index) => setSplitPayments(splitPayments.filter((_, i) => i !== index));
+
+    const totalSplitAmount = splitPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const balanceRemaining = Math.max(0, totalSelected() - totalSplitAmount);
+
     return (
-        <div className="billing-profile-page">
-            <div className="billing-header">
+        <div className="billing-profile-page" style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
+            <div className="billing-header" style={{
+                background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)',
+                padding: '30px 40px',
+                borderRadius: '16px',
+                color: 'white',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                boxShadow: '0 10px 25px -5px rgba(59, 130, 246, 0.5)',
+                marginBottom: '30px'
+            }}>
                 <div>
-                    <h1>Patient Billing Profile</h1>
-                    <p>Search a patient to view and settle their bills</p>
+                    <h1 style={{ margin: '0 0 8px 0', fontSize: '2rem', display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 800 }}>
+                        <span>💳</span> Patient Billing Profile
+                    </h1>
+                    <p style={{ margin: 0, fontSize: '1.05rem', opacity: 0.9 }}>Search a patient to instantly view, manage, and settle their pending bills.</p>
                 </div>
-                <button className="btn-back" onClick={() => navigate(-1)}>Back</button>
+                <button className="btn-back" onClick={() => navigate(-1)} style={{
+                    padding: '10px 24px',
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                    color: 'white',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    transition: 'all 0.3s'
+                }}
+                    onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)'}
+                    onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'}
+                >← Back</button>
             </div>
 
             {/* Search */}
-            <div style={{ position: 'relative', marginBottom: '20px' }} className="billing-search-container">
-                <form className="billing-search-bar" onSubmit={handleSearch}>
-                    <input
-                        type="text"
-                        placeholder="Search by Phone / MRN / Patient ID..."
-                        value={searchQuery}
-                        onChange={e => handleQueryChange(e.target.value)}
-                        className="billing-search-input"
-                        onFocus={() => searchQuery.trim().length >= 2 && setShowSuggestions(true)}
-                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                    />
-                    <button type="submit" className="btn-search" disabled={loading}>
+            <div style={{ position: 'relative', marginBottom: '30px' }} className="billing-search-container">
+                <form className="billing-search-bar" onSubmit={handleSearch} style={{
+                    display: 'flex', gap: '12px', padding: '10px', background: 'white', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)', border: '1px solid #e2e8f0'
+                }}>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', fontSize: '1.2rem' }}>🔍</span>
+                        <input
+                            type="text"
+                            placeholder="Search by Phone / MRN / Patient ID..."
+                            value={searchQuery}
+                            onChange={e => handleQueryChange(e.target.value)}
+                            onFocus={() => searchQuery.trim().length >= 2 && setShowSuggestions(true)}
+                            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                            style={{ width: '100%', padding: '16px 16px 16px 48px', border: 'none', borderRadius: '8px', fontSize: '1.1rem', outline: 'none', background: '#f8fafc' }}
+                        />
+                    </div>
+                    <button type="submit" disabled={loading} style={{
+                        padding: '0 32px', background: 'linear-gradient(to right, #0ea5e9, #2563eb)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.1rem', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.4)', transition: 'transform 0.1s'
+                    }}
+                        onMouseDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                        onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                    >
                         {loading ? 'Searching...' : 'Search'}
                     </button>
                 </form>
@@ -415,7 +468,7 @@ const PatientBillingProfile = () => {
 
                     {/* Consolidated Billing View (Appointments & Facility Charges) */}
                     {(billing.appointments?.length > 0 || billing.facilityCharges?.length > 0) && (
-                        <div className="billing-section">                        
+                        <div className="billing-section">
                             <div className="section-header">
                                 <h3>Consolidated Billing View (Consultations & ICU Charges)</h3>
                                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -446,8 +499,8 @@ const PatientBillingProfile = () => {
                                             </td>
                                             <td>{fmtDate(a.appointmentDate)}{a.appointmentTime && ` ${a.appointmentTime}`}</td>
                                             <td>
-                                                <strong>Appointment Fee</strong><br/>
-                                                <span style={{fontSize:'0.85rem', color:'#64748b'}}>{a.serviceName || 'Consultation'}</span>
+                                                <strong>Appointment Fee</strong><br />
+                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{a.serviceName || 'Consultation'}</span>
                                             </td>
                                             <td>{a.doctorName || '—'}</td>
                                             <td>
@@ -458,7 +511,7 @@ const PatientBillingProfile = () => {
                                             <td className="amount-cell">{fmt(a.amount)}</td>
                                         </tr>
                                     ))}
-                                    
+
                                     {/* Facility / ICU Charges - Actionable */}
                                     {billing.facilityCharges.map(f => (
                                         <tr key={f._id} className={selected.facilityCharges.includes(f._id) ? 'selected-row' : ''}>
@@ -471,8 +524,8 @@ const PatientBillingProfile = () => {
                                             </td>
                                             <td>{fmtDate(f.createdAt)}</td>
                                             <td>
-                                                <strong>ICU / Facility Charge</strong><br/>
-                                                <span style={{fontSize:'0.85rem', color:'#64748b'}}>{f.facilityName} ({f.daysUsed || f.days || 1} Days @ {fmt(f.pricePerDay)}/day)</span>
+                                                <strong>ICU / Facility Charge</strong><br />
+                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{f.facilityName} ({f.daysUsed || f.days || 1} Days @ {fmt(f.pricePerDay)}/day)</span>
                                             </td>
                                             <td>{f.collectedBy?.name || f.addedBy?.name || '—'}</td>
                                             <td>
@@ -555,7 +608,7 @@ const PatientBillingProfile = () => {
                                                     <span style={{ fontWeight: '500', fontSize: '0.9rem', color: '#334155' }}>
                                                         📦 {p.items?.length || 0} Items
                                                     </span>
-                                                    <button 
+                                                    <button
                                                         onClick={() => toggleExpand(p._id)}
                                                         style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500', padding: 0 }}
                                                     >
@@ -634,8 +687,8 @@ const PatientBillingProfile = () => {
                     {billing.appointments.length === 0 && billing.labReports.length === 0 &&
                         billing.pharmacyOrders.length === 0 && billing.facilityCharges.length === 0 &&
                         activeAdmissions.length === 0 && pastAdmissions.length === 0 && (
-                        <div className="no-bills">No billing items found for this patient.</div>
-                    )}
+                            <div className="no-bills">No billing items found for this patient.</div>
+                        )}
 
                     {/* Payment Panel */}
                     {pendingTotal() > 0 && (
@@ -651,69 +704,81 @@ const PatientBillingProfile = () => {
                                 </div>
                             </div>
                             <form className="payment-controls" onSubmit={(e) => {
-                                if (paymentMode === 'Cash') {
-                                    e.preventDefault();
+                                e.preventDefault();
+                                if (totalSplitAmount !== totalSelected()) {
+                                    alert(`Total split amount (${fmt(totalSplitAmount)}) must exactly match the selected amount (${fmt(totalSelected())}).`);
+                                    return;
+                                }
+                                const hasNonCash = splitPayments.some(p => p.method !== 'Cash');
+                                if (!hasNonCash) {
                                     if (!window.confirm(`Process payment of ${fmt(totalSelected())} via Cash?`)) return;
                                     executePayment({});
                                 } else {
                                     confirmPaymentWithProof(e);
                                 }
                             }}>
-                                <div className="payment-inline-inputs" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px', alignItems: 'center' }}>
-                                    <select value={paymentMode} onChange={e => { setPaymentMode(e.target.value); setPaymentModal({ ...paymentModal, data: {} }); setProofFile(null); }} className="payment-mode-select" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
-                                        <option value="Cash">Cash</option>
-                                        <option value="UPI">UPI</option>
-                                        <option value="Card">Card</option>
-                                        <option value="Cheque">Cheque</option>
-                                        <option value="NEFT/RTGS">NEFT / RTGS</option>
-                                    </select>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginBottom: '20px' }}>
+                                    {splitPayments.map((split, index) => (
+                                        <div key={index} className="payment-inline-inputs" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                            <select value={split.method} onChange={e => handleSplitPaymentChange(index, 'method', e.target.value)} className="payment-mode-select" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', minWidth: '150px' }}>
+                                                <option value="Cash">Cash</option>
+                                                <option value="UPI">UPI</option>
+                                                <option value="Card">Card</option>
+                                                <option value="Cheque">Cheque</option>
+                                                <option value="NEFT/RTGS">NEFT / RTGS</option>
+                                            </select>
 
-                                    {paymentMode === 'UPI' && (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', padding: '15px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '10px' }}>
-    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-      <div style={{ flex: 1, minWidth: '150px' }}>
-        <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Hospital UPI ID <span style={{color: '#ef4444'}}>*</span></label>
-        <select value={paymentModal.data?.upiId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, upiId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%' }} required>
-          <option value="" disabled>Select Hospital UPI ID</option>
-          {upiOptions.map((opt, idx) => (
-            <option key={idx} value={opt.upiId}>{opt.label} ({opt.upiId})</option>
-          ))}
-        </select>
-      </div>
-      <div style={{ flex: 1, minWidth: '150px' }}>
-        <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>12-Digit Transaction Ref <span style={{color: '#ef4444'}}>*</span></label>
-        <input type="text" placeholder="Transaction ID" required value={paymentModal.data?.transactionId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, transactionId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%' }} />
-      </div>
-    </div>
-    {paymentModal.data?.upiId && totalSelected() > 0 && (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#fff', padding: '15px', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
-        <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>Scan to Pay {fmt(totalSelected())}</span>
-        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent('upi://pay?pa=' + (paymentModal.data.upiId).trim() + '&pn=Hospital&am=' + totalSelected() + '&cu=INR')}`} alt="UPI QR Code" style={{ border: '4px solid #fff', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} />
-        <span style={{ fontSize: '11px', color: '#64748b', marginTop: '8px' }}>Ask patient to scan this QR code</span>
-      </div>
-    )}
-  </div>
-)}
-                                    {paymentMode === 'Card' && (
-                                        <>
-                                            <input type="text" placeholder="Card Details (Last 4)" required value={paymentModal.data?.cardDetails || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, cardDetails: e.target.value } })} className="inline-input" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                                            <input type="text" placeholder="Transaction ID" required value={paymentModal.data?.transactionId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, transactionId: e.target.value } })} className="inline-input" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                                        </>
-                                    )}
-                                    {['Cheque', 'NEFT/RTGS'].includes(paymentMode) && (
-                                        <input type="text" placeholder="Bank Ref / Cheque No" required value={paymentModal.data?.bankReference || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, bankReference: e.target.value } })} className="inline-input" style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-                                    )}
-                                    
-                                    {paymentMode !== 'Cash' && (
-                                        <div className="inline-file-upload" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                            <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>Payment Screenshot / Proof <span style={{ color: '#ef4444' }}>*Required</span></label>
-                                            <input type="file" accept="image/*,.pdf" onChange={e => setProofFile(e.target.files[0])} style={{ fontSize: '13px' }} required />
+                                            <input
+                                                type="number"
+                                                placeholder="Amount"
+                                                value={split.amount}
+                                                onChange={e => handleSplitPaymentChange(index, 'amount', e.target.value)}
+                                                style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '120px' }}
+                                                min="1"
+                                                required
+                                            />
+
+                                            {splitPayments.length > 1 && (
+                                                <button type="button" onClick={() => removeSplitPayment(index)} style={{ padding: '8px 12px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+                                            )}
+
+                                            {split.method === 'UPI' && (
+                                                <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                                    <select value={paymentModal.data?.upiId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, upiId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} required>
+                                                        <option value="" disabled>Select Hospital UPI ID</option>
+                                                        {upiOptions.map((opt, idx) => (
+                                                            <option key={idx} value={opt.upiId}>{opt.label} ({opt.upiId})</option>
+                                                        ))}
+                                                    </select>
+                                                    <input type="text" placeholder="Txn Ref" required value={paymentModal.data?.transactionId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, transactionId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} />
+                                                </div>
+                                            )}
+                                            {split.method === 'Card' && (
+                                                <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                                    <input type="text" placeholder="Card (Last 4)" required value={paymentModal.data?.cardDetails || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, cardDetails: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} />
+                                                    <input type="text" placeholder="Txn Ref" required value={paymentModal.data?.transactionId || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, transactionId: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} />
+                                                </div>
+                                            )}
+                                            {['Cheque', 'NEFT/RTGS'].includes(split.method) && (
+                                                <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                                    <input type="text" placeholder="Bank Ref / Cheque No" required value={paymentModal.data?.bankReference || ''} onChange={e => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, bankReference: e.target.value } })} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }} />
+                                                </div>
+                                            )}
+
+                                            {split.method !== 'Cash' && !proofFile && (
+                                                <div className="inline-file-upload" style={{ flexBasis: '100%', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '10px' }}>
+                                                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>Payment Proof <span style={{ color: '#ef4444' }}>*Required once for all non-cash</span></label>
+                                                    <input type="file" accept="image/*,.pdf" onChange={e => setProofFile(e.target.files[0])} style={{ fontSize: '13px' }} required />
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
+                                    ))}
+
+                                    <button type="button" onClick={addSplitPayment} style={{ alignSelf: 'flex-start', padding: '8px 16px', background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>+ Add Payment Method</button>
                                 </div>
 
-                                <button type="submit" className="btn-pay" disabled={paying || totalSelected() === 0}>
-                                    {paying ? 'Processing...' : `Pay ${fmt(totalSelected())}`}
+                                <button type="submit" className="btn-pay" disabled={paying || totalSelected() === 0 || totalSplitAmount !== totalSelected()}>
+                                    {paying ? 'Processing...' : `Pay ${fmt(totalSelected())} (Split: ${fmt(totalSplitAmount)})`}
                                 </button>
                             </form>
                         </div>
@@ -734,7 +799,19 @@ const PatientBillingProfile = () => {
                                     {billing.paymentTransactions.map(pt => (
                                         <tr key={pt._id}>
                                             <td>{fmtDate(pt.paymentDate)}</td>
-                                            <td>{pt.paymentMode}</td>
+                                            <td>
+                                                {pt.splitPayments && pt.splitPayments.length > 1 ? (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                        {pt.splitPayments.map((sp, idx) => (
+                                                            <span key={idx} style={{ fontSize: '11px', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
+                                                                {sp.method}: {fmt(sp.amount)}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    pt.paymentMode
+                                                )}
+                                            </td>
                                             <td>{pt.transactionId || pt.upiId || pt.bankReference || '—'}</td>
                                             <td style={{ maxWidth: '250px' }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

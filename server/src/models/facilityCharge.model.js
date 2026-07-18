@@ -7,7 +7,15 @@ const facilityChargeSchema = new mongoose.Schema({
     pricePerDay: { type: Number, required: true },
     days: { type: Number, required: true },
     totalAmount: { type: Number, required: true },
-    paymentStatus: { type: String, enum: ['Pending', 'Paid'], default: 'Pending' },
+    paymentStatus: {
+        type: String,
+        enum: ['Pending', 'Paid'],
+        default: 'Pending'
+    },
+    splitPayments: [{
+        method: { type: String },
+        amount: { type: Number, default: 0 }
+    }],
     addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     collectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });

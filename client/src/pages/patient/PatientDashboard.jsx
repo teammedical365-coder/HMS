@@ -1128,7 +1128,19 @@ const PatientDashboard = () => {
                                         <tr key={receipt.id}>
                                             <td><span className="bill-number-badge" style={{ background: '#f0fdf4', color: '#16a34a' }}>{receipt.receiptNumber}</span></td>
                                             <td>{new Date(receipt.paymentDate).toLocaleDateString()}</td>
-                                            <td><strong>{receipt.paymentMode}</strong></td>
+                                            <td>
+                                                {receipt.splitPayments && receipt.splitPayments.length > 1 ? (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                        {receipt.splitPayments.map((sp, idx) => (
+                                                            <span key={idx} style={{ fontSize: '12px', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
+                                                                {sp.method}: ₹{sp.amount}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <strong>{receipt.paymentMode}</strong>
+                                                )}
+                                            </td>
                                             <td><code>{receipt.transactionId || receipt.upiId || receipt.bankReference || '—'}</code></td>
                                             <td className="bill-amount-text" style={{ color: '#16a34a' }}>₹{receipt.amount}</td>
                                             <td><span className="bill-status-pill paid">✓ {receipt.status}</span></td>
@@ -1494,8 +1506,18 @@ const PatientDashboard = () => {
                                 <span>{patient?.mrn || patient?.linkedPatientProfileId || '—'}</span>
                             </div>
                             <div className="invoice-detail-item">
-                                <strong>Payment Method</strong>
-                                <span>{selectedReceipt.paymentMode}</span>
+                                <strong>Payment Breakdown</strong>
+                                {selectedReceipt.splitPayments && selectedReceipt.splitPayments.length > 1 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                                        {selectedReceipt.splitPayments.map((sp, idx) => (
+                                            <span key={idx} style={{ display: 'inline-block', fontSize: '13px', background: '#f1f5f9', padding: '4px 8px', borderRadius: '4px' }}>
+                                                {sp.method}: ₹{sp.amount}
+                                            </span>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <span>{selectedReceipt.paymentMode}</span>
+                                )}
                             </div>
                             <div className="invoice-detail-item">
                                 <strong>Transaction Ref / UPI</strong>
