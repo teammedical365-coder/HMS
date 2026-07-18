@@ -9,7 +9,10 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-dig
 const getPharmacyTotal = (p) => {
     if (p.totalAmount && Number(p.totalAmount) > 0) return Number(p.totalAmount);
     if (!p.items || !p.items.length) return 0;
-    return p.items.reduce((sum, item) => sum + (Number(item.price) || 50), 0); // 50 as fallback if price missing
+    return p.items.reduce((sum, item) => {
+        const qty = parseInt(item.quantity) || parseInt(item.duration) || parseInt(item.days) || 1;
+        return sum + (Number(item.price) || 50) * qty;
+    }, 0);
 };
 
 const PatientBillingProfile = () => {
@@ -20,6 +23,11 @@ const PatientBillingProfile = () => {
     const [patient, setPatient] = useState(null);
     const [billing, setBilling] = useState(null);
     const [selected, setSelected] = useState({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [] });
+    const [expandedRows, setExpandedRows] = useState({});
+
+    const toggleExpand = (id) => {
+        setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
+    };
     const [paymentMode, setPaymentMode] = useState('Cash');
     const [paying, setPaying] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
@@ -542,7 +550,40 @@ const PatientBillingProfile = () => {
                                                 )}
                                             </td>
                                             <td>{fmtDate(p.createdAt)}</td>
-                                            <td>{Array.isArray(p.items) ? p.items.map(i => i.medicineName || i.name).filter(Boolean).join(', ') : '—'}</td>
+                                            <td>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span style={{ fontWeight: '500', fontSize: '0.9rem', color: '#334155' }}>
+                                                        📦 {p.items?.length || 0} Items
+                                                    </span>
+                                                    <button 
+                                                        onClick={() => toggleExpand(p._id)}
+                                                        style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500', padding: 0 }}
+                                                    >
+                                                        {expandedRows[p._id] ? 'Hide Details ↑' : 'View Details ↓'}
+                                                    </button>
+                                                </div>
+                                                {expandedRows[p._id] && Array.isArray(p.items) && (
+                                                    <div className="bg-gray-50/50 p-2 rounded mt-1" style={{ backgroundColor: '#f8fafc', padding: '8px', borderRadius: '6px', marginTop: '8px', border: '1px solid #e2e8f0' }}>
+                                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.9rem' }}>
+                                                            {p.items.map((item, idx) => {
+                                                                const name = item.medicineName || item.name;
+                                                                const freq = item.frequency ? ` (${item.frequency})` : '';
+                                                                const qty = parseInt(item.quantity) || parseInt(item.duration) || parseInt(item.days) || 1;
+                                                                const itemTotal = (Number(item.price) || 50) * qty;
+                                                                if (!name) return null;
+                                                                const durationText = item.duration ? `${item.duration}` : item.quantity ? `${item.quantity} Qty` : item.days ? `${item.days} Days` : '1 Qty';
+                                                                return (
+                                                                    <li key={idx} style={{ marginBottom: '4px' }}>
+                                                                        <span style={{ color: '#000' }}>{name}{freq}</span>
+                                                                        <span style={{ marginLeft: '6px', color: '#475569', fontSize: '0.85rem' }}>[{durationText}]</span>
+                                                                        <span style={{ marginLeft: '6px', color: '#059669', fontWeight: '600', fontSize: '0.8rem' }}>- ₹{itemTotal}</span>
+                                                                    </li>
+                                                                );
+                                                            })}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td>
                                                 <span className="status-badge">
                                                     {p.paymentStatus === 'Paid' ? 'PAID' : 'Pending'}
