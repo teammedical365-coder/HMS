@@ -91,6 +91,19 @@ const AdminDoctors = () => {
         if (doctorsState.error) setError(doctorsState.error);
     }, [doctorsState.error]);
 
+    // Auto-fetch department consultation fee when a new department is selected
+    useEffect(() => {
+        if (!editingDoctor && formData.departments && formData.departments.length > 0) {
+            const selectedDept = formData.departments[0];
+            if (hospital && hospital.departmentFees && hospital.departmentFees[selectedDept] !== undefined) {
+                setFormData(prev => ({
+                    ...prev,
+                    consultationFee: hospital.departmentFees[selectedDept]
+                }));
+            }
+        }
+    }, [formData.departments, hospital, editingDoctor]);
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData({ ...formData, [name]: value });
@@ -343,7 +356,7 @@ const AdminDoctors = () => {
                             {/* Contact & Password */}
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label htmlFor="phone">Phone</label>
+                                    <label htmlFor="phone">Phone *</label>
 
                                     <input 
                                         type="tel" 

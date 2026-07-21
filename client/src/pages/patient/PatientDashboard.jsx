@@ -1200,7 +1200,7 @@ const PatientDashboard = () => {
                                             />
                                         </div>
                                         <div className="form-field-group">
-                                            <label>Alternate Mobile</label>
+                                            <label>Emergency Contact Number</label>
                                             <input 
                                                 type="text" 
                                                 name="alternateMobile" 
@@ -1232,50 +1232,7 @@ const PatientDashboard = () => {
                                     </div>
                                 </div>
 
-                                {/* Section 3: Emergency Contact */}
-                                <div className="profile-edit-section">
-                                    <div className="section-title-bar">
-                                        <span className="section-icon">🚨</span>
-                                        <h4>Emergency Contact</h4>
-                                    </div>
-                                    <div className="form-fields-grid">
-                                        <div className="form-field-group">
-                                            <label>Contact Person Name</label>
-                                            <input 
-                                                type="text" 
-                                                name="name" 
-                                                value={editForm.emergencyContact?.name || ''} 
-                                                onChange={handleEmergencyContactChange} 
-                                            />
-                                        </div>
-                                        <div className="form-field-group">
-                                            <label>Relation</label>
-                                            <select name="relation" value={editForm.emergencyContact?.relation || ''} onChange={handleEmergencyContactChange}>
-                                                <option value="">Select Relation</option>
-                                                <option value="Father">Father</option>
-                                                <option value="Mother">Mother</option>
-                                                <option value="Spouse">Spouse</option>
-                                                <option value="Son">Son</option>
-                                                <option value="Daughter">Daughter</option>
-                                                <option value="Brother">Brother</option>
-                                                <option value="Sister">Sister</option>
-                                                <option value="Others">Others</option>
-                                            </select>
-                                        </div>
-                                        <div className="form-field-group">
-                                            <label>Contact Mobile</label>
-                                            <input 
-                                                type="text" 
-                                                name="mobile" 
-                                                value={editForm.emergencyContact?.mobile || ''} 
-                                                onChange={handleEmergencyContactChange} 
-                                                maxLength={10} 
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Section 4: Address Details */}
+                                {/* Section 3: Address Details */}
                                 <div className="profile-edit-section">
                                     <div className="section-title-bar">
                                         <span className="section-icon">📍</span>
@@ -1449,26 +1406,13 @@ const PatientDashboard = () => {
                             </div>
                             <div className="detail-fields-list">
                                 <div className="detail-field-row"><span className="field-label">Mobile Number</span><span className="field-value">{profileData.mobile || profileData.phone || patient?.mobile || '—'}</span></div>
-                                <div className="detail-field-row"><span className="field-label">Alternate Mobile</span><span className="field-value">{profileData.alternateMobile || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Emergency Contact Number</span><span className="field-value">{profileData.alternateMobile || '—'}</span></div>
                                 <div className="detail-field-row"><span className="field-label">WhatsApp Number</span><span className="field-value">{profileData.whatsappNumber || '—'}</span></div>
                                 <div className="detail-field-row"><span className="field-label">Email Address</span><span className="field-value">{profileData.email || '—'}</span></div>
                             </div>
                         </div>
 
-                        {/* 3. Emergency Contact */}
-                        <div className="profile-detail-card">
-                            <div className="detail-card-header">
-                                <span className="detail-card-icon">🚨</span>
-                                <h4>Emergency Contact</h4>
-                            </div>
-                            <div className="detail-fields-list">
-                                <div className="detail-field-row"><span className="field-label">Contact Person</span><span className="field-value">{profileData.emergencyContact?.name || '—'}</span></div>
-                                <div className="detail-field-row"><span className="field-label">Relation</span><span className="field-value">{profileData.emergencyContact?.relation || '—'}</span></div>
-                                <div className="detail-field-row"><span className="field-label">Mobile Number</span><span className="field-value">{profileData.emergencyContact?.mobile || '—'}</span></div>
-                            </div>
-                        </div>
-
-                        {/* 4. Address Details */}
+                        {/* 3. Address Details */}
                         <div className="profile-detail-card">
                             <div className="detail-card-header">
                                 <span className="detail-card-icon">📍</span>

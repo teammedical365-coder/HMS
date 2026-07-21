@@ -488,11 +488,11 @@ const Admin = () => {
                                 )}
                                 <div className="form-row">
                                     <div className="form-group">
-                                        <label className="staff-label">Name</label>
+                                        <label className="staff-label">Name *</label>
                                         <input type="text" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} required className="staff-input" />
                                     </div>
                                     <div className="form-group">
-                                        <label className="staff-label">Email</label>
+                                        <label className="staff-label">Email *</label>
                                         <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} required className="staff-input" />
                                     </div>
                                 </div>
@@ -503,7 +503,7 @@ const Admin = () => {
                                         <small className="form-hint">Share this password with the staff member</small>
                                     </div>
                                     <div className="form-group">
-                                        <label className="staff-label">Phone</label>
+                                        <label className="staff-label">Phone *</label>
                                         <input 
                                             type="text" 
                                             placeholder="e.g. 9876543210" 

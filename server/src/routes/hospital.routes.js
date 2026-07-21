@@ -415,11 +415,16 @@ router.delete('/:id', verifyCentralAdmin, async (req, res) => {
 // Hospital Admin Signup (creates a hospitaladmin account) — Central Admin only
 router.post('/admin/signup', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, email, password, phone, hospitalId } = req.body;
+        const { name, email, password, phone, hospitalId, aadhaarNumber } = req.body;
 
         if (!name || !email || !password || !hospitalId) {
             return res.status(400).json({ success: false, message: 'Name, email, password, and hospitalId are required' });
         }
+        
+        if (aadhaarNumber && !/^\d{12}$/.test(aadhaarNumber)) {
+            return res.status(400).json({ success: false, message: 'Aadhaar number must be exactly 12 digits.' });
+        }
+
         const pwErrH = validatePassword(password);
         if (pwErrH) return res.status(400).json({ success: false, message: pwErrH });
 
@@ -432,7 +437,8 @@ router.post('/admin/signup', verifyCentralAdmin, async (req, res) => {
         const admin = new User({
             name, email, password, phone: phone || '',
             role: 'hospitaladmin',
-            hospitalId
+            hospitalId,
+            aadhaarNumber: aadhaarNumber || ''
         });
 
         await admin.save();

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const PatientAuth = require('../models/patientAuth.model');
 const Hospital = require('../models/hospital.model');
+const User = require('../models/user.model');
 const { checkPatientDoubleBooking } = require('../utils/appointmentValidator');
 
 // Universal MRN Generator matching Hospital & Clinic exact formats
@@ -354,7 +355,6 @@ router.post('/reset-password', async (req, res) => {
 // GET /api/patient-auth/me
 // Verify patient token and return credentials
 const { verifyPatientToken } = require('../middleware/auth.middleware');
-const User = require('../models/user.model'); // Added to fetch MRN
 
 router.get('/me', verifyPatientToken, async (req, res) => {
     let mrn = null;

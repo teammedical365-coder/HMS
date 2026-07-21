@@ -1105,7 +1105,10 @@ const CentralAdminDashboard = () => {
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Aadhaar Number *</label>
-                                                <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={hospitalAdminForm.aadhaarNumber} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
+                                                <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={hospitalAdminForm.aadhaarNumber} onChange={e => {
+                                                    const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 12);
+                                                    setHospitalAdminForm({ ...hospitalAdminForm, aadhaarNumber: cleanVal });
+                                                }} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
                                             </div>
                                         </div>
                                         <div className="form-row">
@@ -1572,7 +1575,10 @@ const CentralAdminDashboard = () => {
                                                     </div>
                                                     <div className="form-group">
                                                         <label className="staff-label">Aadhaar Number *</label>
-                                                        <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={clinicManagerForm.aadhaarNumber} onChange={e => setClinicManagerForm({ ...clinicManagerForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
+                                                        <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={clinicManagerForm.aadhaarNumber} onChange={e => {
+                                                            const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 12);
+                                                            setClinicManagerForm({ ...clinicManagerForm, aadhaarNumber: cleanVal });
+                                                        }} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
                                                     </div>
                                                 </div>
                                                 <button type="submit" disabled={savingClinicManager} className="submit-button" style={{ marginTop: '4px' }}>
@@ -1640,7 +1646,10 @@ const CentralAdminDashboard = () => {
                                                     </div>
                                                     <div className="form-group">
                                                         <label className="staff-label">Aadhaar Number *</label>
-                                                        <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={clinicStaffForm.aadhaarNumber} onChange={e => setClinicStaffForm({ ...clinicStaffForm, aadhaarNumber: e.target.value })} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
+                                                        <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={clinicStaffForm.aadhaarNumber} onChange={e => {
+                                                            const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 12);
+                                                            setClinicStaffForm({ ...clinicStaffForm, aadhaarNumber: cleanVal });
+                                                        }} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
                                                     </div>
                                                 </div>
                                                 <div className="form-group">
