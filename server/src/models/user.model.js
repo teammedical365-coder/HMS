@@ -69,7 +69,12 @@ const userSchema = new mongoose.Schema({
     isAadhaarVerified: { type: Boolean, default: false },
     age: { 
         type: Number, 
-        min: 1 
+        min: 1,
+        max: 999,
+        validate: {
+            validator: Number.isInteger,
+            message: '{VALUE} is not an integer value'
+        }
     },
 
     // Clinical Profile

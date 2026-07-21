@@ -813,28 +813,7 @@ const DoctorPatientDetails = () => {
                             <span className="dpd-appt-value">{appointment.serviceName || 'Consultation'}</span>
                         </div>
                     </div>
-                    {/* Follow-up Card from Reception Dashboard */}
-                    {currentFollowupStatus && (
-                        <div style={{
-                            display: 'flex', flexDirection: 'column',
-                            background: currentFollowupStatus.active ? '#f0fdf4' : '#fef2f2',
-                            border: '1px solid',
-                            borderColor: currentFollowupStatus.active ? '#bbf7d0' : '#fecaca',
-                            borderLeft: currentFollowupStatus.active ? '4px solid #22c55e' : '4px solid #ef4444',
-                            borderRadius: '12px', padding: '12px 16px', minWidth: '160px', marginLeft: '16px'
-                        }}>
-                            <span style={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', color: currentFollowupStatus.active ? '#166534' : '#991b1b', letterSpacing: '0.5px' }}>FOLLOW-UP</span>
-                            <span style={{ fontSize: '18px', fontWeight: 'bold', color: currentFollowupStatus.active ? '#15803d' : '#b91c1c', marginTop: '4px' }}>
-                                {currentFollowupStatus.active ? 'Active' : 'Expired'}
-                            </span>
-                            <span style={{ fontSize: '12px', color: currentFollowupStatus.active ? '#166534' : '#7f1d1d', marginTop: '6px' }}>
-                                {currentFollowupStatus.active ? (() => {
-                                    const remain = Math.max(0, Math.ceil((new Date(currentFollowupStatus.validUntil).getTime() - new Date().getTime()) / (1000 * 3600 * 24)));
-                                    return `Valid: ${remain} Day${remain > 1 ? 's' : ''}`;
-                                })() : `Last: ${currentFollowupStatus.lastConsultation ? new Date(currentFollowupStatus.lastConsultation).toLocaleDateString('en-IN') : 'N/A'}`}
-                            </span>
-                        </div>
-                    )}
+
                 </div>
 
                 {/* Tabs Navigation */}
@@ -1047,14 +1026,7 @@ const DoctorPatientDetails = () => {
                         return (
                             <div className="dpd-tab-panel">
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', padding: '10px 14px', background: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', flexWrap: 'wrap', gap: '8px' }}>
-                                    <div>
-                                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e3a8a' }}>
-                                            {showAllDeptHistory ? '🌐 Complete Hospital History across All Departments' : `📌 Showing Only ${appointment?.department || appointment?.serviceName || 'Current'} Department History`}
-                                        </div>
-                                        <div style={{ fontSize: '11px', color: '#3b82f6', marginTop: '2px' }}>
-                                            {showAllDeptHistory ? 'Viewing consultations from all departments.' : 'Other departments hidden per appointment context.'}
-                                        </div>
-                                    </div>
+
                                     <button
                                         type="button"
                                         onClick={() => setShowAllDeptHistory(!showAllDeptHistory)}
