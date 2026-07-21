@@ -20,9 +20,10 @@ const patientAuthSchema = new mongoose.Schema({
     linkedPatientProfileId: { type: mongoose.Schema.Types.ObjectId, ref: 'Patient', default: null }
 }, { timestamps: true });
 
-// Ensure email and mobile are unique strictly PER hospital
+// Ensure email, mobile, and aadhaarNumber are unique strictly PER hospital
 patientAuthSchema.index({ email: 1, hospitalId: 1 }, { unique: true });
 patientAuthSchema.index({ mobile: 1, hospitalId: 1 }, { unique: true });
+patientAuthSchema.index({ aadhaarNumber: 1, hospitalId: 1 }, { unique: true, sparse: true });
 
 // Hash password before save
 patientAuthSchema.pre('save', async function (next) {

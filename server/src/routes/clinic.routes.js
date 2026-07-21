@@ -295,7 +295,7 @@ router.get('/patients', verifyClinicStaff, async (req, res) => {
 // ─────────────────────────────────────────────
 router.post('/patients', verifyClinicStaff, async (req, res) => {
     try {
-        const { name, phone, email, dob, gender, address, bloodGroup, allergies, chronicConditions, relatives } = req.body;
+        const { name, phone, email, dob, gender, address, bloodGroup, allergies, chronicConditions, relatives, aadhaarNumber } = req.body;
         if (!name || !phone) return res.status(400).json({ success: false, message: 'Name and phone are required' });
 
         const cleanPhone = phone.replace(/\D/g, '');
@@ -303,10 +303,19 @@ router.post('/patients', verifyClinicStaff, async (req, res) => {
 
         const clinicId = hid(req);
 
-        // Duplicate check within this clinic
+        // Duplicate check within this clinic by phone
         const existing = await ClinicPatient.findOne({ clinicId, phone: cleanPhone });
         if (existing) {
             return res.status(200).json({ success: true, patient: existing, existing: true, message: `Patient already registered — ${existing.patientUid}` });
+        }
+
+        // Duplicate check within this clinic by Aadhaar if provided
+        if (aadhaarNumber && String(aadhaarNumber).trim()) {
+            const cleanAadhaar = String(aadhaarNumber).trim();
+            const existingAadhaar = await ClinicPatient.findOne({ clinicId, aadhaarNumber: cleanAadhaar });
+            if (existingAadhaar) {
+                return res.status(200).json({ success: true, patient: existingAadhaar, existing: true, message: `Patient with this Aadhaar already registered — ${existingAadhaar.patientUid}` });
+            }
         }
 
         // Clinic-scoped patient UID: e.g. "RAM-001"
@@ -328,6 +337,7 @@ router.post('/patients', verifyClinicStaff, async (req, res) => {
             name: name.trim(),
             phone: cleanPhone,
             email: email || '',
+            aadhaarNumber: aadhaarNumber ? String(aadhaarNumber).trim() : undefined,
             dob: dob ? new Date(dob) : null,
             gender: gender || 'Male',
             bloodGroup: bloodGroup || '',
@@ -343,7 +353,12 @@ router.post('/patients', verifyClinicStaff, async (req, res) => {
         res.status(201).json({ success: true, patient, message: `Patient registered — ${patientUid}` });
     } catch (err) {
         if (err.code === 11000) {
-            return res.status(400).json({ success: false, message: 'A patient with this phone already exists in this clinic' });
+            const field = Object.keys(err.keyPattern || {})[0] || 'field';
+            const friendlyField = field === 'phone' ? 'phone'
+                : field === 'aadhaarNumber' ? 'Aadhaar'
+                : field === 'patientUid' ? 'Patient UID'
+                : field;
+            return res.status(400).json({ success: false, message: `A patient with this ${friendlyField} already exists in this clinic` });
         }
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }

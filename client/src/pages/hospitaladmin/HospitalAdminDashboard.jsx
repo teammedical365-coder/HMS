@@ -60,10 +60,13 @@ const HospitalAdminDashboard = () => {
     const [loadingInventory, setLoadingInventory] = useState(false);
     const [showInventoryForm, setShowInventoryForm] = useState(false);
     const [editingInventoryId, setEditingInventoryId] = useState(null);
-    const [inventoryForm, setInventoryForm] = useState({
-        name: '', salt: '', category: 'General', stock: '', unit: 'Tablets',
-        buyingPrice: '', sellingPrice: '', vendor: '', batchNumber: '', expiryDate: ''
-    });
+    const defaultInventoryForm = {
+        name: '', salt: '', category: 'General', stock: '', unit: 'Tablets', vendor: '', batchNumber: '', expiryDate: '', buyingPrice: '', sellingPrice: '',
+        unitConfig: { purchaseUnit: 'Box', saleUnit: 'Strip', baseUnit: 'Tablet', purchaseToSaleMultiplier: 10, saleToBaseMultiplier: 10 },
+        inventoryConfig: { openingStock: 0, minStock: 0, maxStock: 0, reorderLevel: 0, warehouse: 'Main Store', rackNumber: '', shelfNumber: '' },
+        pricingConfig: { purchasePrice: 0, landingCost: 0, mrp: 0, sellingPrice: 0, maxDiscount: 0, taxType: 'Inclusive' }
+    };
+    const [inventoryForm, setInventoryForm] = useState(defaultInventoryForm);
     const [savingInventory, setSavingInventory] = useState(false);
 
     // --- Lab Test Pricing State ---
@@ -371,7 +374,7 @@ const HospitalAdminDashboard = () => {
     };
 
     const resetInventoryForm = () => {
-        setInventoryForm({ name: '', salt: '', category: 'General', stock: '', unit: 'Tablets', buyingPrice: '', sellingPrice: '', vendor: '', batchNumber: '', expiryDate: '' });
+        setInventoryForm(defaultInventoryForm);
         setEditingInventoryId(null);
         setShowInventoryForm(false);
     };
@@ -380,7 +383,7 @@ const HospitalAdminDashboard = () => {
         e.preventDefault();
         setSavingInventory(true); setError(''); setSuccess('');
         try {
-            const data = { ...inventoryForm, stock: Number(inventoryForm.stock), buyingPrice: Number(inventoryForm.buyingPrice), sellingPrice: Number(inventoryForm.sellingPrice) };
+            const data = { ...inventoryForm, stock: Number(inventoryForm.stock), buyingPrice: Number(inventoryForm.pricingConfig.purchasePrice), sellingPrice: Number(inventoryForm.pricingConfig.sellingPrice) };
             if (editingInventoryId) {
                 await hospitalAPI.updateInventory(editingInventoryId, data);
                 setSuccess('Item updated!');
@@ -399,7 +402,10 @@ const HospitalAdminDashboard = () => {
             name: item.name, salt: item.salt || '', category: item.category, stock: item.stock,
             unit: item.unit, buyingPrice: item.buyingPrice, sellingPrice: item.sellingPrice,
             vendor: item.vendor || '', batchNumber: item.batchNumber || '',
-            expiryDate: item.expiryDate ? item.expiryDate.split('T')[0] : ''
+            expiryDate: item.expiryDate ? item.expiryDate.split('T')[0] : '',
+            unitConfig: item.unitConfig || defaultInventoryForm.unitConfig,
+            inventoryConfig: item.inventoryConfig || defaultInventoryForm.inventoryConfig,
+            pricingConfig: item.pricingConfig || defaultInventoryForm.pricingConfig
         });
         setEditingInventoryId(item._id);
         setShowInventoryForm(true);
@@ -701,91 +707,6 @@ const HospitalAdminDashboard = () => {
                             </div>
                         </div>
 
-                        {/* Create Staff Form */}
-                        <div className="admin-card" style={{ marginBottom: '20px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <h2>👤 Create Staff Account</h2>
-                                <button onClick={() => setShowCreateForm(!showCreateForm)} className={showCreateForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '8px 20px', fontSize: '14px' }}>
-                                    {showCreateForm ? 'Cancel' : '+ New Staff'}
-                                </button>
-                            </div>
-                            {!showCreateForm && <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>Create login credentials for doctors, lab technicians, pharmacists, and other staff.</p>}
-                            {showCreateForm && (
-                                <form onSubmit={handleCreateStaff} className="user-form">
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Full Name *</label>
-                                            <input type="text" placeholder="e.g. Dr. Sharma" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} required minLength={2} className="staff-input" />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Email Address *</label>
-                                            <input type="email" placeholder="staff@hospital.com" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} required className="staff-input" />
-                                        </div>
-                                    </div>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Password *</label>
-                                            <input type="text" placeholder="Temporary password" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} required className="staff-input" />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Phone *</label>
-                                            <input 
-                                                type="text" 
-                                                placeholder="e.g. 9876543210" 
-                                                value={createForm.phone || ''} 
-                                                onChange={e => {
-                                                    const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                                    setCreateForm({ ...createForm, phone: cleanVal });
-                                                }} 
-                                                required
-                                                title="Phone number must be exactly 10 digits"
-                                                className="staff-input" 
-                                             maxLength="10"  pattern="\d{10}" />
-                                        </div>
-                                    </div>
-
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Profile Image</label>
-                                            <input type="file" accept="image/*" onChange={e => setCreateForm({ ...createForm, file: e.target.files[0] })} className="staff-input" style={{ padding: '10px' }} />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Assign Role *</label>
-                                            <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
-                                                <option value="">-- Select a Role --</option>
-                                                {roles
-                                                    .filter(role => !role.name.toLowerCase().includes('clinic'))
-                                                    .map(role => (
-                                                        <option key={role._id} value={role._id}>{role.name}</option>
-                                                    ))}
-                                            </select>
-                                        </div>
-                                    </div>
-                                    
-                                    {hospitalInfo && hospitalInfo.departments && hospitalInfo.departments.length > 0 && (
-                                        <div className="form-row" style={{ marginTop: '10px' }}>
-                                            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                                                <label className="staff-label">Assign Department (Optional - Leave blank to allow all)</label>
-                                                <select
-                                                    value={createForm.department}
-                                                    onChange={(e) => setCreateForm(prev => ({ ...prev, department: e.target.value }))}
-                                                    className="staff-input"
-                                                    style={{ marginTop: '8px' }}
-                                                >
-                                                    <option value="">-- Select Department --</option>
-                                                    {hospitalInfo.departments.map(dept => (
-                                                        <option key={dept} value={dept}>{dept}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <button type="submit" disabled={creating} className="submit-button" style={{ marginTop: '20px', maxWidth: '200px' }}>
-                                        {creating ? 'Creating...' : 'Create Account'}
-                                    </button>
-                                </form>
-                            )}
-                        </div>
 
                         {/* Users Table */}
                         <div className="admin-card">
@@ -1034,66 +955,174 @@ const HospitalAdminDashboard = () => {
                             </div>
 
                             {showInventoryForm && (
-                                <form onSubmit={handleInventorySubmit} className="user-form" style={{ background: '#f8fafc', padding: '20px', borderRadius: '10px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
-                                    <h3 style={{ margin: '0 0 16px', fontSize: '15px', color: '#334155' }}>{editingInventoryId ? 'Edit Medicine' : 'Add New Medicine'}</h3>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Medicine Name *</label>
-                                            <input type="text" className="staff-input" placeholder="e.g. Paracetamol 500mg" value={inventoryForm.name} onChange={e => setInventoryForm({ ...inventoryForm, name: e.target.value })} required />
+                                <form onSubmit={handleInventorySubmit} className="user-form" style={{ padding: '0px', marginBottom: '20px' }}>
+                                    
+                                    {/* BASIC INFO */}
+                                    <div style={{ background: 'white', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                        <h4 style={{ margin: '0 0 16px', fontSize: '14px', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{editingInventoryId ? 'Edit Medicine' : 'Add New Medicine'}</h4>
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label className="staff-label">Medicine Name *</label>
+                                                <input type="text" className="staff-input" placeholder="e.g. Paracetamol 500mg" value={inventoryForm.name} onChange={e => setInventoryForm({ ...inventoryForm, name: e.target.value })} required />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Salt / Composition</label>
+                                                <input type="text" className="staff-input" placeholder="e.g. Acetaminophen" value={inventoryForm.salt} onChange={e => setInventoryForm({ ...inventoryForm, salt: e.target.value })} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Category *</label>
+                                                <input type="text" className="staff-input" placeholder="e.g. Analgesic" value={inventoryForm.category} onChange={e => setInventoryForm({ ...inventoryForm, category: e.target.value })} required />
+                                            </div>
                                         </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Salt / Composition</label>
-                                            <input type="text" className="staff-input" placeholder="e.g. Acetaminophen" value={inventoryForm.salt} onChange={e => setInventoryForm({ ...inventoryForm, salt: e.target.value })} />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Category *</label>
-                                            <input type="text" className="staff-input" placeholder="e.g. Analgesic" value={inventoryForm.category} onChange={e => setInventoryForm({ ...inventoryForm, category: e.target.value })} required />
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label className="staff-label">Batch Number</label>
+                                                <input type="text" className="staff-input" placeholder="e.g. BT-2026-001" value={inventoryForm.batchNumber} onChange={e => setInventoryForm({ ...inventoryForm, batchNumber: e.target.value })} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Expiry Date *</label>
+                                                <input type="date" className="staff-input" value={inventoryForm.expiryDate} onChange={e => setInventoryForm({ ...inventoryForm, expiryDate: e.target.value })} required />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Vendor / Supplier</label>
+                                                <input type="text" className="staff-input" placeholder="e.g. MedSupply Co." value={inventoryForm.vendor} onChange={e => setInventoryForm({ ...inventoryForm, vendor: e.target.value })} />
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Stock Qty *</label>
-                                            <input type="number" className="staff-input" placeholder="e.g. 500" min="0" value={inventoryForm.stock} onChange={e => setInventoryForm({ ...inventoryForm, stock: e.target.value })} required />
+
+                                    {/* UNIT CONFIGURATION */}
+                                    <div style={{ background: 'white', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                        <h4 style={{ margin: '0 0 16px', fontSize: '14px', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Unit Configuration</h4>
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label className="staff-label">Purchase Unit</label>
+                                                <select className="staff-input" value={inventoryForm.unitConfig.purchaseUnit} onChange={e => setInventoryForm({ ...inventoryForm, unitConfig: { ...inventoryForm.unitConfig, purchaseUnit: e.target.value }})}>
+                                                    {['Box', 'Carton', 'Pack', 'Bottle'].map(u => <option key={u} value={u}>{u}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Sale Unit</label>
+                                                <select className="staff-input" value={inventoryForm.unitConfig.saleUnit} onChange={e => setInventoryForm({ ...inventoryForm, unitConfig: { ...inventoryForm.unitConfig, saleUnit: e.target.value }})}>
+                                                    {['Strip', 'Sheet', 'Vial', 'Piece'].map(u => <option key={u} value={u}>{u}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Base Unit</label>
+                                                <select className="staff-input" value={inventoryForm.unitConfig.baseUnit} onChange={e => setInventoryForm({ ...inventoryForm, unitConfig: { ...inventoryForm.unitConfig, baseUnit: e.target.value }})}>
+                                                    {['Tablet', 'Capsule', 'ml', 'mg'].map(u => <option key={u} value={u}>{u}</option>)}
+                                                </select>
+                                            </div>
                                         </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Unit</label>
-                                            <select className="staff-input" value={inventoryForm.unit} onChange={e => setInventoryForm({ ...inventoryForm, unit: e.target.value })}>
-                                                {['Tablets', 'Capsules', 'Bottles', 'Vials', 'Strips', 'Packs', 'Tubes', 'Sachets', 'ml', 'mg'].map(u => <option key={u} value={u}>{u}</option>)}
-                                            </select>
+
+                                        <div style={{ border: '1px dashed #cbd5e1', padding: '16px', borderRadius: '8px', background: '#f8fafc', marginBottom: '16px' }}>
+                                            <h5 style={{ margin: '0 0 12px', fontSize: '13px', color: '#64748b' }}>Conversion Builder</h5>
+                                            <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                                                    <span style={{ fontSize: '14px', fontWeight: '500' }}>1 {inventoryForm.unitConfig.purchaseUnit} = </span>
+                                                    <input type="number" className="staff-input" style={{ width: '80px', padding: '6px' }} min="1" value={inventoryForm.unitConfig.purchaseToSaleMultiplier} onChange={e => setInventoryForm({ ...inventoryForm, unitConfig: { ...inventoryForm.unitConfig, purchaseToSaleMultiplier: Number(e.target.value) }})} />
+                                                    <span style={{ fontSize: '14px' }}>{inventoryForm.unitConfig.saleUnit}</span>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                                                    <span style={{ fontSize: '14px', fontWeight: '500' }}>1 {inventoryForm.unitConfig.saleUnit} = </span>
+                                                    <input type="number" className="staff-input" style={{ width: '80px', padding: '6px' }} min="1" value={inventoryForm.unitConfig.saleToBaseMultiplier} onChange={e => setInventoryForm({ ...inventoryForm, unitConfig: { ...inventoryForm.unitConfig, saleToBaseMultiplier: Number(e.target.value) }})} />
+                                                    <span style={{ fontSize: '14px' }}>{inventoryForm.unitConfig.baseUnit}</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Batch Number</label>
-                                            <input type="text" className="staff-input" placeholder="e.g. BT-2026-001" value={inventoryForm.batchNumber} onChange={e => setInventoryForm({ ...inventoryForm, batchNumber: e.target.value })} />
+
+                                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '12px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ fontSize: '16px' }}>💡</span>
+                                            <p style={{ margin: 0, fontSize: '13px', color: '#1d4ed8' }}>
+                                                <strong>System Intelligence:</strong> Inventory is always maintained in the smallest base unit. System Stock Unit: <strong>{(inventoryForm.unitConfig.purchaseToSaleMultiplier || 1) * (inventoryForm.unitConfig.saleToBaseMultiplier || 1)} {inventoryForm.unitConfig.baseUnit}s</strong> per {inventoryForm.unitConfig.purchaseUnit}.
+                                            </p>
                                         </div>
                                     </div>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Cost Price (₹) *</label>
-                                            <input type="number" className="staff-input" placeholder="e.g. 30" min="0" step="0.01" value={inventoryForm.buyingPrice} onChange={e => setInventoryForm({ ...inventoryForm, buyingPrice: e.target.value })} required />
+
+                                    {/* INVENTORY CONFIGURATION */}
+                                    <div style={{ background: 'white', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                        <h4 style={{ margin: '0 0 16px', fontSize: '14px', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Inventory Configuration</h4>
+                                        <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '16px' }}>
+                                            <div className="form-group">
+                                                <label className="staff-label">Opening Stock</label>
+                                                <input type="number" className="staff-input" value={inventoryForm.inventoryConfig.openingStock} onChange={e => setInventoryForm({ ...inventoryForm, inventoryConfig: { ...inventoryForm.inventoryConfig, openingStock: Number(e.target.value) }})} />
+                                                <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>In {inventoryForm.unitConfig.purchaseUnit}s</span>
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Min Stock</label>
+                                                <input type="number" className="staff-input" value={inventoryForm.inventoryConfig.minStock} onChange={e => setInventoryForm({ ...inventoryForm, inventoryConfig: { ...inventoryForm.inventoryConfig, minStock: Number(e.target.value) }})} />
+                                                <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>In {inventoryForm.unitConfig.purchaseUnit}s</span>
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Max Stock</label>
+                                                <input type="number" className="staff-input" value={inventoryForm.inventoryConfig.maxStock} onChange={e => setInventoryForm({ ...inventoryForm, inventoryConfig: { ...inventoryForm.inventoryConfig, maxStock: Number(e.target.value) }})} />
+                                                <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>In {inventoryForm.unitConfig.purchaseUnit}s</span>
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Reorder Level</label>
+                                                <input type="number" className="staff-input" value={inventoryForm.inventoryConfig.reorderLevel} onChange={e => setInventoryForm({ ...inventoryForm, inventoryConfig: { ...inventoryForm.inventoryConfig, reorderLevel: Number(e.target.value) }})} />
+                                                <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', display: 'block' }}>In {inventoryForm.unitConfig.purchaseUnit}s</span>
+                                            </div>
                                         </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Selling Price (₹) *</label>
-                                            <input type="number" className="staff-input" placeholder="e.g. 50" min="0" step="0.01" value={inventoryForm.sellingPrice} onChange={e => setInventoryForm({ ...inventoryForm, sellingPrice: e.target.value })} required />
+                                        <div className="form-row">
+                                            <div className="form-group">
+                                                <label className="staff-label">Warehouse / Store</label>
+                                                <select className="staff-input" value={inventoryForm.inventoryConfig.warehouse} onChange={e => setInventoryForm({ ...inventoryForm, inventoryConfig: { ...inventoryForm.inventoryConfig, warehouse: e.target.value }})}>
+                                                    {['Main Store', 'Pharmacy Front', 'Cold Storage'].map(u => <option key={u} value={u}>{u}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Rack Number</label>
+                                                <input type="text" className="staff-input" placeholder="e.g. A-12" value={inventoryForm.inventoryConfig.rackNumber} onChange={e => setInventoryForm({ ...inventoryForm, inventoryConfig: { ...inventoryForm.inventoryConfig, rackNumber: e.target.value }})} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Shelf Number</label>
+                                                <input type="text" className="staff-input" placeholder="e.g. S-3" value={inventoryForm.inventoryConfig.shelfNumber} onChange={e => setInventoryForm({ ...inventoryForm, inventoryConfig: { ...inventoryForm.inventoryConfig, shelfNumber: e.target.value }})} />
+                                            </div>
                                         </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Profit Margin</label>
+                                    </div>
+
+                                    {/* PRICING CONFIGURATION */}
+                                    <div style={{ background: 'white', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                        <h4 style={{ margin: '0 0 16px', fontSize: '14px', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pricing & Margins (Per {inventoryForm.unitConfig.saleUnit})</h4>
+                                        <div className="form-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px' }}>
+                                            <div className="form-group">
+                                                <label className="staff-label">Purchase Price (₹)</label>
+                                                <input type="number" className="staff-input" step="0.01" value={inventoryForm.pricingConfig.purchasePrice} onChange={e => setInventoryForm({ ...inventoryForm, pricingConfig: { ...inventoryForm.pricingConfig, purchasePrice: Number(e.target.value) }})} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Landing Cost (₹)</label>
+                                                <input type="number" className="staff-input" step="0.01" value={inventoryForm.pricingConfig.landingCost} onChange={e => setInventoryForm({ ...inventoryForm, pricingConfig: { ...inventoryForm.pricingConfig, landingCost: Number(e.target.value) }})} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">MRP (₹)</label>
+                                                <input type="number" className="staff-input" step="0.01" value={inventoryForm.pricingConfig.mrp} onChange={e => setInventoryForm({ ...inventoryForm, pricingConfig: { ...inventoryForm.pricingConfig, mrp: Number(e.target.value) }})} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Selling Price (₹)</label>
+                                                <input type="number" className="staff-input" step="0.01" value={inventoryForm.pricingConfig.sellingPrice} onChange={e => setInventoryForm({ ...inventoryForm, pricingConfig: { ...inventoryForm.pricingConfig, sellingPrice: Number(e.target.value) }})} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Max Discount (%)</label>
+                                                <input type="number" className="staff-input" step="0.1" value={inventoryForm.pricingConfig.maxDiscount} onChange={e => setInventoryForm({ ...inventoryForm, pricingConfig: { ...inventoryForm.pricingConfig, maxDiscount: Number(e.target.value) }})} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label className="staff-label">Tax Type</label>
+                                                <select className="staff-input" value={inventoryForm.pricingConfig.taxType} onChange={e => setInventoryForm({ ...inventoryForm, pricingConfig: { ...inventoryForm.pricingConfig, taxType: e.target.value }})}>
+                                                    {['Inclusive', 'Exclusive'].map(u => <option key={u} value={u}>{u}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                            <label className="staff-label">System Calculated Profit</label>
                                             <input type="text" className="staff-input" readOnly
-                                                style={{ background: '#f1f5f9', fontWeight: 700, color: Number(inventoryForm.sellingPrice) > Number(inventoryForm.buyingPrice) ? '#059669' : '#dc2626' }}
-                                                value={inventoryForm.buyingPrice && inventoryForm.sellingPrice ? `₹${(Number(inventoryForm.sellingPrice) - Number(inventoryForm.buyingPrice)).toFixed(2)} (${((Number(inventoryForm.sellingPrice) - Number(inventoryForm.buyingPrice)) / (Number(inventoryForm.buyingPrice) || 1) * 100).toFixed(1)}%)` : '--'}
+                                                style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', fontWeight: 700, color: (Number(inventoryForm.pricingConfig.sellingPrice) - Number(inventoryForm.pricingConfig.landingCost)) >= 0 ? '#16a34a' : '#dc2626' }}
+                                                value={`₹${(Number(inventoryForm.pricingConfig.sellingPrice || 0) - Number(inventoryForm.pricingConfig.landingCost || 0)).toFixed(2)} (${(Number(inventoryForm.pricingConfig.landingCost || 0) > 0 ? ((Number(inventoryForm.pricingConfig.sellingPrice || 0) - Number(inventoryForm.pricingConfig.landingCost || 0)) / Number(inventoryForm.pricingConfig.landingCost || 1) * 100) : 0).toFixed(1)}%)`}
                                             />
                                         </div>
                                     </div>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Expiry Date *</label>
-                                            <input type="date" className="staff-input" value={inventoryForm.expiryDate} onChange={e => setInventoryForm({ ...inventoryForm, expiryDate: e.target.value })} required />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Vendor / Supplier</label>
-                                            <input type="text" className="staff-input" placeholder="e.g. MedSupply Co." value={inventoryForm.vendor} onChange={e => setInventoryForm({ ...inventoryForm, vendor: e.target.value })} />
-                                        </div>
-                                    </div>
-                                    <button type="submit" disabled={savingInventory} className="submit-button" style={{ marginTop: '16px', maxWidth: '220px' }}>
+
+                                    <button type="submit" disabled={savingInventory} className="submit-button" style={{ maxWidth: '250px', padding: '12px', fontSize: '16px', fontWeight: 'bold' }}>
                                         {savingInventory ? 'Saving...' : editingInventoryId ? 'Update Medicine' : 'Add Medicine'}
                                     </button>
                                 </form>

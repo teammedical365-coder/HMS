@@ -100,8 +100,9 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         if (name.length > 100) return res.status(400).json({ success: false, message: 'Name too long (max 100 chars)' });
         if (email && email.length > 200) return res.status(400).json({ success: false, message: 'Email too long (max 200 chars)' });
 
+        const currentHospitalId = req.user.hospitalId || req.body.hospitalId;
+
         // Check if patient exists by Phone AND Name (case-insensitive) to prevent overwriting family members sharing a phone.
-        // We do NOT match by email because dummy emails are often shared.
         let userQuery = { 
             phone,
             name: new RegExp('^' + String(name).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i')
@@ -115,8 +116,36 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
             }
         }
         
-        if (req.user.hospitalId) {
-            userQuery.hospitalId = req.user.hospitalId;
+        if (currentHospitalId) {
+            userQuery.hospitalId = currentHospitalId;
+        }
+
+        // Check if Aadhaar is already registered for a different patient within THIS hospital
+        if (aadhaarNumber && currentHospitalId) {
+            const existingAadhaar = await User.findOne({
+                hospitalId: currentHospitalId,
+                aadhaarNumber: String(aadhaarNumber).trim()
+            });
+            if (existingAadhaar && (existingAadhaar.phone !== phone || existingAadhaar.name.toLowerCase() !== name.toLowerCase())) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'A patient with this Aadhaar number already exists in this hospital.'
+                });
+            }
+        }
+
+        // Check if Email is already registered for a different patient within THIS hospital
+        if (email && currentHospitalId) {
+            const existingEmail = await User.findOne({
+                hospitalId: currentHospitalId,
+                email: String(email).trim().toLowerCase()
+            });
+            if (existingEmail && (existingEmail.phone !== phone || existingEmail.name.toLowerCase() !== name.toLowerCase())) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'A patient with this email address already exists in this hospital.'
+                });
+            }
         }
 
         let user = await User.findOne(userQuery);

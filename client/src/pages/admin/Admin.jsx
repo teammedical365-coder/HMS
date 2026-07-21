@@ -427,6 +427,113 @@ const Admin = () => {
                     return null;
                 })()}
 
+                {/* Create Staff Account Card */}
+                <div className="admin-card" style={{ marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showCreateForm ? '16px' : '8px' }}>
+                        <h2>👤 Create Staff Account</h2>
+                        <button onClick={handleToggleCreateForm} className={showCreateForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '8px 20px', fontSize: '14px' }}>
+                            {showCreateForm ? 'Cancel' : '+ New Staff'}
+                        </button>
+                    </div>
+                    {!showCreateForm && (
+                        <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>
+                            Create login credentials for doctors, lab technicians, pharmacists, and other staff.
+                        </p>
+                    )}
+                    {showCreateForm && (
+                        <>
+                            {clinicDoctorExists && hospital?.clinicType === 'clinic' && (
+                                <div className="error-message" style={{ marginBottom: '16px' }}>
+                                    ⚠️ This clinic already has an assigned Clinic Doctor. Only 1 Doctor account is permitted under this plan.
+                                </div>
+                            )}
+                            <form onSubmit={handleCreateStaff} className="user-form">
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="staff-label">Full Name *</label>
+                                        <input type="text" placeholder="e.g. Dr. Sharma" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} required minLength={2} className="staff-input" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Email Address *</label>
+                                        <input type="email" placeholder="staff@hospital.com" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} required className="staff-input" />
+                                    </div>
+                                </div>
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="staff-label">Password *</label>
+                                        <input type="text" placeholder="Temporary password" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} required className="staff-input" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Phone *</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="e.g. 9876543210" 
+                                            value={createForm.phone || ''} 
+                                            onChange={e => {
+                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                setCreateForm({ ...createForm, phone: cleanVal });
+                                            }} 
+                                            required
+                                            title="Phone number must be exactly 10 digits"
+                                            className="staff-input" 
+                                            maxLength="10" 
+                                            pattern="\d{10}" 
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="staff-label">Profile Image</label>
+                                        <input type="file" accept="image/*" onChange={e => setCreateForm({ ...createForm, file: e.target.files[0] })} className="staff-input" style={{ padding: '10px' }} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Assign Role *</label>
+                                        <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
+                                            <option value="">-- Select a Role --</option>
+                                            {roles
+                                                .filter(r => {
+                                                    const name = (r.name || '').toLowerCase().trim();
+                                                    if (['patient', 'user'].includes(name)) return false;
+                                                    if (name.includes('doctor') || name.includes('doc')) return false;
+                                                    if (name.includes('admin')) return false;
+                                                    const isClinic = hospital?.clinicType === 'clinic';
+                                                    if (!isClinic && name.includes('clinic')) return false;
+                                                    return true;
+                                                })
+                                                .map(role => (
+                                                    <option key={role._id} value={role._id}>{role.name}</option>
+                                                ))}
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                {hospital && hospital.departments && hospital.departments.length > 0 && (
+                                    <div className="form-row" style={{ marginTop: '10px' }}>
+                                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                            <label className="staff-label">Assign Department (Optional - Leave blank to allow all)</label>
+                                            <select
+                                                value={createForm.department}
+                                                onChange={(e) => setCreateForm(prev => ({ ...prev, department: e.target.value }))}
+                                                className="staff-input"
+                                                style={{ marginTop: '8px' }}
+                                            >
+                                                <option value="">-- Select Department --</option>
+                                                {hospital.departments.map(dept => (
+                                                    <option key={dept} value={dept}>{dept}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+                                <button type="submit" disabled={creating || checkingDocLimit || (clinicDoctorExists && hospital?.clinicType === 'clinic')} className="submit-button" style={{ marginTop: '20px', maxWidth: '200px' }}>
+                                    {creating ? 'Creating...' : 'Create Account'}
+                                </button>
+                            </form>
+                        </>
+                    )}
+                </div>
+
 
 
                 {/* Users List */}

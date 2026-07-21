@@ -22,6 +22,30 @@ const inventorySchema = new mongoose.Schema({
     batchNumber: { type: String, default: '' },
     expiryDate: { type: Date, default: null },
     purchaseDate: { type: Date, default: Date.now },
+    unitConfig: {
+        purchaseUnit: { type: String, default: 'Box' },
+        saleUnit: { type: String, default: 'Strip' },
+        baseUnit: { type: String, default: 'Tablet' },
+        purchaseToSaleMultiplier: { type: Number, default: 1 },
+        saleToBaseMultiplier: { type: Number, default: 1 }
+    },
+    inventoryConfig: {
+        openingStock: { type: Number, default: 0 },
+        minStock: { type: Number, default: 0 },
+        maxStock: { type: Number, default: 0 },
+        reorderLevel: { type: Number, default: 0 },
+        warehouse: { type: String, default: 'Main Store' },
+        rackNumber: { type: String, default: '' },
+        shelfNumber: { type: String, default: '' }
+    },
+    pricingConfig: {
+        purchasePrice: { type: Number, default: 0 },
+        landingCost: { type: Number, default: 0 },
+        mrp: { type: Number, default: 0 },
+        sellingPrice: { type: Number, default: 0 },
+        maxDiscount: { type: Number, default: 0 },
+        taxType: { type: String, enum: ['Inclusive', 'Exclusive'], default: 'Inclusive' }
+    },
     status: {
         type: String,
         enum: ['In Stock', 'Low Stock', 'Out of Stock'],
