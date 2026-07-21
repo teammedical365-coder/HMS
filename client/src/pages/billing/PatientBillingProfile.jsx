@@ -40,15 +40,27 @@ const PatientBillingProfile = () => {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [upiOptions, setUpiOptions] = useState([]);
     useEffect(() => {
-        hospitalAPI
-            .getUpiIds()
-            .then((res) => {
-                const data = res?.upiIds || [];
-                setUpiOptions(data);
-            })
-            .catch((err) => {
+        const fetchUpiOptions = async () => {
+            try {
+                // Try department-specific UPI for Billing first
+                const deptRes = await hospitalAPI.getDepartmentUpiByRole('Billing');
+                if (deptRes?.success && deptRes.departmentUpi) {
+                    const du = deptRes.departmentUpi;
+                    setUpiOptions([{ label: du.label, upiId: du.upiId }]);
+                    return;
+                }
+            } catch (err) {
+                console.error('Dept UPI lookup failed, falling back to legacy', err);
+            }
+            // Fallback to legacy hospital-wide UPI list
+            try {
+                const res = await hospitalAPI.getUpiIds();
+                setUpiOptions(res?.upiIds || []);
+            } catch (err) {
                 console.error('Failed to fetch UPI IDs', err);
-            });
+            }
+        };
+        fetchUpiOptions();
     }, []);
 
     const loadPatientBilling = async (identifier) => {

@@ -434,9 +434,6 @@ const Admin = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                         <div>
                             <h2 style={{ margin: 0 }}>👥 Add New Staff Member</h2>
-                            <p style={{ color: '#e53935', fontSize: '13px', fontWeight: 600, margin: '4px 0 0' }}>
-                                ⚠️ Every staff member must be linked to a specific hospital
-                            </p>
                         </div>
                         <button
                             onClick={handleToggleCreateForm}

@@ -371,9 +371,16 @@ export const hospitalAPI = {
     updateHospital: async (id, data) => (await apiClient.put(`/api/hospitals/${id}`, data)).data,
     deleteHospital: async (id) => (await apiClient.delete(`/api/hospitals/${id}`)).data,
     getMyHospital: async () => (await apiClient.get('/api/hospitals/my-hospital')).data,
-    // UPI management (Hospital Admin)
+    // UPI management (Hospital Admin) — legacy
     getUpiIds: async () => (await apiClient.get('/api/hospitals/my-hospital/upi-ids')).data,
     updateUpiIds: async (upiIds) => (await apiClient.put('/api/hospitals/my-hospital/upi-ids', { upiIds })).data,
+    // Department-wise UPI management (Hospital Admin)
+    getDepartmentUpis: async () => (await apiClient.get('/api/hospitals/my-hospital/department-upi')).data,
+    createDepartmentUpi: async (data) => (await apiClient.post('/api/hospitals/my-hospital/department-upi', data)).data,
+    updateDepartmentUpi: async (id, data) => (await apiClient.put(`/api/hospitals/my-hospital/department-upi/${id}`, data)).data,
+    deleteDepartmentUpi: async (id) => (await apiClient.delete(`/api/hospitals/my-hospital/department-upi/${id}`)).data,
+    getStaffForUpi: async () => (await apiClient.get('/api/hospitals/my-hospital/staff-for-upi')).data,
+    getDepartmentUpiByRole: async (roleName) => (await apiClient.get(`/api/hospitals/my-hospital/department-upi/by-role/${encodeURIComponent(roleName)}`)).data,
     updateFacilities: async (data) => (await apiClient.put('/api/hospitals/my-hospital/facilities', data)).data,
     updateDepartmentFees: async (data) => (await apiClient.put('/api/hospitals/my-hospital/department-fees', data)).data,
     // Hospital inventory
@@ -579,6 +586,7 @@ export const patientAuthAPI = {
     getMe: async () => (await patientApiClient.get('/api/patient-auth/me')).data,
     getPatientAppointments: async () => (await patientApiClient.get('/api/patient-auth/appointments')).data,
     getPatientProfile: async () => (await patientApiClient.get('/api/patient-auth/profile')).data,
+    updatePatientProfile: async (data) => (await patientApiClient.put('/api/patient-auth/profile', data)).data,
     cancelAppointment: async (id) => (await patientApiClient.put(`/api/patient-auth/appointments/${id}/cancel`)).data,
     getPatientDocuments: async () => (await patientApiClient.get('/api/patient-auth/documents')).data,
     getPatientBills: async () => (await patientApiClient.get('/api/patient-auth/bills')).data,
@@ -595,7 +603,8 @@ export const patientAuthAPI = {
         const response = await patientApiClient.get(url);
         return response.data;
     },
-    bookAppointment: async (data) => (await patientApiClient.post('/api/patient-auth/book-appointment', data)).data
+    bookAppointment: async (data) => (await patientApiClient.post('/api/patient-auth/book-appointment', data)).data,
+    getDepartmentUpiByRole: async (roleName) => (await patientApiClient.get(`/api/patient-auth/department-upi/${encodeURIComponent(roleName)}`)).data,
 };
 
 export default apiClient;

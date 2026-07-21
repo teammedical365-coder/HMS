@@ -13,6 +13,7 @@ const Reception = require('../models/reception.model');
 const Appointment = require('../models/appointment.model');
 const FacilityCharge = require('../models/facilityCharge.model');
 const QuestionLibrary = require('../models/questionLibrary.model');
+const DepartmentUpi = require('../models/departmentUpi.model');
 const jwt = require('jsonwebtoken');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { getTenantConnection, getTenantDbName, getActiveConnections, removeTenantConnection } = require('../db/tenantDb');
@@ -1075,6 +1076,261 @@ router.put('/:id/branding', verifyCentralAdmin, async (req, res) => {
 
         res.json({ success: true, message: 'Branding updated successfully', branding: hospital.branding });
     } catch (err) {
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// ==========================================
+// DEPARTMENT-WISE UPI ACCOUNT MANAGEMENT
+// ==========================================
+
+// 1. List all department UPI accounts for the hospital
+router.get('/my-hospital/department-upi', verifyToken, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital context' });
+
+        const upis = await DepartmentUpi.find({ hospitalId })
+            .populate('staffUserId', 'name email phone')
+            .populate('createdBy', 'name')
+            .sort({ createdAt: -1 });
+
+        res.json({ success: true, departmentUpis: upis });
+    } catch (err) {
+        console.error('Error fetching department UPIs:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// 2. Create a new department UPI account (Hospital Admin only)
+router.post('/my-hospital/department-upi', verifyHospitalAdmin, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital context' });
+
+        const { staffUserId, upiId, label } = req.body;
+
+        if (!staffUserId || !upiId || !label) {
+            return res.status(400).json({ success: false, message: 'staffUserId, upiId, and label are required' });
+        }
+
+        // Validate staff exists and belongs to this hospital
+        const staffUser = await User.findOne({ _id: staffUserId, hospitalId });
+        if (!staffUser) {
+            return res.status(404).json({ success: false, message: 'Staff member not found in this hospital' });
+        }
+
+        // Get role name for denormalization
+        let staffRoleName = 'Staff';
+        const specialRoles = ['centraladmin', 'superadmin', 'hospitaladmin'];
+        if (typeof staffUser.role === 'string' && specialRoles.includes(staffUser.role)) {
+            return res.status(400).json({ success: false, message: 'Cannot assign UPI to admin accounts' });
+        }
+        if (staffUser.role && mongoose.Types.ObjectId.isValid(staffUser.role)) {
+            const roleDoc = await Role.findById(staffUser.role);
+            if (roleDoc) staffRoleName = roleDoc.name;
+        } else if (typeof staffUser.role === 'string') {
+            staffRoleName = staffUser.role;
+        }
+
+        // Check one-staff-one-UPI constraint
+        const existingForStaff = await DepartmentUpi.findOne({ hospitalId, staffUserId });
+        if (existingForStaff) {
+            return res.status(400).json({ success: false, message: 'This staff member already has a UPI account assigned. Each staff can have only one UPI account.' });
+        }
+
+        // Check duplicate UPI ID within hospital
+        const existingUpiId = await DepartmentUpi.findOne({ hospitalId, upiId: upiId.trim() });
+        if (existingUpiId) {
+            return res.status(400).json({ success: false, message: 'This UPI ID is already configured for another department in this hospital.' });
+        }
+
+        const newUpi = new DepartmentUpi({
+            hospitalId,
+            staffUserId,
+            staffRoleName,
+            upiId: upiId.trim(),
+            label: label.trim(),
+            isActive: true,
+            createdBy: req.user._id || req.user.userId
+        });
+
+        await newUpi.save();
+
+        const populated = await DepartmentUpi.findById(newUpi._id)
+            .populate('staffUserId', 'name email phone')
+            .populate('createdBy', 'name');
+
+        res.status(201).json({ success: true, message: 'Department UPI account created', departmentUpi: populated });
+    } catch (err) {
+        // Handle MongoDB duplicate key errors
+        if (err.code === 11000) {
+            return res.status(400).json({ success: false, message: 'Duplicate UPI assignment detected. Each staff can have only one UPI, and each UPI ID must be unique within the hospital.' });
+        }
+        console.error('Error creating department UPI:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// 3. Update a department UPI account (Hospital Admin only)
+router.put('/my-hospital/department-upi/:id', verifyHospitalAdmin, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital context' });
+
+        const upiDoc = await DepartmentUpi.findOne({ _id: req.params.id, hospitalId });
+        if (!upiDoc) {
+            return res.status(404).json({ success: false, message: 'Department UPI account not found' });
+        }
+
+        const { upiId, label, staffUserId, isActive } = req.body;
+
+        // If changing UPI ID, check for duplicates
+        if (upiId !== undefined && upiId.trim() !== upiDoc.upiId) {
+            const duplicate = await DepartmentUpi.findOne({ hospitalId, upiId: upiId.trim(), _id: { $ne: upiDoc._id } });
+            if (duplicate) {
+                return res.status(400).json({ success: false, message: 'This UPI ID is already configured for another department.' });
+            }
+            upiDoc.upiId = upiId.trim();
+        }
+
+        // If changing staff assignment, validate and update role name
+        if (staffUserId !== undefined && String(staffUserId) !== String(upiDoc.staffUserId)) {
+            const newStaff = await User.findOne({ _id: staffUserId, hospitalId });
+            if (!newStaff) {
+                return res.status(404).json({ success: false, message: 'New staff member not found in this hospital' });
+            }
+            // Check if new staff already has a UPI
+            const existingForNewStaff = await DepartmentUpi.findOne({ hospitalId, staffUserId, _id: { $ne: upiDoc._id } });
+            if (existingForNewStaff) {
+                return res.status(400).json({ success: false, message: 'The selected staff member already has a UPI account assigned.' });
+            }
+
+            let newRoleName = 'Staff';
+            if (newStaff.role && mongoose.Types.ObjectId.isValid(newStaff.role)) {
+                const roleDoc = await Role.findById(newStaff.role);
+                if (roleDoc) newRoleName = roleDoc.name;
+            } else if (typeof newStaff.role === 'string') {
+                newRoleName = newStaff.role;
+            }
+
+            upiDoc.staffUserId = staffUserId;
+            upiDoc.staffRoleName = newRoleName;
+        }
+
+        if (label !== undefined) upiDoc.label = label.trim();
+        if (isActive !== undefined) upiDoc.isActive = isActive;
+
+        await upiDoc.save();
+
+        const populated = await DepartmentUpi.findById(upiDoc._id)
+            .populate('staffUserId', 'name email phone')
+            .populate('createdBy', 'name');
+
+        res.json({ success: true, message: 'Department UPI account updated', departmentUpi: populated });
+    } catch (err) {
+        if (err.code === 11000) {
+            return res.status(400).json({ success: false, message: 'Duplicate UPI assignment detected.' });
+        }
+        console.error('Error updating department UPI:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// 4. Delete a department UPI account (Hospital Admin only)
+router.delete('/my-hospital/department-upi/:id', verifyHospitalAdmin, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital context' });
+
+        const upiDoc = await DepartmentUpi.findOne({ _id: req.params.id, hospitalId });
+        if (!upiDoc) {
+            return res.status(404).json({ success: false, message: 'Department UPI account not found' });
+        }
+
+        await DepartmentUpi.deleteOne({ _id: upiDoc._id });
+        res.json({ success: true, message: 'Department UPI account deleted' });
+    } catch (err) {
+        console.error('Error deleting department UPI:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// 5. Get department UPI by role name (for module-wise visibility)
+router.get('/my-hospital/department-upi/by-role/:roleName', verifyToken, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital context' });
+
+        const roleName = decodeURIComponent(req.params.roleName).trim();
+
+        // Case-insensitive, partial match on role name (e.g. 'Reception' matches 'Receptionist')
+        const upiDoc = await DepartmentUpi.findOne({
+            hospitalId,
+            staffRoleName: { $regex: new RegExp(roleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') },
+            isActive: true
+        });
+
+        if (!upiDoc) {
+            return res.json({ success: true, departmentUpi: null, message: 'No UPI account configured for this department' });
+        }
+
+        res.json({ success: true, departmentUpi: upiDoc });
+    } catch (err) {
+        console.error('Error fetching department UPI by role:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// 6. Get eligible staff members for UPI assignment (Hospital Admin)
+router.get('/my-hospital/staff-for-upi', verifyHospitalAdmin, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital context' });
+
+        // Get all users for this hospital (exclude patients and admins)
+        const allUsers = await User.find({ hospitalId }).select('name email phone role');
+
+        // Resolve role names
+        const specialRoles = ['centraladmin', 'superadmin', 'hospitaladmin', 'patient'];
+        const eligibleStaff = [];
+
+        for (const user of allUsers) {
+            // Skip special/admin roles
+            if (typeof user.role === 'string' && specialRoles.includes(user.role.toLowerCase())) continue;
+
+            let roleName = 'Staff';
+            if (user.role && mongoose.Types.ObjectId.isValid(user.role)) {
+                const roleDoc = await Role.findById(user.role).lean();
+                if (roleDoc) roleName = roleDoc.name;
+                // Skip if the role is patient-related
+                if (roleDoc && roleDoc.name.toLowerCase() === 'patient') continue;
+            } else if (typeof user.role === 'string') {
+                roleName = user.role;
+            }
+
+            eligibleStaff.push({
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                roleName
+            });
+        }
+
+        // Get staff IDs that already have UPI assigned
+        const assignedUpiDocs = await DepartmentUpi.find({ hospitalId }).select('staffUserId');
+        const assignedStaffIds = new Set(assignedUpiDocs.map(d => String(d.staffUserId)));
+
+        // Mark staff availability
+        const staffList = eligibleStaff.map(s => ({
+            ...s,
+            hasUpiAssigned: assignedStaffIds.has(String(s._id))
+        }));
+
+        res.json({ success: true, staff: staffList });
+    } catch (err) {
+        console.error('Error fetching eligible staff for UPI:', err);
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });

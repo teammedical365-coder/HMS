@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
-import { patientAuthAPI } from '../../utils/api';
+import { patientAuthAPI, uploadAPI } from '../../utils/api';
+import SlotPicker from '../../components/SlotPicker';
 import './PatientDashboard.css';
 
 const PatientDashboard = () => {
@@ -46,11 +47,188 @@ const PatientDashboard = () => {
     const [payUpiId, setPayUpiId] = useState('');
     const [payCardLast4, setPayCardLast4] = useState('');
     const [payLoading, setPayLoading] = useState(false);
+    const [departmentUpi, setDepartmentUpi] = useState(null);
+    const [fetchingUpi, setFetchingUpi] = useState(false);
 
     // Modal State
     const [selectedAppt, setSelectedAppt] = useState(null);
     const [selectedDocPreview, setSelectedDocPreview] = useState(null);
     const [followupData, setFollowupData] = useState(null);
+    const [rebookingAppt, setRebookingAppt] = useState(null);
+    const [rebookForm, setRebookForm] = useState({ visitDate: '', visitTime: '' });
+    const [bookingAppt, setBookingAppt] = useState(false);
+
+    // Profile Edit State
+    const [isEditing, setIsEditing] = useState(false);
+    const [editForm, setEditForm] = useState(null);
+    const [updatingProfile, setUpdatingProfile] = useState(false);
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+    const handleEditClick = () => {
+        if (!profileData) return;
+        setEditForm({
+            name: profileData.name || '',
+            email: profileData.email || '',
+            mobile: profileData.mobile || profileData.phone || '',
+            dob: profileData.dob || '',
+            age: profileData.age || '',
+            gender: profileData.gender || '',
+            bloodGroup: profileData.bloodGroup || '',
+            maritalStatus: profileData.maritalStatus || '',
+            occupation: profileData.occupation || '',
+            nationality: profileData.nationality || '',
+            panNumber: profileData.panNumber || '',
+            alternateMobile: profileData.alternateMobile || '',
+            whatsappNumber: profileData.whatsappNumber || '',
+            
+            // Emergency Contact
+            emergencyContact: {
+                name: profileData.emergencyContact?.name || '',
+                relation: profileData.emergencyContact?.relation || '',
+                mobile: profileData.emergencyContact?.mobile || ''
+            },
+            
+            // Address
+            houseNo: profileData.houseNo || '',
+            buildingName: profileData.buildingName || '',
+            street: profileData.street || '',
+            area: profileData.area || '',
+            landmark: profileData.landmark || '',
+            city: profileData.city || '',
+            state: profileData.state || '',
+            country: profileData.country || 'India',
+            zipCode: profileData.zipCode || '',
+            
+            // Medical / Fertility Profile
+            height: profileData.fertilityProfile?.height || '',
+            weight: profileData.fertilityProfile?.weight || '',
+            bmi: profileData.fertilityProfile?.bmi || '',
+            allergies: profileData.fertilityProfile?.allergies || '',
+            chronicDiseases: profileData.fertilityProfile?.chronicDiseases || '',
+            medicalHistory: profileData.fertilityProfile?.medicalHistory || '',
+            surgicalHistory: profileData.fertilityProfile?.surgicalHistory || '',
+            currentMedications: profileData.fertilityProfile?.currentMedications || '',
+
+            avatar: profileData.avatar || ''
+        });
+        setIsEditing(true);
+    };
+
+    const handleAvatarChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setUploadingAvatar(true);
+        try {
+            const formData = new FormData();
+            formData.append('images', file);
+            const res = await uploadAPI.uploadImages(formData);
+            if (res.success && res.files?.length > 0) {
+                const url = res.files[0].url;
+                setEditForm(prev => ({ ...prev, avatar: url }));
+                alert('Profile picture uploaded successfully!');
+            } else {
+                alert('Upload failed. Please try again.');
+            }
+        } catch (err) {
+            console.error('Avatar upload error:', err);
+            alert('Failed to upload avatar.');
+        } finally {
+            setUploadingAvatar(false);
+        }
+    };
+
+    const handleProfileInputChange = (e) => {
+        const { name, value } = e.target;
+
+        if (name === 'mobile' || name === 'alternateMobile' || name === 'whatsappNumber') {
+            const cleaned = value.replace(/\D/g, '').slice(0, 10);
+            setEditForm(prev => ({ ...prev, [name]: cleaned }));
+            return;
+        }
+
+        if (name === 'aadhaarNumber') {
+            const cleaned = value.replace(/\D/g, '').slice(0, 12);
+            setEditForm(prev => ({ ...prev, [name]: cleaned }));
+            return;
+        }
+
+        if (name === 'height' || name === 'weight') {
+            setEditForm(prev => {
+                const h = name === 'height' ? value : prev.height;
+                const w = name === 'weight' ? value : prev.weight;
+                let bmi = prev.bmi;
+                if (h && w) {
+                    const hM = Number(h) / 100;
+                    bmi = (Number(w) / (hM * hM)).toFixed(2);
+                }
+                return { ...prev, [name]: value, bmi };
+            });
+            return;
+        }
+
+        setEditForm(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleEmergencyContactChange = (e) => {
+        const { name, value } = e.target;
+        let val = value;
+        if (name === 'mobile') {
+            val = value.replace(/\D/g, '').slice(0, 10);
+        }
+        setEditForm(prev => ({
+            ...prev,
+            emergencyContact: {
+                ...prev.emergencyContact,
+                [name]: val
+            }
+        }));
+    };
+
+    const handleSaveProfile = async (e) => {
+        e.preventDefault();
+        
+        if (!editForm.name?.trim()) {
+            alert('Name is required.');
+            return;
+        }
+
+        if (!/^\d{10}$/.test(editForm.mobile)) {
+            alert('Mobile number must be exactly 10 digits.');
+            return;
+        }
+
+        if (editForm.aadhaarNumber && !/^\d{12}$/.test(editForm.aadhaarNumber)) {
+            alert('Aadhaar number must be exactly 12 digits.');
+            return;
+        }
+
+        setUpdatingProfile(true);
+        try {
+            const res = await patientAuthAPI.updatePatientProfile(editForm);
+            if (res.success) {
+                alert('Profile updated successfully!');
+                setProfileData(res.profile);
+                
+                const pUserStr = localStorage.getItem('patientUser');
+                if (pUserStr) {
+                    const pUser = JSON.parse(pUserStr);
+                    pUser.name = res.profile.name;
+                    pUser.avatar = res.profile.avatar;
+                    localStorage.setItem('patientUser', JSON.stringify(pUser));
+                }
+                
+                setIsEditing(false);
+            } else {
+                alert(res.message || 'Failed to update profile.');
+            }
+        } catch (err) {
+            console.error('Profile update error:', err);
+            alert(err.response?.data?.message || 'Failed to save changes.');
+        } finally {
+            setUpdatingProfile(false);
+        }
+    };
 
     useEffect(() => {
         loadDashboardData();
@@ -125,6 +303,34 @@ const PatientDashboard = () => {
         } catch (error) {
             console.error('Cancel error:', error);
             alert(error.response?.data?.message || 'Failed to cancel appointment.');
+        }
+    };
+
+    const handleRebookSubmit = async () => {
+        if (!rebookForm.visitDate || !rebookForm.visitTime) {
+            alert('Please select both date and time.');
+            return;
+        }
+        setBookingAppt(true);
+        try {
+            const res = await patientAuthAPI.bookAppointment({
+                doctorId: rebookingAppt.doctorId,
+                department: rebookingAppt.department,
+                date: rebookForm.visitDate,
+                time: rebookForm.visitTime,
+                notes: 'Rebooked appointment via Patient Portal'
+            });
+            if (res.success) {
+                alert('Appointment rebooked successfully!');
+                setRebookingAppt(null);
+                setRebookForm({ visitDate: '', visitTime: '' });
+                loadDashboardData(); // refresh appointments
+            }
+        } catch (err) {
+            console.error('Rebook error:', err);
+            alert(err.response?.data?.message || 'Failed to rebook appointment.');
+        } finally {
+            setBookingAppt(false);
         }
     };
 
@@ -800,157 +1006,540 @@ const PatientDashboard = () => {
         );
     };
 
-    const renderProfile = () => (
-        <div className="dashboard-card">
-            <div className="card-body">
-                <div className="section-header">
-                    <h2>My Profile</h2>
+    const calculateCompleteness = (data) => {
+        if (!data) return 0;
+        const fields = [
+            data.name, data.mrn || data.patientId, data.hospitalName, data.branch, data.registrationDate, data.patientStatus, data.patientType,
+            data.dob, data.age, data.gender, data.maritalStatus, data.bloodGroup, data.aadhaarNumber, data.panNumber, data.occupation, data.nationality,
+            data.mobile || data.phone, data.alternateMobile, data.whatsappNumber, data.email,
+            data.houseNo, data.buildingName, data.street, data.area, data.landmark, data.city, data.state, data.country, data.zipCode,
+            data.emergencyContact?.name, data.emergencyContact?.relation, data.emergencyContact?.mobile,
+            data.fertilityProfile?.height, data.fertilityProfile?.weight, data.fertilityProfile?.bmi, data.fertilityProfile?.allergies, data.fertilityProfile?.chronicDiseases, data.fertilityProfile?.medicalHistory, data.fertilityProfile?.surgicalHistory, data.fertilityProfile?.currentMedications,
+            data.department, data.primaryDoctorName, data.sourceType, data.registrationType
+        ];
+        const filled = fields.filter(f => f !== undefined && f !== null && f !== '' && (Array.isArray(f) ? f.length > 0 : true)).length;
+        return Math.round((filled / fields.length) * 100);
+    };
+
+    const renderProfile = () => {
+        const completeness = calculateCompleteness(profileData);
+        
+        if (!profileData) {
+            return (
+                <div className="profile-loading-container">
+                    <div className="profile-spinner"></div>
+                    <p>Loading your profile...</p>
                 </div>
-                {profileData ? (
-                    <div className="profile-grid">
-                        {/* Personal Information */}
-                        <div className="profile-section">
-                            <h3>Personal Information</h3>
-                            <div className="profile-field">
-                                <label>Patient Name</label>
-                                <div className="value">{profileData.name || 'Not Provided'}</div>
-                            </div>
-                            <div className="profile-field">
-                                <label>Date of Birth / Age</label>
-                                <div className="value">
-                                    {profileData.dob ? new Date(profileData.dob).toLocaleDateString('en-IN') : 'Not Provided'} 
-                                    {profileData.age ? ` (${profileData.age} Years)` : ''}
+            );
+        }
+
+        const initials = (profileData.name || 'P').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+        if (isEditing && editForm) {
+            return (
+                <div className="dashboard-card profile-edit-card animate-fade-in">
+                    <div className="card-body">
+                        <form onSubmit={handleSaveProfile}>
+                            {/* Header identity card edit mode */}
+                            <div className="profile-gradient-header">
+                                <div className="profile-header-avatar-section">
+                                    <div className="avatar-edit-container">
+                                        {editForm.avatar ? (
+                                            <img src={editForm.avatar} alt="Avatar" className="profile-large-avatar" />
+                                        ) : (
+                                            <div className="profile-large-avatar initials-avatar">{initials}</div>
+                                        )}
+                                        <label className="avatar-upload-overlay" htmlFor="avatar-file-input">
+                                            {uploadingAvatar ? (
+                                                <div className="spinner-mini"></div>
+                                            ) : (
+                                                <>
+                                                    <span>📷</span>
+                                                    <span className="overlay-text">Upload</span>
+                                                </>
+                                            )}
+                                        </label>
+                                        <input 
+                                            id="avatar-file-input" 
+                                            type="file" 
+                                            accept="image/*" 
+                                            onChange={handleAvatarChange} 
+                                            style={{ display: 'none' }} 
+                                            disabled={uploadingAvatar}
+                                        />
+                                    </div>
+                                    <div className="profile-header-text">
+                                        <h3>Editing Profile</h3>
+                                        <p>{editForm.email}</p>
+                                    </div>
+                                </div>
+                                <div className="profile-header-actions">
+                                    <button type="submit" className="btn-save-profile" disabled={updatingProfile}>
+                                        {updatingProfile ? 'Saving...' : '💾 Save Changes'}
+                                    </button>
+                                    <button type="button" className="btn-cancel-profile" onClick={() => setIsEditing(false)} disabled={updatingProfile}>
+                                        ❌ Cancel
+                                    </button>
                                 </div>
                             </div>
-                            <div className="profile-field">
-                                <label>Gender</label>
-                                <div className="value" style={{ textTransform: 'capitalize' }}>{profileData.gender || 'Not Specified'}</div>
-                            </div>
-                            <div className="profile-field">
-                                <label>Blood Group</label>
-                                <div className="value">{profileData.bloodGroup || 'Not Specified'}</div>
-                            </div>
-                            <div className="profile-field">
-                                <label>Aadhaar Number</label>
-                                <div className="value">
-                                    {profileData.aadhaarNumber 
-                                        ? `XXXX-XXXX-${String(profileData.aadhaarNumber).slice(-4)}` 
-                                        : (profileData.aadhaar ? `XXXX-XXXX-${String(profileData.aadhaar).slice(-4)}` : 'Not Provided')}
+
+                            <div className="profile-edit-grid">
+                                {/* Section 1: Personal Details */}
+                                <div className="profile-edit-section">
+                                    <div className="section-title-bar">
+                                        <span className="section-icon">👤</span>
+                                        <h4>Personal Information</h4>
+                                    </div>
+                                    <div className="form-fields-grid">
+                                        <div className="form-field-group">
+                                            <label>Patient Full Name <span className="req">*</span></label>
+                                            <input 
+                                                type="text" 
+                                                name="name" 
+                                                value={editForm.name} 
+                                                onChange={handleProfileInputChange} 
+                                                required 
+                                                minLength={2} 
+                                            />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Date of Birth</label>
+                                            <input 
+                                                type="date" 
+                                                name="dob" 
+                                                value={editForm.dob ? editForm.dob.split('T')[0] : ''} 
+                                                onChange={handleProfileInputChange} 
+                                            />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Age (Years) <span className="req">*</span></label>
+                                            <input 
+                                                type="number" 
+                                                name="age" 
+                                                value={editForm.age} 
+                                                onChange={handleProfileInputChange} 
+                                                required 
+                                                min="1" 
+                                            />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Gender</label>
+                                            <select name="gender" value={editForm.gender} onChange={handleProfileInputChange}>
+                                                <option value="">Select Gender</option>
+                                                <option value="Male">Male</option>
+                                                <option value="Female">Female</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Blood Group</label>
+                                            <select name="bloodGroup" value={editForm.bloodGroup} onChange={handleProfileInputChange}>
+                                                <option value="">Select Blood Group</option>
+                                                <option value="A+">A+</option>
+                                                <option value="A-">A-</option>
+                                                <option value="B+">B+</option>
+                                                <option value="B-">B-</option>
+                                                <option value="AB+">AB+</option>
+                                                <option value="AB-">AB-</option>
+                                                <option value="O+">O+</option>
+                                                <option value="O-">O-</option>
+                                            </select>
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Marital Status</label>
+                                            <select name="maritalStatus" value={editForm.maritalStatus} onChange={handleProfileInputChange}>
+                                                <option value="">Select Marital Status</option>
+                                                <option value="single">Single</option>
+                                                <option value="married">Married</option>
+                                                <option value="divorced">Divorced</option>
+                                                <option value="widowed">Widowed</option>
+                                            </select>
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Occupation</label>
+                                            <input type="text" name="occupation" value={editForm.occupation} onChange={handleProfileInputChange} />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Nationality</label>
+                                            <input type="text" name="nationality" value={editForm.nationality} onChange={handleProfileInputChange} />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Aadhaar Number</label>
+                                            <input 
+                                                type="text" 
+                                                name="aadhaarNumber" 
+                                                value={editForm.aadhaarNumber} 
+                                                onChange={handleProfileInputChange} 
+                                                maxLength={12} 
+                                                placeholder="12-digit Aadhaar"
+                                            />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>PAN Number</label>
+                                            <input type="text" name="panNumber" value={editForm.panNumber} onChange={handleProfileInputChange} placeholder="PAN Number" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 2: Contact Details */}
+                                <div className="profile-edit-section">
+                                    <div className="section-title-bar">
+                                        <span className="section-icon">📞</span>
+                                        <h4>Contact Information</h4>
+                                    </div>
+                                    <div className="form-fields-grid">
+                                        <div className="form-field-group">
+                                            <label>Mobile Number <span className="req">*</span></label>
+                                            <input 
+                                                type="text" 
+                                                name="mobile" 
+                                                value={editForm.mobile} 
+                                                onChange={handleProfileInputChange} 
+                                                required 
+                                                maxLength={10} 
+                                            />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Alternate Mobile</label>
+                                            <input 
+                                                type="text" 
+                                                name="alternateMobile" 
+                                                value={editForm.alternateMobile} 
+                                                onChange={handleProfileInputChange} 
+                                                maxLength={10} 
+                                            />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>WhatsApp Number</label>
+                                            <input 
+                                                type="text" 
+                                                name="whatsappNumber" 
+                                                value={editForm.whatsappNumber} 
+                                                onChange={handleProfileInputChange} 
+                                                maxLength={10} 
+                                            />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Email Address <span className="req">*</span></label>
+                                            <input 
+                                                type="email" 
+                                                name="email" 
+                                                value={editForm.email} 
+                                                onChange={handleProfileInputChange} 
+                                                required 
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 3: Emergency Contact */}
+                                <div className="profile-edit-section">
+                                    <div className="section-title-bar">
+                                        <span className="section-icon">🚨</span>
+                                        <h4>Emergency Contact</h4>
+                                    </div>
+                                    <div className="form-fields-grid">
+                                        <div className="form-field-group">
+                                            <label>Contact Person Name</label>
+                                            <input 
+                                                type="text" 
+                                                name="name" 
+                                                value={editForm.emergencyContact?.name || ''} 
+                                                onChange={handleEmergencyContactChange} 
+                                            />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Relation</label>
+                                            <select name="relation" value={editForm.emergencyContact?.relation || ''} onChange={handleEmergencyContactChange}>
+                                                <option value="">Select Relation</option>
+                                                <option value="Father">Father</option>
+                                                <option value="Mother">Mother</option>
+                                                <option value="Spouse">Spouse</option>
+                                                <option value="Son">Son</option>
+                                                <option value="Daughter">Daughter</option>
+                                                <option value="Brother">Brother</option>
+                                                <option value="Sister">Sister</option>
+                                                <option value="Others">Others</option>
+                                            </select>
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Contact Mobile</label>
+                                            <input 
+                                                type="text" 
+                                                name="mobile" 
+                                                value={editForm.emergencyContact?.mobile || ''} 
+                                                onChange={handleEmergencyContactChange} 
+                                                maxLength={10} 
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 4: Address Details */}
+                                <div className="profile-edit-section">
+                                    <div className="section-title-bar">
+                                        <span className="section-icon">📍</span>
+                                        <h4>Address Details</h4>
+                                    </div>
+                                    <div className="form-fields-grid">
+                                        <div className="form-field-group">
+                                            <label>House/Flat No.</label>
+                                            <input type="text" name="houseNo" value={editForm.houseNo} onChange={handleProfileInputChange} />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Building Name</label>
+                                            <input type="text" name="buildingName" value={editForm.buildingName} onChange={handleProfileInputChange} />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Street</label>
+                                            <input type="text" name="street" value={editForm.street} onChange={handleProfileInputChange} />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Area / Locality</label>
+                                            <input type="text" name="area" value={editForm.area} onChange={handleProfileInputChange} />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Landmark</label>
+                                            <input type="text" name="landmark" value={editForm.landmark} onChange={handleProfileInputChange} />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>City</label>
+                                            <input type="text" name="city" value={editForm.city} onChange={handleProfileInputChange} />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>State</label>
+                                            <input type="text" name="state" value={editForm.state} onChange={handleProfileInputChange} />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Country</label>
+                                            <input type="text" name="country" value={editForm.country} onChange={handleProfileInputChange} />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Pincode / Zip Code</label>
+                                            <input type="text" name="zipCode" value={editForm.zipCode} onChange={handleProfileInputChange} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 5: Medical / Fertility Details */}
+                                <div className="profile-edit-section">
+                                    <div className="section-title-bar">
+                                        <span className="section-icon">🩺</span>
+                                        <h4>Medical Information</h4>
+                                    </div>
+                                    <div className="form-fields-grid">
+                                        <div className="form-field-group">
+                                            <label>Height (cm)</label>
+                                            <input type="number" name="height" value={editForm.height} onChange={handleProfileInputChange} min="1" max="300" />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Weight (kg)</label>
+                                            <input type="number" name="weight" value={editForm.weight} onChange={handleProfileInputChange} min="1" max="500" />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>BMI (Body Mass Index)</label>
+                                            <input type="text" name="bmi" value={editForm.bmi} readOnly style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }} />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Known Allergies</label>
+                                            <input type="text" name="allergies" value={editForm.allergies} onChange={handleProfileInputChange} placeholder="e.g. Penicillin, Peanuts" />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Chronic Diseases</label>
+                                            <input type="text" name="chronicDiseases" value={editForm.chronicDiseases} onChange={handleProfileInputChange} placeholder="e.g. Diabetes, Hypertension" />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Medical History</label>
+                                            <input type="text" name="medicalHistory" value={editForm.medicalHistory} onChange={handleProfileInputChange} />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Surgical History</label>
+                                            <input type="text" name="surgicalHistory" value={editForm.surgicalHistory} onChange={handleProfileInputChange} />
+                                        </div>
+                                        <div className="form-field-group">
+                                            <label>Current Medications</label>
+                                            <input type="text" name="currentMedications" value={editForm.currentMedications} onChange={handleProfileInputChange} />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="profile-field">
-                                <label>Marital Status</label>
-                                <div className="value" style={{ textTransform: 'capitalize' }}>{profileData.maritalStatus || 'Not Specified'}</div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // View mode (Read-only) with improved colorful styling
+        return (
+            <div className="dashboard-card profile-view-card animate-fade-in">
+                <div className="card-body">
+                    {/* Header Identity banner */}
+                    <div className="profile-gradient-header">
+                        <div className="profile-header-avatar-section">
+                            {profileData.avatar ? (
+                                <img src={profileData.avatar} alt="Avatar" className="profile-large-avatar" />
+                            ) : (
+                                <div className="profile-large-avatar initials-avatar">{initials}</div>
+                            )}
+                            <div className="profile-header-text">
+                                <h3>{profileData.name}</h3>
+                                <div className="profile-header-badges">
+                                    <span className="profile-mrn-badge">MRN: {profileData.mrn || profileData.patientId || 'Pending'}</span>
+                                    {profileData.uhid && <span className="profile-uhid-badge">UHID: {profileData.uhid}</span>}
+                                </div>
+                                <p className="profile-header-subtitle">Registered on {profileData.registrationDate ? new Date(profileData.registrationDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}</p>
                             </div>
                         </div>
-
-                        {/* Contact Information */}
-                        <div className="profile-section">
-                            <h3>Contact Information</h3>
-                            <div className="profile-field">
-                                <label>Mobile Number</label>
-                                <div className="value">{profileData.mobile || profileData.phone || patient?.mobile || 'Not Provided'}</div>
-                            </div>
-                            <div className="profile-field">
-                                <label>Email Address</label>
-                                <div className="value">{profileData.email || 'Not Provided'}</div>
-                            </div>
-                            <div className="profile-field">
-                                <label>Emergency Contact</label>
-                                <div className="value">
-                                    {profileData.emergencyContact?.name || 'Not Provided'} 
-                                    {profileData.emergencyContact?.phone ? ` (${profileData.emergencyContact.phone})` : ''}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Address */}
-                        <div className="profile-section">
-                            <h3>Address</h3>
-                            <div className="profile-field">
-                                <label>House/Flat No.</label>
-                                <div className="value">{profileData.houseNo || 'Not Provided'}</div>
-                            </div>
-                            <div className="profile-field">
-                                <label>Street / Area</label>
-                                <div className="value">{profileData.street || 'Not Provided'}</div>
-                            </div>
-                            <div className="profile-field">
-                                <label>City & State</label>
-                                <div className="value">
-                                    {profileData.city || 'Not Provided'}
-                                    {profileData.state ? `, ${profileData.state}` : ''}
-                                </div>
-                            </div>
-                            <div className="profile-field">
-                                <label>Pincode / Zip Code</label>
-                                <div className="value">{profileData.zipCode || 'Not Provided'}</div>
-                            </div>
-                        </div>
-
-                        {/* Medical Information */}
-                        <div className="profile-section">
-                            <h3>Medical Information</h3>
-                            <div className="profile-field">
-                                <label>Height & Weight (BMI)</label>
-                                <div className="value">
-                                    {profileData.fertilityProfile?.height ? `${profileData.fertilityProfile.height} cm, ` : ''}
-                                    {profileData.fertilityProfile?.weight ? `${profileData.fertilityProfile.weight} kg` : ''}
-                                    {profileData.fertilityProfile?.bmi ? ` (BMI: ${profileData.fertilityProfile.bmi})` : 'Not Provided'}
-                                </div>
-                            </div>
-                            <div className="profile-field">
-                                <label>Allergies</label>
-                                <div className="value">
-                                    {profileData.fertilityProfile?.allergies?.length > 0 
-                                        ? profileData.fertilityProfile.allergies.join(', ') 
-                                        : 'None Reported'}
-                                </div>
-                            </div>
-                            <div className="profile-field">
-                                <label>Medical History</label>
-                                <div className="value">
-                                    {profileData.fertilityProfile?.medicalHistory?.length > 0 
-                                        ? profileData.fertilityProfile.medicalHistory.join(', ') 
-                                        : 'None Reported'}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Patient Source & Hospital */}
-                        <div className="profile-section">
-                            <h3>Patient Source & Hospital</h3>
-                            <div className="profile-field">
-                                <label>Hospital Name</label>
-                                <div className="value">{profileData.hospitalName || hospitalName || 'Not Specified'}</div>
-                            </div>
-                            <div className="profile-field">
-                                <label>MRN (Medical Record Number)</label>
-                                <div className="value" style={{ fontWeight: 'bold', color: '#0369a1' }}>
-                                    {profileData.mrn || profileData.patientId || 'Pending Validation'}
-                                </div>
-                            </div>
-                            <div className="profile-field">
-                                <label>Referral Type</label>
-                                <div className="value" style={{ textTransform: 'capitalize' }}>
-                                    {profileData.sourceType || 'Self Registration'}
-                                    {profileData.sourceDetails ? ` (${profileData.sourceDetails})` : ''}
-                                </div>
-                            </div>
-                            <div className="profile-field">
-                                <label>Registration Date</label>
-                                <div className="value">
-                                    {profileData.registrationDate ? new Date(profileData.registrationDate).toLocaleDateString('en-IN') : 'Not Provided'}
-                                </div>
-                            </div>
+                        <div className="profile-header-actions">
+                            <button className="btn-edit-profile" onClick={handleEditClick}>
+                                ✏️ Edit Profile
+                            </button>
                         </div>
                     </div>
-                ) : (
-                    <div>Loading profile...</div>
-                )}
+
+                    {/* Progress Completeness */}
+                    <div className="profile-completeness-banner">
+                        <div className="completeness-info">
+                            <span>Profile Completeness Indicator</span>
+                            <span className="completeness-value">{completeness}%</span>
+                        </div>
+                        <div className="completeness-bar-bg">
+                            <div 
+                                className="completeness-bar-fill" 
+                                style={{ 
+                                    width: `${completeness}%`,
+                                    backgroundColor: completeness === 100 ? '#10b981' : (completeness > 65 ? '#6366f1' : '#f59e0b')
+                                }}
+                            ></div>
+                        </div>
+                    </div>
+
+                    <div className="profile-details-grid">
+                        {/* 1. Personal Information */}
+                        <div className="profile-detail-card">
+                            <div className="detail-card-header">
+                                <span className="detail-card-icon">👤</span>
+                                <h4>Personal Details</h4>
+                            </div>
+                            <div className="detail-fields-list">
+                                <div className="detail-field-row"><span className="field-label">Name</span><span className="field-value">{profileData.name || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">DOB / Age</span><span className="field-value">{profileData.dob ? new Date(profileData.dob).toLocaleDateString('en-IN') : '—'} {profileData.age ? `(${profileData.age} Years)` : ''}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Gender</span><span className="field-value" style={{ textTransform: 'capitalize' }}>{profileData.gender || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Blood Group</span><span className="field-value">{profileData.bloodGroup || '—'}</span></div>
+                                <div className="detail-field-row">
+                                    <span className="field-label">Aadhaar Number</span>
+                                    <span className="field-value">
+                                        {profileData.aadhaarNumber 
+                                            ? `XXXX-XXXX-${String(profileData.aadhaarNumber).slice(-4)}` 
+                                            : (profileData.aadhaar ? `XXXX-XXXX-${String(profileData.aadhaar).slice(-4)}` : '—')}
+                                    </span>
+                                </div>
+                                <div className="detail-field-row"><span className="field-label">PAN Number</span><span className="field-value">{profileData.panNumber || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Marital Status</span><span className="field-value" style={{ textTransform: 'capitalize' }}>{profileData.maritalStatus || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Occupation</span><span className="field-value">{profileData.occupation || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Nationality</span><span className="field-value">{profileData.nationality || '—'}</span></div>
+                            </div>
+                        </div>
+
+                        {/* 2. Contact Information */}
+                        <div className="profile-detail-card">
+                            <div className="detail-card-header">
+                                <span className="detail-card-icon">📞</span>
+                                <h4>Contact Details</h4>
+                            </div>
+                            <div className="detail-fields-list">
+                                <div className="detail-field-row"><span className="field-label">Mobile Number</span><span className="field-value">{profileData.mobile || profileData.phone || patient?.mobile || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Alternate Mobile</span><span className="field-value">{profileData.alternateMobile || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">WhatsApp Number</span><span className="field-value">{profileData.whatsappNumber || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Email Address</span><span className="field-value">{profileData.email || '—'}</span></div>
+                            </div>
+                        </div>
+
+                        {/* 3. Emergency Contact */}
+                        <div className="profile-detail-card">
+                            <div className="detail-card-header">
+                                <span className="detail-card-icon">🚨</span>
+                                <h4>Emergency Contact</h4>
+                            </div>
+                            <div className="detail-fields-list">
+                                <div className="detail-field-row"><span className="field-label">Contact Person</span><span className="field-value">{profileData.emergencyContact?.name || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Relation</span><span className="field-value">{profileData.emergencyContact?.relation || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Mobile Number</span><span className="field-value">{profileData.emergencyContact?.mobile || '—'}</span></div>
+                            </div>
+                        </div>
+
+                        {/* 4. Address Details */}
+                        <div className="profile-detail-card">
+                            <div className="detail-card-header">
+                                <span className="detail-card-icon">📍</span>
+                                <h4>Address Details</h4>
+                            </div>
+                            <div className="detail-fields-list">
+                                <div className="detail-field-row"><span className="field-label">House/Flat No.</span><span className="field-value">{profileData.houseNo || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Building Name</span><span className="field-value">{profileData.buildingName || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Street / Area</span><span className="field-value">{[profileData.street, profileData.area].filter(Boolean).join(', ') || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Landmark</span><span className="field-value">{profileData.landmark || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">City</span><span className="field-value">{profileData.city || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">State</span><span className="field-value">{profileData.state || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Country</span><span className="field-value">{profileData.country || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Pincode</span><span className="field-value">{profileData.zipCode || '—'}</span></div>
+                            </div>
+                        </div>
+
+                        {/* 5. Medical Info */}
+                        <div className="profile-detail-card">
+                            <div className="detail-card-header">
+                                <span className="detail-card-icon">🩺</span>
+                                <h4>Medical Information</h4>
+                            </div>
+                            <div className="detail-fields-list">
+                                <div className="detail-field-row"><span className="field-label">Height</span><span className="field-value">{profileData.fertilityProfile?.height ? `${profileData.fertilityProfile.height} cm` : '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Weight</span><span className="field-value">{profileData.fertilityProfile?.weight ? `${profileData.fertilityProfile.weight} kg` : '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">BMI</span><span className="field-value">{profileData.fertilityProfile?.bmi || '—'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Allergies</span><span className="field-value">{Array.isArray(profileData.fertilityProfile?.allergies) ? profileData.fertilityProfile.allergies.join(', ') : (profileData.fertilityProfile?.allergies || '—')}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Chronic Diseases</span><span className="field-value">{Array.isArray(profileData.fertilityProfile?.chronicDiseases) ? profileData.fertilityProfile.chronicDiseases.join(', ') : (profileData.fertilityProfile?.chronicDiseases || '—')}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Medical History</span><span className="field-value">{Array.isArray(profileData.fertilityProfile?.medicalHistory) ? profileData.fertilityProfile.medicalHistory.join(', ') : (profileData.fertilityProfile?.medicalHistory || '—')}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Surgical History</span><span className="field-value">{Array.isArray(profileData.fertilityProfile?.surgicalHistory) ? profileData.fertilityProfile.surgicalHistory.join(', ') : (profileData.fertilityProfile?.surgicalHistory || '—')}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Current Medications</span><span className="field-value">{Array.isArray(profileData.fertilityProfile?.currentMedications) ? profileData.fertilityProfile.currentMedications.join(', ') : (profileData.fertilityProfile?.currentMedications || '—')}</span></div>
+                            </div>
+                        </div>
+
+                        {/* 6. Hospital Details */}
+                        <div className="profile-detail-card">
+                            <div className="detail-card-header">
+                                <span className="detail-card-icon">🏥</span>
+                                <h4>Hospital Information</h4>
+                            </div>
+                            <div className="detail-fields-list">
+                                <div className="detail-field-row"><span className="field-label">Hospital</span><span className="field-value">{profileData.hospitalName || hospitalName}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Branch</span><span className="field-value">{profileData.branch || 'Main'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Department</span><span className="field-value">{profileData.department || 'General'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Primary Doctor</span><span className="field-value">{profileData.primaryDoctorName || 'Not Assigned'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Registration Type</span><span className="field-value" style={{ textTransform: 'capitalize' }}>{profileData.registrationType || 'Self'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Patient Status</span><span className="field-value" style={{ textTransform: 'capitalize' }}>{profileData.patientStatus || 'Active'}</span></div>
+                                <div className="detail-field-row"><span className="field-label">Patient Type</span><span className="field-value" style={{ textTransform: 'capitalize' }}>{profileData.patientType || 'Primary'}</span></div>
+                            </div>
+                        </div>
+
+                        {/* IVF Details (Conditional) */}
+                        {(profileData.patientType === 'Partner' || profileData.ivfDetails?.coupleId || profileData.partnerName) && (
+                            <div className="profile-detail-card">
+                                <div className="detail-card-header">
+                                    <span className="detail-card-icon">🧬</span>
+                                    <h4>IVF / Couple Details</h4>
+                                </div>
+                                <div className="detail-fields-list">
+                                    <div className="detail-field-row"><span className="field-label">Couple ID</span><span className="field-value">{profileData.ivfDetails?.coupleId || '—'}</span></div>
+                                    <div className="detail-field-row"><span className="field-label">Partner Name</span><span className="field-value">{profileData.partnerName || '—'}</span></div>
+                                    <div className="detail-field-row"><span className="field-label">Partner MRN</span><span className="field-value">{profileData.partnerMrn || '—'}</span></div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     const refreshBillsData = async () => {
         try {
@@ -1179,6 +1768,33 @@ const PatientDashboard = () => {
                                                             setPayingBill(bill);
                                                             setPayMode('UPI');
                                                             setPayTxnId('');
+                                                            
+                                                            const fetchDeptUpi = async () => {
+                                                                setFetchingUpi(true);
+                                                                setDepartmentUpi(null);
+                                                                try {
+                                                                    const categoryToRole = {
+                                                                        'Consultation': 'Reception',
+                                                                        'Lab Test': 'Laboratory',
+                                                                        'Pharmacy': 'Pharmacy',
+                                                                        'Facility Charge': 'Billing',
+                                                                        'Admission': 'Billing'
+                                                                    };
+                                                                    const targetRole = categoryToRole[bill.category] || 'Billing';
+                                                                    const res = await patientAuthAPI.getDepartmentUpiByRole(targetRole);
+                                                                    if (res.success && res.departmentUpi) {
+                                                                        setDepartmentUpi(res.departmentUpi);
+                                                                        setPayUpiId(res.departmentUpi.upiId);
+                                                                    } else {
+                                                                        setPayUpiId('');
+                                                                    }
+                                                                } catch (err) {
+                                                                    console.error("Failed to fetch department UPI", err);
+                                                                } finally {
+                                                                    setFetchingUpi(false);
+                                                                }
+                                                            };
+                                                            fetchDeptUpi();
                                                         }}>
                                                             <span>💳</span> Pay Now
                                                         </button>
@@ -1417,8 +2033,9 @@ const PatientDashboard = () => {
                         </div>
                         <div className="patient-modal-footer">
                             <button className="btn-primary" onClick={() => {
+                                setRebookingAppt(selectedAppt);
+                                setRebookForm({ visitDate: '', visitTime: '' });
                                 setSelectedAppt(null);
-                                navigate(`/patient/book-appointment?department=${encodeURIComponent(selectedAppt.department || '')}`);
                             }}>
                                 Re-Book Appointment
                             </button>
@@ -1427,6 +2044,58 @@ const PatientDashboard = () => {
                                     Cancel Visit
                                 </button>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Rebook Appointment Modal */}
+            {rebookingAppt && (
+                <div className="patient-modal-overlay" onClick={() => !bookingAppt && setRebookingAppt(null)}>
+                    <div className="patient-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+                        <div className="patient-modal-header">
+                            <h3>Re-Book Appointment</h3>
+                            <button className="patient-modal-close" onClick={() => !bookingAppt && setRebookingAppt(null)}>&times;</button>
+                        </div>
+                        <div className="patient-modal-body" style={{ padding: '20px' }}>
+                            <div className="form-group" style={{ marginBottom: '15px' }}>
+                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Department (Read Only)</label>
+                                <input type="text" value={rebookingAppt.department || 'Consultation'} disabled className="patient-input" style={{ width: '100%', backgroundColor: '#f1f5f9', cursor: 'not-allowed' }} />
+                            </div>
+                            <div className="form-group" style={{ marginBottom: '15px' }}>
+                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Doctor (Read Only)</label>
+                                <input type="text" value={`Dr. ${rebookingAppt.doctorName}`} disabled className="patient-input" style={{ width: '100%', backgroundColor: '#f1f5f9', cursor: 'not-allowed' }} />
+                            </div>
+                            <div className="form-group" style={{ marginBottom: '15px' }}>
+                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Select Date</label>
+                                <input 
+                                    type="date" 
+                                    className="patient-input" 
+                                    style={{ width: '100%' }}
+                                    min={new Date().toISOString().split('T')[0]} 
+                                    value={rebookForm.visitDate} 
+                                    onChange={(e) => setRebookForm({ ...rebookForm, visitDate: e.target.value, visitTime: '' })}
+                                />
+                            </div>
+                            {rebookForm.visitDate && (
+                                <div className="form-group" style={{ marginBottom: '15px' }}>
+                                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Available Slots</label>
+                                    <SlotPicker 
+                                        doctorId={rebookingAppt.doctorId} 
+                                        date={rebookForm.visitDate} 
+                                        selectedTime={rebookForm.visitTime} 
+                                        onSelectTime={(t) => setRebookForm({ ...rebookForm, visitTime: t })}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        <div className="patient-modal-footer">
+                            <button className="btn-primary" onClick={handleRebookSubmit} disabled={bookingAppt || !rebookForm.visitDate || !rebookForm.visitTime}>
+                                {bookingAppt ? 'Booking...' : 'Confirm Appointment'}
+                            </button>
+                            <button className="btn-danger-outline" onClick={() => !bookingAppt && setRebookingAppt(null)} disabled={bookingAppt}>
+                                Cancel
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1683,30 +2352,73 @@ const PatientDashboard = () => {
 
                         <form onSubmit={handleOnlinePayment}>
                             {payMode === 'UPI' && (
-                                <>
-                                    <div className="pay-form-group">
-                                        <label>Your UPI ID / VPA</label>
-                                        <input
-                                            type="text"
-                                            className="pay-form-input"
-                                            placeholder="e.g. username@okhdfcbank"
-                                            value={payUpiId}
-                                            onChange={(e) => setPayUpiId(e.target.value)}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="pay-form-group">
-                                        <label>UPI Transaction ID / UTR (Optional)</label>
-                                        <input
-                                            type="text"
-                                            className="pay-form-input"
-                                            placeholder="12-digit UTR number after payment"
-                                            value={payTxnId}
-                                            onChange={(e) => setPayTxnId(e.target.value)}
-                                        />
-                                    </div>
-                                </>
-                            )}
+                                                        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                                                            <div style={{ flex: '1 1 300px' }}>
+                                                                <div className="pay-form-group">
+                                                                    <label>Your UPI ID / VPA</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="pay-form-input"
+                                                                        placeholder="e.g. username@okhdfcbank"
+                                                                        value={payUpiId}
+                                                                        onChange={(e) => setPayUpiId(e.target.value)}
+                                                                        required
+                                                                    />
+                                                                </div>
+                                                                <div className="pay-form-group">
+                                                                    <label>UPI Transaction ID / UTR (Optional)</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="pay-form-input"
+                                                                        placeholder="12-digit UTR number after payment"
+                                                                        value={payTxnId}
+                                                                        onChange={(e) => setPayTxnId(e.target.value)}
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            {/* QR Code Section */}
+                                                            <div style={{ flex: '0 0 200px' }}>
+                                                                {fetchingUpi ? (
+                                                                    <div style={{ textAlign: 'center', padding: '20px', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                                                                        Loading QR...
+                                                                    </div>
+                                                                ) : departmentUpi ? (
+                                                                    <div style={{
+                                                                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                                                        padding: '16px', background: '#f0fdfa', borderRadius: '12px',
+                                                                        border: '1px dashed #0d9488', textAlign: 'center'
+                                                                    }}>
+                                                                        <div style={{ fontSize: '13px', color: '#0f766e', fontWeight: 'bold', marginBottom: '12px' }}>
+                                                                            Scan to Pay (₹{payingBill.amount})
+                                                                        </div>
+                                                                        <img
+                                                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent('upi://pay?pa=' + departmentUpi.upiId.trim() + '&pn=Medical365&am=' + payingBill.amount + '&cu=INR')}`}
+                                                                            alt="UPI QR Code"
+                                                                            style={{ borderRadius: '8px', width: '140px', height: '140px' }}
+                                                                        />
+                                                                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '8px', wordBreak: 'break-all' }}>
+                                                                            {departmentUpi.upiId}
+                                                                        </div>
+                                                                        <div style={{ fontSize: '11px', color: '#0f766e', marginTop: '4px', fontWeight: 600 }}>
+                                                                            {departmentUpi.label}
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div style={{
+                                                                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                                                        padding: '16px', background: '#fef3c7', borderRadius: '12px',
+                                                                        border: '1px dashed #f59e0b', textAlign: 'center', height: '100%', justifyContent: 'center'
+                                                                    }}>
+                                                                        <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚠️</div>
+                                                                        <div style={{ fontSize: '12px', color: '#92400e', fontWeight: 600 }}>
+                                                                            No UPI account is configured for the billing department. You can still pay manually via any UPI app if you have the details.
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                            )}
 
                             {payMode === 'Card' && (
                                 <>

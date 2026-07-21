@@ -22,17 +22,40 @@ const userSchema = new mongoose.Schema({
 
     // Patient ID for clinical tracking
     patientId: { type: String, unique: true, sparse: true },
+    uhid: { type: String, sparse: true },
+    patientStatus: { type: String, default: 'Active' },
+    branch: { type: String },
 
     // Static Demographics
     dob: String,
     gender: String,
     bloodGroup: String,
+    maritalStatus: String,
+    nationality: String,
+    occupation: String,
+    
+    // Address
     address: String,
     houseNo: String,
+    buildingName: String,
     street: String,
+    area: String,
+    landmark: String,
     city: String,
     state: String,
+    country: { type: String, default: 'India' },
     zipCode: String,
+
+    // Contact
+    alternateMobile: String,
+    whatsappNumber: String,
+
+    // Emergency Contact
+    emergencyContact: {
+        name: String,
+        relation: String,
+        mobile: String
+    },
 
     // Identity Verification (KYC)
     aadhaarNumber: { 
@@ -42,6 +65,7 @@ const userSchema = new mongoose.Schema({
         sparse: true, 
         trim: true 
     },
+    panNumber: String,
     isAadhaarVerified: { type: Boolean, default: false },
     age: { 
         type: Number, 
@@ -51,7 +75,19 @@ const userSchema = new mongoose.Schema({
     // Clinical Profile
     patientType: { type: String, enum: ['Primary', 'Partner'], default: 'Primary' },
     partner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    ivfDetails: {
+        coupleId: String,
+        partnerName: String,
+        partnerMrn: String
+    },
     fertilityProfile: { type: mongoose.Schema.Types.Mixed, default: {} },
+
+    // Hospital Details
+    department: { type: String },
+    primaryDoctor: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor' },
+    sourceType: { type: String },
+    sourceDetails: { type: String },
+    registrationType: { type: String, default: 'Self' },
 
     services: [String],
     departments: [{ type: String }],

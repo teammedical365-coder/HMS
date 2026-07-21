@@ -8,6 +8,7 @@ import autoTable from 'jspdf-autotable';
 import { FiSearch, FiUserPlus, FiFileText, FiDollarSign, FiUsers, FiCalendar, FiHome, FiPlusSquare } from 'react-icons/fi';
 import { FaRupeeSign } from 'react-icons/fa';
 import PaymentSection from '../../components/PaymentSection';
+import SlotPicker from '../../components/SlotPicker';
 import './ReceptionDashboard.css';
 
 console.log("--- DASHBOARD FILE IS RUNNING ---");
@@ -222,10 +223,22 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 if (res.success) {
                     setHospitalContext(res.hospital);
                     fetchDoctors(res.hospital._id);
-                }
-                const upiRes = await hospitalAPI.getUpiIds();
-                if (upiRes.success) {
-                    setUpiOptions(upiRes.upiIds || []);
+                    const upiRes = await hospitalAPI.getUpiIds();
+                    if (upiRes.success) {
+                        // Try to fetch department-specific UPI for Reception
+                        try {
+                            const deptUpiRes = await hospitalAPI.getDepartmentUpiByRole('Reception');
+                            if (deptUpiRes.success && deptUpiRes.departmentUpi) {
+                                const du = deptUpiRes.departmentUpi;
+                                setUpiOptions([{ label: du.label, upiId: du.upiId }]);
+                            } else {
+                                // Fallback to legacy hospital-wide UPI list
+                                setUpiOptions(upiRes.upiIds || []);
+                            }
+                        } catch {
+                            setUpiOptions(upiRes.upiIds || []);
+                        }
+                    }
                 }
             } catch (err) { console.error('Error fetching hospital context:', err); }
         };
@@ -1208,24 +1221,26 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                 )}
                             </div>
                             {(!selectedPatientId || isPatientPortal) && (
-                                <div className="form-row">
-                                    <div className="field" style={{ flexBasis: '100%' }}>
-                                        <PaymentSection
-                                            splitPayments={intakeForm.splitPayments}
-                                            onSplitChange={handleIntakeSplitPaymentChange}
-                                            onAddSplit={addIntakeSplitPayment}
-                                            onRemoveSplit={removeIntakeSplitPayment}
-                                            totalAmount={Number(intakeForm.consultationFee) || 0}
-                                            upiOptions={upiOptions}
-                                            paymentData={intakePaymentData}
-                                            onPaymentDataChange={setIntakePaymentData}
-                                            proofFile={paymentScreenshot}
-                                            onProofFileChange={setPaymentScreenshot}
-                                        />
-                                    </div>
-                                    <div className="field" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', marginTop: '10px', height: 'fit-content' }}>
+                                <div className="form-row" style={followupStatus?.active ? { display: 'flex', flexDirection: 'column', gap: '10px' } : {}}>
+                                    {!followupStatus?.active && (
+                                        <div className="field" style={{ flexBasis: '100%' }}>
+                                            <PaymentSection
+                                                splitPayments={intakeForm.splitPayments}
+                                                onSplitChange={handleIntakeSplitPaymentChange}
+                                                onAddSplit={addIntakeSplitPayment}
+                                                onRemoveSplit={removeIntakeSplitPayment}
+                                                totalAmount={Number(intakeForm.consultationFee) || 0}
+                                                upiOptions={upiOptions}
+                                                paymentData={intakePaymentData}
+                                                onPaymentDataChange={setIntakePaymentData}
+                                                proofFile={paymentScreenshot}
+                                                onProofFileChange={setPaymentScreenshot}
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="field" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', height: 'fit-content', width: '100%', justifyContent: 'center' }}>
                                         <span style={{ fontSize: '18px' }}>✅</span>
-                                        <span style={{ fontWeight: 600, color: '#15803d', fontSize: '14px' }}>Payment Confirmed — Paid</span>
+                                        <span style={{ fontWeight: 600, color: '#15803d', fontSize: '16px' }}>Payment Confirmed — Paid</span>
                                     </div>
                                 </div>
                             )}
@@ -1268,7 +1283,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                 </div>
                             )}
 
-                            {(!selectedPatientId || isPatientPortal) && intakeForm.splitPayments.some(p => p.method !== 'Cash') && (
+                            {(!selectedPatientId || isPatientPortal) && !followupStatus?.active && intakeForm.splitPayments.some(p => p.method !== 'Cash') && (
                                 <div className="form-row" style={{ marginTop: '6px' }}>
                                     <div className="field" style={{ flex: 1 }}>
                                         <label>Payment Screenshot / Proof <span style={{ color: '#ef4444', fontSize: '12px' }}>*Required for non-cash payment</span></label>
@@ -1294,8 +1309,14 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px', borderBottom: '2px solid #bfdbfe', paddingBottom: '10px' }}>5. Assign to Doctor/Counselor</h4>
                                     <div className="form-row">
                                         <div className="field">
-                                            <label>Department</label>
-                                            <select name="department" value={intakeForm.department} onChange={handleInputChange}>
+                                            <label>Department {followupStatus?.active && '(Read Only)'}</label>
+                                            <select 
+                                                name="department" 
+                                                value={intakeForm.department} 
+                                                onChange={handleInputChange}
+                                                disabled={followupStatus?.active}
+                                                style={followupStatus?.active ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
+                                            >
                                                 <option value="">-- Choose Department --</option>
                                                 {[...new Set([...(hospitalContext?.departments || []), ...doctorsList.flatMap(d => d.departments || [])])].filter(Boolean).map(dept => (
                                                     <option key={dept} value={dept}>{dept}</option>
@@ -1303,13 +1324,13 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             </select>
                                         </div>
                                         <div className="field">
-                                            <label>Select Specialist</label>
+                                            <label>Select Specialist {followupStatus?.active && '(Read Only)'}</label>
                                             <select
                                                 name="doctor"
                                                 value={intakeForm.doctor}
                                                 onChange={handleInputChange}
-                                                disabled={!intakeForm.department}
-                                                style={!intakeForm.department ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
+                                                disabled={!intakeForm.department || followupStatus?.active}
+                                                style={(!intakeForm.department || followupStatus?.active) ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
                                             >
                                                 {!intakeForm.department ? (
                                                     <option value="">-- Select Department First --</option>
@@ -1346,24 +1367,13 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                 </div>
                                             </div>
                                         ) : (
-                                            /* Slot mode: existing time slot grid */
-                                            <div className="slot-grid">
-                                                {timeSlots.map(time => {
-                                                    const isBooked = availabilityCheck.bookedSlots.includes(time);
-                                                    const isPast = isSlotInPast(time);
-                                                    const isDisabled = isBooked || isPast;
-                                                    return (
-                                                        <button
-                                                            key={time} type="button"
-                                                            className={`slot-btn ${isBooked ? 'booked' : ''} ${isPast ? 'booked' : ''} ${intakeForm.visitTime === time ? 'selected' : ''}`}
-                                                            onClick={() => !isDisabled && setIntakeForm({ ...intakeForm, visitTime: time })}
-                                                            disabled={isDisabled}
-                                                        >
-                                                            {time}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
+                                            /* Slot mode: using unified SlotPicker component */
+                                            <SlotPicker
+                                                doctorId={intakeForm.doctor}
+                                                date={intakeForm.visitDate}
+                                                selectedTime={intakeForm.visitTime}
+                                                onSelectTime={(time) => setIntakeForm({ ...intakeForm, visitTime: time })}
+                                            />
                                         )
                                     )}
                                 </div>

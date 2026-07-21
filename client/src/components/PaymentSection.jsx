@@ -18,6 +18,7 @@ const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency:
  * - proofFile: File | null
  * - onProofFileChange(file): handler for proof file upload
  * - label: optional label for the section (default: 'Payment Breakdown')
+ * - noUpiMessage: optional message shown when no UPI is configured for this department
  */
 const PaymentSection = ({
     splitPayments = [],
@@ -30,7 +31,8 @@ const PaymentSection = ({
     onPaymentDataChange,
     proofFile = null,
     onProofFileChange,
-    label = 'Payment Breakdown'
+    label = 'Payment Breakdown',
+    noUpiMessage = ''
 }) => {
     const totalSplitAmount = splitPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
@@ -40,7 +42,8 @@ const PaymentSection = ({
         ? splitPayments.filter(sp => sp.method === 'UPI').reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0)
         : 0;
     const selectedUpiId = paymentData?.upiId || upiOptions?.[0]?.upiId || '';
-    const showQr = hasUpi && upiAmount > 0 && selectedUpiId;
+    const showQr = hasUpi && upiAmount > 0 && selectedUpiId && upiOptions.length > 0;
+    const showNoUpiMsg = hasUpi && upiOptions.length === 0;
 
     return (
         <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -80,7 +83,7 @@ const PaymentSection = ({
                             )}
 
                             {/* UPI fields */}
-                            {split.method === 'UPI' && (
+                            {split.method === 'UPI' && upiOptions.length > 0 && (
                                 <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
                                     <select
                                         value={paymentData?.upiId || ''}
@@ -88,7 +91,7 @@ const PaymentSection = ({
                                         style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }}
                                         required
                                     >
-                                        <option value="" disabled>Select Hospital UPI ID</option>
+                                        <option value="" disabled>Select Department UPI ID</option>
                                         {upiOptions.map((opt, idx) => (
                                             <option key={idx} value={opt.upiId}>{opt.label} ({opt.upiId})</option>
                                         ))}
@@ -101,6 +104,13 @@ const PaymentSection = ({
                                         onChange={e => onPaymentDataChange({ ...paymentData, transactionId: e.target.value })}
                                         style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }}
                                     />
+                                </div>
+                            )}
+
+                            {/* No UPI configured message */}
+                            {split.method === 'UPI' && upiOptions.length === 0 && (
+                                <div style={{ flexBasis: '100%', marginTop: '10px', padding: '12px 16px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', color: '#92400e', fontSize: '13px' }}>
+                                    ⚠️ {noUpiMessage || 'No UPI account has been configured for this department. Please contact Hospital Admin.'}
                                 </div>
                             )}
 
@@ -182,6 +192,27 @@ const PaymentSection = ({
                     />
                     <div style={{ fontSize: '11px', color: '#64748b', marginTop: '8px', textAlign: 'center' }}>
                         UPI ID: {selectedUpiId}
+                    </div>
+                </div>
+            )}
+
+            {/* RIGHT: No UPI configured message */}
+            {showNoUpiMsg && (
+                <div style={{
+                    flex: '0 0 200px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    padding: '20px',
+                    background: '#fef3c7',
+                    borderRadius: '12px',
+                    border: '1px dashed #f59e0b',
+                    alignSelf: 'flex-start',
+                    textAlign: 'center'
+                }}>
+                    <div style={{ fontSize: '28px', marginBottom: '8px' }}>⚠️</div>
+                    <div style={{ fontSize: '12px', color: '#92400e', fontWeight: 600 }}>
+                        {noUpiMessage || 'No UPI account has been configured for this department. Please contact Hospital Admin.'}
                     </div>
                 </div>
             )}
