@@ -50,9 +50,8 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
                 ];
             }
             return [
+                { label: 'Dashboard', path: '/doctor/cases', icon: <FiClipboard /> },
                 { label: 'My Patients', path: '/doctor/dashboard', icon: <FiUsers /> },
-                { label: 'Appointments', path: '/doctor/patients', icon: <FiCalendar /> },
-                { label: 'All Cases', path: '/doctor/cases', icon: <FiClipboard /> },
             ];
         }
         if (role === 'reception' || role === 'receptionist') {
@@ -207,42 +206,7 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
 
             <div className="topbar-right">
                 <div className="user-profile-widget">
-                    {((user?.role || '').toLowerCase() !== 'centraladmin' && (user?.role || '').toLowerCase() !== 'superadmin' && (user?.role || '').toLowerCase() !== 'reception' && (user?.role || '').toLowerCase() !== 'receptionist') && (
-                        <button 
-                            onClick={() => {
-                                if ((user?.role || '').toLowerCase() === 'reception' || (user?.role || '').toLowerCase() === 'receptionist') {
-                                    navigate('/reception/dashboard');
-                                } else {
-                                    navigate('/my-dashboard');
-                                }
-                            }} 
-                            title="Go to Home Dashboard"
-                            style={{
-                                background: '#2563eb',
-                                color: '#ffffff',
-                                border: 'none',
-                                cursor: 'pointer',
-                                padding: '6px 14px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                fontSize: '0.85rem',
-                                fontWeight: '600',
-                                borderRadius: '6px',
-                                transition: 'all 0.2s',
-                                height: '34px',
-                                boxSizing: 'border-box'
-                            }}
-                            onMouseOver={(e) => {
-                                e.currentTarget.style.backgroundColor = '#1d4ed8';
-                            }}
-                            onMouseOut={(e) => {
-                                e.currentTarget.style.backgroundColor = '#2563eb';
-                            }}
-                        >
-                            <FiHome size={15} /> Home
-                        </button>
-                    )}
+
                     <div className="profile-text-info">
                         <span className="user-disp-name">{(user?.role || '').toLowerCase().includes('doctor') ? 'DR. ' : ''}{user?.name || 'User'}</span>
                         <span className="user-disp-role">{user?.email}</span>
