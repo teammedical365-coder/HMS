@@ -43,10 +43,20 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const [profileAppointments, setProfileAppointments] = useState([]);
     const [transactions, setTransactions] = useState([]);
     const [hospitalizedPatients, setHospitalizedPatients] = useState([]);
-    const [loadingHospitalized, setLoadingHospitalized] = useState(true);
-    const [hospitalizedSearch, setHospitalizedSearch] = useState('');
-    const [hospitalizedWardFilter, setHospitalizedWardFilter] = useState('');
-    const [hospitalizedDoctorFilter, setHospitalizedDoctorFilter] = useState('');
+    const [loadingHospitalized, setLoadingHospitalized] = useState(false);
+    
+    // New states for Reception Dashboard Filtering
+    const [listTab, setListTab] = useState('queue'); // 'queue', 'all', 'hospitalized'
+    const [departmentFilter, setDepartmentFilter] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+        }, 500);
+        return () => clearTimeout(handler);
+    }, [searchQuery]);
+
 
     // Token mode — next token preview
     const [nextToken, setNextToken] = useState(null);
@@ -245,15 +255,18 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         fetchHospital();
 
         if (!isPatientPortal) {
-            fetchAppointments();
-            fetchHospitalizedPatients();
+            // Initial fetch handled by another useEffect below
         }
     }, [isPatientPortal]);
 
     const fetchHospitalizedPatients = async () => {
         try {
             setLoadingHospitalized(true);
-            const res = await admissionAPI.getActiveAdmissions();
+            const params = {
+                department: departmentFilter,
+                search: debouncedSearch
+            };
+            const res = await admissionAPI.getActiveAdmissions(params);
             if (res.success) {
                 setHospitalizedPatients(res.admissions || []);
             }
@@ -388,10 +401,26 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const fetchAppointments = async () => {
         setLoading(true);
         try {
-            const response = await receptionAPI.getAllAppointments();
+            const params = {
+                all: listTab === 'all' ? 'true' : 'false',
+                department: departmentFilter,
+                search: debouncedSearch
+            };
+            const response = await receptionAPI.getAllAppointments(params);
             if (response.success) setAppointments(response.appointments);
         } catch (err) { console.error(err); } finally { setLoading(false); }
     };
+
+    useEffect(() => {
+        if (!isPatientPortal) {
+            if (listTab === 'queue' || listTab === 'all') {
+                fetchAppointments();
+            } else if (listTab === 'hospitalized') {
+                fetchHospitalizedPatients();
+            }
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [listTab, departmentFilter, debouncedSearch, isPatientPortal]);
 
     const fetchTransactions = async () => {
         try {
@@ -811,6 +840,17 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         if (!selectedPatientId && intakeForm.doctor && intakeForm.visitTime && hasNonCash && !paymentScreenshot) {
             alert(`Please upload a payment screenshot/proof for non-cash payment before booking.`);
             setSaving(false); return;
+        }
+
+        const isTokenMode = hospitalContext?.appointmentMode === 'token';
+        const isBooking = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
+        
+        if (isBooking && Number(intakeForm.consultationFee) > 0) {
+            const totalSplit = intakeForm.splitPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+            if (totalSplit !== Number(intakeForm.consultationFee)) {
+                alert(`Payment is incomplete. Total paid (,1${totalSplit}) must match the full Consultation Fee (,1${intakeForm.consultationFee}) before booking.`);
+                setSaving(false); return;
+            }
         }
 
         try {
@@ -1507,8 +1547,42 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     const renderTodaysQueue = () => (
         <div className="appointments-list">
+            <div style={{ marginBottom: '16px' }}>
+                <select 
+                    value={departmentFilter} 
+                    onChange={(e) => setDepartmentFilter(e.target.value)}
+                    style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '1rem', outline: 'none' }}
+                >
+                    <option value="">All Departments</option>
+                    {[...new Set([...(hospitalContext?.departments || []), ...doctorsList.flatMap(d => d.departments || [])])].filter(Boolean).map(dept => (
+                        <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                </select>
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', overflowX: 'auto' }}>
+                <button 
+                    onClick={() => setListTab('queue')}
+                    style={{ flex: '1', padding: '10px 12px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', background: listTab === 'queue' ? '#3b82f6' : '#f1f5f9', color: listTab === 'queue' ? '#fff' : '#475569', whiteSpace: 'nowrap', transition: 'all 0.2s' }}
+                >
+                    Today's Queue
+                </button>
+                <button 
+                    onClick={() => setListTab('all')}
+                    style={{ flex: '1', padding: '10px 12px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', background: listTab === 'all' ? '#3b82f6' : '#f1f5f9', color: listTab === 'all' ? '#fff' : '#475569', whiteSpace: 'nowrap', transition: 'all 0.2s' }}
+                >
+                    All Appointments
+                </button>
+                <button 
+                    onClick={() => setListTab('hospitalized')}
+                    style={{ flex: '1', padding: '10px 12px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', background: listTab === 'hospitalized' ? '#eab308' : '#f1f5f9', color: listTab === 'hospitalized' ? '#fff' : '#475569', whiteSpace: 'nowrap', transition: 'all 0.2s' }}
+                >
+                    Hospitalized
+                </button>
+            </div>
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                <h3 style={{ margin: 0 }}>Today's Queue</h3>
+                <h3 style={{ margin: 0 }}>{listTab === 'all' ? 'All Appointments' : 'Today\'s Queue'}</h3>
                 {hospitalContext?.appointmentMode === 'token' && (
                     <span style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '3px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>
                         🎟️ Token Queue Mode
@@ -1588,6 +1662,56 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                 </td>
                             </tr>
                         ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+
+    const renderHospitalized = () => (
+        <div className="appointments-list">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+                <h3 style={{ margin: 0 }}>Hospitalized Patients</h3>
+            </div>
+            <div className="table-responsive">
+                <table className="reception-table">
+                    <thead>
+                        <tr>
+                            <th>Patient Name</th>
+                            <th>MRN</th>
+                            <th>Department</th>
+                            <th>Doctor</th>
+                            <th>Admission Date</th>
+                            <th>Ward / Bed</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {loadingHospitalized ? (
+                            <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>Loading...</td></tr>
+                        ) : hospitalizedPatients.length === 0 ? (
+                            <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>No hospitalized patients found.</td></tr>
+                        ) : (
+                            hospitalizedPatients.map(adm => (
+                                <tr key={adm._id}>
+                                    <td style={{ fontWeight: 600 }}>{adm.patientId?.name || 'Unknown'}<br /><small>{adm.patientId?.phone}</small></td>
+                                    <td>{adm.patientId?.patientId || '-'}</td>
+                                    <td>{adm.appointmentId?.department || adm.appointmentId?.serviceName || '-'}</td>
+                                    <td>{adm.appointmentId?.doctorName || '-'}</td>
+                                    <td>{new Date(adm.admissionDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}<br/><small>{new Date(adm.admissionDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</small></td>
+                                    <td>{adm.ward || '-'}<br /><small>Bed: {adm.bedNumber || '-'}</small></td>
+                                    <td>
+                                        <span style={{
+                                            display: 'inline-block', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600,
+                                            background: adm.status === 'Admitted' ? '#dcfce7' : '#f1f5f9',
+                                            color: adm.status === 'Admitted' ? '#166534' : '#475569'
+                                        }}>
+                                            {adm.status}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -2132,7 +2256,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     )}
                 </div>
 
-                {renderTodaysQueue()}
+                {listTab === 'hospitalized' ? renderHospitalized() : renderTodaysQueue()}
             </div>
 
             {/* Camera Modal */}

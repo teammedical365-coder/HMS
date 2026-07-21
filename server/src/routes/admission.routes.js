@@ -73,12 +73,64 @@ router.post('/', verifyAdmissionAccess, async (req, res) => {
 router.get('/active', verifyAdmissionAccess, async (req, res) => {
     try {
         const Admission = getAdmission(req);
-        const admissions = await Admission.find({
+        let queryFilter = {
             status: 'Admitted',
             hospitalId: req.hospitalId || req.user.hospitalId,
-        })
+        };
+
+        if (req.query.department) {
+            const Appointment = require('../models/appointment.model');
+            const deptRegex = new RegExp(`^${req.query.department}$`, 'i');
+            const validAppts = await Appointment.find({
+                hospitalId: queryFilter.hospitalId,
+                $or: [
+                    { department: { $regex: deptRegex } },
+                    { serviceName: { $regex: deptRegex } }
+                ]
+            }).select('_id').lean();
+            const validApptIds = validAppts.map(a => a._id);
+            queryFilter.appointmentId = { $in: validApptIds };
+        }
+
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, 'i');
+            const MasterUser = require('../models/user.model');
+            const Appointment = require('../models/appointment.model');
+            
+            const matchingUsers = await MasterUser.find({
+                $or: [
+                    { name: searchRegex },
+                    { phone: searchRegex },
+                    { patientId: searchRegex },
+                    { patientUid: searchRegex }
+                ]
+            }).select('_id').lean();
+            const validPatientIds = matchingUsers.map(u => u._id);
+            
+            const matchingAppointments = await Appointment.find({
+                hospitalId: queryFilter.hospitalId,
+                $or: [
+                    { doctorName: searchRegex },
+                    { patientId: searchRegex } // Appointment string field
+                ]
+            }).select('_id').lean();
+            const validApptIdsFromSearch = matchingAppointments.map(a => a._id);
+            
+            if (validPatientIds.length > 0 || validApptIdsFromSearch.length > 0) {
+                const searchConditions = [];
+                if (validPatientIds.length > 0) searchConditions.push({ patientId: { $in: validPatientIds } });
+                if (validApptIdsFromSearch.length > 0) searchConditions.push({ appointmentId: { $in: validApptIdsFromSearch } });
+                
+                if (!queryFilter.$and) queryFilter.$and = [];
+                queryFilter.$and.push({ $or: searchConditions });
+            } else {
+                return res.json({ success: true, admissions: [] });
+            }
+        }
+
+        const admissions = await Admission.find(queryFilter)
         .populate('patientId', 'name phone patientId mrn gender dob')
-        .populate('appointmentId', 'doctorName')
+        .populate('appointmentId', 'doctorName department serviceName')
         .lean();
 
         res.json({ success: true, admissions });

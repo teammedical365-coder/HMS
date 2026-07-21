@@ -439,7 +439,7 @@ export const billingAPI = {
 
 export const admissionAPI = {
     createAdmission: async (data) => (await apiClient.post('/api/admissions', data)).data,
-    getActiveAdmissions: async () => (await apiClient.get('/api/admissions/active')).data,
+    getActiveAdmissions: async (params = {}) => (await apiClient.get('/api/admissions/active', { params })).data,
     getPatientAdmissions: async (patientId) => (await apiClient.get(`/api/admissions/patient/${patientId}`)).data,
     dischargePatient: async (id, data = {}) => (await apiClient.put(`/api/admissions/${id}/discharge`, data)).data,
     markAdmissionPaid: async (id) => (await apiClient.put(`/api/admissions/${id}/pay`, {})).data,

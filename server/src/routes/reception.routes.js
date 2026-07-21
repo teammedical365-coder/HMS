@@ -431,6 +431,56 @@ router.get('/appointments', verifyToken, verifyReception, resolveTenant, async (
             queryFilter.userId = req.user._id;
         }
 
+        // Department filtering
+        if (req.query.department) {
+            const deptRegex = new RegExp(`^${req.query.department}$`, 'i');
+            const deptCondition = {
+                $or: [
+                    { department: { $regex: deptRegex } },
+                    { serviceName: { $regex: deptRegex } }
+                ]
+            };
+            if (!queryFilter.$and) queryFilter.$and = [];
+            queryFilter.$and.push(deptCondition);
+        }
+
+        // Search filtering (Server-side)
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, 'i');
+            const MasterUser = require('../models/user.model');
+            
+            const matchingUsers = await MasterUser.find({
+                $or: [
+                    { name: searchRegex },
+                    { phone: searchRegex },
+                    { patientId: searchRegex },
+                    { patientUid: searchRegex }
+                ]
+            }).select('_id').lean();
+            const userIds = matchingUsers.map(u => u._id);
+            
+            const matchingDoctors = await MasterUser.find({
+                name: searchRegex, role: 'doctor'
+            }).select('_id').lean();
+            const doctorIds = matchingDoctors.map(u => u._id);
+            
+            const searchConditions = [];
+            if (userIds.length > 0) searchConditions.push({ userId: { $in: userIds } });
+            if (doctorIds.length > 0) searchConditions.push({ doctorId: { $in: doctorIds } });
+            
+            // Allow matching direct string fields on the Appointment model
+            searchConditions.push({ doctorName: searchRegex });
+            searchConditions.push({ patientId: searchRegex });
+            
+            // Match numeric token if search string is a number
+            if (!isNaN(req.query.search.trim()) && req.query.search.trim() !== '') {
+                searchConditions.push({ tokenNumber: Number(req.query.search.trim()) });
+            }
+            
+            if (!queryFilter.$and) queryFilter.$and = [];
+            queryFilter.$and.push({ $or: searchConditions });
+        }
+
         const appointments = await Appointment.find(queryFilter)
             .populate('userId', 'name email phone patientId')
             .populate('doctorId', 'name')
@@ -618,6 +668,14 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
 
         if (!patientId || !doctorId || !date) {
             return res.status(400).json({ success: false, message: 'Missing booking details' });
+        }
+
+        const bookingAmount = Number(amount || 0);
+        if (bookingAmount > 0) {
+            const totalSplit = splitPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+            if (totalSplit !== bookingAmount) {
+                return res.status(400).json({ success: false, message: `Payment is incomplete. Total paid (,1${totalSplit}) must match the full Consultation Fee (,1${bookingAmount}) before booking.` });
+            }
         }
 
         const reqDateMatch = String(date).split('T')[0];
