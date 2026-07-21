@@ -1101,7 +1101,17 @@ const CentralAdminDashboard = () => {
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label className="staff-label">Age *</label>
-                                                <input type="number" className="staff-input" placeholder="Age" value={hospitalAdminForm.age} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, age: e.target.value })} required min="1" />
+                                                <input 
+                                                    type="text" 
+                                                    className="staff-input" 
+                                                    placeholder="Age" 
+                                                    value={hospitalAdminForm.age || ''} 
+                                                    onChange={e => {
+                                                        const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 3);
+                                                        setHospitalAdminForm({ ...hospitalAdminForm, age: cleanVal });
+                                                    }} 
+                                                    required 
+                                                />
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Aadhaar Number *</label>
@@ -1642,7 +1652,17 @@ const CentralAdminDashboard = () => {
                                                 <div className="form-row">
                                                     <div className="form-group">
                                                         <label className="staff-label">Age *</label>
-                                                        <input type="number" className="staff-input" placeholder="Age" value={clinicStaffForm.age} onChange={e => setClinicStaffForm({ ...clinicStaffForm, age: e.target.value })} required min="1" />
+                                                        <input 
+                                                            type="text" 
+                                                            className="staff-input" 
+                                                            placeholder="Age" 
+                                                            value={clinicStaffForm.age || ''} 
+                                                            onChange={e => {
+                                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 3);
+                                                                setClinicStaffForm({ ...clinicStaffForm, age: cleanVal });
+                                                            }} 
+                                                            required 
+                                                        />
                                                     </div>
                                                     <div className="form-group">
                                                         <label className="staff-label">Aadhaar Number *</label>

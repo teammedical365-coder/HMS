@@ -415,7 +415,7 @@ router.delete('/:id', verifyCentralAdmin, async (req, res) => {
 // Hospital Admin Signup (creates a hospitaladmin account) — Central Admin only
 router.post('/admin/signup', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, email, password, phone, hospitalId, aadhaarNumber } = req.body;
+        const { name, email, password, phone, hospitalId, aadhaarNumber, age } = req.body;
 
         if (!name || !email || !password || !hospitalId) {
             return res.status(400).json({ success: false, message: 'Name, email, password, and hospitalId are required' });
@@ -423,6 +423,13 @@ router.post('/admin/signup', verifyCentralAdmin, async (req, res) => {
         
         if (aadhaarNumber && !/^\d{12}$/.test(aadhaarNumber)) {
             return res.status(400).json({ success: false, message: 'Aadhaar number must be exactly 12 digits.' });
+        }
+
+        if (age !== undefined && age !== '') {
+            const ageNum = Number(age);
+            if (!Number.isInteger(ageNum) || ageNum < 1 || ageNum > 999) {
+                return res.status(400).json({ success: false, message: 'Age must be a valid integer between 1 and 999.' });
+            }
         }
 
         const pwErrH = validatePassword(password);
@@ -438,7 +445,8 @@ router.post('/admin/signup', verifyCentralAdmin, async (req, res) => {
             name, email, password, phone: phone || '',
             role: 'hospitaladmin',
             hospitalId,
-            aadhaarNumber: aadhaarNumber || ''
+            aadhaarNumber: aadhaarNumber || '',
+            age: age ? parseInt(age, 10) : undefined
         });
 
         await admin.save();
