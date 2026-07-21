@@ -21,7 +21,7 @@ const userSchema = new mongoose.Schema({
     hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', default: null },
 
     // Patient ID for clinical tracking
-    patientId: { type: String, unique: true, sparse: true },
+    patientId: { type: String, sparse: true },
     uhid: { type: String, sparse: true },
     patientStatus: { type: String, default: 'Active' },
     branch: { type: String },
@@ -61,7 +61,6 @@ const userSchema = new mongoose.Schema({
     aadhaarNumber: { 
         type: String, 
         match: /^\d{12}$/, 
-        unique: true, 
         sparse: true, 
         trim: true 
     },
@@ -102,6 +101,11 @@ const userSchema = new mongoose.Schema({
     // Increment to invalidate all outstanding tokens for this user (revoke-all-sessions)
     tokenVersion: { type: Number, default: 0 },
 }, { timestamps: true });
+
+// Scoped compound indexes for multi-tenant isolation per hospital
+userSchema.index({ hospitalId: 1, phone: 1 }, { unique: true, sparse: true });
+userSchema.index({ hospitalId: 1, aadhaarNumber: 1 }, { unique: true, sparse: true });
+userSchema.index({ hospitalId: 1, patientId: 1 }, { unique: true, sparse: true });
 
 userSchema.pre('save', async function (next) {
     if (!this.isModified('password')) return next();
