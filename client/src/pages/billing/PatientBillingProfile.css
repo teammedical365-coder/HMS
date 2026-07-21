@@ -17,11 +17,11 @@
     font-size: 1.6rem;
     font-weight: 700;
     margin: 0 0 4px;
-    color: #0f172a;
+    color: #eff6ff;
 }
 
 .billing-header p {
-    color: #64748b;
+    color: #f0e8d2;
     margin: 0;
     font-size: 0.9rem;
 }
@@ -55,11 +55,11 @@
     outline: none;
     transition: border-color 0.15s;
 }
-.billing-search-input:focus { border-color: #3b82f6; }
+.billing-search-input:focus { border-color: #0d9488; }
 
 .btn-search {
     padding: 11px 26px;
-    background: #3b82f6;
+    background: #0d9488;
     color: #fff;
     border: none;
     border-radius: 10px;
@@ -68,7 +68,7 @@
     cursor: pointer;
     transition: background 0.15s;
 }
-.btn-search:hover:not(:disabled) { background: #2563eb; }
+.btn-search:hover:not(:disabled) { background: #0f766e; }
 .btn-search:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .billing-error {
@@ -95,7 +95,7 @@
     display: flex;
     align-items: center;
     gap: 20px;
-    background: linear-gradient(135deg, #1e40af, #3b82f6);
+    background: linear-gradient(135deg, #134e4a, #0d9488);
     color: #fff;
     padding: 20px 24px;
     border-radius: 14px;
@@ -215,7 +215,7 @@
 
 .billing-table tr:last-child td { border-bottom: none; }
 .billing-table tr:hover td { background: #f8fafc; }
-.billing-table .selected-row td { background: #eff6ff; }
+.billing-table .selected-row td { background: #f0fdfa; }
 
 .amount-cell { font-weight: 600; color: #0f172a; text-align: right; }
 
@@ -230,7 +230,7 @@
 }
 .status-badge.status-confirmed, .status-badge.status-Confirmed, .status-badge.status-Paid, .status-badge.status-paid { background: #dcfce7; color: #16a34a; }
 .status-badge.status-pending, .status-badge.status-Pending { background: #fef9c3; color: #ca8a04; }
-.status-badge.status-completed, .status-badge.status-Completed { background: #dbeafe; color: #1d4ed8; }
+.status-badge.status-completed, .status-badge.status-Completed { background: #ccfbf1; color: #0f766e; }
 .status-badge.status-cancelled, .status-badge.status-Cancelled { background: #fee2e2; color: #dc2626; }
 
 /* Admission Cards */
@@ -271,8 +271,8 @@
 .badge-ward, .badge-bed {
     display: inline-block;
     margin-left: 8px;
-    background: #dbeafe;
-    color: #1d4ed8;
+    background: #ccfbf1;
+    color: #0f766e;
     padding: 2px 8px;
     border-radius: 10px;
     font-size: 0.8rem;
@@ -334,8 +334,8 @@
     margin-top: 6px;
 }
 .facility-tag {
-    background: #e0f2fe;
-    color: #0369a1;
+    background: #ccfbf1;
+    color: #0f766e;
     padding: 3px 10px;
     border-radius: 20px;
     font-size: 0.8rem;
@@ -412,7 +412,7 @@
     background: #fff;
     cursor: pointer;
 }
-.payment-mode-select:focus { border-color: #3b82f6; }
+.payment-mode-select:focus { border-color: #0d9488; }
 
 .btn-pay {
     padding: 12px 28px;
@@ -485,7 +485,7 @@
     outline: none;
 }
 .payment-proof-modal input[type="text"]:focus {
-    border-color: #3b82f6;
+    border-color: #0d9488;
 }
 
 .proof-upload-section {
@@ -519,14 +519,14 @@
 
 .btn-confirm {
     padding: 10px 20px;
-    background: #3b82f6;
+    background: #0d9488;
     border: none;
     border-radius: 8px;
     cursor: pointer;
     font-weight: 600;
     color: #fff;
 }
-.btn-confirm:hover:not(:disabled) { background: #2563eb; }
+.btn-confirm:hover:not(:disabled) { background: #0f766e; }
 .btn-confirm:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .proof-view-modal {

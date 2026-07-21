@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI } from '../../utils/api';
 import { useAuth } from '../../store/hooks';
@@ -6,6 +6,9 @@ import { getSubdomain } from '../../utils/subdomain';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { FiSearch, FiUserPlus, FiFileText, FiDollarSign, FiUsers, FiCalendar, FiHome, FiPlusSquare } from 'react-icons/fi';
+import { FaRupeeSign } from 'react-icons/fa';
+import PaymentSection from '../../components/PaymentSection';
+import SlotPicker from '../../components/SlotPicker';
 import './ReceptionDashboard.css';
 
 console.log("--- DASHBOARD FILE IS RUNNING ---");
@@ -57,6 +60,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const [hospitalizeForm, setHospitalizeForm] = useState({ ward: '', bedNumber: '', admissionDate: new Date().toISOString().split('T')[0], notes: '', facilityDays: {} });
     const [hospitalizingSaving, setHospitalizingSaving] = useState(false);
 
+    const [upiOptions, setUpiOptions] = useState([]);
+    const [intakePaymentData, setIntakePaymentData] = useState({ upiId: '', transactionId: '', cardDetails: '', bankReference: '' });
+
     // Availability
     const [availabilityCheck, setAvailabilityCheck] = useState({
         doctorId: '', date: new Date().toISOString().split('T')[0], bookedSlots: []
@@ -94,6 +100,80 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const [hospitalContext, setHospitalContext] = useState(null);
     const [pendingDownload, setPendingDownload] = useState(null);
     const [followupStatus, setFollowupStatus] = useState(null);
+    const [showCameraModal, setShowCameraModal] = useState(false);
+    const [cameraCapturedPreview, setCameraCapturedPreview] = useState(null); // blob URL for preview before saving
+    const [cameraCapturedBlob, setCameraCapturedBlob] = useState(null);
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+
+    const startCamera = async () => {
+        setCameraCapturedPreview(null);
+        setCameraCapturedBlob(null);
+        setShowCameraModal(true);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.play();
+            }
+        } catch (err) {
+            alert("Camera access denied or unavailable.");
+            setShowCameraModal(false);
+        }
+    };
+
+    const capturePhotoFromCamera = () => {
+        if (videoRef.current && canvasRef.current) {
+            const context = canvasRef.current.getContext('2d');
+            canvasRef.current.width = videoRef.current.videoWidth || 640;
+            canvasRef.current.height = videoRef.current.videoHeight || 480;
+            context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+            canvasRef.current.toBlob(blob => {
+                if (blob) {
+                    setCameraCapturedBlob(blob);
+                    setCameraCapturedPreview(URL.createObjectURL(blob));
+                    // Pause camera stream (don't stop yet — retake needs it)
+                    if (videoRef.current && videoRef.current.srcObject) {
+                        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+                    }
+                }
+            }, 'image/jpeg');
+        }
+    };
+
+    const saveCapturedPhoto = () => {
+        if (cameraCapturedBlob) {
+            const file = new File([cameraCapturedBlob], 'patient_photo.jpg', { type: 'image/jpeg' });
+            setProfilePhoto(file);
+            setProfilePhotoPreview(URL.createObjectURL(file));
+        }
+        setCameraCapturedPreview(null);
+        setCameraCapturedBlob(null);
+        setShowCameraModal(false);
+    };
+
+    const retakePhoto = async () => {
+        setCameraCapturedPreview(null);
+        setCameraCapturedBlob(null);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.play();
+            }
+        } catch (err) {
+            alert("Camera access denied or unavailable.");
+        }
+    };
+
+    const stopCamera = () => {
+        if (videoRef.current && videoRef.current.srcObject) {
+            videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+        }
+        setCameraCapturedPreview(null);
+        setCameraCapturedBlob(null);
+        setShowCameraModal(false);
+    };
 
     const processFormChange = useCallback((e, formSetter) => {
         const { name, value } = e.target;
@@ -143,6 +223,22 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 if (res.success) {
                     setHospitalContext(res.hospital);
                     fetchDoctors(res.hospital._id);
+                    const upiRes = await hospitalAPI.getUpiIds();
+                    if (upiRes.success) {
+                        // Try to fetch department-specific UPI for Reception
+                        try {
+                            const deptUpiRes = await hospitalAPI.getDepartmentUpiByRole('Reception');
+                            if (deptUpiRes.success && deptUpiRes.departmentUpi) {
+                                const du = deptUpiRes.departmentUpi;
+                                setUpiOptions([{ label: du.label, upiId: du.upiId }]);
+                            } else {
+                                // Fallback to legacy hospital-wide UPI list
+                                setUpiOptions(upiRes.upiIds || []);
+                            }
+                        } catch {
+                            setUpiOptions(upiRes.upiIds || []);
+                        }
+                    }
                 }
             } catch (err) { console.error('Error fetching hospital context:', err); }
         };
@@ -560,14 +656,21 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const handleSearch = async (e) => {
         const query = e.target.value;
         setSearchQuery(query);
-        if (query.trim().length > 0) {
-            try {
-                const res = await receptionAPI.searchPatients(query);
-                if (res.success) setSearchResults(res.patients);
-            } catch (err) { console.error(err); }
-        } else {
+        if (query.trim().length === 0) {
             setSearchResults([]);
+            return;
         }
+        try {
+            const res = await receptionAPI.searchPatients(query);
+            if (res.success) {
+                setSearchQuery(current => {
+                    if (current === query) {
+                        setSearchResults(res.patients);
+                    }
+                    return current;
+                });
+            }
+        } catch (err) { console.error(err); }
     };
 
     const handleInputChange = (e) => {
@@ -941,7 +1044,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             <div style={{ marginBottom: '18px' }}>
                                 <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '6px' }}>Patient Photo</label>
                                 <div
-                                    onClick={() => document.getElementById('avatarFileInput').click()}
+                                    onClick={startCamera}
                                     style={{
                                         cursor: 'pointer',
                                         border: '1.5px dashed #cbd5e1',
@@ -966,23 +1069,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         <span style={{ fontSize: '1.25rem' }}>📷</span>
                                     )}
                                     <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569' }}>
-                                        {profilePhoto || profilePhotoPreview ? 'Change Photo' : 'Open Camera / Upload'}
+                                        {profilePhoto || profilePhotoPreview ? 'Change Photo' : 'Capture Photo'}
                                     </span>
                                 </div>
-                                <input
-                                    id="avatarFileInput"
-                                    type="file"
-                                    accept="image/*"
-                                    capture="user"
-                                    onChange={(e) => {
-                                        const file = e.target.files[0];
-                                        if (file) {
-                                            setProfilePhoto(file);
-                                            setProfilePhotoPreview(URL.createObjectURL(file));
-                                        }
-                                    }}
-                                    style={{ display: 'none' }}
-                                />
                             </div>
 
                             {/* AADHAAR VERIFICATION ROW */}
@@ -1131,50 +1220,27 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     </div>
                                 )}
                             </div>
-                            {!selectedPatientId && (
-                                <div className="form-row">
-                                    <div className="field" style={{ flexBasis: '100%' }}>
-                                        <label>Payment Breakdown <span style={{ color: '#ef4444' }}>*(Total Split must match Consultation Fee: ₹{intakeForm.consultationFee || 0})</span></label>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                            {intakeForm.splitPayments.map((split, index) => (
-                                                <div key={index} style={{ display: 'flex', gap: '10px', alignItems: 'center', background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                                    <select 
-                                                        value={split.method} 
-                                                        onChange={e => handleIntakeSplitPaymentChange(index, 'method', e.target.value)}
-                                                        style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', minWidth: '120px' }}
-                                                    >
-                                                        <option value="Cash">Cash</option>
-                                                        <option value="UPI">UPI</option>
-                                                        <option value="Card">Card</option>
-                                                        <option value="Cheque">Cheque</option>
-                                                        <option value="NEFT/RTGS">NEFT / RTGS</option>
-                                                    </select>
-                                                    
-                                                    <input 
-                                                        type="number" 
-                                                        placeholder="Amount" 
-                                                        value={split.amount} 
-                                                        onChange={e => handleIntakeSplitPaymentChange(index, 'amount', e.target.value)} 
-                                                        style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100px' }} 
-                                                        min="1" 
-                                                    />
-
-                                                    {intakeForm.splitPayments.length > 1 && (
-                                                        <button type="button" onClick={() => removeIntakeSplitPayment(index)} style={{ padding: '8px 12px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                                                <button type="button" onClick={addIntakeSplitPayment} style={{ padding: '6px 12px', background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}>+ Add Payment Method</button>
-                                                <span style={{ fontSize: '14px', fontWeight: 600, color: totalIntakeSplitAmount === Number(intakeForm.consultationFee) ? '#15803d' : '#ef4444' }}>
-                                                    Split Total: ₹{totalIntakeSplitAmount} / ₹{intakeForm.consultationFee || 0}
-                                                </span>
-                                            </div>
+                            {(!selectedPatientId || isPatientPortal) && (
+                                <div className="form-row" style={followupStatus?.active ? { display: 'flex', flexDirection: 'column', gap: '10px' } : {}}>
+                                    {!followupStatus?.active && (
+                                        <div className="field" style={{ flexBasis: '100%' }}>
+                                            <PaymentSection
+                                                splitPayments={intakeForm.splitPayments}
+                                                onSplitChange={handleIntakeSplitPaymentChange}
+                                                onAddSplit={addIntakeSplitPayment}
+                                                onRemoveSplit={removeIntakeSplitPayment}
+                                                totalAmount={Number(intakeForm.consultationFee) || 0}
+                                                upiOptions={upiOptions}
+                                                paymentData={intakePaymentData}
+                                                onPaymentDataChange={setIntakePaymentData}
+                                                proofFile={paymentScreenshot}
+                                                onProofFileChange={setPaymentScreenshot}
+                                            />
                                         </div>
-                                    </div>
-                                    <div className="field" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', marginTop: '10px', height: 'fit-content' }}>
+                                    )}
+                                    <div className="field" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', height: 'fit-content', width: '100%', justifyContent: 'center' }}>
                                         <span style={{ fontSize: '18px' }}>✅</span>
-                                        <span style={{ fontWeight: 600, color: '#15803d', fontSize: '14px' }}>Payment Confirmed — Paid</span>
+                                        <span style={{ fontWeight: 600, color: '#15803d', fontSize: '16px' }}>Payment Confirmed — Paid</span>
                                     </div>
                                 </div>
                             )}
@@ -1217,7 +1283,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                 </div>
                             )}
 
-                            {!selectedPatientId && intakeForm.splitPayments.some(p => p.method !== 'Cash') && (
+                            {(!selectedPatientId || isPatientPortal) && !followupStatus?.active && intakeForm.splitPayments.some(p => p.method !== 'Cash') && (
                                 <div className="form-row" style={{ marginTop: '6px' }}>
                                     <div className="field" style={{ flex: 1 }}>
                                         <label>Payment Screenshot / Proof <span style={{ color: '#ef4444', fontSize: '12px' }}>*Required for non-cash payment</span></label>
@@ -1238,13 +1304,19 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
                             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
 
-                            {!selectedPatientId && (
+                            {(!selectedPatientId || isPatientPortal) && (
                                 <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
                                     <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px', borderBottom: '2px solid #bfdbfe', paddingBottom: '10px' }}>5. Assign to Doctor/Counselor</h4>
                                     <div className="form-row">
                                         <div className="field">
-                                            <label>Department</label>
-                                            <select name="department" value={intakeForm.department} onChange={handleInputChange}>
+                                            <label>Department {followupStatus?.active && '(Read Only)'}</label>
+                                            <select 
+                                                name="department" 
+                                                value={intakeForm.department} 
+                                                onChange={handleInputChange}
+                                                disabled={followupStatus?.active}
+                                                style={followupStatus?.active ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
+                                            >
                                                 <option value="">-- Choose Department --</option>
                                                 {[...new Set([...(hospitalContext?.departments || []), ...doctorsList.flatMap(d => d.departments || [])])].filter(Boolean).map(dept => (
                                                     <option key={dept} value={dept}>{dept}</option>
@@ -1252,13 +1324,13 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             </select>
                                         </div>
                                         <div className="field">
-                                            <label>Select Specialist</label>
+                                            <label>Select Specialist {followupStatus?.active && '(Read Only)'}</label>
                                             <select
                                                 name="doctor"
                                                 value={intakeForm.doctor}
                                                 onChange={handleInputChange}
-                                                disabled={!intakeForm.department}
-                                                style={!intakeForm.department ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
+                                                disabled={!intakeForm.department || followupStatus?.active}
+                                                style={(!intakeForm.department || followupStatus?.active) ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
                                             >
                                                 {!intakeForm.department ? (
                                                     <option value="">-- Select Department First --</option>
@@ -1295,24 +1367,13 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                 </div>
                                             </div>
                                         ) : (
-                                            /* Slot mode: existing time slot grid */
-                                            <div className="slot-grid">
-                                                {timeSlots.map(time => {
-                                                    const isBooked = availabilityCheck.bookedSlots.includes(time);
-                                                    const isPast = isSlotInPast(time);
-                                                    const isDisabled = isBooked || isPast;
-                                                    return (
-                                                        <button
-                                                            key={time} type="button"
-                                                            className={`slot-btn ${isBooked ? 'booked' : ''} ${isPast ? 'booked' : ''} ${intakeForm.visitTime === time ? 'selected' : ''}`}
-                                                            onClick={() => !isDisabled && setIntakeForm({ ...intakeForm, visitTime: time })}
-                                                            disabled={isDisabled}
-                                                        >
-                                                            {time}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
+                                            /* Slot mode: using unified SlotPicker component */
+                                            <SlotPicker
+                                                doctorId={intakeForm.doctor}
+                                                date={intakeForm.visitDate}
+                                                selectedTime={intakeForm.visitTime}
+                                                onSelectTime={(time) => setIntakeForm({ ...intakeForm, visitTime: time })}
+                                            />
                                         )
                                     )}
                                 </div>
@@ -1937,7 +1998,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     fontSize: '1.6rem',
                                     flexShrink: 0
                                 }}>
-                                    <FiDollarSign />
+                                    <FaRupeeSign />
                                 </div>
                                 <div>
                                     <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Finance & Accounting</h4>
@@ -2020,7 +2081,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             style={{ flex: 1, padding: '12px', fontSize: '1rem', borderRadius: '6px', border: '1px solid #ddd' }}
                         />
                     </div>
-                    {searchResults.length > 0 && (
+                    {searchQuery.trim().length > 0 && searchResults.length > 0 && (
                         <div className="search-results-dropdown" style={{
                             position: 'absolute', top: '70px', left: '20px', right: '20px',
                             background: 'white', border: '1px solid #eee', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
@@ -2073,6 +2134,62 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
                 {renderTodaysQueue()}
             </div>
+
+            {/* Camera Modal */}
+            {showCameraModal && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', textAlign: 'center', width: '90%', maxWidth: '640px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+                        <h3 style={{ marginTop: 0, fontSize: '1.25rem', color: '#0f172a' }}>
+                            {cameraCapturedPreview ? '📷 Photo Preview' : '📷 Capture Patient Photo'}
+                        </h3>
+
+                        <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3', background: '#000', borderRadius: '12px', overflow: 'hidden', marginBottom: '20px' }}>
+                            {cameraCapturedPreview ? (
+                                <img src={cameraCapturedPreview} alt="Captured" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                                <>
+                                    <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay playsInline muted />
+                                    <canvas ref={canvasRef} style={{ display: 'none' }} />
+                                    {/* Capture button overlay */}
+                                    <div style={{ position: 'absolute', bottom: '20px', left: '50%', transform: 'translateX(-50%)' }}>
+                                        <button
+                                            onClick={capturePhotoFromCamera}
+                                            style={{
+                                                width: '64px', height: '64px', borderRadius: '50%',
+                                                background: 'rgba(255,255,255,0.9)', border: '4px solid #10b981',
+                                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                boxShadow: '0 4px 15px rgba(0,0,0,0.3)', transition: 'transform 0.15s'
+                                            }}
+                                            onMouseOver={e => e.currentTarget.style.transform = 'scale(1.1)'}
+                                            onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                                            title="Capture Photo"
+                                        >
+                                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#10b981' }} />
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '15px' }}>
+                            {cameraCapturedPreview ? (
+                                <>
+                                    <button onClick={retakePhoto} style={{ padding: '12px 28px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', color: '#475569' }}>
+                                        🔄 Retake
+                                    </button>
+                                    <button onClick={saveCapturedPhoto} style={{ padding: '12px 28px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', boxShadow: '0 2px 8px rgba(16,185,129,0.4)' }}>
+                                        ✅ Save Photo
+                                    </button>
+                                </>
+                            ) : (
+                                <button onClick={stopCamera} style={{ padding: '12px 28px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', color: '#475569' }}>
+                                    Cancel
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {renderModals()}
         </>

@@ -730,7 +730,7 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             amount: finalAmount,
             status: 'confirmed',
             paymentStatus: finalAmount === 0 ? 'Paid' : (paymentStatus || 'Paid'),
-            paymentMethod: splitPayments.length > 0 ? splitPayments[0].method : (paymentMethod || 'Cash'),
+            paymentMethod: splitPayments.length > 0 ? [...new Set(splitPayments.map(p => p.method))].join(' / ') : (paymentMethod || 'Cash'),
             splitPayments,
             notes: notes || 'Walk-in created by reception',
             bookedBy: req.user._id
@@ -785,7 +785,7 @@ router.patch('/appointments/:id/confirm-payment', verifyToken, verifyReception, 
         if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found or unauthorized' });
         
         appt.paymentStatus = 'Paid';
-        appt.paymentMethod = splitPayments.length > 0 ? splitPayments[0].method : (paymentMethod || appt.paymentMethod || 'Cash');
+        appt.paymentMethod = splitPayments.length > 0 ? [...new Set(splitPayments.map(p => p.method))].join(' / ') : (paymentMethod || appt.paymentMethod || 'Cash');
         appt.splitPayments = splitPayments;
         if (amount !== undefined) appt.amount = amount;
         await appt.save();

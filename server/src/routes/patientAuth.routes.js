@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const PatientAuth = require('../models/patientAuth.model');
 const Hospital = require('../models/hospital.model');
+const User = require('../models/user.model');
 const { checkPatientDoubleBooking } = require('../utils/appointmentValidator');
 
 // Universal MRN Generator matching Hospital & Clinic exact formats
@@ -58,9 +59,11 @@ router.post('/register', async (req, res) => {
         mobile = sanitizedPhone;
 
         // Basic validations
-        if (!name || !email || !mobile || !password || !hospitalId || !age || !aadhaarNumber) {
-            return res.status(400).json({ success: false, message: 'All fields are required.' });
-        }
+        if (!name) return res.status(400).json({ success: false, message: 'Full Name is required.' });
+        if (!email) return res.status(400).json({ success: false, message: 'Email Address is required.' });
+        if (!mobile) return res.status(400).json({ success: false, message: 'Mobile Number is required.' });
+        if (!password) return res.status(400).json({ success: false, message: 'Password is required.' });
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'Hospital context is required.' });
 
         if (password.length < 8) {
             return res.status(400).json({ success: false, message: 'Password must be at least 8 characters long.' });
@@ -352,7 +355,6 @@ router.post('/reset-password', async (req, res) => {
 // GET /api/patient-auth/me
 // Verify patient token and return credentials
 const { verifyPatientToken } = require('../middleware/auth.middleware');
-const User = require('../models/user.model'); // Added to fetch MRN
 
 router.get('/me', verifyPatientToken, async (req, res) => {
     let mrn = null;
@@ -708,23 +710,58 @@ router.get('/profile', verifyPatientToken, async (req, res) => {
     try {
         let userDoc = null;
         if (req.patient.linkedPatientProfileId) {
-            userDoc = await User.findById(req.patient.linkedPatientProfileId).select('-password -role').lean();
+            userDoc = await User.findById(req.patient.linkedPatientProfileId)
+                .populate('partner', 'name patientId')
+                .populate('primaryDoctor', 'name')
+                .select('-password -role')
+                .lean();
         }
 
-        const mobileValue = userDoc?.phone || userDoc?.mobile || req.patient.mobile || '';
+        const authDoc = await PatientAuth.findById(req.patient.id).lean();
+        
+        let hospitalName = 'Not Specified';
+        let branch = '';
+        if (userDoc?.hospitalId || authDoc?.hospitalId) {
+            const hosp = await Hospital.findById(userDoc?.hospitalId || authDoc?.hospitalId).select('name branch').lean();
+            if (hosp) {
+                hospitalName = hosp.name;
+                branch = hosp.branch || '';
+            }
+        }
+
+        const mobileValue = userDoc?.phone || userDoc?.mobile || authDoc?.mobile || req.patient.mobile || '';
+        const emailValue = userDoc?.email || authDoc?.email || req.patient.email || '';
+        const nameValue = userDoc?.name || authDoc?.name || req.patient.name || '';
+        const aadhaarValue = userDoc?.aadhaarNumber || authDoc?.aadhaarNumber || '';
+        const ageValue = userDoc?.age || authDoc?.age || 'Not Specified';
+
         const profile = userDoc ? {
             ...userDoc,
+            name: nameValue,
+            email: emailValue,
             phone: mobileValue,
-            mobile: mobileValue
+            mobile: mobileValue,
+            aadhaarNumber: aadhaarValue,
+            age: ageValue,
+            hospitalName: hospitalName,
+            branch: userDoc.branch || branch,
+            primaryDoctorName: userDoc.primaryDoctor?.name || '',
+            partnerName: userDoc.partner?.name || userDoc.ivfDetails?.partnerName || '',
+            partnerMrn: userDoc.partner?.patientId || userDoc.ivfDetails?.partnerMrn || '',
+            registrationDate: authDoc?.createdAt || userDoc?.createdAt || new Date()
         } : {
-            name: req.patient.name,
-            email: req.patient.email,
+            name: nameValue,
+            email: emailValue,
             mobile: mobileValue,
             phone: mobileValue,
+            aadhaarNumber: aadhaarValue,
             gender: 'Not Specified',
-            age: 'Not Specified',
+            age: ageValue,
             bloodGroup: 'Not Specified',
-            address: 'Not Specified'
+            address: 'Not Specified',
+            hospitalName: hospitalName,
+            branch: branch,
+            registrationDate: authDoc?.createdAt || new Date()
         };
 
         res.json({ success: true, profile });
@@ -1356,4 +1393,197 @@ router.post('/bills/pay', verifyPatientToken, async (req, res) => {
     }
 });
 
+// ==========================================
+// DEPARTMENT UPI — Patient-facing lookup
+// ==========================================
+
+// Get department UPI by role name (for patient dashboard payment QR)
+router.get('/department-upi/:roleName', verifyPatientToken, async (req, res) => {
+    try {
+        const patientAuth = await PatientAuth.findById(req.patient._id || req.patient.id);
+        if (!patientAuth || !patientAuth.hospitalId) {
+            return res.status(400).json({ success: false, message: 'Patient hospital not found' });
+        }
+
+        const DepartmentUpi = require('../models/departmentUpi.model');
+        const roleName = decodeURIComponent(req.params.roleName).trim();
+
+        const upiDoc = await DepartmentUpi.findOne({
+            hospitalId: patientAuth.hospitalId,
+            staffRoleName: { $regex: new RegExp(`^${roleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+            isActive: true
+        });
+
+        if (!upiDoc) {
+            return res.json({ success: true, departmentUpi: null, message: 'No UPI account configured for this department' });
+        }
+
+        // Only expose what the patient needs
+        res.json({
+            success: true,
+            departmentUpi: {
+                upiId: upiDoc.upiId,
+                label: upiDoc.label,
+                staffRoleName: upiDoc.staffRoleName
+            }
+        });
+    } catch (err) {
+        console.error('Error fetching department UPI for patient:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// PUT /api/patient-auth/profile
+// Update complete demographic profile for the logged-in patient
+router.put('/profile', verifyPatientToken, async (req, res) => {
+    try {
+        const patientAuth = await PatientAuth.findById(req.patient.id);
+        if (!patientAuth) {
+            return res.status(404).json({ success: false, message: 'Patient account not found.' });
+        }
+
+        const updates = req.body;
+
+        // 1. Update fields in PatientAuth
+        if (updates.name) patientAuth.name = updates.name.trim();
+        if (updates.email) patientAuth.email = updates.email.toLowerCase().trim();
+        if (updates.mobile) {
+            const ph = String(updates.mobile).replace(/\D/g, '').slice(0, 10);
+            if (ph.length === 10) patientAuth.mobile = ph;
+        }
+        if (updates.age) patientAuth.age = Number(updates.age);
+        if (updates.aadhaarNumber) patientAuth.aadhaarNumber = updates.aadhaarNumber;
+        await patientAuth.save();
+
+        // 2. Resolve or Create the clinical User profile
+        let userDoc = null;
+        if (patientAuth.linkedPatientProfileId) {
+            userDoc = await User.findById(patientAuth.linkedPatientProfileId);
+        }
+
+        // If no linked profile exists, let's create a new User clinical record
+        if (!userDoc) {
+            const hospital = await Hospital.findById(patientAuth.hospitalId);
+            const newMrn = await generateUniversalMRN(patientAuth.hospitalId, hospital, User);
+            userDoc = new User({
+                name: patientAuth.name,
+                email: patientAuth.email,
+                phone: patientAuth.mobile,
+                role: 'patient',
+                hospitalId: patientAuth.hospitalId,
+                patientId: newMrn,
+                mrn: newMrn,
+                age: patientAuth.age,
+                aadhaarNumber: patientAuth.aadhaarNumber,
+                registrationType: 'Self',
+                patientStatus: 'Active'
+            });
+            await userDoc.save();
+
+            // Link the profile to patient auth
+            patientAuth.linkedPatientProfileId = userDoc._id;
+            await patientAuth.save();
+        }
+
+        // 3. Update clinical User document fields
+        if (updates.name) userDoc.name = updates.name.trim();
+        if (updates.email) userDoc.email = updates.email.toLowerCase().trim();
+        if (updates.mobile) {
+            const ph = String(updates.mobile).replace(/\D/g, '').slice(0, 10);
+            if (ph.length === 10) userDoc.phone = ph;
+        }
+        
+        // Static Demographics
+        if (updates.dob !== undefined) userDoc.dob = updates.dob;
+        if (updates.gender !== undefined) userDoc.gender = updates.gender;
+        if (updates.bloodGroup !== undefined) userDoc.bloodGroup = updates.bloodGroup;
+        if (updates.maritalStatus !== undefined) userDoc.maritalStatus = updates.maritalStatus;
+        if (updates.nationality !== undefined) userDoc.nationality = updates.nationality;
+        if (updates.occupation !== undefined) userDoc.occupation = updates.occupation;
+        if (updates.age !== undefined) userDoc.age = Number(updates.age);
+        if (updates.panNumber !== undefined) userDoc.panNumber = updates.panNumber;
+
+        // Address
+        if (updates.address !== undefined) userDoc.address = updates.address;
+        if (updates.houseNo !== undefined) userDoc.houseNo = updates.houseNo;
+        if (updates.buildingName !== undefined) userDoc.buildingName = updates.buildingName;
+        if (updates.street !== undefined) userDoc.street = updates.street;
+        if (updates.area !== undefined) userDoc.area = updates.area;
+        if (updates.landmark !== undefined) userDoc.landmark = updates.landmark;
+        if (updates.city !== undefined) userDoc.city = updates.city;
+        if (updates.state !== undefined) userDoc.state = updates.state;
+        if (updates.country !== undefined) userDoc.country = updates.country;
+        if (updates.zipCode !== undefined) userDoc.zipCode = updates.zipCode;
+
+        // Contact
+        if (updates.alternateMobile !== undefined) userDoc.alternateMobile = updates.alternateMobile;
+        if (updates.whatsappNumber !== undefined) userDoc.whatsappNumber = updates.whatsappNumber;
+
+        // Emergency Contact
+        if (updates.emergencyContact) {
+            userDoc.emergencyContact = {
+                name: updates.emergencyContact.name || userDoc.emergencyContact?.name || '',
+                relation: updates.emergencyContact.relation || userDoc.emergencyContact?.relation || '',
+                mobile: updates.emergencyContact.mobile || userDoc.emergencyContact?.mobile || ''
+            };
+        }
+
+        // KYC / Aadhaar
+        if (updates.aadhaarNumber !== undefined) userDoc.aadhaarNumber = updates.aadhaarNumber;
+        if (updates.isAadhaarVerified !== undefined) userDoc.isAadhaarVerified = updates.isAadhaarVerified;
+
+        // Avatar (Profile Picture)
+        if (updates.avatar !== undefined) userDoc.avatar = updates.avatar;
+
+        // Fertility Profile vitals
+        if (userDoc.fertilityProfile === undefined || userDoc.fertilityProfile === null) {
+            userDoc.fertilityProfile = {};
+        }
+
+        const fertFields = ['height', 'weight', 'bmi', 'allergies', 'chronicDiseases', 'medicalHistory', 'surgicalHistory', 'currentMedications'];
+        fertFields.forEach(field => {
+            if (updates[field] !== undefined) {
+                userDoc.fertilityProfile[field] = updates[field];
+            }
+        });
+
+        // Save modifications to mixed schema properly
+        userDoc.markModified('fertilityProfile');
+        userDoc.markModified('emergencyContact');
+        
+        await userDoc.save();
+
+        // Send back updated profile in the same shape as GET /profile
+        let hospitalName = 'Not Specified';
+        let branch = '';
+        if (userDoc.hospitalId) {
+            const hosp = await Hospital.findById(userDoc.hospitalId).select('name branch').lean();
+            if (hosp) {
+                hospitalName = hosp.name;
+                branch = hosp.branch || '';
+            }
+        }
+
+        const profile = {
+            ...userDoc.toObject(),
+            name: userDoc.name,
+            email: userDoc.email,
+            phone: userDoc.phone,
+            mobile: userDoc.phone,
+            aadhaarNumber: userDoc.aadhaarNumber,
+            age: userDoc.age,
+            hospitalName: hospitalName,
+            branch: userDoc.branch || branch,
+            registrationDate: patientAuth.createdAt || userDoc.createdAt
+        };
+
+        res.json({ success: true, message: 'Profile updated successfully.', profile });
+
+    } catch (error) {
+        console.error('Patient Profile Update Error:', error);
+        res.status(500).json({ success: false, message: 'Internal server error during profile update.' });
+    }
+});
+
 module.exports = router;
+

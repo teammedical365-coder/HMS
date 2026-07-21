@@ -49,9 +49,11 @@ const HospitalAdminDashboard = () => {
 
     // --- Accounts State ---
     const [accountsSubTab, setAccountsSubTab] = useState('upi');
-    const [upiOptions, setUpiOptions] = useState([]);
-    const [newUpi, setNewUpi] = useState({ label: '', upiId: '' });
-    const [savingUpi, setSavingUpi] = useState(false);
+    const [deptUpis, setDeptUpis] = useState([]);
+    const [upiStaffOptions, setUpiStaffOptions] = useState([]);
+    const [newDeptUpi, setNewDeptUpi] = useState({ staffUserId: '', upiId: '', label: '' });
+    const [loadingDeptUpis, setLoadingDeptUpis] = useState(false);
+    const [savingDeptUpi, setSavingDeptUpi] = useState(false);
 
     // --- Inventory State ---
     const [inventory, setInventory] = useState([]);
@@ -103,46 +105,58 @@ const HospitalAdminDashboard = () => {
     useEffect(() => {
         if (activeTab === 'inventory' && inventory.length === 0) fetchInventory();
         if (activeTab === 'labpricing' && labTests.length === 0) fetchLabTests();
-        if (activeTab === 'accounts' && upiOptions.length === 0) fetchUpiOptions();
+        if (activeTab === 'accounts' && deptUpis.length === 0) fetchDepartmentUpis();
     }, [activeTab]);
 
-    const fetchUpiOptions = async () => {
+    const fetchDepartmentUpis = async () => {
         try {
-            const res = await hospitalAPI.getUpiIds();
-            setUpiOptions(res?.upiIds || []);
-        } catch (err) { console.error('Failed to fetch UPI IDs', err); }
+            setLoadingDeptUpis(true);
+            const [upiRes, staffRes] = await Promise.all([
+                hospitalAPI.getDepartmentUpis(),
+                hospitalAPI.getStaffForUpi()
+            ]);
+            if (upiRes.success) setDeptUpis(upiRes.departmentUpis);
+            if (staffRes.success) setUpiStaffOptions(staffRes.staff.filter(s => !s.hasUpiAssigned));
+        } catch (err) { console.error('Failed to fetch department UPIs', err); }
+        finally { setLoadingDeptUpis(false); }
     };
 
-    const handleAddUpi = async (e) => {
+    const handleAddDeptUpi = async (e) => {
         e.preventDefault();
-        setSavingUpi(true);
+        setSavingDeptUpi(true);
         try {
-            const updated = [...upiOptions, newUpi];
-            const res = await hospitalAPI.updateUpiIds(updated);
+            const res = await hospitalAPI.createDepartmentUpi(newDeptUpi);
             if (res.success) {
-                setUpiOptions(res.upiIds || []);
-                setNewUpi({ label: '', upiId: '' });
+                setNewDeptUpi({ staffUserId: '', upiId: '', label: '' });
+                fetchDepartmentUpis(); // refresh lists
             }
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to add UPI');
+            alert(err.response?.data?.message || 'Failed to add Department UPI');
         } finally {
-            setSavingUpi(false);
+            setSavingDeptUpi(false);
         }
     };
 
-    const handleDeleteUpi = async (index) => {
-        if (!window.confirm('Delete this UPI ID?')) return;
-        setSavingUpi(true);
+    const handleDeleteDeptUpi = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this UPI account?')) return;
         try {
-            const updated = upiOptions.filter((_, i) => i !== index);
-            const res = await hospitalAPI.updateUpiIds(updated);
+            const res = await hospitalAPI.deleteDepartmentUpi(id);
             if (res.success) {
-                setUpiOptions(res.upiIds || []);
+                fetchDepartmentUpis(); // refresh lists
             }
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to delete UPI');
-        } finally {
-            setSavingUpi(false);
+            alert(err.response?.data?.message || 'Failed to delete Department UPI');
+        }
+    };
+    
+    const handleToggleDeptUpi = async (upiDoc) => {
+        try {
+            const res = await hospitalAPI.updateDepartmentUpi(upiDoc._id, { isActive: !upiDoc.isActive });
+            if (res.success) {
+                fetchDepartmentUpis();
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to update status');
         }
     };
 
@@ -1444,36 +1458,64 @@ const HospitalAdminDashboard = () => {
 
                         {accountsSubTab === 'upi' && (
                             <div className="admin-card" style={{ padding: '24px' }}>
-                                <h3 style={{ marginBottom: '20px', color: '#0f172a' }}>UPI Payment Configuration</h3>
+                                <h3 style={{ marginBottom: '20px', color: '#0f172a' }}>Department UPI Management</h3>
                                 
-                                <form onSubmit={handleAddUpi} style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', marginBottom: '30px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-                                    <div style={{ flex: 1, minWidth: '200px' }}>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>Account Label / Counter Name</label>
-                                        <input type="text" value={newUpi.label} onChange={(e) => setNewUpi({ ...newUpi, label: e.target.value })} required placeholder="e.g. Main Counter, Lab Counter" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
+                                <form onSubmit={handleAddDeptUpi} style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', marginBottom: '30px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                                    <div style={{ flex: '1 1 200px' }}>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>Assign To Staff *</label>
+                                        <select 
+                                            value={newDeptUpi.staffUserId} 
+                                            onChange={(e) => setNewDeptUpi({ ...newDeptUpi, staffUserId: e.target.value })} 
+                                            required 
+                                            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }}
+                                        >
+                                            <option value="" disabled>-- Select Staff Member --</option>
+                                            {upiStaffOptions.map(s => (
+                                                <option key={s._id} value={s._id}>{s.name} ({s.roleName})</option>
+                                            ))}
+                                        </select>
                                     </div>
-                                    <div style={{ flex: 1, minWidth: '200px' }}>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>UPI ID</label>
-                                        <input type="text" value={newUpi.upiId} onChange={(e) => setNewUpi({ ...newUpi, upiId: e.target.value })} required placeholder="e.g. hospital@upi" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
+                                    <div style={{ flex: '1 1 200px' }}>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>Account Label / Counter Name *</label>
+                                        <input type="text" value={newDeptUpi.label} onChange={(e) => setNewDeptUpi({ ...newDeptUpi, label: e.target.value })} required placeholder="e.g. Reception Desk" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
                                     </div>
-                                    <button type="submit" disabled={savingUpi} style={{ padding: '10px 20px', background: '#059669', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                                        {savingUpi ? 'Saving...' : '+ Add UPI'}
+                                    <div style={{ flex: '1 1 200px' }}>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>UPI ID *</label>
+                                        <input type="text" value={newDeptUpi.upiId} onChange={(e) => setNewDeptUpi({ ...newDeptUpi, upiId: e.target.value })} required placeholder="e.g. counter@upi" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }} />
+                                    </div>
+                                    <button type="submit" disabled={savingDeptUpi || upiStaffOptions.length === 0} style={{ padding: '10px 20px', background: '#059669', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap', opacity: (savingDeptUpi || upiStaffOptions.length === 0) ? 0.7 : 1 }}>
+                                        {savingDeptUpi ? 'Saving...' : '+ Add UPI Account'}
                                     </button>
                                 </form>
         
                                 <h4 style={{ marginBottom: '15px', color: '#334155' }}>Configured UPI Accounts</h4>
-                                {upiOptions.length === 0 ? (
-                                    <p style={{ color: '#64748b' }}>No UPI accounts added yet.</p>
+                                {loadingDeptUpis ? (
+                                    <p style={{ color: '#64748b' }}>Loading...</p>
+                                ) : deptUpis.length === 0 ? (
+                                    <p style={{ color: '#64748b' }}>No department UPI accounts configured yet.</p>
                                 ) : (
                                     <div style={{ display: 'grid', gap: '12px' }}>
-                                        {upiOptions.map((upi, index) => (
-                                            <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>
+                                        {deptUpis.map((upi) => (
+                                            <div key={upi._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>
                                                 <div>
-                                                    <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{upi.label}</div>
-                                                    <div style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '4px' }}>{upi.upiId}</div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{upi.label}</span>
+                                                        <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px', background: upi.isActive ? '#dcfce7' : '#f1f5f9', color: upi.isActive ? '#166534' : '#64748b', fontWeight: 600 }}>
+                                                            {upi.isActive ? 'Active' : 'Inactive'}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ color: '#64748b', fontSize: '0.9rem', marginTop: '4px' }}>
+                                                        {upi.upiId} — Assigned to: <strong>{upi.staffUserId?.name || 'Unknown'}</strong> ({upi.staffRoleName})
+                                                    </div>
                                                 </div>
-                                                <button type="button" onClick={() => handleDeleteUpi(index)} disabled={savingUpi} style={{ padding: '8px 16px', background: '#fee2e2', color: '#ef4444', border: '1px solid #f87171', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
-                                                    Delete
-                                                </button>
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <button type="button" onClick={() => handleToggleDeptUpi(upi)} style={{ padding: '8px 16px', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                                        {upi.isActive ? 'Deactivate' : 'Activate'}
+                                                    </button>
+                                                    <button type="button" onClick={() => handleDeleteDeptUpi(upi._id)} style={{ padding: '8px 16px', background: '#fee2e2', color: '#ef4444', border: '1px solid #f87171', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                                        Delete
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
