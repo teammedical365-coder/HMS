@@ -563,8 +563,10 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
             }
         }
 
-        const existingUser = await User.findOne({ email });
-        if (existingUser) return res.status(400).json({ success: false, message: 'User already exists' });
+        const checkQuery = { email: email.toLowerCase() };
+        if (assignedHospitalId) checkQuery.hospitalId = assignedHospitalId;
+        const existingUser = await User.findOne(checkQuery);
+        if (existingUser) return res.status(400).json({ success: false, message: 'User with this email already exists in this hospital' });
 
         const user = new User({
             name,

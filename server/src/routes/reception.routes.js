@@ -134,6 +134,20 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
             }
         }
 
+        // Check if Email is already registered for a different patient within THIS hospital
+        if (email && currentHospitalId) {
+            const existingEmail = await User.findOne({
+                hospitalId: currentHospitalId,
+                email: String(email).trim().toLowerCase()
+            });
+            if (existingEmail && (existingEmail.phone !== phone || existingEmail.name.toLowerCase() !== name.toLowerCase())) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'A patient with this email address already exists in this hospital.'
+                });
+            }
+        }
+
         let user = await User.findOne(userQuery);
 
         if (user) {

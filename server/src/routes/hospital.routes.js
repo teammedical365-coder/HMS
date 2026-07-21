@@ -438,8 +438,8 @@ router.post('/admin/signup', verifyCentralAdmin, async (req, res) => {
         const hospital = await Hospital.findOne({ _id: hospitalId, clinicType: { $ne: 'clinic' } });
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
-        const existing = await User.findOne({ email });
-        if (existing) return res.status(400).json({ success: false, message: 'Email already registered' });
+        const existing = await User.findOne({ email, hospitalId });
+        if (existing) return res.status(400).json({ success: false, message: 'Email already registered for this hospital' });
 
         const admin = new User({
             name, email, password, phone: phone || '',

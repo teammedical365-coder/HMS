@@ -44,8 +44,11 @@ router.post('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Name and email are required' });
     }
 
-    // Check if email already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    // Check if email already exists in this hospital
+    const targetHospitalId = getHospitalId(req);
+    const checkUserQuery = { email: email.toLowerCase() };
+    if (targetHospitalId) checkUserQuery.hospitalId = targetHospitalId;
+    const existingUser = await User.findOne(checkUserQuery);
     if (existingUser) {
       return res.status(400).json({ success: false, message: 'User with this email already exists' });
     }
@@ -287,8 +290,11 @@ router.post('/labs', verifyAdminOrSuperAdmin, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Name and email are required' });
     }
 
-    // Check if email already exists in User collection
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    // Check if email already exists in User collection for this hospital
+    const targetHospitalId = getHospitalId(req);
+    const checkUserQuery = { email: email.toLowerCase() };
+    if (targetHospitalId) checkUserQuery.hospitalId = targetHospitalId;
+    const existingUser = await User.findOne(checkUserQuery);
     if (existingUser) {
       return res.status(400).json({ success: false, message: 'User with this email already exists' });
     }
@@ -418,8 +424,11 @@ router.post('/pharmacies', verifyAdminOrSuperAdmin, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Name and email are required' });
     }
 
-    // Check if email already exists in User collection
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    // Check if email already exists in User collection for this hospital
+    const targetHospitalId = getHospitalId(req);
+    const checkUserQuery = { email: email.toLowerCase() };
+    if (targetHospitalId) checkUserQuery.hospitalId = targetHospitalId;
+    const existingUser = await User.findOne(checkUserQuery);
     if (existingUser) {
       return res.status(400).json({ success: false, message: 'User with this email already exists' });
     }
@@ -548,8 +557,11 @@ router.post('/receptions', verifyAdminOrSuperAdmin, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Name and email are required' });
     }
 
-    // Check if email already exists in User collection
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    // Check if email already exists in User collection for this hospital
+    const targetHospitalId = getHospitalId(req);
+    const checkUserQuery = { email: email.toLowerCase() };
+    if (targetHospitalId) checkUserQuery.hospitalId = targetHospitalId;
+    const existingUser = await User.findOne(checkUserQuery);
     if (existingUser) {
       return res.status(400).json({ success: false, message: 'User with this email already exists' });
     }

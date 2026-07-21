@@ -69,6 +69,8 @@ const clinicPatientSchema = new mongoose.Schema({
 clinicPatientSchema.index({ clinicId: 1, patientUid: 1 }, { unique: true });
 // phone unique per clinic
 clinicPatientSchema.index({ clinicId: 1, phone: 1 }, { unique: true });
+// email unique per clinic
+clinicPatientSchema.index({ clinicId: 1, email: 1 }, { unique: true, sparse: true });
 // aadhaarNumber unique per clinic
 clinicPatientSchema.index({ clinicId: 1, aadhaarNumber: 1 }, { unique: true, sparse: true });
 

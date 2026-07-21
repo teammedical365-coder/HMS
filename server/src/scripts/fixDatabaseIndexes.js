@@ -53,8 +53,9 @@ async function fixIndexes() {
                     const isSingleAadhaar = idx.name === 'aadhaarNumber_1' || (idx.key && idx.key.aadhaarNumber && Object.keys(idx.key).length === 1);
                     const isSinglePhone = idx.name === 'phone_1' || (idx.key && idx.key.phone && Object.keys(idx.key).length === 1);
                     const isSinglePatientId = idx.name === 'patientId_1' || (idx.key && idx.key.patientId && Object.keys(idx.key).length === 1);
+                    const isSingleEmail = idx.name === 'email_1' || (idx.key && idx.key.email && Object.keys(idx.key).length === 1);
 
-                    if (isSingleAadhaar || isSinglePhone || isSinglePatientId) {
+                    if (isSingleAadhaar || isSinglePhone || isSinglePatientId || isSingleEmail) {
                         console.log(`  🗑️ Dropping legacy index: ${idx.name} from ${dbName}.${collName}`);
                         try {
                             await coll.dropIndex(idx.name);

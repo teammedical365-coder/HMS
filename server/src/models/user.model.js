@@ -109,6 +109,7 @@ const userSchema = new mongoose.Schema({
 
 // Scoped compound indexes for multi-tenant isolation per hospital
 userSchema.index({ hospitalId: 1, phone: 1 }, { unique: true, sparse: true });
+userSchema.index({ hospitalId: 1, email: 1 }, { unique: true, sparse: true });
 userSchema.index({ hospitalId: 1, aadhaarNumber: 1 }, { unique: true, sparse: true });
 userSchema.index({ hospitalId: 1, patientId: 1 }, { unique: true, sparse: true });
 
