@@ -53,7 +53,11 @@ exports.verifyToken = async (req, res, next) => {
 
         // hospitalId: prefer JWT payload (authoritative for hospital admins), fallback to DB
         if (decoded.hospitalId) {
-            user.hospitalId = decoded.hospitalId;
+            try {
+                user.hospitalId = new (require('mongoose').Types.ObjectId)(decoded.hospitalId);
+            } catch (e) {
+                user.hospitalId = decoded.hospitalId; // Fallback if somehow not castable
+            }
         }
 
         // Populate the role data

@@ -80,7 +80,16 @@ const verifyClinicStaff = async (req, res, next) => {
     }
 };
 
-const hid = (req) => new mongoose.Types.ObjectId(req.user.hospitalId.toString());
+const hid = (req) => {
+    if (!req.user || !req.user.hospitalId) {
+        throw new Error("No clinic assigned to your account or invalid hospital ID.");
+    }
+    try {
+        return new mongoose.Types.ObjectId(req.user.hospitalId.toString());
+    } catch (err) {
+        throw new Error("Invalid clinic ID format.");
+    }
+};
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -103,24 +112,38 @@ const getClinicCode = async (hospitalId) => {
 
 // Upsert subscription record and increment new patient count
 const trackNewPatient = async (clinicId) => {
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    const year  = now.getFullYear();
-    const clinic = await Hospital.findById(clinicId).select('subscription');
-    const rate   = clinic?.subscription?.ratePerPatient || 0;
-    const total  = await ClinicPatient.countDocuments({ clinicId });
+    try {
+        const now = new Date();
+        const month = now.getMonth() + 1;
+        const year  = now.getFullYear();
+        const clinic = await Hospital.findById(clinicId).select('subscription');
+        const rate   = clinic?.subscription?.ratePerPatient || 0;
+        const total  = await ClinicPatient.countDocuments({ clinicId });
 
-    await ClinicSubscription.findOneAndUpdate(
-        { clinicId, month, year },
-        {
-            $inc: { newPatientCount: 1 },
-            $set: { totalPatientCount: total, ratePerPatient: rate },
-        },
-        { upsert: true, new: true }
-    ).then(sub => {
-        sub.totalAmount = sub.newPatientCount * sub.ratePerPatient;
-        return sub.save();
-    }).catch(() => {}); // non-fatal
+        await ClinicSubscription.findOneAndUpdate(
+            { clinicId, month, year },
+            {
+                $inc: { newPatientCount: 1 },
+                $set: { totalPatientCount: total, ratePerPatient: rate },
+            },
+            { upsert: true, new: true }
+        ).then(sub => {
+            sub.totalAmount = sub.newPatientCount * sub.ratePerPatient;
+            return sub.save();
+        }).then(saved => {
+            const io = require('express')().get('io');
+            if (io) {
+                io.to(clinicId.toString()).emit('clinic_metrics_updated', {
+                    newPatients: saved.newPatientCount,
+                    totalPatients: saved.totalPatientCount,
+                    month: saved.month,
+                    year: saved.year
+                });
+            }
+        });
+    } catch (err) {
+        console.error('trackNewPatient Background Error:', err);
+    }
 };
 
 // ─────────────────────────────────────────────
@@ -286,7 +309,8 @@ router.get('/patients', verifyClinicStaff, async (req, res) => {
 
         res.json({ success: true, patients });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'An internal error occurred' });
+        console.error('CLINIC PATIENTS GET ERROR:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred: ' + err.message });
     }
 });
 
@@ -295,7 +319,7 @@ router.get('/patients', verifyClinicStaff, async (req, res) => {
 // ─────────────────────────────────────────────
 router.post('/patients', verifyClinicStaff, async (req, res) => {
     try {
-        const { name, phone, email, dob, gender, address, bloodGroup, allergies, chronicConditions, relatives, aadhaarNumber } = req.body;
+        const { name, phone, email, age, dob, gender, address, bloodGroup, allergies, chronicConditions, relatives, aadhaarNumber } = req.body;
         if (!name || !phone) return res.status(400).json({ success: false, message: 'Name and phone are required' });
 
         const cleanPhone = phone.replace(/\D/g, '');
@@ -337,6 +361,7 @@ router.post('/patients', verifyClinicStaff, async (req, res) => {
             name: name.trim(),
             phone: cleanPhone,
             email: email || '',
+            age: age ? Number(age) : 1, // Default or parsed age
             aadhaarNumber: aadhaarNumber ? String(aadhaarNumber).trim() : undefined,
             dob: dob ? new Date(dob) : null,
             gender: gender || 'Male',
@@ -360,7 +385,8 @@ router.post('/patients', verifyClinicStaff, async (req, res) => {
                 : field;
             return res.status(400).json({ success: false, message: `A patient with this ${friendlyField} already exists in this clinic` });
         }
-        res.status(500).json({ success: false, message: 'An internal error occurred' });
+        console.error('CLINIC PATIENTS POST ERROR:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred: ' + err.message });
     }
 });
 
