@@ -556,9 +556,22 @@ router.get('/:id/documents', verifyToken, resolveTenant, async (req, res) => {
         }));
 
         const allCombined = [...baseDocs, ...prevReports, ...doctorReports, ...labDocs];
+        
+        // Strictly isolate documents by department if requested
+        const filteredCombined = allCombined.filter(doc => {
+            if (!department) return true;
+            if (doc.department) {
+                return doc.department.toLowerCase() === department.toLowerCase();
+            }
+            if (doc.appointmentId && deptApptIds.some(id => id.toString() === doc.appointmentId.toString())) {
+                return true;
+            }
+            return false;
+        });
+
         const seen = new Set();
         const documents = [];
-        for (const doc of allCombined) {
+        for (const doc of filteredCombined) {
             const key = doc.url || doc.fileName;
             if (key && !seen.has(key)) {
                 seen.add(key);
@@ -702,9 +715,25 @@ router.delete('/:id/documents/:index', verifyToken, resolveTenant, async (req, r
         }));
 
         const allCombined = [...baseDocs, ...prevReports, ...doctorReports, ...labDocs];
+        
+        // Strictly isolate documents by department if requested (optional for DELETE response but consistent)
+        const department = req.query.department || '';
+        const deptApptIdsStr = req.query.deptApptIds ? req.query.deptApptIds.split(',') : [];
+
+        const filteredCombined = allCombined.filter(doc => {
+            if (!department) return true;
+            if (doc.department) {
+                return doc.department.toLowerCase() === department.toLowerCase();
+            }
+            if (doc.appointmentId && deptApptIdsStr.includes(doc.appointmentId.toString())) {
+                return true;
+            }
+            return false;
+        });
+
         const seen = new Set();
         const documents = [];
-        for (const doc of allCombined) {
+        for (const doc of filteredCombined) {
             const key = doc.url || doc.fileName;
             if (key && !seen.has(key)) {
                 seen.add(key);

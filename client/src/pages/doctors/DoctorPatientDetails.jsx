@@ -63,7 +63,6 @@ const DoctorPatientDetails = () => {
 
     // Tab State for Left Panel
     const [activeTab, setActiveTab] = useState('overview');
-    const [showAllDeptHistory, setShowAllDeptHistory] = useState(false);
 
     // Time Machine Feature State
     const [viewingPastSession, setViewingPastSession] = useState(null);
@@ -1018,23 +1017,13 @@ const DoctorPatientDetails = () => {
                     {activeTab === 'history' && (() => {
                         const currentDept = (appointment?.department || appointment?.serviceName || '').toLowerCase();
                         const filteredHistory = history.filter(h => {
-                            if (showAllDeptHistory || !currentDept) return true;
+                            if (!currentDept) return true;
                             if (h._id === appointmentId) return true;
                             const hDept = (h.department || h.serviceName || h.doctorConsultation?.department || '').toLowerCase();
                             return hDept === currentDept;
                         });
                         return (
                             <div className="dpd-tab-panel">
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', padding: '10px 14px', background: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', flexWrap: 'wrap', gap: '8px' }}>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowAllDeptHistory(!showAllDeptHistory)}
-                                        style={{ padding: '6px 12px', background: showAllDeptHistory ? '#d97706' : '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}
-                                    >
-                                        {showAllDeptHistory ? '📌 Filter by Current Department' : '👁️ View Complete Medical History'}
-                                    </button>
-                                </div>
                                 <h3 className="dpd-panel-title">📜 Previous Consultations ({filteredHistory.length})</h3>
                                 {filteredHistory.length === 0 ? (
                                     <div className="dpd-empty-hist">
