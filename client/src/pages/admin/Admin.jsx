@@ -389,7 +389,9 @@ const Admin = () => {
                     </div>
                     <div className="admin-user-info">
                         <span>Welcome, {user.name}</span>
-                        <button onClick={() => navigate('/admin/roles')} className="btn-edit" style={{ marginRight: '10px', padding: '8px 16px' }}>🔑 Manage Roles</button>
+                        {!['enterprise', 'clinic_basic', 'multi_speciality_starter'].includes(user.subscriptionPlan) && (
+                            <button onClick={() => navigate('/admin/roles')} className="btn-edit" style={{ marginRight: '10px', padding: '8px 16px' }}>🔑 Manage Roles</button>
+                        )}
                         <button onClick={handleLogout} className="logout-btn">Logout</button>
                     </div>
                 </div>

@@ -698,12 +698,14 @@ const HospitalAdminDashboard = () => {
                                 >
                                     👨‍⚕️ Manage Doctors
                                 </button>
-                                <button
-                                    onClick={() => navigate('/admin/roles')}
-                                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', background: '#f3e8ff', color: '#9333ea', border: '1px solid #e9d5ff', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}
-                                >
-                                    🔑 Manage Roles
-                                </button>
+                                {!['enterprise', 'clinic_basic', 'multi_speciality_starter'].includes(currentUser?.subscriptionPlan) && (
+                                    <button
+                                        onClick={() => navigate('/admin/roles')}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', background: '#f3e8ff', color: '#9333ea', border: '1px solid #e9d5ff', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}
+                                    >
+                                        🔑 Manage Roles
+                                    </button>
+                                )}
                             </div>
                         </div>
 
