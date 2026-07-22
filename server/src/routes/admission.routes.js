@@ -74,7 +74,6 @@ router.get('/active', verifyAdmissionAccess, async (req, res) => {
     try {
         const Admission = getAdmission(req);
         let queryFilter = {
-            status: 'Admitted',
             hospitalId: req.hospitalId || req.user.hospitalId,
         };
 
@@ -128,10 +127,24 @@ router.get('/active', verifyAdmissionAccess, async (req, res) => {
             }
         }
 
-        const admissions = await Admission.find(queryFilter)
-        .populate('patientId', 'name phone patientId mrn gender dob')
-        .populate('appointmentId', 'doctorName department serviceName')
-        .lean();
+        const User = require('../models/user.model');
+        const Appointment = require('../models/appointment.model');
+        console.log('Query Filter:', queryFilter);
+        let admissions = await Admission.find(queryFilter).sort({ admissionDate: -1 }).lean();
+        console.log('Found admissions:', admissions.length);
+
+        for (let adm of admissions) {
+            try {
+                if (adm.patientId) {
+                    adm.patientId = await User.findById(adm.patientId).select('name phone patientId mrn gender dob').lean() || adm.patientId;
+                }
+            } catch (err) {}
+            try {
+                if (adm.appointmentId) {
+                    adm.appointmentId = await Appointment.findById(adm.appointmentId).select('doctorName department serviceName').lean() || adm.appointmentId;
+                }
+            } catch (err) {}
+        }
 
         res.json({ success: true, admissions });
     } catch (err) {

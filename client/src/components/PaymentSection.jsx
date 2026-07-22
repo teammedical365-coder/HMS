@@ -32,7 +32,8 @@ const PaymentSection = ({
     proofFile = null,
     onProofFileChange,
     label = 'Payment Breakdown',
-    noUpiMessage = ''
+    noUpiMessage = '',
+    allowCash = true
 }) => {
     const totalSplitAmount = splitPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
@@ -61,7 +62,7 @@ const PaymentSection = ({
                                 className="payment-mode-select"
                                 style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', minWidth: '150px' }}
                             >
-                                <option value="Cash">Cash</option>
+                                {allowCash && <option value="Cash">Cash</option>}
                                 <option value="UPI">UPI</option>
                                 <option value="Card">Card</option>
                                 <option value="Cheque">Cheque</option>

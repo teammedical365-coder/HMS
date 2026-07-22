@@ -56,6 +56,7 @@ const PatientDashboard = () => {
     const [followupData, setFollowupData] = useState(null);
     const [rebookingAppt, setRebookingAppt] = useState(null);
     const [rebookForm, setRebookForm] = useState({ visitDate: '', visitTime: '' });
+    const [rebookFollowupData, setRebookFollowupData] = useState(null);
     const [bookingAppt, setBookingAppt] = useState(false);
 
     // Profile Edit State
@@ -233,6 +234,18 @@ const PatientDashboard = () => {
     useEffect(() => {
         loadDashboardData();
     }, []);
+
+    useEffect(() => {
+        if (rebookingAppt && rebookForm.visitDate) {
+            patientAuthAPI.getFollowupStatus(rebookForm.visitDate)
+                .then(res => {
+                    if (res.success) setRebookFollowupData(res);
+                })
+                .catch(err => console.error("Failed to fetch rebook followup status", err));
+        } else {
+            setRebookFollowupData(null);
+        }
+    }, [rebookingAppt, rebookForm.visitDate]);
 
     const loadDashboardData = async () => {
         try {
@@ -2030,6 +2043,34 @@ const PatientDashboard = () => {
                                         selectedTime={rebookForm.visitTime} 
                                         onSelectTime={(t) => setRebookForm({ ...rebookForm, visitTime: t })}
                                     />
+                                </div>
+                            )}
+                            
+                            {rebookFollowupData && rebookFollowupData.lastConsultation && (
+                                <div className="form-row" style={{ marginTop: '15px' }}>
+                                    <div className="field" style={{ flex: 1 }}>
+                                        <div style={{
+                                            padding: '12px 16px', borderRadius: '8px', border: '1px solid',
+                                            backgroundColor: rebookFollowupData.active ? '#f0fdf4' : '#fef2f2',
+                                            borderColor: rebookFollowupData.active ? '#bbf7d0' : '#fecaca',
+                                            color: rebookFollowupData.active ? '#15803d' : '#b91c1c',
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', fontSize: '14px' }}>
+                                                <span>{rebookFollowupData.active ? '✅ Follow-up Visit - Payment Not Required' : '🔴 Follow-up Expired'}</span>
+                                            </div>
+                                            <div style={{ fontSize: '13px', display: 'flex', gap: '24px', alignItems: 'center' }}>
+                                                {rebookFollowupData.active ? (
+                                                    <>
+                                                        <div>Last Visit: <strong>{new Date(rebookFollowupData.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
+                                                        <div>Valid Till: <strong>{new Date(rebookFollowupData.validUntil).toLocaleDateString('en-IN')}</strong></div>
+                                                    </>
+                                                ) : (
+                                                    <div>Fee: <strong>₹{rebookFollowupData.fee}</strong></div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </div>

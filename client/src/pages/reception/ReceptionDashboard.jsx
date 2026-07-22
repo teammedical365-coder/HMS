@@ -413,10 +413,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     useEffect(() => {
         if (!isPatientPortal) {
+            fetchHospitalizedPatients();
             if (listTab === 'queue' || listTab === 'all') {
                 fetchAppointments();
-            } else if (listTab === 'hospitalized') {
-                fetchHospitalizedPatients();
             }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -531,7 +530,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         try {
             const res = await receptionAPI.getFollowupStatus(patient._id || patient.patientId, 'auto', new Date().toISOString().split('T')[0]);
             if (res.success && res.department) {
-                setIntakeForm(prev => ({ ...prev, department: res.department }));
+                setIntakeForm(prev => ({ 
+                    ...prev, 
+                    department: res.department,
+                    doctor: res.doctorId || prev.doctor
+                }));
             }
         } catch (err) {
             console.error("Failed to auto-fetch followup status", err);
@@ -574,6 +577,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             alert(`Patient admitted successfully!`);
             setHospitalizeModal({ open: false, appointment: null });
             fetchAppointments();
+            fetchHospitalizedPatients();
         } catch (err) {
             alert(err.response?.data?.message || 'Failed to admit patient');
         } finally {
@@ -837,7 +841,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         intakeForm.address = fullAddress || intakeForm.address || '';
 
         const hasNonCash = intakeForm.splitPayments.some(p => p.method !== 'Cash');
-        if (!selectedPatientId && intakeForm.doctor && intakeForm.visitTime && hasNonCash && !paymentScreenshot) {
+        if (intakeForm.doctor && intakeForm.visitTime && hasNonCash && !paymentScreenshot && !followupStatus?.active) {
             alert(`Please upload a payment screenshot/proof for non-cash payment before booking.`);
             setSaving(false); return;
         }
@@ -1047,7 +1051,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                         navigate('/patient/dashboard');
                         return;
                     } else {
-                        alert(`Patient Registered & Assigned to Doctor!${tokenMsg}`);
+                        const successMsg = selectedPatientId
+                            ? `✅ Appointment Booked Successfully!${tokenMsg}`
+                            : `Patient Registered & Assigned to Doctor!${tokenMsg}`;
+                        alert(successMsg);
                     }
                 } else {
                     alert("Booking Failed: " + bookingRes.message);
@@ -1067,17 +1074,236 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         }
     };
 
+    // Determine if reception is rebooking an existing patient (not patient portal, not new registration)
+    const isRebookingMode = !!selectedPatientId && !isPatientPortal;
+
     if (viewMode === 'intake') {
+        // ─── RECEPTION REBOOKING MODE (identical layout to Patient Rebooking) ────
+        if (isRebookingMode) {
+            const patientName = [intakeForm.firstName, intakeForm.lastName].filter(Boolean).join(' ') || 'Patient';
+            return (
+                <div className="intake-full-page" data-lenis-prevent="true">
+                    <div className="context-bar">
+                        <h3>{followupStatus?.active ? 'Re-Book Appointment' : 'Book Appointment'}</h3>
+                        <button type="button" className="btn-cancel" onClick={() => setViewMode('list')}>Close ✖</button>
+                    </div>
+                    <div className="intake-container" style={{ maxWidth: '650px', margin: '0 auto' }}>
+                        <form onSubmit={handleSave}>
+                            <div className="form-section" style={{ padding: '24px' }}>
+                                {/* Patient Summary Header */}
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', gap: '14px',
+                                    padding: '16px', background: '#f8fafc', borderRadius: '10px',
+                                    border: '1px solid #e2e8f0', marginBottom: '20px'
+                                }}>
+                                    {profilePhotoPreview ? (
+                                        <img src={profilePhotoPreview} alt="Patient" style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #e2e8f0' }} />
+                                    ) : (
+                                        <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>👤</div>
+                                    )}
+                                    <div>
+                                        <div style={{ fontWeight: 700, fontSize: '1rem', color: '#1e293b' }}>{patientName}</div>
+                                        <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                                            {intakeForm.mobile && <span>📱 {intakeForm.mobile}</span>}
+                                            {intakeForm.age && <span style={{ marginLeft: '12px' }}>Age: {intakeForm.age}</span>}
+                                            {intakeForm.gender && <span style={{ marginLeft: '12px' }}>{intakeForm.gender}</span>}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Follow-up Status Card */}
+                                {followupStatus && followupStatus.lastConsultation && (
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <div style={{
+                                            padding: '12px 16px', borderRadius: '8px', border: '1px solid',
+                                            backgroundColor: followupStatus.active ? '#f0fdf4' : '#fef2f2',
+                                            borderColor: followupStatus.active ? '#bbf7d0' : '#fecaca',
+                                            color: followupStatus.active ? '#15803d' : '#b91c1c',
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', fontSize: '14px' }}>
+                                                <span>{followupStatus.active ? '✅ Follow-up Visit - Payment Not Required' : '🔴 Follow-up Expired'}</span>
+                                            </div>
+                                            <div style={{ fontSize: '13px', display: 'flex', gap: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                {followupStatus.active ? (
+                                                    <>
+                                                        <div>Last Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
+                                                        <div>Valid Till: <strong>{new Date(followupStatus.validUntil).toLocaleDateString('en-IN')}</strong></div>
+                                                        {(() => {
+                                                            const remaining = Math.max(0, Math.ceil((new Date(followupStatus.validUntil).getTime() - new Date(intakeForm.visitDate || new Date()).getTime()) / (1000 * 3600 * 24)));
+                                                            return <div>Remaining Days: <strong>{remaining === 0 ? 'Expires Today' : `${remaining} Day${remaining > 1 ? 's' : ''}`}</strong></div>;
+                                                        })()}
+                                                        <div>Fee: <strong>₹0</strong></div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div>Last Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
+                                                        <div>Expired On: <strong>{new Date(followupStatus.validUntil).toLocaleDateString('en-IN')}</strong></div>
+                                                        <div>Fee Applicable: <strong>₹{followupStatus.fee || intakeForm.consultationFee}</strong></div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Payment Confirmed Banner (when follow-up is active) */}
+                                {followupStatus?.active && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', justifyContent: 'center', marginBottom: '20px' }}>
+                                        <span style={{ fontSize: '18px' }}>✅</span>
+                                        <span style={{ fontWeight: 600, color: '#15803d', fontSize: '16px' }}>Payment Confirmed — Paid</span>
+                                    </div>
+                                )}
+
+                                {/* Payment Section (when follow-up is NOT active) */}
+                                {!followupStatus?.active && (
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <div className="field" style={{ flexBasis: '100%' }}>
+                                            <PaymentSection
+                                                splitPayments={intakeForm.splitPayments}
+                                                onSplitChange={handleIntakeSplitPaymentChange}
+                                                onAddSplit={addIntakeSplitPayment}
+                                                onRemoveSplit={removeIntakeSplitPayment}
+                                                totalAmount={Number(intakeForm.consultationFee) || 0}
+                                                upiOptions={upiOptions}
+                                                paymentData={intakePaymentData}
+                                                onPaymentDataChange={setIntakePaymentData}
+                                                proofFile={paymentScreenshot}
+                                                onProofFileChange={setPaymentScreenshot}
+                                                allowCash={true}
+                                            />
+                                        </div>
+                                        {intakeForm.splitPayments.some(p => p.method !== 'Cash') && (
+                                            <div style={{ marginTop: '8px' }}>
+                                                <label>Payment Screenshot / Proof <span style={{ color: '#ef4444', fontSize: '12px' }}>*Required for non-cash payment</span></label>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*,application/pdf"
+                                                    onChange={e => setPaymentScreenshot(e.target.files[0])}
+                                                    style={{ padding: '8px', border: '2px dashed #6366f1', borderRadius: '8px', background: '#f5f3ff', width: '100%' }}
+                                                />
+                                                {paymentScreenshot && (
+                                                    <span style={{ fontSize: '12px', color: '#059669', marginTop: '4px', display: 'block' }}>
+                                                        ✅ {paymentScreenshot.name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Assign to Doctor/Counselor */}
+                                <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
+                                    <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px', borderBottom: '2px solid #bfdbfe', paddingBottom: '10px' }}>Assign to Doctor/Counselor</h4>
+                                    <div className="form-row">
+                                        <div className="field">
+                                            <label>Department {followupStatus?.active && '(Read Only)'}</label>
+                                            <select
+                                                name="department"
+                                                value={intakeForm.department}
+                                                onChange={handleInputChange}
+                                                disabled={followupStatus?.active}
+                                                style={followupStatus?.active ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
+                                            >
+                                                <option value="">-- Choose Department --</option>
+                                                {[...new Set([...(hospitalContext?.departments || []), ...doctorsList.flatMap(d => d.departments || [])])].filter(Boolean).map(dept => (
+                                                    <option key={dept} value={dept}>{dept}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="field">
+                                            <label>Select Specialist {followupStatus?.active && '(Read Only)'}</label>
+                                            <select
+                                                name="doctor"
+                                                value={intakeForm.doctor}
+                                                onChange={handleInputChange}
+                                                disabled={!intakeForm.department || followupStatus?.active}
+                                                style={(!intakeForm.department || followupStatus?.active) ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
+                                            >
+                                                {!intakeForm.department ? (
+                                                    <option value="">-- Select Department First --</option>
+                                                ) : (
+                                                    <>
+                                                        <option value="">-- Choose Specialist --</option>
+                                                        {doctorsList.filter(doc => (doc.departments || []).includes(intakeForm.department)).map(doc => (
+                                                            <option key={doc._id} value={doc._id}>{doc.name} {doc.departments?.length > 0 ? `(${doc.departments.join(', ')})` : ''}</option>
+                                                        ))}
+                                                    </>
+                                                )}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="form-row" style={{ marginTop: '10px' }}>
+                                        <div className="field">
+                                            <label>Appointment Date</label>
+                                            <input type="date" name="visitDate" value={intakeForm.visitDate} min={todayStr} onChange={handleInputChange} disabled={!intakeForm.doctor} style={!intakeForm.doctor ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}} />
+                                        </div>
+                                    </div>
+                                    {intakeForm.doctor && intakeForm.visitDate && (
+                                        hospitalContext?.appointmentMode === 'token' ? (
+                                            <div style={{ margin: '14px 0', padding: '18px 24px', background: 'linear-gradient(135deg, #fef3c7, #fde68a)', borderRadius: '12px', border: '2px solid #f59e0b', display: 'flex', alignItems: 'center', gap: '18px' }}>
+                                                <span style={{ fontSize: '2.5rem' }}>🎟️</span>
+                                                <div>
+                                                    <div style={{ fontWeight: 700, fontSize: '1rem', color: '#78350f', marginBottom: '2px' }}>Token Queue Mode Active</div>
+                                                    {nextToken !== null ? (
+                                                        <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#92400e' }}>
+                                                            Next Token: <span style={{ fontSize: '2rem', color: '#d97706' }}>#{nextToken}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ color: '#92400e', fontSize: '0.9rem' }}>Select doctor and date to see next token</div>
+                                                    )}
+                                                    <div style={{ fontSize: '0.8rem', color: '#92400e', marginTop: '4px', opacity: 0.8 }}>Tokens reset daily at midnight</div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div style={{ marginTop: '10px' }}>
+                                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold', fontSize: '0.85rem', color: '#475569' }}>Available Slots</label>
+                                                <SlotPicker
+                                                    doctorId={intakeForm.doctor}
+                                                    date={intakeForm.visitDate}
+                                                    selectedTime={intakeForm.visitTime}
+                                                    onSelectTime={(time) => setIntakeForm({ ...intakeForm, visitTime: time })}
+                                                />
+                                            </div>
+                                        )
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="form-footer">
+                                <button type="submit" className="btn-save" disabled={saving}>
+                                    {saving
+                                        ? 'Booking...'
+                                        : (() => {
+                                            const isTokenMode = hospitalContext?.appointmentMode === 'token';
+                                            const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
+                                            const actionText = followupStatus?.active ? 'Re-Book Appointment' : 'Book Appointment';
+                                            return canBook ? `${actionText} & Receipt` : 'Select Doctor & Slot';
+                                        })()
+                                    }
+                                </button>
+                                <button type="button" className="btn-cancel" onClick={() => setViewMode('list')} disabled={saving} style={{ marginLeft: '10px' }}>
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // ─── NEW REGISTRATION / PATIENT PORTAL MODE (unchanged) ────────────
         return (
             <div className="intake-full-page" data-lenis-prevent="true">
                 <div className="context-bar">
-                    <h3>{isPatientPortal ? (followupStatus?.active ? 'Re-Book Appointment' : 'Book Appointment') : (selectedPatientId ? 'Edit Patient Details' : 'New Registration')}</h3>
+                    <h3>{isPatientPortal ? (followupStatus?.active ? 'Re-Book Appointment' : 'Book Appointment') : 'New Registration'}</h3>
                     <button type="button" className="btn-cancel" onClick={() => isPatientPortal ? navigate('/patient/dashboard') : setViewMode('list')}>Close ✖</button>
                 </div>
                 <div className="intake-container">
                     <form onSubmit={handleSave}>
                         {/* Unifying Sections 1, 2, and 3 into a single card container */}
                         <div className="form-section">
+                            <fieldset disabled={false} style={{ border: 'none', padding: 0, margin: 0 }}>
                             <h4>1. Patient Identity & KYC</h4>
 
                             {/* PATIENT PROFILE PHOTO */}
@@ -1245,6 +1471,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     </select>
                                 </div>
                             </div>
+                            </fieldset>
 
                             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
 
@@ -1253,14 +1480,12 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                 <div className="field"><label>Height (cm)</label><input name="height" value={intakeForm.height} onChange={handleInputChange} /></div>
                                 <div className="field"><label>Weight (kg)</label><input name="weight" value={intakeForm.weight} onChange={handleInputChange} /></div>
                                 <div className="field"><label>BMI</label><input name="bmi" value={intakeForm.bmi} readOnly /></div>
-                                {!selectedPatientId && (
-                                    <div className="field">
-                                        <label>Consultation Fee</label>
-                                        <input name="consultationFee" value={intakeForm.consultationFee} readOnly style={{ backgroundColor: '#f1f5f9', color: '#475569', cursor: 'not-allowed' }} />
-                                    </div>
-                                )}
+                                <div className="field">
+                                    <label>Consultation Fee</label>
+                                    <input name="consultationFee" value={intakeForm.consultationFee} readOnly style={{ backgroundColor: '#f1f5f9', color: '#475569', cursor: 'not-allowed' }} />
+                                </div>
                             </div>
-                            {(!selectedPatientId || isPatientPortal) && (
+                            {(true) && (
                                 <div className="form-row" style={followupStatus?.active ? { display: 'flex', flexDirection: 'column', gap: '10px' } : {}}>
                                     {!followupStatus?.active && (
                                         <div className="field" style={{ flexBasis: '100%' }}>
@@ -1275,6 +1500,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                 onPaymentDataChange={setIntakePaymentData}
                                                 proofFile={paymentScreenshot}
                                                 onProofFileChange={setPaymentScreenshot}
+                                                allowCash={!isPatientPortal}
                                             />
                                         </div>
                                     )}
@@ -1297,7 +1523,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                                         }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', fontSize: '14px' }}>
-                                                <span>{followupStatus.active ? '🟢 Follow-up Active' : '🔴 Follow-up Expired'}</span>
+                                                <span>{followupStatus.active ? '✅ Follow-up Visit - Payment Not Required' : '🔴 Follow-up Expired'}</span>
                                             </div>
                                             <div style={{ fontSize: '13px', display: 'flex', gap: '24px', alignItems: 'center' }}>
                                                 {followupStatus.active ? (
@@ -1323,7 +1549,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                 </div>
                             )}
 
-                            {(!selectedPatientId || isPatientPortal) && !followupStatus?.active && intakeForm.splitPayments.some(p => p.method !== 'Cash') && (
+                            {!followupStatus?.active && intakeForm.splitPayments.some(p => p.method !== 'Cash') && (
                                 <div className="form-row" style={{ marginTop: '6px' }}>
                                     <div className="field" style={{ flex: 1 }}>
                                         <label>Payment Screenshot / Proof <span style={{ color: '#ef4444', fontSize: '12px' }}>*Required for non-cash payment</span></label>
@@ -1344,7 +1570,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
                             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
 
-                            {(!selectedPatientId || isPatientPortal) && (
+                            {(true) && (
                                 <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
                                     <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px', borderBottom: '2px solid #bfdbfe', paddingBottom: '10px' }}>5. Assign to Doctor/Counselor</h4>
                                     <div className="form-row">
@@ -1429,7 +1655,6 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
                                         const actionText = followupStatus?.active ? 'Re-Book Appointment' : (isTokenMode && !isPatientPortal ? 'Issue Token' : 'Book Appointment');
                                         if (isPatientPortal) return canBook ? actionText : 'Complete Profile & Continue';
-                                        if (selectedPatientId) return canBook ? `${actionText} & Receipt` : 'Save Patient Details';
                                         return canBook ? `Register, ${actionText} & Receipt` : 'Save Patient Details';
                                     })()
                                 }
@@ -1547,121 +1772,53 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     const renderTodaysQueue = () => (
         <div className="appointments-list">
-            <div style={{ marginBottom: '16px' }}>
-                <select 
-                    value={departmentFilter} 
-                    onChange={(e) => setDepartmentFilter(e.target.value)}
-                    style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '1rem', outline: 'none' }}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0 }}>Today's Queue</h3>
+                <button 
+                    onClick={() => setListTab(listTab === 'hospitalized' ? 'queue' : 'hospitalized')}
+                    style={{ padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', background: listTab === 'hospitalized' ? '#3b82f6' : '#f1f5f9', color: listTab === 'hospitalized' ? '#fff' : '#475569', transition: 'all 0.2s' }}
                 >
-                    <option value="">All Departments</option>
-                    {[...new Set([...(hospitalContext?.departments || []), ...doctorsList.flatMap(d => d.departments || [])])].filter(Boolean).map(dept => (
-                        <option key={dept} value={dept}>{dept}</option>
-                    ))}
-                </select>
+                    {listTab === 'hospitalized' ? 'Back to Today\'s Queue' : 'View Hospitalized'}
+                </button>
             </div>
             
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', overflowX: 'auto' }}>
-                <button 
-                    onClick={() => setListTab('queue')}
-                    style={{ flex: '1', padding: '10px 12px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', background: listTab === 'queue' ? '#3b82f6' : '#f1f5f9', color: listTab === 'queue' ? '#fff' : '#475569', whiteSpace: 'nowrap', transition: 'all 0.2s' }}
-                >
-                    Today's Queue
-                </button>
-                <button 
-                    onClick={() => setListTab('all')}
-                    style={{ flex: '1', padding: '10px 12px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', background: listTab === 'all' ? '#3b82f6' : '#f1f5f9', color: listTab === 'all' ? '#fff' : '#475569', whiteSpace: 'nowrap', transition: 'all 0.2s' }}
-                >
-                    All Appointments
-                </button>
-                <button 
-                    onClick={() => setListTab('hospitalized')}
-                    style={{ flex: '1', padding: '10px 12px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', background: listTab === 'hospitalized' ? '#eab308' : '#f1f5f9', color: listTab === 'hospitalized' ? '#fff' : '#475569', whiteSpace: 'nowrap', transition: 'all 0.2s' }}
-                >
-                    Hospitalized
-                </button>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                <h3 style={{ margin: 0 }}>{listTab === 'all' ? 'All Appointments' : 'Today\'s Queue'}</h3>
-                {hospitalContext?.appointmentMode === 'token' && (
-                    <span style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', padding: '3px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>
-                        🎟️ Token Queue Mode
-                    </span>
-                )}
-            </div>
             <div className="table-responsive">
                 <table className="reception-table">
                     <thead>
                         <tr>
-                            <th>Patient</th>
-                            <th style={{ whiteSpace: 'nowrap' }}>Doctor</th>
-                            <th>{hospitalContext?.appointmentMode === 'token' ? 'Token #' : 'Time'}</th>
-                            <th>Status</th>
-                            <th>Action</th>
+                            <th style={{ textTransform: 'uppercase' }}>Patient</th>
+                            <th style={{ textTransform: 'uppercase' }}>Doctor</th>
+                            <th style={{ textTransform: 'uppercase' }}>Time</th>
+                            <th style={{ textTransform: 'uppercase' }}>Status</th>
+                            <th style={{ textTransform: 'uppercase' }}>Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {appointments.map(apt => (
+                        {appointments.map(apt => {
+                            const isHospitalized = hospitalizedPatients.some(adm => 
+                                (adm.appointmentId?._id === apt._id || adm.appointmentId === apt._id) && adm.status === 'Admitted'
+                            );
+                            
+                            return (
                             <tr key={apt._id}>
-                                <td>{apt.userId?.name}<br /><small>{apt.userId?.phone}</small></td>
-                                <td style={{ whiteSpace: 'nowrap' }}>{apt.doctorName || '-'}</td>
+                                <td>{apt.userId?.name}<br /><small style={{ color: '#64748b' }}>{apt.userId?.phone}</small></td>
+                                <td>{apt.doctorName || apt.doctorId?.name}</td>
+                                <td>{apt.appointmentTime || '-'}</td>
+                                <td><span className={`status ${apt.status}`}>{String(apt.status).toUpperCase()}</span></td>
                                 <td>
-                                    {apt.tokenNumber != null
-                                        ? <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#d97706' }}>#{apt.tokenNumber}</span>
-                                        : apt.appointmentTime?.startsWith('token-')
-                                            ? <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#d97706' }}>#{apt.appointmentTime.replace('token-', '')}</span>
-                                            : apt.appointmentTime}
-                                </td>
-                                <td><span className={`status ${apt.status}`}>{apt.status}</span></td>
-                                <td style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                    {(apt.paymentStatus || '').toLowerCase() !== 'paid' && apt.status !== 'cancelled' && (
-                                        <button
-                                            onClick={() => setPaymentModal({ open: true, appointment: apt, splitPayments: [{ method: apt.paymentMethod || 'Cash', amount: apt.amount }] })}
-                                            style={{ padding: '4px 10px', fontSize: '12px', background: '#dcfce7', color: '#166534', border: '1px solid #86efac', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
-                                        >
-                                            💰 Confirm Payment
-                                        </button>
-                                    )}
-                                    {(apt.paymentStatus || '').toLowerCase() === 'paid' && (
-                                        <button
-                                            onClick={() => generateReceiptPDF(apt)}
-                                            style={{ padding: '4px 10px', fontSize: '12px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #93c5fd', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
-                                        >
-                                            🧾 Print Receipt
-                                        </button>
-                                    )}
-                                    {apt.status !== 'cancelled' && (
-                                        <>
-                                            {console.log('DEBUG apt:', apt._id, 'createdAt:', apt.createdAt, 'isWithin24Hours:', isWithin24Hours(apt.createdAt))}
-                                            {isWithin24Hours(apt.createdAt) && (
-                                                <button
-                                                    onClick={() => openHospitalizeModal(apt)}
-                                                    disabled={false}
-                                                    style={{
-                                                        padding: '4px 10px',
-                                                        fontSize: '12px',
-                                                        background: apt.isHospitalized ? '#fff1f2' : '#dbeafe',
-                                                        color: apt.isHospitalized ? '#be123c' : '#1d4ed8',
-                                                        border: apt.isHospitalized ? '1px solid #fda4af' : '1px solid #93c5fd',
-                                                        borderRadius: '5px',
-                                                        cursor: 'pointer',
-                                                        fontWeight: '600'
-                                                    }}
-                                                >
-                                                    {apt.isHospitalized ? '🏥 Hospitalized' : 'Hospitalize'}
-                                                </button>
-                                            )}
-                                            {apt.status !== 'completed' && (
-                                                <button
-                                                    onClick={() => handleCancelAppointment(apt._id)}
-                                                    style={{ padding: '4px 10px', fontSize: '12px', background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '5px', cursor: 'pointer', fontWeight: '600' }}
-                                                >Cancel</button>
-                                            )}
-                                        </>
-                                    )}
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                        <button onClick={() => {
+                                            const pdf = generateReceiptPDF(apt, apt.paymentMethod || 'Cash', false);
+                                            setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Payment Receipt' });
+                                        }} style={{ padding: '6px 12px', background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>📄 Print Receipt</button>
+                                        
+                                        <button onClick={() => setHospitalizeModal({ open: true, appointment: apt })} style={{ padding: '6px 12px', background: isHospitalized ? '#fef2f2' : '#eff6ff', color: isHospitalized ? '#ef4444' : '#3b82f6', border: `1px solid ${isHospitalized ? '#fecaca' : '#bfdbfe'}`, borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>{isHospitalized ? 'Hospitalized' : 'Hospitalize'}</button>
+                                        
+                                        <button onClick={() => handleCancelAppointment(apt._id)} style={{ padding: '6px 12px', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
+                                    </div>
                                 </td>
                             </tr>
-                        ))}
+                        )})}
                     </tbody>
                 </table>
             </div>
@@ -1670,7 +1827,14 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     const renderHospitalized = () => (
         <div className="appointments-list">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <button 
+                    onClick={() => setListTab('queue')} 
+                    style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#64748b', padding: '0 8px 0 0' }}
+                    title="Back to Today's Queue"
+                >
+                    ←
+                </button>
                 <h3 style={{ margin: 0 }}>Hospitalized Patients</h3>
             </div>
             <div className="table-responsive">
@@ -1689,16 +1853,16 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     <tbody>
                         {loadingHospitalized ? (
                             <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>Loading...</td></tr>
-                        ) : hospitalizedPatients.length === 0 ? (
+                        ) : hospitalizedPatients.filter(a => a.status === 'Admitted').length === 0 ? (
                             <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>No hospitalized patients found.</td></tr>
                         ) : (
-                            hospitalizedPatients.map(adm => (
+                            hospitalizedPatients.filter(a => a.status === 'Admitted').map(adm => (
                                 <tr key={adm._id}>
                                     <td style={{ fontWeight: 600 }}>{adm.patientId?.name || 'Unknown'}<br /><small>{adm.patientId?.phone}</small></td>
                                     <td>{adm.patientId?.patientId || '-'}</td>
                                     <td>{adm.appointmentId?.department || adm.appointmentId?.serviceName || '-'}</td>
                                     <td>{adm.appointmentId?.doctorName || '-'}</td>
-                                    <td>{new Date(adm.admissionDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}<br/><small>{new Date(adm.admissionDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</small></td>
+                                    <td>{new Date(adm.admissionDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                                     <td>{adm.ward || '-'}<br /><small>Bed: {adm.bedNumber || '-'}</small></td>
                                     <td>
                                         <span style={{

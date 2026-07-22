@@ -615,7 +615,9 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
                     lastConsultation: null,
                     fee: deptFee,
                     message: 'First Consultation',
-                    department: selectedDept
+                    department: selectedDept,
+                    doctorId: lastApptForDept?.doctorId || null,
+                    doctorName: lastApptForDept?.doctorName || null
                 });
             }
 
@@ -635,7 +637,9 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
                     lastConsultation: lastDate.toISOString().split('T')[0],
                     fee: 0,
                     message: 'Follow-up Active',
-                    department: selectedDept
+                    department: selectedDept,
+                    doctorId: lastApptForDept.doctorId,
+                    doctorName: lastApptForDept.doctorName
                 });
             } else {
                 return res.json({
@@ -645,7 +649,9 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
                     lastConsultation: lastDate.toISOString().split('T')[0],
                     fee: deptFee,
                     message: 'Follow-up Expired',
-                    department: selectedDept
+                    department: selectedDept,
+                    doctorId: lastApptForDept.doctorId,
+                    doctorName: lastApptForDept.doctorName
                 });
             }
         } else {
