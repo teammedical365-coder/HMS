@@ -28,8 +28,8 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
         }
         if (role === 'hospitaladmin') {
             const u = JSON.parse(localStorage.getItem('user') || '{}');
-            if (u.clinicType === 'clinic') {
-                // Simple clinic — single hub page with built-in role switcher
+            if (u.clinicType === 'clinic' || u.subscriptionPlan === 'starter') {
+                // Simple clinic or starter plan — single hub page with built-in role switcher
                 return [
                     { label: 'Clinic Hub', path: '/hospitaladmin', icon: <FiHome /> },
                 ];
