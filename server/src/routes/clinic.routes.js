@@ -290,15 +290,18 @@ router.get('/stats', verifyClinicStaff, async (req, res) => {
 // ─────────────────────────────────────────────
 router.get('/patients', verifyClinicStaff, async (req, res) => {
     try {
-        const { search } = req.query;
+        const search = req.query.search || req.query.s || req.query.term || '';
         const query = { clinicId: hid(req), isActive: true };
 
-        if (search && search.trim().length >= 2) {
+        if (search && search.trim().length >= 1) {
             const s = search.trim();
+            // Escape special regex characters
+            const escapedS = s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             query.$or = [
-                { name:       { $regex: s, $options: 'i' } },
-                { phone:      { $regex: s, $options: 'i' } },
-                { patientUid: { $regex: s, $options: 'i' } },
+                { name:          { $regex: escapedS, $options: 'i' } },
+                { phone:         { $regex: escapedS, $options: 'i' } },
+                { patientUid:    { $regex: escapedS, $options: 'i' } },
+                { aadhaarNumber: { $regex: escapedS, $options: 'i' } },
             ];
         }
 

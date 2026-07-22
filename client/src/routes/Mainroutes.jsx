@@ -154,6 +154,7 @@ const MainRoutes = () => {
 
                         {/* Flat Architecture - Handled by Subdomains */}
                         <Route path="patient/:id/department/:department" element={<ProtectedRoute requiredPermissions={[]}><UnifiedPatientProfile /></ProtectedRoute>} />
+                        <Route path="patient/:id" element={<ProtectedRoute requiredPermissions={[]}><UnifiedPatientProfile /></ProtectedRoute>} />
                             <Route path="my-dashboard" element={<ProtectedRoute requiredPermissions={[]}>
                               {(() => {
                                   const u = JSON.parse(localStorage.getItem('user') || '{}');
@@ -172,7 +173,7 @@ const MainRoutes = () => {
                             {/* Transitions between roles/admin */}
                             <Route path="doctor/dashboard" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><Patient /></ProtectedRoute>} />
                             <Route path="doctor/patients" element={<Patient />} />
-                            <Route path="doctor/patient/:appointmentId" element={<ProtectedRoute requiredPermissions={['visit_diagnose']}><DoctorPatientDetails /></ProtectedRoute>} />
+                            <Route path="doctor/patient/:id" element={<ProtectedRoute requiredPermissions={['visit_diagnose']}><DoctorPatientDetails /></ProtectedRoute>} />
 
                             <Route path="admin" element={<ProtectedRoute requiredPermissions={['admin_view_stats', 'admin_manage_roles']}><AdminMainDashboard /></ProtectedRoute>} />
                             <Route path="admin/users" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><Admin /></ProtectedRoute>} />

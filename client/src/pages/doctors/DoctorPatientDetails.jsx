@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { doctorAPI, labTestAPI, questionLibraryAPI, hospitalAPI, patientAPI, receptionAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -36,7 +36,10 @@ const timingOptions = [
 ];
 
 const DoctorPatientDetails = () => {
-    const { appointmentId } = useParams();
+    const { id } = useParams();
+    const location = useLocation();
+    const [appointmentId, setAppointmentId] = useState(location.state?.appointmentId);
+    
     const navigate = useNavigate();
     const { user } = useAuth();
     
@@ -112,7 +115,33 @@ const DoctorPatientDetails = () => {
     useEffect(() => {
         const fetchDetails = async () => {
             try {
-                const res = await doctorAPI.getAppointmentDetails(appointmentId);
+                let currentApptId = appointmentId;
+                if (!currentApptId && id) {
+                    try {
+                        const apptsRes = await doctorAPI.getAppointments();
+                        if (apptsRes.success) {
+                            const ptAppts = apptsRes.appointments.filter(a => 
+                                a.userId?.patientId === id || 
+                                a.clinicPatientId?.patientUid === id || 
+                                a.patientId === id ||
+                                (a.userId?.name || '').replace(/\s+/g, '-') === id ||
+                                (a.clinicPatientId?.name || '').replace(/\s+/g, '-') === id ||
+                                a._id === id
+                            );
+                            if (ptAppts.length > 0) {
+                                currentApptId = ptAppts[0]._id;
+                                setAppointmentId(currentApptId);
+                            }
+                        }
+                    } catch(e) { console.error("Error finding appointment by MRN", e); }
+                }
+
+                if (!currentApptId) {
+                    setLoading(false);
+                    return;
+                }
+
+                const res = await doctorAPI.getAppointmentDetails(currentApptId);
                 if (res.success) {
                     setAppointment(res.appointment);
                     const cp = res.appointment.clinicPatientId || {};

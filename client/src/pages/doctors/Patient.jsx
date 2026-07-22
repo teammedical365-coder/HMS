@@ -424,10 +424,11 @@ const Patient = () => {
                                                     <div style={{ display: 'flex', gap: '8px' }}>
                                                         <button
                                                             onClick={() => {
-                                                                const pid = apt.userId?._id || apt.clinicPatientId?._id || apt.clinicPatientId?.patientUid || apt.patientId;
+                                                                const ptName = (apt.userId?.name || apt.clinicPatientId?.name || 'Walk-in').replace(/\s+/g, '-');
+                                                                const pid = apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || ptName;
                                                                 console.log("DEBUG PATIENT ID OBJECT:", apt);
                                                                 console.log("FINAL CHOSEN PID:", pid);
-                                                                if (pid) navigate(`/patient/${pid}/department/${encodeURIComponent(apt.department || apt.serviceName || 'Unassigned')}`);
+                                                                if (pid) navigate(`/patient/${pid}`);
                                                             }}
                                                             style={{
                                                                 ...S.btn('rgba(59,130,246,0.1)'),
@@ -459,7 +460,11 @@ const Patient = () => {
                                                             📁 Upload Report
                                                         </button>
                                                         <button
-                                                            onClick={() => navigate(`/doctor/patient/${apt._id}`)}
+                                                            onClick={() => {
+                                                                const ptName = (apt.userId?.name || apt.clinicPatientId?.name || 'Walk-in').replace(/\s+/g, '-');
+                                                                const patientMRN = apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || ptName;
+                                                                navigate(`/doctor/patient/${patientMRN}`, { state: { appointmentId: apt._id } });
+                                                            }}
                                                             style={{
                                                                 ...S.btn('linear-gradient(135deg, #8b5cf6, #d946ef)'),
                                                                 display: 'flex', alignItems: 'center', gap: '5px'

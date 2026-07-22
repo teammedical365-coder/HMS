@@ -49,6 +49,9 @@ const ClinicPatientProfile = () => {
         try {
             const res = await patientAPI.getFullHistory(patientId);
             if (res.success) {
+                if (res.user && Array.isArray(res.user.reports)) {
+                    res.user.reports = Array.from(new Map(res.user.reports.map(r => [r.filename || r.url || r.fileUrl || r.name, r])).values());
+                }
                 setPatientData(res.user);
                 setTimeline(res.timeline || []);
             } else {
@@ -68,9 +71,43 @@ const ClinicPatientProfile = () => {
         return isAbsolute ? filename : `/api/patients/reports/${encodeURIComponent(filename)}`;
     };
 
+    // Helper to filter out unassigned/orphaned placeholder visits
+    const filterValidVisits = (items) => {
+        if (!Array.isArray(items) || items.length === 0) return [];
+
+        const isUnassignedPlaceholder = (item) => {
+            const d = item.data || item;
+            const rawDoc = (d.doctorName || d.doctorSeen || d.doctorId?.name || d.assignedDoctor || '').toString().trim();
+            const docClean = rawDoc.replace(/^dr\.\s*/i, '').toLowerCase();
+            const isDocUnassigned = !docClean || docClean === 'not assigned' || docClean === 'pending' || docClean === 'unassigned' || docClean === 'none';
+
+            const status = (d.status || '').toString().toLowerCase();
+            const isStatusUnassigned = status === 'active' || status === 'pending' || !status;
+
+            const hasDoctorActions = Boolean(
+                (d.diagnosis && d.diagnosis !== '—' && d.diagnosis !== 'Processing' && d.diagnosis !== 'No diagnosis logged') ||
+                (d.doctorNotes && d.doctorNotes.trim()) ||
+                (d.notes && d.notes.trim() && d.notes !== '—') ||
+                (d.prescriptions && d.prescriptions.length > 0) ||
+                (d.medicines && d.medicines.length > 0) ||
+                (d.pharmacy && d.pharmacy.length > 0)
+            );
+
+            return isDocUnassigned && isStatusUnassigned && !hasDoctorActions;
+        };
+
+        const hasValidConsultation = items.some(item => !isUnassignedPlaceholder(item));
+
+        if (hasValidConsultation) {
+            return items.filter(item => !isUnassignedPlaceholder(item));
+        }
+        return items;
+    };
+
     // Calculate Metrics
     const calculateMetrics = () => {
-        const appointments = timeline.filter(t => t.type === 'appointment') || [];
+        const validTimeline = filterValidVisits(timeline);
+        const appointments = validTimeline.filter(t => t.type === 'appointment' || t.type === 'clinicalVisit') || [];
         const completed = appointments.filter(a => a.data?.status === 'completed');
         const upcoming = appointments.filter(a => {
             const status = a.data?.status;
@@ -142,7 +179,7 @@ const ClinicPatientProfile = () => {
         }
     };
 
-    // Export PDF Profile summary
+    // Export PDF Profile summary with Prescribed Medicines
     const handleDownloadPDF = () => {
         if (!patientData) return;
         const doc = new jsPDF();
@@ -201,17 +238,18 @@ const ClinicPatientProfile = () => {
         const vitals = patientData.vitals || {};
         doc.text(`Weight: ${vitals.weight || '—'} kg`, 20, 98);
         doc.text(`Height: ${vitals.height || '—'} cm`, 65, 98);
-        doc.text(`BP: ${vitals.bloodPressure || '—'}`, 110, 98);
+        doc.text(`BP: ${vitals.bloodPressure || vitals.bp || '—'}`, 110, 98);
         doc.text(`Pulse: ${vitals.pulse || '—'} bpm`, 150, 98);
 
-        // Visits table
-        const appointments = timeline.filter(t => t.type === 'appointment');
+        // Filter valid visits for PDF export
+        const validTimeline = filterValidVisits(timeline);
+        const appointments = validTimeline.filter(t => t.type === 'appointment' || t.type === 'clinicalVisit');
         const rows = appointments.map(a => [
             new Date(a.date).toLocaleDateString('en-IN'),
-            a.data?.doctorName || 'Not Assigned',
+            a.data?.doctorName || a.data?.doctorSeen || 'Not Assigned',
             a.data?.diagnosis || '—',
-            a.data?.notes || '—',
-            a.data?.status || 'Pending'
+            a.data?.notes || a.data?.doctorNotes || '—',
+            a.data?.status || 'Completed'
         ]);
 
         autoTable(doc, {
@@ -222,6 +260,67 @@ const ClinicPatientProfile = () => {
             theme: 'striped',
             margin: { horizontal: 15 }
         });
+
+        let nextY = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 115) + 12;
+
+        if (nextY > 240) {
+            doc.addPage();
+            nextY = 20;
+        }
+
+        // Prescribed Medicines Section
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(13);
+        doc.setTextColor(16, 185, 129);
+        doc.text("PRESCRIBED MEDICINES SUMMARY", 15, nextY);
+        nextY += 6;
+
+        // Extract medicines from all consultation records
+        const allMedicines = [];
+        validTimeline.forEach(t => {
+            const dateStr = t.date ? new Date(t.date).toLocaleDateString('en-IN') : '—';
+            const d = t.data || {};
+            const medList = d.medicines || d.pharmacy || d.prescriptions || d.doctorConsultation?.medicines || [];
+            if (Array.isArray(medList) && medList.length > 0) {
+                medList.forEach(m => {
+                    allMedicines.push({
+                        date: dateStr,
+                        doctor: d.doctorName || d.doctorSeen || 'Doctor',
+                        name: m.name || m.medicineName || m.title || '—',
+                        dosage: m.dosage || m.dose || m.frequency || '—',
+                        frequency: m.frequency || '—',
+                        duration: m.duration || (m.days ? `${m.days} days` : '—'),
+                        instructions: m.instructions || m.notes || m.instruction || '—'
+                    });
+                });
+            }
+        });
+
+        if (allMedicines.length > 0) {
+            const medRows = allMedicines.map((m, idx) => [
+                idx + 1,
+                m.date,
+                m.name,
+                `${m.dosage} ${m.frequency !== '—' && m.frequency !== m.dosage ? `(${m.frequency})` : ''}`.trim(),
+                m.duration,
+                m.instructions
+            ]);
+
+            autoTable(doc, {
+                startY: nextY,
+                head: [['#', 'Date', 'Medicine Name', 'Dosage / Frequency', 'Duration', 'Instructions']],
+                body: medRows,
+                headStyles: { fillColor: [16, 185, 129] },
+                theme: 'striped',
+                margin: { horizontal: 15 },
+                styles: { fontSize: 9 }
+            });
+        } else {
+            doc.setFont("helvetica", "italic");
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text("No prescribed medicines recorded for these visits.", 15, nextY + 4);
+        }
 
         doc.save(`Patient_Profile_${patientData.patientUid || 'summary'}.pdf`);
     };
@@ -427,42 +526,46 @@ const ClinicPatientProfile = () => {
                 <div className="cpp-main-panel">
                     
                     {/* Horizontal Nav Tabs */}
-                    <div className="cpp-tabs-bar">
-                        <button 
-                            className={`cpp-tab-btn ${activeTab === 'timeline' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('timeline')}
-                        >
-                            📋 Visits History ({timeline.length})
-                        </button>
-                        <button 
-                            className={`cpp-tab-btn ${activeTab === 'medicines' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('medicines')}
-                        >
-                            💊 Medicines ({medicinesList.length})
-                        </button>
-                        <button 
-                            className={`cpp-tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('reports')}
-                        >
-                            🧪 Lab Reports ({patientData.reports?.length || 0})
-                        </button>
-                        <button 
-                            className={`cpp-tab-btn ${activeTab === 'billing' ? 'active' : ''}`}
-                            onClick={() => setActiveTab('billing')}
-                        >
-                            💰 Financials ({invoicesList.length})
-                        </button>
-                    </div>
+                    {(() => {
+                        const displayTimeline = filterValidVisits(timeline);
+                        return (
+                            <>
+                                <div className="cpp-tabs-bar">
+                                    <button 
+                                        className={`cpp-tab-btn ${activeTab === 'timeline' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('timeline')}
+                                    >
+                                        📋 Visits History ({displayTimeline.length})
+                                    </button>
+                                    <button 
+                                        className={`cpp-tab-btn ${activeTab === 'medicines' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('medicines')}
+                                    >
+                                        💊 Medicines ({medicinesList.length})
+                                    </button>
+                                    <button 
+                                        className={`cpp-tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('reports')}
+                                    >
+                                        🧪 Lab Reports ({patientData.reports?.length || 0})
+                                    </button>
+                                    <button 
+                                        className={`cpp-tab-btn ${activeTab === 'billing' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('billing')}
+                                    >
+                                        💰 Financials ({invoicesList.length})
+                                    </button>
+                                </div>
 
-                    {/* Tab Panels */}
-                    {activeTab === 'timeline' && (
-                        <div className="cpp-card">
-                            <h3 className="cpp-card-title"><FiFileText /> Visit Consultation Log</h3>
-                            {timeline.length === 0 ? (
-                                <div className="cpp-empty-state">No consult history logs recorded for this patient.</div>
-                            ) : (
-                                <div className="cpp-timeline">
-                                    {timeline.map((item, idx) => {
+                                {/* Tab Panels */}
+                                {activeTab === 'timeline' && (
+                                    <div className="cpp-card">
+                                        <h3 className="cpp-card-title"><FiFileText /> Visit Consultation Log</h3>
+                                        {displayTimeline.length === 0 ? (
+                                            <div className="cpp-empty-state">No consult history logs recorded for this patient.</div>
+                                        ) : (
+                                            <div className="cpp-timeline">
+                                                {displayTimeline.map((item, idx) => {
                                         const dateStr = new Date(item.date).toLocaleDateString('en-IN', {
                                             day: '2-digit', month: 'short', year: 'numeric'
                                         });
@@ -641,6 +744,9 @@ const ClinicPatientProfile = () => {
                             )}
                         </div>
                     )}
+                </>
+            );
+        })()}
                 </div>
             </div>
         </div>

@@ -195,6 +195,207 @@ const todayStr = () => new Date().toISOString().split('T')[0];
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+const downloadTreatmentPlanPDF = (plan) => {
+    const doc = new jsPDF();
+    const { hName, hAddr, hPhone } = getClinicInfo();
+    
+    let y = 18;
+    doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+    doc.text(hName, 105, y, { align: 'center' }); y += 7;
+    if (hAddr) { doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100); doc.text(hAddr, 105, y, { align: 'center' }); y += 5; }
+    if (hPhone) { doc.text(`Ph: ${hPhone}`, 105, y, { align: 'center' }); y += 5; }
+    
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(8, 145, 178);
+    doc.text('TREATMENT PLAN RECEIPT', 105, y + 4, { align: 'center' });
+    y += 15;
+    
+    const pt = plan.clinicPatientId || {};
+    doc.setFontSize(10); doc.setTextColor(33, 37, 41);
+    doc.setFont('helvetica', 'bold'); doc.text('Patient Info', 14, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Name: ${pt.name || '—'}`, 14, y + 6);
+    doc.text(`UID: ${pt.patientUid || '—'}`, 14, y + 12);
+    doc.text(`Phone: ${pt.phone || '—'}`, 14, y + 18);
+    
+    doc.setFont('helvetica', 'bold'); doc.text('Plan Details', 110, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Title: ${plan.title || '—'}`, 110, y + 6);
+    doc.text(`Total Visits: ${plan.visits?.length || 0}`, 110, y + 12);
+    doc.text(`Date: ${new Date().toLocaleDateString('en-IN')}`, 110, y + 18);
+    y += 26;
+    
+    doc.setFillColor(248, 250, 252); doc.rect(14, y, 182, 16, 'F');
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold'); doc.text('Total Cost:', 18, y + 11);
+    doc.setFont('helvetica', 'normal'); doc.text(`Rs. ${plan.totalAmount?.toLocaleString('en-IN') || 0}`, 45, y + 11);
+    doc.setFont('helvetica', 'bold'); doc.text('Paid:', 85, y + 11);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(22, 163, 74); doc.text(`Rs. ${plan.totalPaid?.toLocaleString('en-IN') || 0}`, 98, y + 11);
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(0); doc.text('Balance Due:', 140, y + 11);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(plan.pendingBalance > 0 ? 220 : 22, plan.pendingBalance > 0 ? 38 : 163, plan.pendingBalance > 0 ? 38 : 74); 
+    doc.text(plan.pendingBalance > 0 ? `Rs. ${plan.pendingBalance.toLocaleString('en-IN')}` : 'Cleared', 170, y + 11);
+    y += 24;
+    
+    doc.setTextColor(33, 37, 41); doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+    doc.text('Sitting Completion Logs', 14, y); y += 4;
+    
+    const visitRows = (plan.visits || []).map((v, i) => [
+        i + 1,
+        new Date(v.scheduledDate).toLocaleDateString('en-IN'),
+        v.procedure || '—',
+        v.amountPaid > 0 ? `Rs. ${v.amountPaid.toLocaleString('en-IN')} (${v.paymentMethod || 'Cash'})` : '—',
+        v.status === 'completed' && v.completedAt ? new Date(v.completedAt).toLocaleDateString('en-IN') : v.status
+    ]);
+    
+    autoTable(doc, {
+        startY: y,
+        head: [['#', 'Scheduled Date', 'Procedure', 'Amount Paid', 'Completion Status']],
+        body: visitRows,
+        theme: 'striped',
+        headStyles: { fillColor: [8, 145, 178], textColor: 255 },
+        bodyStyles: { fontSize: 9 },
+    });
+    
+    doc.save(`${(pt.name || 'patient').replace(/\s+/g, '_')}_Treatment_Plan.pdf`);
+};
+
+const filterValidVisits = (items) => {
+    if (!Array.isArray(items) || items.length === 0) return [];
+
+    const isUnassignedPlaceholder = (item) => {
+        const d = item.data || item;
+        const rawDoc = (d.doctorName || d.doctorSeen || d.doctorId?.name || d.assignedDoctor || '').toString().trim();
+        const docClean = rawDoc.replace(/^dr\.\s*/i, '').toLowerCase();
+        const isDocUnassigned = !docClean || docClean === 'not assigned' || docClean === 'pending' || docClean === 'unassigned' || docClean === 'none';
+
+        const status = (d.status || '').toString().toLowerCase();
+        const isStatusUnassigned = status === 'active' || status === 'pending' || !status;
+
+        const hasDoctorActions = Boolean(
+            (d.diagnosis && d.diagnosis !== '—' && d.diagnosis !== 'Processing' && d.diagnosis !== 'No diagnosis logged') ||
+            (d.doctorNotes && d.doctorNotes.trim()) ||
+            (d.notes && d.notes.trim() && d.notes !== '—') ||
+            (d.prescriptions && d.prescriptions.length > 0) ||
+            (d.medicines && d.medicines.length > 0) ||
+            (d.pharmacy && d.pharmacy.length > 0)
+        );
+
+        return isDocUnassigned && isStatusUnassigned && !hasDoctorActions;
+    };
+
+    const hasValidConsultation = items.some(item => !isUnassignedPlaceholder(item));
+
+    if (hasValidConsultation) {
+        return items.filter(item => !isUnassignedPlaceholder(item));
+    }
+    return items;
+};
+
+const generatePatientProfilePDF = (patient, historyAppointments = []) => {
+    const doc = new jsPDF();
+    let y = pdfHeader(doc, 'Patient Profile Summary', [99, 102, 241]);
+
+    autoTable(doc, {
+        startY: y,
+        body: [
+            ['Patient Name', patient.name || '-'],
+            ['Patient ID (MRN)', patient.patientUid || patient._id || 'N/A'],
+            ['Phone', patient.phone || '-'],
+            ['Gender / DOB', `${patient.gender || '-'} / ${patient.dob ? new Date(patient.dob).toLocaleDateString('en-IN') : '-'}`],
+            ['Blood Group', patient.bloodGroup || '-'],
+            ['Allergies', patient.allergies || 'None'],
+            ['Chronic Conditions', patient.chronicConditions || 'None'],
+            ['Address', patient.address || '-'],
+        ],
+        theme: 'grid',
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 52 } },
+        bodyStyles: { fontSize: 10 },
+        alternateRowStyles: { fillColor: [245, 249, 255] },
+    });
+    y = doc.lastAutoTable.finalY + 10;
+
+    // Filter valid visits
+    const validAppts = filterValidVisits(historyAppointments);
+
+    // Visit History Table
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
+    doc.text('Consultation Visit History', 14, y); y += 6;
+
+    if (validAppts.length > 0) {
+        autoTable(doc, {
+            startY: y,
+            head: [['Date', 'Token / Slot', 'Doctor', 'Diagnosis', 'Notes', 'Status']],
+            body: validAppts.map(a => [
+                fmtDate(a.appointmentDate),
+                a.tokenNumber ? `#${a.tokenNumber}` : a.appointmentTime || '—',
+                a.doctorName || 'Doctor',
+                a.diagnosis || '—',
+                a.doctorNotes || a.notes || '—',
+                a.status || 'Completed'
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [99, 102, 241], textColor: 255 },
+            bodyStyles: { fontSize: 9 },
+        });
+        y = doc.lastAutoTable.finalY + 10;
+    } else {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100);
+        doc.text('No valid consultation visits recorded.', 16, y); y += 8;
+    }
+
+    if (y > 240) { doc.addPage(); y = 20; }
+
+    // Prescribed Medicines Section
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(16, 185, 129);
+    doc.text('Prescribed Medicines Summary', 14, y); y += 6;
+
+    const allMedicines = [];
+    validAppts.forEach(a => {
+        const medList = a.medicines || a.pharmacy || a.prescriptions || [];
+        if (Array.isArray(medList) && medList.length > 0) {
+            medList.forEach(m => {
+                allMedicines.push({
+                    date: fmtDate(a.appointmentDate),
+                    name: m.name || m.medicineName || '—',
+                    dosage: m.dosage || m.dose || m.frequency || '—',
+                    frequency: m.frequency || '—',
+                    duration: m.duration || (m.days ? `${m.days} days` : '—'),
+                    instructions: m.instructions || m.notes || '—'
+                });
+            });
+        }
+    });
+
+    if (allMedicines.length > 0) {
+        autoTable(doc, {
+            startY: y,
+            head: [['#', 'Date', 'Medicine Name', 'Dosage / Frequency', 'Duration', 'Instructions']],
+            body: allMedicines.map((m, i) => [
+                i + 1,
+                m.date,
+                m.name,
+                `${m.dosage} ${m.frequency !== '—' && m.frequency !== m.dosage ? `(${m.frequency})` : ''}`.trim(),
+                m.duration,
+                m.instructions
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [16, 185, 129], textColor: 255 },
+            bodyStyles: { fontSize: 9 },
+        });
+        y = doc.lastAutoTable.finalY + 10;
+    } else {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100);
+        doc.text('No prescribed medicines recorded for these visits.', 16, y); y += 8;
+    }
+
+    const { issuedBy, hName } = getClinicInfo();
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.setFontSize(8); doc.setTextColor(120);
+    doc.text(`Issued by: ${issuedBy}  |  Generated: ${new Date().toLocaleString('en-IN')}`, 105, y, { align: 'center' }); y += 5;
+    doc.text(`Patient Profile from ${hName}`, 105, y, { align: 'center' });
+    return { doc, filename: `PatientProfile_${patient.patientUid || patient._id}.pdf` };
+};
+
 // ─────────────────────────────────────────────
 // Role Modes
 // ─────────────────────────────────────────────
@@ -751,7 +952,8 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
         clinicAPI.getPatientHistory(p._id)
             .then(r => {
                 if (r.success) {
-                    setPatientHistory(r);
+                    const cleanedAppts = filterValidVisits(r.appointments || []);
+                    setPatientHistory({ ...r, appointments: cleanedAppts });
                     setPatientReports(r.patient?.reports || []);
                 }
             })
@@ -856,32 +1058,60 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                             <div style={{ fontSize: '12px', color: '#94a3b8' }}>
                                 Registered: {fmtDate(selectedPatient.createdAt)}
                             </div>
-                            <button
-                                onClick={() => {
-                                    try {
-                                        const pdf = generateRegistrationSlipPDF(selectedPatient);
-                                        pdf.doc.save(pdf.filename);
-                                    } catch (pdfErr) {
-                                        console.error('PDF generation error:', pdfErr);
-                                        alert('Failed to generate registration slip PDF');
-                                    }
-                                }}
-                                style={{
-                                    padding: '6px 12px',
-                                    background: '#e0f2fe',
-                                    color: '#0369a1',
-                                    border: '1.5px solid #bae6fd',
-                                    borderRadius: '8px',
-                                    fontWeight: 700,
-                                    fontSize: '12px',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px'
-                                }}
-                            >
-                                📥 Download Slip
-                            </button>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                                <button
+                                    onClick={() => {
+                                        try {
+                                            const pdf = generateRegistrationSlipPDF(selectedPatient);
+                                            pdf.doc.save(pdf.filename);
+                                        } catch (pdfErr) {
+                                            console.error('PDF generation error:', pdfErr);
+                                            alert('Failed to generate registration slip PDF');
+                                        }
+                                    }}
+                                    style={{
+                                        padding: '6px 12px',
+                                        background: '#e0f2fe',
+                                        color: '#0369a1',
+                                        border: '1.5px solid #bae6fd',
+                                        borderRadius: '8px',
+                                        fontWeight: 700,
+                                        fontSize: '12px',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    📄 Registration Slip
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        try {
+                                            const pdf = generatePatientProfilePDF(selectedPatient, patientHistory?.appointments || []);
+                                            pdf.doc.save(pdf.filename);
+                                        } catch (pdfErr) {
+                                            console.error('Profile PDF generation error:', pdfErr);
+                                            alert('Failed to generate patient profile PDF');
+                                        }
+                                    }}
+                                    style={{
+                                        padding: '6px 12px',
+                                        background: '#ecfdf5',
+                                        color: '#059669',
+                                        border: '1.5px solid #a7f3d0',
+                                        borderRadius: '8px',
+                                        fontWeight: 700,
+                                        fontSize: '12px',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    📥 Download Profile PDF
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -1057,9 +1287,9 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
             {tab === 'list' && (
                 <div className="clinic-card">
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                        <input className="clinic-input" style={{ flex: 1 }} placeholder="Search by name, phone or patient ID..."
+                        <input className="clinic-input" style={{ flex: 1 }} placeholder="Search by name, phone, patient ID or Aadhaar..."
                             value={search} onChange={e => setSearch(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && handleSearch()}  maxLength="10"  pattern="\d{10}"  title="Phone number must be exactly 10 digits" />
+                            onKeyDown={e => e.key === 'Enter' && handleSearch()} />
                         <button className="clinic-btn-secondary" onClick={handleSearch} disabled={searching}>
                             {searching ? '...' : '🔍 Search'}
                         </button>
@@ -1566,6 +1796,16 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected, setPendingDownloa
         if (preselectedPatient) setAssigningFor(preselectedPatient._id);
     }, [preselectedPatient]);
 
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setSearching(true);
+            clinicAPI.getPatients(search)
+                .then(r => { if (r.success) setPatients(r.patients); })
+                .finally(() => setSearching(false));
+        }, 200);
+        return () => clearTimeout(timer);
+    }, [search]);
+
     const handleSearch = () => {
         setSearching(true);
         clinicAPI.getPatients(search)
@@ -1608,9 +1848,9 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected, setPendingDownloa
     const activeTokens = appointments.filter(a => a.status === 'confirmed' || a.status === 'pending');
     const doneToday = appointments.filter(a => a.status === 'completed');
 
-    // Merge: patients with today's token shown first
+    // Merge: patients with active token shown first, followed by all other matching patients (so no patient is hidden)
     const withToken = patients.filter(p => todayApptMap[p._id] && ['confirmed', 'pending'].includes(todayApptMap[p._id]?.status));
-    const withoutToken = patients.filter(p => !todayApptMap[p._id] || todayApptMap[p._id]?.status === 'cancelled');
+    const withoutToken = patients.filter(p => !todayApptMap[p._id] || !['confirmed', 'pending'].includes(todayApptMap[p._id]?.status));
     const displayList = [...withToken, ...withoutToken];
 
     return (
@@ -1632,8 +1872,8 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected, setPendingDownloa
                     <button className="clinic-btn-secondary" style={{ fontSize: '12px' }} onClick={loadAll}>↻ Refresh</button>
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                    <input className="clinic-input" style={{ flex: 1 }} placeholder="Search patient by name, phone or ID..."
-                        value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()}  maxLength="10"  pattern="\d{10}"  title="Phone number must be exactly 10 digits" />
+                    <input className="clinic-input" style={{ flex: 1 }} placeholder="Search patient by name, phone, patient ID or Aadhaar..."
+                        value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} />
                     <button className="clinic-btn-secondary" onClick={handleSearch} disabled={searching}>{searching ? '...' : '🔍'}</button>
                     <button className="clinic-btn-primary" onClick={() => { setShowQuickReg(!showQuickReg); }}
                         style={{ whiteSpace: 'nowrap', padding: '8px 14px', fontSize: '13px' }}>
@@ -1730,11 +1970,11 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected, setPendingDownloa
                                                 <button className="clinic-btn-remove" onClick={() => cancelAppt(appt._id)}>✕</button>
                                             </>
                                         )}
-                                        {isDone && <span style={{ background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600 }}>✅ Done</span>}
-                                        {!hasToken && !isDone && (
+                                        {isDone && <span style={{ background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600 }}>✅ Visited Today</span>}
+                                        {!hasToken && (
                                             <button className="clinic-btn-primary" style={{ fontSize: '12px', padding: '6px 14px', whiteSpace: 'nowrap' }}
                                                 onClick={() => setAssigningFor(isExpanding ? null : p._id)}>
-                                                {isExpanding ? '✕ Cancel' : isSlotMode ? '🕐 Book Slot' : '🎟️ Assign Token'}
+                                                {isExpanding ? '✕ Cancel' : isDone ? '🎟️ Rebook / Assign Token' : isSlotMode ? '🕐 Book Slot' : '🎟️ Assign Token'}
                                             </button>
                                         )}
                                     </div>
@@ -2592,7 +2832,20 @@ const TreatmentPlanMode = () => {
         }));
     }, [form.numberOfVisits, form.intervalDays, form.startDate]);
 
+    // Debounced search for live patient filtering
+    useEffect(() => {
+        if (view === 'create') {
+            const delay = setTimeout(() => {
+                clinicAPI.getPatients(patSearch).then(r => {
+                    if (r.success) setPatients(r.patients || []);
+                }).catch(e => console.error(e));
+            }, 300);
+            return () => clearTimeout(delay);
+        }
+    }, [patSearch, view]);
+
     const loadPatients = async (search) => {
+        // Kept for backward compatibility if called directly
         try { const r = await clinicAPI.getPatients(search); if (r.success) setPatients(r.patients || []); } catch { }
     };
 
@@ -2805,13 +3058,13 @@ const TreatmentPlanMode = () => {
                 <h3 style={{ margin: '0 0 20px', color: '#0f172a' }}>📅 New Treatment Plan</h3>
 
                 {/* Patient Search */}
-                <div className="clinic-form-group" style={{ marginBottom: '14px' }}>
+                <div className="clinic-form-group" style={{ marginBottom: '14px', position: 'relative' }}>
                     <label>Patient *</label>
                     <input className="clinic-input" placeholder="Search by name or ID..."
                         value={patSearch}
-                        onChange={e => { setPatSearch(e.target.value); loadPatients(e.target.value); }} />
+                        onChange={e => setPatSearch(e.target.value)} />
                     {patients.length > 0 && !form.clinicPatientId && (
-                        <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', maxHeight: '160px', overflowY: 'auto', marginTop: '4px' }}>
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', maxHeight: '160px', overflowY: 'auto', marginTop: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
                             {patients.map(p => (
                                 <div key={p._id} onClick={() => { setForm(f => ({ ...f, clinicPatientId: p._id })); setPatSearch(`${p.name} (${p.patientUid || p.phone})`); setPatients([]); }}
                                     style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '13px' }}
@@ -2925,7 +3178,16 @@ const TreatmentPlanMode = () => {
                             {selectedPlan.description && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>{selectedPlan.description}</div>}
                         </div>
                         <div style={{ display: 'flex', gap: '8px' }}>
-                            <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 12px', borderRadius: '20px', background: (planStatusColor[selectedPlan.status] || '#94a3b8') + '20', color: planStatusColor[selectedPlan.status] || '#94a3b8', textTransform: 'uppercase' }}>{selectedPlan.status}</span>
+                            {selectedPlan.visits.filter(v => v.status === 'completed').length >= selectedPlan.visits.length || selectedPlan.status === 'completed' ? (
+                                <button onClick={() => downloadTreatmentPlanPDF(selectedPlan)} style={{ fontSize: '11px', padding: '4px 12px', background: '#ecfdf5', color: '#059669', border: '1px solid #10b981', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Download Slip / Receipt
+                                </button>
+                            ) : (
+                                <span title="Available after all sittings are completed" style={{ fontSize: '11px', padding: '4px 12px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'not-allowed', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    🔒 In Progress ({selectedPlan.visits.filter(v => v.status === 'completed').length}/{selectedPlan.visits.length} Sittings)
+                                </span>
+                            )}
+                            <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 12px', borderRadius: '20px', background: (planStatusColor[selectedPlan.status] || '#94a3b8') + '20', color: planStatusColor[selectedPlan.status] || '#94a3b8', textTransform: 'uppercase', display: 'flex', alignItems: 'center' }}>{selectedPlan.status}</span>
                             {selectedPlan.status === 'active' && <button onClick={() => handleCancel(selectedPlan._id)} style={{ fontSize: '11px', padding: '4px 12px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '700' }}>Cancel Plan</button>}
                         </div>
                     </div>
@@ -3184,11 +3446,11 @@ const TreatmentPlanMode = () => {
 };
 
 // ═══════════════════════════════════════════════════
-// BILLING MODE — Collection history only. All payments are upfront.
+// BILLING MODE — Collection & Billing History for Consultations & Treatment Plans
 // ═══════════════════════════════════════════════════
 const BillingMode = () => {
-    const [appointments, setAppointments] = useState([]);
-    const [allAppointments, setAllAppointments] = useState([]);
+    const [allRecords, setAllRecords] = useState([]);
+    const [displayRecords, setDisplayRecords] = useState([]);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState(null);
     const [patSearch, setPatSearch] = useState('');
@@ -3196,30 +3458,100 @@ const BillingMode = () => {
     useEffect(() => {
         Promise.all([
             clinicAPI.getAppointments(),
+            clinicAPI.getTreatmentPlans(),
             clinicAPI.getStats(),
-        ]).then(([apptR, statsR]) => {
-            if (apptR.success) {
-                // Only show paid appointments (all should be paid, but filter defensively)
-                const paid = apptR.appointments.filter(a => a.paymentStatus === 'paid');
-                setAllAppointments(paid);
-                setAppointments(paid);
+        ]).then(([apptR, plansR, statsR]) => {
+            let combined = [];
+
+            // 1. Consultation Appointments
+            if (apptR.success && Array.isArray(apptR.appointments)) {
+                const paidAppts = apptR.appointments.filter(a => a.paymentStatus === 'paid' || a.amount > 0);
+                paidAppts.forEach(a => {
+                    combined.push({
+                        _id: a._id,
+                        date: a.appointmentDate,
+                        tokenOrSlot: a.tokenNumber ? `#${a.tokenNumber}` : (a.appointmentTime ? `🕐 ${a.appointmentTime}` : 'Token'),
+                        patientName: a.clinicPatientId?.name || '—',
+                        patientUid: a.clinicPatientId?.patientUid || a.patientId || '—',
+                        serviceName: a.serviceName || 'General Consultation',
+                        category: 'Consultation Fee',
+                        amount: a.amount || 0,
+                        pendingAmount: 0,
+                        paymentMethod: a.paymentMethod || 'Cash',
+                        status: a.status || 'completed',
+                        cardRef: a.cardRef,
+                        upiScreenshotUrl: a.upiScreenshotUrl,
+                        type: 'consultation'
+                    });
+                });
             }
+
+            // 2. Treatment Plan Bills / Procedures
+            if (plansR.success && Array.isArray(plansR.plans)) {
+                plansR.plans.forEach(plan => {
+                    const pName = plan.clinicPatientId?.name || plan.patientName || '—';
+                    const pUid = plan.clinicPatientId?.patientUid || '—';
+
+                    if (Array.isArray(plan.visits) && plan.visits.length > 0) {
+                        plan.visits.forEach((v, idx) => {
+                            if (v.isPaid || (v.amountPaid && v.amountPaid > 0) || (v.cost && v.cost > 0)) {
+                                combined.push({
+                                    _id: `${plan._id}_v${v._id || idx}`,
+                                    date: v.paidAt || v.completedAt || v.dueDate || plan.createdAt,
+                                    tokenOrSlot: `Plan: ${plan.title || 'Procedure'}`,
+                                    patientName: pName,
+                                    patientUid: pUid,
+                                    serviceName: `Treatment Plan: ${plan.title || 'Procedure'} (Visit #${v.visitNumber || (idx + 1)})`,
+                                    category: 'Treatment Plan / Procedure',
+                                    amount: v.amountPaid || (v.isPaid ? v.cost : 0) || 0,
+                                    pendingAmount: v.isPaid ? 0 : Math.max(0, (v.cost || 0) - (v.amountPaid || 0)),
+                                    paymentMethod: v.paymentMethod || 'Cash',
+                                    status: v.isPaid ? 'completed' : (v.status || plan.status || 'pending'),
+                                    type: 'treatment_plan'
+                                });
+                            }
+                        });
+                    } else {
+                        combined.push({
+                            _id: plan._id,
+                            date: plan.createdAt,
+                            tokenOrSlot: `Plan: ${plan.title || 'Procedure'}`,
+                            patientName: pName,
+                            patientUid: pUid,
+                            serviceName: `Treatment Plan: ${plan.title || 'Procedure'}`,
+                            category: 'Treatment Plan / Procedure',
+                            amount: plan.totalPaid || 0,
+                            pendingAmount: plan.pendingBalance || 0,
+                            paymentMethod: 'Multiple / Cash',
+                            status: plan.status || 'active',
+                            type: 'treatment_plan'
+                        });
+                    }
+                });
+            }
+
+            // Sort by date descending
+            combined.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+            setAllRecords(combined);
+            setDisplayRecords(combined);
             if (statsR.success) setStats(statsR.stats);
         }).catch(console.error).finally(() => setLoading(false));
     }, []);
 
     const filterByPatient = () => {
-        if (!patSearch.trim()) { setAppointments(allAppointments); return; }
+        if (!patSearch.trim()) { setDisplayRecords(allRecords); return; }
         const q = patSearch.trim().toLowerCase();
-        setAppointments(allAppointments.filter(a =>
-            (a.clinicPatientId?.name || '').toLowerCase().includes(q) ||
-            (a.clinicPatientId?.patientUid || a.patientId || '').toLowerCase().includes(q)
+        setDisplayRecords(allRecords.filter(r =>
+            (r.patientName || '').toLowerCase().includes(q) ||
+            (r.patientUid || '').toLowerCase().includes(q) ||
+            (r.serviceName || '').toLowerCase().includes(q)
         ));
     };
 
-    const todayTotal = allAppointments
-        .filter(a => new Date(a.appointmentDate).toDateString() === new Date().toDateString())
-        .reduce((s, a) => s + (a.amount || 0), 0);
+    const todayTotal = allRecords
+        .filter(r => new Date(r.date).toDateString() === new Date().toDateString())
+        .reduce((s, r) => s + (r.amount || 0), 0);
 
     return (
         <div>
@@ -3227,10 +3559,11 @@ const BillingMode = () => {
             {stats && (
                 <div className="clinic-kpi-grid" style={{ marginBottom: '20px' }}>
                     {[
-                        { label: 'Total Collection', value: fmt(stats.totalRevenue), icon: '💰', color: '#f59e0b' },
-                        { label: "Today's Collection", value: fmt(todayTotal), icon: '📅', color: '#10b981' },
-                        { label: 'This Month', value: fmt(stats.monthRevenue), icon: '📊', color: '#6366f1' },
-                        { label: 'Total Paid Visits', value: allAppointments.length, icon: '✅', color: '#0ea5e9' },
+                        { label: 'Total Collection', value: fmt(stats.totalRevenue || allRecords.reduce((sum, r) => sum + r.amount, 0)), icon: '💰', color: '#f59e0b' },
+                        { label: "Today's Collection", value: fmt(stats.todayRevenue || todayTotal), icon: '📅', color: '#10b981' },
+                        { label: 'Treatment Plan Revenue', value: fmt(stats.treatmentPlanRevenue || 0), icon: '📋', color: '#0891b2' },
+                        { label: 'Treatment Plan Pending', value: fmt(stats.treatmentPlanPending || 0), icon: '⏳', color: '#dc2626' },
+                        { label: 'Total Paid Transactions', value: allRecords.filter(r => r.amount > 0).length, icon: '✅', color: '#0ea5e9' },
                     ].map((k, i) => (
                         <div key={i} className="clinic-kpi-card" style={{ borderTop: `4px solid ${k.color}` }}>
                             <div style={{ fontSize: '24px' }}>{k.icon}</div>
@@ -3243,60 +3576,76 @@ const BillingMode = () => {
 
             <div className="clinic-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                    <h3 style={{ margin: 0 }}>🧾 Collection Records</h3>
+                    <h3 style={{ margin: 0 }}>🧾 Billing & Collection Records</h3>
                     <span style={{ fontSize: '12px', background: '#dcfce7', color: '#16a34a', padding: '3px 10px', borderRadius: '10px', fontWeight: 700 }}>
-                        All payments collected upfront
+                        Consultations & Treatment Plans
                     </span>
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
-                    <input className="clinic-input" style={{ flex: 1 }} placeholder="Search by patient name or ID…"
+                    <input className="clinic-input" style={{ flex: 1 }} placeholder="Search by patient name, ID or procedure..."
                         value={patSearch} onChange={e => setPatSearch(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && filterByPatient()} />
                     <button className="clinic-btn-secondary" onClick={filterByPatient}>Search</button>
-                    {patSearch && <button className="clinic-btn-secondary" onClick={() => { setPatSearch(''); setAppointments(allAppointments); }}>✕ Clear</button>}
+                    {patSearch && <button className="clinic-btn-secondary" onClick={() => { setPatSearch(''); setDisplayRecords(allRecords); }}>✕ Clear</button>}
                 </div>
 
-                {loading ? <Spinner /> : appointments.length === 0 ? (
-                    <Empty text="No collection records yet." />
+                {loading ? <Spinner /> : displayRecords.length === 0 ? (
+                    <Empty text="No collection records found." />
                 ) : (
                     <table className="clinic-table">
                         <thead>
                             <tr>
                                 <th>Date</th>
-                                <th>Token / Slot</th>
+                                <th>Type</th>
+                                <th>Token / Plan</th>
                                 <th>Patient</th>
-                                <th>Service</th>
-                                <th>Fee</th>
+                                <th>Service / Procedure</th>
+                                <th>Paid Fee</th>
+                                <th>Pending Dues</th>
                                 <th>Method</th>
-                                <th>Visit Status</th>
+                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {appointments.map(a => (
-                                <tr key={a._id}>
-                                    <td style={{ fontSize: '12px' }}>{fmtDate(a.appointmentDate)}</td>
+                            {displayRecords.map(r => (
+                                <tr key={r._id}>
+                                    <td style={{ fontSize: '12px' }}>{fmtDate(r.date)}</td>
                                     <td>
-                                        {a.tokenNumber
-                                            ? <strong style={{ color: '#6366f1' }}>#{a.tokenNumber}</strong>
-                                            : <span style={{ color: '#3b82f6', fontWeight: 600 }}>🕐 {a.appointmentTime}</span>}
-                                    </td>
-                                    <td>
-                                        <div style={{ fontWeight: 600 }}>{a.clinicPatientId?.name || '—'}</div>
-                                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{a.clinicPatientId?.patientUid || a.patientId}</div>
-                                    </td>
-                                    <td style={{ fontSize: '12px', color: '#64748b' }}>{a.serviceName || 'General'}</td>
-                                    <td><strong style={{ color: '#16a34a' }}>{fmt(a.amount)}</strong></td>
-                                    <td>
-                                        <span style={{ background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: 600 }}>
-                                            {a.paymentMethod || 'Cash'}
+                                        <span style={{
+                                            background: r.type === 'treatment_plan' ? '#ecfeff' : '#f0fdf4',
+                                            color: r.type === 'treatment_plan' ? '#0891b2' : '#16a34a',
+                                            padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700
+                                        }}>
+                                            {r.category || (r.type === 'treatment_plan' ? 'Treatment Plan' : 'Consultation')}
                                         </span>
-                                        {a.cardRef && <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>Ref: {a.cardRef}</div>}
-                                        {a.upiScreenshotUrl && (
-                                            <a href={a.upiScreenshotUrl} target="_blank" rel="noreferrer" style={{ fontSize: '10px', color: '#3b82f6', display: 'block', marginTop: '2px' }}>📎 Screenshot</a>
+                                    </td>
+                                    <td>
+                                        <strong style={{ color: '#6366f1' }}>{r.tokenOrSlot}</strong>
+                                    </td>
+                                    <td>
+                                        <div style={{ fontWeight: 600 }}>{r.patientName}</div>
+                                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>{r.patientUid}</div>
+                                    </td>
+                                    <td style={{ fontSize: '12px', color: '#334155' }}>{r.serviceName}</td>
+                                    <td><strong style={{ color: '#16a34a' }}>{fmt(r.amount)}</strong></td>
+                                    <td>
+                                        {r.pendingAmount > 0 ? (
+                                            <strong style={{ color: '#dc2626' }}>{fmt(r.pendingAmount)}</strong>
+                                        ) : (
+                                            <span style={{ color: '#94a3b8', fontSize: '12px' }}>₹0</span>
                                         )}
                                     </td>
-                                    <td><StatusBadge status={a.status} /></td>
+                                    <td>
+                                        <span style={{ background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '8px', fontSize: '11px', fontWeight: 600 }}>
+                                            {r.paymentMethod}
+                                        </span>
+                                        {r.cardRef && <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>Ref: {r.cardRef}</div>}
+                                        {r.upiScreenshotUrl && (
+                                            <a href={r.upiScreenshotUrl} target="_blank" rel="noreferrer" style={{ fontSize: '10px', color: '#3b82f6', display: 'block', marginTop: '2px' }}>📎 Screenshot</a>
+                                        )}
+                                    </td>
+                                    <td><StatusBadge status={r.status} /></td>
                                 </tr>
                             ))}
                         </tbody>

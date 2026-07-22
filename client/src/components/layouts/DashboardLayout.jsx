@@ -197,7 +197,9 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                 )}
                 <div className="breadcrumb-wrap">
                     <span className="curr-page-name">
-                        {location.pathname.split('/').pop().replace(/-/g, ' ') || 'Dashboard'}
+                        {location.pathname.includes('/patient/') 
+                            ? 'Patient Profile' 
+                            : decodeURIComponent(location.pathname.split('/').pop()).replace(/-/g, ' ') || 'Dashboard'}
                     </span>
                     <span className="path-slash">/</span>
                     <span className="path-user-role">{user?.role}</span>
