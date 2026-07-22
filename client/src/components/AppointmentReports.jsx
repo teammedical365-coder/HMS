@@ -21,7 +21,7 @@ const AppointmentReports = ({ appointmentId, prescriptions = [] }) => {
 
     const isPDF = (mimetype) => mimetype === 'application/pdf' || (typeof mimetype === 'string' && mimetype.endsWith('pdf'));
 
-    const allFiles = [
+    const rawFiles = [
         ...prescriptions.map(p => ({ 
             ...p, 
             name: p.name || 'Prescription',
@@ -36,6 +36,8 @@ const AppointmentReports = ({ appointmentId, prescriptions = [] }) => {
             source: 'report'
         }))
     ];
+
+    const allFiles = Array.from(new Map(rawFiles.map(f => [f.url || f.name, f])).values());
 
     return (
         <div>
