@@ -320,12 +320,45 @@ router.get('/patients', verifyClinicStaff, async (req, res) => {
 router.post('/patients', verifyClinicStaff, async (req, res) => {
     try {
         const { name, phone, email, age, dob, gender, address, bloodGroup, allergies, chronicConditions, relatives, aadhaarNumber } = req.body;
+        const clinicId = hid(req);
+
+        // Fetch hospital to check plan
+        const Hospital = require('../models/hospital.model');
+        const clinicData = await Hospital.findById(clinicId).select('subscriptionPlan');
+        const isStarterPlan = clinicData?.subscriptionPlan === 'starter';
+
         if (!name || !phone) return res.status(400).json({ success: false, message: 'Name and phone are required' });
+
+        if (isStarterPlan) {
+            if (!email || !age) {
+                return res.status(400).json({ success: false, message: 'Name, phone, email, and age are required' });
+            }
+        }
 
         const cleanPhone = phone.replace(/\D/g, '');
         if (cleanPhone.length !== 10) return res.status(400).json({ success: false, message: 'Phone must be exactly 10 digits' });
 
-        const clinicId = hid(req);
+        let cleanAge = null;
+        if (age) {
+            cleanAge = String(age).replace(/\D/g, '');
+            if (isStarterPlan) {
+                if (!cleanAge || cleanAge !== String(age) || cleanAge.length > 3 || Number(cleanAge) <= 0) {
+                    return res.status(400).json({ success: false, message: 'Age must be a valid positive number up to 3 digits' });
+                }
+            }
+        }
+
+        let cleanAadhaar = null;
+        if (aadhaarNumber) {
+            if (isStarterPlan) {
+                cleanAadhaar = String(aadhaarNumber).replace(/\D/g, '');
+                if (cleanAadhaar !== String(aadhaarNumber).trim() || cleanAadhaar.length !== 12) {
+                    return res.status(400).json({ success: false, message: 'Aadhaar number must be exactly 12 digits' });
+                }
+            } else {
+                cleanAadhaar = String(aadhaarNumber).trim();
+            }
+        }
 
         // Duplicate check within this clinic by phone
         const existing = await ClinicPatient.findOne({ clinicId, phone: cleanPhone });
@@ -334,8 +367,7 @@ router.post('/patients', verifyClinicStaff, async (req, res) => {
         }
 
         // Duplicate check within this clinic by Aadhaar if provided
-        if (aadhaarNumber && String(aadhaarNumber).trim()) {
-            const cleanAadhaar = String(aadhaarNumber).trim();
+        if (cleanAadhaar) {
             const existingAadhaar = await ClinicPatient.findOne({ clinicId, aadhaarNumber: cleanAadhaar });
             if (existingAadhaar) {
                 return res.status(200).json({ success: true, patient: existingAadhaar, existing: true, message: `Patient with this Aadhaar already registered — ${existingAadhaar.patientUid}` });
@@ -360,9 +392,9 @@ router.post('/patients', verifyClinicStaff, async (req, res) => {
             patientUid,
             name: name.trim(),
             phone: cleanPhone,
-            email: email || '',
-            age: age ? Number(age) : 1, // Default or parsed age
-            aadhaarNumber: aadhaarNumber ? String(aadhaarNumber).trim() : undefined,
+            email: email ? email.trim() : '',
+            age: cleanAge ? Number(cleanAge) : 1,
+            aadhaarNumber: cleanAadhaar || undefined,
             dob: dob ? new Date(dob) : null,
             gender: gender || 'Male',
             bloodGroup: bloodGroup || '',

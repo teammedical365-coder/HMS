@@ -307,10 +307,12 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     // Build user response with role data (roleData is already fetched above)
     let clinicType = null;
+    let subscriptionPlan = null;
     if (user.hospitalId) {
       try {
-        const hosp = await Hospital.findById(user.hospitalId).select('clinicType');
+        const hosp = await Hospital.findById(user.hospitalId).select('clinicType subscriptionPlan');
         clinicType = hosp?.clinicType || 'hospital';
+        subscriptionPlan = hosp?.subscriptionPlan || 'none';
       } catch (_) {}
     }
 
@@ -324,6 +326,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       patientId: user.patientId || null,
       hospitalId: user.hospitalId ? String(user.hospitalId) : null,
       clinicType,
+      subscriptionPlan,
       permissions: roleData.permissions || [],
       dashboardPath: roleData.dashboardPath || '/',
       navLinks: roleData.navLinks || []

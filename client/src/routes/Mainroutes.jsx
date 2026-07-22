@@ -176,10 +176,11 @@ const MainRoutes = () => {
                             {/* Dashboard routes — clinic vs full hospital */}
                             <Route path="hospitaladmin" element={
                                 <ProtectedRoute allowedRoles={['hospitaladmin', 'doctor', 'clinic doctor', 'reception', 'receptionist']}>
-                                    {(() => {
-                                        const u = JSON.parse(localStorage.getItem('user') || '{}');
-                                        return u.clinicType === 'clinic' ? <ClinicDashboard /> : <HospitalAdminDashboard />;
-                                    })()}
+                                      {(() => {
+                                          const u = JSON.parse(localStorage.getItem('user') || '{}');
+                                          const useClinicHub = u.clinicType === 'clinic' || u.subscriptionPlan === 'starter';
+                                          return useClinicHub ? <ClinicDashboard /> : <HospitalAdminDashboard />;
+                                      })()}
                                 </ProtectedRoute>
                             } />
                             <Route path="hospitaladmin/question-library" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><HospitalAdminQuestionLibrary /></ProtectedRoute>} />

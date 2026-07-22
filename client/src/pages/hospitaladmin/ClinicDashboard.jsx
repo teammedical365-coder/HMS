@@ -255,18 +255,22 @@ const ClinicDashboard = () => {
                             <span>{m.icon}</span> {m.label}
                         </button>
                     ))}
-                    <div className="switcher-user">
-                        <div className="switcher-avatar">{currentUser?.name?.charAt(0)?.toUpperCase()}</div>
-                        <span>{currentUser?.name}</span>
-                    </div>
+                    {currentUser?.subscriptionPlan !== 'starter' && (
+                        <div className="switcher-user">
+                            <div className="switcher-avatar">{currentUser?.name?.charAt(0)?.toUpperCase()}</div>
+                            <span>{currentUser?.name}</span>
+                        </div>
+                    )}
                 </div>
             )}
             {isClinicDoctorUser && (
                 <div className="clinic-role-switcher" style={{ justifyContent: 'flex-end' }}>
-                    <div className="switcher-user">
-                        <div className="switcher-avatar">{currentUser?.name?.charAt(0)?.toUpperCase()}</div>
-                        <span>Dr. {currentUser?.name}</span>
-                    </div>
+                    {currentUser?.subscriptionPlan !== 'starter' && (
+                        <div className="switcher-user">
+                            <div className="switcher-avatar">{currentUser?.name?.charAt(0)?.toUpperCase()}</div>
+                            <span>Dr. {currentUser?.name}</span>
+                        </div>
+                    )}
                 </div>
             )}
  
@@ -1127,15 +1131,22 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                                 </div>
                                 <div className="clinic-form-group">
                                     <label>Age *</label>
-                                    <input className="clinic-input" type="number" placeholder="Age" value={form.age} onChange={e => setForm(f => ({ ...f, age: e.target.value }))} required min="1" />
+                                    <input className="clinic-input" type="text" placeholder="Age" maxLength={3}
+                                        value={form.age} 
+                                        onChange={e => setForm(f => ({ ...f, age: e.target.value.replace(/\D/g, '').slice(0, 3) }))} 
+                                        required pattern="^[1-9]\d{0,2}$" title="Age must be a positive number up to 3 digits" />
                                 </div>
                                 <div className="clinic-form-group">
                                     <label>Aadhaar Number *</label>
-                                    <input className="clinic-input" type="text" placeholder="12-digit Aadhaar" value={form.aadhaarNumber} onChange={e => setForm(f => ({ ...f, aadhaarNumber: e.target.value }))} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
+                                    <input className="clinic-input" type="text" placeholder="12-digit Aadhaar" maxLength={12}
+                                        value={form.aadhaarNumber} 
+                                        onChange={e => setForm(f => ({ ...f, aadhaarNumber: e.target.value.replace(/\D/g, '').slice(0, 12) }))} 
+                                        required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
                                 </div>
                                 <div className="clinic-form-group">
-                                    <label>Email</label>
-                                    <input className="clinic-input" type="email" placeholder="Optional" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+                                    <label>Email *</label>
+                                    <input className="clinic-input" type="email" placeholder="Required" 
+                                        value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
                                 </div>
                                 <div className="clinic-form-group">
                                     <label>Date of Birth</label>
@@ -1521,7 +1532,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected, setPendingDownloa
     const [defaultServiceName, setDefaultServiceName] = useState('General Consultation');
     // Quick register state
     const [showQuickReg, setShowQuickReg] = useState(false);
-    const [qrForm, setQrForm] = useState({ name: '', phone: '', gender: 'Male' });
+    const [qrForm, setQrForm] = useState({ name: '', phone: '', email: '', age: '', gender: 'Male' });
     const [qrSaving, setQrSaving] = useState(false);
 
     const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg({ type: '', text: '' }), 4000); };
@@ -1571,7 +1582,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected, setPendingDownloa
                 setPatients(prev => r.existing ? prev : [r.patient, ...prev]);
                 setAssigningFor(r.patient._id);
                 setShowQuickReg(false);
-                setQrForm({ name: '', phone: '', gender: 'Male' });
+                setQrForm({ name: '', phone: '', email: '', age: '', gender: 'Male' });
                 if (clearPreselected) clearPreselected();
                 flash('success', `${r.existing ? 'Found' : 'Registered'}: ${r.patient.patientUid} — ${isSlotMode ? 'book an appointment below.' : 'assign a token below.'}`);
             } else flash('error', r.message);
@@ -1641,10 +1652,21 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected, setPendingDownloa
                                     onChange={e => setQrForm(f => ({ ...f, name: e.target.value }))} required />
                             </div>
                             <div style={{ flex: '1', minWidth: '130px' }}>
-                                <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Phone (10 digits) *</label>
+                                <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Phone *</label>
                                 <input className="clinic-input" type="tel" placeholder="10-digit number" maxLength={10}
                                     value={qrForm.phone}
                                     onChange={e => setQrForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} required  pattern="\d{10}"  title="Phone number must be exactly 10 digits" />
+                            </div>
+                            <div style={{ flex: '1', minWidth: '60px' }}>
+                                <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Age *</label>
+                                <input className="clinic-input" type="text" placeholder="Age" maxLength={3}
+                                    value={qrForm.age || ''}
+                                    onChange={e => setQrForm(f => ({ ...f, age: e.target.value.replace(/\D/g, '').slice(0, 3) }))} required pattern="^[1-9]\d{0,2}$" title="Age must be a positive number up to 3 digits" />
+                            </div>
+                            <div style={{ flex: '1', minWidth: '120px' }}>
+                                <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Email *</label>
+                                <input className="clinic-input" type="email" placeholder="Email" value={qrForm.email || ''}
+                                    onChange={e => setQrForm(f => ({ ...f, email: e.target.value }))} required />
                             </div>
                             <div style={{ flex: '1', minWidth: '100px' }}>
                                 <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Gender</label>

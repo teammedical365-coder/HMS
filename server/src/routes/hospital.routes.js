@@ -527,7 +527,9 @@ router.post('/admin/login', async (req, res) => {
                 dashboardPath: '/hospitaladmin',
                 navLinks: [],
                 hospitalId: user.hospitalId,
-                hospitalName: hospital.name
+                hospitalName: hospital.name,
+                subscriptionPlan: hospital.subscriptionPlan || 'none',
+                clinicType: hospital.clinicType || 'hospital'
             },
             token
         });

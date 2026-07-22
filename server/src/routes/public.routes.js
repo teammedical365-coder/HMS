@@ -57,7 +57,7 @@ router.get('/tenant-config', async (req, res) => {
         }
 
         const hospital = await Hospital.findOne(query)
-            .select('name slug customDomain branding')
+            .select('name slug customDomain branding subscriptionPlan')
             .lean();
 
         if (!hospital) {
@@ -73,8 +73,9 @@ router.get('/tenant-config', async (req, res) => {
                 name: hospital.name,
                 slug: hospital.slug,
                 customDomain: hospital.customDomain,
-                branding: hospital.branding || {}
-}   
+                branding: hospital.branding || {},
+                subscriptionPlan: hospital.subscriptionPlan || 'none'
+            }
         });
     } catch (err) {
         console.error('Get tenant-config error:', err);
