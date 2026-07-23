@@ -171,6 +171,7 @@
   color: #94a3b8;
   pointer-events: none;
   transition: color 0.2s;
+  z-index: 10;
 }
 
 .input-field-wrapper input {

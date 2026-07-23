@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
 import { publicAPI, patientAuthAPI } from '../../utils/api';
 import './PatientPortalLogin.css';
+import PasswordInput from '../../components/PasswordInput';
 
 const PatientPortalLogin = () => {
     const { loadBranding } = useBranding();
@@ -113,8 +114,7 @@ const PatientPortalLogin = () => {
                     
                     <div className="input-group">
                         <label>Password</label>
-                        <input 
-                            type="password" 
+                        <PasswordInput 
                             placeholder="Enter your password" 
                             required 
                             value={password}

@@ -10,6 +10,7 @@ import { HiOutlineMail, HiOutlineLockClosed } from 'react-icons/hi';
 import { RiHospitalLine } from 'react-icons/ri';
 import '../user/Login.css';
 import './HospitalLogin.css';
+import PasswordInput from '../../components/PasswordInput';
 
 /**
  * HospitalLogin — Subdomain-based hospital login page
@@ -197,8 +198,7 @@ const HospitalLogin = () => {
                                         <label>Password</label>
                                         <div className="input-field-wrapper">
                                             <HiOutlineLockClosed className="input-icon" />
-                                            <input
-                                                type="password" 
+                                            <PasswordInput
                                                 name="password"
                                                 placeholder="••••••••"
                                                 value={formData.password}

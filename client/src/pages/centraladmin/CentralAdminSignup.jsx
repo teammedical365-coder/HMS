@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { adminAPI } from '../../utils/api';
 import '../user/Signup.css';
+import PasswordInput from '../../components/PasswordInput';
 
 const CentralAdminSignup = () => {
     const navigate = useNavigate();
@@ -81,21 +82,19 @@ const CentralAdminSignup = () => {
                             <input type="tel" id="phone" name="phone" pattern="^\d{10}$" maxLength={10} value={formData.phone} onChange={handleChange} placeholder="Enter your phone number (optional)"  />
                             </div>
                         <div className="form-group">
-                            <label htmlFor="phone">Phone Number</label>
-                            <input 
-                                type="tel" 
-                                id="phone" 
-                                name="phone" 
-                                pattern="^\d{10}$" 
-                                maxLength={10} 
-                                value={formData.phone} 
+                            <label htmlFor="password">Password *</label>
+                            <PasswordInput 
+                                id="password" 
+                                name="password" 
+                                value={formData.password} 
                                 onChange={handleChange} 
-                                placeholder="Enter your phone number (optional)"  
+                                placeholder="Enter your password"  
+                                required
                             />
                         </div>
                         <div className="form-group">
                             <label htmlFor="confirmPassword">Confirm Password *</label>
-                            <input type="password" id="confirmPassword" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} placeholder="Confirm your password" required />
+                            <PasswordInput id="confirmPassword" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} placeholder="Confirm your password" required />
                         </div>
                         <button type="submit" className="auth-button" disabled={loading}>
                             {loading ? 'Creating Account...' : 'Sign Up'}

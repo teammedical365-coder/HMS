@@ -6,6 +6,7 @@ import { fetchAdminDoctors, createDoctor, updateDoctor, deleteDoctor } from '../
 import { adminEntitiesAPI, hospitalAPI } from '../../utils/api';
 import { getSubscriptionLimits } from '../../utils/subscriptionPlans';
 import '../administration/SuperAdmin.css';
+import PasswordInput from '../../components/PasswordInput';
 
 const AdminDoctors = () => {
     const navigate = useNavigate();
@@ -372,7 +373,7 @@ const AdminDoctors = () => {
                                 </div>
                                 <div className="form-group">
                                     <label htmlFor="password">{editingDoctor ? 'New Password' : 'Password *'}</label>
-                                    <input type="password" name="password" value={formData.password} onChange={handleChange} placeholder="Min 6 characters" required={!editingDoctor} />
+                                    <PasswordInput name="password" value={formData.password} onChange={handleChange} placeholder="Min 6 characters" required={!editingDoctor} />
                                 </div>
                             </div>
 

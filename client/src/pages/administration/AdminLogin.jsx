@@ -3,6 +3,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAuth } from '../../store/hooks';
 import { loginAdmin, clearError } from '../../store/slices/authSlice';
 import '../user/Login.css';
+import PasswordInput from '../../components/PasswordInput';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -102,8 +103,7 @@ const AdminLogin = () => {
 
             <div className="form-group">
               <label htmlFor="password">Password</label>
-              <input
-                type="password"
+              <PasswordInput
                 id="password"
                 name="password"
                 value={formData.password}

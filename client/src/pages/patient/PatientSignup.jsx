@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
 import { publicAPI, patientAuthAPI } from '../../utils/api';
 import './PatientPortalLogin.css'; // Reuse the premium styles from login
+import PasswordInput from '../../components/PasswordInput';
 
 const PatientSignup = () => {
     const navigate = useNavigate();
@@ -166,11 +167,11 @@ const PatientSignup = () => {
                     <div style={{ display: 'flex', gap: '1rem' }}>
                         <div className="input-group" style={{ flex: 1 }}>
                             <label>Password</label>
-                            <input type="password" name="password" placeholder="Min. 8 characters" value={formData.password} onChange={handleChange} required />
+                            <PasswordInput name="password" placeholder="Min. 8 characters" value={formData.password} onChange={handleChange} required />
                         </div>
                         <div className="input-group" style={{ flex: 1 }}>
                             <label>Confirm Password</label>
-                            <input type="password" name="confirmPassword" placeholder="Confirm password" value={formData.confirmPassword} onChange={handleChange} required />
+                            <PasswordInput name="confirmPassword" placeholder="Confirm password" value={formData.confirmPassword} onChange={handleChange} required />
                         </div>
                     </div>
 

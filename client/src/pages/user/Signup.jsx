@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAppDispatch, useAuth } from '../../store/hooks';
 import { signupUser, clearError } from '../../store/slices/authSlice';
 import './Signup.css';
+import PasswordInput from '../../components/PasswordInput';
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -130,8 +131,7 @@ const Signup = () => {
                 <label>Create Password</label>
                 <div className="input-wrapper">
                   <i className="fa-solid fa-lock"></i>
-                  <input
-                    type="password"
+                  <PasswordInput
                     name="password"
                     placeholder="Min 6 characters"
                     value={formData.password}
@@ -145,8 +145,7 @@ const Signup = () => {
                 <label>Confirm Password</label>
                 <div className="input-wrapper">
                   <i className="fa-solid fa-shield-halved"></i>
-                  <input
-                    type="password"
+                  <PasswordInput
                     name="confirmPassword"
                     placeholder="Repeat your password"
                     value={formData.confirmPassword}
