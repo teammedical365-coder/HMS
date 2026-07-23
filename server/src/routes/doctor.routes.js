@@ -673,17 +673,46 @@ router.patch('/appointments/:id/prescription', verifyToken, upload.single('presc
             if (appointment.pharmacy && appointment.pharmacy.length > 0) {
                 const existingOrder = await PharmacyOrder.findOne({ appointmentId: appointment._id });
                 if (!existingOrder) {
+                    const Inventory = require('../models/inventory.model');
+                    const itemsWithPrice = await Promise.all(appointment.pharmacy.map(async p => {
+                        let baseUnitPrice = 0;
+                        let rawName = p.medicineName.trim();
+                        let actualName = rawName.includes(' - ') ? rawName.substring(0, rawName.lastIndexOf(' - ')).trim() : rawName;
+                        actualName = actualName.toLowerCase().trim();
+                        // Replace multiple spaces with flexible whitespace regex
+                        const flexNamePattern = actualName.replace(/\s+/g, '\\s*');
+                        
+                        const invQuery = { name: { $regex: new RegExp(`^${flexNamePattern}$`, 'i') } };
+                        if (req.user.hospitalId || appointment.hospitalId) invQuery.hospitalId = req.user.hospitalId || appointment.hospitalId;
+                        
+                        let invItem = await Inventory.findOne(invQuery);
+                        if (!invItem) {
+                            const fallbackQuery = { name: { $regex: new RegExp(flexNamePattern, 'i') } };
+                            if (req.user.hospitalId || appointment.hospitalId) fallbackQuery.hospitalId = req.user.hospitalId || appointment.hospitalId;
+                            invItem = await Inventory.findOne(fallbackQuery);
+                        }
+                        
+                        if (invItem) {
+                            const s2b = invItem.unitConfig?.saleToBaseMultiplier || 1;
+                            const sp = invItem.pricingConfig?.sellingPrice || invItem.sellingPrice || 0;
+                            baseUnitPrice = sp / s2b;
+                        }
+                        
+                        return {
+                            medicineName: p.medicineName,
+                            frequency: p.frequency,
+                            duration: p.duration,
+                            price: baseUnitPrice
+                        };
+                    }));
+
                     await PharmacyOrder.create({
                         appointmentId: appointment._id,
                         patientId: appointment.patientId || 'N/A',
                         userId: appointment.userId,
                         doctorId: req.user.id,
                         hospitalId: req.user.hospitalId || appointment.hospitalId,
-                        items: appointment.pharmacy.map(p => ({
-                            medicineName: p.medicineName,
-                            frequency: p.frequency,
-                            duration: p.duration
-                        })),
+                        items: itemsWithPrice,
                         orderStatus: 'Upcoming',
                         paymentStatus: 'Pending'
                     });
@@ -746,27 +775,31 @@ router.get('/medicines-list', verifyToken, async (req, res) => {
         const Hospital = require('../models/hospital.model');
         const h = await Hospital.findById(req.user.hospitalId).select('clinicType').lean();
         
+        const mapInventory = (m) => ({
+            _id: m._id,
+            name: m.name,
+            genericName: m.salt || '',
+            category: m.category || 'Medicine',
+            stock: m.stock || 0
+        });
+
         if (h && h.clinicType === 'clinic') {
             const list = await Inventory.find({ hospitalId: req.user.hospitalId }).sort({ name: 1 }).lean();
-            medicines = list.map(m => ({
-                _id: m._id,
-                name: m.name,
-                genericName: m.salt || '',
-                category: m.category || 'Medicine',
-                stock: m.stock || 0
-            }));
+            medicines = list.map(mapInventory);
         } else {
-            const medQuery = { stock: { $gt: 0 } };
+            const medQuery = {};
             if (req.user.hospitalId) medQuery.hospitalId = req.user.hospitalId;
-            const list = await Inventory.find(medQuery).select('name category stock').lean();
-            medicines = list;
+            const list = await Inventory.find(medQuery).sort({ name: 1 }).lean();
             
-            if (medicines.length === 0) {
+            if (list.length > 0) {
+                medicines = list.map(mapInventory);
+            } else {
                 const Medicine = require('../models/medicine.model');
-                const list2 = await Medicine.find({}).sort({ name: 1 }).select('name genericName category').lean();
+                const list2 = await Medicine.find({}).sort({ name: 1 }).lean();
                 medicines = list2.map(m => ({
+                    _id: m._id,
                     name: m.name,
-                    genericName: m.genericName,
+                    genericName: m.genericName || m.salt || '',
                     category: m.category || 'Medicine',
                     stock: 999
                 }));

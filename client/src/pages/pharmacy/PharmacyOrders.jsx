@@ -2,6 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { pharmacyOrderAPI } from '../../utils/api';
 import './PharmacyInventory.css';
 
+const parseQty = (item) => {
+    const freqStr = (item.frequency || '').toLowerCase();
+    let dailyMultiplier = 1;
+    if (freqStr.includes('bd') || freqStr.includes('twice')) dailyMultiplier = 2;
+    else if (freqStr.includes('tds') || freqStr.includes('three')) dailyMultiplier = 3;
+    else if (freqStr.includes('qid') || freqStr.includes('four')) dailyMultiplier = 4;
+    
+    const days = parseInt(item.quantity) || parseInt(item.duration) || parseInt(item.days) || 1;
+    return dailyMultiplier * days;
+};
+
 const getPharmacyTotal = (order, isChecked) => {
     if (order.totalAmount && Number(order.totalAmount) > 0) return Number(order.totalAmount);
     if (!order.items || !order.items.length) return 0;
@@ -10,8 +21,8 @@ const getPharmacyTotal = (order, isChecked) => {
     order.items.forEach((item, idx) => {
         const includeItem = order.orderStatus === 'Upcoming' ? isChecked(order._id, idx) : item.purchased;
         if (includeItem) {
-            const qty = parseInt(item.quantity) || parseInt(item.duration) || parseInt(item.days) || 1;
-            sum += (Number(item.price) || 50) * qty;
+            const qty = parseQty(item);
+            sum += (Number(item.price) || 0) * qty;
         }
     });
     return sum;
@@ -197,8 +208,8 @@ const PharmacyOrders = () => {
                                                             <span style={{ textDecoration: order.orderStatus !== 'Upcoming' && !item.purchased ? 'line-through' : 'none', color: order.orderStatus !== 'Upcoming' && !item.purchased ? '#999' : '#000' }}>
                                                                 {item.medicineName} {item.frequency ? `(${item.frequency})` : ''}
                                                                 {(() => {
-                                                                    const itemQty = parseInt(item.quantity) || parseInt(item.duration) || parseInt(item.days) || 1;
-                                                                    const itemTotal = (Number(item.price) || 50) * itemQty;
+                                                                    const itemQty = parseQty(item);
+                                                                    const itemTotal = (Number(item.price) || 0) * itemQty;
                                                                     const durationText = item.duration ? `${item.duration}` : item.quantity ? `${item.quantity} Qty` : item.days ? `${item.days} Days` : '1 Qty';
                                                                     return (
                                                                         <>

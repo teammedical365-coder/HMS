@@ -680,7 +680,7 @@ router.put('/my-hospital/inventory/:id', verifyHospitalAdmin, async (req, res) =
         const item = await Inventory.findOne({ _id: req.params.id, hospitalId });
         if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
 
-        const allowed = ['name', 'salt', 'category', 'stock', 'unit', 'buyingPrice', 'sellingPrice', 'vendor', 'batchNumber', 'expiryDate'];
+        const allowed = ['name', 'salt', 'category', 'stock', 'unit', 'buyingPrice', 'sellingPrice', 'vendor', 'batchNumber', 'expiryDate', 'unitConfig', 'inventoryConfig', 'pricingConfig'];
         allowed.forEach(field => {
             if (req.body[field] !== undefined) item[field] = req.body[field];
         });

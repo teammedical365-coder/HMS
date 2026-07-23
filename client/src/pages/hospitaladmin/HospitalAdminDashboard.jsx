@@ -383,7 +383,18 @@ const HospitalAdminDashboard = () => {
         e.preventDefault();
         setSavingInventory(true); setError(''); setSuccess('');
         try {
-            const data = { ...inventoryForm, stock: Number(inventoryForm.stock), buyingPrice: Number(inventoryForm.pricingConfig.purchasePrice), sellingPrice: Number(inventoryForm.pricingConfig.sellingPrice) };
+            const p2s = inventoryForm.unitConfig?.purchaseToSaleMultiplier || 1;
+            const s2b = inventoryForm.unitConfig?.saleToBaseMultiplier || 1;
+            const opStock = inventoryForm.inventoryConfig?.openingStock || 0;
+            const calculatedStock = opStock * p2s * s2b;
+
+            const data = { 
+                ...inventoryForm, 
+                stock: calculatedStock, 
+                buyingPrice: Number(inventoryForm.pricingConfig?.purchasePrice || 0), 
+                sellingPrice: Number(inventoryForm.pricingConfig?.sellingPrice || 0) 
+            };
+
             if (editingInventoryId) {
                 await hospitalAPI.updateInventory(editingInventoryId, data);
                 setSuccess('Item updated!');

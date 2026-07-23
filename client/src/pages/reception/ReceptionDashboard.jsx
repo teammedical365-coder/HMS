@@ -585,6 +585,19 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         }
     };
 
+    const handleDischargePatient = async (admissionId) => {
+        if (!window.confirm('Are you sure you want to discharge this patient?')) return;
+        try {
+            const res = await admissionAPI.dischargePatient(admissionId, { dischargeDate: new Date() });
+            if (res.success) {
+                alert('Patient discharged successfully!');
+                fetchHospitalizedPatients();
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to discharge patient.');
+        }
+    };
+
     const handleCancelAppointment = async (appointmentId) => {
         if (!window.confirm('Cancel this appointment?')) return;
         try {
@@ -1848,21 +1861,29 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             <th>Admission Date</th>
                             <th>Ward / Bed</th>
                             <th>Status</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loadingHospitalized ? (
-                            <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>Loading...</td></tr>
-                        ) : hospitalizedPatients.filter(a => a.status === 'Admitted').length === 0 ? (
-                            <tr><td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>No hospitalized patients found.</td></tr>
+                            <tr><td colSpan="8" style={{ textAlign: 'center', padding: '20px' }}>Loading...</td></tr>
+                        ) : hospitalizedPatients.length === 0 ? (
+                            <tr><td colSpan="8" style={{ textAlign: 'center', padding: '20px' }}>No hospitalized patients found.</td></tr>
                         ) : (
-                            hospitalizedPatients.filter(a => a.status === 'Admitted').map(adm => (
+                            hospitalizedPatients.map(adm => (
                                 <tr key={adm._id}>
                                     <td style={{ fontWeight: 600 }}>{adm.patientId?.name || 'Unknown'}<br /><small>{adm.patientId?.phone}</small></td>
                                     <td>{adm.patientId?.patientId || '-'}</td>
                                     <td>{adm.appointmentId?.department || adm.appointmentId?.serviceName || '-'}</td>
                                     <td>{adm.appointmentId?.doctorName || '-'}</td>
-                                    <td>{new Date(adm.admissionDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                                    <td>
+                                        <div>{new Date(adm.admissionDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                                        {adm.status === 'Discharged' && adm.dischargeDate && (
+                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                                Discharged: {new Date(adm.dischargeDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            </div>
+                                        )}
+                                    </td>
                                     <td>{adm.ward || '-'}<br /><small>Bed: {adm.bedNumber || '-'}</small></td>
                                     <td>
                                         <span style={{
@@ -1870,8 +1891,36 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             background: adm.status === 'Admitted' ? '#dcfce7' : '#f1f5f9',
                                             color: adm.status === 'Admitted' ? '#166534' : '#475569'
                                         }}>
-                                            {adm.status}
+                                            {String(adm.status).toUpperCase()}
                                         </span>
+                                    </td>
+                                    <td>
+                                        {adm.status === 'Admitted' ? (
+                                            <button 
+                                                onClick={() => handleDischargePatient(adm._id)} 
+                                                style={{ padding: '6px 12px', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                                            >
+                                                Discharge
+                                            </button>
+                                        ) : (
+                                            <button 
+                                                onClick={() => {
+                                                    const fakeApt = {
+                                                        ...adm.appointmentId,
+                                                        userId: adm.patientId,
+                                                        patientId: adm.patientId?.patientId,
+                                                        appointmentDate: adm.admissionDate,
+                                                        amount: adm.totalAmount || 0,
+                                                        paymentMethod: 'Hospital Bill'
+                                                    };
+                                                    const pdf = generateReceiptPDF(fakeApt, 'Hospital Bill', false);
+                                                    setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Discharge Summary / Receipt' });
+                                                }} 
+                                                style={{ padding: '6px 12px', background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                                            >
+                                                Receipt
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             ))

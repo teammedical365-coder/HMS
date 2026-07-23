@@ -52,6 +52,17 @@ const PatientBillingProfile = () => {
             } catch (err) {
                 console.error('Dept UPI lookup failed, falling back to legacy', err);
             }
+            // Fallback to Reception Department UPI
+            try {
+                const recRes = await hospitalAPI.getDepartmentUpiByRole('Reception');
+                if (recRes?.success && recRes.departmentUpi) {
+                    const du = recRes.departmentUpi;
+                    setUpiOptions([{ label: du.label, upiId: du.upiId }]);
+                    return;
+                }
+            } catch (err) {
+                console.error('Reception UPI lookup failed, falling back to legacy', err);
+            }
             // Fallback to legacy hospital-wide UPI list
             try {
                 const res = await hospitalAPI.getUpiIds();

@@ -740,7 +740,37 @@ const DoctorPatientDetails = () => {
     // Dynamic Form Tabs Injection
     let dynamicTabs = [];
     if (dynamicLibrary) {
-        let allowedDepts = hospitalDepartments.length > 0 ? hospitalDepartments : Object.keys(dynamicLibrary);
+        const docDept = user?.department || user?._roleData?.department || '';
+        const apptDept = appointment?.department || appointment?.serviceName || '';
+        let targetDept = docDept || apptDept || '';
+        const normalizedTarget = targetDept.toLowerCase().trim();
+
+        const isGeneral = !normalizedTarget || 
+                         normalizedTarget.includes('general') || 
+                         normalizedTarget === 'unassigned';
+
+        let allowedDepts = [];
+
+        if (isGeneral) {
+            const generalMatch = Object.keys(dynamicLibrary).find(d => d.toLowerCase() === 'general' || d.toLowerCase() === 'general medicine');
+            if (generalMatch) allowedDepts.push(generalMatch);
+        } else {
+            const exactMatch = Object.keys(dynamicLibrary).find(d => d.toLowerCase() === normalizedTarget);
+            if (exactMatch) {
+                allowedDepts.push(exactMatch);
+            } else {
+                const partialMatch = Object.keys(dynamicLibrary).find(d => 
+                    d.toLowerCase().includes(normalizedTarget) || normalizedTarget.includes(d.toLowerCase())
+                );
+                if (partialMatch) allowedDepts.push(partialMatch);
+            }
+            
+            // If specialty has no specific tabs in library, fallback to General
+            if (allowedDepts.length === 0) {
+                const generalMatch = Object.keys(dynamicLibrary).find(d => d.toLowerCase() === 'general' || d.toLowerCase() === 'general medicine');
+                if (generalMatch) allowedDepts.push(generalMatch);
+            }
+        }
         
         allowedDepts.forEach(dept => {
             if (dynamicLibrary[dept]) {

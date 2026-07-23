@@ -83,20 +83,48 @@ router.post('/diagnose/:visitId', verifyToken, async (req, res) => {
         // A. CREATE PHARMACY ORDER — wrapped so it never blocks consultation completion
         if (prescription && prescription.length > 0) {
             try {
-                const pharmacyOrder = new PharmacyOrder({
-                    appointmentId: visit.appointmentId || visit._id,
-                    patientId: visit.patientId.toString(),
-                    userId: visit.patientId,
-                    doctorId: req.user.id,
-                    hospitalId: req.user.hospitalId,    // RLS: set hospitalId
-                    items: prescription.map(p => ({
-                        medicineName: p.medicine,
-                        frequency: p.dosage,
-                        duration: p.duration
-                    })),
-                    orderStatus: 'Upcoming',
-                    paymentStatus: 'Pending'
-                });
+                    const Inventory = require('../models/inventory.model');
+                    const itemsWithPrice = await Promise.all(prescription.map(async (p) => {
+                        let baseUnitPrice = 0;
+                        let rawName = p.medicine.trim();
+                        let actualName = rawName.includes(' - ') ? rawName.substring(0, rawName.lastIndexOf(' - ')).trim() : rawName;
+                        actualName = actualName.toLowerCase().trim();
+                        const flexNamePattern = actualName.replace(/\s+/g, '\\s*');
+                        
+                        const invQuery = { name: { $regex: new RegExp(`^${flexNamePattern}$`, 'i') } };
+                        if (req.user.hospitalId || visit.hospitalId) invQuery.hospitalId = req.user.hospitalId || visit.hospitalId;
+                        
+                        let invItem = await Inventory.findOne(invQuery);
+                        if (!invItem) {
+                            const fallbackQuery = { name: { $regex: new RegExp(flexNamePattern, 'i') } };
+                            if (req.user.hospitalId || visit.hospitalId) fallbackQuery.hospitalId = req.user.hospitalId || visit.hospitalId;
+                            invItem = await Inventory.findOne(fallbackQuery);
+                        }
+                        
+                        if (invItem) {
+                            const s2b = invItem.unitConfig?.saleToBaseMultiplier || 1;
+                            const sp = invItem.pricingConfig?.sellingPrice || invItem.sellingPrice || 0;
+                            baseUnitPrice = sp / s2b;
+                        }
+                        
+                        return {
+                            medicineName: p.medicine,
+                            frequency: p.dosage,
+                            duration: p.duration,
+                            price: baseUnitPrice
+                        };
+                    }));
+
+                    const pharmacyOrder = new PharmacyOrder({
+                        appointmentId: visit.appointmentId || visit._id,
+                        patientId: visit.patientId.toString(),
+                        userId: visit.patientId,
+                        doctorId: req.user.id,
+                        hospitalId: req.user.hospitalId || visit.hospitalId,
+                        items: itemsWithPrice,
+                        orderStatus: 'Upcoming',
+                        paymentStatus: 'Pending'
+                    });
                 await pharmacyOrder.save();
 
                 const notif = new Notification({
