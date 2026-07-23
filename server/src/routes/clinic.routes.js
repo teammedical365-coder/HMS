@@ -526,7 +526,8 @@ router.get('/patients/:id/check-fee-waiver', verifyClinicStaff, async (req, res)
             const lastAppt = await Appointment.findOne({
                 hospitalId: clinicId,
                 clinicPatientId: patient._id,
-                status: 'completed'
+                status: 'completed',
+                amount: { $gt: 0 } // Anchor strictly to the last PAID consultation
             }).sort({ appointmentDate: -1 }).lean();
 
             if (lastAppt && lastAppt.appointmentDate) {
@@ -759,7 +760,8 @@ router.post('/appointments', verifyClinicStaff, async (req, res) => {
             const lastAppt = await Appointment.findOne({
                 hospitalId: clinicId,
                 clinicPatientId: patient._id,
-                status: 'completed'
+                status: 'completed',
+                amount: { $gt: 0 } // Anchor strictly to the last PAID consultation
             }).sort({ appointmentDate: -1 }).lean();
 
             if (lastAppt && lastAppt.appointmentDate) {
@@ -883,6 +885,7 @@ router.post('/appointments', verifyClinicStaff, async (req, res) => {
             appointmentTime: finalTime,
             tokenNumber,
             status:         'confirmed',
+            visitType:      fee === 0 ? 'Follow-up' : 'New Consultation',
             paymentStatus:  'paid',   // payment is always collected upfront in clinic module
             paymentMethod:  paymentMethod || (fee === 0 ? 'Free' : 'Cash'),
             amount:         fee,

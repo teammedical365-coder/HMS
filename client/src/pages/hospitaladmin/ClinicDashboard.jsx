@@ -2482,7 +2482,9 @@ const DoctorMode = ({ setPendingDownload }) => {
 
             {/* Tab switcher */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                {[{ id: 'staff', label: '👥 Doctor & Staff List' }, { id: 'queue', label: '🩺 Today\'s Queue' }].map(t => (
+                {[{ id: 'staff', label: '👥 Doctor & Staff List' }, { id: 'queue', label: '🩺 Today\'s Queue' }]
+                    .filter(t => !(t.id === 'queue' && (JSON.parse(localStorage.getItem('user') || '{}')?.role || '').toLowerCase() === 'hospitaladmin'))
+                    .map(t => (
                     <button key={t.id} className={tab === t.id ? 'clinic-btn-primary' : 'clinic-btn-secondary'}
                         style={{ padding: '8px 18px', fontSize: '13px' }} onClick={() => setTab(t.id)}>
                         {t.label}
