@@ -153,14 +153,16 @@ const PatientBillingProfile = () => {
         return total;
     };
 
+    const isPaid = (status) => status && status.toLowerCase() === 'paid';
+
     const pendingTotal = () => {
         if (!billing) return 0;
         let total = 0;
-        billing.appointments.filter(a => a.paymentStatus !== 'Paid').forEach(a => total += (Number(a.amount) || 0));
-        billing.labReports.filter(l => l.paymentStatus !== 'Paid').forEach(l => total += (Number(l.amount || l.price) || 0));
-        billing.pharmacyOrders.filter(p => p.paymentStatus !== 'Paid').forEach(p => total += getPharmacyTotal(p));
-        billing.facilityCharges.filter(f => f.paymentStatus !== 'Paid').forEach(f => total += (Number(f.totalAmount) || 0));
-        billing.admissions.filter(a => a.paymentStatus !== 'Paid').forEach(a => total += (Number(a.totalAmount) || 0));
+        billing.appointments.filter(a => !isPaid(a.paymentStatus)).forEach(a => total += (Number(a.amount) || 0));
+        billing.labReports.filter(l => !isPaid(l.paymentStatus)).forEach(l => total += (Number(l.amount || l.price) || 0));
+        billing.pharmacyOrders.filter(p => !isPaid(p.paymentStatus)).forEach(p => total += getPharmacyTotal(p));
+        billing.facilityCharges.filter(f => !isPaid(f.paymentStatus)).forEach(f => total += (Number(f.totalAmount) || 0));
+        billing.admissions.filter(a => !isPaid(a.paymentStatus)).forEach(a => total += (Number(a.totalAmount) || 0));
         return total;
     };
 
@@ -178,11 +180,11 @@ const PatientBillingProfile = () => {
     const totalPaidBill = () => {
         if (!billing) return 0;
         let total = 0;
-        billing.appointments?.filter(a => a.paymentStatus === 'Paid').forEach(a => total += (Number(a.amount) || 0));
-        billing.labReports?.filter(l => l.paymentStatus === 'Paid').forEach(l => total += (Number(l.amount || l.price) || 0));
-        billing.pharmacyOrders?.filter(p => p.paymentStatus === 'Paid').forEach(p => total += (Number(p.totalAmount) || 0));
-        billing.facilityCharges?.filter(f => f.paymentStatus === 'Paid').forEach(f => total += (Number(f.totalAmount) || 0));
-        billing.admissions?.filter(a => a.paymentStatus === 'Paid').forEach(a => total += (Number(a.totalAmount) || 0));
+        billing.appointments?.filter(a => isPaid(a.paymentStatus)).forEach(a => total += (Number(a.amount) || 0));
+        billing.labReports?.filter(l => isPaid(l.paymentStatus)).forEach(l => total += (Number(l.amount || l.price) || 0));
+        billing.pharmacyOrders?.filter(p => isPaid(p.paymentStatus)).forEach(p => total += (Number(p.totalAmount) || 0));
+        billing.facilityCharges?.filter(f => isPaid(f.paymentStatus)).forEach(f => total += (Number(f.totalAmount) || 0));
+        billing.admissions?.filter(a => isPaid(a.paymentStatus)).forEach(a => total += (Number(a.totalAmount) || 0));
         return total;
     };
 
@@ -191,7 +193,7 @@ const PatientBillingProfile = () => {
     const getSectionBadge = (items) => {
         const total = items.length;
         if (total === 0) return null;
-        const paid = items.filter(x => x.paymentStatus === 'Paid').length;
+        const paid = items.filter(x => isPaid(x.paymentStatus)).length;
         const pending = total - paid;
         if (paid === total) return `${total} paid`;
         if (pending === total) return `${total} pending`;
@@ -453,9 +455,9 @@ const PatientBillingProfile = () => {
                                                     type="checkbox"
                                                     checked={selected.admissions.includes(adm._id)}
                                                     onChange={() => toggle('admissions', adm._id)}
-                                                    disabled={adm.paymentStatus === 'Paid'}
+                                                    disabled={isPaid(adm.paymentStatus)}
                                                 />
-                                                {adm.paymentStatus === 'Paid' ? (
+                                                {isPaid(adm.paymentStatus) ? (
                                                     <span className="paid-badge">Paid</span>
                                                 ) : (
                                                     <span>Mark for payment</span>
@@ -505,14 +507,14 @@ const PatientBillingProfile = () => {
                             <div className="section-header">
                                 <h3>Consolidated Billing View (Consultations & ICU Charges)</h3>
                                 <div style={{ display: 'flex', gap: '10px' }}>
-                                    {billing.appointments.some(a => a.paymentStatus !== 'Paid') && (
+                                    {billing.appointments.some(a => !isPaid(a.paymentStatus)) && (
                                         <button className="btn-select-all" onClick={() => toggleAll('appointments', billing.appointments)}>
-                                            {billing.appointments.filter(a => a.paymentStatus !== 'Paid').every(a => selected.appointments.includes(a._id)) ? 'Deselect All Consults' : 'Select All Consults'}
+                                            {billing.appointments.filter(a => !isPaid(a.paymentStatus)).every(a => selected.appointments.includes(a._id)) ? 'Deselect All Consults' : 'Select All Consults'}
                                         </button>
                                     )}
-                                    {billing.facilityCharges.some(f => f.paymentStatus !== 'Paid') && (
+                                    {billing.facilityCharges.some(f => !isPaid(f.paymentStatus)) && (
                                         <button className="btn-select-all" onClick={() => toggleAll('facilityCharges', billing.facilityCharges)}>
-                                            {billing.facilityCharges.filter(f => f.paymentStatus !== 'Paid').every(f => selected.facilityCharges.includes(f._id)) ? 'Deselect All ICU' : 'Select All ICU'}
+                                            {billing.facilityCharges.filter(f => !isPaid(f.paymentStatus)).every(f => selected.facilityCharges.includes(f._id)) ? 'Deselect All ICU' : 'Select All ICU'}
                                         </button>
                                     )}
                                 </div>
@@ -549,7 +551,7 @@ const PatientBillingProfile = () => {
                                     {billing.facilityCharges.map(f => (
                                         <tr key={f._id} className={selected.facilityCharges.includes(f._id) ? 'selected-row' : ''}>
                                             <td>
-                                                {f.paymentStatus === 'Paid' ? (
+                                                {isPaid(f.paymentStatus) ? (
                                                     <span className="paid-icon-check">✓</span>
                                                 ) : (
                                                     <input type="checkbox" checked={selected.facilityCharges.includes(f._id)} onChange={() => toggle('facilityCharges', f._id)} />
@@ -563,7 +565,7 @@ const PatientBillingProfile = () => {
                                             <td>{f.collectedBy?.name || f.addedBy?.name || '—'}</td>
                                             <td>
                                                 <span className="status-badge">
-                                                    {f.paymentStatus === 'Paid' ? 'PAID' : 'Pending'}
+                                                    {isPaid(f.paymentStatus) ? 'PAID' : 'Pending'}
                                                 </span>
                                             </td>
                                             <td className="amount-cell">{fmt(f.totalAmount)}</td>
@@ -579,9 +581,9 @@ const PatientBillingProfile = () => {
                         <div className="billing-section">
                             <div className="section-header">
                                 <h3>Lab Tests ({getSectionBadge(billing.labReports)})</h3>
-                                {billing.labReports.some(l => l.paymentStatus !== 'Paid') && (
+                                {billing.labReports.some(l => !isPaid(l.paymentStatus)) && (
                                     <button className="btn-select-all" onClick={() => toggleAll('labReports', billing.labReports)}>
-                                        {billing.labReports.filter(l => l.paymentStatus !== 'Paid').every(l => selected.labReports.includes(l._id)) ? 'Deselect All' : 'Select All'}
+                                        {billing.labReports.filter(l => !isPaid(l.paymentStatus)).every(l => selected.labReports.includes(l._id)) ? 'Deselect All' : 'Select All'}
                                     </button>
                                 )}
                             </div>
@@ -591,7 +593,7 @@ const PatientBillingProfile = () => {
                                     {billing.labReports.map(l => (
                                         <tr key={l._id} className={selected.labReports.includes(l._id) ? 'selected-row' : ''}>
                                             <td>
-                                                {l.paymentStatus === 'Paid' ? (
+                                                {isPaid(l.paymentStatus) ? (
                                                     <span className="paid-icon-check">✓</span>
                                                 ) : (
                                                     <input type="checkbox" checked={selected.labReports.includes(l._id)} onChange={() => toggle('labReports', l._id)} />
@@ -601,7 +603,7 @@ const PatientBillingProfile = () => {
                                             <td>{Array.isArray(l.testNames) ? l.testNames.join(', ') : (l.testName || '—')}</td>
                                             <td>
                                                 <span className="status-badge">
-                                                    {l.paymentStatus === 'Paid' ? 'PAID' : 'Pending'}
+                                                    {isPaid(l.paymentStatus) ? 'PAID' : 'Pending'}
                                                 </span>
                                             </td>
                                             <td className="amount-cell">{fmt(l.amount || l.price)}</td>
@@ -617,9 +619,9 @@ const PatientBillingProfile = () => {
                         <div className="billing-section">
                             <div className="section-header">
                                 <h3>Pharmacy Orders ({getSectionBadge(billing.pharmacyOrders)})</h3>
-                                {billing.pharmacyOrders.some(p => p.paymentStatus !== 'Paid') && (
+                                {billing.pharmacyOrders.some(p => !isPaid(p.paymentStatus)) && (
                                     <button className="btn-select-all" onClick={() => toggleAll('pharmacyOrders', billing.pharmacyOrders)}>
-                                        {billing.pharmacyOrders.filter(p => p.paymentStatus !== 'Paid').every(p => selected.pharmacyOrders.includes(p._id)) ? 'Deselect All' : 'Select All'}
+                                        {billing.pharmacyOrders.filter(p => !isPaid(p.paymentStatus)).every(p => selected.pharmacyOrders.includes(p._id)) ? 'Deselect All' : 'Select All'}
                                     </button>
                                 )}
                             </div>
@@ -629,7 +631,7 @@ const PatientBillingProfile = () => {
                                     {billing.pharmacyOrders.map(p => (
                                         <tr key={p._id} className={selected.pharmacyOrders.includes(p._id) ? 'selected-row' : ''}>
                                             <td>
-                                                {p.paymentStatus === 'Paid' ? (
+                                                {isPaid(p.paymentStatus) ? (
                                                     <span className="paid-icon-check">✓</span>
                                                 ) : (
                                                     <input type="checkbox" checked={selected.pharmacyOrders.includes(p._id)} onChange={() => toggle('pharmacyOrders', p._id)} />
@@ -672,7 +674,7 @@ const PatientBillingProfile = () => {
                                             </td>
                                             <td>
                                                 <span className="status-badge">
-                                                    {p.paymentStatus === 'Paid' ? 'PAID' : 'Pending'}
+                                                    {isPaid(p.paymentStatus) ? 'PAID' : 'Pending'}
                                                 </span>
                                             </td>
                                             <td className="amount-cell">{fmt(getPharmacyTotal(p))}</td>
@@ -700,8 +702,8 @@ const PatientBillingProfile = () => {
                                             {adm.ward && <span className="badge-ward"> Ward: {adm.ward}</span>}
                                             {adm.bedNumber && <span className="badge-bed"> Bed: {adm.bedNumber}</span>}
                                         </div>
-                                        <span className={adm.paymentStatus === 'Paid' ? 'paid-badge' : 'pending-badge'}>
-                                            {adm.paymentStatus === 'Paid' ? 'Paid' : `Pending — ${fmt(adm.totalAmount)}`}
+                                        <span className={isPaid(adm.paymentStatus) ? 'paid-badge' : 'pending-badge'}>
+                                            {isPaid(adm.paymentStatus) ? 'Paid' : `Pending — ${fmt(adm.totalAmount)}`}
                                         </span>
                                     </div>
                                     {adm.selectedFacilities?.length > 0 && (

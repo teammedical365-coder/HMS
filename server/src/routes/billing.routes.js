@@ -219,7 +219,9 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
             proofFileId
         } = req.body;
 
-        const actualPaymentMode = splitPayments.length > 0 ? [...new Set(splitPayments.map(p => p.method))].join(' / ') : paymentMode;
+        let rawMode = splitPayments.length > 0 ? [...new Set(splitPayments.map(p => p.method))].join(' / ') : paymentMode;
+        if (!rawMode || String(rawMode).trim() === '') rawMode = 'Cash';
+        const actualPaymentMode = String(rawMode).trim();
         const totalAmount = splitPayments.length > 0 ? splitPayments.reduce((acc, p) => acc + Number(p.amount), 0) : amount;
 
         const { Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission, PaymentTransaction } = getModels(req);
@@ -261,11 +263,22 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
         await Promise.all([
             appointmentIds.length > 0 && Appointment.updateMany(
                 { _id: { $in: appointmentIds } }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments, status: 'completed' } }),
+            appointmentIds.length > 0 && MasterAppointment !== Appointment && MasterAppointment.updateMany(
+                { _id: { $in: appointmentIds } }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments, status: 'completed' } }),
+            
             labReportIds.length > 0 && LabReport.updateMany(
-                { _id: { $in: labReportIds } }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments } }),
+                { _id: { $in: labReportIds } }, { $set: { paymentStatus: 'Paid', status: 'Completed', paymentMethod: actualPaymentMode, splitPayments } }),
+            labReportIds.length > 0 && MasterLabReport !== LabReport && MasterLabReport.updateMany(
+                { _id: { $in: labReportIds } }, { $set: { paymentStatus: 'PAID', testStatus: 'DONE', paymentMethod: actualPaymentMode, splitPayments } }),
+
             pharmacyOrderIds.length > 0 && PharmacyOrder.updateMany(
                 { _id: { $in: pharmacyOrderIds } }, { $set: { paymentStatus: 'Paid', splitPayments, orderStatus: 'Completed' } }),
+            pharmacyOrderIds.length > 0 && MasterPharmacyOrder !== PharmacyOrder && MasterPharmacyOrder.updateMany(
+                { _id: { $in: pharmacyOrderIds } }, { $set: { paymentStatus: 'Paid', splitPayments, orderStatus: 'Completed' } }),
+
             facilityChargeIds.length > 0 && FacilityCharge.updateMany(
+                { _id: { $in: facilityChargeIds } }, { $set: { paymentStatus: 'Paid', splitPayments } }),
+            facilityChargeIds.length > 0 && MasterFacilityCharge !== FacilityCharge && MasterFacilityCharge.updateMany(
                 { _id: { $in: facilityChargeIds } }, { $set: { paymentStatus: 'Paid', splitPayments } }),
         ].filter(Boolean));
 
@@ -280,10 +293,15 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
 
             const description = descParts.length > 0 ? `Payment for: ${descParts.join(', ')}` : 'General Payment';
 
+            let finalMode = actualPaymentMode;
+            if (Array.isArray(finalMode)) finalMode = finalMode.join(' / ');
+            if (typeof finalMode === 'string') finalMode = finalMode.trim();
+            if (!finalMode) finalMode = 'Cash';
+
             const pt = new PaymentTransaction({
                 hospitalId: req.hospitalId || req.user.hospitalId,
                 patientId,
-                paymentMode: actualPaymentMode,
+                paymentMode: finalMode,
                 splitPayments,
                 paymentStatus: 'Paid',
                 amount: Number(totalAmount) || 0,

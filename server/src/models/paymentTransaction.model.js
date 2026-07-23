@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const paymentTransactionSchema = new mongoose.Schema({
     hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', index: true },
     patientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    paymentMode: { type: String, enum: ['Cash', 'UPI', 'Card', 'NetBanking', 'Insurance'], default: 'Cash' },
+    paymentMode: { type: String, default: 'Cash' },
     paymentStatus: { type: String, enum: ['Pending', 'Paid', 'Failed', 'Refunded'], default: 'Paid' },
     amount: { type: Number, required: true, default: 0 },
     
