@@ -164,6 +164,7 @@
   transform: translateY(-50%);
   color: #94a3b8;
   font-size: 0.95rem;
+  z-index: 10;
 }
 
 .input-wrapper input {
@@ -379,6 +380,7 @@
   top: 50%;
   transform: translateY(-50%);
   color: #aaa;
+  z-index: 10;
 }
 
 .input-wrapper input {

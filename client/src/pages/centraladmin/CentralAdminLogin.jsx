@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { HiOutlineMail, HiOutlineLockClosed } from 'react-icons/hi';
 import { RiArrowLeftLine } from 'react-icons/ri';
 import '../user/Login.css';
+import PasswordInput from '../../components/PasswordInput';
 
 const CentralAdminLogin = () => {
     const navigate = useNavigate();
@@ -102,8 +103,7 @@ const CentralAdminLogin = () => {
                                         <label>Secret Password</label>
                                         <div className="input-field-wrapper">
                                             <HiOutlineLockClosed className="input-icon" />
-                                            <input
-                                                type="password"
+                                            <PasswordInput
                                                 name="password"
                                                 placeholder="••••••••"
                                                 value={formData.password}

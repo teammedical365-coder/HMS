@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminEntitiesAPI } from '../../utils/api';
 import '../administration/SuperAdmin.css';
+import PasswordInput from '../../components/PasswordInput';
 
 const AdminLabs = () => {
   const navigate = useNavigate();
@@ -258,8 +259,7 @@ const AdminLabs = () => {
               <div className="form-row">
                 <div className="form-group">
                   <label htmlFor="password">{editingLab ? 'New Password (leave blank to keep current)' : 'Password *'}</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     id="password"
                     name="password"
                     value={formData.password}

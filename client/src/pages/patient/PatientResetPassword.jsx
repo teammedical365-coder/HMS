@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
 import { publicAPI, patientAuthAPI } from '../../utils/api';
 import './PatientPortalLogin.css';
+import PasswordInput from '../../components/PasswordInput';
 
 const PatientResetPassword = () => {
     const navigate = useNavigate();
@@ -136,8 +137,7 @@ const PatientResetPassword = () => {
                         <form className="patient-login-form" onSubmit={handleSubmit}>
                             <div className="input-group">
                                 <label>New Password</label>
-                                <input 
-                                    type="password" 
+                                <PasswordInput 
                                     placeholder="Enter new password (min 8 chars)" 
                                     required 
                                     value={password}
@@ -147,8 +147,7 @@ const PatientResetPassword = () => {
 
                             <div className="input-group">
                                 <label>Confirm New Password</label>
-                                <input 
-                                    type="password" 
+                                <PasswordInput 
                                     placeholder="Confirm new password" 
                                     required 
                                     value={confirmPassword}

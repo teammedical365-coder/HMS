@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { adminAPI } from '../../utils/api';
 import '../user/Signup.css';
+import PasswordInput from '../../components/PasswordInput';
 
 const AdminSignup = () => {
   const navigate = useNavigate();
@@ -134,8 +135,7 @@ const AdminSignup = () => {
 
             <div className="form-group">
               <label htmlFor="password">Password *</label>
-              <input
-                type="password"
+              <PasswordInput
                 id="password"
                 name="password"
                 value={formData.password}
@@ -147,8 +147,7 @@ const AdminSignup = () => {
 
             <div className="form-group">
               <label htmlFor="confirmPassword">Confirm Password *</label>
-              <input
-                type="password"
+              <PasswordInput
                 id="confirmPassword"
                 name="confirmPassword"
                 value={formData.confirmPassword}
