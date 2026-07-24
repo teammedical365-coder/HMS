@@ -734,6 +734,26 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         if (name === 'visitDate') {
             // Prevent past dates
             if (value < todayStr) return;
+
+            // Validate doctor availability for the selected day
+            if (intakeForm.doctor) {
+                const selectedDoc = doctorsList.find(d => d._id === intakeForm.doctor);
+                if (selectedDoc && selectedDoc.availability) {
+                    const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                    // Parse locally to avoid timezone shifts
+                    const [year, month, day] = value.split('-');
+                    const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
+                    const dayName = daysOfWeek[dateObj.getDay()];
+                    
+                    const isAvailable = selectedDoc.availability[dayName] && selectedDoc.availability[dayName].available === true;
+                    if (!isAvailable) {
+                        const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+                        alert(`Doctor ${selectedDoc.name} is not available on ${capitalizedDay}s. Please select another date.`);
+                        return; // Prevent updating state
+                    }
+                }
+            }
+
             // Reset time slot when date changes (past slot may no longer be valid)
             setIntakeForm(prev => ({ ...prev, visitDate: value, visitTime: '' }));
             return;
@@ -757,6 +777,28 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             setIntakeForm(prev => ({ ...prev, [name]: cleaned }));
             return;
         }
+
+        if (name === 'doctor' && intakeForm.visitDate) {
+            const selectedDoc = doctorsList.find(d => d._id === value);
+            if (selectedDoc && selectedDoc.availability) {
+                const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+                // Parse locally to avoid timezone shifts
+                const [year, month, day] = intakeForm.visitDate.split('-');
+                const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
+                const dayName = daysOfWeek[dateObj.getDay()];
+                
+                const isAvailable = selectedDoc.availability[dayName] && selectedDoc.availability[dayName].available === true;
+                if (!isAvailable) {
+                    const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+                    alert(`Doctor ${selectedDoc.name} is not available on ${capitalizedDay}s. Please select another date before assigning this doctor.`);
+                    return; // Prevent updating state
+                }
+            }
+            // Also reset time slot when doctor changes
+            setIntakeForm(prev => ({ ...prev, doctor: value, visitTime: '' }));
+            return;
+        }
+
         setIntakeForm(prev => ({ ...prev, [name]: value }));
     };
 
@@ -1140,17 +1182,28 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             <div style={{ fontSize: '13px', display: 'flex', gap: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
                                                 {followupStatus.active ? (
                                                     <>
-                                                        <div>Last Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
+                                                        <div>Last Paid Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
                                                         <div>Valid Till: <strong>{new Date(followupStatus.validUntil).toLocaleDateString('en-IN')}</strong></div>
                                                         {(() => {
-                                                            const remaining = Math.max(0, Math.ceil((new Date(followupStatus.validUntil).getTime() - new Date(intakeForm.visitDate || new Date()).getTime()) / (1000 * 3600 * 24)));
+                                                            const [vY, vM, vD] = String(followupStatus.validUntil).split('T')[0].split('-');
+                                                            const validTillDate = new Date(Number(vY), Number(vM) - 1, Number(vD)).getTime();
+                                                            
+                                                            let todayDate = new Date();
+                                                            todayDate.setHours(0,0,0,0);
+                                                            todayDate = todayDate.getTime();
+                                                            if (intakeForm.visitDate) {
+                                                                const [y, m, d] = String(intakeForm.visitDate).split('-');
+                                                                todayDate = new Date(Number(y), Number(m) - 1, Number(d)).getTime();
+                                                            }
+                                                            
+                                                            const remaining = Math.max(0, Math.ceil((validTillDate - todayDate) / (1000 * 3600 * 24)));
                                                             return <div>Remaining Days: <strong>{remaining === 0 ? 'Expires Today' : `${remaining} Day${remaining > 1 ? 's' : ''}`}</strong></div>;
                                                         })()}
                                                         <div>Fee: <strong>₹0</strong></div>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <div>Last Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
+                                                        <div>Last Paid Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
                                                         <div>Expired On: <strong>{new Date(followupStatus.validUntil).toLocaleDateString('en-IN')}</strong></div>
                                                         <div>Fee Applicable: <strong>₹{followupStatus.fee || intakeForm.consultationFee}</strong></div>
                                                     </>
@@ -1541,17 +1594,28 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             <div style={{ fontSize: '13px', display: 'flex', gap: '24px', alignItems: 'center' }}>
                                                 {followupStatus.active ? (
                                                     <>
-                                                        <div>Last Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
+                                                        <div>Last Paid Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
                                                         <div>Valid Till: <strong>{new Date(followupStatus.validUntil).toLocaleDateString('en-IN')}</strong></div>
                                                         {(() => {
-                                                            const remaining = Math.max(0, Math.ceil((new Date(followupStatus.validUntil).getTime() - new Date(intakeForm.visitDate || new Date()).getTime()) / (1000 * 3600 * 24)));
+                                                            const [vY, vM, vD] = String(followupStatus.validUntil).split('T')[0].split('-');
+                                                            const validTillDate = new Date(Number(vY), Number(vM) - 1, Number(vD)).getTime();
+                                                            
+                                                            let todayDate = new Date();
+                                                            todayDate.setHours(0,0,0,0);
+                                                            todayDate = todayDate.getTime();
+                                                            if (intakeForm.visitDate) {
+                                                                const [y, m, d] = String(intakeForm.visitDate).split('-');
+                                                                todayDate = new Date(Number(y), Number(m) - 1, Number(d)).getTime();
+                                                            }
+                                                            
+                                                            const remaining = Math.max(0, Math.ceil((validTillDate - todayDate) / (1000 * 3600 * 24)));
                                                             return <div>Remaining Days: <strong>{remaining === 0 ? 'Expires Today' : `${remaining} Day${remaining > 1 ? 's' : ''}`}</strong></div>;
                                                         })()}
                                                         <div>Fee: <strong>₹0</strong></div>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <div>Last Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
+                                                        <div>Last Paid Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
                                                         <div>Expired On: <strong>{new Date(followupStatus.validUntil).toLocaleDateString('en-IN')}</strong></div>
                                                         <div>Fee Applicable: <strong>₹{followupStatus.fee || intakeForm.consultationFee}</strong></div>
                                                     </>
