@@ -179,13 +179,20 @@ const PatientBillingProfile = () => {
 
     const totalPaidBill = () => {
         if (!billing) return 0;
-        let total = 0;
-        billing.appointments?.filter(a => isPaid(a.paymentStatus)).forEach(a => total += (Number(a.amount) || 0));
-        billing.labReports?.filter(l => isPaid(l.paymentStatus)).forEach(l => total += (Number(l.amount || l.price) || 0));
-        billing.pharmacyOrders?.filter(p => isPaid(p.paymentStatus)).forEach(p => total += (Number(p.totalAmount) || 0));
-        billing.facilityCharges?.filter(f => isPaid(f.paymentStatus)).forEach(f => total += (Number(f.totalAmount) || 0));
-        billing.admissions?.filter(a => isPaid(a.paymentStatus)).forEach(a => total += (Number(a.totalAmount) || 0));
-        return total;
+        
+        // Sum from individual modules
+        let modulePaid = 0;
+        billing.appointments?.filter(a => isPaid(a.paymentStatus) || a.isPaid).forEach(a => modulePaid += (Number(a.amount) || 0));
+        billing.labReports?.filter(l => isPaid(l.paymentStatus) || isPaid(l.status)).forEach(l => modulePaid += (Number(l.amount || l.price) || 0));
+        billing.pharmacyOrders?.filter(p => isPaid(p.paymentStatus) || isPaid(p.status) || isPaid(p.orderStatus)).forEach(p => modulePaid += getPharmacyTotal(p));
+        billing.facilityCharges?.filter(f => isPaid(f.paymentStatus)).forEach(f => modulePaid += (Number(f.totalAmount) || 0));
+        billing.admissions?.forEach(a => modulePaid += (Number(a.paidAmount) || (isPaid(a.paymentStatus) ? Number(a.totalAmount) : 0) || 0));
+
+        // Sum from payment history
+        let historyPaid = 0;
+        billing.paymentTransactions?.filter(p => isPaid(p.status)).forEach(p => historyPaid += (Number(p.amount) || 0));
+
+        return Math.max(modulePaid, historyPaid);
     };
 
     const balanceBill = () => Math.max(0, grandTotalBill() - totalPaidBill());
@@ -431,6 +438,26 @@ const PatientBillingProfile = () => {
                                 <span className="meta-paid">Paid: {fmt(totalPaidBill())}</span>
                                 <span className="meta-balance">Balance: {fmt(balanceBill())}</span>
                             </div>
+                            <button 
+                                onClick={() => window.print()} 
+                                style={{
+                                    marginTop: '12px',
+                                    padding: '8px 12px',
+                                    backgroundColor: '#3b82f6',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontWeight: '500',
+                                    width: '100%',
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }}
+                            >
+                                🖨️ Print Consolidated Bill
+                            </button>
                         </div>
                     </div>
 
