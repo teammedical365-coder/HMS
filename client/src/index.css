@@ -391,3 +391,39 @@ input:user-invalid, select:user-invalid, textarea:user-invalid {
     border: 2px solid #ef4444 !important;
     background-color: #fef2f2 !important;
 }
+
+/* Modal Scroll Fix */
+.modal-content, .modal-body, .erp-modal-content, .dialog-content {
+  overflow-y: auto !important;
+  max-height: 80vh !important;
+  overscroll-behavior-y: contain !important;
+  pointer-events: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* When modal is open, lock the background body scroll */
+body.modal-open, body:has(.modal), body:has(.erp-modal-overlay), body:has(.dialog-overlay) {
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100vw !important;
+  height: 100vh !important;
+}
+
+/* Ensure modal overlay catches all scroll events and allows internal scrolling */
+.modal-overlay, .erp-modal-overlay, .dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999999 !important;
+  overflow-y: auto !important;
+  touch-action: pan-y !important;
+  overscroll-behavior: contain !important;
+}
+
+.modal-content, .erp-modal-content, .dialog-content {
+  position: relative;
+  z-index: 1000000 !important;
+  max-height: 85vh !important;
+  overflow-y: auto !important;
+  touch-action: pan-y !important;
+  overscroll-behavior: contain !important;
+}
