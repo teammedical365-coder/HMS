@@ -15,8 +15,8 @@ import socket from '../utils/socket';
 const DEFAULT_BRANDING = {
     appName: 'Medical 365',
     tagline: 'Healthcare Suite',
-    logoUrl: 'https://www.medical365.in/logo/medical365fav.jpg',
-    faviconUrl: 'https://www.medical365.in/logo/medical365fav.jpg',
+    logoUrl: '/assets/logo.png',
+    faviconUrl: '/assets/logo.png',
     primaryColor: '#14b8a6',
     secondaryColor: '#0a2647',
     accentColor: '#6366f1',
@@ -92,16 +92,15 @@ function applyBrandingToCSS(branding) {
     root.style.setProperty('--gray-900', text);
     root.style.setProperty('--gray-800', text);
 
-    // Favicon (if provided)
-    if (branding.faviconUrl) {
-        let fav = document.querySelector("link[rel*='icon']");
-        if (!fav) {
-            fav = document.createElement('link');
-            fav.rel = 'icon';
-            document.head.appendChild(fav);
-        }
-        fav.href = branding.faviconUrl;
+    // Favicon (dynamic with fallback)
+    const faviconHref = branding.faviconUrl || branding.logoUrl || branding.logo || '/assets/medical365fav.jpg';
+    let fav = document.querySelector("link[rel*='icon']");
+    if (!fav) {
+        fav = document.createElement('link');
+        fav.rel = 'icon';
+        document.head.appendChild(fav);
     }
+    fav.href = faviconHref;
 
     // Page title / app name
     if (branding.appName) {
@@ -122,6 +121,12 @@ function resetBrandingFromCSS() {
     ];
     overrides.forEach(v => root.style.removeProperty(v));
     document.title = 'Medical 365';
+
+    // Reset favicon to default
+    const fav = document.querySelector("link[rel*='icon']");
+    if (fav) {
+        fav.href = '/assets/medical365fav.jpg';
+    }
 }
 
 export const BrandingProvider = ({ children }) => {

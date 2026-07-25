@@ -936,12 +936,15 @@ const CentralAdminDashboard = () => {
             <div className={`centraladmin-container ${selectedHospital ? 'has-sidebar-padding' : ''}`}>
                 {/* Redundant Header Removed (now in TopBar) */}
                 <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 800, background: 'var(--brand-50, #f0fdfa)', color: 'var(--brand-600, #14b8a6)', padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.05em' }}>CENTRAL ADMIN</span>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <img src="/assets/medical365fav.jpg" alt="Hospital Logo" style={{ height: '36px', width: 'auto', marginRight: '10px', objectFit: 'contain' }} />
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 800, background: 'var(--brand-50, #f0fdfa)', color: 'var(--brand-600, #14b8a6)', padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.05em' }}>CENTRAL ADMIN</span>
+                            </div>
+                            <h1 className="ca-dashboard-title" style={{ fontSize: '1.8rem', fontWeight: 850, margin: '8px 0 4px' }}>🏛️ Central Administration Dashboard</h1>
+                            <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Manage all hospitals, staff, and system configurations</p>
                         </div>
-                        <h1 className="ca-dashboard-title" style={{ fontSize: '1.8rem', fontWeight: 850, margin: '8px 0 4px' }}>🏛️ Central Administration Dashboard</h1>
-                        <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Manage all hospitals, staff, and system configurations</p>
                     </div>
                     <button
                         onClick={() => navigate('/supremeadmin/revenue')}

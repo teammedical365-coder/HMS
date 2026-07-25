@@ -41,18 +41,18 @@ const Navbar = () => {
 
         {/* Logo/Brand */}
         <NavLink to="/" className="navbar-brand">
-          <div className="navbar-logo-icon">
-            {branding.logoUrl ? (
-              <img src={branding.logoUrl} alt={branding.appName || 'Medical 365'} className="navbar-custom-logo" />
-            ) : (
-              <BrandLogo />
-            )}
-          </div>
-          {!branding.logoUrl && (
-            <div className="navbar-logo-text">
-              <span className="navbar-logo-main">{branding.appName || 'Medical 365'}</span>
-              <span className="navbar-logo-sub">{branding.tagline || 'Healthcare Suite'}</span>
-            </div>
+          {branding.logoUrl ? (
+            <img src={branding.logoUrl} alt={branding.appName || 'Medical 365'} style={{ height: '36px', width: 'auto', objectFit: 'contain' }} />
+          ) : (
+            <>
+              <div className="navbar-logo-icon">
+                <BrandLogo />
+              </div>
+              <div className="navbar-logo-text">
+                <span className="navbar-logo-main">{branding.appName || 'Medical 365'}</span>
+                <span className="navbar-logo-sub">{branding.tagline || 'Healthcare Suite'}</span>
+              </div>
+            </>
           )}
         </NavLink>
 

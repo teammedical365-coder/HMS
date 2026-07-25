@@ -32,8 +32,8 @@ const getDescForLink = (label) => {
 
 const operationLinks = [
     { icon: '👨‍⚕️', label: 'Doctors', desc: 'Manage doctor profiles & schedules', path: '/admin/doctors', bg: '#dbeafe', color: '#2563eb' },
-    { icon: '🧪', label: 'Labs', desc: 'Configure lab departments', path: '/admin/labs', bg: '#f3e8ff', color: '#9333ea' },
-    { icon: '💊', label: 'Pharmacy', desc: 'Pharmacy inventory & orders', path: '/admin/pharmacy', bg: '#ffedd5', color: '#ea580c' },
+    { icon: '🧪', label: 'Labs', desc: 'Configure lab departments', path: '/admin/lab-tests', bg: '#f3e8ff', color: '#9333ea' },
+    { icon: '💊', label: 'Pharmacy', desc: 'Pharmacy inventory & orders', path: '/pharmacy/inventory', bg: '#ffedd5', color: '#ea580c' },
     { icon: '🛠️', label: 'Services', desc: 'Hospital services & pricing', path: '/admin/services', bg: '#fefce8', color: '#ca8a04' },
     { icon: '👥', label: 'Manage Users', desc: 'View and manage all staff', path: '/admin/users', bg: '#f0f9ff', color: '#0284c7' },
     { icon: '📝', label: 'Question Library', desc: 'Manage diagnostic questions', path: '/hospitaladmin/question-library', bg: '#fdf2f8', color: '#be185d' },
