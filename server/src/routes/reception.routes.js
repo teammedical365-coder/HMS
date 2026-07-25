@@ -577,8 +577,18 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
         const { patientId } = req.params;
         const { department, auto, date } = req.query;
         const mongoose = require('mongoose');
+<<<<<<< HEAD
         const isObjectId = mongoose.Types.ObjectId.isValid(patientId) && patientId.length === 24;
         const patient = await User.findOne(isObjectId ? { _id: patientId } : { patientId: patientId });
+=======
+        let patientQuery = {};
+        if (mongoose.Types.ObjectId.isValid(patientId) && String(patientId).length === 24) {
+            patientQuery = { _id: patientId };
+        } else {
+            patientQuery = { $or: [{ patientId: patientId }, { mrn: patientId }] };
+        }
+        const patient = await User.findOne(patientQuery);
+>>>>>>> 01648d71fe5c1440f8cab1ed263d19c446400546
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
         const hospitalId = req.user.hospitalId || patient.hospitalId;
         if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital linked' });
@@ -592,7 +602,8 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
         if (auto === 'true') {
             const lastAppt = await Appointment.findOne({
                 userId: patient._id,
-                status: { $ne: 'cancelled' }
+                status: { $ne: 'cancelled' },
+                $or: [{ amount: { $gt: 0 } }, { visitType: 'New Consultation' }]
             }).sort({ appointmentDate: -1 });
 
             if (lastAppt) {
@@ -607,7 +618,8 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
             const lastApptForDept = await Appointment.findOne({
                 userId: patient._id,
                 department: selectedDept,
-                status: { $ne: 'cancelled' }
+                status: { $ne: 'cancelled' },
+                $or: [{ amount: { $gt: 0 } }, { visitType: 'New Consultation' }]
             }).sort({ appointmentDate: -1 });
 
             if (!lastApptForDept || !lastApptForDept.appointmentDate) {
@@ -667,7 +679,8 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
                         const lastAppt = await Appointment.findOne({
                             userId: patient._id,
                             department: dept,
-                            status: { $ne: 'cancelled' }
+                            status: { $ne: 'cancelled' },
+                            $or: [{ amount: { $gt: 0 } }, { visitType: 'New Consultation' }]
                         }).sort({ appointmentDate: -1 });
 
                         if (lastAppt && lastAppt.appointmentDate) {
@@ -729,6 +742,18 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
         const doctor = await Doctor.findById(doctorId);
         if (!doctor) return res.status(404).json({ success: false, message: 'Doctor not found' });
 
+        // Validate doctor's day availability
+        const [year, month, day] = String(date).split('T')[0].split('-');
+        const bookingDateObj = new Date(Number(year), Number(month) - 1, Number(day));
+        const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const dayName = daysOfWeek[bookingDateObj.getDay()];
+        
+        const isAvailable = doctor.availability && doctor.availability[dayName] && doctor.availability[dayName].available === true;
+        if (!isAvailable) {
+            const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+            return res.status(400).json({ success: false, message: `Doctor ${doctor.name} is not available on ${capitalizedDay}s` });
+        }
+
         const hospitalId = req.user.hospitalId || patient.hospitalId;
 
         // Determine appointment mode
@@ -787,7 +812,8 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
                 const lastAppt = await Appointment.findOne({
                     userId: patient._id,
                     department,
-                    status: { $ne: 'cancelled' }
+                    status: { $ne: 'cancelled' },
+                    $or: [{ amount: { $gt: 0 } }, { visitType: 'New Consultation' }]
                 }).sort({ appointmentDate: -1 });
 
                 if (lastAppt && lastAppt.appointmentDate) {

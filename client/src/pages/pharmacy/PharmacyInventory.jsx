@@ -212,8 +212,11 @@ const PharmacyInventory = () => {
             </div>
 
             {showAddModal && (
-                <div className="modal-overlay !fixed !inset-0 !z-[9999] !flex !items-center !justify-center !bg-black/50 !overflow-hidden">
-                    <div className="modal-content inventory-modal !bg-white !rounded-xl !shadow-xl !max-h-[85vh] !w-full !max-w-2xl !flex !flex-col !overflow-hidden" style={{ height: '85vh', display: 'flex', flexDirection: 'column' }}>
+                <div className="modal-overlay !fixed !inset-0 !z-[9999] !flex !items-center !justify-center !bg-black/50 !overflow-hidden" 
+                     style={{ position: 'fixed', inset: 0, overflowY: 'auto', zIndex: 9999 }} 
+                     onWheel={(e) => e.stopPropagation()}>
+                    <div className="modal-content inventory-modal !bg-white !rounded-xl !shadow-xl !max-h-[85vh] !w-full !max-w-2xl !flex !flex-col" 
+                         style={{ height: '85vh', maxHeight: '85vh', overflowY: 'auto', overscrollBehavior: 'contain', display: 'flex', flexDirection: 'column' }}>
                         <div className="modal-header !p-6 !border-b !flex !justify-between !items-center !bg-white">
                             <div>
                                 <h2>{editId ? 'Edit Medication' : 'Add New Medication'}</h2>

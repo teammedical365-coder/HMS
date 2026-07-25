@@ -169,22 +169,7 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
                 ], 
                 ...hFilter 
             };
-            if (department) {
-                clinicApptQuery.$and = [{
-                    $or: [
-                        { department: { $regex: new RegExp(`^${department}$`, 'i') } },
-                        { serviceName: { $regex: new RegExp(`^${department}$`, 'i') } }
-                    ]
-                }];
-            } else {
-                clinicApptQuery.$and = [{
-                    $or: [
-                        { department: { $in: [null, ''] } },
-                        { serviceName: { $in: [null, ''] } },
-                        { department: { $exists: false } }
-                    ]
-                }];
-            }
+            // Removed department filtering to fetch all appointments across the hospital
             appointments = await Appointment.find(clinicApptQuery).lean();
             // Clinic treatment plans
             plans = await TreatmentPlan.find({ clinicPatientId: { $in: objectIdList }, ...hFilter }).lean();
@@ -235,29 +220,15 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
             let pharmaQuery = { $or: [{ userId: { $in: objectIdList } }, { patientId: { $in: idList } }], ...hFilter };
             let apptQuery = { $or: [{ userId: { $in: objectIdList } }, { patientId: { $in: idList } }], ...hFilter };
 
-            if (department) {
-                apptQuery.$and = [{
-                    $or: [
-                        { department: { $regex: new RegExp(`^${department}$`, 'i') } },
-                        { serviceName: { $regex: new RegExp(`^${department}$`, 'i') } }
-                    ]
-                }];
-            } else {
-                apptQuery.$and = [{
-                    $or: [
-                        { department: { $in: [null, ''] } },
-                        { serviceName: { $in: [null, ''] } },
-                        { department: { $exists: false } }
-                    ]
-                }];
-            }
+            // Removed department filtering to fetch all appointments across the hospital
 
             appointments = await Appointment.find(apptQuery).lean();
 
-            const deptApptIds = appointments.map(a => a._id);
-            visitQuery.appointmentId = { $in: deptApptIds };
-            labQuery.appointmentId = { $in: deptApptIds };
-            pharmaQuery.appointmentId = { $in: deptApptIds };
+            // Removed appointmentId filtering from visitQuery, labQuery, pharmaQuery to fetch all records
+            // const deptApptIds = appointments.map(a => a._id);
+            // visitQuery.appointmentId = { $in: deptApptIds };
+            // labQuery.appointmentId = { $in: deptApptIds };
+            // pharmaQuery.appointmentId = { $in: deptApptIds };
 
             [visits, labs, pharmacies] = await Promise.all([
                 ClinicalVisit.find(visitQuery).lean(),
@@ -331,8 +302,8 @@ router.post('/:id/consent', verifyToken, resolveTenant, consentUpload.single('co
         const hid = req.user.hospitalId;
 
         const mongoose = require('mongoose');
-        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && userId.length === 24;
-        const userQuery = isObjectId ? { _id: userId } : { patientId: userId };
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24;
+        const userQuery = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
         if (hid) userQuery.hospitalId = hid;
 
         const user = await MasterUser.findOne(userQuery);
@@ -379,8 +350,8 @@ router.get('/:id/consent', verifyToken, resolveTenant, async (req, res) => {
         const hid = req.user.hospitalId;
 
         const mongoose = require('mongoose');
-        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && userId.length === 24;
-        const userQuery = isObjectId ? { _id: userId } : { patientId: userId };
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24;
+        const userQuery = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
         if (hid) userQuery.hospitalId = hid;
 
         const user = await MasterUser.findOne(userQuery).lean();
@@ -402,8 +373,9 @@ router.delete('/:id/consent/:index', verifyToken, resolveTenant, async (req, res
         const { fileId } = req.body || {};
 
         const mongoose = require('mongoose');
-        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && userId.length === 24;
-        const user = await MasterUser.findOne(isObjectId ? { _id: userId } : { patientId: userId });
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24;
+        const userQuery = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
+        const user = await MasterUser.findOne(userQuery);
         if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });
 
         if (!user.fertilityProfile || !Array.isArray(user.fertilityProfile.consentForms)) {
@@ -448,8 +420,8 @@ router.post('/:id/documents', verifyToken, resolveTenant, consentUpload.single('
         const hid = req.user.hospitalId;
 
         const mongoose = require('mongoose');
-        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && userId.length === 24;
-        const userQuery = isObjectId ? { _id: userId } : { patientId: userId };
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24;
+        const userQuery = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
         if (hid) userQuery.hospitalId = hid;
 
         const user = await MasterUser.findOne(userQuery);
@@ -497,8 +469,8 @@ router.get('/:id/documents', verifyToken, resolveTenant, async (req, res) => {
         const hid = req.user.hospitalId;
 
         const mongoose = require('mongoose');
-        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && userId.length === 24;
-        const userQuery = isObjectId ? { _id: userId } : { patientId: userId };
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24;
+        const userQuery = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
         if (hid) userQuery.hospitalId = hid;
 
         const user = await MasterUser.findOne(userQuery).lean();
@@ -525,27 +497,11 @@ router.get('/:id/documents', verifyToken, resolveTenant, async (req, res) => {
 
         let department = req.query.department;
 
-
         let deptApptIds = [];
         const Appointment = require('../models/appointment.model');
         let apptQuery = { $or: [{ userId: userId }, { patientId: userId }], hospitalId: hid };
         
-        if (department) {
-            apptQuery.$and = [{
-                $or: [
-                    { department: { $regex: new RegExp(`^${department}$`, 'i') } },
-                    { serviceName: { $regex: new RegExp(`^${department}$`, 'i') } }
-                ]
-            }];
-        } else {
-            apptQuery.$and = [{
-                $or: [
-                    { department: { $in: [null, ''] } },
-                    { serviceName: { $in: [null, ''] } },
-                    { department: { $exists: false } }
-                ]
-            }];
-        }
+        // Removed department filtering to fetch all appointments across the hospital
         
         const appts = await Appointment.find(apptQuery).lean();
         deptApptIds = appts.map(a => a._id);
@@ -554,7 +510,7 @@ router.get('/:id/documents', verifyToken, resolveTenant, async (req, res) => {
         const LabReport = require('../models/labReport.model');
         let labQuery = { $or: [{ userId: userId }, { patientId: userId }] };
         if (hid) labQuery.hospitalId = hid;
-        labQuery.appointmentId = { $in: deptApptIds };
+        // Removed labQuery.appointmentId filtering to fetch all lab reports
         const labReports = await LabReport.find({ ...labQuery, 'data.fileUrl': { $ne: null } }).lean();
         const labDocs = labReports.map(l => ({
             fileName: l.data?.reportName || l.data?.testName || 'Lab Investigation Report',
@@ -567,16 +523,9 @@ router.get('/:id/documents', verifyToken, resolveTenant, async (req, res) => {
 
         const allCombined = [...baseDocs, ...prevReports, ...doctorReports, ...labDocs];
         
-        // Strictly isolate documents by department if requested
+        // Strictly isolate documents by department if requested - removed to fetch all documents
         const filteredCombined = allCombined.filter(doc => {
-            if (!department) return true;
-            if (doc.department) {
-                return doc.department.toLowerCase() === department.toLowerCase();
-            }
-            if (doc.appointmentId && deptApptIds.some(id => id.toString() === doc.appointmentId.toString())) {
-                return true;
-            }
-            return false;
+            return true;
         });
 
         const seen = new Set();
@@ -606,8 +555,9 @@ router.delete('/:id/documents/:index', verifyToken, resolveTenant, async (req, r
         const { fileId, url, fileName } = req.body || {};
 
         const mongoose = require('mongoose');
-        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && userId.length === 24;
-        const user = await MasterUser.findOne(isObjectId ? { _id: userId } : { patientId: userId });
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24;
+        const userQuery = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
+        const user = await MasterUser.findOne(userQuery);
         if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });
 
         if (!user.fertilityProfile) user.fertilityProfile = {};
@@ -728,19 +678,12 @@ router.delete('/:id/documents/:index', verifyToken, resolveTenant, async (req, r
 
         const allCombined = [...baseDocs, ...prevReports, ...doctorReports, ...labDocs];
         
-        // Strictly isolate documents by department if requested (optional for DELETE response but consistent)
+        // Strictly isolate documents by department if requested (optional for DELETE response but consistent) - removed
         const department = req.query.department || '';
         const deptApptIdsStr = req.query.deptApptIds ? req.query.deptApptIds.split(',') : [];
 
         const filteredCombined = allCombined.filter(doc => {
-            if (!department) return true;
-            if (doc.department) {
-                return doc.department.toLowerCase() === department.toLowerCase();
-            }
-            if (doc.appointmentId && deptApptIdsStr.includes(doc.appointmentId.toString())) {
-                return true;
-            }
-            return false;
+            return true;
         });
 
         const seen = new Set();
