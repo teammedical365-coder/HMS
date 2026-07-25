@@ -330,7 +330,9 @@ router.post('/:id/consent', verifyToken, resolveTenant, consentUpload.single('co
         const userId = req.params.id;
         const hid = req.user.hospitalId;
 
-        const userQuery = { _id: userId };
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && userId.length === 24;
+        const userQuery = isObjectId ? { _id: userId } : { patientId: userId };
         if (hid) userQuery.hospitalId = hid;
 
         const user = await MasterUser.findOne(userQuery);
@@ -376,7 +378,9 @@ router.get('/:id/consent', verifyToken, resolveTenant, async (req, res) => {
         const userId = req.params.id;
         const hid = req.user.hospitalId;
 
-        const userQuery = { _id: userId };
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && userId.length === 24;
+        const userQuery = isObjectId ? { _id: userId } : { patientId: userId };
         if (hid) userQuery.hospitalId = hid;
 
         const user = await MasterUser.findOne(userQuery).lean();
@@ -397,7 +401,9 @@ router.delete('/:id/consent/:index', verifyToken, resolveTenant, async (req, res
         const index = parseInt(req.params.index, 10);
         const { fileId } = req.body || {};
 
-        const user = await MasterUser.findOne({ _id: userId });
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && userId.length === 24;
+        const user = await MasterUser.findOne(isObjectId ? { _id: userId } : { patientId: userId });
         if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });
 
         if (!user.fertilityProfile || !Array.isArray(user.fertilityProfile.consentForms)) {
@@ -441,7 +447,9 @@ router.post('/:id/documents', verifyToken, resolveTenant, consentUpload.single('
         const userId = req.params.id;
         const hid = req.user.hospitalId;
 
-        const userQuery = { _id: userId };
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && userId.length === 24;
+        const userQuery = isObjectId ? { _id: userId } : { patientId: userId };
         if (hid) userQuery.hospitalId = hid;
 
         const user = await MasterUser.findOne(userQuery);
@@ -488,7 +496,9 @@ router.get('/:id/documents', verifyToken, resolveTenant, async (req, res) => {
         const userId = req.params.id;
         const hid = req.user.hospitalId;
 
-        const userQuery = { _id: userId };
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && userId.length === 24;
+        const userQuery = isObjectId ? { _id: userId } : { patientId: userId };
         if (hid) userQuery.hospitalId = hid;
 
         const user = await MasterUser.findOne(userQuery).lean();
@@ -514,7 +524,7 @@ router.get('/:id/documents', verifyToken, resolveTenant, async (req, res) => {
         })) : [];
 
         let department = req.query.department;
-        const mongoose = require('mongoose');
+
 
         let deptApptIds = [];
         const Appointment = require('../models/appointment.model');
@@ -595,7 +605,9 @@ router.delete('/:id/documents/:index', verifyToken, resolveTenant, async (req, r
         const index = parseInt(req.params.index, 10);
         const { fileId, url, fileName } = req.body || {};
 
-        const user = await MasterUser.findOne({ _id: userId });
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId) && userId.length === 24;
+        const user = await MasterUser.findOne(isObjectId ? { _id: userId } : { patientId: userId });
         if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });
 
         if (!user.fertilityProfile) user.fertilityProfile = {};

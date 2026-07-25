@@ -259,6 +259,10 @@ export const reportAPI = {
     getReportsByAppointment: async (appointmentId) => {
         const response = await apiClient.get(`/api/reports/${appointmentId}`);
         return response.data;
+    },
+    generateAISummary: async (fileUrl, mimeType) => {
+        const response = await apiClient.post('/api/reports/summary', { fileUrl, mimeType });
+        return response.data;
     }
 };
 

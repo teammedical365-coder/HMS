@@ -1,9 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { reportAPI } from '../utils/api';
+import { useAuth } from '../store/hooks';
 
 const AppointmentReports = ({ appointmentId, prescriptions = [] }) => {
     const [reports, setReports] = useState([]);
     const [loading, setLoading] = useState(false);
+    
+    // AI Summary States
+    const [aiLoading, setAiLoading] = useState({});
+    const [aiSummaries, setAiSummaries] = useState({});
+    const [aiErrors, setAiErrors] = useState({});
+
+    const { user } = useAuth();
+    const roleName = user?._roleData?.name?.toLowerCase() || (typeof user?.role === 'string' ? user.role.toLowerCase() : '');
+    const isDoctor = roleName.includes('doctor');
 
     useEffect(() => {
         if (!appointmentId) return;
@@ -39,6 +49,24 @@ const AppointmentReports = ({ appointmentId, prescriptions = [] }) => {
 
     const allFiles = Array.from(new Map(rawFiles.map(f => [f.url || f.name, f])).values());
 
+    const handleGenerateSummary = async (fileUrl, mimeType, index) => {
+        setAiLoading(prev => ({ ...prev, [index]: true }));
+        setAiErrors(prev => ({ ...prev, [index]: null }));
+        try {
+            const res = await reportAPI.generateAISummary(fileUrl, mimeType);
+            if (res.success) {
+                setAiSummaries(prev => ({ ...prev, [index]: res.summary }));
+            } else {
+                setAiErrors(prev => ({ ...prev, [index]: res.message || 'Failed to generate summary.' }));
+            }
+        } catch (error) {
+            console.error("AI Summary error:", error);
+            setAiErrors(prev => ({ ...prev, [index]: 'An error occurred while generating summary.' }));
+        } finally {
+            setAiLoading(prev => ({ ...prev, [index]: false }));
+        }
+    };
+
     return (
         <div>
             <h3 style={{ marginBottom: '16px', color: '#1e293b' }}>📁 Appointment Reports & Files</h3>
@@ -52,25 +80,88 @@ const AppointmentReports = ({ appointmentId, prescriptions = [] }) => {
             {allFiles.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {allFiles.map((f, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                            <div style={{ fontSize: '1.4rem' }}>{isPDF(f.mimetype) ? '📄' : '🖼️'}</div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {f.name || 'Unnamed file'}
+                        <div key={i} style={{ display: 'flex', flexDirection: 'column', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px' }}>
+                                <div style={{ fontSize: '1.4rem' }}>{isPDF(f.mimetype) ? '📄' : '🖼️'}</div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {f.name || 'Unnamed file'}
+                                    </div>
+                                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                        {f.source === 'prescription' ? '📝 Prescription' : '📋 Report'}
+                                        {f.uploadedByRole && ` (via ${f.uploadedByRole})`}
+                                        {f.uploadedAt && ` · ${new Date(f.uploadedAt).toLocaleDateString('en-IN')}`}
+                                    </div>
                                 </div>
-                                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
-                                    {f.source === 'prescription' ? '📝 Prescription' : '📋 Report'}
-                                    {f.uploadedByRole && ` (via ${f.uploadedByRole})`}
-                                    {f.uploadedAt && ` · ${new Date(f.uploadedAt).toLocaleDateString('en-IN')}`}
+                                
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    {isDoctor && f.source === 'report' && f.url && (
+                                        <button 
+                                            onClick={() => handleGenerateSummary(f.url, f.mimetype, i)}
+                                            disabled={aiLoading[i]}
+                                            style={{
+                                                background: '#8b5cf6', color: '#fff', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: 'none', cursor: aiLoading[i] ? 'not-allowed' : 'pointer', opacity: aiLoading[i] ? 0.7 : 1
+                                            }}
+                                        >
+                                            {aiLoading[i] ? '⏳ Processing...' : '🤖 AI Report Summary'}
+                                        </button>
+                                    )}
+
+                                    {f.url ? (
+                                        <a href={f.url} target="_blank" rel="noreferrer"
+                                            style={{ background: '#3b82f6', color: '#fff', padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                                            {isPDF(f.mimetype) ? 'Open PDF' : 'View'}
+                                        </a>
+                                    ) : (
+                                        <span style={{ color: '#94a3b8', fontSize: '12px' }}>No URL</span>
+                                    )}
                                 </div>
                             </div>
-                            {f.url ? (
-                                <a href={f.url} target="_blank" rel="noreferrer"
-                                    style={{ background: '#3b82f6', color: '#fff', padding: '6px 14px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                                    {isPDF(f.mimetype) ? 'Open PDF' : 'View'}
-                                </a>
-                            ) : (
-                                <span style={{ color: '#94a3b8', fontSize: '12px' }}>No URL</span>
+                            
+                            {/* AI Summary Display */}
+                            {aiErrors[i] && (
+                                <div style={{ padding: '10px 14px', background: '#fee2e2', color: '#991b1b', fontSize: '12px', borderTop: '1px solid #fecaca' }}>
+                                    ❌ {aiErrors[i]}
+                                </div>
+                            )}
+                            {aiSummaries[i] && (
+                                <div style={{ padding: '16px', background: '#f5f3ff', borderTop: '1px solid #ede9fe' }}>
+                                    <h4 style={{ margin: '0 0 12px 0', color: '#5b21b6', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        🤖 AI Report Summary
+                                    </h4>
+                                    
+                                    <div style={{ marginBottom: '10px' }}>
+                                        <strong style={{ fontSize: '12px', color: '#4c1d95' }}>Report Type:</strong>
+                                        <div style={{ fontSize: '13px', color: '#334155', marginTop: '2px' }}>{aiSummaries[i].ReportType || 'Unknown'}</div>
+                                    </div>
+                                    
+                                    <div style={{ marginBottom: '10px' }}>
+                                        <strong style={{ fontSize: '12px', color: '#4c1d95' }}>Overall Summary:</strong>
+                                        <div style={{ fontSize: '13px', color: '#334155', marginTop: '2px', lineHeight: '1.5' }}>{aiSummaries[i].OverallSummary || 'No summary available.'}</div>
+                                    </div>
+                                    
+                                    {aiSummaries[i].ImportantFindings && aiSummaries[i].ImportantFindings.length > 0 && (
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <strong style={{ fontSize: '12px', color: '#4c1d95' }}>Important Findings:</strong>
+                                            <ul style={{ margin: '4px 0 0 0', paddingLeft: '20px', fontSize: '13px', color: '#334155' }}>
+                                                {aiSummaries[i].ImportantFindings.map((finding, idx) => (
+                                                    <li key={idx} style={{ marginBottom: '3px' }}>{finding}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                    
+                                    {aiSummaries[i].AbnormalValues && aiSummaries[i].AbnormalValues.length > 0 && (
+                                        <div>
+                                            <strong style={{ fontSize: '12px', color: '#ef4444' }}>Abnormal Values:</strong>
+                                            <ul style={{ margin: '4px 0 0 0', paddingLeft: '20px', fontSize: '13px', color: '#b91c1c' }}>
+                                                {aiSummaries[i].AbnormalValues.map((val, idx) => (
+                                                    <li key={idx} style={{ marginBottom: '3px' }}>{val}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </div>
                     ))}

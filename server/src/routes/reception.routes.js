@@ -576,7 +576,9 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
     try {
         const { patientId } = req.params;
         const { department, auto, date } = req.query;
-        const patient = await User.findById(patientId);
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(patientId) && patientId.length === 24;
+        const patient = await User.findOne(isObjectId ? { _id: patientId } : { patientId: patientId });
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
         const hospitalId = req.user.hospitalId || patient.hospitalId;
         if (!hospitalId) return res.status(400).json({ success: false, message: 'No hospital linked' });
@@ -719,7 +721,9 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             return res.status(400).json({ success: false, message: 'Cannot book appointments in the past' });
         }
 
-        const patient = await User.findById(patientId);
+        const mongoose = require('mongoose');
+        const isObjectId = mongoose.Types.ObjectId.isValid(patientId) && patientId.length === 24;
+        const patient = await User.findOne(isObjectId ? { _id: patientId } : { patientId: patientId });
         if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
         const doctor = await Doctor.findById(doctorId);

@@ -4,6 +4,8 @@ const multer = require('multer');
 const { verifyToken } = require('../middleware/auth.middleware');
 const imagekit = require('../utils/imagekit');
 const Report = require('../models/report.model');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const axios = require('axios');
 
 // Configure Multer for memory storage (Required for ImageKit)
 const upload = multer({
@@ -144,6 +146,88 @@ router.get('/:appointmentId', verifyToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch reports."
+    });
+  }
+});
+
+// Route: POST /api/reports/summary
+router.post('/summary', verifyToken, async (req, res) => {
+  try {
+    const { fileUrl, mimeType } = req.body;
+    
+    if (!fileUrl) {
+      return res.status(400).json({ success: false, message: "fileUrl is required." });
+    }
+    
+    // Only allow access if Doctor
+    let isDoctor = false;
+    if (req.user && req.user.role) {
+      const roleStr = (req.user._roleData?.name || req.user.role).toString().toLowerCase();
+      if (roleStr.includes('doctor')) {
+        isDoctor = true;
+      }
+    }
+    
+    if (!isDoctor) {
+      return res.status(403).json({ success: false, message: "Only doctors can generate AI summaries." });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ success: false, message: "GEMINI_API_KEY not configured on server." });
+    }
+
+    // 1. Download file
+    const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+    const buffer = Buffer.from(response.data, 'binary');
+    const base64Data = buffer.toString('base64');
+    
+    // 2. Initialize Gemini AI
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    // 3. Define prompt
+    const prompt = `You are a medical AI assistant. Analyze the provided medical report and return ONLY a valid JSON string with the following structure (no markdown, no other text):
+{
+  "ReportType": "Identified report type (e.g. Complete Blood Count, X-Ray, Unknown)",
+  "OverallSummary": "Short overall summary (4-8 lines) of the report's main findings. NO diagnosis or treatment advice.",
+  "ImportantFindings": ["Finding 1", "Finding 2"],
+  "AbnormalValues": ["Parameter: Value", "Parameter: Value"]
+}
+Only include AbnormalValues if there are any, otherwise an empty array.
+ImportantFindings should just be bullet points as an array of strings.`;
+
+    const imageParts = [
+      {
+        inlineData: {
+          data: base64Data,
+          mimeType: mimeType || 'application/pdf'
+        }
+      }
+    ];
+
+    const aiResult = await model.generateContent([prompt, ...imageParts]);
+    const responseText = aiResult.response.text();
+    
+    // Attempt to parse JSON. Gemini might wrap in \`\`\`json \`\`\`
+    let cleanedText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    let summaryJson;
+    try {
+      summaryJson = JSON.parse(cleanedText);
+    } catch (e) {
+      console.error("AI returned invalid JSON:", responseText);
+      return res.status(500).json({ success: false, message: "Failed to parse AI response." });
+    }
+
+    res.status(200).json({
+      success: true,
+      summary: summaryJson
+    });
+
+  } catch (error) {
+    console.error('[Generate Summary Route] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate AI summary."
     });
   }
 });
