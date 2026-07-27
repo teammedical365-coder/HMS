@@ -1440,7 +1440,7 @@ const CentralAdminDashboard = () => {
                                                 {clinic.phone && <div>📞 {clinic.phone}</div>}
                                                 {clinic.email && <div>✉️ {clinic.email}</div>}
                                                 <div style={{ marginTop: '6px' }}>💰 Fee: {formatCurrency(clinic.defaultFee)}</div>
-                                                {clinic.slug && <div style={{ marginTop: '4px', fontFamily: 'monospace', fontSize: '11px', color: '#94a3b8' }}>🔗 /{clinic.slug}</div>}
+                                                {clinic.slug && <div style={{ marginTop: '4px' }} onClick={e => e.stopPropagation()}><a href={`${window.location.protocol}//${clinic.slug}.${getBaseHost()}`} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'monospace', fontSize: '11px', color: '#14b8a6', textDecoration: 'none' }}>🔗 {clinic.slug}.{getBaseHost()}</a></div>}
                                                 <div style={{ marginTop: '8px', padding: '6px 10px', borderRadius: '6px', background: clinic.adminUserId ? '#f0fdf4' : '#fff7ed', border: `1px solid ${clinic.adminUserId ? '#bbf7d0' : '#fed7aa'}` }}>
                                                     {clinic.adminUserId
                                                         ? <span style={{ color: '#16a34a', fontSize: '12px', fontWeight: 600 }}>👤 Admin: {clinic.adminUserId.name}</span>
@@ -1480,7 +1480,7 @@ const CentralAdminDashboard = () => {
                                     <p style={{ color: '#64748b', margin: '4px 0 0' }}>
                                         {selectedClinic.city}{selectedClinic.state ? `, ${selectedClinic.state}` : ''}
                                         {selectedClinic.phone ? ` · 📞 ${selectedClinic.phone}` : ''}
-                                        {selectedClinic.slug ? ` · 🔗 /${selectedClinic.slug}` : ''}
+                                        {selectedClinic.slug ? <> · <a href={`${window.location.protocol}//${selectedClinic.slug}.${getBaseHost()}`} target="_blank" rel="noopener noreferrer" style={{ color: '#14b8a6', textDecoration: 'none', fontFamily: 'monospace', fontSize: '13px' }}>🔗 {selectedClinic.slug}.{getBaseHost()}</a></> : ''}
                                     </p>
                                 </div>
                                 <span style={{ marginLeft: 'auto', padding: '4px 12px', borderRadius: '6px', fontWeight: 600, fontSize: '13px', background: selectedClinic.isActive ? '#dcfce7' : '#fee2e2', color: selectedClinic.isActive ? '#16a34a' : '#dc2626' }}>
