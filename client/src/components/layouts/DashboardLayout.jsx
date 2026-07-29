@@ -52,6 +52,7 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
             return [
                 { label: 'Dashboard', path: '/doctor/cases', icon: <FiClipboard /> },
                 { label: 'My Patients', path: '/doctor/dashboard', icon: <FiUsers /> },
+                { label: '🤖 AI Assistant', path: '/doctor/ai-assistant', icon: <FiFileText /> },
             ];
         }
         if (role === 'reception' || role === 'receptionist') {

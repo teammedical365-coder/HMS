@@ -263,6 +263,14 @@ export const reportAPI = {
     generateAISummary: async (fileUrl, mimeType) => {
         const response = await apiClient.post('/api/reports/summary', { fileUrl, mimeType });
         return response.data;
+    },
+    searchReports: async (patientId, keyword) => {
+        const response = await apiClient.post('/api/reports/search', { patientId, keyword });
+        return response.data;
+    },
+    compareReports: async (latestFileUrl, latestMimeType, previousFileUrl, previousMimeType) => {
+        const response = await apiClient.post('/api/reports/compare', { latestFileUrl, latestMimeType, previousFileUrl, previousMimeType });
+        return response.data;
     }
 };
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { patientAPI, receptionAPI } from '../../utils/api';
+import { patientAPI, receptionAPI, reportAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { 
@@ -45,6 +45,8 @@ const HospitalPatientProfileContent = () => {
                         permissions.includes('reception_access') || 
                         permissions.includes('*');
 
+    const isDoctor = dynRole.includes('doctor') || userRole.includes('doctor');
+
     // State
     const [patientData, setPatientData] = useState(null);
     const [timeline, setTimeline] = useState([]);
@@ -58,6 +60,29 @@ const HospitalPatientProfileContent = () => {
 
     const [documentList, setDocumentList] = useState([]);
     const [_activeFollowups, setActiveFollowups] = useState([]);
+
+    // AI Summary States
+    const [aiLoading, setAiLoading] = useState({});
+    const [aiSummaries, setAiSummaries] = useState({});
+    const [aiErrors, setAiErrors] = useState({});
+
+    const handleGenerateSummary = async (fileUrl, mimeType, index) => {
+        setAiLoading(prev => ({ ...prev, [index]: true }));
+        setAiErrors(prev => ({ ...prev, [index]: null }));
+        try {
+            const res = await reportAPI.generateAISummary(fileUrl, mimeType);
+            if (res.success) {
+                setAiSummaries(prev => ({ ...prev, [index]: res.summary }));
+            } else {
+                setAiErrors(prev => ({ ...prev, [index]: res.message || 'Failed to generate summary.' }));
+            }
+        } catch (error) {
+            console.error("AI Summary error:", error);
+            setAiErrors(prev => ({ ...prev, [index]: 'An error occurred while generating summary.' }));
+        } finally {
+            setAiLoading(prev => ({ ...prev, [index]: false }));
+        }
+    };
     const [currentFollowupStatus, setCurrentFollowupStatus] = useState(null);
     const [searchParams] = useSearchParams();
 
@@ -827,25 +852,27 @@ const HospitalPatientProfileContent = () => {
                         ) : (
                             <div className="upp-list-items">
                                 {displayDocuments.map((doc, i) => (
-                                    <div key={i} className="upp-list-card">
-                                        <div className="upp-list-info">
-                                            <span className="upp-list-title">{doc.fileName || 'Hospital Document'}</span>
-                                            <span className="upp-list-sub">{doc.docType || 'General'} • {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('en-IN') : 'Saved'}</span>
-                                        </div>
-                                        <div className="upp-list-action">
-                                            {doc.url && (
-                                                <>
-                                                    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="upp-icon-btn" title="View">
-                                                        <FiEye />
-                                                    </a>
-                                                    <a href={doc.url} download target="_blank" rel="noopener noreferrer" className="upp-icon-btn upp-icon-btn-download" title="Download">
-                                                        <FiDownload />
-                                                    </a>
-                                                </>
-                                            )}
-                                            <button type="button" onClick={() => handleDeleteDocument(i, doc)} className="upp-icon-btn upp-icon-btn-danger" title="Delete">
-                                                <FiTrash2 />
-                                            </button>
+                                    <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                        <div className="upp-list-card">
+                                            <div className="upp-list-info">
+                                                <span className="upp-list-title">{doc.fileName || 'Hospital Document'}</span>
+                                                <span className="upp-list-sub">{doc.docType || 'General'} • {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('en-IN') : 'Saved'}</span>
+                                            </div>
+                                            <div className="upp-list-action">
+                                                {doc.url && (
+                                                    <>
+                                                        <a href={doc.url} target="_blank" rel="noopener noreferrer" className="upp-icon-btn" title="View">
+                                                            <FiEye />
+                                                        </a>
+                                                        <a href={doc.url} download target="_blank" rel="noopener noreferrer" className="upp-icon-btn upp-icon-btn-download" title="Download">
+                                                            <FiDownload />
+                                                        </a>
+                                                    </>
+                                                )}
+                                                <button type="button" onClick={() => handleDeleteDocument(i, doc)} className="upp-icon-btn upp-icon-btn-danger" title="Delete">
+                                                    <FiTrash2 />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
