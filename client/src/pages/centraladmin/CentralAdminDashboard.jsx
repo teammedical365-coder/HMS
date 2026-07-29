@@ -933,22 +933,30 @@ const CentralAdminDashboard = () => {
     // ==========================================
     return (
         <div className="centraladmin-page">
-            <div className={`centraladmin-container ${selectedHospital ? 'has-sidebar-padding' : ''}`}>
+            <div className={`centraladmin-container px-3 md:px-6 w-full ${selectedHospital ? 'has-sidebar-padding' : ''}`}>
                 {/* Redundant Header Removed (now in TopBar) */}
-                <div className="flex flex-col md:flex-row flex-wrap md:flex-nowrap items-start md:items-end justify-between md:justify-between gap-4 w-full" style={{ marginBottom: '32px' }}>
-                    <div className="flex flex-row flex-wrap items-center gap-4 w-full">
-                        <img src="/assets/medical365fav.jpg" alt="Hospital Logo" style={{ height: '36px', width: 'auto', marginRight: '10px', objectFit: 'contain' }} />
-                        <div>
-                            <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-[10px]">
+                <div className="flex flex-col md:flex-row flex-nowrap items-start md:items-end justify-between gap-6 md:gap-4 w-full" style={{ marginBottom: '32px' }}>
+                    <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full">
+                        <div className="flex flex-row items-center gap-3">
+                            <img src="/assets/medical365fav.jpg" alt="Hospital Logo" className="h-10 md:h-9 w-auto object-contain bg-white rounded-lg p-1 md:p-0 md:bg-transparent" style={{ marginRight: '0' }} />
+                            <span className="md:hidden" style={{ fontSize: '0.75rem', fontWeight: 800, background: 'var(--brand-50, #f0fdfa)', color: 'var(--brand-600, #14b8a6)', padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.05em' }}>CENTRAL ADMIN</span>
+                        </div>
+                        <div className="flex flex-col gap-1 w-full">
+                            <div className="hidden md:flex items-center gap-2">
                                 <span style={{ fontSize: '0.75rem', fontWeight: 800, background: 'var(--brand-50, #f0fdfa)', color: 'var(--brand-600, #14b8a6)', padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.05em' }}>CENTRAL ADMIN</span>
                             </div>
-                            <h1 className="ca-dashboard-title break-words whitespace-normal text-xl md:text-2xl" style={{ fontSize: '1.8rem', fontWeight: 850, margin: '8px 0 4px' }}>🏛️ Central Administration Dashboard</h1>
-                            <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Manage all hospitals, staff, and system configurations</p>
+                            <h1 className="ca-dashboard-title text-2xl md:text-[1.8rem] font-[850] leading-snug m-0" style={{ fontWeight: 850, margin: '4px 0' }}>
+                                🏛️ Central Administration Dashboard
+                            </h1>
+                            <p className="text-slate-400 md:text-[#64748b] text-[0.95rem] m-0" style={{ color: '#64748b', fontSize: '0.95rem', margin: '0' }}>
+                                Manage all hospitals, staff, and system configurations
+                            </p>
                         </div>
                     </div>
                     <button
                         onClick={() => navigate('/supremeadmin/revenue')}
-                        className="w-full sm:w-auto" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(99,102,241,0.3)', whiteSpace: 'normal' }}
+                        className="w-full md:w-auto flex-shrink-0" 
+                        style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(99,102,241,0.3)', whiteSpace: 'normal' }}
                     >
                         📊 System Revenue Analytics
                     </button>
@@ -958,9 +966,9 @@ const CentralAdminDashboard = () => {
                 {success && <div className="success-message">✅ {success}</div>}
 
                 {/* Tabs */}
-                <div className="ca-tabs flex flex-row overflow-x-auto w-full max-w-full min-w-0 pb-2">
+                <div className="ca-tabs flex flex-row flex-nowrap whitespace-nowrap overflow-x-auto w-full max-w-full min-w-0 pb-2 gap-2 hide-scrollbar">
                     {tabs.map(tab => (
-                        <button key={tab.id} className={`ca-tab ${activeTab === tab.id ? 'ca-tab-active' : ''}`} onClick={() => setActiveTab(tab.id)}>
+                        <button key={tab.id} className={`ca-tab flex-shrink-0 ${activeTab === tab.id ? 'ca-tab-active' : ''}`} onClick={() => setActiveTab(tab.id)}>
                             {tab.label}
                         </button>
                     ))}
@@ -987,7 +995,7 @@ const CentralAdminDashboard = () => {
                                                 : 'Advanced clinics supporting up to 5 Doctors & 3 Staff.'}
                                     </p>
                                 </div>
-                                <div className="flex flex-col md:flex-row gap-2 md:gap-[10px] w-full">
+                                <div className="flex flex-col sm:flex-row gap-3 w-full">
                                     <button className={`w-full md:w-auto text-center justify-center flex ${showHospitalAdminForm ? 'btn-cancel' : 'btn-edit'}`} style={{ padding: '10px 18px' }}
                                         onClick={() => { setShowHospitalAdminForm(!showHospitalAdminForm); setShowHospitalForm(false); setEditHospital(null); }}>
                                         {showHospitalAdminForm ? 'Cancel' : '👤 Add Hospital Admin'}
@@ -1282,7 +1290,7 @@ const CentralAdminDashboard = () => {
                                             </div>
                                             <div className="hospital-card-footer">
                                                 <div className="hospital-click-hint">📊 Click to view full analytics →</div>
-                                                <div className="hospital-actions" onClick={e => e.stopPropagation()}>
+                                                <div className="hospital-actions flex-wrap w-full" onClick={e => e.stopPropagation()}>
                                                     <button className="btn-branding" onClick={() => setBrandingHospital(h)}>🎨 Branding</button>
                                                     <button className="btn-edit" onClick={() => openEditHospital(h)}>Edit</button>
                                                     <button className="btn-delete w-full md:w-auto" onClick={() => setDeleteHospitalConfirm(h._id)}>Delete</button>
@@ -1955,7 +1963,7 @@ const CentralAdminDashboard = () => {
                                     <h2>💰 Revenue Plans</h2>
                                     <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>Assign a billing model to each hospital or clinic</p>
                                 </div>
-                                <div className="flex flex-col md:flex-row gap-2 md:gap-[10px] w-full">
+                                <div className="flex flex-col sm:flex-row gap-3 w-full">
                                     <button
                                         onClick={() => navigate('/supremeadmin/revenue')}
                                         style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', border: 'none', padding: '9px 18px', borderRadius: '9px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}

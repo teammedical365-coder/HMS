@@ -382,6 +382,9 @@
 }
 
 @media (max-width: 1023px) {
+  .profile-text-info { display: none !important; }
+  .erp-topbar { padding: 0 12px !important; }
+  .erp-page-content { padding: 12px !important; }
   .erp-topbar {
     padding: 0 16px !important;
   }
@@ -389,7 +392,7 @@
     /* breadcrumb visible */
   }
   .profile-text-info {
-    /* profile text visible */
+    .profile-text-info { display: none !important; }
   }
   .erp-page-content {
     padding: 16px !important; /* Reduce padding on mobile content */

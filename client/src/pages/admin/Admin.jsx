@@ -421,9 +421,13 @@ const Admin = () => {
                                     <div style={{ background: remaining === 0 ? '#fee2e2' : '#f0fdf4', padding: '12px 16px', borderRadius: '8px', border: `1px solid ${remaining === 0 ? '#fecaca' : '#bbf7d0'}`, flex: 1 }}>
                                         <div style={{ color: remaining === 0 ? '#dc2626' : '#16a34a', fontSize: '12px', fontWeight: 600 }}>Remaining</div>
                                         <div style={{ fontSize: '20px', fontWeight: 700, color: remaining === 0 ? '#dc2626' : '#16a34a' }}>{remaining}</div>
+                                    </div></div>
+                                {remaining === 0 && (
+                                    <div style={{ color: '#dc2626', fontSize: '13px', fontWeight: 600, marginTop: '16px', background: '#fee2e2', padding: '12px 16px', borderRadius: '8px', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        ⚠️ Staff quota has been fully utilized. Upgrade your plan to add more staff.
                                     </div>
-                                </div>
-                            </div>
+                                )}
+</div>
                         );
                     }
                     return null;
@@ -433,9 +437,35 @@ const Admin = () => {
                 <div className="admin-card" style={{ marginBottom: '20px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showCreateForm ? '16px' : '8px' }}>
                         <h2>👤 Create Staff Account</h2>
-                        <button onClick={handleToggleCreateForm} className={showCreateForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '8px 20px', fontSize: '14px' }}>
-                            {showCreateForm ? 'Cancel' : '+ New Staff'}
-                        </button>
+                        
+                        {(() => {
+                            let isQuotaFull = false;
+                            if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
+                                const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                                const maxStaff = limits.maxStaff;
+                                const staffCount = users.filter(u => {
+                                    const rName = (u.role?.name || u.role || '').toLowerCase();
+                                    return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+                                }).length;
+                                isQuotaFull = Math.max(0, maxStaff - staffCount) === 0;
+                            }
+                            
+                            return (
+                                <button 
+                                    onClick={isQuotaFull && !showCreateForm ? undefined : handleToggleCreateForm} 
+                                    className={showCreateForm ? 'btn-cancel' : 'btn-save'} 
+                                    style={{ 
+                                        padding: '8px 20px', 
+                                        fontSize: '14px', 
+                                        opacity: (isQuotaFull && !showCreateForm) ? 0.5 : 1, 
+                                        cursor: (isQuotaFull && !showCreateForm) ? 'not-allowed' : 'pointer' 
+                                    }}
+                                    title={(isQuotaFull && !showCreateForm) ? "Staff account quota reached. Upgrade your plan to add more staff." : ""}
+                                >
+                                    {showCreateForm ? 'Cancel' : '+ New Staff'}
+                                </button>
+                            );
+                        })()}
                     </div>
                     {!showCreateForm && (
                         <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>

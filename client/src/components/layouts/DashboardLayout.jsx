@@ -180,7 +180,7 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                         <FiMenu size={24} color="#1e293b" />
                     </div>
                 </button>
-                <div className="breadcrumb-wrap flex flex-wrap min-w-0 flex-1">
+                <div className="breadcrumb-wrap flex flex-nowrap whitespace-nowrap overflow-x-auto overflow-y-hidden items-center">
                     <span className="curr-page-name">
                         {location.pathname.includes('/patient/') 
                             ? 'Patient Profile' 
@@ -212,10 +212,6 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                                 <strong>{user?.name}</strong>
                                 <span>{user?.email}</span>
                                 <span className="p-role-badge">{user?.role}</span>
-                            </div>
-                            <div className="p-body">
-                                <div className="p-item"><FiUsers size={14} /> My Profile</div>
-                                <div className="p-item"><FiSettings size={14} /> Account Settings</div>
                             </div>
                             <div className="p-footer">
                                 <button onClick={handleLogout} className="btn-p-logout">
