@@ -221,9 +221,12 @@ const SuperAdmin = () => {
         <div className="superadmin-page">
             <div className="superadmin-container">
                 <div className="admin-header">
-                    <div>
-                        <h1>SuperAdmin Dashboard</h1>
-                        <p>Manage System Users & Staff Accounts</p>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <img src="/assets/medical365fav.jpg" alt="Hospital Logo" style={{ height: '36px', width: 'auto', marginRight: '10px', objectFit: 'contain' }} />
+                        <div>
+                            <h1>SuperAdmin Dashboard</h1>
+                            <p>Manage System Users & Staff Accounts</p>
+                        </div>
                     </div>
                     <div className="admin-user-info">
                         <span>Welcome, {user.name}</span>

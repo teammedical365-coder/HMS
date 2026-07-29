@@ -105,18 +105,11 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
     return (
         <aside className={`erp-sidebar ${isOpen ? 'open' : 'collapsed'}`}>
             <div className="sidebar-brand">
-                {branding.logoUrl ? (
-                    <img
-                        src={branding.logoUrl}
-                        alt={hospitalName}
-                        style={{ height: '32px', maxWidth: '120px', objectFit: 'contain', borderRadius: '4px' }}
-                    />
-                ) : (
-                    <>
-                        <div className="brand-dot" />
-                        <span>{hospitalName !== 'Medical 365' ? hospitalName : 'Medical 365'}</span>
-                    </>
-                )}
+                <img
+                    src={branding?.logoUrl || branding?.logo || '/assets/logo.png'}
+                    alt={hospitalName || "Medical 365"}
+                    style={{ maxHeight: '36px', maxWidth: '160px', width: 'auto', objectFit: 'contain' }}
+                />
             </div>
             
             <nav className="sidebar-nav">
@@ -189,13 +182,6 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                         <span />
                     </div>
                 </button>
-                {branding.logoUrl && (
-                    <img
-                        src={branding.logoUrl}
-                        alt={hospitalName}
-                        style={{ height: '28px', maxWidth: '100px', objectFit: 'contain', borderRadius: '3px', marginRight: '8px' }}
-                    />
-                )}
                 <div className="breadcrumb-wrap">
                     <span className="curr-page-name">
                         {location.pathname.includes('/patient/') 
