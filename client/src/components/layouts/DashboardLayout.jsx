@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, useAppDispatch } from '../../store/hooks';
 import { logout } from '../../store/slices/authSlice';
@@ -6,7 +6,7 @@ import { useBranding } from '../../context/BrandingContext';
 import {
     FiHome, FiUsers, FiCalendar, FiActivity, FiPackage,
     FiSettings, FiLogOut, FiPieChart, FiClipboard,
-    FiFileText, FiPlusSquare, FiDatabase, FiGrid, FiShield
+    FiFileText, FiPlusSquare, FiDatabase, FiGrid, FiShield, FiMenu
 } from 'react-icons/fi';
 import './DashboardLayout.css';
 
@@ -177,12 +177,10 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
             <div className="topbar-left">
                 <button className="sidebar-toggle" onClick={toggleSidebar}>
                     <div className={`hamburger ${sidebarOpen ? 'active' : ''}`}>
-                        <span />
-                        <span />
-                        <span />
+                        <FiMenu size={24} color="#1e293b" />
                     </div>
                 </button>
-                <div className="breadcrumb-wrap">
+                <div className="breadcrumb-wrap flex flex-wrap min-w-0 flex-1">
                     <span className="curr-page-name">
                         {location.pathname.includes('/patient/') 
                             ? 'Patient Profile' 
@@ -197,8 +195,8 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                 <div className="user-profile-widget">
 
                     <div className="profile-text-info">
-                        <span className="user-disp-name">{(user?.role || '').toLowerCase().includes('doctor') ? 'DR. ' : ''}{user?.name || 'User'}</span>
-                        <span className="user-disp-role">{user?.email}</span>
+                        <span className="user-disp-name truncate max-w-[100px] sm:max-w-none">{(user?.role || '').toLowerCase().includes('doctor') ? 'DR. ' : ''}{user?.name || 'User'}</span>
+                        <span className="user-disp-role truncate max-w-[100px] sm:max-w-none">{user?.email}</span>
                     </div>
                     <div className="profile-avatar-wrap">
                         <div className="profile-avatar" style={{ overflow: 'hidden', padding: 0 }}>
@@ -233,11 +231,28 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
 };
 
 const DashboardLayout = ({ children }) => {
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' ? window.innerWidth > 1024 : true);
+
+    useEffect(() => {
+        const handleResize = () => {
+            if (window.innerWidth <= 1024) {
+                setSidebarOpen(false);
+            } else {
+                setSidebarOpen(true);
+            }
+        };
+        window.addEventListener('resize', handleResize);
+        handleResize();
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     return (
         <div className="erp-layout">
-            <DashboardSidebar isOpen={sidebarOpen} />
+            <DashboardSidebar isOpen={sidebarOpen} setOpen={setSidebarOpen} />
+            <div 
+                className={`sidebar-overlay ${sidebarOpen ? 'show' : ''}`} 
+                onClick={() => setSidebarOpen(false)}
+            />
             <div className={`erp-main-area ${sidebarOpen ? 'shifted' : 'full'}`}>
                 <TopBar sidebarOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
                 <main className="erp-page-content">

@@ -357,3 +357,63 @@
     transform: translateY(0);
   }
 }
+
+/* =========================================================
+   RESPONSIVE SIDEBAR DRAWER (ADDED FOR MOBILE/TABLET)
+   ========================================================= */
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 999;
+  transition: opacity 0.3s ease;
+}
+
+@media (min-width: 1024px) {
+  .sidebar-toggle {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  .erp-topbar {
+    padding: 0 16px !important;
+  }
+  .breadcrumb-wrap {
+    /* breadcrumb visible */
+  }
+  .profile-text-info {
+    /* profile text visible */
+  }
+  .erp-page-content {
+    padding: 16px !important; /* Reduce padding on mobile content */
+  }
+  .erp-sidebar {
+    width: var(--sidebar-width) !important;
+    left: calc(-1 * var(--sidebar-width)) !important;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+  }
+  
+  .erp-sidebar.open {
+    left: 0 !important;
+  }
+  
+  .erp-sidebar.collapsed {
+    left: calc(-1 * var(--sidebar-width)) !important;
+  }
+  
+  .erp-main-area.shifted, 
+  .erp-main-area.full {
+    padding-left: 0 !important;
+  }
+  
+  .sidebar-overlay.show {
+    display: block;
+  }
+}
