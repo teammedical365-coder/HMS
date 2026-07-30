@@ -303,6 +303,11 @@ router.post('/:id/manager', verifyCentralAdmin, async (req, res) => {
         const clinic = await Hospital.findOne({ _id: req.params.id, clinicType: 'clinic' });
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
 
+        const isStarter = clinic.subscriptionPlan === 'starter' || clinic.clinicPlan === 'starter' || (!clinic.subscriptionPlan && clinic.clinicPlan !== 'basic');
+        if (isStarter && clinic.adminUserId) {
+            return res.status(400).json({ success: false, message: 'Starter Plan allows only 1 Hospital Admin.' });
+        }
+
         const existing = await User.findOne({ email, hospitalId: clinic._id });
         if (existing) return res.status(400).json({ success: false, message: 'Email already in use in this clinic' });
 
@@ -402,6 +407,18 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
 
         const clinic = await Hospital.findOne({ _id: req.params.id, clinicType: 'clinic' });
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
+
+        const isStarter = clinic.subscriptionPlan === 'starter' || clinic.clinicPlan === 'starter' || (!clinic.subscriptionPlan && clinic.clinicPlan !== 'basic');
+        if (isStarter) {
+            const adminCount = clinic.adminUserId ? 1 : 0;
+            const currentStaffCount = await User.countDocuments({
+                hospitalId: clinic._id,
+                $or: [{ role: 'doctor' }, { role: roleDoc._id }, { role: 'receptionist' }]
+            });
+            if (adminCount + currentStaffCount >= 2) {
+                return res.status(400).json({ success: false, message: 'Starter Plan user limit reached. Upgrade your plan to add more staff.' });
+            }
+        }
 
         // Tier limit check
         const maxForRole = clinic.tier?.maxDoctors || 1;

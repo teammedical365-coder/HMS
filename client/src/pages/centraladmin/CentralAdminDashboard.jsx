@@ -1430,9 +1430,9 @@ const CentralAdminDashboard = () => {
                                 }
 
                                 return (
-                                    <div className="hospital-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-full">
+                                    <div className="hospital-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 w-full">
                                         {filteredClinics.map(clinic => (
-                                        <div key={clinic._id} className="hospital-card" style={{ cursor: 'pointer', border: '2px solid #e2e8f0', borderRadius: '12px', padding: '20px', background: '#fff', transition: 'box-shadow 0.2s' }}
+                                        <div key={clinic._id} className="hospital-card" style={{ cursor: 'pointer', border: '2px solid #e2e8f0', borderRadius: '12px', padding: '24px', background: '#fff', transition: 'box-shadow 0.2s', display: 'flex', flexDirection: 'column' }}
                                             onClick={() => openClinicDetail(clinic)}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                                                 <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>🏪</div>
@@ -1448,7 +1448,7 @@ const CentralAdminDashboard = () => {
                                                 {clinic.phone && <div>📞 {clinic.phone}</div>}
                                                 {clinic.email && <div>✉️ {clinic.email}</div>}
                                                 <div style={{ marginTop: '6px' }}>💰 Fee: {formatCurrency(clinic.defaultFee)}</div>
-                                                {clinic.slug && <div style={{ marginTop: '4px' }} onClick={e => e.stopPropagation()}><a href={`${window.location.protocol}//${clinic.slug}.${getBaseHost()}`} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'monospace', fontSize: '11px', color: '#14b8a6', textDecoration: 'none' }}>🔗 {clinic.slug}.{getBaseHost()}</a></div>}
+                                                {clinic.slug && <div style={{ marginTop: '4px' }} onClick={e => e.stopPropagation()}><a href={`${window.location.protocol}//${clinic.slug}.${getBaseHost()}`} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'monospace', fontSize: '11px', color: '#14b8a6', textDecoration: 'none', wordBreak: 'break-all' }}>🔗 {clinic.slug}.{getBaseHost()}</a></div>}
                                                 <div style={{ marginTop: '8px', padding: '6px 10px', borderRadius: '6px', background: clinic.adminUserId ? '#f0fdf4' : '#fff7ed', border: `1px solid ${clinic.adminUserId ? '#bbf7d0' : '#fed7aa'}` }}>
                                                     {clinic.adminUserId
                                                         ? <span style={{ color: '#16a34a', fontSize: '12px', fontWeight: 600 }}>👤 Admin: {clinic.adminUserId.name}</span>
@@ -1527,10 +1527,27 @@ const CentralAdminDashboard = () => {
                                                 The admin has full access to this clinic. Login at <strong>/login</strong>
                                             </p>
                                         </div>
-                                        <button className={showClinicManagerForm ? 'btn-cancel' : 'btn-save'} style={{ fontSize: '13px', padding: '8px 16px' }}
-                                            onClick={() => { setShowClinicManagerForm(!showClinicManagerForm); setShowClinicStaffForm(false); setClinicManagerForm({ name: '', email: '', password: '', phone: '' }); }}>
-                                            {showClinicManagerForm ? 'Cancel' : clinicStats.clinic?.adminUserId ? '🔄 Add Another Admin' : '+ Add Clinic Admin'}
-                                        </button>
+                                        {(() => {
+                                            const isStarter = clinicStats.clinic?.subscriptionPlan === 'starter' || clinicStats.clinic?.clinicPlan === 'starter' || activeTab === 'simple-clinics';
+                                            const hasAdmin = !!clinicStats.clinic?.adminUserId;
+                                            const disableAdminBtn = isStarter && hasAdmin && !showClinicManagerForm;
+                                            
+                                            return (
+                                                <button 
+                                                    className={showClinicManagerForm ? 'btn-cancel' : 'btn-save'} 
+                                                    style={{ 
+                                                        fontSize: '13px', 
+                                                        padding: '8px 16px',
+                                                        opacity: disableAdminBtn ? 0.5 : 1,
+                                                        cursor: disableAdminBtn ? 'not-allowed' : 'pointer'
+                                                    }}
+                                                    onClick={disableAdminBtn ? undefined : () => { setShowClinicManagerForm(!showClinicManagerForm); setShowClinicStaffForm(false); setClinicManagerForm({ name: '', email: '', password: '', phone: '' }); }}
+                                                    title={disableAdminBtn ? "Starter Plan allows only 1 Hospital Admin." : ""}
+                                                >
+                                                    {showClinicManagerForm ? 'Cancel' : hasAdmin ? '🔄 Add Another Admin' : '+ Add Clinic Admin'}
+                                                </button>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* Current admin info */}
@@ -1616,13 +1633,30 @@ const CentralAdminDashboard = () => {
                                         <div>
                                             <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>👥 Additional Staff</h3>
                                             <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
-                                                Tier: {clinicStats.stats.staff?.filter(s => s.role === 'doctor').length || 0}/{clinicStats.clinic?.tier?.maxDoctors || 1} Doctors · {clinicStats.stats.staff?.filter(s => s.role === 'receptionist').length || 0}/{clinicStats.clinic?.tier?.maxReceptionists || 1} Receptionists · All login at <strong>/login</strong>
+                                                Tier: {clinicStats.stats.staff?.filter(s => s.role?.toLowerCase() === 'doctor' || s.role?.toLowerCase() === 'clinic doctor').length || 0}/{clinicStats.clinic?.tier?.maxDoctors || 1} Doctors · {clinicStats.stats.staff?.filter(s => s.role?.toLowerCase() === 'hospitaladmin' || s.role?.toLowerCase() === 'clinic admin').length || 0}/1 Hospital Admin · All login at <strong>/login</strong>
                                             </p>
                                         </div>
-                                        <button className="btn-edit" style={{ fontSize: '13px', padding: '8px 14px' }}
-                                            onClick={() => { setShowClinicStaffForm(!showClinicStaffForm); setShowClinicManagerForm(false); }}>
-                                            {showClinicStaffForm ? 'Cancel' : '+ Add Staff'}
-                                        </button>
+                                        {(() => {
+                                            const isStarter = clinicStats.clinic?.subscriptionPlan === 'starter' || clinicStats.clinic?.clinicPlan === 'starter' || activeTab === 'simple-clinics';
+                                            const totalUsers = clinicStats.stats?.staff?.length || 0;
+                                            const disableStaffBtn = isStarter && totalUsers >= 2 && !showClinicStaffForm;
+                                            
+                                            return (
+                                                <button 
+                                                    className="btn-edit" 
+                                                    style={{ 
+                                                        fontSize: '13px', 
+                                                        padding: '8px 14px',
+                                                        opacity: disableStaffBtn ? 0.5 : 1,
+                                                        cursor: disableStaffBtn ? 'not-allowed' : 'pointer'
+                                                    }}
+                                                    onClick={disableStaffBtn ? undefined : () => { setShowClinicStaffForm(!showClinicStaffForm); setShowClinicManagerForm(false); }}
+                                                    title={disableStaffBtn ? "Starter Plan user limit reached. Upgrade your plan to add more staff." : ""}
+                                                >
+                                                    {showClinicStaffForm ? 'Cancel' : '+ Add Staff'}
+                                                </button>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* Staff Form */}
