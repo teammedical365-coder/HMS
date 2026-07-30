@@ -1239,20 +1239,68 @@ router.get('/treatment-plans/:id', verifyClinicStaff, async (req, res) => {
     }
 });
 
-// RECORD PAYMENT for a visit (optional, any amount)
+// RECORD PAYMENT for a visit (with full validation)
 router.put('/treatment-plans/:id/visits/:visitId/pay', verifyClinicStaff, async (req, res) => {
     try {
-        const { amountPaid, paymentMethod, notes, upiId, upiRef } = req.body;
+        const { amountPaid, paymentMethod, notes, upiId, upiRef, paymentDate } = req.body;
         const plan = await TreatmentPlan.findOne({ _id: req.params.id, hospitalId: hid(req) });
         if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
 
         const visit = plan.visits.id(req.params.visitId);
         if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
 
-        visit.amountPaid = Number(amountPaid) || 0;
-        visit.paymentMethod = paymentMethod || 'Cash';
-        if (upiId !== undefined) visit.upiId = upiId;
-        if (upiRef !== undefined) visit.upiRef = upiRef;
+        const paid = Number(amountPaid) || 0;
+
+        // Validate amount
+        if (paid <= 0) return res.status(400).json({ success: false, message: 'Payment amount must be greater than zero.' });
+        if (paid > plan.pendingBalance) return res.status(400).json({ success: false, message: `Payment amount cannot exceed outstanding balance of ₹${plan.pendingBalance.toLocaleString('en-IN')}.` });
+
+        // Validate Payment Date
+        if (!paymentDate) return res.status(400).json({ success: false, message: 'Payment date is required.' });
+        const pDate = new Date(paymentDate);
+        pDate.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const vDate = new Date(visit.scheduledDate);
+        vDate.setHours(0, 0, 0, 0);
+
+        if (pDate > today) return res.status(400).json({ success: false, message: 'Future payments are not allowed.' });
+        if (pDate < vDate) return res.status(400).json({ success: false, message: 'Payment date cannot be earlier than the visit date.' });
+
+        // Validate UPI-specific fields
+        const method = paymentMethod || 'Cash';
+        let cleanUpiRef = '';
+        if (method === 'UPI') {
+            if (!(upiId || '').trim()) return res.status(400).json({ success: false, message: 'UPI ID is required for UPI payments.' });
+            if (!(upiRef || '').trim()) return res.status(400).json({ success: false, message: 'Transaction reference is required for UPI payments.' });
+            cleanUpiRef = (upiRef || '').replace(/\D/g, '');
+            if (cleanUpiRef.length !== 12) return res.status(400).json({ success: false, message: 'Transaction reference must be exactly 12 digits.' });
+            
+            // Check duplicate upiRef within this plan's payment histories
+            const isDuplicate = plan.visits.some(v => 
+                v.paymentHistory && v.paymentHistory.some(ph => ph.method === 'UPI' && ph.upiRef === cleanUpiRef)
+            );
+            if (isDuplicate) return res.status(400).json({ success: false, message: 'Duplicate transaction reference. This reference is already used.' });
+        }
+
+        // Add payment to history
+        visit.paymentHistory.push({
+            amount: paid,
+            date: pDate,
+            method: method,
+            upiId: method === 'UPI' ? (upiId || '').trim() : '',
+            upiRef: method === 'UPI' ? cleanUpiRef : '',
+            notes: notes || ''
+        });
+
+        // Update cumulative amounts on visit
+        visit.amountPaid = (visit.amountPaid || 0) + paid;
+        visit.paymentMethod = method;
+        visit.paidAt = new Date();
+        if (method === 'UPI') {
+            visit.upiId = (upiId || '').trim();
+            visit.upiRef = cleanUpiRef;
+        }
         if (notes) visit.notes = notes;
 
         // Recalculate plan totals — pendingBalance = totalAmount - sum of all payments
@@ -1331,7 +1379,14 @@ router.put('/treatment-plans/:id/visits/:visitId/reschedule', verifyClinicStaff,
         if (!newDate) {
             return res.status(400).json({ success: false, message: 'New visit date is required' });
         }
-
+        
+        const nDate = new Date(newDate);
+        nDate.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (nDate < today) {
+            return res.status(400).json({ success: false, message: 'Cannot reschedule to a past date. Please select today or a future date.' });
+        }
         const plan = await TreatmentPlan.findOne({ _id: req.params.id, hospitalId: hid(req) });
         if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
 

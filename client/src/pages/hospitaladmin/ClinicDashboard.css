@@ -137,18 +137,18 @@
 .clinic-form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 14px;
+    gap: 24px;
 }
 @media (max-width: 600px) { .clinic-form-grid { grid-template-columns: 1fr; } }
 
 .clinic-form-group { display: flex; flex-direction: column; gap: 5px; }
-.clinic-form-group label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+.clinic-form-group label { font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
 
 .clinic-input {
     padding: 9px 12px;
     border-radius: 8px;
     border: 1.5px solid #e2e8f0;
-    font-size: 14px;
+    font-size: 15px;
     color: #1e293b;
     background: #f8fafc;
     transition: border 0.15s;

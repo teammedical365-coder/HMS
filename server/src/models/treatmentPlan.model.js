@@ -1,17 +1,29 @@
 const mongoose = require('mongoose');
 
+const paymentSchema = new mongoose.Schema({
+    amount: { type: Number, required: true },
+    date: { type: Date, required: true },
+    method: { type: String, default: 'Cash' },
+    upiId: { type: String, default: '' },
+    upiRef: { type: String, default: '' },
+    notes: { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now }
+}, { _id: true });
+
 const visitSchema = new mongoose.Schema({
     visitNumber:   { type: Number, required: true },
     scheduledDate: { type: Date, required: true },
     scheduledTime: { type: String, default: '' },
     procedure:     { type: String, default: '' },
-    amountPaid:    { type: Number, default: 0 },    // payment collected on this visit (optional)
-    paymentMethod: { type: String, default: 'Cash' },
+    amountPaid:    { type: Number, default: 0 },    // cumulative total of payments collected on this visit
+    paymentMethod: { type: String, default: 'Cash' }, // keeping for backward compat / latest method
     upiId:         { type: String, default: '' },
     upiRef:        { type: String, default: '' },
+    paymentHistory: [paymentSchema],
     status:        { type: String, enum: ['scheduled', 'completed', 'missed', 'rescheduled', 'due'], default: 'scheduled' },
     completedAt:   { type: Date },
     notes:         { type: String, default: '' },
+    paidAt:        { type: Date },                    // when latest payment was recorded
     alertSent:     { type: Boolean, default: false },
     rescheduledToDate: { type: Date },
     rescheduledToTime: { type: String, default: '' },

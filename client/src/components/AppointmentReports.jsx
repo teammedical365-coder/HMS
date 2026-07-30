@@ -5,6 +5,8 @@ import { useAuth } from '../store/hooks';
 const AppointmentReports = ({ appointmentId, prescriptions = [] }) => {
     const [reports, setReports] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [uploadFile, setUploadFile] = useState(null);
+    const [uploading, setUploading] = useState(false);
     
     // AI Summary States
     const [aiLoading, setAiLoading] = useState({});
@@ -67,9 +69,52 @@ const AppointmentReports = ({ appointmentId, prescriptions = [] }) => {
         }
     };
 
+    const handleUpload = async (e) => {
+        e.preventDefault();
+        if (!uploadFile || !appointmentId) return;
+        setUploading(true);
+        const formData = new FormData();
+        formData.append('reportFile', uploadFile);
+        formData.append('appointmentId', appointmentId);
+        try {
+            const res = await reportAPI.uploadReport(formData);
+            if (res.success) {
+                alert('Report uploaded successfully!');
+                setUploadFile(null);
+                // re-fetch reports
+                const newRes = await reportAPI.getReportsByAppointment(appointmentId);
+                if (newRes.success) {
+                    setReports(newRes.reports || []);
+                }
+            } else {
+                alert(res.message || 'Failed to upload report');
+            }
+        } catch (err) {
+            console.error("Upload error:", err);
+            alert("Upload failed.");
+        } finally {
+            setUploading(false);
+        }
+    };
+
     return (
         <div>
-            <h3 style={{ marginBottom: '16px', color: '#1e293b' }}>📁 Appointment Reports & Files</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, color: '#1e293b' }}>📁 Appointment Reports & Files</h3>
+            </div>
+            
+            <form onSubmit={handleUpload} style={{ display: 'flex', gap: '8px', marginBottom: '16px', alignItems: 'center', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                <input 
+                    type="file" 
+                    onChange={e => setUploadFile(e.target.files[0])} 
+                    style={{ flex: 1, fontSize: '13px' }}
+                    required
+                />
+                <button type="submit" disabled={uploading || !uploadFile} style={{ padding: '6px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', opacity: (uploading || !uploadFile) ? 0.6 : 1 }}>
+                    {uploading ? 'Uploading...' : 'Upload'}
+                </button>
+            </form>
+
             {loading && <p style={{ color: '#94a3b8', fontSize: '13px' }}>Loading reports…</p>}
             {!loading && allFiles.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8', border: '1px dashed #e2e8f0', borderRadius: '10px' }}>

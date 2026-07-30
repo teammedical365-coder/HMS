@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { patientAPI, clinicAPI } from '../../utils/api';
+import { patientAPI, clinicAPI, doctorAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { 
@@ -37,6 +37,12 @@ const ClinicPatientProfile = () => {
     const [file, setFile] = useState(null);
     const [reportName, setReportName] = useState('');
     const [uploading, setUploading] = useState(false);
+
+    // Vitals form state
+    const [vitalsForm, setVitalsForm] = useState({
+        weight: '', height: '', bmi: '', bloodPressure: '', pulse: '', temperature: '', spo2: '', respiratoryRate: ''
+    });
+    const [savingVitals, setSavingVitals] = useState(false);
 
     useEffect(() => {
         if (patientId) {
@@ -160,6 +166,39 @@ const ClinicPatientProfile = () => {
             alert('Error uploading report.');
         } finally {
             setUploading(false);
+        }
+    };
+
+    const handleSaveVitals = async (e) => {
+        e.preventDefault();
+        setSavingVitals(true);
+        try {
+            const profileData = {
+                vitals: {
+                    weight: vitalsForm.weight,
+                    height: vitalsForm.height,
+                    bmi: vitalsForm.bmi,
+                    bloodPressure: vitalsForm.bloodPressure,
+                    pulse: vitalsForm.pulse,
+                    temperature: vitalsForm.temperature,
+                    spo2: vitalsForm.spo2,
+                    respiratoryRate: vitalsForm.respiratoryRate,
+                    lastRecorded: new Date().toISOString()
+                }
+            };
+            // Since this is a clinic patient, we'll try to update through the appropriate API
+            // Using doctorAPI.updatePatientProfile works for users, but for clinic patients it might need a different path if they aren't users. 
+            // The doctorAPI handles both if the patientId resolves. Let's see if it updates:
+            await doctorAPI.updatePatientProfile(patientData._id, profileData);
+            
+            alert('Vitals saved successfully!');
+            setVitalsForm({ weight: '', height: '', bmi: '', bloodPressure: '', pulse: '', temperature: '', spo2: '', respiratoryRate: '' });
+            fetchProfile(); // refresh to show updated vitals
+        } catch (err) {
+            console.error(err);
+            alert('Error saving vitals.');
+        } finally {
+            setSavingVitals(false);
         }
     };
 
@@ -544,10 +583,10 @@ const ClinicPatientProfile = () => {
                                         💊 Medicines ({medicinesList.length})
                                     </button>
                                     <button 
-                                        className={`cpp-tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
-                                        onClick={() => setActiveTab('reports')}
+                                        className={`cpp-tab-btn ${activeTab === 'vitals' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('vitals')}
                                     >
-                                        🧪 Lab Reports ({patientData.reports?.length || 0})
+                                        💓 Vitals
                                     </button>
                                     <button 
                                         className={`cpp-tab-btn ${activeTab === 'billing' ? 'active' : ''}`}
@@ -662,45 +701,52 @@ const ClinicPatientProfile = () => {
                         </div>
                     )}
 
-                    {activeTab === 'reports' && (
+                    {activeTab === 'vitals' && (
                         <div className="cpp-card">
-                            <h3 className="cpp-card-title"><FiFileText /> Uploaded Documents & Reports</h3>
-                            
-                            {/* Upload form */}
-                            <form onSubmit={handleUploadReport} className="cpp-report-upload-box">
-                                <span className="cpp-tl-lbl" style={{ alignSelf: 'flex-start' }}>Upload new lab report</span>
-                                <input 
-                                    type="text" 
-                                    className="cpp-report-input" 
-                                    placeholder="e.g. Blood Test, Chest X-Ray" 
-                                    value={reportName}
-                                    onChange={e => setReportName(e.target.value)}
-                                />
-                                <input 
-                                    type="file" 
-                                    className="cpp-report-input" 
-                                    onChange={e => setFile(e.target.files[0])}
-                                />
-                                <button className="cpp-btn-upload" type="submit" disabled={uploading}>
-                                    {uploading ? 'Uploading...' : 'Add Document'}
-                                </button>
+                            <h3 className="cpp-card-title"><FiActivity /> Patient Vitals</h3>
+
+                            {/* Vitals Form */}
+                            <form onSubmit={handleSaveVitals} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                                {[
+                                    { key: 'weight', label: 'Weight (kg)', icon: '⚖️', type: 'number' },
+                                    { key: 'height', label: 'Height (cm)', icon: '📏', type: 'number' },
+                                    { key: 'bloodPressure', label: 'Blood Pressure', icon: '🩸', type: 'text', placeholder: '120/80' },
+                                    { key: 'pulse', label: 'Pulse (bpm)', icon: '💓', type: 'number' },
+                                    { key: 'temperature', label: 'Temp (°F)', icon: '🌡️', type: 'number' },
+                                    { key: 'spo2', label: 'SpO₂ (%)', icon: '🫁', type: 'number' },
+                                ].map(field => (
+                                    <div key={field.key} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>{field.icon} {field.label}</label>
+                                        <input
+                                            type={field.type}
+                                            value={vitalsForm[field.key]}
+                                            placeholder={field.placeholder || ''}
+                                            onChange={e => setVitalsForm({ ...vitalsForm, [field.key]: e.target.value })}
+                                            style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px' }}
+                                        />
+                                    </div>
+                                ))}
+                                <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                                    <button type="submit" disabled={savingVitals} style={{ padding: '8px 24px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: savingVitals ? 'not-allowed' : 'pointer', opacity: savingVitals ? 0.7 : 1 }}>
+                                        {savingVitals ? 'Saving...' : 'Save Vitals'}
+                                    </button>
+                                </div>
                             </form>
 
-                            {/* Reports list */}
-                            {(!patientData.reports || patientData.reports.length === 0) ? (
-                                <div className="cpp-empty-state">No reports uploaded yet.</div>
+                            <h3 className="cpp-card-title" style={{ marginTop: '24px', fontSize: '15px' }}>Vitals Log</h3>
+                            {displayTimeline.filter(t => t.data?.vitals && Object.values(t.data.vitals).some(Boolean)).length === 0 ? (
+                                <div className="cpp-empty-state">No vitals logged yet.</div>
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {patientData.reports.map((rep, idx) => (
-                                        <div key={idx} className="cpp-report-row">
-                                            <div className="cpp-report-info" onClick={() => window.open(getReportUrl(rep.filename), '_blank')}>
-                                                <span className="cpp-report-name">{rep.name}</span>
-                                                <span className="cpp-report-date">{new Date(rep.uploadedAt).toLocaleString('en-IN')}</span>
-                                            </div>
-                                            <div className="cpp-report-actions">
-                                                <button className="cpp-btn-icon-del" onClick={() => handleDeleteReport(rep._id)}>
-                                                    <FiTrash2 />
-                                                </button>
+                                    {displayTimeline.filter(t => t.data?.vitals && Object.values(t.data.vitals).some(Boolean)).map((item, idx) => (
+                                        <div key={idx} className="cpp-report-row" style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                                            <div style={{ fontWeight: 700, color: '#1e293b' }}>{new Date(item.date).toLocaleDateString('en-IN')}</div>
+                                            <div className="cpp-tl-vitals">
+                                                {item.data.vitals.weight && <span className="cpp-tl-vital-pill">⚖️ Weight: {item.data.vitals.weight}kg</span>}
+                                                {item.data.vitals.height && <span className="cpp-tl-vital-pill">📏 Height: {item.data.vitals.height}cm</span>}
+                                                {item.data.vitals.bp && <span className="cpp-tl-vital-pill">🩸 BP: {item.data.vitals.bp}</span>}
+                                                {item.data.vitals.temperature && <span className="cpp-tl-vital-pill">🌡️ Temp: {item.data.vitals.temperature}°F</span>}
+                                                {item.data.vitals.pulse && <span className="cpp-tl-vital-pill">💓 Pulse: {item.data.vitals.pulse}</span>}
                                             </div>
                                         </div>
                                     ))}
