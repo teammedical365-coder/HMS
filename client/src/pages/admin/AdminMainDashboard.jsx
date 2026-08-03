@@ -157,27 +157,66 @@ const AdminMainDashboard = () => {
                 {/* Quick Actions */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '24px 0 16px' }}>
                     <div className="section-label" style={{ margin: 0 }}>⚡ Quick Actions</div>
-                    <button 
-                        onClick={() => navigate('/admin/users', { state: { openCreateForm: true } })} 
-                        className="btn-save" 
-                        style={{ padding: '8px 20px', fontSize: '14px', border: 'none', borderRadius: '10px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: 'white', fontWeight: '700', cursor: 'pointer' }}
-                    >
-                        + Add Staff
-                    </button>
+                    {(() => {
+                        let isStaffQuotaFull = false;
+                        if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
+                            const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                            isStaffQuotaFull = Math.max(0, limits.maxStaff - staffCount) === 0;
+                        }
+                        return (
+                            <button 
+                                onClick={isStaffQuotaFull ? undefined : () => navigate('/admin/users', { state: { openCreateForm: true } })} 
+                                className="btn-save" 
+                                style={{ 
+                                    padding: '8px 20px', 
+                                    fontSize: '14px', 
+                                    border: 'none', 
+                                    borderRadius: '10px', 
+                                    background: isStaffQuotaFull ? '#cbd5e1' : 'linear-gradient(135deg, #3b82f6, #6366f1)', 
+                                    color: 'white', 
+                                    fontWeight: '700', 
+                                    cursor: isStaffQuotaFull ? 'not-allowed' : 'pointer',
+                                    opacity: isStaffQuotaFull ? 0.7 : 1
+                                }}
+                                title={isStaffQuotaFull ? "Staff quota has been fully utilized. Upgrade your plan to add more staff." : ""}
+                            >
+                                + Add Staff
+                            </button>
+                        );
+                    })()}
                 </div>
                 <div className="actions-grid">
-                    {quickActions.map((action, idx) => (
-                        <div key={idx} className="action-card" onClick={() => navigate(action.path)}>
-                            <div className="action-icon" style={{ background: action.bg }}>
-                                {action.icon}
+                    {quickActions.map((action, idx) => {
+                        let isStaffQuotaFull = false;
+                        if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
+                            const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                            isStaffQuotaFull = Math.max(0, limits.maxStaff - staffCount) === 0;
+                        }
+                        const isCreateStaff = action.label === 'Create Staff Account';
+                        const disabled = isCreateStaff && isStaffQuotaFull;
+
+                        return (
+                            <div 
+                                key={idx} 
+                                className="action-card" 
+                                onClick={() => { if (!disabled) navigate(action.path); }}
+                                style={{ 
+                                    opacity: disabled ? 0.5 : 1, 
+                                    cursor: disabled ? 'not-allowed' : 'pointer' 
+                                }}
+                                title={disabled ? "Staff account quota reached. Upgrade your plan." : ""}
+                            >
+                                <div className="action-icon" style={{ background: action.bg }}>
+                                    {action.icon}
+                                </div>
+                                <div className="action-content">
+                                    <h3>{action.label}</h3>
+                                    <p>{action.desc}</p>
+                                </div>
+                                <span className="action-card-arrow">→</span>
                             </div>
-                            <div className="action-content">
-                                <h3>{action.label}</h3>
-                                <p>{action.desc}</p>
-                            </div>
-                            <span className="action-card-arrow">→</span>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
             </div>
