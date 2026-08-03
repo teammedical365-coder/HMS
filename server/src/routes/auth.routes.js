@@ -371,6 +371,15 @@ router.post('/logout', verifyToken, auditLog('STAFF_LOGOUT'), async (req, res) =
             });
         }
 
+        // Deactivate the session record
+        if (decoded?.sessionId) {
+            const Session = require('../models/session.model');
+            await Session.updateOne(
+                { sessionId: decoded.sessionId, userId: decoded.userId },
+                { isActive: false, logoutTime: new Date() }
+            );
+        }
+
         res.json({ success: true, message: 'Logged out successfully' });
     } catch (error) {
         res.status(500).json({ success: false, message: 'An internal error occurred' });

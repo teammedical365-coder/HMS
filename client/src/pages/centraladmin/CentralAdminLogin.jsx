@@ -1,22 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppDispatch, useAuth } from '../../store/hooks';
-import { loginAdmin, clearError } from '../../store/slices/authSlice';
+import { sendOtp, verifyOtp, resendOtp, forceLogin, clearError, resetOtpFlow } from '../../store/slices/authSlice';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HiOutlineMail, HiOutlineLockClosed } from 'react-icons/hi';
 import { RiArrowLeftLine } from 'react-icons/ri';
 import '../user/Login.css';
 import PasswordInput from '../../components/PasswordInput';
+import OtpVerification from '../../components/OtpVerification';
+import ActiveSessionModal from '../../components/ActiveSessionModal';
 
 const CentralAdminLogin = () => {
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
-    const { loading, error, isAuthenticated, user } = useAuth();
+    const { loading, error, isAuthenticated, user, otpStep, preAuthToken, otpEmail, activeSession, otpSuccessMsg } = useAuth();
 
     const [formData, setFormData] = useState({ email: '', password: '' });
+    const [sessionBanner, setSessionBanner] = useState(null);
+
+    // Check for session expired message
+    useEffect(() => {
+        const msg = sessionStorage.getItem('sessionExpiredMessage');
+        if (msg) {
+            setSessionBanner(msg);
+            sessionStorage.removeItem('sessionExpiredMessage');
+        }
+    }, []);
 
     useEffect(() => {
         dispatch(clearError());
+        dispatch(resetOtpFlow());
     }, [dispatch]);
 
     useEffect(() => {
@@ -37,7 +50,34 @@ const CentralAdminLogin = () => {
         e.preventDefault();
         dispatch(clearError());
         if (!formData.email || !formData.password) return;
-        await dispatch(loginAdmin({ email: formData.email, password: formData.password }));
+        setSessionBanner(null);
+
+        // Use OTP flow instead of direct admin login
+        await dispatch(sendOtp({
+            email: formData.email,
+            password: formData.password,
+            loginType: 'admin',
+        }));
+    };
+
+    const handleVerifyOtp = async (otp) => {
+        await dispatch(verifyOtp({ preAuthToken, otp }));
+    };
+
+    const handleResendOtp = async () => {
+        await dispatch(resendOtp({ preAuthToken }));
+    };
+
+    const handleBackToLogin = () => {
+        dispatch(resetOtpFlow());
+    };
+
+    const handleForceLogin = async () => {
+        await dispatch(forceLogin({ preAuthToken }));
+    };
+
+    const handleCancelSession = () => {
+        dispatch(resetOtpFlow());
     };
 
     return (
@@ -60,63 +100,111 @@ const CentralAdminLogin = () => {
                         {/* Left: Form */}
                         <div className="auth-form-container">
                             <div className="auth-box">
-                                <button onClick={() => navigate('/')} className="back-button-new" type="button">
-                                    <RiArrowLeftLine /> <span>Go Back</span>
-                                </button>
+                                {!otpStep && (
+                                    <button onClick={() => navigate('/')} className="back-button-new" type="button">
+                                        <RiArrowLeftLine /> <span>Go Back</span>
+                                    </button>
+                                )}
 
                                 <div className="hospital-brand">
                                     <img src="logo.png" alt="Medical 365" style={{ height: '40px', objectFit: 'contain' }} />
                                 </div>
 
-                                <div className="auth-header">
-                                    <h3>Supreme Portal</h3>
-                                    <p>Sign in to the system administration dashboard.</p>
-                                </div>
-
-                                {error && (
+                                {/* Session Expired Banner */}
+                                {sessionBanner && (
                                     <motion.div
                                         initial={{ height: 0, opacity: 0 }}
                                         animate={{ height: 'auto', opacity: 1 }}
-                                        className="error-message"
+                                        style={{
+                                            background: '#fef3c7',
+                                            border: '1px solid #fbbf24',
+                                            borderRadius: '12px',
+                                            padding: '0.85rem 1rem',
+                                            marginBottom: '1.25rem',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600,
+                                            color: '#92400e',
+                                        }}
                                     >
-                                        {error}
+                                        ⚠️ {sessionBanner}
                                     </motion.div>
                                 )}
 
-                                <form onSubmit={handleSubmit} className="modern-form">
-                                    <div className="auth-input-group">
-                                        <label>Admin Email</label>
-                                        <div className="input-field-wrapper">
-                                            <HiOutlineMail className="input-icon" />
-                                            <input
-                                                type="email"
-                                                name="email"
-                                                placeholder="admin@medical365.com"
-                                                value={formData.email}
-                                                onChange={handleChange}
-                                                required
-                                            />
-                                        </div>
-                                    </div>
+                                <AnimatePresence mode="wait">
+                                    {/* ── Step 1: Credentials ── */}
+                                    {!otpStep && (
+                                        <motion.div
+                                            key="credentials"
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: -20 }}
+                                        >
+                                            <div className="auth-header">
+                                                <h3>Supreme Portal</h3>
+                                                <p>Sign in to the system administration dashboard.</p>
+                                            </div>
 
-                                    <div className="auth-input-group">
-                                        <label>Secret Password</label>
-                                        <div className="input-field-wrapper">
-                                            <HiOutlineLockClosed className="input-icon" />
-                                            <PasswordInput
-                                                name="password"
-                                                placeholder="••••••••"
-                                                value={formData.password}
-                                                onChange={handleChange}
-                                                required
-                                            />
-                                        </div>
-                                    </div>
+                                            {error && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    className="error-message"
+                                                >
+                                                    {error}
+                                                </motion.div>
+                                            )}
 
-                                    <button className="btn-primary btn-block" disabled={loading} style={{ marginTop: '1rem' }}>
-                                        {loading ? <span className="loader-dots">Authenticating...</span> : 'Access System Control →'}
-                                    </button>
-                                </form>
+                                            <form onSubmit={handleSubmit} className="modern-form">
+                                                <div className="auth-input-group">
+                                                    <label>Admin Email</label>
+                                                    <div className="input-field-wrapper">
+                                                        <HiOutlineMail className="input-icon" />
+                                                        <input
+                                                            type="email"
+                                                            name="email"
+                                                            placeholder="admin@medical365.com"
+                                                            value={formData.email}
+                                                            onChange={handleChange}
+                                                            required
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="auth-input-group">
+                                                    <label>Secret Password</label>
+                                                    <div className="input-field-wrapper">
+                                                        <HiOutlineLockClosed className="input-icon" />
+                                                        <PasswordInput
+                                                            name="password"
+                                                            placeholder="••••••••"
+                                                            value={formData.password}
+                                                            onChange={handleChange}
+                                                            required
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <button className="btn-primary btn-block" disabled={loading} style={{ marginTop: '1rem' }}>
+                                                    {loading ? <span className="loader-dots">Authenticating...</span> : 'Access System Control →'}
+                                                </button>
+                                            </form>
+                                        </motion.div>
+                                    )}
+
+                                    {/* ── Step 2: OTP Verification ── */}
+                                    {otpStep === 'otp' && (
+                                        <OtpVerification
+                                            key="otp"
+                                            email={otpEmail}
+                                            onVerify={handleVerifyOtp}
+                                            onResend={handleResendOtp}
+                                            onBack={handleBackToLogin}
+                                            loading={loading}
+                                            error={error}
+                                            successMsg={otpSuccessMsg}
+                                        />
+                                    )}
+                                </AnimatePresence>
 
                                 <div className="auth-footer-note">
                                     Enterprise Internal Control Node
@@ -144,6 +232,16 @@ const CentralAdminLogin = () => {
                     </motion.div>
                 </motion.div>
             </AnimatePresence>
+
+            {/* Active Session Modal */}
+            {otpStep === 'session_check' && activeSession && (
+                <ActiveSessionModal
+                    activeSession={activeSession}
+                    onForceLogin={handleForceLogin}
+                    onCancel={handleCancelSession}
+                    loading={loading}
+                />
+            )}
         </section>
     );
 };

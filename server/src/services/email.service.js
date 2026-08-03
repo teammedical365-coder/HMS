@@ -1,10 +1,12 @@
 const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 
 // Create reusable transporter using SMTP config from .env
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT) || 465,
     secure: process.env.SMTP_SECURE === 'true',
+    requireTLS: true,
     auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS
@@ -206,6 +208,61 @@ async function sendAppointmentConfirmationEmail({
     }
 }
 
+/**
+ * Send a login verification OTP email to a staff/admin user.
+ * This function NEVER throws — failures are logged silently.
+ *
+ * @param {Object} params
+ * @param {string} params.email
+ * @param {string} params.otp - The plain 6-digit OTP (shown in email)
+ * @param {string} [params.userName] - Recipient name for greeting
+ */
+async function sendLoginOtpEmail({ email, otp, userName }) {
+    try {
+        if (!email) {
+            console.log('[email-service] No email provided — skipping OTP email.');
+            return;
+        }
+
+        const plainTextBody = `Hi${userName ? ' ' + userName : ''},
+
+Your login verification code is:
+${otp}
+
+This OTP is valid for 5 minutes.
+If you did not request this login, please ignore this email.
+
+Support: support@medical365.in
+Powered by Medical365`;
+
+        const htmlBody = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head><body style="margin:0;padding:0;background-color:#ffffff;font-family:Arial,sans-serif;"><span style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">Your Medical365 verification code is ready.</span><table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;padding:20px 0;"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid #e2e8f0;border-radius:8px;"><tr><td style="background-color:#2563eb;padding:24px;text-align:center;border-top-left-radius:8px;border-top-right-radius:8px;"><h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:bold;">Medical365</h1></td></tr><tr><td style="padding:32px;"><p style="margin:0 0 16px;font-size:16px;color:#334155;">Hi${userName ? ' ' + userName : ''},</p><p style="margin:0 0 24px;font-size:16px;color:#334155;">Your login verification code is:</p><table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center"><div style="display:inline-block;background-color:#f8fafc;border:1px solid #cbd5e1;border-radius:6px;padding:16px 32px;"><span style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#0f172a;">${otp}</span></div></td></tr></table><p style="margin:24px 0 0;font-size:14px;color:#64748b;">This OTP is valid for <strong>5 minutes</strong>.</p><p style="margin:8px 0 0;font-size:14px;color:#64748b;">If you did not request this login, please ignore this email.</p></td></tr><tr><td style="background-color:#f8fafc;padding:20px;text-align:center;border-bottom-left-radius:8px;border-bottom-right-radius:8px;border-top:1px solid #e2e8f0;"><p style="margin:0;font-size:12px;color:#64748b;">Support: <a href="mailto:support@medical365.in" style="color:#2563eb;text-decoration:none;">support@medical365.in</a></p><p style="margin:8px 0 0;font-size:12px;color:#94a3b8;">&copy; ${new Date().getFullYear()} Medical365. All rights reserved.</p></td></tr></table></td></tr></table></body></html>`;
+
+        const messageId = '<' + crypto.randomBytes(16).toString('hex') + '@medical365.in>';
+
+        const mailOptions = {
+            from: '"Medical365 Authentication" <noreply@medical365.in>',
+            replyTo: 'support@medical365.in',
+            to: email,
+            subject: 'Medical365 Login Verification Code',
+            text: plainTextBody,
+            html: htmlBody,
+            messageId: messageId,
+            date: new Date().toUTCString(),
+            headers: {
+                'List-Unsubscribe': '<mailto:support@medical365.in?subject=unsubscribe>',
+                'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex')
+            }
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(`[email-service] Login OTP email sent to ${email}`);
+
+    } catch (error) {
+        console.error('[email-service] Failed to send login OTP email:', error.message);
+    }
+}
+
 module.exports = {
-    sendAppointmentConfirmationEmail
+    sendAppointmentConfirmationEmail,
+    sendLoginOtpEmail
 };

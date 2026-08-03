@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppDispatch, useAuth } from '../../store/hooks';
-import { loginUser, clearError } from '../../store/slices/authSlice';
+import { sendOtp, verifyOtp, resendOtp, forceLogin, clearError, resetOtpFlow, setSessionExpiredMessage } from '../../store/slices/authSlice';
 import { useBranding } from '../../context/BrandingContext';
 import { getSubdomain } from '../../utils/subdomain';
 import api, { publicAPI } from '../../utils/api';
@@ -11,6 +11,8 @@ import { RiHospitalLine } from 'react-icons/ri';
 import '../user/Login.css';
 import './HospitalLogin.css';
 import PasswordInput from '../../components/PasswordInput';
+import OtpVerification from '../../components/OtpVerification';
+import ActiveSessionModal from '../../components/ActiveSessionModal';
 
 /**
  * HospitalLogin — Subdomain-based hospital login page
@@ -25,13 +27,23 @@ const HospitalLogin = () => {
     const hospitalSlug = getSubdomain();
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
-    const { loading, error, isAuthenticated, user } = useAuth();
+    const { loading, error, isAuthenticated, user, otpStep, preAuthToken, otpEmail, activeSession, otpSuccessMsg, sessionExpiredMessage } = useAuth();
     const { loadBranding } = useBranding();
 
     const [hospital, setHospital] = useState(null);
     const [hospitalLoading, setHospitalLoading] = useState(true);
     const [hospitalError, setHospitalError] = useState('');
     const [formData, setFormData] = useState({ email: '', password: '' });
+    const [sessionBanner, setSessionBanner] = useState(null);
+
+    // Check for session expired message
+    useEffect(() => {
+        const msg = sessionStorage.getItem('sessionExpiredMessage');
+        if (msg) {
+            setSessionBanner(msg);
+            sessionStorage.removeItem('sessionExpiredMessage');
+        }
+    }, []);
 
     // Resolve hospital by domain/slug on mount
     useEffect(() => {
@@ -84,6 +96,7 @@ const HospitalLogin = () => {
 
     useEffect(() => {
         dispatch(clearError());
+        dispatch(resetOtpFlow());
     }, [dispatch]);
 
     const handleChange = (e) => {
@@ -95,13 +108,35 @@ const HospitalLogin = () => {
         e.preventDefault();
         dispatch(clearError());
         if (!formData.email || !formData.password) return;
+        setSessionBanner(null);
 
-        // Pass hospitalId along with credentials so backend can embed it in JWT
-        await dispatch(loginUser({
+        // Use OTP flow instead of direct login
+        await dispatch(sendOtp({
             email: formData.email,
             password: formData.password,
-            hospitalId: hospital?._id,     // Used by backend to scope the session
+            hospitalId: hospital?._id,
+            loginType: 'staff',
         }));
+    };
+
+    const handleVerifyOtp = async (otp) => {
+        await dispatch(verifyOtp({ preAuthToken, otp }));
+    };
+
+    const handleResendOtp = async () => {
+        await dispatch(resendOtp({ preAuthToken }));
+    };
+
+    const handleBackToLogin = () => {
+        dispatch(resetOtpFlow());
+    };
+
+    const handleForceLogin = async () => {
+        await dispatch(forceLogin({ preAuthToken }));
+    };
+
+    const handleCancelSession = () => {
+        dispatch(resetOtpFlow());
     };
 
     if (hospitalLoading) {
@@ -164,62 +199,108 @@ const HospitalLogin = () => {
                                     </div>
                                 </div>
 
-                                <div className="auth-header">
-                                    <h3>Welcome Back</h3>
-                                    <p>Sign in with your hospital-issued credentials.</p>
-                                </div>
-
-                                {error && (
-                                    <motion.div 
+                                {/* Session Expired Banner */}
+                                {sessionBanner && (
+                                    <motion.div
                                         initial={{ height: 0, opacity: 0 }}
                                         animate={{ height: 'auto', opacity: 1 }}
-                                        className="error-message"
+                                        style={{
+                                            background: '#fef3c7',
+                                            border: '1px solid #fbbf24',
+                                            borderRadius: '12px',
+                                            padding: '0.85rem 1rem',
+                                            marginBottom: '1.25rem',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600,
+                                            color: '#92400e',
+                                        }}
                                     >
-                                        {error}
+                                        ⚠️ {sessionBanner}
                                     </motion.div>
                                 )}
 
-                                <form onSubmit={handleSubmit} className="modern-form">
-                                    <div className="auth-input-group">
-                                        <label>Email Address</label>
-                                        <div className="input-field-wrapper">
-                                            <HiOutlineMail className="input-icon" />
-                                            <input
-                                                type="email" 
-                                                name="email"
-                                                placeholder="name@hospital.com"
-                                                value={formData.email}
-                                                onChange={handleChange} 
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="auth-input-group">
-                                        <label>Password</label>
-                                        <div className="input-field-wrapper">
-                                            <HiOutlineLockClosed className="input-icon" />
-                                            <PasswordInput
-                                                name="password"
-                                                placeholder="••••••••"
-                                                value={formData.password}
-                                                onChange={handleChange} 
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="form-options">
-                                        <label className="checkbox-label">
-                                            <input type="checkbox" />
-                                            <span>Remember me</span>
-                                        </label>
-                                        <a href="#" className="forgot-link">Forgot password?</a>
-                                    </div>
+                                <AnimatePresence mode="wait">
+                                    {/* ── Step 1: Credentials ── */}
+                                    {!otpStep && (
+                                        <motion.div
+                                            key="credentials"
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: -20 }}
+                                        >
+                                            <div className="auth-header">
+                                                <h3>Welcome Back</h3>
+                                                <p>Sign in with your hospital-issued credentials.</p>
+                                            </div>
 
-                                    <button className="btn-primary btn-block" type="submit" disabled={loading}>
-                                        {loading ? <span className="loader-dots">Authenticating...</span> : 'Sign In to Portal'}
-                                    </button>
-                                </form>
+                                            {error && (
+                                                <motion.div 
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    className="error-message"
+                                                >
+                                                    {error}
+                                                </motion.div>
+                                            )}
+
+                                            <form onSubmit={handleSubmit} className="modern-form">
+                                                <div className="auth-input-group">
+                                                    <label>Email Address</label>
+                                                    <div className="input-field-wrapper">
+                                                        <HiOutlineMail className="input-icon" />
+                                                        <input
+                                                            type="email" 
+                                                            name="email"
+                                                            placeholder="name@hospital.com"
+                                                            value={formData.email}
+                                                            onChange={handleChange} 
+                                                            required
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="auth-input-group">
+                                                    <label>Password</label>
+                                                    <div className="input-field-wrapper">
+                                                        <HiOutlineLockClosed className="input-icon" />
+                                                        <PasswordInput
+                                                            name="password"
+                                                            placeholder="••••••••"
+                                                            value={formData.password}
+                                                            onChange={handleChange} 
+                                                            required
+                                                        />
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="form-options">
+                                                    <label className="checkbox-label">
+                                                        <input type="checkbox" />
+                                                        <span>Remember me</span>
+                                                    </label>
+                                                    <a href="#" className="forgot-link">Forgot password?</a>
+                                                </div>
+
+                                                <button className="btn-primary btn-block" type="submit" disabled={loading}>
+                                                    {loading ? <span className="loader-dots">Authenticating...</span> : 'Sign In to Portal'}
+                                                </button>
+                                            </form>
+                                        </motion.div>
+                                    )}
+
+                                    {/* ── Step 2: OTP Verification ── */}
+                                    {otpStep === 'otp' && (
+                                        <OtpVerification
+                                            key="otp"
+                                            email={otpEmail}
+                                            onVerify={handleVerifyOtp}
+                                            onResend={handleResendOtp}
+                                            onBack={handleBackToLogin}
+                                            loading={loading}
+                                            error={error}
+                                            successMsg={otpSuccessMsg}
+                                        />
+                                    )}
+                                </AnimatePresence>
 
                                 <div className="auth-footer-note" style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
                                     <img src="https://www.medical365.in/logo/medical365fav.jpg" alt="Medical 365" style={{ height: '18px', objectFit: 'contain' }} />
@@ -248,6 +329,16 @@ const HospitalLogin = () => {
                     </motion.div>
                 </motion.div>
             </AnimatePresence>
+
+            {/* Active Session Modal */}
+            {otpStep === 'session_check' && activeSession && (
+                <ActiveSessionModal
+                    activeSession={activeSession}
+                    onForceLogin={handleForceLogin}
+                    onCancel={handleCancelSession}
+                    loading={loading}
+                />
+            )}
         </section>
     );
 };

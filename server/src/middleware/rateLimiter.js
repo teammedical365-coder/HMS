@@ -37,4 +37,22 @@ const generalLimiter = rateLimit({
     message: { success: false, message: 'Too many requests. Please slow down.' },
 });
 
-module.exports = { loginLimiter, signupLimiter, otpLimiter, generalLimiter };
+// Email OTP send — 5 sends per 15 min per IP
+const emailOtpSendLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Too many OTP requests. Please try again after 15 minutes.' },
+});
+
+// Email OTP verify — 10 attempts per 15 min per IP
+const emailOtpVerifyLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: 'Too many verification attempts. Please try again after 15 minutes.' },
+});
+
+module.exports = { loginLimiter, signupLimiter, otpLimiter, generalLimiter, emailOtpSendLimiter, emailOtpVerifyLimiter };
