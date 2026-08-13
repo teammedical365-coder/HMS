@@ -297,7 +297,7 @@ const HospitalAdminQuestionLibrary = () => {
             </div>
 
             {/* Department Navbar */}
-            <div className="gender-navbar" style={{ display: 'flex', overflowX: 'auto', gap: '4px', padding: '6px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+            <div data-lenis-prevent="true" className="gender-navbar" style={{ display: 'flex', overflowX: 'auto', gap: '4px', padding: '6px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                 {visibleDepartments.map(dept => (
                     <div
                         key={dept}
@@ -362,7 +362,7 @@ const HospitalAdminQuestionLibrary = () => {
             {/* Modal for adding questions */}
             {showAddModal && (
                 <div className="modal-overlay">
-                    <div className="modal-content">
+                    <div data-lenis-prevent="true" className="modal-content">
                         <h3 style={{ margin: '0 0 10px 0', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', color: '#0f172a' }}>{editIndex !== null ? 'Edit Question Details' : 'Add Detailed Question'}</h3>
 
                         <div>

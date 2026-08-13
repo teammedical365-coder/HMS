@@ -566,7 +566,7 @@ const CentralAdminDashboard = () => {
                         </div>
 
                         {/* Bottom Row: Flex container with justify-content: space-between */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                        <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full">
                             {/* Left Column: Logo + Name & Contact Details */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                                 {h.branding?.logoUrl ? (
@@ -613,27 +613,27 @@ const CentralAdminDashboard = () => {
                     ) : s ? (
                         <>
                             {/* ---- DATE FILTER BAR ---- */}
-                            <div className="admin-card date-filter-card">
+                            <div className="admin-card date-filter-card w-full max-w-full min-w-0 overflow-hidden">
                                 <h3>📅 Analytics Timeframe</h3>
-                                <div className="date-filter-controls">
-                                    <div className="preset-buttons">
+                                <div className="date-filter-controls flex flex-col md:flex-row flex-wrap gap-4 w-full">
+                                    <div className="preset-buttons flex flex-col sm:flex-row flex-wrap gap-2 w-full">
                                         <button className={datePreset === 'all' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('all')}>All Time</button>
                                         <button className={datePreset === 'today' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('today')}>Today</button>
                                         <button className={datePreset === '30' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('30')}>Last 30 Days</button>
                                         <button className={datePreset === '60' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('60')}>Last 60 Days</button>
                                         <button className={datePreset === '90' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('90')}>Last 90 Days</button>
                                     </div>
-                                    <div className="custom-date-inputs">
+                                    <div className="custom-date-inputs flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-2 w-full">
                                         <input type="date" className="date-input" value={customStartDate} onChange={(e) => { setDatePreset('custom'); setCustomStartDate(e.target.value); }} />
                                         <span>to</span>
                                         <input type="date" className="date-input" value={customEndDate} onChange={(e) => { setDatePreset('custom'); setCustomEndDate(e.target.value); }} />
-                                        <button className="btn-save" onClick={handleApplyCustomDate}>Apply Custom</button>
+                                        <button className="btn-save w-full md:w-auto" onClick={handleApplyCustomDate}>Apply Custom</button>
                                     </div>
                                 </div>
                             </div>
 
                             {/* ---- KPI STATS ROW ---- */}
-                            <div className="hospital-kpi-grid">
+                            <div className="hospital-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-full min-w-0">
                                 <div className="kpi-card kpi-blue">
                                     <div className="kpi-icon">👩‍⚕️</div>
                                     <div className="kpi-value">{s.totalStaff}</div>
@@ -673,7 +673,7 @@ const CentralAdminDashboard = () => {
                             </div>
 
                             {/* ---- FEATURE QUICK ACTIONS ---- */}
-                            <div className="admin-card" style={{ marginBottom: '24px' }}>
+                            <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '24px' }}>
                                 <h3 style={{ marginBottom: '8px' }}>⚡ Quick Feature Management</h3>
                                 <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>Jump to manage specific features for this hospital.</p>
                                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -700,9 +700,9 @@ const CentralAdminDashboard = () => {
                             </div>
 
                             {/* ---- APPOINTMENT MODE CUSTOMIZATION ---- */}
-                            <div className="admin-card" style={{ marginBottom: '24px', border: '2px solid #e0f2fe' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                                    <h3 style={{ margin: 0 }}>🎟️ Appointment System Mode</h3>
+                            <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '24px', border: '2px solid #e0f2fe' }}>
+                                <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-[10px]" style={{ marginBottom: '6px' }}>
+                                    <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>🎟️ Appointment System Mode</h3>
                                     <span style={{ fontSize: '0.75rem', background: h.appointmentMode === 'token' ? '#fef3c7' : '#dbeafe', color: h.appointmentMode === 'token' ? '#92400e' : '#1d4ed8', padding: '2px 10px', borderRadius: '20px', fontWeight: 700 }}>
                                         Current: {h.appointmentMode === 'token' ? 'Token Queue' : 'Time Slots'}
                                     </span>
@@ -784,7 +784,7 @@ const CentralAdminDashboard = () => {
                             {/* ---- TWO COLUMN: Staff Breakdown + Revenue Chart ---- */}
                             <div className="detail-two-col">
                                 {/* Staff breakdown */}
-                                <div className="admin-card">
+                                <div className="admin-card w-full max-w-full min-w-0">
                                     <h3>👥 Staff Breakdown</h3>
                                     {s.staffBreakdown.length === 0 ? (
                                         <p style={{ color: '#888', fontSize: '14px' }}>No staff assigned yet.</p>
@@ -834,7 +834,7 @@ const CentralAdminDashboard = () => {
                                 </div>
 
                                 {/* Revenue chart */}
-                                <div className="admin-card">
+                                <div className="admin-card w-full max-w-full min-w-0">
                                     <h3>💰 Monthly Revenue (Last 6 Months)</h3>
                                     {s.monthlyRevenue.length === 0 ? (
                                         <p style={{ color: '#888', fontSize: '14px' }}>No revenue data yet.</p>
@@ -858,22 +858,22 @@ const CentralAdminDashboard = () => {
                             </div>
 
                             {/* ---- STAFF LIST ---- */}
-                            <div className="admin-card">
+                            <div className="admin-card w-full max-w-full min-w-0">
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-                                    <h3 style={{ margin: 0 }}>👥 Staff Members ({hospitalStats.staffList?.length || 0})</h3>
+                                    <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>👥 Staff Members ({hospitalStats.staffList?.length || 0})</h3>
                                 </div>
                                 {!hospitalStats.staffList?.length ? (
                                     <p style={{ color: '#888', fontSize: '14px' }}>No staff assigned to this hospital yet.</p>
                                 ) : (
-                                    <div className="users-table">
-                                        <table>
+                                    <div className="users-table w-full overflow-x-auto">
+                                        <table className="w-full min-w-[600px] overflow-hidden">
                                             <thead>
                                                 <tr><th>Name</th><th>Role</th><th>Email</th><th>Phone</th></tr>
                                             </thead>
                                             <tbody>
                                                 {hospitalStats.staffList.map(u => (
                                                     <tr key={u._id}>
-                                                        <td><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        <td><div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-[10px]">
                                                             {u.avatar
                                                                 ? <img src={u.avatar} alt={u.name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
                                                                 : <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#6366f1' }}>{u.name?.charAt(0)?.toUpperCase()}</div>
@@ -892,13 +892,13 @@ const CentralAdminDashboard = () => {
                             </div>
 
                             {/* ---- RECENT APPOINTMENTS ---- */}
-                            <div className="admin-card">
+                            <div className="admin-card w-full max-w-full min-w-0">
                                 <h3>📋 Recent Appointments ({hospitalStats.recentAppointments?.length || 0} latest)</h3>
                                 {!hospitalStats.recentAppointments?.length ? (
                                     <p style={{ color: '#888', fontSize: '14px' }}>No appointments yet.</p>
                                 ) : (
-                                    <div className="users-table">
-                                        <table>
+                                    <div className="users-table w-full overflow-x-auto">
+                                        <table className="w-full min-w-[600px] overflow-hidden">
                                             <thead>
                                                 <tr><th>Patient</th><th>Doctor</th><th>Date</th><th>Status</th><th>Amount</th></tr>
                                             </thead>
@@ -933,22 +933,30 @@ const CentralAdminDashboard = () => {
     // ==========================================
     return (
         <div className="centraladmin-page">
-            <div className={`centraladmin-container ${selectedHospital ? 'has-sidebar-padding' : ''}`}>
+            <div className={`centraladmin-container px-3 md:px-6 w-full ${selectedHospital ? 'has-sidebar-padding' : ''}`}>
                 {/* Redundant Header Removed (now in TopBar) */}
-                <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <img src="/assets/medical365fav.jpg" alt="Hospital Logo" style={{ height: '36px', width: 'auto', marginRight: '10px', objectFit: 'contain' }} />
-                        <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div className="flex flex-col md:flex-row flex-nowrap items-start md:items-end justify-between gap-6 md:gap-4 w-full" style={{ marginBottom: '32px' }}>
+                    <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full">
+                        <div className="flex flex-row items-center gap-3">
+                            <img src="/assets/medical365fav.jpg" alt="Hospital Logo" className="h-10 md:h-9 w-auto object-contain bg-white rounded-lg p-1 md:p-0 md:bg-transparent" style={{ marginRight: '0' }} />
+                            <span className="md:hidden" style={{ fontSize: '0.75rem', fontWeight: 800, background: 'var(--brand-50, #f0fdfa)', color: 'var(--brand-600, #14b8a6)', padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.05em' }}>CENTRAL ADMIN</span>
+                        </div>
+                        <div className="flex flex-col gap-1 w-full">
+                            <div className="hidden md:flex items-center gap-2">
                                 <span style={{ fontSize: '0.75rem', fontWeight: 800, background: 'var(--brand-50, #f0fdfa)', color: 'var(--brand-600, #14b8a6)', padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.05em' }}>CENTRAL ADMIN</span>
                             </div>
-                            <h1 className="ca-dashboard-title" style={{ fontSize: '1.8rem', fontWeight: 850, margin: '8px 0 4px' }}>🏛️ Central Administration Dashboard</h1>
-                            <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Manage all hospitals, staff, and system configurations</p>
+                            <h1 className="ca-dashboard-title text-2xl md:text-[1.8rem] font-[850] leading-snug m-0" style={{ fontWeight: 850, margin: '4px 0' }}>
+                                🏛️ Central Administration Dashboard
+                            </h1>
+                            <p className="text-slate-400 md:text-[#64748b] text-[0.95rem] m-0" style={{ color: '#64748b', fontSize: '0.95rem', margin: '0' }}>
+                                Manage all hospitals, staff, and system configurations
+                            </p>
                         </div>
                     </div>
                     <button
                         onClick={() => navigate('/supremeadmin/revenue')}
-                        style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(99,102,241,0.3)', whiteSpace: 'nowrap' }}
+                        className="w-full md:w-auto flex-shrink-0" 
+                        style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', border: 'none', padding: '12px 20px', borderRadius: '10px', fontWeight: 700, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(99,102,241,0.3)', whiteSpace: 'normal' }}
                     >
                         📊 System Revenue Analytics
                     </button>
@@ -958,9 +966,9 @@ const CentralAdminDashboard = () => {
                 {success && <div className="success-message">✅ {success}</div>}
 
                 {/* Tabs */}
-                <div className="ca-tabs">
+                <div className="ca-tabs flex flex-row flex-nowrap whitespace-nowrap overflow-x-auto w-full max-w-full min-w-0 pb-2 gap-2 hide-scrollbar">
                     {tabs.map(tab => (
-                        <button key={tab.id} className={`ca-tab ${activeTab === tab.id ? 'ca-tab-active' : ''}`} onClick={() => setActiveTab(tab.id)}>
+                        <button key={tab.id} className={`ca-tab flex-shrink-0 ${activeTab === tab.id ? 'ca-tab-active' : ''}`} onClick={() => setActiveTab(tab.id)}>
                             {tab.label}
                         </button>
                     ))}
@@ -969,8 +977,8 @@ const CentralAdminDashboard = () => {
                 {/* ========== HOSPITALS TAB (Enterprise, Multi-Speciality, Clinic Basic) ========== */}
                 {(activeTab === 'hospitals' || activeTab === 'multi-speciality' || activeTab === 'clinic-basic') && !selectedHospital && (
                     <div>
-                        <div className="admin-card">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <div className="admin-card w-full max-w-full min-w-0">
+                            <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full" style={{ marginBottom: '20px' }}>
                                 <div>
                                     <h2>
                                         {activeTab === 'hospitals' 
@@ -987,12 +995,12 @@ const CentralAdminDashboard = () => {
                                                 : 'Advanced clinics supporting up to 5 Doctors & 3 Staff.'}
                                     </p>
                                 </div>
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                    <button className={showHospitalAdminForm ? 'btn-cancel' : 'btn-edit'} style={{ padding: '10px 18px' }}
+                                <div className="flex flex-col sm:flex-row gap-3 w-full">
+                                    <button className={`w-full md:w-auto text-center justify-center flex ${showHospitalAdminForm ? 'btn-cancel' : 'btn-edit'}`} style={{ padding: '10px 18px' }}
                                         onClick={() => { setShowHospitalAdminForm(!showHospitalAdminForm); setShowHospitalForm(false); setEditHospital(null); }}>
                                         {showHospitalAdminForm ? 'Cancel' : '👤 Add Hospital Admin'}
                                     </button>
-                                    <button className={showHospitalForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '10px 18px' }}
+                                    <button className={`w-full md:w-auto text-center justify-center flex ${showHospitalForm ? 'btn-cancel' : 'btn-save'}`} style={{ padding: '10px 18px' }}
                                         onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] }); }}>
                                         {showHospitalForm 
                                             ? 'Cancel' 
@@ -1081,7 +1089,7 @@ const CentralAdminDashboard = () => {
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label className="staff-label">Full Name *</label>
-                                                <input type="text" className="staff-input" placeholder="e.g. Dr. Ramesh Kumar" value={hospitalAdminForm.name} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, name: e.target.value })} required minLength={2} />
+                                                <input type="text" className="staff-input w-full" placeholder="e.g. Dr. Ramesh Kumar" value={hospitalAdminForm.name} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, name: e.target.value })} required minLength={2} />
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Email *</label>
@@ -1091,7 +1099,7 @@ const CentralAdminDashboard = () => {
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label className="staff-label">Password *</label>
-                                                <input type="text" className="staff-input" placeholder="Temporary password" value={hospitalAdminForm.password} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, password: e.target.value })} required />
+                                                <input type="text" className="staff-input w-full" placeholder="Temporary password" value={hospitalAdminForm.password} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, password: e.target.value })} required />
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Phone *</label>
@@ -1118,7 +1126,7 @@ const CentralAdminDashboard = () => {
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Aadhaar Number *</label>
-                                                <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={hospitalAdminForm.aadhaarNumber} onChange={e => {
+                                                <input type="text" className="staff-input w-full" placeholder="12-digit Aadhaar" value={hospitalAdminForm.aadhaarNumber} onChange={e => {
                                                     const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 12);
                                                     setHospitalAdminForm({ ...hospitalAdminForm, aadhaarNumber: cleanVal });
                                                 }} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
@@ -1132,7 +1140,7 @@ const CentralAdminDashboard = () => {
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Assign Hospital *</label>
-                                                <select className="staff-input" value={hospitalAdminForm.hospitalId} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, hospitalId: e.target.value })} required>
+                                                <select className="staff-input w-full" value={hospitalAdminForm.hospitalId} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, hospitalId: e.target.value })} required>
                                                     <option value="">-- Select Hospital --</option>
                                                     {[...hospitals].sort((a, b) => (a.name || '').trim().toLowerCase().localeCompare((b.name || '').trim().toLowerCase())).map(h => <option key={h._id} value={h._id}>{h.name}{h.city ? ` — ${h.city}` : ''}</option>)}
                                                 </select>
@@ -1151,30 +1159,30 @@ const CentralAdminDashboard = () => {
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label className="staff-label">Hospital Name *</label>
-                                                <input type="text" className="staff-input" placeholder="e.g. City General Hospital" value={hospitalForm.name} onChange={e => setHospitalForm({ ...hospitalForm, name: e.target.value })} required />
+                                                <input type="text" className="staff-input w-full" placeholder="e.g. City General Hospital" value={hospitalForm.name} onChange={e => setHospitalForm({ ...hospitalForm, name: e.target.value })} required />
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Subdomain Prefix *</label>
-                                                <input type="text" className="staff-input" placeholder="e.g. citycare" value={hospitalForm.slug} onChange={e => setHospitalForm({ ...hospitalForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} required />
+                                                <input type="text" className="staff-input w-full" placeholder="e.g. citycare" value={hospitalForm.slug} onChange={e => setHospitalForm({ ...hospitalForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} required />
                                             </div>
                                         </div>
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label className="staff-label">Custom White-label Domain</label>
-                                                <input type="text" className="staff-input" placeholder="e.g. portal.hospitalA.com" value={hospitalForm.customDomain || ''} onChange={e => setHospitalForm({ ...hospitalForm, customDomain: e.target.value.toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '') })} />
+                                                <input type="text" className="staff-input w-full" placeholder="e.g. portal.hospitalA.com" value={hospitalForm.customDomain || ''} onChange={e => setHospitalForm({ ...hospitalForm, customDomain: e.target.value.toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '') })} />
                                                 <small style={{ color: '#888' }}>Optional. Maps via DNS CNAME.</small>
                                             </div>
                                         </div>
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label className="staff-label">City</label>
-                                                <input type="text" className="staff-input" placeholder="e.g. Mumbai" value={hospitalForm.city} onChange={e => setHospitalForm({ ...hospitalForm, city: e.target.value })} />
+                                                <input type="text" className="staff-input w-full" placeholder="e.g. Mumbai" value={hospitalForm.city} onChange={e => setHospitalForm({ ...hospitalForm, city: e.target.value })} />
                                             </div>
                                         </div>
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label className="staff-label">State</label>
-                                                <input type="text" className="staff-input" placeholder="e.g. Maharashtra" value={hospitalForm.state} onChange={e => setHospitalForm({ ...hospitalForm, state: e.target.value })} />
+                                                <input type="text" className="staff-input w-full" placeholder="e.g. Maharashtra" value={hospitalForm.state} onChange={e => setHospitalForm({ ...hospitalForm, state: e.target.value })} />
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Phone *</label>
@@ -1191,12 +1199,12 @@ const CentralAdminDashboard = () => {
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Website</label>
-                                                <input type="text" className="staff-input" value={hospitalForm.website} onChange={e => setHospitalForm({ ...hospitalForm, website: e.target.value })} />
+                                                <input type="text" className="staff-input w-full" value={hospitalForm.website} onChange={e => setHospitalForm({ ...hospitalForm, website: e.target.value })} />
                                             </div>
                                         </div>
                                         <div className="form-group">
                                             <label className="staff-label">Address</label>
-                                            <input type="text" className="staff-input" value={hospitalForm.address} onChange={e => setHospitalForm({ ...hospitalForm, address: e.target.value })} />
+                                            <input type="text" className="staff-input w-full" value={hospitalForm.address} onChange={e => setHospitalForm({ ...hospitalForm, address: e.target.value })} />
                                         </div>
                                         <div className="form-group" style={{ marginBottom: '16px' }}>
                                             <label className="staff-label">Departments Provided (Linked to Question Library)</label>
@@ -1243,7 +1251,7 @@ const CentralAdminDashboard = () => {
                                 }
 
                                 return (
-                                    <div className="hospitals-grid">
+                                    <div className="hospitals-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-full min-w-0">
                                         {filteredHospitals.map(h => (
                                             <div key={h._id} className={`hospital-card clickable-card ${!h.isActive ? 'hospital-inactive' : ''}`} onClick={() => openHospitalDetail(h)}>
                                             <div className="hospital-card-content">
@@ -1282,10 +1290,10 @@ const CentralAdminDashboard = () => {
                                             </div>
                                             <div className="hospital-card-footer">
                                                 <div className="hospital-click-hint">📊 Click to view full analytics →</div>
-                                                <div className="hospital-actions" onClick={e => e.stopPropagation()}>
+                                                <div className="hospital-actions flex-wrap w-full" onClick={e => e.stopPropagation()}>
                                                     <button className="btn-branding" onClick={() => setBrandingHospital(h)}>🎨 Branding</button>
                                                     <button className="btn-edit" onClick={() => openEditHospital(h)}>Edit</button>
-                                                    <button className="btn-delete" onClick={() => setDeleteHospitalConfirm(h._id)}>Delete</button>
+                                                    <button className="btn-delete w-full md:w-auto" onClick={() => setDeleteHospitalConfirm(h._id)}>Delete</button>
                                                 </div>
                                             </div>
                                         </div>
@@ -1301,8 +1309,8 @@ const CentralAdminDashboard = () => {
                 {/* ========== CLINICS TAB (Starter) ========== */}
                 {activeTab === 'simple-clinics' && !selectedClinic && (
                     <div>
-                        <div className="admin-card">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <div className="admin-card w-full max-w-full min-w-0">
+                            <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full" style={{ marginBottom: '20px' }}>
                                 <div>
                                     <h2>🏪 Starter Plan</h2>
                                     <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
@@ -1351,12 +1359,12 @@ const CentralAdminDashboard = () => {
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label className="staff-label">Clinic Name *</label>
-                                                <input type="text" className="staff-input" placeholder="e.g. Sharma Family Clinic" value={clinicForm.name}
+                                                <input type="text" className="staff-input w-full" placeholder="e.g. Sharma Family Clinic" value={clinicForm.name}
                                                     onChange={e => setClinicForm({ ...clinicForm, name: e.target.value })} required />
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">Subdomain / Slug *</label>
-                                                <input type="text" className="staff-input" placeholder="e.g. sharma-clinic" value={clinicForm.slug}
+                                                <input type="text" className="staff-input w-full" placeholder="e.g. sharma-clinic" value={clinicForm.slug}
                                                     onChange={e => setClinicForm({ ...clinicForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} />
                                                 <small style={{ color: '#888' }}>Leave blank to auto-generate from name</small>
                                             </div>
@@ -1364,19 +1372,19 @@ const CentralAdminDashboard = () => {
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label className="staff-label">Address</label>
-                                                <input type="text" className="staff-input" placeholder="Street address" value={clinicForm.address}
+                                                <input type="text" className="staff-input w-full" placeholder="Street address" value={clinicForm.address}
                                                     onChange={e => setClinicForm({ ...clinicForm, address: e.target.value })} />
                                             </div>
                                             <div className="form-group">
                                                 <label className="staff-label">City</label>
-                                                <input type="text" className="staff-input" placeholder="e.g. Delhi" value={clinicForm.city}
+                                                <input type="text" className="staff-input w-full" placeholder="e.g. Delhi" value={clinicForm.city}
                                                     onChange={e => setClinicForm({ ...clinicForm, city: e.target.value })} />
                                             </div>
                                         </div>
                                         <div className="form-row">
                                             <div className="form-group">
                                                 <label className="staff-label">State</label>
-                                                <input type="text" className="staff-input" placeholder="e.g. Delhi" value={clinicForm.state}
+                                                <input type="text" className="staff-input w-full" placeholder="e.g. Delhi" value={clinicForm.state}
                                                     onChange={e => setClinicForm({ ...clinicForm, state: e.target.value })} />
                                             </div>
                                             <div className="form-group">
@@ -1422,9 +1430,9 @@ const CentralAdminDashboard = () => {
                                 }
 
                                 return (
-                                    <div className="hospital-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                                    <div className="hospital-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 w-full">
                                         {filteredClinics.map(clinic => (
-                                        <div key={clinic._id} className="hospital-card" style={{ cursor: 'pointer', border: '2px solid #e2e8f0', borderRadius: '12px', padding: '20px', background: '#fff', transition: 'box-shadow 0.2s' }}
+                                        <div key={clinic._id} className="hospital-card" style={{ cursor: 'pointer', border: '2px solid #e2e8f0', borderRadius: '12px', padding: '24px', background: '#fff', transition: 'box-shadow 0.2s', display: 'flex', flexDirection: 'column' }}
                                             onClick={() => openClinicDetail(clinic)}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                                                 <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '22px' }}>🏪</div>
@@ -1440,7 +1448,7 @@ const CentralAdminDashboard = () => {
                                                 {clinic.phone && <div>📞 {clinic.phone}</div>}
                                                 {clinic.email && <div>✉️ {clinic.email}</div>}
                                                 <div style={{ marginTop: '6px' }}>💰 Fee: {formatCurrency(clinic.defaultFee)}</div>
-                                                {clinic.slug && <div style={{ marginTop: '4px' }} onClick={e => e.stopPropagation()}><a href={`${window.location.protocol}//${clinic.slug}.${getBaseHost()}`} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'monospace', fontSize: '11px', color: '#14b8a6', textDecoration: 'none' }}>🔗 {clinic.slug}.{getBaseHost()}</a></div>}
+                                                {clinic.slug && <div style={{ marginTop: '4px' }} onClick={e => e.stopPropagation()}><a href={`${window.location.protocol}//${clinic.slug}.${getBaseHost()}`} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'monospace', fontSize: '11px', color: '#14b8a6', textDecoration: 'none', wordBreak: 'break-all' }}>🔗 {clinic.slug}.{getBaseHost()}</a></div>}
                                                 <div style={{ marginTop: '8px', padding: '6px 10px', borderRadius: '6px', background: clinic.adminUserId ? '#f0fdf4' : '#fff7ed', border: `1px solid ${clinic.adminUserId ? '#bbf7d0' : '#fed7aa'}` }}>
                                                     {clinic.adminUserId
                                                         ? <span style={{ color: '#16a34a', fontSize: '12px', fontWeight: 600 }}>👤 Admin: {clinic.adminUserId.name}</span>
@@ -1471,12 +1479,12 @@ const CentralAdminDashboard = () => {
                 {activeTab === 'simple-clinics' && selectedClinic && (
                     <div>
                         {/* Header */}
-                        <div className="admin-card" style={{ marginBottom: '16px' }}>
+                        <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '16px' }}>
                             <button onClick={closeClinicDetail} className="back-btn" style={{ marginBottom: '12px' }}>← Back to All Clinics</button>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                                 <div style={{ fontSize: '40px' }}>🏪</div>
                                 <div>
-                                    <h2 style={{ margin: 0 }}>{selectedClinic.name}</h2>
+                                    <h2 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>{selectedClinic.name}</h2>
                                     <p style={{ color: '#64748b', margin: '4px 0 0' }}>
                                         {selectedClinic.city}{selectedClinic.state ? `, ${selectedClinic.state}` : ''}
                                         {selectedClinic.phone ? ` · 📞 ${selectedClinic.phone}` : ''}
@@ -1502,7 +1510,7 @@ const CentralAdminDashboard = () => {
                                         { label: 'Revenue', value: formatCurrency(clinicStats.stats.revenue), icon: '💰', color: '#f59e0b', bg: '#fffbeb' },
                                         { label: 'Staff Members', value: clinicStats.stats.staff?.length || 0, icon: '👥', color: '#6366f1', bg: '#eef2ff' },
                                     ].map((kpi, i) => (
-                                        <div key={i} className="admin-card" style={{ background: kpi.bg, border: `1px solid ${kpi.color}22`, textAlign: 'center', padding: '18px' }}>
+                                        <div key={i} className="admin-card w-full max-w-full min-w-0" style={{ background: kpi.bg, border: `1px solid ${kpi.color}22`, textAlign: 'center', padding: '18px' }}>
                                             <div style={{ fontSize: '28px', marginBottom: '6px' }}>{kpi.icon}</div>
                                             <div style={{ fontSize: '22px', fontWeight: 800, color: kpi.color }}>{kpi.value}</div>
                                             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{kpi.label}</div>
@@ -1511,18 +1519,35 @@ const CentralAdminDashboard = () => {
                                 </div>
 
                                 {/* Clinic Admin Section */}
-                                <div className="admin-card" style={{ marginBottom: '20px', border: '2px solid #e0e7ff' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '20px', border: '2px solid #e0e7ff' }}>
+                                    <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full" style={{ marginBottom: '16px' }}>
                                         <div>
-                                            <h3 style={{ margin: 0 }}>👤 Clinic Admin Account</h3>
+                                            <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>👤 Clinic Admin Account</h3>
                                             <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
                                                 The admin has full access to this clinic. Login at <strong>/login</strong>
                                             </p>
                                         </div>
-                                        <button className={showClinicManagerForm ? 'btn-cancel' : 'btn-save'} style={{ fontSize: '13px', padding: '8px 16px' }}
-                                            onClick={() => { setShowClinicManagerForm(!showClinicManagerForm); setShowClinicStaffForm(false); setClinicManagerForm({ name: '', email: '', password: '', phone: '' }); }}>
-                                            {showClinicManagerForm ? 'Cancel' : clinicStats.clinic?.adminUserId ? '🔄 Add Another Admin' : '+ Add Clinic Admin'}
-                                        </button>
+                                        {(() => {
+                                            const isStarter = clinicStats.clinic?.subscriptionPlan === 'starter' || clinicStats.clinic?.clinicPlan === 'starter' || activeTab === 'simple-clinics';
+                                            const hasAdmin = !!clinicStats.clinic?.adminUserId;
+                                            const disableAdminBtn = isStarter && hasAdmin && !showClinicManagerForm;
+                                            
+                                            return (
+                                                <button 
+                                                    className={showClinicManagerForm ? 'btn-cancel' : 'btn-save'} 
+                                                    style={{ 
+                                                        fontSize: '13px', 
+                                                        padding: '8px 16px',
+                                                        opacity: disableAdminBtn ? 0.5 : 1,
+                                                        cursor: disableAdminBtn ? 'not-allowed' : 'pointer'
+                                                    }}
+                                                    onClick={disableAdminBtn ? undefined : () => { setShowClinicManagerForm(!showClinicManagerForm); setShowClinicStaffForm(false); setClinicManagerForm({ name: '', email: '', password: '', phone: '' }); }}
+                                                    title={disableAdminBtn ? "Starter Plan allows only 1 Hospital Admin." : ""}
+                                                >
+                                                    {showClinicManagerForm ? 'Cancel' : hasAdmin ? '🔄 Add Another Admin' : '+ Add Clinic Admin'}
+                                                </button>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* Current admin info */}
@@ -1557,7 +1582,7 @@ const CentralAdminDashboard = () => {
                                                 <div className="form-row">
                                                     <div className="form-group">
                                                         <label className="staff-label">Full Name *</label>
-                                                        <input type="text" className="staff-input" placeholder="e.g. Dr. Ramesh Sharma" value={clinicManagerForm.name}
+                                                        <input type="text" className="staff-input w-full" placeholder="e.g. Dr. Ramesh Sharma" value={clinicManagerForm.name}
                                                             onChange={e => setClinicManagerForm({ ...clinicManagerForm, name: e.target.value })} required minLength={2} />
                                                     </div>
                                                     <div className="form-group">
@@ -1569,7 +1594,7 @@ const CentralAdminDashboard = () => {
                                                 <div className="form-row">
                                                     <div className="form-group">
                                                         <label className="staff-label">Password *</label>
-                                                        <input type="text" className="staff-input" placeholder="Set a temporary password" value={clinicManagerForm.password}
+                                                        <input type="text" className="staff-input w-full" placeholder="Set a temporary password" value={clinicManagerForm.password}
                                                             onChange={e => setClinicManagerForm({ ...clinicManagerForm, password: e.target.value })} required />
                                                     </div>
                                                     <div className="form-group">
@@ -1588,7 +1613,7 @@ const CentralAdminDashboard = () => {
                                                     </div>
                                                     <div className="form-group">
                                                         <label className="staff-label">Aadhaar Number *</label>
-                                                        <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={clinicManagerForm.aadhaarNumber} onChange={e => {
+                                                        <input type="text" className="staff-input w-full" placeholder="12-digit Aadhaar" value={clinicManagerForm.aadhaarNumber} onChange={e => {
                                                             const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 12);
                                                             setClinicManagerForm({ ...clinicManagerForm, aadhaarNumber: cleanVal });
                                                         }} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
@@ -1603,18 +1628,35 @@ const CentralAdminDashboard = () => {
                                 </div>
 
                                 {/* Staff Management */}
-                                <div className="admin-card" style={{ marginBottom: '20px' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '20px' }}>
+                                    <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full" style={{ marginBottom: '16px' }}>
                                         <div>
-                                            <h3 style={{ margin: 0 }}>👥 Additional Staff</h3>
+                                            <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>👥 Additional Staff</h3>
                                             <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
-                                                Tier: {clinicStats.stats.staff?.filter(s => s.role === 'doctor').length || 0}/{clinicStats.clinic?.tier?.maxDoctors || 1} Doctors · {clinicStats.stats.staff?.filter(s => s.role === 'receptionist').length || 0}/{clinicStats.clinic?.tier?.maxReceptionists || 1} Receptionists · All login at <strong>/login</strong>
+                                                Tier: {clinicStats.stats.staff?.filter(s => s.role?.toLowerCase() === 'doctor' || s.role?.toLowerCase() === 'clinic doctor').length || 0}/{clinicStats.clinic?.tier?.maxDoctors || 1} Doctors · {clinicStats.stats.staff?.filter(s => s.role?.toLowerCase() === 'hospitaladmin' || s.role?.toLowerCase() === 'clinic admin').length || 0}/1 Hospital Admin · All login at <strong>/login</strong>
                                             </p>
                                         </div>
-                                        <button className="btn-edit" style={{ fontSize: '13px', padding: '8px 14px' }}
-                                            onClick={() => { setShowClinicStaffForm(!showClinicStaffForm); setShowClinicManagerForm(false); }}>
-                                            {showClinicStaffForm ? 'Cancel' : '+ Add Staff'}
-                                        </button>
+                                        {(() => {
+                                            const isStarter = clinicStats.clinic?.subscriptionPlan === 'starter' || clinicStats.clinic?.clinicPlan === 'starter' || activeTab === 'simple-clinics';
+                                            const totalUsers = clinicStats.stats?.staff?.length || 0;
+                                            const disableStaffBtn = isStarter && totalUsers >= 2 && !showClinicStaffForm;
+                                            
+                                            return (
+                                                <button 
+                                                    className="btn-edit" 
+                                                    style={{ 
+                                                        fontSize: '13px', 
+                                                        padding: '8px 14px',
+                                                        opacity: disableStaffBtn ? 0.5 : 1,
+                                                        cursor: disableStaffBtn ? 'not-allowed' : 'pointer'
+                                                    }}
+                                                    onClick={disableStaffBtn ? undefined : () => { setShowClinicStaffForm(!showClinicStaffForm); setShowClinicManagerForm(false); }}
+                                                    title={disableStaffBtn ? "Starter Plan user limit reached. Upgrade your plan to add more staff." : ""}
+                                                >
+                                                    {showClinicStaffForm ? 'Cancel' : '+ Add Staff'}
+                                                </button>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* Staff Form */}
@@ -1628,7 +1670,7 @@ const CentralAdminDashboard = () => {
                                                 <div className="form-row">
                                                     <div className="form-group">
                                                         <label className="staff-label">Full Name *</label>
-                                                        <input type="text" className="staff-input" placeholder="Staff name" value={clinicStaffForm.name}
+                                                        <input type="text" className="staff-input w-full" placeholder="Staff name" value={clinicStaffForm.name}
                                                             onChange={e => setClinicStaffForm({ ...clinicStaffForm, name: e.target.value })} required minLength={2} />
                                                     </div>
                                                     <div className="form-group">
@@ -1640,7 +1682,7 @@ const CentralAdminDashboard = () => {
                                                 <div className="form-row">
                                                     <div className="form-group">
                                                         <label className="staff-label">Password *</label>
-                                                        <input type="text" className="staff-input" placeholder="Temporary password" value={clinicStaffForm.password}
+                                                        <input type="text" className="staff-input w-full" placeholder="Temporary password" value={clinicStaffForm.password}
                                                             onChange={e => setClinicStaffForm({ ...clinicStaffForm, password: e.target.value })} required />
                                                     </div>
                                                     <div className="form-group">
@@ -1669,7 +1711,7 @@ const CentralAdminDashboard = () => {
                                                     </div>
                                                     <div className="form-group">
                                                         <label className="staff-label">Aadhaar Number *</label>
-                                                        <input type="text" className="staff-input" placeholder="12-digit Aadhaar" value={clinicStaffForm.aadhaarNumber} onChange={e => {
+                                                        <input type="text" className="staff-input w-full" placeholder="12-digit Aadhaar" value={clinicStaffForm.aadhaarNumber} onChange={e => {
                                                             const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 12);
                                                             setClinicStaffForm({ ...clinicStaffForm, aadhaarNumber: cleanVal });
                                                         }} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
@@ -1677,7 +1719,7 @@ const CentralAdminDashboard = () => {
                                                 </div>
                                                 <div className="form-group">
                                                     <label className="staff-label">Role *</label>
-                                                    <select className="staff-input" value={clinicStaffForm.staffRole}
+                                                    <select className="staff-input w-full" value={clinicStaffForm.staffRole}
                                                         onChange={e => setClinicStaffForm({ ...clinicStaffForm, staffRole: e.target.value })}>
                                                         <option value="doctor">🩺 Clinic Doctor</option>
                                                     </select>
@@ -1691,8 +1733,8 @@ const CentralAdminDashboard = () => {
 
                                     {/* Staff Table */}
                                     {clinicStats.stats.staff?.length > 0 ? (
-                                        <div className="users-table">
-                                            <table>
+                                        <div className="users-table w-full overflow-x-auto">
+                                            <table className="w-full min-w-[600px] overflow-hidden">
                                                 <thead>
                                                     <tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Added</th><th></th></tr>
                                                 </thead>
@@ -1700,7 +1742,7 @@ const CentralAdminDashboard = () => {
                                                     {clinicStats.stats.staff.map(s => (
                                                         <tr key={s._id}>
                                                             <td style={{ fontWeight: 600 }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-[8px]">
                                                                     <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#6366f1', fontSize: '13px' }}>
                                                                         {s.name?.charAt(0)?.toUpperCase()}
                                                                     </div>
@@ -1729,10 +1771,10 @@ const CentralAdminDashboard = () => {
 
                                 {/* Recent Appointments */}
                                 {clinicStats.stats.recentAppointments?.length > 0 && (
-                                    <div className="admin-card">
+                                    <div className="admin-card w-full max-w-full min-w-0">
                                         <h3>📅 Recent Appointments</h3>
-                                        <div className="users-table">
-                                            <table>
+                                        <div className="users-table w-full overflow-x-auto">
+                                            <table className="w-full min-w-[600px] overflow-hidden">
                                                 <thead>
                                                     <tr><th>Patient ID</th><th>Doctor</th><th>Date</th><th>Status</th><th>Amount</th><th>Payment</th></tr>
                                                 </thead>
@@ -1754,7 +1796,7 @@ const CentralAdminDashboard = () => {
                                 )}
 
                                 {/* ── Subscription / Billing Management ── */}
-                                <div className="admin-card" style={{ marginTop: '20px', border: '2px solid #e0e7ff' }}>
+                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginTop: '20px', border: '2px solid #e0e7ff' }}>
                                     <h3 style={{ marginBottom: '4px' }}>💳 Billing &amp; Subscription</h3>
                                     <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>
                                         Patient code: <strong style={{ color: '#6366f1' }}>{clinicStats.clinic?.clinicCode || '—'}</strong> · Rate per new patient this month
@@ -1764,7 +1806,7 @@ const CentralAdminDashboard = () => {
                                     <form onSubmit={handleSaveRate} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '20px', padding: '14px', background: '#f8fafc', borderRadius: '8px' }}>
                                         <div>
                                             <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '4px' }}>Rate per New Patient (₹)</label>
-                                            <input type="number" min="0" style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '14px', width: '160px' }}
+                                            <input type="number" min="0" className="w-full sm:w-[160px]" style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '14px' }}
                                                 placeholder="e.g. 50" value={subscriptionRateForm.ratePerPatient}
                                                 onChange={e => setSubscriptionRateForm(f => ({ ...f, ratePerPatient: e.target.value }))} />
                                         </div>
@@ -1773,15 +1815,15 @@ const CentralAdminDashboard = () => {
                                                 onChange={e => setSubscriptionRateForm(f => ({ ...f, billingEnabled: e.target.checked }))} />
                                             <label htmlFor="billingEnabled" style={{ fontSize: '13px', color: '#475569', cursor: 'pointer' }}>Enable billing</label>
                                         </div>
-                                        <button type="submit" className="btn-save" style={{ fontSize: '13px', padding: '8px 16px' }} disabled={savingRate}>
+                                        <button type="submit" className="btn-save w-full md:w-auto" style={{ fontSize: '13px', padding: '8px 16px' }} disabled={savingRate}>
                                             {savingRate ? 'Saving...' : '💾 Save Rate'}
                                         </button>
                                     </form>
 
                                     {/* Subscription history table */}
                                     {clinicSubscriptions.length > 0 ? (
-                                        <div className="users-table">
-                                            <table>
+                                        <div className="users-table w-full overflow-x-auto">
+                                            <table className="w-full min-w-[600px] overflow-hidden">
                                                 <thead>
                                                     <tr><th>Month / Year</th><th>New Patients</th><th>Total Patients</th><th>Rate</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
                                                 </thead>
@@ -1804,7 +1846,7 @@ const CentralAdminDashboard = () => {
                                                             </td>
                                                             <td>
                                                                 {sub.status !== 'paid' && (
-                                                                    <button className="btn-save" style={{ fontSize: '11px', padding: '4px 10px', marginRight: '4px' }}
+                                                                    <button className="btn-save w-full md:w-auto" style={{ fontSize: '11px', padding: '4px 10px', marginRight: '4px' }}
                                                                         onClick={() => handleMarkSubscription(sub._id, 'paid')}>Mark Paid</button>
                                                                 )}
                                                                 {sub.status === 'pending' && (
@@ -1823,9 +1865,9 @@ const CentralAdminDashboard = () => {
                                 </div>
 
                                 {/* ── Appointment System Mode ── */}
-                                <div className="admin-card" style={{ marginTop: '20px', border: '2px solid #e0f2fe' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                                        <h3 style={{ margin: 0 }}>🎟️ Appointment System Mode</h3>
+                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginTop: '20px', border: '2px solid #e0f2fe' }}>
+                                    <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-[10px]" style={{ marginBottom: '6px' }}>
+                                        <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>🎟️ Appointment System Mode</h3>
                                         <span style={{ fontSize: '0.75rem', background: selectedClinic.appointmentMode === 'token' ? '#fef3c7' : '#dbeafe', color: selectedClinic.appointmentMode === 'token' ? '#92400e' : '#1d4ed8', padding: '2px 10px', borderRadius: '20px', fontWeight: 700 }}>
                                             Current: {selectedClinic.appointmentMode === 'token' ? 'Token Queue' : 'Time Slots'}
                                         </span>
@@ -1903,7 +1945,7 @@ const CentralAdminDashboard = () => {
                                 </div>
 
                                 {/* Quick Access Links */}
-                                <div className="admin-card" style={{ marginTop: '20px' }}>
+                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginTop: '20px' }}>
                                     <h3>🚀 Clinic Features</h3>
                                     <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>Staff can access these modules after logging in at <strong>/login</strong></p>
                                     <div className="config-grid">
@@ -1949,13 +1991,13 @@ const CentralAdminDashboard = () => {
                 {/* ========== REVENUE PLANS TAB ========== */}
                 {activeTab === 'revenue-plans' && (
                     <div>
-                        <div className="admin-card">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <div className="admin-card w-full max-w-full min-w-0">
+                            <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full" style={{ marginBottom: '20px' }}>
                                 <div>
                                     <h2>💰 Revenue Plans</h2>
                                     <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>Assign a billing model to each hospital or clinic</p>
                                 </div>
-                                <div style={{ display: 'flex', gap: '10px' }}>
+                                <div className="flex flex-col sm:flex-row gap-3 w-full">
                                     <button
                                         onClick={() => navigate('/supremeadmin/revenue')}
                                         style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', border: 'none', padding: '9px 18px', borderRadius: '9px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}
@@ -1999,11 +2041,11 @@ const CentralAdminDashboard = () => {
                                 <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
                                     <p style={{ fontSize: '32px', marginBottom: '8px' }}>💰</p>
                                     <p>No hospitals found. Add hospitals first, then assign revenue plans.</p>
-                                    <button className="btn-save" style={{ marginTop: '12px' }} onClick={fetchRevenuePlans}>Load Plans</button>
+                                    <button className="btn-save w-full md:w-auto" style={{ marginTop: '12px' }} onClick={fetchRevenuePlans}>Load Plans</button>
                                 </div>
                             ) : (
-                                <div className="users-table">
-                                    <table>
+                                <div className="users-table w-full overflow-x-auto">
+                                    <table className="w-full min-w-[600px] overflow-hidden">
                                         <thead>
                                             <tr>
                                                 <th>#</th>
@@ -2138,7 +2180,7 @@ const CentralAdminDashboard = () => {
                                         )}
 
                                         <div className="modal-buttons">
-                                            <button type="submit" className="btn-save" disabled={savingPlan}>
+                                            <button type="submit" className="btn-save w-full md:w-auto" disabled={savingPlan}>
                                                 {savingPlan ? 'Saving…' : '✓ Save Plan'}
                                             </button>
                                             <button type="button" className="btn-cancel" onClick={() => setEditingPlan(null)}>Cancel</button>
@@ -2152,7 +2194,7 @@ const CentralAdminDashboard = () => {
 
                 {/* ========== CONFIGURATIONS TAB ========== */}
                 {activeTab === 'configurations' && (
-                    <div className="admin-card">
+                    <div className="admin-card w-full max-w-full min-w-0">
                         <h2>⚙️ System Configurations</h2>
                         <p style={{ color: '#888', fontSize: '14px', margin: '5px 0 20px' }}>
                             Manage global settings — roles, question libraries, lab tests, medicines, services, and test packages.

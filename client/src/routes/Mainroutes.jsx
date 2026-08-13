@@ -24,6 +24,7 @@ import Signup from '../pages/user/Signup';
 import Patient from '../pages/doctors/Patient';
 import AdminLabTests from '../pages/admin/AdminLabTests';
 import DoctorPatientDetails from '../pages/doctors/DoctorPatientDetails';
+import AIAssistant from '../pages/doctors/AIAssistant';
 import UnifiedPatientProfile from '../pages/patient/UnifiedPatientProfile';
 import PatientPortalLogin from '../pages/patient/PatientPortalLogin';
 import PatientSignup from '../pages/patient/PatientSignup';
@@ -179,6 +180,7 @@ const MainRoutes = () => {
                             <Route path="doctor/dashboard" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><Patient /></ProtectedRoute>} />
                             <Route path="doctor/patients" element={<Patient />} />
                             <Route path="doctor/patient/:id" element={<ProtectedRoute requiredPermissions={['visit_diagnose']}><DoctorPatientDetails /></ProtectedRoute>} />
+                            <Route path="doctor/ai-assistant" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><AIAssistant /></ProtectedRoute>} />
 
                             <Route path="admin" element={<ProtectedRoute requiredPermissions={['admin_view_stats', 'admin_manage_roles']}><AdminMainDashboard /></ProtectedRoute>} />
                             <Route path="admin/users" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><Admin /></ProtectedRoute>} />

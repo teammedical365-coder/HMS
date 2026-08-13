@@ -28,11 +28,19 @@ apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
+            // Check if this is a session-expired (force logout from another device)
+            const isSessionExpired = error.response?.data?.sessionExpired;
+
             // CIRCULAR DEPENDENCY FIX:
             // Instead of dispatching logout action here, we simply clear storage and redirect.
             // The authSlice will pick up the initial state from localStorage on reload.
             localStorage.removeItem('token');
             localStorage.removeItem('user');
+
+            // Store session expired message for the login page to display
+            if (isSessionExpired) {
+                sessionStorage.setItem('sessionExpiredMessage', error.response?.data?.message || 'Your account has been logged in from another device. Please login again.');
+            }
 
             // Only redirect if not already on the login page to avoid loops
             if (!window.location.pathname.includes('/login')) {
@@ -52,6 +60,25 @@ export const authAPI = {
     },
     signup: async (name, email, password, phone = '') => {
         const response = await apiClient.post('/api/auth/signup', { name, email, password, phone });
+        return response.data;
+    },
+    // ── Email OTP Authentication ──────────────────────────────────────────
+    sendOtp: async (email, password, hospitalId, loginType) => {
+        const payload = { email, password, loginType };
+        if (hospitalId) payload.hospitalId = hospitalId;
+        const response = await apiClient.post('/api/auth/otp/send', payload);
+        return response.data;
+    },
+    verifyOtp: async (preAuthToken, otp) => {
+        const response = await apiClient.post('/api/auth/otp/verify', { preAuthToken, otp });
+        return response.data;
+    },
+    resendOtp: async (preAuthToken) => {
+        const response = await apiClient.post('/api/auth/otp/resend', { preAuthToken });
+        return response.data;
+    },
+    forceLogin: async (preAuthToken) => {
+        const response = await apiClient.post('/api/auth/otp/force-login', { preAuthToken });
         return response.data;
     },
 };
@@ -262,6 +289,14 @@ export const reportAPI = {
     },
     generateAISummary: async (fileUrl, mimeType) => {
         const response = await apiClient.post('/api/reports/summary', { fileUrl, mimeType });
+        return response.data;
+    },
+    searchReports: async (patientId, keyword) => {
+        const response = await apiClient.post('/api/reports/search', { patientId, keyword });
+        return response.data;
+    },
+    compareReports: async (latestFileUrl, latestMimeType, previousFileUrl, previousMimeType) => {
+        const response = await apiClient.post('/api/reports/compare', { latestFileUrl, latestMimeType, previousFileUrl, previousMimeType });
         return response.data;
     }
 };

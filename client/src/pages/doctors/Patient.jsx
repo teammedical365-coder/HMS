@@ -439,26 +439,7 @@ const Patient = () => {
                                                             👁 Profile
                                                         </button>
 
-                                                        <button
-                                                            onClick={() => openVitalsForm(apt)}
-                                                            style={{
-                                                                ...S.btn(hasVitals ? 'linear-gradient(135deg, #10b981, #059669)' : 'linear-gradient(135deg, #3b82f6, #6366f1)'),
-                                                                display: 'flex', alignItems: 'center', gap: '5px'
-                                                            }}
-                                                        >
-                                                            {hasVitals ? '✏️ Vitals' : '💉 Vitals'}
-                                                        </button>
 
-                                                        <button
-                                                            onClick={() => setUploadPatient(apt)}
-                                                            style={{
-                                                                ...S.btn('rgba(168, 85, 247, 0.1)'),
-                                                                color: '#a855f7', border: '1px solid #a855f7',
-                                                                display: 'flex', alignItems: 'center', gap: '5px'
-                                                            }}
-                                                        >
-                                                            📁 Upload Report
-                                                        </button>
                                                         <button
                                                             onClick={() => {
                                                                 const ptName = (apt.userId?.name || apt.clinicPatientId?.name || 'Walk-in').replace(/\s+/g, '-');

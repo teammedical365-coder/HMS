@@ -1153,7 +1153,7 @@ const HospitalAdminDashboard = () => {
                             {loadingInventory ? (
                                 <div className="loading-message">Loading inventory...</div>
                             ) : (
-                                <div className="users-table" style={{ overflowX: 'auto' }}>
+                                <div data-lenis-prevent="true" className="users-table" style={{ overflowX: 'auto' }}>
                                     <table style={{ minWidth: '1100px' }}>
                                         <thead>
                                             <tr>
@@ -1292,7 +1292,7 @@ const HospitalAdminDashboard = () => {
                                 <button onClick={fetchLabTests} className="btn-edit" style={{ marginTop: '10px', padding: '6px 14px', fontSize: '13px' }}>Reload</button>
                             </div>
                         ) : (
-                            <div className="users-table" style={{ overflowX: 'auto' }}>
+                            <div data-lenis-prevent="true" className="users-table" style={{ overflowX: 'auto' }}>
                                 <table>
                                     <thead>
                                         <tr>
@@ -1472,7 +1472,7 @@ const HospitalAdminDashboard = () => {
                 {/* EDIT USER MODAL */}
                 {editModal && (
                     <div className="modal-overlay">
-                        <div className="modal-content" style={{ maxWidth: '600px' }}>
+                        <div data-lenis-prevent="true" className="modal-content" style={{ maxWidth: '600px' }}>
                             <h3>Edit Staff Details</h3>
                             <form onSubmit={handleUpdateUser} className="user-form">
                                 <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '20px' }}>
@@ -1561,7 +1561,7 @@ const HospitalAdminDashboard = () => {
                 {/* Delete User Confirm */}
                 {deleteConfirm && (
                     <div className="modal-overlay">
-                        <div className="modal-content">
+                        <div data-lenis-prevent="true" className="modal-content">
                             <h3>Confirm Delete</h3>
                             <p>Are you sure you want to delete this user?</p>
                             <div className="modal-buttons">

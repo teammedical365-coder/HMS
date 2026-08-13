@@ -421,31 +421,67 @@ const Admin = () => {
                                     <div style={{ background: remaining === 0 ? '#fee2e2' : '#f0fdf4', padding: '12px 16px', borderRadius: '8px', border: `1px solid ${remaining === 0 ? '#fecaca' : '#bbf7d0'}`, flex: 1 }}>
                                         <div style={{ color: remaining === 0 ? '#dc2626' : '#16a34a', fontSize: '12px', fontWeight: 600 }}>Remaining</div>
                                         <div style={{ fontSize: '20px', fontWeight: 700, color: remaining === 0 ? '#dc2626' : '#16a34a' }}>{remaining}</div>
+                                    </div></div>
+                                {remaining === 0 && (
+                                    <div style={{ color: '#dc2626', fontSize: '13px', fontWeight: 600, marginTop: '16px', background: '#fee2e2', padding: '12px 16px', borderRadius: '8px', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        ⚠️ Staff quota has been fully utilized. Upgrade your plan to add more staff.
                                     </div>
-                                </div>
-                            </div>
+                                )}
+</div>
                         );
                     }
                     return null;
                 })()}
 
-                {/* Create Staff Account Card */}
+                {/* Create Staff Account */}
                 <div className="admin-card" style={{ marginBottom: '20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showCreateForm ? '16px' : '8px' }}>
-                        <h2>👤 Create Staff Account</h2>
-                        <button onClick={handleToggleCreateForm} className={showCreateForm ? 'btn-cancel' : 'btn-save'} style={{ padding: '8px 20px', fontSize: '14px' }}>
-                            {showCreateForm ? 'Cancel' : '+ New Staff'}
-                        </button>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showCreateForm ? '20px' : '0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <h2>Create Staff Account</h2>
+                            {hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter') && (() => {
+                                const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                                const maxStaff = limits.maxStaff;
+                                const staffCount = users.filter(u => {
+                                    const rName = (u.role?.name || u.role || '').toLowerCase();
+                                    return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+                                }).length;
+                                const remaining = Math.max(0, maxStaff - staffCount);
+                                
+                                if (remaining === 0) return null;
+                                
+                                return (
+                                    <span style={{ background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 600 }}>
+                                        {remaining} left
+                                    </span>
+                                );
+                            })()}
+                        </div>
+                        {(() => {
+                            let isStaffQuotaFull = false;
+                            if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
+                                const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                                const maxStaff = limits.maxStaff;
+                                const staffCount = users.filter(u => {
+                                    const rName = (u.role?.name || u.role || '').toLowerCase();
+                                    return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+                                }).length;
+                                isStaffQuotaFull = Math.max(0, maxStaff - staffCount) === 0;
+                            }
+                            
+                            if (isStaffQuotaFull) return null;
+                            
+                            return (
+                                <button onClick={handleToggleCreateForm} className="btn-edit" style={{ background: showCreateForm ? '#f1f5f9' : '#eef2ff', color: showCreateForm ? '#64748b' : '#4f46e5', border: 'none', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    {showCreateForm ? '✕ Close' : '+ Add Staff'}
+                                </button>
+                            );
+                        })()}
                     </div>
-                    {!showCreateForm && (
-                        <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>
-                            Create login credentials for doctors, lab technicians, pharmacists, and other staff.
-                        </p>
-                    )}
+
                     {showCreateForm && (
                         <>
-                            {clinicDoctorExists && hospital?.clinicType === 'clinic' && (
-                                <div className="error-message" style={{ marginBottom: '16px' }}>
+                            {hospital?.clinicType === 'clinic' && clinicDoctorExists && (
+                                <div style={{ background: '#fef2f2', color: '#dc2626', padding: '12px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #fecaca', fontSize: '14px' }}>
                                     ⚠️ This clinic already has an assigned Clinic Doctor. Only 1 Doctor account is permitted under this plan.
                                 </div>
                             )}
@@ -535,11 +571,6 @@ const Admin = () => {
                         </>
                     )}
                 </div>
-
-
-
-                {/* Users List */}
-
 
                 {/* Staff list with hospital filter */}
                 <div className="admin-card">

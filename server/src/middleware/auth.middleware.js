@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/user.model');
 const Role = require('../models/role.model');
 const TokenBlacklist = require('../models/tokenBlacklist.model');
+const Session = require('../models/session.model');
 
 const { JWT_SECRET } = require('../config/jwt');
 
@@ -30,6 +31,31 @@ exports.verifyToken = async (req, res, next) => {
             const currentVersion = await require('../models/user.model').findById(decoded.userId).select('tokenVersion').lean();
             if (currentVersion && (currentVersion.tokenVersion ?? 0) !== decoded.tv) {
                 return res.status(401).json({ success: false, message: 'Session revoked. Please log in again.' });
+            }
+        }
+
+        // ── Session validation (single active session enforcement) ────────────
+        // Tokens with sessionId are from the new OTP flow; legacy tokens without sessionId skip this check.
+        if (decoded.sessionId) {
+            const activeSession = await Session.findOne({
+                sessionId: decoded.sessionId,
+                userId: decoded.userId,
+                isActive: true,
+            });
+
+            if (!activeSession) {
+                return res.status(401).json({
+                    success: false,
+                    sessionExpired: true,
+                    message: 'Your account has been logged in from another device. Please login again.',
+                });
+            }
+
+            // Update lastActive (throttled — only if >1 minute since last update)
+            const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+            if (activeSession.lastActive < oneMinuteAgo) {
+                activeSession.lastActive = new Date();
+                activeSession.save().catch(() => {}); // fire-and-forget
             }
         }
 

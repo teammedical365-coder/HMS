@@ -1,0 +1,211 @@
+/* ============================================================
+   Active Session Modal — Medical365 Design System
+   ============================================================ */
+
+.session-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 1rem;
+}
+
+.session-modal-card {
+    background: white;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 460px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+
+/* Header */
+.session-modal-header {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    padding: 1.75rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    border-bottom: 1px solid #fbbf24;
+}
+
+.session-modal-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: rgba(217, 119, 6, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: #d97706;
+    flex-shrink: 0;
+}
+
+.session-modal-header-text h3 {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #78350f;
+    margin: 0;
+}
+
+.session-modal-header-text p {
+    font-size: 0.85rem;
+    color: #92400e;
+    margin: 0.25rem 0 0;
+    line-height: 1.4;
+}
+
+/* Body */
+.session-modal-body {
+    padding: 1.75rem 2rem;
+}
+
+.session-modal-message {
+    font-size: 0.92rem;
+    color: #475569;
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+}
+
+/* Device Info Card */
+.session-device-info {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 1.25rem;
+}
+
+.session-device-info-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #94a3b8;
+    margin-bottom: 0.75rem;
+}
+
+.session-device-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+}
+
+.session-device-row:not(:last-child) {
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.session-device-row-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
+.session-device-row-label {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.session-device-row-value {
+    font-size: 0.9rem;
+    color: #1e293b;
+    font-weight: 600;
+}
+
+/* Buttons */
+.session-modal-actions {
+    padding: 0 2rem 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.session-btn-force {
+    width: 100%;
+    padding: 0.875rem;
+    background: #0f172a;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.session-btn-force:hover:not(:disabled) {
+    background: #1e293b;
+    transform: translateY(-1px);
+    box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.15);
+}
+
+.session-btn-force:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.session-btn-cancel {
+    width: 100%;
+    padding: 0.875rem;
+    background: #f8fafc;
+    color: #64748b;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.session-btn-cancel:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #475569;
+}
+
+/* Loading Spinner */
+.session-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2.5px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: session-spin 0.6s linear infinite;
+}
+
+@keyframes session-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .session-modal-card {
+        max-width: 100%;
+    }
+    .session-modal-header,
+    .session-modal-body,
+    .session-modal-actions {
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+    }
+}

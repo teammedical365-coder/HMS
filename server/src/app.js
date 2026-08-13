@@ -42,6 +42,7 @@ const patientLocalRoutes = require('./routes/patientLocal.routes');
 const patientAppRoutes = require('./routes/patientApp.routes');
 const revenueRoutes = require('./routes/revenue.routes');
 const mfaRoutes = require('./routes/mfa.routes');
+const emailOtpRoutes = require('./routes/emailOtp.routes');
 
 const app = express();
 
@@ -150,6 +151,7 @@ app.use('/api/patient-auth', patientAuthRoutes);
 app.use('/api/patient-app', patientAppRoutes);
 app.use('/api/patient-local', patientLocalRoutes);
 app.use('/api/mfa', mfaRoutes);
+app.use('/api/auth/otp', emailOtpRoutes);
 app.use('/api/patient-auth', patientAuthRoutes);
 
 app.get('/', (req, res) => {
