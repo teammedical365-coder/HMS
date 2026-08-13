@@ -67,10 +67,15 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
                 { label: 'Assigned Tests', path: '/lab/tests', icon: <FiFileText /> },
             ];
         }
-        if (role === 'pharmacy') {
+        if (role.includes('pharmac')) {
             return [
                 { label: 'Inventory', path: '/pharmacy/inventory', icon: <FiPackage /> },
                 { label: 'Pharmacy Orders', path: '/pharmacy/orders', icon: <FiClipboard /> },
+                { label: 'Purchase Invoices', path: '/pharmacy/purchase-invoices', icon: <FiFileText /> },
+                { label: 'Returns', path: '/pharmacy/returns', icon: <FiActivity /> },
+                { label: 'Vendor Returns', path: '/pharmacy/vendor-returns', icon: <FiActivity /> },
+                { label: 'Collections', path: '/pharmacy/collections', icon: <FiPieChart /> },
+                { label: 'Departments', path: '/pharmacy/departments', icon: <FiGrid /> },
             ];
         }
         if (role === 'accountant') {
