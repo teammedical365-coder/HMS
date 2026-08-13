@@ -629,6 +629,7 @@ const OverviewMode = () => {
     const [cfgSaving, setCfgSaving] = useState(false);
     const [cfgMsg, setCfgMsg] = useState('');
     const [overviewMonthStr, setOverviewMonthStr] = useState(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`);
+    const [showAllKpis, setShowAllKpis] = useState(false);
 
     useEffect(() => {
         Promise.all([
@@ -771,9 +772,9 @@ const OverviewMode = () => {
             </div>
 
             {/* KPI Row */}
-            <div className="clinic-kpi-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+            <div className={`clinic-kpi-grid${showAllKpis ? ' clinic-kpi-expanded' : ''}`} style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
                 {kpis.map((k, i) => (
-                    <div key={i} className="clinic-kpi-card" style={{ borderTop: `4px solid ${k.color}`, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', boxSizing: 'border-box' }}>
+                    <div key={i} className={`clinic-kpi-card clinic-kpi-item-${i}`} style={{ borderTop: `4px solid ${k.color}`, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', boxSizing: 'border-box' }}>
                         <div style={{ fontSize: '28px' }}>{k.icon}</div>
                         <div>
                             <div style={{ fontSize: '20px', fontWeight: 800, color: k.color, marginTop: '8px' }}>{k.value}</div>
@@ -783,14 +784,21 @@ const OverviewMode = () => {
                     </div>
                 ))}
             </div>
+            {/* Mobile-only: View All Overview toggle */}
+            <button
+                className="clinic-kpi-toggle-btn"
+                onClick={() => setShowAllKpis(v => !v)}
+            >
+                {showAllKpis ? '▲ Show Less' : '▼ View All Overview'}
+            </button>
 
             {/* Monthly Revenue Chart */}
             <div className="clinic-card" style={{ marginBottom: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+                <div className="clinic-revenue-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
                     <h3 style={{ margin: 0 }}>📈 Monthly Revenue</h3>
                     
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ display: 'flex', gap: '12px', fontSize: '11px', fontWeight: '600', color: '#64748b' }}>
+                    <div className="clinic-revenue-controls" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div className="clinic-revenue-legend" style={{ display: 'flex', gap: '12px', fontSize: '11px', fontWeight: '600', color: '#64748b' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#3b82f6' }}></div> Appointment Revenue</div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#10b981' }}></div> Treatment Revenue</div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#6366f1' }}></div> Total Revenue</div>
@@ -799,7 +807,7 @@ const OverviewMode = () => {
                         <select 
                             value={overviewMonthStr} 
                             onChange={e => setOverviewMonthStr(e.target.value)} 
-                            className="clinic-input" 
+                            className="clinic-input clinic-month-select" 
                             style={{ padding: '6px 10px', width: 'auto', fontSize: '13px', borderRadius: '6px', cursor: 'pointer' }}
                         >
                             {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => {
@@ -809,7 +817,7 @@ const OverviewMode = () => {
                         </select>
                     </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'stretch', justifyContent: 'flex-start', height: '180px' }}>
+                <div className="clinic-revenue-chart" style={{ display: 'flex', alignItems: 'stretch', justifyContent: 'flex-start', height: '180px' }}>
                     {chartData.map((m, i) => {
                         const maxTotal = Math.max(...chartData.map(x => x.total));
                         const apptPct = maxTotal > 0 ? (m.appt / maxTotal) * 100 : 0;
@@ -858,7 +866,7 @@ const OverviewMode = () => {
             {stats?.lowStockItems?.length > 0 && (
                 <div className="clinic-card" style={{ border: '1px solid #fecaca' }}>
                     <h3 style={{ color: '#dc2626', marginBottom: '12px' }}>⚠️ Low Stock Alert</h3>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <div className="clinic-lowstock-list" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         {stats.lowStockItems.map(item => (
                             <div key={item._id} style={{ background: '#fee2e2', borderRadius: '6px', padding: '6px 12px', fontSize: '13px' }}>
                                 <strong>{item.name}</strong> — only <strong style={{ color: '#dc2626' }}>{item.stock}</strong> {item.unit} left
@@ -871,7 +879,7 @@ const OverviewMode = () => {
             {/* Clinic Settings */}
             <div className="clinic-card" style={{ marginTop: '16px' }}>
                 <h3 style={{ marginBottom: '14px' }}>⚙️ Clinic Settings</h3>
-                <form onSubmit={saveConfig} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <form className="clinic-settings-form" onSubmit={saveConfig} style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                     <div style={{ flex: '0 1 280px', minWidth: '200px' }}>
                         <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', whiteSpace: 'nowrap' }}>Default Service Name</label>
                         <input className="clinic-input" value={config.defaultServiceName}

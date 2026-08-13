@@ -81,6 +81,10 @@ export const authAPI = {
         const response = await apiClient.post('/api/auth/otp/force-login', { preAuthToken });
         return response.data;
     },
+    getAuthConfig: async () => {
+        const response = await apiClient.get('/api/public/auth-config');
+        return response.data;
+    },
 };
 
 export const doctorAPI = {

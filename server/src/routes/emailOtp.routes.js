@@ -22,6 +22,15 @@ const OTP_EXPIRY_MINUTES = 5;
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_RESEND_COOLDOWN_SECONDS = 30;
 
+/**
+ * ⚠️  OTP Feature Flag (environment-controlled)
+ * When false, the /send endpoint bypasses OTP generation/email and proceeds
+ * directly to session check → JWT. All OTP code remains intact for production.
+ *
+ * OTP is temporarily disabled for development. Enable AUTH_OTP_ENABLED=true before production deployment.
+ */
+const AUTH_OTP_ENABLED = process.env.AUTH_OTP_ENABLED !== 'false';
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Generate a cryptographically secure 6-digit OTP */
@@ -298,6 +307,58 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
         if (!isPasswordValid) {
             return res.status(401).json({ success: false, message: 'Invalid email or password' });
         }
+
+        // ── DEV BYPASS: Skip OTP when AUTH_OTP_ENABLED=false ──────────────────
+        // All OTP code below remains intact. This block early-returns so the
+        // /send endpoint acts as a direct login when OTP is disabled.
+        // Session management (active-session check, force-login) still works.
+        if (!AUTH_OTP_ENABLED) {
+            // Resolve role if not already resolved (staff loginType)
+            if (!roleData) {
+                roleData = await resolveRoleData(user);
+                if (!roleData) {
+                    return res.status(403).json({ success: false, message: 'Role not found. Contact admin.' });
+                }
+            }
+
+            // Check for active session (same logic as /verify endpoint)
+            const activeSession = await Session.findOne({ userId: user._id, isActive: true });
+
+            if (activeSession) {
+                // Generate a preAuthToken so force-login still works
+                const preAuthToken = jwt.sign(
+                    { otp_pending: true, userId: String(user._id), loginType: effectiveLoginType },
+                    JWT_SECRET,
+                    { expiresIn: `${OTP_EXPIRY_MINUTES}m` }
+                );
+
+                return res.json({
+                    success: true,
+                    otpBypassed: true,
+                    activeSessionExists: true,
+                    preAuthToken,
+                    activeSession: {
+                        browser: activeSession.browser,
+                        os: activeSession.os,
+                        lastActive: activeSession.lastActive,
+                        loginTime: activeSession.loginTime,
+                    },
+                });
+            }
+
+            // No active session — complete login immediately
+            const { token, userData } = await createSessionAndToken(user, roleData, req);
+
+            return res.json({
+                success: true,
+                otpBypassed: true,
+                activeSessionExists: false,
+                message: 'Login successful (OTP bypassed for development)',
+                token,
+                user: userData,
+            });
+        }
+
 
         // ── Generate OTP ──────────────────────────────────────────────────────
         const otp = generateSecureOTP();

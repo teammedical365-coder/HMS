@@ -5,14 +5,19 @@ import { authAPI, adminAPI, hospitalAdminAPI } from '../../utils/api';
 // OTP-Based Login Thunks
 // ══════════════════════════════════════════════════════════════════════════════
 
-/** Step 1: Validate credentials and send OTP email */
+/** Step 1: Validate credentials and send OTP email (or bypass OTP if disabled) */
 export const sendOtp = createAsyncThunk(
   'auth/sendOtp',
   async ({ email, password, hospitalId, loginType }, { rejectWithValue }) => {
     try {
       const response = await authAPI.sendOtp(email, password, hospitalId, loginType);
       if (response.success) {
-        return response; // { preAuthToken, email (masked) }
+        // When OTP is bypassed and no active session, login is complete — persist to localStorage
+        if (response.otpBypassed && !response.activeSessionExists && response.token) {
+          localStorage.setItem('token', response.token);
+          localStorage.setItem('user', JSON.stringify(response.user));
+        }
+        return response;
       }
       return rejectWithValue(response.message || 'Failed to send OTP');
     } catch (error) {
@@ -266,9 +271,30 @@ const authSlice = createSlice({
     });
     builder.addCase(sendOtp.fulfilled, (state, action) => {
       state.loading = false;
-      state.otpStep = 'otp';
-      state.preAuthToken = action.payload.preAuthToken;
-      state.otpEmail = action.payload.email;
+
+      if (action.payload.otpBypassed) {
+        // OTP is disabled (AUTH_OTP_ENABLED=false) — backend handled login directly
+        if (action.payload.activeSessionExists) {
+          // Active session detected — show session conflict modal
+          state.otpStep = 'session_check';
+          state.preAuthToken = action.payload.preAuthToken;
+          state.activeSession = action.payload.activeSession;
+        } else {
+          // No active session — login is complete
+          state.user = action.payload.user;
+          state.token = action.payload.token;
+          state.isAuthenticated = true;
+          state.otpStep = null;
+          state.preAuthToken = null;
+          state.otpEmail = null;
+          state.activeSession = null;
+        }
+      } else {
+        // Normal OTP flow — show OTP verification form
+        state.otpStep = 'otp';
+        state.preAuthToken = action.payload.preAuthToken;
+        state.otpEmail = action.payload.email;
+      }
     });
     builder.addCase(sendOtp.rejected, (state, action) => {
       state.loading = false;

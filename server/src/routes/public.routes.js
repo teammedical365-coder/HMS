@@ -83,6 +83,14 @@ router.get('/tenant-config', async (req, res) => {
     }
 });
 
-module.exports = router;
+// Get authentication configuration flags (public — used by frontend to adapt login flow)
+router.get('/auth-config', (req, res) => {
+    res.set('Cache-Control', 'public, max-age=60');
+    res.json({
+        success: true,
+        otpEnabled: process.env.AUTH_OTP_ENABLED !== 'false',
+    });
+});
 
+module.exports = router;
 

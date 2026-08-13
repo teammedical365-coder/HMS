@@ -6,7 +6,7 @@ import { useBranding } from '../../context/BrandingContext';
 import {
     FiHome, FiUsers, FiCalendar, FiActivity, FiPackage,
     FiSettings, FiLogOut, FiPieChart, FiClipboard,
-    FiFileText, FiPlusSquare, FiDatabase, FiGrid, FiShield, FiMenu
+    FiFileText, FiPlusSquare, FiDatabase, FiGrid, FiShield, FiMenu, FiX
 } from 'react-icons/fi';
 import './DashboardLayout.css';
 
@@ -104,12 +104,19 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
 
     return (
         <aside className={`erp-sidebar ${isOpen ? 'open' : 'collapsed'}`}>
-            <div className="sidebar-brand">
+            <div className="sidebar-brand" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                 <img
                     src={branding?.logoUrl || branding?.logo || '/assets/logo.png'}
                     alt={hospitalName || "Medical 365"}
                     style={{ maxHeight: '36px', maxWidth: '160px', width: 'auto', objectFit: 'contain' }}
                 />
+                <button 
+                    className="block lg:hidden p-1 rounded-md hover:bg-gray-100 transition-colors" 
+                    onClick={() => setOpen(false)}
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
+                >
+                    <FiX size={24} color="#64748b" />
+                </button>
             </div>
             
             <nav className="sidebar-nav">
@@ -195,8 +202,7 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                 <div className="user-profile-widget">
 
                     <div className="profile-text-info">
-                        <span className="user-disp-name truncate max-w-[100px] sm:max-w-none">{(user?.role || '').toLowerCase().includes('doctor') ? 'DR. ' : ''}{user?.name || 'User'}</span>
-                        <span className="user-disp-role truncate max-w-[100px] sm:max-w-none">{user?.email}</span>
+                        <span className="user-disp-name truncate max-w-[100px] sm:max-w-none capitalize">{(user?.role || '').toLowerCase().includes('doctor') ? 'Dr. ' : ''}{user?.name || 'User'}</span>
                     </div>
                     <div className="profile-avatar-wrap">
                         <div className="profile-avatar" style={{ overflow: 'hidden', padding: 0 }}>
@@ -209,7 +215,7 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                         
                         <div className="profile-dropdown-content">
                             <div className="p-header">
-                                <strong>{user?.name}</strong>
+                                <strong className="capitalize">{user?.name}</strong>
                                 <span>{user?.email}</span>
                                 <span className="p-role-badge">{user?.role}</span>
                             </div>
