@@ -325,15 +325,48 @@ export const labAPI = {
 };
 
 export const pharmacyAPI = {
+    getDashboardSummary: async (hospitalId) => (await apiClient.get(`/api/pharmacy/orders/dashboard-summary?hospitalId=${hospitalId}`)).data,
+    getVendorReturns: async () => (await apiClient.get('/api/pharmacy/vendor-returns')).data,
+    createVendorReturn: async (data) => (await apiClient.post('/api/pharmacy/vendor-returns', data)).data,
     getInventory: async () => (await apiClient.get('/api/pharmacy/inventory')).data,
     addMedicine: async (data) => (await apiClient.post('/api/pharmacy/inventory', data)).data,
     updateMedicine: async (id, data) => (await apiClient.put(`/api/pharmacy/inventory/${id}`, data)).data,
-    deleteMedicine: async (id) => (await apiClient.delete(`/api/pharmacy/inventory/${id}`)).data
+    deleteMedicine: async (id) => (await apiClient.delete(`/api/pharmacy/inventory/${id}`)).data,
+    getVendors: async () => (await apiClient.get('/api/pharmacy/vendors')).data,
+    addVendor: async (data) => (await apiClient.post('/api/pharmacy/vendors', data)).data,
+    updateVendor: async (id, data) => (await apiClient.put(`/api/pharmacy/vendors/${id}`, data)).data,
+    getCollectionsAnalytics: async (startDate, endDate) => {
+        let url = `/api/pharmacy/analytics/collections`;
+        const params = new URLSearchParams();
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        const qs = params.toString();
+        if (qs) url += `?${qs}`;
+        return (await apiClient.get(url)).data;
+    },
+    uploadPurchaseInvoice: async (formData) => (await apiClient.post('/api/pharmacy/purchase-invoice/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } })).data,
+    processPurchaseInvoice: async (id) => (await apiClient.post(`/api/pharmacy/purchase-invoice/${id}/process`)).data,
+    getPurchaseInvoices: async () => (await apiClient.get('/api/pharmacy/purchase-invoice')).data,
+    getPurchaseInvoiceById: async (id) => (await apiClient.get(`/api/pharmacy/purchase-invoice/${id}`)).data,
+    deletePurchaseInvoice: async (id) => (await apiClient.delete(`/api/pharmacy/purchase-invoice/${id}`)).data,
+    recordConsumption: async (data) => (await apiClient.post('/api/pharmacy/consumption', data)).data,
+    getDepartments: async () => (await apiClient.get('/api/pharmacy/departments')).data,
+    createDepartment: async (data) => (await apiClient.post('/api/pharmacy/departments', data)).data,
+    getDepartmentStocks: async (departmentId = '') => {
+        let url = '/api/pharmacy/department-stocks';
+        if (departmentId) url += `?departmentId=${departmentId}`;
+        return (await apiClient.get(url)).data;
+    },
+    transferToDepartment: async (data) => (await apiClient.post('/api/pharmacy/departments/transfer', data)).data,
+    recordDepartmentUsage: async (data) => (await apiClient.post('/api/pharmacy/departments/usage', data)).data
 };
 
 export const pharmacyOrderAPI = {
     getOrders: async () => (await apiClient.get('/api/pharmacy/orders')).data,
-    completeOrder: async (id, purchasedIndices = null) => (await apiClient.patch(`/api/pharmacy/orders/${id}/complete`, { purchasedIndices })).data
+    createOrder: async (data) => (await apiClient.post('/api/pharmacy/orders', data)).data,
+    completeOrder: async (id, purchasedIndices = null) => (await apiClient.patch(`/api/pharmacy/orders/${id}/complete`, { purchasedIndices })).data,
+    searchBills: async (query) => (await apiClient.get(`/api/pharmacy/orders/search-bill?query=${query}`)).data,
+    processReturn: async (data) => (await apiClient.post('/api/pharmacy/orders/process-return', data)).data
 };
 
 export const clinicalAPI = {
