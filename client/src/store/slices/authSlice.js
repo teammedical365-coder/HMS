@@ -278,7 +278,7 @@ const authSlice = createSlice({
           // Active session detected — show session conflict modal
           state.otpStep = 'session_check';
           state.preAuthToken = action.payload.preAuthToken;
-          state.activeSession = action.payload.activeSession;
+          state.activeSession = action.payload.activeSessions || action.payload.activeSession;
         } else {
           // No active session — login is complete
           state.user = action.payload.user;
@@ -312,7 +312,7 @@ const authSlice = createSlice({
       if (action.payload.activeSessionExists) {
         // Show session conflict modal
         state.otpStep = 'session_check';
-        state.activeSession = action.payload.activeSession;
+        state.activeSession = action.payload.activeSessions || action.payload.activeSession;
       } else {
         // Login complete
         state.user = action.payload.user;

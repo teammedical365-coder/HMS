@@ -7,9 +7,9 @@
  * Admins can still create additional custom roles via the UI.
  */
 
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const mongoose = require('mongoose');
-const Role = require('./src/models/role.model');
+const Role = require('../src/models/role.model');
 
 const DB_URI = process.env.MONGODB_URL || process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/crm';
 

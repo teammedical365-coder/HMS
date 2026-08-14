@@ -150,6 +150,25 @@ async function createSessionAndToken(user, roleData, req) {
     return { token, userData, sessionId };
 }
 
+/**
+ * Determine if a user belongs to Super Admin / Central Admin role
+ */
+function isCentralAdminRole(user, roleData) {
+    if (!user) return false;
+    if (user.role === 'superadmin' || user.role === 'centraladmin') return true;
+    const roleName = roleData?.name ? roleData.name.toLowerCase() : (typeof user.role === 'string' ? user.role.toLowerCase() : '');
+    return ['superadmin', 'centraladmin', 'super admin', 'central admin'].includes(roleName);
+}
+
+/**
+ * Get maximum allowed active sessions for a user based on their role:
+ * - Super Admin & Central Admin: 2 devices
+ * - All other roles (Hospital Admin, Doctor, Receptionist, Staff, etc.): 1 device
+ */
+function getMaxAllowedSessions(user, roleData) {
+    return isCentralAdminRole(user, roleData) ? 2 : 1;
+}
+
 /** Invalidate all active sessions for a user (blacklist JWTs + deactivate sessions) */
 async function invalidateUserSessions(userId) {
     const activeSessions = await Session.find({ userId, isActive: true });
@@ -171,6 +190,33 @@ async function invalidateUserSessions(userId) {
         }
 
         // Deactivate the session
+        session.isActive = false;
+        session.logoutTime = now;
+        await session.save();
+    }
+}
+
+/**
+ * Invalidate oldest active sessions for a user so that at most `keepCount` active sessions remain.
+ * Used when a user exceeds their allowed session limit and force-logins from a new device.
+ */
+async function invalidateOldestSessions(userId, keepCount = 0) {
+    const activeSessions = await Session.find({ userId, isActive: true }).sort({ lastActive: -1 }); // newest first
+    const now = new Date();
+
+    const sessionsToDeactivate = activeSessions.slice(keepCount);
+
+    for (const session of sessionsToDeactivate) {
+        if (session.jti) {
+            try {
+                await TokenBlacklist.create({
+                    jti: session.jti,
+                    expireAt: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000), // 8 days
+                });
+            } catch (e) {
+                if (e.code !== 11000) console.error('[session] Error blacklisting JTI:', e.message);
+            }
+        }
         session.isActive = false;
         session.logoutTime = now;
         await session.save();
@@ -321,10 +367,11 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
                 }
             }
 
-            // Check for active session (same logic as /verify endpoint)
-            const activeSession = await Session.findOne({ userId: user._id, isActive: true });
+            // Check for active sessions against role-based limit (2 for central/superadmin, 1 for others)
+            const maxAllowedSessions = getMaxAllowedSessions(user, roleData);
+            const activeSessions = await Session.find({ userId: user._id, isActive: true }).sort({ lastActive: -1 });
 
-            if (activeSession) {
+            if (activeSessions.length >= maxAllowedSessions) {
                 // Generate a preAuthToken so force-login still works
                 const preAuthToken = jwt.sign(
                     { otp_pending: true, userId: String(user._id), loginType: effectiveLoginType },
@@ -336,17 +383,25 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
                     success: true,
                     otpBypassed: true,
                     activeSessionExists: true,
+                    maxAllowedSessions,
                     preAuthToken,
                     activeSession: {
-                        browser: activeSession.browser,
-                        os: activeSession.os,
-                        lastActive: activeSession.lastActive,
-                        loginTime: activeSession.loginTime,
+                        browser: activeSessions[0].browser,
+                        os: activeSessions[0].os,
+                        lastActive: activeSessions[0].lastActive,
+                        loginTime: activeSessions[0].loginTime,
                     },
+                    activeSessions: activeSessions.map(s => ({
+                        sessionId: s.sessionId,
+                        browser: s.browser,
+                        os: s.os,
+                        lastActive: s.lastActive,
+                        loginTime: s.loginTime,
+                    })),
                 });
             }
 
-            // No active session — complete login immediately
+            // Active sessions are below the limit — complete login immediately
             const { token, userData } = await createSessionAndToken(user, roleData, req);
 
             return res.json({
@@ -471,25 +526,6 @@ router.post('/verify', emailOtpVerifyLimiter, async (req, res) => {
         // OTP verified! Clean up the OTP record
         await LoginOtp.deleteMany({ userId: decoded.userId });
 
-        // ── Check for active session ──────────────────────────────────────────
-        const activeSession = await Session.findOne({ userId: decoded.userId, isActive: true });
-
-        if (activeSession) {
-            // Return session info so frontend can show the modal
-            return res.json({
-                success: true,
-                otpVerified: true,
-                activeSessionExists: true,
-                activeSession: {
-                    browser: activeSession.browser,
-                    os: activeSession.os,
-                    lastActive: activeSession.lastActive,
-                    loginTime: activeSession.loginTime,
-                },
-            });
-        }
-
-        // No active session — proceed to complete login
         const user = await User.findById(decoded.userId);
         if (!user) {
             return res.status(401).json({ success: false, message: 'User not found' });
@@ -500,6 +536,35 @@ router.post('/verify', emailOtpVerifyLimiter, async (req, res) => {
             return res.status(403).json({ success: false, message: 'Role not found. Contact admin.' });
         }
 
+        // ── Check active sessions against role-based limit ───────────────────
+        // Super Admin & Central Admin: 2 devices. All other roles: 1 device.
+        const maxAllowedSessions = getMaxAllowedSessions(user, roleData);
+        const activeSessions = await Session.find({ userId: decoded.userId, isActive: true }).sort({ lastActive: -1 });
+
+        if (activeSessions.length >= maxAllowedSessions) {
+            // Return session info so frontend can show the modal
+            return res.json({
+                success: true,
+                otpVerified: true,
+                activeSessionExists: true,
+                maxAllowedSessions,
+                activeSession: {
+                    browser: activeSessions[0].browser,
+                    os: activeSessions[0].os,
+                    lastActive: activeSessions[0].lastActive,
+                    loginTime: activeSessions[0].loginTime,
+                },
+                activeSessions: activeSessions.map(s => ({
+                    sessionId: s.sessionId,
+                    browser: s.browser,
+                    os: s.os,
+                    lastActive: s.lastActive,
+                    loginTime: s.loginTime,
+                })),
+            });
+        }
+
+        // Active sessions are below the limit — proceed to complete login
         const { token, userData } = await createSessionAndToken(user, roleData, req);
 
         res.json({
@@ -631,8 +696,13 @@ router.post('/force-login', async (req, res) => {
             return res.status(403).json({ success: false, message: 'Role not found. Contact admin.' });
         }
 
-        // Invalidate ALL active sessions for this user
-        await invalidateUserSessions(user._id);
+        const maxAllowedSessions = getMaxAllowedSessions(user, roleData);
+
+        // For single-session roles (max 1): invalidate all existing active sessions
+        // For multi-session roles (max 2): invalidate oldest session(s) leaving at most (maxAllowedSessions - 1)
+        // so that creating 1 new session keeps total active sessions <= maxAllowedSessions.
+        const keepCount = Math.max(0, maxAllowedSessions - 1);
+        await invalidateOldestSessions(user._id, keepCount);
 
         // Create new session and JWT
         const { token, userData } = await createSessionAndToken(user, roleData, req);
