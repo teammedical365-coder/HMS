@@ -81,27 +81,32 @@ const AIAssistant = () => {
         if (chatTextareaRef.current) chatTextareaRef.current.style.height = 'auto';
         setIsChatLoading(true);
 
-        // ── Mock AI response (replace with Gemini later) ──
-        await new Promise(r => setTimeout(r, 1500));
+        try {
+            const patientContext = selectedPatient ? `Context: Patient name is ${selectedPatient.name}, age ${selectedPatient.profile?.age || 'unknown'}, gender ${selectedPatient.profile?.gender || 'unknown'}. ` : '';
+            
+            // Build message history for the AI
+            const apiMessages = chatMessages.map(m => ({
+                role: m.role === 'ai' ? 'assistant' : 'user',
+                content: m.text
+            }));
+            
+            // Append the new message with patient context
+            apiMessages.push({ role: 'user', content: patientContext + text });
 
-        const patientName = selectedPatient.profile?.name || selectedPatient.name || 'the patient';
-        const mockResponses = {
-            'explain this report': `Based on the selected report for ${patientName}, the findings indicate values within expected clinical ranges. Key observations include standard hematological markers and organ function panels. A detailed breakdown can be provided upon request.`,
-            'summarize abnormalities': `For ${patientName}, the following abnormalities were noted:\n• Elevated markers in specific parameters\n• Borderline values requiring follow-up\n• All critical values remain within safe limits.\nPlease select a specific report for detailed analysis.`,
-            'show important findings': `Important findings for ${patientName}:\n• Primary diagnostic indicators are stable\n• No critical flags detected in recent reports\n• Trending data suggests consistent health metrics\n• Follow-up recommended for borderline parameters.`,
-            'explain medical terms': `Here are common medical terms from ${patientName}'s reports:\n• **CBC** – Complete Blood Count: measures red/white blood cells and platelets\n• **BMP** – Basic Metabolic Panel: evaluates kidney function, blood sugar, and electrolytes\n• **MRI** – Magnetic Resonance Imaging: detailed body imaging\nAsk about any specific term for a detailed explanation.`,
-            'compare latest report': `To compare reports for ${patientName}, please ensure at least two reports are uploaded. The comparison will highlight:\n• Parameter changes over time\n• Trend analysis of key values\n• Improvement or decline indicators.`,
-        };
-
-        const lowerText = text.toLowerCase();
-        let aiText = mockResponses[lowerText];
-        if (!aiText) {
-            aiText = `Thank you for your question regarding ${patientName}. Based on the available medical records, reports, and clinical history, I can provide analysis on this topic. This is a mock response — once Gemini AI is integrated, you will receive detailed, context-aware clinical insights here.`;
+            const res = await reportAPI.chatWithAssistant(apiMessages);
+            if (res.success && res.reply) {
+                const aiMsg = { role: 'ai', text: res.reply, timestamp: new Date() };
+                setChatMessages(prev => [...prev, aiMsg]);
+            } else {
+                throw new Error(res.message || "Failed to get AI response.");
+            }
+        } catch (err) {
+            console.error("AI Chat Error:", err);
+            const errorMsg = { role: 'ai', text: `Sorry, I encountered an error: ${err.message || "Failed to get response."}`, timestamp: new Date() };
+            setChatMessages(prev => [...prev, errorMsg]);
+        } finally {
+            setIsChatLoading(false);
         }
-
-        const aiMsg = { role: 'ai', text: aiText, timestamp: new Date() };
-        setChatMessages(prev => [...prev, aiMsg]);
-        setIsChatLoading(false);
     };
 
     const handleChatKeyDown = (e) => {

@@ -50,6 +50,15 @@ async function buildUserResponse(user) {
             const query = { name: { $regex: new RegExp(`^${user.role}$`, 'i') } };
             if (user.hospitalId) query.hospitalId = user.hospitalId;
             roleData = await Role.findOne(query);
+            
+            // Fallback to global roles if hospital-specific role is not found
+            if (!roleData && user.hospitalId) {
+                roleData = await Role.findOne({
+                    hospitalId: null,
+                    name: { $regex: new RegExp(`^${user.role}$`, 'i') }
+                });
+            }
+
             if (roleData) {
                 user.role = roleData._id;
                 await user.save();

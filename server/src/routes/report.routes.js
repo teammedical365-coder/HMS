@@ -4,7 +4,7 @@ const multer = require('multer');
 const { verifyToken } = require('../middleware/auth.middleware');
 const imagekit = require('../utils/imagekit');
 const Report = require('../models/report.model');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const aiService = require('../services/ai/ai.service');
 const axios = require('axios');
 
 // Configure Multer for memory storage (Required for ImageKit)
@@ -59,19 +59,7 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
     // Extract text using Gemini OCR
     let extractedText = "";
     try {
-      if (process.env.GEMINI_API_KEY) {
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
-        const prompt = "Extract all text from this medical report. Return ONLY the raw text word for word. Do not summarize or format. If the image is not a document or contains no text, return an empty string.";
-        const imageParts = [{
-          inlineData: {
-            data: file.buffer.toString('base64'),
-            mimeType: file.mimetype || 'application/pdf'
-          }
-        }];
-        const aiResult = await model.generateContent([prompt, ...imageParts]);
-        extractedText = aiResult.response.text().trim();
-      }
+      extractedText = await aiService.extractReportText(file.buffer.toString('base64'), file.mimetype || 'application/pdf');
     } catch (ocrErr) {
       console.error('[OCR Extraction Error]:', ocrErr.message);
     }
@@ -194,51 +182,13 @@ router.post('/summary', verifyToken, async (req, res) => {
       return res.status(403).json({ success: false, message: "Only doctors can generate AI summaries." });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ success: false, message: "GEMINI_API_KEY not configured on server." });
-    }
-
     // 1. Download file
     const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
     const buffer = Buffer.from(response.data, 'binary');
     const base64Data = buffer.toString('base64');
     
-    // 2. Initialize Gemini AI
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
-
-    // 3. Define prompt
-    const prompt = `You are a medical AI assistant. Analyze the provided medical report and return ONLY a valid JSON string with the following structure (no markdown, no other text):
-{
-  "ReportType": "Identified report type (e.g. Complete Blood Count, X-Ray, Unknown)",
-  "OverallSummary": "Short overall summary (4-8 lines) of the report's main findings. NO diagnosis or treatment advice.",
-  "ImportantFindings": ["Finding 1", "Finding 2"],
-  "AbnormalValues": ["Parameter: Value", "Parameter: Value"]
-}
-Only include AbnormalValues if there are any, otherwise an empty array.
-ImportantFindings should just be bullet points as an array of strings.`;
-
-    const imageParts = [
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType: mimeType || 'application/pdf'
-        }
-      }
-    ];
-
-    const aiResult = await model.generateContent([prompt, ...imageParts]);
-    const responseText = aiResult.response.text();
-    
-    // Attempt to parse JSON. Gemini might wrap in \`\`\`json \`\`\`
-    let cleanedText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
-    let summaryJson;
-    try {
-      summaryJson = JSON.parse(cleanedText);
-    } catch (e) {
-      console.error("AI returned invalid JSON:", responseText);
-      return res.status(500).json({ success: false, message: "Failed to parse AI response." });
-    }
+    // 2. Generate AI Summary
+    const summaryJson = await aiService.generateReportSummary(base64Data, mimeType);
 
     res.status(200).json({
       success: true,
@@ -273,53 +223,13 @@ router.post('/compare', verifyToken, async (req, res) => {
       return res.status(403).json({ success: false, message: "Only doctors can compare reports." });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ success: false, message: "GEMINI_API_KEY not configured." });
-    }
-
     const latestResponse = await axios.get(latestFileUrl, { responseType: 'arraybuffer' });
     const prevResponse = await axios.get(previousFileUrl, { responseType: 'arraybuffer' });
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
+    const latestBase64 = Buffer.from(latestResponse.data, 'binary').toString('base64');
+    const prevBase64 = Buffer.from(prevResponse.data, 'binary').toString('base64');
 
-    const prompt = `You are a medical AI assistant. Compare the latest medical report with the previous medical report.
-Keep it strictly factual based on the data. Do NOT generate any diagnosis, treatment suggestions, prescriptions, or medical advice.
-Return ONLY a valid JSON string with the following structure (no markdown, no other text):
-{
-  "NewFindings": ["Finding 1", "Finding 2"],
-  "RemovedFindings": ["Finding 1", "Finding 2"],
-  "ChangedFindings": ["Parameter 1: Old Value -> New Value"],
-  "OverallChange": "Short factual statement summarizing the difference."
-}
-If a section is empty, return an empty array. Do not invent details.`;
-
-    const imageParts = [
-      {
-        inlineData: {
-          data: Buffer.from(latestResponse.data, 'binary').toString('base64'),
-          mimeType: latestMimeType || 'application/pdf'
-        }
-      },
-      {
-        inlineData: {
-          data: Buffer.from(prevResponse.data, 'binary').toString('base64'),
-          mimeType: previousMimeType || 'application/pdf'
-        }
-      }
-    ];
-
-    const aiResult = await model.generateContent([prompt, ...imageParts]);
-    const responseText = aiResult.response.text();
-    
-    let cleanedText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
-    let comparisonJson;
-    try {
-      comparisonJson = JSON.parse(cleanedText);
-    } catch (e) {
-      console.error("AI returned invalid JSON:", responseText);
-      return res.status(500).json({ success: false, message: "Failed to parse AI response." });
-    }
+    const comparisonJson = await aiService.compareReports(latestBase64, latestMimeType, prevBase64, previousMimeType);
 
     res.status(200).json({
       success: true,
@@ -418,6 +328,29 @@ router.post('/search', verifyToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to search reports."
+    });
+  }
+});
+
+// Route: POST /api/reports/chat
+router.post('/chat', verifyToken, async (req, res) => {
+  try {
+    const { messages } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ success: false, message: "messages array is required." });
+    }
+    
+    const replyText = await aiService.chatWithAssistant(messages);
+    
+    res.status(200).json({
+      success: true,
+      reply: replyText
+    });
+  } catch (error) {
+    console.error('[AI Chat Route] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to get AI response."
     });
   }
 });
