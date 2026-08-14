@@ -289,12 +289,18 @@ router.get('/:id/stats', verifyCentralAdmin, async (req, res) => {
     }
 });
 
+const mongoose = require('mongoose');
+
 // ==========================================
 // CREATE clinic manager (hospitaladmin)
 // POST /api/simple-clinics/:id/manager
 // ==========================================
 router.post('/:id/manager', verifyCentralAdmin, async (req, res) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'Invalid clinic ID format' });
+        }
+
         const { name, email, password, phone } = req.body;
         if (!name || !email || !password) return res.status(400).json({ success: false, message: 'Name, email and password are required' });
         const pwErrM = validatePassword(password);
@@ -334,7 +340,8 @@ router.post('/:id/manager', verifyCentralAdmin, async (req, res) => {
             message: 'Clinic manager created. They can login at /hospitaladmin/login'
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'An internal error occurred' });
+        console.error('Error in POST /api/simple-clinics/:id/manager:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred', error: err.message });
     }
 });
 
@@ -344,6 +351,10 @@ router.post('/:id/manager', verifyCentralAdmin, async (req, res) => {
 // ==========================================
 router.get('/:id/staff', verifyCentralAdmin, async (req, res) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'Invalid clinic ID format' });
+        }
+
         const Role = require('../models/role.model');
         const roleDoc = await Role.findOne({ name: 'Clinic Doctor', hospitalId: null });
 
@@ -378,7 +389,8 @@ router.get('/:id/staff', verifyCentralAdmin, async (req, res) => {
 
         res.json({ success: true, staff: enriched, tier: clinic?.tier });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'An internal error occurred' });
+        console.error('Error in GET /api/simple-clinics/:id/staff:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred', error: err.message });
     }
 });
 
@@ -389,6 +401,10 @@ router.get('/:id/staff', verifyCentralAdmin, async (req, res) => {
 // ==========================================
 router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: 'Invalid clinic ID format' });
+        }
+
         const { name, email, password, phone, staffRole } = req.body;
         if (!name || !email || !password) return res.status(400).json({ success: false, message: 'Name, email and password are required' });
         const pwErrS = validatePassword(password);
@@ -408,6 +424,7 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
         const clinic = await Hospital.findOne({ _id: req.params.id, clinicType: 'clinic' });
         if (!clinic) return res.status(404).json({ success: false, message: 'Clinic not found' });
 
+        // Starter Plan check
         const isStarter = clinic.subscriptionPlan === 'starter' || clinic.clinicPlan === 'starter' || (!clinic.subscriptionPlan && clinic.clinicPlan !== 'basic');
         if (isStarter) {
             const adminCount = clinic.adminUserId ? 1 : 0;
@@ -420,9 +437,8 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
             }
         }
 
-        // Tier limit check
+        // General Tier limit check
         const maxForRole = clinic.tier?.maxDoctors || 1;
-
         const currentCount = await User.countDocuments({
             hospitalId: clinic._id,
             $or: [
@@ -454,7 +470,8 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
             message: 'Clinic Doctor account created successfully',
         });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'An internal error occurred' });
+        console.error('Error in POST /api/simple-clinics/:id/staff:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred', error: err.message });
     }
 });
 
