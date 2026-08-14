@@ -58,7 +58,7 @@ async function buildLoginUserData(user, roleData) {
             const hosp = await Hospital.findById(user.hospitalId).select('clinicType subscriptionPlan');
             clinicType = hosp?.clinicType || 'hospital';
             subscriptionPlan = hosp?.subscriptionPlan || 'none';
-        } catch (_) {}
+        } catch (_) { }
     }
 
     return {
@@ -166,7 +166,7 @@ function isCentralAdminRole(user, roleData) {
  * - All other roles (Hospital Admin, Doctor, Receptionist, Staff, etc.): 1 device
  */
 function getMaxAllowedSessions(user, roleData) {
-    return isCentralAdminRole(user, roleData) ? 2 : 1;
+    return isCentralAdminRole(user, roleData) ? 4 : 1;
 }
 
 /** Invalidate all active sessions for a user (blacklist JWTs + deactivate sessions) */
@@ -238,7 +238,7 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
         }
 
         const normalizedEmail = email.toLowerCase().trim();
-        
+
         let user = null;
         if (hospitalId) {
             // Priority 1: Find user strictly for this hospital
@@ -248,7 +248,7 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
                 user = await User.findOne({ email: normalizedEmail, role: { $in: ['superadmin', 'centraladmin'] } });
             }
         }
-        
+
         // Priority 3: Generic fallback
         if (!user) {
             user = await User.findOne({ email: normalizedEmail });
