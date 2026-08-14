@@ -145,7 +145,9 @@
     margin-bottom: 20px;
 }
 
-.ca-tab { flex-shrink: 0; /* no squish */ 
+.ca-tab {
+    flex-shrink: 0;
+    /* no squish */
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.8);
@@ -264,11 +266,109 @@
 }
 
 .kpi-card {
+    background: #f8fafc !important;
+    /* Forcefully apply background color */
     border-radius: 16px;
     padding: 22px 24px;
-    color: white;
+    color: #0f172a !important;
+    /* Force text color to prevent white-on-white text */
     position: relative;
     overflow: hidden;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.centraladmin-page .kpi-card {
+    border-radius: 16px;
+    padding: 22px 24px;
+    color: #ffffff !important;
+    position: relative;
+    overflow: hidden;
+    border: none !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Har card ke liye alag vibrant gradient */
+.centraladmin-page .kpi-blue { 
+    background: linear-gradient(135deg, #22d3ee 0%, #0284c7 100%) !important; 
+}
+.centraladmin-page .kpi-green { 
+    background: linear-gradient(135deg, #34d399 0%, #059669 100%) !important; 
+}
+.centraladmin-page .kpi-purple { 
+    background: linear-gradient(135deg, #c084fc 0%, #818cf8 100%) !important; 
+}
+.centraladmin-page .kpi-orange { 
+    background: linear-gradient(135deg, #fbbf24 0%, #f97316 100%) !important; 
+}
+.centraladmin-page .kpi-teal { 
+    background: linear-gradient(135deg, #2dd4bf 0%, #0d9488 100%) !important; 
+}
+.centraladmin-page .kpi-pink { 
+    background: linear-gradient(135deg, #f472b6 0%, #db2777 100%) !important; 
+}
+
+.centraladmin-page .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: -30px;
+    right: -30px;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.centraladmin-page .kpi-icon {
+    font-size: 28px;
+    margin-bottom: 8px;
+}
+
+.centraladmin-page .kpi-value {
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 4px;
+    color: #ffffff !important;
+}
+
+.centraladmin-page .kpi-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.9) !important;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.centraladmin-page .kpi-sub {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Subtly highlight left border with respective colors */
+.kpi-blue {
+    border-left: 5px solid #3b82f6;
+}
+
+.kpi-green {
+    border-left: 5px solid #10b981;
+}
+
+.kpi-purple {
+    border-left: 5px solid #8b5cf6;
+}
+
+.kpi-orange {
+    border-left: 5px solid #f97316;
+}
+
+.kpi-teal {
+    border-left: 5px solid #14b8a6;
+}
+
+.kpi-pink {
+    border-left: 5px solid #ec4899;
 }
 
 .kpi-card::before {
@@ -279,31 +379,8 @@
     width: 100px;
     height: 100px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
-}
-
-.kpi-blue {
-    background: linear-gradient(135deg, #3b82f6, #6366f1);
-}
-
-.kpi-green {
-    background: linear-gradient(135deg, #10b981, #059669);
-}
-
-.kpi-purple {
-    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-}
-
-.kpi-orange {
-    background: linear-gradient(135deg, #f97316, #ea580c);
-}
-
-.kpi-teal {
-    background: linear-gradient(135deg, #14b8a6, #0d9488);
-}
-
-.kpi-pink {
-    background: linear-gradient(135deg, #ec4899, #db2777);
+    background: rgba(0, 0, 0, 0.02);
+    /* Soft background circle for white cards */
 }
 
 .kpi-icon {
@@ -316,12 +393,15 @@
     font-weight: 800;
     line-height: 1;
     margin-bottom: 4px;
+    color: #0f172a;
+    /* Numbers dark */
 }
 
 .kpi-label {
     font-size: 13px;
     font-weight: 700;
-    opacity: 0.9;
+    color: #64748b;
+    /* Label color muted gray */
     margin-bottom: 4px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -329,7 +409,8 @@
 
 .kpi-sub {
     font-size: 12px;
-    opacity: 0.75;
+    color: #94a3b8;
+    /* Subtext light gray */
 }
 
 /* ---- TWO COLUMN LAYOUT ---- */
@@ -960,8 +1041,16 @@
         align-items: flex-start;
     }
 
-    .ca-tabs { flex-wrap: nowrap !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch; scrollbar-width: none; } 
-.ca-tabs::-webkit-scrollbar { display: none; }
+    .ca-tabs {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .ca-tabs::-webkit-scrollbar {
+        display: none;
+    }
 
     .date-filter-controls {
         flex-direction: column;
