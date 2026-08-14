@@ -11,7 +11,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
+ "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "axios": "^1.6.0",
     "bcryptjs": "^2.4.3",
@@ -34,7 +34,7 @@
     "nanoid": "^3.3.6",
     "nodemailer": "^9.0.3",
     "otplib": "^13.4.0",
-    "pdf-parse": "^2.4.5",
+    "pdf-parse": "1.1.1",
     "pizzip": "^3.2.0",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.3",
