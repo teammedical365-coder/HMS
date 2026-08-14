@@ -559,50 +559,40 @@ const CentralAdminDashboard = () => {
                     {/* Back Header */}
                     <div className="centraladmin-header-details" style={{ background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: 'var(--shadow-sm)', marginBottom: '24px' }}>
                         {/* Top Row: Back Button */}
-                        <div style={{ marginBottom: '16px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                             <button onClick={closeHospitalDetail} className="back-btn-light" style={{ display: 'inline-flex', alignItems: 'center', margin: 0 }}>
                                 ← Back to Hospitals
                             </button>
+                            <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`} style={{
+                                padding: '6px 14px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', borderRadius: '20px',
+                                border: h.isActive ? '1px solid #15803d' : '1px solid #b91c1c',
+                                background: h.isActive ? '#dcfce7' : '#fee2e2',
+                                color: h.isActive ? '#15803d' : '#b91c1c', display: 'inline-flex', alignItems: 'center', height: 'fit-content'
+                            }}>
+                                {h.isActive ? 'ACTIVE' : 'INACTIVE'}
+                            </span>
                         </div>
 
                         {/* Bottom Row: Flex container with justify-content: space-between */}
                         <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full">
                             {/* Left Column: Logo + Name & Contact Details */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'nowrap' }}>
                                 {h.branding?.logoUrl ? (
-                                    <img src={h.branding.logoUrl} alt="Logo" style={{ width: '48px', height: '48px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '4px' }} />
+                                    <img src={h.branding.logoUrl} alt="Logo" style={{ width: '48px', height: '48px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '4px', flexShrink: 0 }} />
                                 ) : (
-                                    <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', border: '1px solid #cbd5e1' }}>🏥</div>
+                                    <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', border: '1px solid #cbd5e1', flexShrink: 0 }}>🏥</div>
                                 )}
-                                <div>
-                                    <h1 style={{ fontSize: '1.6rem', fontWeight: 850, color: '#1e293b', margin: 0 }}>
+                                <div style={{ minWidth: 0 }}>
+                                    <h1 style={{ fontSize: 'clamp(1.2rem, 4.5vw, 1.6rem)', fontWeight: 850, color: '#1e293b', margin: 0, lineHeight: '1.2', wordBreak: 'break-word' }}>
                                         {h.name}
                                     </h1>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: '#64748b', fontSize: '0.92rem', marginTop: '6px', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#64748b', fontSize: 'clamp(0.8rem, 3vw, 0.92rem)', marginTop: '4px', flexWrap: 'wrap' }}>
                                         {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
                                         {h.phone && <span>📞 {h.phone}</span>}
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Right Column: ACTIVE Badge */}
-                            <div>
-                                <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`} style={{
-                                    padding: '6px 14px',
-                                    fontSize: '12px',
-                                    fontWeight: 700,
-                                    textTransform: 'uppercase',
-                                    borderRadius: '20px',
-                                    border: h.isActive ? '1px solid #15803d' : '1px solid #b91c1c',
-                                    background: h.isActive ? '#dcfce7' : '#fee2e2',
-                                    color: h.isActive ? '#15803d' : '#b91c1c',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    height: 'fit-content'
-                                }}>
-                                    {h.isActive ? 'ACTIVE' : 'INACTIVE'}
-                                </span>
-                            </div>
                         </div>
                     </div>
 
@@ -616,18 +606,18 @@ const CentralAdminDashboard = () => {
                             <div className="admin-card date-filter-card w-full max-w-full min-w-0 overflow-hidden">
                                 <h3>📅 Analytics Timeframe</h3>
                                 <div className="date-filter-controls flex flex-col md:flex-row flex-wrap gap-4 w-full">
-                                    <div className="preset-buttons flex flex-col sm:flex-row flex-wrap gap-2 w-full">
-                                        <button className={datePreset === 'all' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('all')}>All Time</button>
-                                        <button className={datePreset === 'today' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('today')}>Today</button>
-                                        <button className={datePreset === '30' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('30')}>Last 30 Days</button>
-                                        <button className={datePreset === '60' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('60')}>Last 60 Days</button>
-                                        <button className={datePreset === '90' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('90')}>Last 90 Days</button>
+                                    <div className="preset-buttons flex flex-row flex-wrap gap-2 w-full">
+                                        <button className={datePreset === 'all' ? 'preset-btn active' : 'preset-btn'} style={{ flex: '1 1 auto', textAlign: 'center', padding: '8px 12px' }} onClick={() => handleDatePresetChange('all')}>All Time</button>
+                                        <button className={datePreset === 'today' ? 'preset-btn active' : 'preset-btn'} style={{ flex: '1 1 auto', textAlign: 'center', padding: '8px 12px' }} onClick={() => handleDatePresetChange('today')}>Today</button>
+                                        <button className={datePreset === '30' ? 'preset-btn active' : 'preset-btn'} style={{ flex: '1 1 auto', textAlign: 'center', padding: '8px 12px' }} onClick={() => handleDatePresetChange('30')}>30 Days</button>
                                     </div>
-                                    <div className="custom-date-inputs flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-2 w-full">
-                                        <input type="date" className="date-input" value={customStartDate} onChange={(e) => { setDatePreset('custom'); setCustomStartDate(e.target.value); }} />
-                                        <span>to</span>
-                                        <input type="date" className="date-input" value={customEndDate} onChange={(e) => { setDatePreset('custom'); setCustomEndDate(e.target.value); }} />
-                                        <button className="btn-save w-full md:w-auto" onClick={handleApplyCustomDate}>Apply Custom</button>
+                                    <div className="custom-date-inputs flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 w-full">
+                                        <div className="flex flex-row items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+                                            <input type="date" className="date-input flex-1 sm:flex-none" style={{ minWidth: '110px', width: '100%' }} value={customStartDate} onChange={(e) => { setDatePreset('custom'); setCustomStartDate(e.target.value); }} />
+                                            <span style={{ fontSize: '14px', color: '#64748b', fontWeight: '500' }}>to</span>
+                                            <input type="date" className="date-input flex-1 sm:flex-none" style={{ minWidth: '110px', width: '100%' }} value={customEndDate} onChange={(e) => { setDatePreset('custom'); setCustomEndDate(e.target.value); }} />
+                                        </div>
+                                        <button className="btn-save w-full sm:w-auto mt-2 sm:mt-0" onClick={handleApplyCustomDate}>Apply Custom</button>
                                     </div>
                                 </div>
                             </div>
@@ -676,7 +666,7 @@ const CentralAdminDashboard = () => {
                             <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '24px' }}>
                                 <h3 style={{ marginBottom: '8px' }}>⚡ Quick Feature Management</h3>
                                 <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>Jump to manage specific features for this hospital.</p>
-                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                                     {[
                                         { icon: '👨‍⚕️', label: 'Doctors', path: '/admin/doctors', bg: '#dbeafe', color: '#2563eb', border: '#bfdbfe' },
                                         { icon: '👥', label: 'Staff', path: '/admin/users', bg: '#f0f9ff', color: '#0284c7', border: '#bae6fd' },
@@ -691,7 +681,7 @@ const CentralAdminDashboard = () => {
                                         <button
                                             key={i}
                                             onClick={() => navigate(item.path)}
-                                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: item.bg, color: item.color, border: `1px solid ${item.border}`, borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}
+                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '10px 14px', background: item.bg, color: item.color, border: `1px solid ${item.border}`, borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', width: '100%' }}
                                         >
                                             {item.icon} {item.label}
                                         </button>
@@ -711,13 +701,13 @@ const CentralAdminDashboard = () => {
                                     Choose how patients and reception staff book appointments for this hospital.
                                 </p>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '18px' }}>
+                                <div className="flex md:grid md:grid-cols-2 gap-4 mb-4 overflow-x-auto pb-4 hide-scrollbars" style={{ scrollSnapType: 'x mandatory' }}>
                                     {/* Slot Mode Card */}
-                                    <label style={{
+                                    <label className="shrink-0 w-11/12 md:w-auto" style={{
                                         display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
                                         border: apptMode === 'slot' ? '2px solid #3b82f6' : '2px solid #e2e8f0',
                                         background: apptMode === 'slot' ? '#eff6ff' : '#f8fafc',
-                                        transition: 'all 0.15s'
+                                        transition: 'all 0.15s', scrollSnapAlign: 'center'
                                     }}>
                                         <input type="radio" name="apptMode" value="slot" checked={apptMode === 'slot'} onChange={() => setApptMode('slot')} style={{ display: 'none' }} />
                                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
@@ -735,11 +725,11 @@ const CentralAdminDashboard = () => {
                                     </label>
 
                                     {/* Token Mode Card */}
-                                    <label style={{
+                                    <label className="shrink-0 w-11/12 md:w-auto" style={{
                                         display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
                                         border: apptMode === 'token' ? '2px solid #f59e0b' : '2px solid #e2e8f0',
                                         background: apptMode === 'token' ? '#fffbeb' : '#f8fafc',
-                                        transition: 'all 0.15s'
+                                        transition: 'all 0.15s', scrollSnapAlign: 'center'
                                     }}>
                                         <input type="radio" name="apptMode" value="token" checked={apptMode === 'token'} onChange={() => setApptMode('token')} style={{ display: 'none' }} />
                                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
@@ -819,7 +809,7 @@ const CentralAdminDashboard = () => {
                                         ].map((item, i) => item.value && (
                                             <div key={i} style={{ display: 'flex', gap: '12px', marginBottom: '8px', fontSize: '14px' }}>
                                                 <span style={{ color: '#888', minWidth: '90px' }}>{item.label}</span>
-                                                <span style={{ color: '#333', fontWeight: '500' }}>
+                                                <span style={{ color: '#333', fontWeight: '500', wordBreak: 'break-word' }}>
                                                     {item.isLink ? (
                                                         <a href={item.value} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-pink)', textDecoration: 'none' }}>
                                                             {item.value}
@@ -835,7 +825,7 @@ const CentralAdminDashboard = () => {
 
                                 {/* Revenue chart */}
                                 <div className="admin-card w-full max-w-full min-w-0">
-                                    <h3>💰 Monthly Revenue (Last 6 Months)</h3>
+                                    <h3 style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 'clamp(1.1rem, 4.5vw, 1.3rem)' }}>💰 Monthly Revenue (Last 6 Months)</h3>
                                     {s.monthlyRevenue.length === 0 ? (
                                         <p style={{ color: '#888', fontSize: '14px' }}>No revenue data yet.</p>
                                     ) : (
@@ -873,12 +863,12 @@ const CentralAdminDashboard = () => {
                                             <tbody>
                                                 {hospitalStats.staffList.map(u => (
                                                     <tr key={u._id}>
-                                                        <td><div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-[10px]">
+                                                        <td><div className="flex flex-row items-center gap-3">
                                                             {u.avatar
-                                                                ? <img src={u.avatar} alt={u.name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
-                                                                : <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#6366f1' }}>{u.name?.charAt(0)?.toUpperCase()}</div>
+                                                                ? <img src={u.avatar} alt={u.name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                                                                : <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#6366f1', flexShrink: 0 }}>{u.name?.charAt(0)?.toUpperCase()}</div>
                                                             }
-                                                            {u.name}
+                                                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name}</span>
                                                         </div></td>
                                                         <td><span className="role-badge">{u.roleName || u.role}</span></td>
                                                         <td>{u.email}</td>
@@ -1244,7 +1234,7 @@ const CentralAdminDashboard = () => {
                                         : activeTab === 'clinic-basic'
                                             ? h.subscriptionPlan === 'clinic_basic'
                                             : (h.subscriptionPlan !== 'multi_speciality_starter' && h.subscriptionPlan !== 'clinic_basic')
-                                );
+                                ).sort((a, b) => b._id.localeCompare(a._id));
                                 
                                 if (filteredHospitals.length === 0) {
                                     return <div className="ca-empty"><p>🏥 No hospitals found for this plan. Add your first hospital above.</p></div>;
@@ -1255,22 +1245,23 @@ const CentralAdminDashboard = () => {
                                         {filteredHospitals.map(h => (
                                             <div key={h._id} className={`hospital-card clickable-card ${!h.isActive ? 'hospital-inactive' : ''}`} onClick={() => openHospitalDetail(h)}>
                                             <div className="hospital-card-content">
-                                                <div className="hospital-card-header">
-                                                    <div className="hospital-logo-container">
+                                                <div className="hospital-card-header" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                                                    <div className="hospital-logo-container" style={{ margin: 0, flexShrink: 0 }}>
                                                         {h.branding?.logoUrl
                                                             ? <img src={h.branding.logoUrl} alt={h.name} style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 6 }} />
-                                                            : <span>🏥</span>
+                                                            : <span style={{ fontSize: '28px' }}>🏥</span>
                                                         }
                                                     </div>
-                                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                                        {h.branding?.primaryColor && (
-                                                            <span title="Custom branding" style={{ width: 12, height: 12, borderRadius: '50%', background: h.branding.primaryColor, border: '1.5px solid rgba(0,0,0,0.1)', flexShrink: 0 }} />
-                                                        )}
-                                                        <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`}>{h.isActive ? 'Active' : 'Inactive'}</span>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <h3 className="hospital-name" style={{ margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            {h.branding?.appName || h.name}
+                                                            {h.branding?.primaryColor && (
+                                                                <span title="Custom branding" style={{ width: 10, height: 10, borderRadius: '50%', background: h.branding.primaryColor, border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0, display: 'inline-block' }} />
+                                                            )}
+                                                        </h3>
+                                                        {h.branding?.tagline && <p className="hospital-tagline" style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 0', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.branding.tagline}</p>}
                                                     </div>
                                                 </div>
-                                                <h3 className="hospital-name">{h.branding?.appName || h.name}</h3>
-                                                {h.branding?.tagline && <p className="hospital-tagline" style={{ fontSize: 11, color: '#94a3b8', margin: '2px 0 6px', fontStyle: 'italic' }}>{h.branding.tagline}</p>}
                                                 <div className="hospital-meta">
                                                     {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
                                                     {h.phone && <span>📞 {h.phone}</span>}
@@ -1423,7 +1414,7 @@ const CentralAdminDashboard = () => {
                                     activeTab === 'clinic-basic' 
                                         ? clinic.subscriptionPlan === 'clinic_basic'
                                         : clinic.subscriptionPlan !== 'clinic_basic'
-                                );
+                                ).sort((a, b) => b._id.localeCompare(a._id));
 
                                 if (filteredClinics.length === 0) {
                                     return <div className="ca-empty"><p>No clinics found in this plan. Click <strong>+ Add Clinic</strong> to get started.</p></div>;
@@ -1479,21 +1470,39 @@ const CentralAdminDashboard = () => {
                 {activeTab === 'simple-clinics' && selectedClinic && (
                     <div>
                         {/* Header */}
-                        <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '16px' }}>
-                            <button onClick={closeClinicDetail} className="back-btn" style={{ marginBottom: '12px' }}>← Back to All Clinics</button>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                <div style={{ fontSize: '40px' }}>🏪</div>
-                                <div>
-                                    <h2 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>{selectedClinic.name}</h2>
-                                    <p style={{ color: '#64748b', margin: '4px 0 0' }}>
-                                        {selectedClinic.city}{selectedClinic.state ? `, ${selectedClinic.state}` : ''}
-                                        {selectedClinic.phone ? ` · 📞 ${selectedClinic.phone}` : ''}
-                                        {selectedClinic.slug ? <> · <a href={`${window.location.protocol}//${selectedClinic.slug}.${getBaseHost()}`} target="_blank" rel="noopener noreferrer" style={{ color: '#14b8a6', textDecoration: 'none', fontFamily: 'monospace', fontSize: '13px' }}>🔗 {selectedClinic.slug}.{getBaseHost()}</a></> : ''}
-                                    </p>
-                                </div>
-                                <span style={{ marginLeft: 'auto', padding: '4px 12px', borderRadius: '6px', fontWeight: 600, fontSize: '13px', background: selectedClinic.isActive ? '#dcfce7' : '#fee2e2', color: selectedClinic.isActive ? '#16a34a' : '#dc2626' }}>
-                                    {selectedClinic.isActive ? 'Active' : 'Inactive'}
+                        <div className="centraladmin-header-details" style={{ background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: 'var(--shadow-sm)', marginBottom: '24px' }}>
+                            {/* Top Row: Back Button */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <button onClick={closeClinicDetail} className="back-btn-light" style={{ display: 'inline-flex', alignItems: 'center', margin: 0 }}>
+                                    ← Back to All Clinics
+                                </button>
+                                <span className={`status-badge ${selectedClinic.isActive ? 'status-active' : 'status-inactive'}`} style={{
+                                    padding: '6px 14px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', borderRadius: '20px',
+                                    border: selectedClinic.isActive ? '1px solid #15803d' : '1px solid #b91c1c',
+                                    background: selectedClinic.isActive ? '#dcfce7' : '#fee2e2',
+                                    color: selectedClinic.isActive ? '#15803d' : '#b91c1c', display: 'inline-flex', alignItems: 'center', height: 'fit-content'
+                                }}>
+                                    {selectedClinic.isActive ? 'ACTIVE' : 'INACTIVE'}
                                 </span>
+                            </div>
+
+                            {/* Bottom Row */}
+                            <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full">
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'nowrap' }}>
+                                    <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', border: '1px solid #cbd5e1', flexShrink: 0 }}>🏪</div>
+                                    <div style={{ minWidth: 0 }}>
+                                        <h1 style={{ fontSize: 'clamp(1.2rem, 4.5vw, 1.6rem)', fontWeight: 850, color: '#1e293b', margin: 0, lineHeight: '1.2', wordBreak: 'break-word' }}>
+                                            {selectedClinic.name}
+                                        </h1>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', color: '#64748b', fontSize: 'clamp(0.8rem, 3vw, 0.92rem)', marginTop: '4px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                                                {selectedClinic.city && <span>📍 {selectedClinic.city}{selectedClinic.state ? `, ${selectedClinic.state}` : ''}</span>}
+                                                {selectedClinic.phone && <span>📞 {selectedClinic.phone}</span>}
+                                            </div>
+                                            {selectedClinic.slug && <div><a href={`${window.location.protocol}//${selectedClinic.slug}.${getBaseHost()}`} target="_blank" rel="noopener noreferrer" style={{ color: '#14b8a6', textDecoration: 'none', fontFamily: 'monospace' }}>🔗 {selectedClinic.slug}.{getBaseHost()}</a></div>}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -1742,11 +1751,11 @@ const CentralAdminDashboard = () => {
                                                     {clinicStats.stats.staff.map(s => (
                                                         <tr key={s._id}>
                                                             <td style={{ fontWeight: 600 }}>
-                                                                <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-[8px]">
-                                                                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#6366f1', fontSize: '13px' }}>
+                                                                <div className="flex flex-row items-center gap-3">
+                                                                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#6366f1', fontSize: '13px', flexShrink: 0 }}>
                                                                         {s.name?.charAt(0)?.toUpperCase()}
                                                                     </div>
-                                                                    {s.name}
+                                                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
                                                                 </div>
                                                             </td>
                                                             <td>{s.email}</td>
@@ -1803,19 +1812,19 @@ const CentralAdminDashboard = () => {
                                     </p>
 
                                     {/* Set rate form */}
-                                    <form onSubmit={handleSaveRate} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '20px', padding: '14px', background: '#f8fafc', borderRadius: '8px' }}>
-                                        <div>
+                                    <form onSubmit={handleSaveRate} className="grid md:flex md:flex-wrap md:items-end gap-[10px]" style={{ gridTemplateColumns: '1fr auto', marginBottom: '20px', padding: '14px', background: '#f8fafc', borderRadius: '8px' }}>
+                                        <div className="order-1 md:order-1">
                                             <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '4px' }}>Rate per New Patient (₹)</label>
                                             <input type="number" min="0" className="w-full sm:w-[160px]" style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '14px' }}
                                                 placeholder="e.g. 50" value={subscriptionRateForm.ratePerPatient}
                                                 onChange={e => setSubscriptionRateForm(f => ({ ...f, ratePerPatient: e.target.value }))} />
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingBottom: '4px' }}>
+                                        <div className="order-3 md:order-2" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '6px', paddingBottom: '4px' }}>
                                             <input type="checkbox" id="billingEnabled" checked={subscriptionRateForm.billingEnabled}
                                                 onChange={e => setSubscriptionRateForm(f => ({ ...f, billingEnabled: e.target.checked }))} />
                                             <label htmlFor="billingEnabled" style={{ fontSize: '13px', color: '#475569', cursor: 'pointer' }}>Enable billing</label>
                                         </div>
-                                        <button type="submit" className="btn-save w-full md:w-auto" style={{ fontSize: '13px', padding: '8px 16px' }} disabled={savingRate}>
+                                        <button type="submit" className="btn-save order-2 md:order-3" style={{ alignSelf: 'end', fontSize: '13px', padding: '8px 16px', height: '38px' }} disabled={savingRate}>
                                             {savingRate ? 'Saving...' : '💾 Save Rate'}
                                         </button>
                                     </form>
@@ -1875,13 +1884,13 @@ const CentralAdminDashboard = () => {
                                     <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 18px' }}>
                                         Choose how patients are managed in this clinic's reception queue.
                                     </p>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                                    <div className="flex md:grid md:grid-cols-2 gap-4 mb-4 overflow-x-auto pb-4 hide-scrollbars" style={{ scrollSnapType: 'x mandatory' }}>
                                         {/* Token Mode Card */}
-                                        <label style={{
+                                        <label className="shrink-0 w-11/12 md:w-auto" style={{
                                             display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
                                             border: clinicApptMode === 'token' ? '2px solid #f59e0b' : '2px solid #e2e8f0',
                                             background: clinicApptMode === 'token' ? '#fffbeb' : '#f8fafc',
-                                            transition: 'all 0.15s'
+                                            transition: 'all 0.15s', scrollSnapAlign: 'center'
                                         }}>
                                             <input type="radio" name="clinicApptMode" value="token" checked={clinicApptMode === 'token'} onChange={() => setClinicApptMode('token')} style={{ display: 'none' }} />
                                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
@@ -1898,11 +1907,11 @@ const CentralAdminDashboard = () => {
                                             </div>
                                         </label>
                                         {/* Slot Mode Card */}
-                                        <label style={{
+                                        <label className="shrink-0 w-11/12 md:w-auto" style={{
                                             display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
                                             border: clinicApptMode === 'slot' ? '2px solid #3b82f6' : '2px solid #e2e8f0',
                                             background: clinicApptMode === 'slot' ? '#eff6ff' : '#f8fafc',
-                                            transition: 'all 0.15s'
+                                            transition: 'all 0.15s', scrollSnapAlign: 'center'
                                         }}>
                                             <input type="radio" name="clinicApptMode" value="slot" checked={clinicApptMode === 'slot'} onChange={() => setClinicApptMode('slot')} style={{ display: 'none' }} />
                                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
