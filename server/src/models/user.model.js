@@ -108,10 +108,10 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Scoped compound indexes for multi-tenant isolation per hospital
-userSchema.index({ hospitalId: 1, phone: 1 }, { unique: true, sparse: true });
-userSchema.index({ hospitalId: 1, email: 1 }, { unique: true, sparse: true });
-userSchema.index({ hospitalId: 1, aadhaarNumber: 1 }, { unique: true, sparse: true });
-userSchema.index({ hospitalId: 1, patientId: 1 }, { unique: true, sparse: true });
+userSchema.index({ hospitalId: 1, phone: 1 }, { unique: true, partialFilterExpression: { phone: { $type: "string" } } });
+userSchema.index({ hospitalId: 1, email: 1 }, { unique: true, partialFilterExpression: { email: { $type: "string" } } });
+userSchema.index({ hospitalId: 1, aadhaarNumber: 1 }, { unique: true, partialFilterExpression: { aadhaarNumber: { $type: "string" } } });
+userSchema.index({ hospitalId: 1, patientId: 1 }, { unique: true, partialFilterExpression: { patientId: { $type: "string" } } });
 
 userSchema.pre('save', async function (next) {
     if (!this.isModified('password')) return next();
