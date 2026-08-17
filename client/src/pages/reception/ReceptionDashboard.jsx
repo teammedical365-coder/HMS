@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI } from '../../utils/api';
 import { useAuth } from '../../store/hooks';
 import { getSubdomain } from '../../utils/subdomain';
+import toast from 'react-hot-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { FiSearch, FiUserPlus, FiFileText, FiDollarSign, FiUsers, FiCalendar, FiHome, FiPlusSquare } from 'react-icons/fi';
@@ -49,6 +50,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const [listTab, setListTab] = useState('queue'); // 'queue', 'all', 'hospitalized'
     const [departmentFilter, setDepartmentFilter] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [isEditingProfileOnly, setIsEditingProfileOnly] = useState(false);
 
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -330,7 +332,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             return;
         }
         if (location.state?.patient) {
-            handleEditPatient(location.state.patient);
+            handleEditPatient(location.state.patient, location.state?.isEditingExisting || false);
         } else if (viewParam === 'intake') {
             handleNewWalkIn();
         } else if (viewParam === 'transactions') {
@@ -486,7 +488,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         setViewMode('intake');
     };
 
-    const handleEditPatient = (patient) => {
+    const handleEditPatient = (patient, isEditOnly = false) => {
+        setIsEditingProfileOnly(isEditOnly);
         setSelectedPatientId(patient._id);
         setOtpSent(false);
         setAadhaarOtp('');
@@ -524,7 +527,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     };
 
     const handleSelectSearchResult = async (patient) => {
-        handleEditPatient(patient);
+        handleEditPatient(patient, false);
         setSearchResults([]);
 
         try {
@@ -878,13 +881,13 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         }
 
         if (!/^\d{10}$/.test(intakeForm.mobile)) {
-            alert("Mobile number must be exactly 10 digits.");
+            toast.error("Mobile number must be exactly 10 digits.");
             setSaving(false); return;
         }
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!intakeForm.email || !emailRegex.test(intakeForm.email)) {
-            alert("Please enter a valid email address (e.g. patient@gmail.com).");
+        if (intakeForm.email && !emailRegex.test(intakeForm.email)) {
+            toast.error("Please enter a valid email address (e.g. patient@gmail.com).");
             setSaving(false); return;
         }
 
@@ -897,7 +900,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
         const hasNonCash = intakeForm.splitPayments.some(p => p.method !== 'Cash');
         if (intakeForm.doctor && intakeForm.visitTime && hasNonCash && !paymentScreenshot && !followupStatus?.active) {
-            alert(`Please upload a payment screenshot/proof for non-cash payment before booking.`);
+            toast.error(`Please upload a payment screenshot/proof for non-cash payment before booking.`);
             setSaving(false); return;
         }
 
@@ -907,7 +910,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         if (isBooking && Number(intakeForm.consultationFee) > 0) {
             const totalSplit = intakeForm.splitPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
             if (totalSplit !== Number(intakeForm.consultationFee)) {
-                alert(`Payment is incomplete. Total paid (,1${totalSplit}) must match the full Consultation Fee (,1${intakeForm.consultationFee}) before booking.`);
+                toast.error(`Payment is incomplete. Total paid (₹${totalSplit}) must match the full Consultation Fee (₹${intakeForm.consultationFee}) before booking.`);
                 setSaving(false); return;
             }
         }
@@ -968,7 +971,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             if (!canBook) {
                 if (isPatientPortal) {
                     const localU = JSON.parse(localStorage.getItem('patientUser') || '{}');
-                    alert("✅ Patient Profile Registered Successfully!\n\nRedirecting to your Dashboard...");
+                    toast.success("Patient Profile Registered Successfully! Redirecting...");
                     localU.registrationStatus = 'Completed';
                     if (userId) localU.linkedPatientProfileId = userId;
                     localStorage.setItem('patientUser', JSON.stringify(localU));
@@ -976,7 +979,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     return;
                 }
                 if (selectedPatientId) {
-                    alert("✅ Patient profile and demographics updated successfully!");
+                    toast.success("Patient profile and demographics updated successfully!");
                     setSaving(false);
                     if (location.state?.isEditingExisting) {
                         navigate(`/patient/${userId}`);
@@ -1091,10 +1094,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     if (isPatientPortal) {
                         const localU = JSON.parse(localStorage.getItem('patientUser') || '{}');
                         const isReBook = selectedPatientId || localU.linkedPatientProfileId;
-                        const msg = isReBook
-                            ? `✅ Appointment Booked Successfully!${tokenMsg}\n\nRedirecting to your Dashboard...`
-                            : `Patient Registered & Assigned to Doctor!${tokenMsg}\n\nYour Patient Dashboard is now Activated!`;
-                        alert(msg);
+                        if (isReBook) {
+                            toast.success(`Appointment Booked Successfully!${tokenMsg}`);
+                        } else {
+                            toast.success(`Patient Registered & Assigned to Doctor!${tokenMsg}`);
+                        }
                         localU.registrationStatus = 'Completed';
                         if (bookingRes.appointment?.userId) {
                             localU.linkedPatientProfileId = bookingRes.appointment.userId;
@@ -1107,30 +1111,30 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                         return;
                     } else {
                         const successMsg = selectedPatientId
-                            ? `✅ Appointment Booked Successfully!${tokenMsg}`
+                            ? `Appointment Booked Successfully!${tokenMsg}`
                             : `Patient Registered & Assigned to Doctor!${tokenMsg}`;
-                        alert(successMsg);
+                        toast.success(successMsg);
                     }
                 } else {
-                    alert("Booking Failed: " + bookingRes.message);
+                    toast.error("Booking Failed: " + bookingRes.message);
                 }
             } else if (selectedPatientId) {
                 // Editing existing patient — profile saved, no appointment needed
-                alert("✅ Patient details updated successfully!");
+                toast.success("Patient details updated successfully!");
                 setViewMode('list');
             } else {
-                alert("Please select a Doctor and Time Slot to complete the registration.");
+                toast.error("Please select a Doctor and Time Slot to complete the registration.");
             }
         } catch (err) {
             const msg = err.response?.data?.message || err.message || 'An unexpected error occurred.';
-            alert("❌ Error: " + msg);
+            toast.error(msg);
         } finally {
             setSaving(false);
         }
     };
 
     // Determine if reception is rebooking an existing patient (not patient portal, not new registration)
-    const isRebookingMode = !!selectedPatientId && !isPatientPortal;
+    const isRebookingMode = !!selectedPatientId && !isPatientPortal && !isEditingProfileOnly;
 
     if (viewMode === 'intake') {
         // ─── RECEPTION REBOOKING MODE (identical layout to Patient Rebooking) ────
@@ -1541,17 +1545,19 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
                             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
 
-                            <h4>4. Vitals & Payment</h4>
+                            <h4>4. Vitals</h4>
                             <div className="form-row">
                                 <div className="field"><label>Height (cm)</label><input name="height" value={intakeForm.height} onChange={handleInputChange} /></div>
                                 <div className="field"><label>Weight (kg)</label><input name="weight" value={intakeForm.weight} onChange={handleInputChange} /></div>
                                 <div className="field"><label>BMI</label><input name="bmi" value={intakeForm.bmi} readOnly /></div>
-                                <div className="field">
-                                    <label>Consultation Fee</label>
-                                    <input name="consultationFee" value={intakeForm.consultationFee} readOnly style={{ backgroundColor: '#f1f5f9', color: '#475569', cursor: 'not-allowed' }} />
-                                </div>
+                                {!isEditingProfileOnly && (
+                                    <div className="field">
+                                        <label>Consultation Fee</label>
+                                        <input name="consultationFee" value={intakeForm.consultationFee} readOnly style={{ backgroundColor: '#f1f5f9', color: '#475569', cursor: 'not-allowed' }} />
+                                    </div>
+                                )}
                             </div>
-                            {(true) && (
+                            {!isEditingProfileOnly && (
                                 <div className="form-row" style={followupStatus?.active ? { display: 'flex', flexDirection: 'column', gap: '10px' } : {}}>
                                     {!followupStatus?.active && (
                                         <div className="field" style={{ flexBasis: '100%' }}>
@@ -1578,7 +1584,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             )}
 
                             {/* FOLLOW UP STATUS CARD RELOCATED HERE */}
-                            {followupStatus && followupStatus.lastConsultation && (
+                            {(!isEditingProfileOnly && followupStatus && followupStatus.lastConsultation) && (
                                 <div className="form-row" style={{ marginTop: '0px' }}>
                                     <div className="field" style={{ flex: 1 }}>
                                         <div style={{
@@ -1626,7 +1632,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                 </div>
                             )}
 
-                            {!followupStatus?.active && intakeForm.splitPayments.some(p => p.method !== 'Cash') && (
+                            {(!isEditingProfileOnly && !followupStatus?.active && intakeForm.splitPayments.some(p => p.method !== 'Cash')) && (
                                 <div className="form-row" style={{ marginTop: '6px' }}>
                                     <div className="field" style={{ flex: 1 }}>
                                         <label>Payment Screenshot / Proof <span style={{ color: '#ef4444', fontSize: '12px' }}>*Required for non-cash payment</span></label>
@@ -1647,7 +1653,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
                             <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
 
-                            {(true) && (
+                            {!isEditingProfileOnly && (
                                 <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
                                     <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px', borderBottom: '2px solid #bfdbfe', paddingBottom: '10px' }}>5. Assign to Doctor/Counselor</h4>
                                     <div className="form-row">
@@ -1728,6 +1734,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                 {saving
                                     ? 'Saving...'
                                     : (() => {
+                                        if (isEditingProfileOnly) return 'Save Patient Details';
                                         const isTokenMode = hospitalContext?.appointmentMode === 'token';
                                         const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
                                         const actionText = followupStatus?.active ? 'Re-Book Appointment' : (isTokenMode && !isPatientPortal ? 'Issue Token' : 'Book Appointment');
