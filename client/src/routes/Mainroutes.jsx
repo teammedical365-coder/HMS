@@ -102,9 +102,15 @@ const SmartLogin = () => {
 
 const SmartDashboardRedirector = () => {
     const subdomain = getSubdomain();
+    const u = JSON.parse(localStorage.getItem('user') || '{}');
+    const roleStr = (u.role || '').toLowerCase();
+    
+    if (roleStr === 'centraladmin' || roleStr === 'superadmin') {
+        return <Navigate to="/supremeadmin" replace />;
+    }
+
     if (subdomain && !RESERVED_SUBDOMAINS.includes(subdomain)) {
-        const u = JSON.parse(localStorage.getItem('user') || '{}');
-        if (u.subscriptionPlan === 'starter' && u.role === 'hospitaladmin') {
+        if (u.subscriptionPlan === 'starter' && roleStr === 'hospitaladmin') {
             return <Navigate to="/hospitaladmin" replace />;
         }
         return <Navigate to="/my-dashboard" replace />;

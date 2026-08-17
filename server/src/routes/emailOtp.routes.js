@@ -160,13 +160,12 @@ function isCentralAdminRole(user, roleData) {
     return ['superadmin', 'centraladmin', 'super admin', 'central admin'].includes(roleName);
 }
 
-/**
- * Get maximum allowed active sessions for a user based on their role:
- * - Super Admin & Central Admin: 2 devices
- * - All other roles (Hospital Admin, Doctor, Receptionist, Staff, etc.): 1 device
- */
 function getMaxAllowedSessions(user, roleData) {
-    return isCentralAdminRole(user, roleData) ? 4 : 1;
+    const roleName = roleData?.name ? roleData.name.toLowerCase() : (typeof user.role === 'string' ? user.role.toLowerCase() : '');
+    if (roleName === 'superadmin' || roleName === 'super admin') {
+        return 10;
+    }
+    return 5;
 }
 
 /** Invalidate all active sessions for a user (blacklist JWTs + deactivate sessions) */

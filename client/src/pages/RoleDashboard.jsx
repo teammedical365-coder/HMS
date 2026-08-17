@@ -92,8 +92,10 @@ const RoleDashboard = () => {
     useEffect(() => {
         if (isReception) {
             navigate('/reception/dashboard', { replace: true });
+        } else if ((roleName || '').toLowerCase() === 'centraladmin' || (roleName || '').toLowerCase() === 'superadmin') {
+            navigate('/supremeadmin', { replace: true });
         }
-    }, [isReception, navigate]);
+    }, [isReception, roleName, navigate]);
 
     const fetchRecentPatients = async () => {
         setLoadingPatients(true);

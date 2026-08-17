@@ -17,8 +17,8 @@ if (!secret || secret.trim().length < 32) {
     }
 }
 
-// Production default is 8h; set JWT_EXPIRES_IN in .env to override (e.g. '1d' for convenience).
-const defaultExpiry = process.env.NODE_ENV === 'production' ? '8h' : '7d';
+// Set JWT_EXPIRES_IN to 10 years for indefinite sessions until explicit logout
+const defaultExpiry = '3650d';
 
 module.exports = {
     JWT_SECRET: secret,
