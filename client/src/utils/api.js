@@ -368,7 +368,7 @@ export const pharmacyAPI = {
 export const pharmacyOrderAPI = {
     getOrders: async () => (await apiClient.get('/api/pharmacy/orders')).data,
     createOrder: async (data) => (await apiClient.post('/api/pharmacy/orders', data)).data,
-    completeOrder: async (id, purchasedIndices = null) => (await apiClient.patch(`/api/pharmacy/orders/${id}/complete`, { purchasedIndices })).data,
+    completeOrder: async (id, payload = {}) => (await apiClient.patch(`/api/pharmacy/orders/${id}/complete`, payload)).data,
     searchBills: async (query) => (await apiClient.get(`/api/pharmacy/orders/search-bill?query=${query}`)).data,
     processReturn: async (data) => (await apiClient.post('/api/pharmacy/orders/process-return', data)).data
 };
@@ -513,6 +513,8 @@ export const billingAPI = {
     getPatientBills: async (identifier) => (await apiClient.get(`/api/billing/patient/${identifier}`)).data,
     addFacilityCharge: async (data) => (await apiClient.post('/api/billing/facility-charge', data)).data,
     processPayment: async (data) => (await apiClient.put('/api/billing/pay', data)).data,
+    searchPatients: async (query) => (await apiClient.get(`/api/reception/search-patients?query=${query}`)).data,
+    searchPatient: async (query) => (await apiClient.get(`/api/reception/search-patients?query=${query}`)).data,
 };
 
 

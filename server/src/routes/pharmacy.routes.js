@@ -923,10 +923,12 @@ router.post('/departments/usage', verifyToken, async (req, res) => {
             hospitalId: hospitalId
         }).sort({ createdAt: -1 });
 
+        const calculatedTotalPrice = (Number(quantity) || 1) * (Number(unitPrice) || 0);
         const orderItem = {
             medicineName: facilityName,
             price: Number(unitPrice),
             quantity: Number(quantity),
+            totalPrice: calculatedTotalPrice,
             purchased: true,
             days: 1
         };
@@ -941,16 +943,20 @@ router.post('/departments/usage', verifyToken, async (req, res) => {
             const patient = await UserMaster.findById(patientId);
             const lastAppt = await Appointment.findOne({ patientId }).sort({ createdAt: -1 });
 
+            const isDoctor = req.user.role === 'doctor';
+            const finalDoctorId = isDoctor ? req.user.id : null;
+            const finalDoctorName = isDoctor ? (req.user.name || 'Doctor') : 'N/A (Department Usage)';
+
             pharmacyOrder = new PharmacyOrder({
                 hospitalId,
                 patientId: patientId.toString(),
                 userId: patientId,
-                doctorId: req.user.id, 
+                doctorId: finalDoctorId, 
                 appointmentId: lastAppt ? lastAppt._id : (new (require('mongoose').Types.ObjectId)()), // Dummy ID if no appt exists to pass validation safely, or use isOutsidePatient
                 isOutsidePatient: !lastAppt,
                 patientName: patient ? patient.name : 'Unknown',
                 patientPhone: patient ? patient.phone : '',
-                doctorName: req.user.name || 'Staff',
+                doctorName: finalDoctorName,
                 items: [orderItem],
                 totalAmount: totalAmount,
                 taxableAmount: totalAmount,

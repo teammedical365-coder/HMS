@@ -306,6 +306,7 @@ router.get('/dashboard-summary', verifyToken, async (req, res) => {
 router.patch('/:id/complete', verifyToken, async (req, res) => {
     try {
         console.log("\n🚀 [BACKEND CHECKOUT] Received req.body:", JSON.stringify(req.body, null, 2));
+        console.log("🚀 [BACKEND CHECKOUT] req.user:", req.user);
         const {
             purchasedIndices = [],
             updatedItems = [],

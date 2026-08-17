@@ -32,6 +32,12 @@ const verifyReception = (req, res, next) => {
         if (isAllowedPath) return next();
     }
 
+    // Allow cross-department roles to search for patients (e.g., pharmacy, doctor, lab)
+    if (req.path.startsWith('/search-patients') || req.path.startsWith('/patients')) {
+        const CROSS_DEPT_ROLES = new Set(['doctor', 'pharmacist', 'pharmacy', 'lab', 'technician']);
+        if (CROSS_DEPT_ROLES.has(roleStr) || CROSS_DEPT_ROLES.has(dynRoleStr)) return next();
+    }
+
     return res.status(403).json({ success: false, message: 'Access denied: Reception access only' });
 };
 
@@ -274,11 +280,15 @@ router.get('/search-patients', verifyToken, verifyReception, async (req, res) =>
 
         const safeQuery = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const queryFilter = {
-            role: { $in: ['user', 'patient'] },
             $or: [
                 { name: { $regex: safeQuery, $options: 'i' } },
-                { phone: { $regex: safeQuery, $options: 'i' } },
+                { firstName: { $regex: safeQuery, $options: 'i' } },
+                { lastName: { $regex: safeQuery, $options: 'i' } },
+                { mrn: { $regex: safeQuery, $options: 'i' } },
+                { mrnNo: { $regex: safeQuery, $options: 'i' } },
                 { patientId: { $regex: safeQuery, $options: 'i' } },
+                { phone: { $regex: safeQuery, $options: 'i' } },
+                { mobile: { $regex: safeQuery, $options: 'i' } },
                 { 'fertilityProfile.partnerFirstName': { $regex: safeQuery, $options: 'i' } }
             ]
         };
