@@ -461,6 +461,149 @@ const Admin = () => {
                 {error && <div className="error-message">{error}</div>}
                 {success && <div className="success-message">{success}</div>}
 
+                {/* Create Staff Account */}
+                <div className="admin-card" style={{ marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showCreateForm ? '20px' : '0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <h2 style={{ margin: '0' }}>Create Staff Account</h2>
+                            {hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter') && (() => {
+                                const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                                const maxStaff = limits.maxStaff;
+                                const staffCount = users.filter(u => {
+                                    const rName = (u.role?.name || u.role || '').toLowerCase();
+                                    return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+                                }).length;
+                                const remaining = Math.max(0, maxStaff - staffCount);
+
+                                if (remaining === 0) return null;
+
+                                return (
+                                    <span style={{ background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 600 }}>
+                                        {remaining} left
+                                    </span>
+                                );
+                            })()}
+                        </div>
+                        {(() => {
+                            let isStaffQuotaFull = false;
+                            if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
+                                const limits = getSubscriptionLimits(hospital.subscriptionPlan);
+                                const maxStaff = limits.maxStaff;
+                                const staffCount = users.filter(u => {
+                                    const rName = (u.role?.name || u.role || '').toLowerCase();
+                                    return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+                                }).length;
+                                isStaffQuotaFull = Math.max(0, maxStaff - staffCount) === 0;
+                            }
+                            
+                            if (isStaffQuotaFull) return null;
+                            
+                            return (
+                                <button onClick={handleToggleCreateForm} className="btn-edit" style={{ background: showCreateForm ? '#f1f5f9' : '#eef2ff', color: showCreateForm ? '#64748b' : '#4f46e5', border: 'none', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    {showCreateForm ? '✕ Close' : '+ Add Staff'}
+                                </button>
+                            );
+                        })()}
+                    </div>
+
+                    {showCreateForm && (
+                        <>
+                            {hospital?.clinicType === 'clinic' && clinicDoctorExists && (
+                                <div style={{ background: '#fef2f2', color: '#dc2626', padding: '12px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #fecaca', fontSize: '14px' }}>
+                                    ⚠️ This clinic already has an assigned Clinic Doctor. Only 1 Doctor account is permitted under this plan.
+                                </div>
+                            )}
+                            <form onSubmit={handleCreateStaff} className="user-form">
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="staff-label">Full Name *</label>
+                                        <input type="text" placeholder="e.g. Dr. Sharma" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} required minLength={2} className="staff-input" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Email Address *</label>
+                                        <input type="email" placeholder="staff@hospital.com" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} required className="staff-input" />
+                                    </div>
+                                </div>
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="staff-label">Password *</label>
+                                        <input type="text" placeholder="Temporary password" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} required className="staff-input" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Phone *</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="e.g. 9876543210" 
+                                            value={createForm.phone || ''} 
+                                            onChange={e => {
+                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                setCreateForm({ ...createForm, phone: cleanVal });
+                                            }} 
+                                            required
+                                            title="Phone number must be exactly 10 digits"
+                                            className="staff-input" 
+                                            maxLength="10" 
+                                            pattern="\d{10}" 
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="staff-label">Profile Image</label>
+                                        <input type="file" accept="image/*" onChange={e => setCreateForm({ ...createForm, file: e.target.files[0] })} className="staff-input" style={{ padding: '10px' }} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="staff-label">Assign Role *</label>
+                                        <select value={createForm.roleId} onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })} required className="staff-input">
+                                            <option value="">-- Select a Role --</option>
+                                            {roles
+                                                .filter(r => {
+                                                    const name = (r.name || '').toLowerCase().trim();
+                                                    if (['patient', 'user'].includes(name)) return false;
+                                                    if (name.includes('doctor') || name.includes('doc')) return false;
+                                                    if (name.includes('admin')) return false;
+                                                    const isClinic = hospital?.clinicType === 'clinic';
+                                                    if (!isClinic && name.includes('clinic')) return false;
+                                                    return true;
+                                                })
+                                                .map(role => (
+                                                    <option key={role._id} value={role._id}>{role.name}</option>
+                                                ))}
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                {hospital && hospital.departments && hospital.departments.length > 0 && (
+                                    <div className="form-row" style={{ marginTop: '10px' }}>
+                                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                            <label className="staff-label">Assign Department (Optional - Leave blank to allow all)</label>
+                                            <select
+                                                value={createForm.department}
+                                                onChange={(e) => setCreateForm(prev => ({ ...prev, department: e.target.value }))}
+                                                className="staff-input"
+                                                style={{ marginTop: '8px' }}
+                                            >
+                                                <option value="">-- Select Department --</option>
+                                                {hospital.departments.map(dept => (
+                                                    <option key={dept} value={dept}>{dept}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                <div className="form-group" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                                    <button type="button" onClick={() => setShowCreateForm(false)} className="btn-cancel" style={{ padding: '10px 20px', fontSize: '14px' }}>Cancel</button>
+                                    <button type="submit" disabled={creating} className="primary-btn" style={{ background: '#0f766e', color: 'white', border: 'none', padding: '10px 24px', borderRadius: '4px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}>
+                                        {creating ? 'Creating...' : 'Create Staff Account'}
+                                    </button>
+                                </div>
+                            </form>
+                        </>
+                    )}
+                </div>
+
                 {/* Quota Card */}
                 {(() => {
                     if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {

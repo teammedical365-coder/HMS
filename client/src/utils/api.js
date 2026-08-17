@@ -302,6 +302,10 @@ export const reportAPI = {
     compareReports: async (latestFileUrl, latestMimeType, previousFileUrl, previousMimeType) => {
         const response = await apiClient.post('/api/reports/compare', { latestFileUrl, latestMimeType, previousFileUrl, previousMimeType });
         return response.data;
+    },
+    chatWithAssistant: async (messages) => {
+        const response = await apiClient.post('/api/reports/chat', { messages });
+        return response.data;
     }
 };
 

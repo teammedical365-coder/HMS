@@ -116,6 +116,15 @@ exports.verifyToken = async (req, res, next) => {
                 // Scope legacy role lookup to the user's hospital
                 if (user.hospitalId) query.hospitalId = user.hospitalId;
                 roleData = await Role.findOne(query);
+                
+                // Fallback to global roles if hospital-specific role is not found
+                if (!roleData && user.hospitalId) {
+                    roleData = await Role.findOne({
+                        hospitalId: null,
+                        name: { $regex: new RegExp(`^${user.role}$`, 'i') }
+                    });
+                }
+
                 if (roleData && typeof user.save === 'function') {
                     user.role = roleData._id;
                     await user.save();
