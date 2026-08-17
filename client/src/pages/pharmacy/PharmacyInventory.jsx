@@ -436,13 +436,13 @@ const PharmacyInventory = () => {
                     </div>
                 </div>
             )}
-            <div className="admin-card" style={{ marginBottom: '20px', background: 'var(--glass-bg)', padding: '24px', borderRadius: '24px', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div className="admin-card" style={{ marginBottom: '20px', background: 'var(--glass-bg)', padding: 'clamp(16px, 4vw, 24px)', borderRadius: '24px', border: '1px solid var(--glass-border)', boxShadow: 'var(--glass-shadow)' }}>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                     <div>
-                        <h2 style={{ margin: '0', fontSize: '1.8rem', color: 'var(--text-dark)' }}>💊 Medicine Inventory</h2>
+                        <h2 className="text-xl sm:text-2xl font-bold" style={{ margin: '0', color: 'var(--text-dark)' }}>💊 Medicine Inventory</h2>
                         <p style={{ color: 'var(--text-light)', fontSize: '14px', margin: '4px 0 0' }}>Manage your hospital's medicine stock, pricing, and expiry tracking</p>
                     </div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
+                    <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                         <button
                             onClick={() => setShowConsumptionModal(true)}
                             className="btn-add"
@@ -460,7 +460,7 @@ const PharmacyInventory = () => {
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '20px', borderBottom: '2px solid #e2e8f0', marginBottom: '24px' }}>
+                <div className="tabs flex flex-wrap gap-2 mb-5 border-b border-slate-200 pb-3">
                     <button onClick={() => setActiveTab('inventory')} style={{ padding: '10px 4px', background: 'none', border: 'none', borderBottom: activeTab === 'inventory' ? '2px solid #3b82f6' : 'none', color: activeTab === 'inventory' ? '#3b82f6' : '#64748b', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer', marginBottom: '-2px' }}>Inventory</button>
                     <button onClick={() => setActiveTab('purchase-history')} style={{ padding: '10px 4px', background: 'none', border: 'none', borderBottom: activeTab === 'purchase-history' ? '2px solid #3b82f6' : 'none', color: activeTab === 'purchase-history' ? '#3b82f6' : '#64748b', fontWeight: 'bold', fontSize: '15px', cursor: 'pointer', marginBottom: '-2px' }}>Purchase History</button>
                 </div>
@@ -767,13 +767,13 @@ const PharmacyInventory = () => {
                             </div>
                         </form>
 
-                        <div className="inventory-controls" style={{ marginBottom: '20px', marginTop: '20px' }}>
-                            <div className="search-bar" style={{ maxWidth: '400px' }}>
+                        <div className="inventory-controls flex flex-col sm:flex-row gap-4 mb-5 mt-5">
+                            <div className="search-bar w-full sm:max-w-md">
                                 <span className="search-icon"></span>
                                 <input type="text" placeholder="Search medicines..." value={searchTerm || ''} onChange={(e) => setSearchTerm(e.target.value)} />
                             </div>
                         </div>
-                        <div className="inventory-table-wrapper">
+                        <div className="inventory-table-wrapper w-full overflow-x-auto -mx-4 sm:mx-0 min-w-full inline-block align-middle px-4 sm:px-0">
                             {loading ? <div className="loader">Loading...</div> : (
                                 <table className="inventory-table">
                                     <thead>
@@ -860,8 +860,8 @@ const PharmacyInventory = () => {
                 )}
             </div>
             {showAddModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content inventory-modal">
+                <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75">
+                    <div className="modal-content inventory-modal w-[95%] sm:w-full max-w-4xl max-h-[90vh] overflow-y-auto">
                         <div className="modal-header">
                             <div>
                                 <h2>{isEditing ? 'Edit Medication' : 'Add New Medication'}</h2>
@@ -1055,235 +1055,107 @@ const PharmacyInventory = () => {
                 </div>
             )}
 
-            {showDetailsModal && selectedMedicine && (() => {
-                // Find all medicines in the same batch/vendor bill
-                const groupedMedicines = medicines.filter(med =>
-                    (med.batchNumber && med.batchNumber === selectedMedicine.batchNumber &&
-                        (med.vendor === selectedMedicine.vendor || med.vendorId === selectedMedicine.vendorId)) ||
-                    (med._id === selectedMedicine._id) // Fallback for itself if batch/vendor is missing
-                );
-
-                // Deduplicate in case fallback overlaps with batch matching
-                const uniqueGrouped = Array.from(new Set(groupedMedicines.map(m => m._id)))
-                    .map(id => groupedMedicines.find(m => m._id === id));
-
-                let totalPurchaseQty = 0;
-                let totalFreeQty = 0;
-                let totalStockQty = 0;
-                let totalGrossPurchaseAmount = 0;
-                let totalDiscountAmount = 0;
-                let totalTaxableAmount = 0;
-                let totalCGST = 0;
-                let totalSGST = 0;
-                let totalGST = 0;
-                let totalFinalPurchaseAmount = 0;
-                let totalExpectedRevenue = 0;
-
-                uniqueGrouped.forEach(med => {
-                    const pQty = (med.purchaseQty !== undefined && med.purchaseQty !== null) ? Number(med.purchaseQty) : (Number(med.stock) || 0);
-                    const fQty = Number(med.freeQty) || 0;
-                    const stock = pQty + fQty; // Total stock for revenue
-
-                    const buyingPrice = Number(med.buyingPrice) || 0;
-                    const sellingPrice = Number(med.sellingPrice) || 0;
-
-                    const gross = pQty * buyingPrice;
-
-                    let discountAmount = 0;
-                    if (med.discountType === 'Flat Amount') {
-                        discountAmount = Number(med.discountValue) || 0;
-                    } else {
-                        discountAmount = gross * ((Number(med.discountValue) || 0) / 100);
-                    }
-
-                    const taxable = Math.max(0, gross - discountAmount);
-                    const cgstPercent = Number(med.cgstPercent) || 0;
-                    const sgstPercent = Number(med.sgstPercent) || 0;
-
-                    const cgstAmt = taxable * (cgstPercent / 100);
-                    const sgstAmt = taxable * (sgstPercent / 100);
-                    const gstAmt = cgstAmt + sgstAmt;
-
-                    const finalAmt = taxable + gstAmt;
-                    const revenue = stock * sellingPrice;
-
-                    totalPurchaseQty += pQty;
-                    totalFreeQty += fQty;
-                    totalStockQty += stock;
-                    totalGrossPurchaseAmount += gross;
-                    totalDiscountAmount += discountAmount;
-                    totalTaxableAmount += taxable;
-                    totalCGST += cgstAmt;
-                    totalSGST += sgstAmt;
-                    totalGST += gstAmt;
-                    totalFinalPurchaseAmount += finalAmt;
-                    totalExpectedRevenue += revenue;
-                });
-
-                const expectedProfit = totalExpectedRevenue - totalFinalPurchaseAmount;
-                const effectiveCost = totalStockQty > 0 ? (totalFinalPurchaseAmount / totalStockQty) : 0;
-
-                return (
-                    <div className="modal-overlay">
-                        <div className="modal-content inventory-modal" style={{ maxWidth: '950px', width: '95%' }}>
-                            <div className="modal-header">
-                                <div>
-                                    <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <span style={{ fontSize: '1.5rem' }}>🧾</span> Purchase Bill / Stock View
-                                    </h2>
-                                    <p className="modal-subtitle" style={{ fontSize: '14px', color: '#1e3a8a', marginTop: '5px' }}>
-                                        Batch: <strong>{selectedMedicine.batchNumber || 'N/A'}</strong> | Vendor: <strong>{selectedMedicine.vendor || 'N/A'}</strong>
-                                    </p>
-                                </div>
-                                <button className="close-btn" onClick={() => setShowDetailsModal(false)}>×</button>
+            {/* Medicine Details Modal */}
+            {showDetailsModal && selectedMedicine && (
+                <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75">
+                    <div className="modal-content w-[95%] sm:w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-xl shadow-2xl">
+                        <div className="modal-header sticky top-0 bg-white z-10 border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-800">💊 {selectedMedicine.name}</h2>
+                                <p className="modal-subtitle text-sm text-slate-500">Comprehensive Inventory Details</p>
                             </div>
-
-                            <div className="pharma-form" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-                                {/* Header Section */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px' }}>
-                                    <div>
-                                        <div style={{ color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', fontSize: '11px', fontWeight: 'bold' }}>Supplier/Vendor</div>
-                                        <div style={{ fontWeight: 'bold', color: '#0f172a' }}>{selectedMedicine.vendor || 'N/A'}</div>
-                                    </div>
-                                    <div>
-                                        <div style={{ color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', fontSize: '11px', fontWeight: 'bold' }}>Batch / Invoice #</div>
-                                        <div style={{ fontWeight: 'bold', color: '#0f172a' }}>{selectedMedicine.batchNumber || 'N/A'}</div>
-                                    </div>
-                                    <div>
-                                        <div style={{ color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', fontSize: '11px', fontWeight: 'bold' }}>Expiry Date</div>
-                                        <div style={{ fontWeight: 'bold', color: new Date(selectedMedicine.expiryDate) < new Date() ? '#dc2626' : '#0f172a' }}>
-                                            {selectedMedicine.expiryDate ? new Date(selectedMedicine.expiryDate).toLocaleDateString() : 'N/A'}
+                            <button className="close-btn" onClick={() => setShowDetailsModal(false)}>×</button>
+                        </div>
+                        <div className="p-4 sm:p-6">
+                            {(() => {
+                                const groupedMedicines = medicines.filter(med =>
+                                    (med.batchNumber && med.batchNumber === selectedMedicine.batchNumber &&
+                                        (med.vendor === selectedMedicine.vendor || med.vendorId === selectedMedicine.vendorId)) ||
+                                    (med._id === selectedMedicine._id)
+                                );
+                                const uniqueGrouped = Array.from(new Set(groupedMedicines.map(m => m._id)))
+                                    .map(id => groupedMedicines.find(m => m._id === id));
+                                let totalPurchaseQty = 0, totalFreeQty = 0, totalStockQty = 0, totalGrossPurchaseAmount = 0, totalDiscountAmount = 0, totalTaxableAmount = 0, totalCGST = 0, totalSGST = 0, totalGST = 0, totalFinalPurchaseAmount = 0, totalExpectedRevenue = 0;
+                                uniqueGrouped.forEach(med => {
+                                    const pQty = (med.purchaseQty !== undefined && med.purchaseQty !== null) ? Number(med.purchaseQty) : (Number(med.stock) || 0);
+                                    const fQty = Number(med.freeQty) || 0;
+                                    const stock = pQty + fQty;
+                                    const buyingPrice = Number(med.buyingPrice) || 0;
+                                    const sellingPrice = Number(med.sellingPrice) || 0;
+                                    const gross = pQty * buyingPrice;
+                                    let discountAmount = med.discountType === 'Flat Amount' ? Number(med.discountValue) || 0 : gross * ((Number(med.discountValue) || 0) / 100);
+                                    const taxable = Math.max(0, gross - discountAmount);
+                                    const cgstAmt = taxable * ((Number(med.cgstPercent) || 0) / 100);
+                                    const sgstAmt = taxable * ((Number(med.sgstPercent) || 0) / 100);
+                                    const gstAmt = cgstAmt + sgstAmt;
+                                    totalPurchaseQty += pQty; totalFreeQty += fQty; totalStockQty += stock; totalGrossPurchaseAmount += gross; totalDiscountAmount += discountAmount; totalTaxableAmount += taxable; totalCGST += cgstAmt; totalSGST += sgstAmt; totalGST += gstAmt; totalFinalPurchaseAmount += (taxable + gstAmt); totalExpectedRevenue += (stock * sellingPrice);
+                                });
+                                const expectedProfit = totalExpectedRevenue - totalFinalPurchaseAmount;
+                                const effectiveCost = totalStockQty > 0 ? (totalFinalPurchaseAmount / totalStockQty) : 0;
+                                return (
+                                    <>
+                                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-5">
+                                            <h3 className="text-sm font-bold text-slate-700 uppercase mb-3">Inventory Status</h3>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                <div><div className="text-[11px] font-bold text-slate-500 uppercase">Supplier</div><div className="font-bold text-slate-900">{selectedMedicine.vendor || 'N/A'}</div></div>
+                                                <div><div className="text-[11px] font-bold text-slate-500 uppercase">Batch</div><div className="font-bold text-slate-900">{selectedMedicine.batchNumber || 'N/A'}</div></div>
+                                                <div><div className="text-[11px] font-bold text-slate-500 uppercase">Expiry</div><div className="font-bold text-slate-900">{selectedMedicine.expiryDate ? new Date(selectedMedicine.expiryDate).toLocaleDateString() : 'N/A'}</div></div>
+                                                <div><div className="text-[11px] font-bold text-slate-500 uppercase">Category</div><div className="font-bold text-slate-900">{selectedMedicine.category}</div></div>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div>
-                                        <div style={{ color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', fontSize: '11px', fontWeight: 'bold' }}>Category & Rack</div>
-                                        <div style={{ fontWeight: 'bold', color: '#0f172a' }}>{selectedMedicine.category} | {selectedMedicine.rackLocation || 'Unassigned'}</div>
-                                    </div>
-                                </div>
 
-                                {/* Stock Breakdown Table */}
-                                <div>
-                                    <h3 style={{ fontSize: '14px', color: '#334155', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px', marginBottom: '12px' }}>📦 Items in this Purchase Bill</h3>
-                                    <div style={{ overflowX: 'auto', maxHeight: '300px' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left', border: '1px solid #e2e8f0' }}>
-                                            <thead>
-                                                <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #cbd5e1', color: '#475569', textTransform: 'uppercase', fontSize: '11px', position: 'sticky', top: 0 }}>
-                                                    <th style={{ padding: '10px' }}>Medicine Name</th>
-                                                    <th style={{ padding: '10px' }}>Batch #</th>
-                                                    <th style={{ padding: '10px' }}>Stock Qty</th>
-                                                    <th style={{ padding: '10px' }}>Cost Price (ex. Tax)</th>
-                                                    <th style={{ padding: '10px' }}>Selling Price</th>
-                                                    <th style={{ padding: '10px' }}>Total Amount (incl. Tax)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {uniqueGrouped.map(med => {
-                                                    const pQty = (med.purchaseQty !== undefined && med.purchaseQty !== null) ? Number(med.purchaseQty) : (Number(med.stock) || 0);
-                                                    const buyingPrice = Number(med.buyingPrice) || 0;
-                                                    const gross = pQty * buyingPrice;
+                                        <div className="w-full overflow-x-auto -mx-4 sm:mx-0 min-w-full inline-block align-middle mb-5">
+                                            <table className="w-full border-collapse text-left text-xs border border-slate-200">
+                                                <thead>
+                                                    <tr className="bg-slate-100 border-b border-slate-300 text-slate-600 uppercase">
+                                                        <th className="p-2 sm:p-3">Medicine Name</th>
+                                                        <th className="p-2 sm:p-3">Batch #</th>
+                                                        <th className="p-2 sm:p-3">Stock Qty</th>
+                                                        <th className="p-2 sm:p-3">Cost Price</th>
+                                                        <th className="p-2 sm:p-3">Selling Price</th>
+                                                        <th className="p-2 sm:p-3">Total Amount</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {uniqueGrouped.map(med => {
+                                                        const pQty = (med.purchaseQty !== undefined && med.purchaseQty !== null) ? Number(med.purchaseQty) : (Number(med.stock) || 0);
+                                                        const buyingPrice = Number(med.buyingPrice) || 0;
+                                                        const gross = pQty * buyingPrice;
+                                                        let discountAmount = med.discountType === 'Flat Amount' ? Number(med.discountValue) || 0 : gross * ((Number(med.discountValue) || 0) / 100);
+                                                        const taxable = Math.max(0, gross - discountAmount);
+                                                        const cgstAmt = taxable * ((Number(med.cgstPercent) || 0) / 100);
+                                                        const sgstAmt = taxable * ((Number(med.sgstPercent) || 0) / 100);
+                                                        const totalFinalCost = taxable + cgstAmt + sgstAmt;
+                                                        return (
+                                                            <tr key={med._id} className={`border-b border-slate-100 ${med._id === selectedMedicine._id ? 'bg-yellow-50' : ''}`}>
+                                                                <td className="p-2 sm:p-3 font-bold text-slate-900">{med.name} {med._id === selectedMedicine._id ? '(Selected)' : ''}</td>
+                                                                <td className="p-2 sm:p-3">{med.batchNumber || 'N/A'}</td>
+                                                                <td className={`p-2 sm:p-3 font-bold ${med.stock < (med.minStockAlertLevel || 50) ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                                    {med.stock} {med.unit || 'Tabs'}
+                                                                </td>
+                                                                <td className="p-2 sm:p-3">₹{med.buyingPrice || 0} <span className="text-[9px] text-slate-500 block">(+{med.cgstPercent || 0}% CGST)</span></td>
+                                                                <td className="p-2 sm:p-3 text-emerald-600 font-bold">₹{med.sellingPrice || 0}</td>
+                                                                <td className="p-2 sm:p-3 font-bold">₹{totalFinalCost.toFixed(2)}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
 
-                                                    let discountAmount = 0;
-                                                    if (med.discountType === 'Flat Amount') {
-                                                        discountAmount = Number(med.discountValue) || 0;
-                                                    } else {
-                                                        discountAmount = gross * ((Number(med.discountValue) || 0) / 100);
-                                                    }
-
-                                                    const taxable = Math.max(0, gross - discountAmount);
-                                                    const cgstPercent = Number(med.cgstPercent) || 0;
-                                                    const sgstPercent = Number(med.sgstPercent) || 0;
-
-                                                    const cgstAmt = taxable * (cgstPercent / 100);
-                                                    const sgstAmt = taxable * (sgstPercent / 100);
-                                                    const gstAmt = cgstAmt + sgstAmt;
-
-                                                    const totalFinalCost = taxable + gstAmt;
-
-                                                    return (
-                                                        <tr key={med._id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: med._id === selectedMedicine._id ? '#fefce8' : 'transparent' }}>
-                                                            <td style={{ padding: '10px', fontWeight: 'bold', color: '#0f172a' }}>{med.name} {med._id === selectedMedicine._id ? '(Selected)' : ''}</td>
-                                                            <td style={{ padding: '10px' }}>{med.batchNumber || 'N/A'}</td>
-                                                            <td style={{ padding: '10px', fontWeight: 'bold', color: med.stock < (med.minStockAlertLevel || 50) ? '#dc2626' : '#059669' }}>
-                                                                {['Strip', 'Capsules', 'Tablets'].includes(med.unit) ? (
-                                                                    <span>
-                                                                        {Math.floor(med.stock / (Number(med.unitsPerStrip) || 1))} {med.unit} <span style={{ fontSize: '0.85em', color: '#64748b', fontWeight: 'normal' }}>({med.stock} Units)</span>
-                                                                    </span>
-                                                                ) : (
-                                                                    <span>{med.stock} {med.unit || 'Tabs'}</span>
-                                                                )}
-                                                            </td>
-                                                            <td style={{ padding: '10px' }}>₹{med.buyingPrice || 0} <span style={{ fontSize: '10px', color: '#64748b', display: 'block' }}>(+{med.cgstPercent || 0}% CGST, +{med.sgstPercent || 0}% SGST)</span></td>
-                                                            <td style={{ padding: '10px', color: '#059669', fontWeight: 'bold' }}>₹{med.sellingPrice || 0}</td>
-                                                            <td style={{ padding: '10px', fontWeight: 'bold' }}>₹{totalFinalCost.toFixed(2)}</td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                {/* Financial Calculations Section */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginTop: '10px' }}>
-
-                                    <div style={{ background: '#f0fdf4', padding: '15px', borderRadius: '8px', border: '1px solid #bbf7d0', textAlign: 'center' }}>
-                                        <div style={{ color: '#166534', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}>Qty (Purchase + Free)</div>
-                                        <div style={{ color: '#14532d', fontSize: '18px', fontWeight: '900' }}>{totalPurchaseQty} + {totalFreeQty}</div>
-                                        <div style={{ color: '#166534', fontSize: '12px', marginTop: '4px' }}>Total Stock: {totalStockQty}</div>
-                                    </div>
-
-                                    <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
-                                        <div style={{ color: '#475569', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}>Gross Amount</div>
-                                        <div style={{ color: '#0f172a', fontSize: '18px', fontWeight: '900' }}>₹{totalGrossPurchaseAmount.toFixed(2)}</div>
-                                        <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }}>- Disc: ₹{totalDiscountAmount.toFixed(2)}</div>
-                                    </div>
-
-                                    <div style={{ background: '#fffbeb', padding: '15px', borderRadius: '8px', border: '1px solid #fde68a', textAlign: 'center' }}>
-                                        <div style={{ color: '#b45309', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}>Taxable & GST</div>
-                                        <div style={{ color: '#92400e', fontSize: '18px', fontWeight: '900' }}>₹{totalTaxableAmount.toFixed(2)}</div>
-                                        <div style={{ color: '#d97706', fontSize: '12px', marginTop: '4px' }}>+ GST: ₹{totalGST.toFixed(2)}</div>
-                                    </div>
-
-                                    <div style={{ background: '#eff6ff', padding: '15px', borderRadius: '8px', border: '1px solid #bfdbfe', textAlign: 'center' }}>
-                                        <div style={{ color: '#1e40af', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}>Final Purchase Amt</div>
-                                        <div style={{ color: '#1e3a8a', fontSize: '20px', fontWeight: '900' }}>₹{totalFinalPurchaseAmount.toFixed(2)}</div>
-                                        <div style={{ color: '#3b82f6', fontSize: '12px', marginTop: '4px' }}>Eff. Cost: ₹{effectiveCost.toFixed(2)}/unit</div>
-                                    </div>
-
-                                    <div style={{ background: '#f5f3ff', padding: '15px', borderRadius: '8px', border: '1px solid #ddd6fe', textAlign: 'center', gridColumn: 'span 2' }}>
-                                        <div style={{ color: '#6d28d9', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}>Expected Revenue</div>
-                                        <div style={{ color: '#5b21b6', fontSize: '20px', fontWeight: '900' }}>₹{totalExpectedRevenue.toFixed(2)}</div>
-                                    </div>
-
-                                    <div style={{ background: expectedProfit >= 0 ? '#f0fdfa' : '#fef2f2', padding: '15px', borderRadius: '8px', border: expectedProfit >= 0 ? '1px solid #a7f3d0' : '1px solid #fecaca', textAlign: 'center', gridColumn: 'span 2' }}>
-                                        <div style={{ color: expectedProfit >= 0 ? '#0f766e' : '#b91c1c', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px' }}>Expected Profit</div>
-                                        <div style={{ color: expectedProfit >= 0 ? '#0d9488' : '#dc2626', fontSize: '20px', fontWeight: '900' }}>₹{expectedProfit.toFixed(2)}</div>
-                                    </div>
-
-                                </div>
-
-                            </div>
-
-                            <div className="modal-actions" style={{ padding: '15px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                                <button
-                                    type="button"
-                                    className="btn-add"
-                                    style={{ background: '#ecfdf5', color: '#10b981', border: '1px solid #a7f3d0', padding: '8px 16px', boxShadow: 'none' }}
-                                    onClick={() => {
-                                        setShowDetailsModal(false);
-                                        handleEdit(selectedMedicine);
-                                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                                    }}
-                                >
-                                    ✏️ Edit Selected Medicine
-                                </button>
-                                <button type="button" className="btn-cancel" onClick={() => setShowDetailsModal(false)} style={{ padding: '8px 16px' }}>Close</button>
-                            </div>
+                                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 sm:p-6 grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 text-center">
+                                            <div><div className="text-emerald-800 text-xs font-bold uppercase">Stock</div><div className="text-emerald-900 text-xl font-black">{totalStockQty}</div></div>
+                                            <div><div className="text-slate-500 text-xs font-bold uppercase">Final Cost</div><div className="text-slate-900 text-xl font-black">₹{totalFinalPurchaseAmount.toFixed(2)}</div></div>
+                                            <div><div className="text-slate-500 text-xs font-bold uppercase">Revenue</div><div className="text-slate-900 text-xl font-black">₹{totalExpectedRevenue.toFixed(2)}</div></div>
+                                            <div><div className="text-emerald-800 text-xs font-bold uppercase">Profit</div><div className="text-emerald-900 text-xl font-black">₹{expectedProfit.toFixed(2)}</div></div>
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
-                );
-            })()}
+                </div>
+            )}
 
             {showVendorModal && (
                 <div className="modal-overlay">
@@ -1342,7 +1214,7 @@ const PharmacyInventory = () => {
                             </span>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+                        <div className="stats-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
                             <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
                                 <h4 style={{ margin: '0 0 10px', color: '#475569' }}>Vendor Details</h4>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '14px' }}>
