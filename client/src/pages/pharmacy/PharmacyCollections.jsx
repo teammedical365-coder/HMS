@@ -13,6 +13,10 @@ const PharmacyCollections = () => {
         netRevenue: 0,
         cogs: 0,
         grossProfit: 0,
+        cashAmount: 0,
+        upiAmount: 0,
+        cardAmount: 0,
+        doctorGuaranteedAmount: 0,
         topSellingItems: [],
         recentTransactions: []
     });
@@ -49,7 +53,19 @@ const PharmacyCollections = () => {
 
             const res = await pharmacyAPI.getCollectionsAnalytics(start, end);
             if (res.success) {
-                setAnalytics(res.data);
+                setAnalytics({
+                    totalSales: res.summary?.totalGrossSales || 0,
+                    totalRefunds: res.summary?.totalReturnsRefunded || 0,
+                    netRevenue: res.summary?.netCollection || 0,
+                    cogs: res.summary?.cogs || 0,
+                    grossProfit: res.summary?.grossProfit || 0,
+                    cashAmount: res.summary?.cashAmount || 0,
+                    upiAmount: res.summary?.upiAmount || 0,
+                    cardAmount: res.summary?.cardAmount || 0,
+                    doctorGuaranteedAmount: res.summary?.doctorGuaranteedAmount || 0,
+                    topSellingItems: res.topSellingItems || [],
+                    recentTransactions: res.recentTransactions || []
+                });
             }
         } catch (error) {
             console.error("Failed to load analytics", error);
@@ -91,10 +107,15 @@ const PharmacyCollections = () => {
                         <div className="kpi-card sales">
                             <h3>Total Sales</h3>
                             <div className="kpi-value">₹{(analytics?.totalSales || 0).toFixed(2)}</div>
+                            <div className="kpi-subtext" style={{ display: 'flex', gap: '10px', marginTop: '5px', fontSize: '12px' }}>
+                                <span>Cash: ₹{(analytics?.cashAmount || 0).toFixed(2)}</span>
+                                <span>Online: ₹{((analytics?.upiAmount || 0) + (analytics?.cardAmount || 0)).toFixed(2)}</span>
+                            </div>
                         </div>
                         <div className="kpi-card refunds">
                             <h3>Total Refunds</h3>
-                            <div className="kpi-value">₹{(analytics?.totalRefunds || 0).toFixed(2)}</div>
+                            <div className="kpi-value" style={{color: '#ef4444'}}>₹{(analytics?.totalRefunds || 0).toFixed(2)}</div>
+                            <div className="kpi-subtext" style={{marginTop: '5px', fontSize: '12px'}}>Dr. Guarantee: ₹{(analytics?.doctorGuaranteedAmount || 0).toFixed(2)}</div>
                         </div>
                         <div className="kpi-card net">
                             <h3>Net Revenue</h3>
@@ -102,8 +123,8 @@ const PharmacyCollections = () => {
                         </div>
                         <div className="kpi-card profit">
                             <h3>Gross Profit</h3>
-                            <div className="kpi-value">₹{(analytics?.grossProfit || 0).toFixed(2)}</div>
-                            <div className="kpi-subtext">COGS: ₹{(analytics?.cogs || 0).toFixed(2)}</div>
+                            <div className="kpi-value" style={{color: '#10b981'}}>₹{(analytics?.grossProfit || 0).toFixed(2)}</div>
+                            <div className="kpi-subtext" style={{marginTop: '5px', fontSize: '12px'}}>COGS: ₹{(analytics?.cogs || 0).toFixed(2)}</div>
                         </div>
                     </div>
 

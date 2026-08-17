@@ -386,30 +386,30 @@ router.put('/intake/:userId', verifyToken, verifyReception, async (req, res) => 
         const updateQuery = {};
 
         // Map Root fields
-        if (updates.firstName || updates.lastName) updateQuery.name = `${updates.firstName || ''} ${updates.lastName || ''}`.trim();
-        if (updates.email) updateQuery.email = updates.email;
+        if (updates.firstName || updates.lastName) updateQuery.name = `${String(updates.firstName || '')} ${String(updates.lastName || '')}`.trim();
+        if (updates.email) updateQuery.email = String(updates.email);
         if (updates.phone || updates.mobile) {
-            const ph = updates.phone || updates.mobile;
+            const ph = String(updates.phone || updates.mobile);
             if (!/^\d{10}$/.test(ph)) {
                 return res.status(400).json({ success: false, message: 'Mobile number must be exactly 10 digits.' });
             }
             updateQuery.phone = ph;
         }
-        if (updates.address) updateQuery.address = updates.address;
-        if (updates.houseNo) updateQuery.houseNo = updates.houseNo;
-        if (updates.street) updateQuery.street = updates.street;
-        if (updates.city) updateQuery.city = updates.city;
-        if (updates.state) updateQuery.state = updates.state;
-        if (updates.zipCode) updateQuery.zipCode = updates.zipCode;
-        if (updates.avatar) updateQuery.avatar = updates.avatar;
-        if (updates.relationToPatient) updateQuery.relationToPatient = updates.relationToPatient;
-        if (updates.gender !== undefined) updateQuery.gender = updates.gender;
-        if (updates.dob !== undefined) updateQuery.dob = updates.dob;
-        if (updates.bloodGroup !== undefined) updateQuery.bloodGroup = updates.bloodGroup;
+        if (updates.address) updateQuery.address = String(updates.address);
+        if (updates.houseNo) updateQuery.houseNo = String(updates.houseNo);
+        if (updates.street) updateQuery.street = String(updates.street);
+        if (updates.city) updateQuery.city = String(updates.city);
+        if (updates.state) updateQuery.state = String(updates.state);
+        if (updates.zipCode) updateQuery.zipCode = String(updates.zipCode);
+        if (updates.avatar) updateQuery.avatar = String(updates.avatar);
+        if (updates.relationToPatient) updateQuery.relationToPatient = String(updates.relationToPatient);
+        if (updates.gender !== undefined) updateQuery.gender = String(updates.gender);
+        if (updates.dob !== undefined) updateQuery.dob = String(updates.dob);
+        if (updates.bloodGroup !== undefined) updateQuery.bloodGroup = String(updates.bloodGroup);
 
         // Update Root Aadhaar Fields
-        if (updates.aadhaar) updateQuery.aadhaarNumber = updates.aadhaar;
-        if (updates.isAadhaarVerified !== undefined) updateQuery.isAadhaarVerified = updates.isAadhaarVerified;
+        if (updates.aadhaar) updateQuery.aadhaarNumber = String(updates.aadhaar);
+        if (updates.isAadhaarVerified !== undefined) updateQuery.isAadhaarVerified = Boolean(updates.isAadhaarVerified);
 
         // Map Fertility Profile fields
         const profileFields = [
@@ -440,7 +440,10 @@ router.put('/intake/:userId', verifyToken, verifyReception, async (req, res) => 
 
         profileFields.forEach(field => {
             if (updates[field] !== undefined) {
-                updateQuery[`fertilityProfile.${field}`] = updates[field];
+                // Cast to String to prevent object-based NoSQL injections. Boolean/Numbers convert cleanly to String, which Mongoose casts back.
+                updateQuery[`fertilityProfile.${field}`] = typeof updates[field] === 'object' && updates[field] !== null 
+                    ? String(updates[field]) 
+                    : updates[field];
             }
         });
 
