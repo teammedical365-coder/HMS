@@ -46,69 +46,41 @@ const Login = () => {
   };
 
   return (
-    <section className="auth-section">
-      <div className="auth-container">
-        <div className="auth-blob blob-1" />
-        <div className="auth-blob blob-2" />
+    <section className="min-h-screen w-full flex items-center justify-center p-4 bg-slate-50">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md rounded-2xl bg-white p-6 sm:p-8 shadow-xl border border-slate-100"
+      >
+        <div className="text-center">
+            <img src="https://www.medical365.in/logo/medical365fav.jpg" alt="Medical 365" className="max-w-[180px] h-auto mx-auto mb-4" />
+        </div>
 
-        <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="auth-card"
-        >
-          {/* Left: Form */}
-          <div className="auth-form-container">
-            <div className="auth-box">
-              <div className="hospital-brand">
-                  <img src="https://www.medical365.in/logo/medical365fav.jpg" alt="Medical 365" style={{ height: '40px', objectFit: 'contain' }} />
-              </div>
+        <div className="text-center mb-6">
+          <h3 className="text-xl font-bold text-slate-800">Global Instance Login</h3>
+          <p className="text-sm text-slate-500 mt-1">Access management for distributed medical nodes.</p>
+        </div>
 
-              <div className="auth-header">
-                <h3>Global Instance Login</h3>
-                <p>Access management for distributed medical nodes.</p>
-              </div>
-
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.5rem', marginBottom: '2rem' }}>
-                <div style={{ display: 'flex', gap: '12px', color: '#0f172a', fontWeight: '700', marginBottom: '8px', alignItems: 'center' }}>
-                    <RiInformationLine style={{ color: '#14b8a6', fontSize: '1.2rem' }} />
-                    Secure Access Only
-                </div>
-                <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.6' }}>
-                  For enhanced data isolation, you must sign in through your <strong>private hospital portal link</strong>.
-                </p>
-              </div>
-
-              <div style={{ background: '#fefce8', border: '1px solid #fef08a', borderRadius: '12px', padding: '1rem', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                <div style={{ fontSize: '0.9rem', color: '#854d0e' }}>
-                    <strong>Access Tip:</strong> Check your institution's registration email for your unique login URL.
-                </div>
-              </div>
-
-              <div className="auth-footer-note" style={{ marginTop: '3rem' }}>
-                System-wide isolation enabled
-              </div>
-            </div>
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center gap-3 text-slate-900 font-bold mb-2">
+              <RiInformationLine className="text-teal-500 text-xl" />
+              Secure Access Only
           </div>
+          <p className="m-0 text-sm text-slate-500 leading-relaxed">
+            For enhanced data isolation, you must sign in through your <strong>private hospital portal link</strong>.
+          </p>
+        </div>
 
-          {/* Right: Visual */}
-          <div className="auth-visual">
-            <img
-              src="https://images.unsplash.com/photo-1576091160550-217359f4268e?q=80&w=1000&auto=format&fit=crop"
-              alt="Medical Data Center"
-              className="auth-hero-img"
-              style={{ opacity: 0.3 }}
-            />
-            <div className="auth-visual-overlay"></div>
-            <div className="auth-content">
-              <div className="visual-badge">Security Node</div>
-              <h2>Enterprise Grade <br /> Isolation.</h2>
-              <p>
-                Each hospital operates on an independent logical partition. This global login gate is closed for public access.
-              </p>
-            </div>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 flex items-start gap-3">
+          <div className="text-sm text-yellow-800">
+              <strong>Access Tip:</strong> Check your institution's registration email for your unique login URL.
           </div>
-        </motion.div>
-      </div>
+        </div>
+
+        <div className="text-center mt-8 text-xs text-slate-400 font-medium">
+          System-wide isolation enabled
+        </div>
+      </motion.div>
     </section>
   );
 };

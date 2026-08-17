@@ -559,7 +559,7 @@ const CentralAdminDashboard = () => {
                     {/* Back Header */}
                     <div className="centraladmin-header-details" style={{ background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: 'var(--shadow-sm)', marginBottom: '24px' }}>
                         {/* Top Row: Back Button */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                             <button onClick={closeHospitalDetail} className="back-btn-light" style={{ display: 'inline-flex', alignItems: 'center', margin: 0 }}>
                                 ← Back to Hospitals
                             </button>
@@ -611,13 +611,30 @@ const CentralAdminDashboard = () => {
                                         <button className={datePreset === 'today' ? 'preset-btn active' : 'preset-btn'} style={{ flex: '1 1 auto', textAlign: 'center', padding: '8px 12px' }} onClick={() => handleDatePresetChange('today')}>Today</button>
                                         <button className={datePreset === '30' ? 'preset-btn active' : 'preset-btn'} style={{ flex: '1 1 auto', textAlign: 'center', padding: '8px 12px' }} onClick={() => handleDatePresetChange('30')}>30 Days</button>
                                     </div>
-                                    <div className="custom-date-inputs flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3 w-full">
-                                        <div className="flex flex-row items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
-                                            <input type="date" className="date-input flex-1 sm:flex-none" style={{ minWidth: '110px', width: '100%' }} value={customStartDate} onChange={(e) => { setDatePreset('custom'); setCustomStartDate(e.target.value); }} />
-                                            <span style={{ fontSize: '14px', color: '#64748b', fontWeight: '500' }}>to</span>
-                                            <input type="date" className="date-input flex-1 sm:flex-none" style={{ minWidth: '110px', width: '100%' }} value={customEndDate} onChange={(e) => { setDatePreset('custom'); setCustomEndDate(e.target.value); }} />
-                                        </div>
-                                        <button className="btn-save w-full sm:w-auto mt-2 sm:mt-0" onClick={handleApplyCustomDate}>Apply Custom</button>
+                                    <div className="custom-date-inputs flex flex-wrap items-center gap-3 w-full mt-2">
+                                        <input 
+                                            type="date" 
+                                            className="date-input flex-1 sm:flex-none" 
+                                            value={customStartDate} 
+                                            onChange={(e) => { setDatePreset('custom'); setCustomStartDate(e.target.value); }} 
+                                        />
+                                        
+                                        <span style={{ fontSize: '14px', color: '#64748b', fontWeight: '500' }}>to</span>
+                                        
+                                        <input 
+                                            type="date" 
+                                            className="date-input flex-1 sm:flex-none" 
+                                            value={customEndDate} 
+                                            onChange={(e) => { setDatePreset('custom'); setCustomEndDate(e.target.value); }} 
+                                        />
+                                        
+                                        <button 
+                                            className="btn-save w-full sm:w-auto" 
+                                            style={{ whiteSpace: 'nowrap' }} 
+                                            onClick={handleApplyCustomDate}
+                                        >
+                                            Apply Custom
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -849,7 +866,7 @@ const CentralAdminDashboard = () => {
 
                             {/* ---- STAFF LIST ---- */}
                             <div className="admin-card w-full max-w-full min-w-0">
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                                     <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>👥 Staff Members ({hospitalStats.staffList?.length || 0})</h3>
                                 </div>
                                 {!hospitalStats.staffList?.length ? (
@@ -1470,10 +1487,10 @@ const CentralAdminDashboard = () => {
                 {activeTab === 'simple-clinics' && selectedClinic && (
                     <div>
                         {/* Header */}
-                        <div className="centraladmin-header-details" style={{ background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: 'var(--shadow-sm)', marginBottom: '24px' }}>
+                        <div className="bg-white rounded-2xl p-5 md:p-6 shadow-sm mb-6">
                             {/* Top Row: Back Button */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <button onClick={closeClinicDetail} className="back-btn-light" style={{ display: 'inline-flex', alignItems: 'center', margin: 0 }}>
+                            <div className="flex justify-between items-center mb-4">
+                                <button onClick={closeClinicDetail} className="back-btn-light inline-flex items-center m-0">
                                     ← Back to All Clinics
                                 </button>
                                 <span className={`status-badge ${selectedClinic.isActive ? 'status-active' : 'status-inactive'}`} style={{
@@ -1957,7 +1974,7 @@ const CentralAdminDashboard = () => {
                                 <div className="admin-card w-full max-w-full min-w-0" style={{ marginTop: '20px' }}>
                                     <h3>🚀 Clinic Features</h3>
                                     <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>Staff can access these modules after logging in at <strong>/login</strong></p>
-                                    <div className="config-grid">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {[
                                             { icon: '👤', label: 'Patient Registration', desc: 'Register & search patients', bg: '#f0f9ff', color: '#0ea5e9' },
                                             { icon: '🩺', label: 'Doctor Consultation', desc: 'Appointments & prescriptions', bg: '#f5f3ff', color: '#8b5cf6' },
@@ -2208,7 +2225,7 @@ const CentralAdminDashboard = () => {
                         <p style={{ color: '#888', fontSize: '14px', margin: '5px 0 20px' }}>
                             Manage global settings — roles, question libraries, lab tests, medicines, services, and test packages.
                         </p>
-                        <div className="config-grid">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                             {[
                                 { icon: '🔑', label: 'Roles & Permissions', desc: 'Create and manage user roles', path: '/admin/roles', bg: '#eff6ff', color: '#3b82f6' },
                                 { icon: '❓', label: 'Question Library', desc: 'Configure assessment forms', path: '/admin/question-library', bg: '#f5f3ff', color: '#8b5cf6' },

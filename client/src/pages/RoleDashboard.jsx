@@ -379,7 +379,8 @@ const RoleDashboard = () => {
                                 border: '1.5px solid #cbd5e1',
                                 borderRadius: '8px',
                                 padding: '8px 14px',
-                                width: '360px',
+                                width: '100%',
+                                maxWidth: '360px',
                                 boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                             }}>
                                 <FiSearch style={{ color: '#94a3b8' }} />
@@ -440,7 +441,7 @@ const RoleDashboard = () => {
                             {loadingAppts ? (
                                 <div style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>Loading appointments...</div>
                             ) : (
-                                <div style={{ overflowX: 'auto' }}>
+                                <div className="w-full overflow-x-auto rounded-lg border border-slate-200">
                                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                         <thead>
                                             <tr style={{ background: '#f8fafc', borderBottom: '2px solid #edf2f7' }}>
@@ -707,7 +708,8 @@ const RoleDashboard = () => {
                             background: '#ffffff',
                             borderRadius: '16px',
                             padding: '28px',
-                            width: '450px',
+                            width: '100%',
+                            maxWidth: '450px',
                             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
                         }}>
                             <h3 style={{ margin: '0 0 16px', color: '#1e293b', fontSize: '1.25rem', fontWeight: 800 }}>Record Vitals</h3>
@@ -780,7 +782,8 @@ const RoleDashboard = () => {
                             background: '#ffffff',
                             borderRadius: '16px',
                             padding: '28px',
-                            width: '400px',
+                            width: '100%',
+                            maxWidth: '400px',
                             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
                         }}>
                             <h3 style={{ margin: '0 0 16px', color: '#1e293b', fontSize: '1.2rem', fontWeight: 800 }}>Upload Patient Report</h3>
@@ -846,7 +849,8 @@ const RoleDashboard = () => {
                             background: '#ffffff',
                             borderRadius: '16px',
                             padding: '28px',
-                            width: '600px',
+                            width: '100%',
+                            maxWidth: '600px',
                             maxHeight: '80vh',
                             overflowY: 'auto',
                             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'

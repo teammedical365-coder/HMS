@@ -605,38 +605,38 @@ const HospitalAdminDashboard = () => {
                                 ))}
                             </div>
                         ) : hospitalStats?.stats ? (
-                            <div className="hospital-kpi-grid">
-                                <div className="kpi-card kpi-blue">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                                <div className="kpi-card kpi-blue w-full">
                                     <div className="kpi-icon">👩‍⚕️</div>
                                     <div className="kpi-value">{hospitalStats.stats.totalStaff}</div>
                                     <div className="kpi-label">Total Staff</div>
                                     <div className="kpi-sub">Active staff members</div>
                                 </div>
-                                <div className="kpi-card kpi-green">
+                                <div className="kpi-card kpi-green w-full">
                                     <div className="kpi-icon">🧑‍🤝‍🧑</div>
                                     <div className="kpi-value">{hospitalStats.stats.totalPatients}</div>
                                     <div className="kpi-label">Unique Patients</div>
                                     <div className="kpi-sub">In selected period</div>
                                 </div>
-                                <div className="kpi-card kpi-purple">
+                                <div className="kpi-card kpi-purple w-full">
                                     <div className="kpi-icon">📅</div>
                                     <div className="kpi-value">{hospitalStats.stats.totalAppointments}</div>
                                     <div className="kpi-label">Total Appointments</div>
                                     <div className="kpi-sub">In selected period</div>
                                 </div>
-                                <div className="kpi-card kpi-orange">
+                                <div className="kpi-card kpi-orange w-full">
                                     <div className="kpi-icon">💰</div>
                                     <div className="kpi-value">{formatCurrency(hospitalStats.stats.totalRevenue)}</div>
                                     <div className="kpi-label">Total Revenue</div>
                                     <div className="kpi-sub">From paid appointments</div>
                                 </div>
-                                <div className="kpi-card kpi-teal">
+                                <div className="kpi-card kpi-teal w-full">
                                     <div className="kpi-icon">✅</div>
                                     <div className="kpi-value">{hospitalStats.stats.completedAppointments}</div>
                                     <div className="kpi-label">Completed</div>
                                     <div className="kpi-sub">{hospitalStats.stats.pendingAppointments} pending/upcoming</div>
                                 </div>
-                                <div className="kpi-card kpi-pink">
+                                <div className="kpi-card kpi-pink w-full">
                                     <div className="kpi-icon">🧪</div>
                                     <div className="kpi-value">{hospitalStats.stats.labReportCount}</div>
                                     <div className="kpi-label">Lab Reports</div>
@@ -648,8 +648,8 @@ const HospitalAdminDashboard = () => {
                         {/* My Profile Card */}
                         <div className="admin-card" style={{ marginTop: '24px' }}>
                             <h2>👤 My Profile</h2>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
-                                <div style={{ flexShrink: 0 }}>
+                            <div className="flex flex-col sm:flex-row items-center gap-5">
+                                <div className="flex-shrink-0">
                                     {profileFile ? (
                                         <img src={URL.createObjectURL(profileFile)} alt="Preview" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--brand-500, #14b8a6)' }} />
                                     ) : currentUser?.avatar ? (
@@ -660,17 +660,17 @@ const HospitalAdminDashboard = () => {
                                         </div>
                                     )}
                                 </div>
-                                <div>
+                                <div className="w-full">
                                     <p style={{ margin: '0 0 4px', fontWeight: 600, fontSize: '16px', color: '#1e293b' }}>{currentUser?.name}</p>
                                     <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#64748b' }}>{currentUser?.email}</p>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <input type="file" accept="image/*" id="profilePhotoInput" style={{ display: 'none' }}
                                             onChange={e => setProfileFile(e.target.files[0])} />
-                                        <label htmlFor="profilePhotoInput" style={{ padding: '8px 16px', background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                                        <label htmlFor="profilePhotoInput" className="px-4 py-2 bg-slate-100 text-slate-700 border border-slate-300 rounded-lg cursor-pointer text-xs font-semibold hover:bg-slate-200">
                                             📷 Choose Photo
                                         </label>
                                         {profileFile && (
-                                            <button onClick={handleSaveProfilePhoto} disabled={savingProfile} className="btn-save" style={{ padding: '8px 16px', fontSize: '13px' }}>
+                                            <button onClick={handleSaveProfilePhoto} disabled={savingProfile} className="btn-save px-4 py-2 text-xs">
                                                 {savingProfile ? 'Saving...' : 'Save Photo'}
                                             </button>
                                         )}
@@ -702,17 +702,17 @@ const HospitalAdminDashboard = () => {
                         <div className="admin-card" style={{ marginBottom: '20px' }}>
                             <h2 style={{ marginBottom: '12px' }}>⚡ Staff Management</h2>
                             <p style={{ color: '#888', fontSize: '14px', margin: '0 0 16px' }}>Manage your hospital's staff and doctors from here.</p>
-                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                            <div className="flex flex-wrap gap-3">
                                 <button
                                     onClick={() => navigate('/admin/doctors')}
-                                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', background: '#dbeafe', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-semibold text-sm hover:bg-blue-100"
                                 >
                                     👨‍⚕️ Manage Doctors
                                 </button>
                                 {!['enterprise', 'clinic_basic', 'multi_speciality_starter'].includes(currentUser?.subscriptionPlan) && (
                                     <button
                                         onClick={() => navigate('/admin/roles')}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', background: '#f3e8ff', color: '#9333ea', border: '1px solid #e9d5ff', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}
+                                        className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg font-semibold text-sm hover:bg-purple-100"
                                     >
                                         🔑 Manage Roles
                                     </button>
@@ -765,11 +765,11 @@ const HospitalAdminDashboard = () => {
                                                         </td>
                                                         <td>{userItem.phone || '-'}</td>
                                                         <td>
-                                                            <div className="action-buttons">
+                                                            <div className="flex flex-col sm:flex-row gap-2">
                                                                 {!isCurrentUser && !isSuperUser && (
                                                                     <>
-                                                                        <button onClick={() => openEditModal(userItem)} className="btn-edit">Edit</button>
-                                                                        <button onClick={() => setDeleteConfirm(userItem.id || userItem._id)} className="btn-delete">Delete</button>
+                                                                        <button onClick={() => openEditModal(userItem)} className="btn-edit text-xs">Edit</button>
+                                                                        <button onClick={() => setDeleteConfirm(userItem.id || userItem._id)} className="btn-delete text-xs">Delete</button>
                                                                     </>
                                                                 )}
                                                             </div>
@@ -788,7 +788,7 @@ const HospitalAdminDashboard = () => {
                 {/* ===================== DEPARTMENTS TAB ===================== */}
                 {activeTab === 'departments' && (
                     <div className="admin-card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                             <div>
                                 <h2>💵 Department Consultation Fees</h2>
                                 <p style={{ color: '#888', fontSize: '14px', margin: '4px 0 0' }}>
@@ -796,7 +796,7 @@ const HospitalAdminDashboard = () => {
                                 </p>
                             </div>
                             <button
-                                className="btn-save"
+                                className="btn-save w-full sm:w-auto"
                                 style={{ padding: '8px 20px', whiteSpace: 'nowrap' }}
                                 onClick={async () => {
                                     try {
@@ -953,14 +953,14 @@ const HospitalAdminDashboard = () => {
                 {activeTab === 'inventory' && (
                     <div>
                         <div className="admin-card" style={{ marginBottom: '20px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                                 <div>
                                     <h2>💊 Medicine Inventory</h2>
                                     <p style={{ color: '#888', fontSize: '14px', margin: '4px 0 0' }}>Manage your hospital's medicine stock, pricing, and expiry tracking</p>
                                 </div>
                                 <button
                                     onClick={() => { if (showInventoryForm && !editingInventoryId) { resetInventoryForm(); } else { resetInventoryForm(); setShowInventoryForm(true); } }}
-                                    className={showInventoryForm ? 'btn-cancel' : 'btn-save'}
+                                    className={`${showInventoryForm ? 'btn-cancel' : 'btn-save'} w-full sm:w-auto`}
                                     style={{ padding: '8px 20px' }}
                                 >
                                     {showInventoryForm ? 'Cancel' : '+ Add Medicine'}
@@ -1144,10 +1144,10 @@ const HospitalAdminDashboard = () => {
 
                         {/* Inventory Table */}
                         <div className="admin-card">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                                 <h2>Current Stock ({inventory.length} items)</h2>
                                 {!inventory.length && !loadingInventory && (
-                                    <button onClick={fetchInventory} className="btn-edit" style={{ padding: '6px 14px', fontSize: '13px' }}>Load Inventory</button>
+                                    <button onClick={fetchInventory} className="btn-edit w-full sm:w-auto" style={{ padding: '6px 14px', fontSize: '13px' }}>Load Inventory</button>
                                 )}
                             </div>
                             {loadingInventory ? (
@@ -1228,7 +1228,7 @@ const HospitalAdminDashboard = () => {
                 {/* ===================== LAB PRICING TAB ===================== */}
                 {activeTab === 'labpricing' && (
                     <div className="admin-card">
-                        <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                             <div>
                                 <h2>🧪 Lab Tests & Pricing</h2>
                                 <p style={{ color: '#888', fontSize: '14px', margin: '4px 0 0' }}>
@@ -1237,7 +1237,7 @@ const HospitalAdminDashboard = () => {
                             </div>
                             <button
                                 onClick={() => { setShowLabTestForm(v => !v); setError(''); }}
-                                className="btn btn-primary"
+                                className="btn btn-primary w-full sm:w-auto"
                                 style={{ padding: '8px 16px', whiteSpace: 'nowrap' }}
                             >
                                 {showLabTestForm ? 'Cancel' : '+ Add Lab Test'}
@@ -1424,7 +1424,7 @@ const HospitalAdminDashboard = () => {
                                 ) : (
                                     <div style={{ display: 'grid', gap: '12px' }}>
                                         {deptUpis.map((upi) => (
-                                            <div key={upi._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>
+                                            <div key={upi._id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4" style={{ padding: '16px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>
                                                 <div>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                         <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '1rem' }}>{upi.label}</span>
