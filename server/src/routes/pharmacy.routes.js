@@ -310,35 +310,69 @@ router.get('/analytics/collections', verifyToken, async (req, res) => {
 
         const orders = await PharmacyOrder.find({
             ...dateFilter,
-            paymentStatus: 'Paid',
+            paymentStatus: { $in: ['Paid', 'PAID_BY_DOCTOR'] },
             orderStatus: 'Completed'
-        }).populate('userId', 'name phone');
+        }).populate('userId', 'name phone').lean();
 
-        const returns = await PharmacyReturn.find(dateFilter);
+        const returns = await PharmacyReturn.find(dateFilter).lean();
 
         let totalGrossSales = 0;
         let cashAmount = 0;
         let upiAmount = 0;
         let cardAmount = 0;
+        let doctorGuaranteedAmount = 0;
+        let cogs = 0;
+        let itemMap = {};
 
         orders.forEach(order => {
             totalGrossSales += (order.totalAmount || 0);
-            // Assuming default Cash if no specific payment mode is tracked in PharmacyOrder yet.
-            // If paymentMode exists, we map it, else fallback to Cash
-            const mode = (order.paymentMode || 'Cash').toLowerCase();
-            if (mode.includes('upi')) upiAmount += (order.totalAmount || 0);
-            else if (mode.includes('card')) cardAmount += (order.totalAmount || 0);
-            else cashAmount += (order.totalAmount || 0);
+            cogs += (order.totalCost || 0);
+            
+            if (order.paymentStatus === 'PAID_BY_DOCTOR') {
+                doctorGuaranteedAmount += (order.totalAmount || 0);
+            } else {
+                const mode = (order.paymentMode || 'Cash').toLowerCase();
+                if (mode.includes('upi')) upiAmount += (order.totalAmount || 0);
+                else if (mode.includes('card')) cardAmount += (order.totalAmount || 0);
+                else cashAmount += (order.totalAmount || 0);
+            }
+
+            if (order.items && Array.isArray(order.items)) {
+                order.items.forEach(item => {
+                    if (item.medicineName) {
+                        if (!itemMap[item.medicineName]) {
+                            itemMap[item.medicineName] = { medicineName: item.medicineName, quantity: 0, totalRevenue: 0 };
+                        }
+                        itemMap[item.medicineName].quantity += (item.quantity || 0);
+                        itemMap[item.medicineName].totalRevenue += ((item.quantity || 0) * (item.price || 0));
+                    }
+                });
+            }
         });
+
+        const topSellingItems = Object.values(itemMap).sort((a, b) => b.quantity - a.quantity).slice(0, 5);
 
         let totalReturnsRefunded = 0;
         returns.forEach(r => {
             if (r.returnType === 'Refund') {
                 totalReturnsRefunded += (r.refundAmount || 0);
+                // Optionally subtract COGS reversed if tracked, but typical MVP skips this or assumes totalCost reversal.
+                // Assuming proportional COGS reversal if needed, but keeping it simple for gross profit.
             }
         });
 
         const netCollection = totalGrossSales - totalReturnsRefunded;
+        const grossProfit = netCollection - cogs;
+
+        let recentTransactions = [];
+        orders.forEach(o => {
+            recentTransactions.push({ _id: o._id, type: 'Sale', amount: o.totalAmount, createdAt: o.createdAt });
+        });
+        returns.forEach(r => {
+            recentTransactions.push({ _id: r._id, type: 'Refund', amount: r.refundAmount, createdAt: r.createdAt });
+        });
+        recentTransactions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        recentTransactions = recentTransactions.slice(0, 10);
 
         res.json({
             success: true,
@@ -348,8 +382,13 @@ router.get('/analytics/collections', verifyToken, async (req, res) => {
                 netCollection,
                 cashAmount,
                 upiAmount,
-                cardAmount
+                cardAmount,
+                doctorGuaranteedAmount,
+                cogs,
+                grossProfit
             },
+            topSellingItems,
+            recentTransactions,
             orders,
             returns
         });
