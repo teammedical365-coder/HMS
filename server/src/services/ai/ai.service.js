@@ -1,12 +1,7 @@
 const geminiProvider = require('./providers/gemini.provider');
-const kimiProvider = require('./providers/kimi.provider');
 
 class AIService {
     get _provider() {
-        const providerName = (process.env.AI_PROVIDER || 'gemini').toLowerCase();
-        if (providerName === 'kimi') {
-            return kimiProvider;
-        }
         return geminiProvider;
     }
 
