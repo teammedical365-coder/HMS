@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { receptionAPI, patientAPI, reportAPI } from '../../utils/api';
+import { receptionAPI, patientAPI, reportAPI, consentAPI } from '../../utils/api';
 import { FiSearch, FiUsers, FiCalendar, FiActivity } from 'react-icons/fi';
 
 const ReceptionPatients = () => {
@@ -19,6 +19,45 @@ const ReceptionPatients = () => {
     const [selectedReportFile, setSelectedReportFile] = useState(null);
     const [uploadingReport, setUploadingReport] = useState(false);
     const [profileModal, setProfileModal] = useState({ open: false, patient: null });
+
+    const [consentModal, setConsentModal] = useState({ open: false, apptId: null, patientId: null, patientName: '' });
+    const [consentTemplates, setConsentTemplates] = useState([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState('');
+
+    useEffect(() => {
+        if (consentModal.open) {
+            consentAPI.getTemplates({ status: 'active' }).then(res => {
+                if (res.success) setConsentTemplates(res.data);
+            }).catch(err => console.error("Failed to load consent templates", err));
+        }
+    }, [consentModal.open]);
+
+    const handleDownloadConsent = async (e) => {
+        e.preventDefault();
+        if (!selectedTemplateId) return alert('Select a template first');
+        try {
+            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/consent/templates/${selectedTemplateId}/generate-pdf?patientId=${consentModal.patientId}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            if (!response.ok) throw new Error('Download failed');
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const template = consentTemplates.find(t => t._id === selectedTemplateId);
+            a.download = `${template?.name || 'Consent'}_${consentModal.patientName.replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            setConsentModal({ open: false, apptId: null, patientId: null, patientName: '' });
+            setSelectedTemplateId('');
+        } catch (error) {
+            alert('Error downloading consent form');
+        }
+    };
 
     useEffect(() => {
         fetchRecentPatients();
@@ -435,6 +474,24 @@ const ReceptionPatients = () => {
                                                                 whiteSpace: 'nowrap'
                                                             }}
                                                         >📁 Upload Report</button>
+                                                        <button 
+                                                            onClick={() => setConsentModal({ open: true, apptId: appt._id, patientId: appt.userId?._id || appt.userId?.patientId || appt.patientId || appt._id, patientName: appt.userId?.name || 'Patient' })}
+                                                            style={{
+                                                                background: '#fef2f2',
+                                                                color: '#ef4444',
+                                                                border: '1px solid #fecaca',
+                                                                padding: '6px 12px',
+                                                                borderRadius: '6px',
+                                                                cursor: 'pointer',
+                                                                fontSize: '0.8rem',
+                                                                fontWeight: 600,
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '6px',
+                                                                whiteSpace: 'nowrap'
+                                                            }}
+                                                        >📝 Consent Form</button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -589,6 +646,59 @@ const ReceptionPatients = () => {
                                     Close
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* CONSENT FORM MODAL */}
+                {consentModal.open && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                        <div style={{
+                            background: '#fff', borderRadius: '12px', padding: '24px',
+                            width: '100%', maxWidth: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)'
+                        }}>
+                            <h3 style={{ margin: '0 0 16px 0', color: '#1e293b' }}>Download Consent Form</h3>
+                            <p style={{ margin: '0 0 16px 0', fontSize: '0.9rem', color: '#64748b' }}>
+                                Generate an auto-filled PDF consent form for <strong>{consentModal.patientName}</strong>.
+                            </p>
+                            
+                            <form onSubmit={handleDownloadConsent}>
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', fontWeight: 600, color: '#475569' }}>
+                                        Select Template
+                                    </label>
+                                    <select 
+                                        style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none' }}
+                                        value={selectedTemplateId}
+                                        onChange={(e) => setSelectedTemplateId(e.target.value)}
+                                        required
+                                    >
+                                        <option value="">-- Choose Template --</option>
+                                        {consentTemplates.map(t => (
+                                            <option key={t._id} value={t._id}>{t.name} ({t.categoryId?.name})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setConsentModal({ open: false, apptId: null, patientId: null, patientName: '' })}
+                                        style={{ padding: '8px 16px', border: 'none', background: '#f1f5f9', color: '#475569', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+                                    >Cancel</button>
+                                    <button 
+                                        type="submit"
+                                        disabled={!selectedTemplateId}
+                                        style={{ 
+                                            padding: '8px 16px', border: 'none', background: '#ef4444', color: '#fff', borderRadius: '6px', 
+                                            cursor: selectedTemplateId ? 'pointer' : 'not-allowed', fontWeight: 600, opacity: selectedTemplateId ? 1 : 0.6 
+                                        }}
+                                    >Generate PDF</button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 )}

@@ -67,6 +67,9 @@ import CashierDashboard from '../pages/cashier/CashierDashboard';
 import AdminLogin from '../pages/administration/AdminLogin';
 import AdminSignup from '../pages/administration/AdminSignup';
 
+// Consent Management
+import ConsentManagement from '../pages/admin/ConsentManagement';
+
 // Lab Pages
 import LabDashboard from '../pages/lab/LabDashboard';
 import AssignedTests from '../pages/lab/AssignedTests';
@@ -200,6 +203,7 @@ const MainRoutes = () => {
                             <Route path="admin/medicines" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminMedicines /></ProtectedRoute>} />
                             <Route path="admin/question-library" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminQuestionLibrary /></ProtectedRoute>} />
                             <Route path="admin/test-packages" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminTestPackages /></ProtectedRoute>} />
+                            <Route path="admin/consent" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><ConsentManagement /></ProtectedRoute>} />
                             
                             {/* Dashboard routes — clinic vs full hospital */}
                             <Route path="hospitaladmin" element={

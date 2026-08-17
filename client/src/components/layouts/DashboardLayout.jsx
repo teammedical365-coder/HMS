@@ -8,6 +8,7 @@ import {
     FiSettings, FiLogOut, FiPieChart, FiClipboard,
     FiFileText, FiPlusSquare, FiDatabase, FiGrid, FiShield, FiMenu, FiX
 } from 'react-icons/fi';
+import GlobalSearch from '../GlobalSearch';
 import './DashboardLayout.css';
 
 const DashboardSidebar = ({ isOpen, setOpen }) => {
@@ -202,6 +203,8 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                     <span className="path-user-role">{user?.role}</span>
                 </div>
             </div>
+
+            <GlobalSearch />
 
             <div className="topbar-right">
                 <div className="user-profile-widget">

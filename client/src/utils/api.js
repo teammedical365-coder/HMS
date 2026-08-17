@@ -690,3 +690,55 @@ export const patientAuthAPI = {
 };
 
 export default apiClient;
+
+export const consentAPI = {
+    getStats: async () => {
+        const response = await apiClient.get('/api/consent/stats');
+        return response.data;
+    },
+    getCategories: async () => {
+        const response = await apiClient.get('/api/consent/categories');
+        return response.data;
+    },
+    createCategory: async (data) => {
+        const response = await apiClient.post('/api/consent/categories', data);
+        return response.data;
+    },
+    updateCategory: async (id, data) => {
+        const response = await apiClient.put('/api/consent/categories/' + id, data);
+        return response.data;
+    },
+    toggleCategory: async (id) => {
+        const response = await apiClient.patch('/api/consent/categories/' + id + '/toggle');
+        return response.data;
+    },
+    deleteCategory: async (id) => {
+        const response = await apiClient.delete('/api/consent/categories/' + id);
+        return response.data;
+    },
+    getTemplates: async (params) => {
+        const response = await apiClient.get('/api/consent/templates', { params });
+        return response.data;
+    },
+    getTemplateById: async (id) => {
+        const response = await apiClient.get('/api/consent/templates/' + id);
+        return response.data;
+    },
+    createTemplate: async (formData) => {
+        const response = await apiClient.post('/api/consent/templates', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+    updateTemplate: async (id, formData) => {
+        const response = await apiClient.put('/api/consent/templates/' + id, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+    deleteTemplate: async (id) => {
+        const response = await apiClient.delete('/api/consent/templates/' + id);
+        return response.data;
+    }
+};
+
