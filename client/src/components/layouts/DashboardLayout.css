@@ -375,28 +375,22 @@
   transition: opacity 0.3s ease;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1025px) {
   .sidebar-toggle {
     display: none !important;
   }
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1024px) {
   .profile-text-info { display: none !important; }
-  .erp-topbar { padding: 0 12px !important; }
-  .erp-page-content { padding: 12px !important; }
-  .erp-topbar {
-    padding: 0 16px !important;
+  .erp-topbar { padding: 0 16px !important; }
+  .erp-page-content { padding: 16px !important; }
+  
+  /* Hide the page name and slash on mobile/tablet, keeping only the user role badge */
+  .curr-page-name, .path-slash {
+    display: none !important;
   }
-  .breadcrumb-wrap {
-    /* breadcrumb visible */
-  }
-  .profile-text-info {
-    .profile-text-info { display: none !important; }
-  }
-  .erp-page-content {
-    padding: 16px !important; /* Reduce padding on mobile content */
-  }
+
   .erp-sidebar {
     width: var(--sidebar-width) !important;
     left: calc(-1 * var(--sidebar-width)) !important;

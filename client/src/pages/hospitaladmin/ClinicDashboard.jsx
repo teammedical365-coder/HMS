@@ -4,6 +4,7 @@ import { clinicAPI, uploadAPI, medicineAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './ClinicDashboard.css';
+import MobileDatePicker from '../../components/MobileDatePicker';
 
 // ─── PDF HELPERS ──────────────────────────────────────────────────────────────
 const getClinicInfo = () => {
@@ -554,19 +555,21 @@ const ClinicDashboard = () => {
             {!isClinicDoctorUser && (
                 <div className="clinic-role-switcher">
                     <div className="switcher-label">Mode:</div>
-                    {MODES.filter(m => {
-                        const role = (currentUser?.role || '').toLowerCase();
-                        if (role === 'doctor' || role === 'clinic doctor') return ['doctor', 'patients', 'overview'].includes(m.id);
-                        if (role === 'reception' || role === 'receptionist') return ['reception', 'patients', 'overview', 'billing', 'plans'].includes(m.id);
-                        return true;
-                    }).map(m => (
-                        <button key={m.id}
-                            className={`switcher-btn ${mode === m.id ? 'active' : ''}`}
-                            style={mode === m.id ? { background: m.color, color: '#fff', borderColor: m.color } : {}}
-                            onClick={() => setMode(m.id)}>
-                            <span>{m.icon}</span> {m.label}
-                        </button>
-                    ))}
+                    <div className="switcher-buttons">
+                        {MODES.filter(m => {
+                            const role = (currentUser?.role || '').toLowerCase();
+                            if (role === 'doctor' || role === 'clinic doctor') return ['doctor', 'patients', 'overview'].includes(m.id);
+                            if (role === 'reception' || role === 'receptionist') return ['reception', 'patients', 'overview', 'billing', 'plans'].includes(m.id);
+                            return true;
+                        }).map(m => (
+                            <button key={m.id}
+                                className={`switcher-btn ${mode === m.id ? 'active' : ''}`}
+                                style={mode === m.id ? { background: m.color, color: '#fff', borderColor: m.color } : {}}
+                                onClick={() => setMode(m.id)}>
+                                <span>{m.icon}</span> {m.label}
+                            </button>
+                        ))}
+                    </div>
                     {currentUser?.subscriptionPlan !== 'starter' && (
                         <div className="switcher-user">
                             <div className="switcher-avatar">{currentUser?.name?.charAt(0)?.toUpperCase()}</div>
@@ -630,6 +633,8 @@ const OverviewMode = () => {
     const [cfgMsg, setCfgMsg] = useState('');
     const [overviewMonthStr, setOverviewMonthStr] = useState(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`);
     const [showAllKpis, setShowAllKpis] = useState(false);
+    const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+    const [showApptModeDropdown, setShowApptModeDropdown] = useState(false);
 
     useEffect(() => {
         Promise.all([
@@ -803,18 +808,26 @@ const OverviewMode = () => {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#10b981' }}></div> Treatment Revenue</div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#6366f1' }}></div> Total Revenue</div>
                         </div>
-                        
-                        <select 
-                            value={overviewMonthStr} 
-                            onChange={e => setOverviewMonthStr(e.target.value)} 
-                            className="clinic-input clinic-month-select" 
-                            style={{ padding: '6px 10px', width: 'auto', fontSize: '13px', borderRadius: '6px', cursor: 'pointer' }}
-                        >
-                            {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => {
-                                const val = `${new Date().getFullYear()}-${String(i + 1).padStart(2, '0')}`;
-                                return <option key={val} value={val}>{m}</option>;
-                            })}
-                        </select>
+                        <div className="clinic-month-select-container">
+                            {/* Custom Dropdown for All Devices */}
+                            <div className="clinic-custom-month-dropdown">
+                                <div className="custom-dropdown-selected" onClick={() => setShowMonthDropdown(!showMonthDropdown)}>
+                                    {MONTHS[parseInt(overviewMonthStr.split('-')[1]) - 1]} {overviewMonthStr.split('-')[0]} <span>▼</span>
+                                </div>
+                                {showMonthDropdown && (
+                                    <div className="custom-dropdown-options">
+                                        {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((m, i) => {
+                                            const val = `${new Date().getFullYear()}-${String(i + 1).padStart(2, '0')}`;
+                                            return (
+                                                <div key={val} className="custom-dropdown-option" onClick={() => { setOverviewMonthStr(val); setShowMonthDropdown(false); }}>
+                                                    {m}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div className="clinic-revenue-chart" style={{ display: 'flex', alignItems: 'stretch', justifyContent: 'flex-start', height: '180px' }}>
@@ -908,13 +921,23 @@ const OverviewMode = () => {
                                 setConfig(c => ({ ...c, followUpDays: val }));
                             }} />
                     </div>
-                    <div style={{ flex: '0 0 200px' }}>
+                    <div style={{ flex: '0 0 200px', position: 'relative' }}>
                         <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px', whiteSpace: 'nowrap' }}>Appointment Mode</label>
-                        <select className="clinic-input" value={config.appointmentMode}
-                            onChange={e => setConfig(c => ({ ...c, appointmentMode: e.target.value }))}>
-                            <option value="token">Token (walk-in queue)</option>
-                            <option value="slot">Time Slot</option>
-                        </select>
+                        <div className="clinic-custom-month-dropdown" style={{ width: '100%' }}>
+                            <div className="custom-dropdown-selected" onClick={() => setShowApptModeDropdown(!showApptModeDropdown)}>
+                                {config.appointmentMode === 'slot' ? 'Time Slot' : 'Token (walk-in queue)'} <span>▼</span>
+                            </div>
+                            {showApptModeDropdown && (
+                                <div className="custom-dropdown-options" style={{ width: '100%' }}>
+                                    <div className="custom-dropdown-option" onClick={() => { setConfig(c => ({ ...c, appointmentMode: 'token' })); setShowApptModeDropdown(false); }}>
+                                        Token (walk-in queue)
+                                    </div>
+                                    <div className="custom-dropdown-option" onClick={() => { setConfig(c => ({ ...c, appointmentMode: 'slot' })); setShowApptModeDropdown(false); }}>
+                                        Time Slot
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <button type="submit" className="clinic-btn-primary" disabled={cfgSaving} style={{ padding: '8px 18px' }}>
@@ -1168,6 +1191,11 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
     const [reportName, setReportName] = useState('');
     const fileInputRef = useRef(null);
     const [reportsTab, setReportsTab] = useState('upload'); // 'upload' | 'view'
+    
+    // Custom dropdown states for mobile
+    const [showGenderDropdown, setShowGenderDropdown] = useState(false);
+    const [showBloodGroupDropdown, setShowBloodGroupDropdown] = useState(false);
+    const [openRelationIdx, setOpenRelationIdx] = useState(null);
 
     const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg({ type: '', text: '' }), 6000); };
 
@@ -1595,7 +1623,8 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                     ) : (
                         <>
                             <h3 style={{ marginBottom: '16px' }}>👤 Register New Patient</h3>
-                            <form onSubmit={handleRegister} className="clinic-form-grid">
+                            {/* Added paddingBottom so native DatePicker popup isn't clipped by the bottom of screen/emulator */}
+                            <form onSubmit={handleRegister} className="clinic-form-grid" style={{ paddingBottom: '120px' }}>
                                 <div className="clinic-form-group">
                                     <label>Full Name *</label>
                                     <input className="clinic-input" placeholder="Patient's full name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required minLength={2} maxLength={50} />
@@ -1627,21 +1656,52 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                                 </div>
                                 <div className="clinic-form-group">
                                     <label>Date of Birth *</label>
-                                    <input className="clinic-input" type="date" value={form.dob} onChange={e => setForm(f => ({ ...f, dob: e.target.value }))} required />
+                                    <MobileDatePicker className="clinic-input" value={form.dob} onChange={e => setForm(f => ({ ...f, dob: e.target.value }))} required placeholder="Select DOB" />
                                 </div>
                                 <div className="clinic-form-group">
                                     <label>Gender *</label>
-                                    <select className="clinic-input" value={form.gender} onChange={e => setForm(f => ({ ...f, gender: e.target.value }))} required>
+                                    <select className="clinic-input hide-on-mobile" value={form.gender} onChange={e => setForm(f => ({ ...f, gender: e.target.value }))} required>
                                         <option value="">Select Gender</option>
                                         <option>Male</option><option>Female</option><option>Other</option>
                                     </select>
+                                    <div className="clinic-custom-month-dropdown show-on-mobile" style={{ width: '100%' }}>
+                                        <div className="custom-dropdown-selected" onClick={() => setShowGenderDropdown(!showGenderDropdown)}>
+                                            {form.gender || 'Select Gender'} <span>▼</span>
+                                        </div>
+                                        {showGenderDropdown && (
+                                            <div className="custom-dropdown-options" style={{ width: '100%' }}>
+                                                {['Male', 'Female', 'Other'].map(g => (
+                                                    <div key={g} className="custom-dropdown-option" onClick={() => { setForm(f => ({ ...f, gender: g })); setShowGenderDropdown(false); }}>
+                                                        {g}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="clinic-form-group">
                                     <label>Blood Group</label>
-                                    <select className="clinic-input" value={form.bloodGroup} onChange={e => setForm(f => ({ ...f, bloodGroup: e.target.value }))}>
+                                    <select className="clinic-input hide-on-mobile" value={form.bloodGroup} onChange={e => setForm(f => ({ ...f, bloodGroup: e.target.value }))}>
                                         <option value=''>Unknown</option>
                                         {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(g => <option key={g}>{g}</option>)}
                                     </select>
+                                    <div className="clinic-custom-month-dropdown show-on-mobile" style={{ width: '100%' }}>
+                                        <div className="custom-dropdown-selected" onClick={() => setShowBloodGroupDropdown(!showBloodGroupDropdown)}>
+                                            {form.bloodGroup || 'Unknown'} <span>▼</span>
+                                        </div>
+                                        {showBloodGroupDropdown && (
+                                            <div className="custom-dropdown-options" style={{ width: '100%' }}>
+                                                <div className="custom-dropdown-option" onClick={() => { setForm(f => ({ ...f, bloodGroup: '' })); setShowBloodGroupDropdown(false); }}>
+                                                    Unknown
+                                                </div>
+                                                {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(g => (
+                                                    <div key={g} className="custom-dropdown-option" onClick={() => { setForm(f => ({ ...f, bloodGroup: g })); setShowBloodGroupDropdown(false); }}>
+                                                        {g}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div style={{ gridColumn: '1/-1', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                                     <div className="clinic-form-group" style={{ flex: '2', minWidth: '200px' }}>
@@ -1685,7 +1745,7 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                                             No contacts added. Click "+ Add Contact" to add a relative or emergency contact.
                                         </div>
                                     ) : (
-                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'visible' }}>
                                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                                                 <thead>
                                                     <tr style={{ background: '#f1f5f9' }}>
@@ -1704,11 +1764,28 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                                                                     style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box' }} />
                                                             </td>
                                                             <td style={{ padding: '5px 8px', borderBottom: '1px solid #f1f5f9' }}>
-                                                                <select value={rel.relation} onChange={e => setForm(f => { const r = [...f.relatives]; r[idx] = { ...r[idx], relation: e.target.value }; return { ...f, relatives: r }; })}
+                                                                <select className="hide-on-mobile" value={rel.relation} onChange={e => setForm(f => { const r = [...f.relatives]; r[idx] = { ...r[idx], relation: e.target.value }; return { ...f, relatives: r }; })}
                                                                     style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: '5px', padding: '5px 7px', fontSize: '12px', boxSizing: 'border-box', background: '#fff' }}>
                                                                     <option value=''>Select...</option>
                                                                     {['Father', 'Mother', 'Spouse', 'Son', 'Daughter', 'Brother', 'Sister', 'Guardian', 'Friend', 'Other'].map(r => <option key={r}>{r}</option>)}
                                                                 </select>
+                                                                <div className="clinic-custom-month-dropdown show-on-mobile" style={{ width: '100%' }}>
+                                                                    <div className="custom-dropdown-selected" style={{ fontSize: '12px', padding: '5px 7px' }} onClick={() => setOpenRelationIdx(openRelationIdx === idx ? null : idx)}>
+                                                                        {rel.relation || 'Select...'} <span>▼</span>
+                                                                    </div>
+                                                                    {openRelationIdx === idx && (
+                                                                        <div className="custom-dropdown-options" style={{ width: '100%' }}>
+                                                                            <div className="custom-dropdown-option" onClick={() => { setForm(f => { const r = [...f.relatives]; r[idx] = { ...r[idx], relation: '' }; return { ...f, relatives: r }; }); setOpenRelationIdx(null); }}>
+                                                                                Select...
+                                                                            </div>
+                                                                            {['Father', 'Mother', 'Spouse', 'Son', 'Daughter', 'Brother', 'Sister', 'Guardian', 'Friend', 'Other'].map(r => (
+                                                                                <div key={r} className="custom-dropdown-option" onClick={() => { setForm(f => { const rels = [...f.relatives]; rels[idx] = { ...rels[idx], relation: r }; return { ...f, relatives: rels }; }); setOpenRelationIdx(null); }}>
+                                                                                    {r}
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </td>
                                                             <td style={{ padding: '5px 8px', borderBottom: '1px solid #f1f5f9' }}>
                                                                 <input value={rel.phone} onChange={e => setForm(f => { const r = [...f.relatives]; r[idx] = { ...r[idx], phone: e.target.value.replace(/\D/g, '').slice(0, 10) }; return { ...f, relatives: r }; })}
@@ -1767,6 +1844,8 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
     const [feeWaived, setFeeWaived] = useState(false);
     const [waiverMessage, setWaiverMessage] = useState('');
     const [bookedSlots, setBookedSlots] = useState([]);
+    const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
+    const [showTimeDropdown, setShowTimeDropdown] = useState(false);
 
     useEffect(() => {
         if (!patient?._id) return;
@@ -1927,14 +2006,14 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
 
                 <div style={{ flex: '1', minWidth: '160px' }}>
                     <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Date *</label>
-                    <input type="date" className="clinic-input" min={getTodayString()} value={form.appointmentDate}
-                        onChange={e => setForm(f => ({ ...f, appointmentDate: e.target.value, appointmentTime: '' }))} required />
+                    <MobileDatePicker className="clinic-input" min={getTodayString()} value={form.appointmentDate}
+                        onChange={e => setForm(f => ({ ...f, appointmentDate: e.target.value, appointmentTime: '' }))} required placeholder="Select Date" />
                 </div>
 
                 {isSlotMode && (
                     <div style={{ flex: '1', minWidth: '120px' }}>
                         <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Time Slot *</label>
-                        <select className="clinic-input" value={form.appointmentTime} onChange={e => setForm(f => ({ ...f, appointmentTime: e.target.value }))} required>
+                        <select className="clinic-input hide-on-mobile" value={form.appointmentTime} onChange={e => setForm(f => ({ ...f, appointmentTime: e.target.value }))} required>
                             <option value="">Select time…</option>
                             {timeSlots.map(t => {
                                 const disabled = isSlotDisabled(t);
@@ -1945,6 +2024,32 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
                                 );
                             })}
                         </select>
+                        <div className="clinic-custom-month-dropdown show-on-mobile" style={{ width: '100%' }}>
+                            <div className="custom-dropdown-selected" onClick={() => setShowTimeDropdown(!showTimeDropdown)}>
+                                {form.appointmentTime || 'Select time…'} <span>▼</span>
+                            </div>
+                            {showTimeDropdown && (
+                                <div className="custom-dropdown-options" style={{ width: '100%', zIndex: 100, maxHeight: '200px', overflowY: 'auto' }}>
+                                    {timeSlots.map(t => {
+                                        const disabled = isSlotDisabled(t);
+                                        return (
+                                            <div 
+                                                key={t} 
+                                                className="custom-dropdown-option" 
+                                                style={{ opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer', background: disabled ? '#f8fafc' : '' }}
+                                                onClick={() => {
+                                                    if (!disabled) {
+                                                        setForm(f => ({ ...f, appointmentTime: t })); 
+                                                        setShowTimeDropdown(false);
+                                                    }
+                                                }}>
+                                                {t} {disabled ? ' (Unavailable)' : ''}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
 
@@ -1960,7 +2065,7 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
                     <label style={{ fontSize: '11px', color: fee > 0 ? '#dc2626' : '#64748b', display: 'block', marginBottom: '3px', fontWeight: fee > 0 ? 700 : 400 }}>
                         Payment Method {fee > 0 ? '*' : ''}
                     </label>
-                    <select className="clinic-input" value={form.paymentMethod}
+                    <select className="clinic-input hide-on-mobile" value={form.paymentMethod}
                         disabled={feeWaived}
                         onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value, upiScreenshot: null, cardRef: '' }))}
                         style={{ borderColor: fee > 0 && !form.paymentMethod ? '#dc2626' : '' }}>
@@ -1969,6 +2074,28 @@ const BookTokenForm = ({ patient, onBook, onCancel, flash, mode = 'token', defau
                         <option value="Card">Card</option>
                         {feeWaived && <option value="Free">Free</option>}
                     </select>
+                    
+                    <div className="clinic-custom-month-dropdown show-on-mobile" style={{ width: '100%' }}>
+                        <div className="custom-dropdown-selected" 
+                            onClick={() => !feeWaived && setShowPaymentDropdown(!showPaymentDropdown)}
+                            style={{ 
+                                borderColor: fee > 0 && !form.paymentMethod ? '#dc2626' : '',
+                                background: feeWaived ? '#f1f5f9' : '#fff',
+                                cursor: feeWaived ? 'not-allowed' : 'pointer',
+                                opacity: feeWaived ? 0.7 : 1
+                            }}>
+                            {form.paymentMethod || 'Select Payment'} <span>▼</span>
+                        </div>
+                        {showPaymentDropdown && !feeWaived && (
+                            <div className="custom-dropdown-options" style={{ width: '100%', zIndex: 100 }}>
+                                {['Cash', 'UPI', 'Card'].map(m => (
+                                    <div key={m} className="custom-dropdown-option" onClick={() => { setForm(f => ({ ...f, paymentMethod: m, upiScreenshot: null, cardRef: '' })); setShowPaymentDropdown(false); }}>
+                                        {m}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* UPI screenshot upload */}
@@ -2021,6 +2148,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected, setPendingDownloa
     const [showQuickReg, setShowQuickReg] = useState(false);
     const [qrForm, setQrForm] = useState({ name: '', phone: '', email: '', age: '', gender: 'Male' });
     const [qrSaving, setQrSaving] = useState(false);
+    const [showQRGender, setShowQRGender] = useState(false);
 
     const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg({ type: '', text: '' }), 4000); };
     const today = todayStr();
@@ -2167,9 +2295,24 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected, setPendingDownloa
                             </div>
                             <div style={{ flex: '1', minWidth: '100px' }}>
                                 <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>Gender</label>
-                                <select className="clinic-input" value={qrForm.gender} onChange={e => setQrForm(f => ({ ...f, gender: e.target.value }))}>
+                                <select className="clinic-input hide-on-mobile" value={qrForm.gender} onChange={e => setQrForm(f => ({ ...f, gender: e.target.value }))}>
                                     <option>Male</option><option>Female</option><option>Other</option>
                                 </select>
+                                
+                                <div className="clinic-custom-month-dropdown show-on-mobile" style={{ width: '100%' }}>
+                                    <div className="custom-dropdown-selected" onClick={() => setShowQRGender(!showQRGender)}>
+                                        {qrForm.gender || 'Select'} <span>▼</span>
+                                    </div>
+                                    {showQRGender && (
+                                        <div className="custom-dropdown-options" style={{ width: '100%', zIndex: 100 }}>
+                                            {['Male', 'Female', 'Other'].map(g => (
+                                                <div key={g} className="custom-dropdown-option" onClick={() => { setQrForm(f => ({ ...f, gender: g })); setShowQRGender(false); }}>
+                                                    {g}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <div style={{ display: 'flex', gap: '6px' }}>
                                 <button type="submit" className="clinic-btn-primary" disabled={qrSaving} style={{ whiteSpace: 'nowrap' }}>
@@ -2875,6 +3018,8 @@ const PharmacyMode = () => {
     const [addForm, setAddForm] = useState({ name: '', category: 'General', unit: 'Tablets' });
     const [adding, setAdding] = useState(false);
     const [search, setSearch] = useState('');
+    const [showCatDropdown, setShowCatDropdown] = useState(false);
+    const [showUnitDropdown, setShowUnitDropdown] = useState(false);
     const [msg, setMsg] = useState({ type: '', text: '' });
 
     const flash = (type, text) => { setMsg({ type, text }); setTimeout(() => setMsg({ type: '', text: '' }), 3000); };
@@ -2996,15 +3141,43 @@ const PharmacyMode = () => {
                                 </div>
                                 <div className="clinic-form-group">
                                     <label>Category</label>
-                                    <select className="clinic-input" value={addForm.category} onChange={e => setAddForm(f => ({ ...f, category: e.target.value }))}>
+                                    <select className="clinic-input hide-on-mobile" value={addForm.category} onChange={e => setAddForm(f => ({ ...f, category: e.target.value }))}>
                                         {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                                     </select>
+                                    <div className="clinic-custom-month-dropdown show-on-mobile" style={{ width: '100%' }}>
+                                        <div className="custom-dropdown-selected" onClick={() => setShowCatDropdown(!showCatDropdown)}>
+                                            {addForm.category || 'Select Category'} <span>▼</span>
+                                        </div>
+                                        {showCatDropdown && (
+                                            <div className="custom-dropdown-options" style={{ width: '100%', zIndex: 100, maxHeight: '200px', overflowY: 'auto' }}>
+                                                {CATEGORIES.map(c => (
+                                                    <div key={c} className="custom-dropdown-option" onClick={() => { setAddForm(f => ({ ...f, category: c })); setShowCatDropdown(false); }}>
+                                                        {c}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="clinic-form-group">
                                     <label>Unit / Form</label>
-                                    <select className="clinic-input" value={addForm.unit} onChange={e => setAddForm(f => ({ ...f, unit: e.target.value }))}>
+                                    <select className="clinic-input hide-on-mobile" value={addForm.unit} onChange={e => setAddForm(f => ({ ...f, unit: e.target.value }))}>
                                         {UNITS.map(u => <option key={u}>{u}</option>)}
                                     </select>
+                                    <div className="clinic-custom-month-dropdown show-on-mobile" style={{ width: '100%' }}>
+                                        <div className="custom-dropdown-selected" onClick={() => setShowUnitDropdown(!showUnitDropdown)}>
+                                            {addForm.unit || 'Select Type'} <span>▼</span>
+                                        </div>
+                                        {showUnitDropdown && (
+                                            <div className="custom-dropdown-options" style={{ width: '100%', zIndex: 100, maxHeight: '200px', overflowY: 'auto' }}>
+                                                {UNITS.map(u => (
+                                                    <div key={u} className="custom-dropdown-option" onClick={() => { setAddForm(f => ({ ...f, unit: u })); setShowUnitDropdown(false); }}>
+                                                        {u}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '10px', alignItems: 'center' }}>
                                     <button type="submit" className="clinic-btn-primary" disabled={adding}>
@@ -3045,6 +3218,7 @@ const TreatmentPlanMode = () => {
 
     const [payModal, setPayModal] = useState(null);
     const [payInput, setPayInput] = useState({ amountPaid: '', paymentMethod: 'Cash', notes: '', upiId: 'payments@upi', upiRef: '', confirmedReceipt: false, shakeAmount: false });
+    const [showPayMethodDropdown, setShowPayMethodDropdown] = useState(false);
 
     const [rescheduleModal, setRescheduleModal] = useState(null);
     const [rescheduleInput, setRescheduleInput] = useState({ newDate: '', newTime: '', remarks: '' });
@@ -3412,7 +3586,7 @@ const TreatmentPlanMode = () => {
 
                     <div className="clinic-form-group">
                         <label>Start Date *</label>
-                        <input className="clinic-input" type="date" 
+                        <MobileDatePicker className="clinic-input" 
                             min={new Date().toISOString().split('T')[0]}
                             max={new Date(new Date().setMonth(new Date().getMonth() + 6)).toISOString().split('T')[0]}
                             value={form.startDate} 
@@ -3461,9 +3635,9 @@ const TreatmentPlanMode = () => {
                                         <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
                                             <td style={{ padding: '6px 10px', borderBottom: '1px solid #f1f5f9', fontWeight: '700', color: '#6366f1', width: '6%' }}>{v.visitNumber}</td>
                                             <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9', width: '22%' }}>
-                                                <input type="date" value={v.scheduledDate}
+                                                <MobileDatePicker value={v.scheduledDate}
                                                     onChange={e => setVisits(p => { const a = [...p]; a[idx] = { ...a[idx], scheduledDate: e.target.value }; return a; })}
-                                                    style={{ border: '1px solid #e2e8f0', borderRadius: '5px', padding: '6px 8px', fontSize: '12px', width: '100%', boxSizing: 'border-box', minHeight: '32px' }} />
+                                                    style={{ border: '1px solid #e2e8f0', borderRadius: '5px', padding: '6px 8px', fontSize: '12px', width: '100%', boxSizing: 'border-box', minHeight: '32px', margin: 0, height: '100%' }} />
                                             </td>
                                             <td style={{ padding: '6px 8px', borderBottom: '1px solid #f1f5f9', width: '18%' }}>
                                                 <input type="time" value={v.scheduledTime}
@@ -3562,7 +3736,7 @@ const TreatmentPlanMode = () => {
 
                     {/* Visits Table */}
                     <h4 style={{ margin: '0 0 12px', color: '#0f172a' }}>Visit Schedule</h4>
-                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '4px' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                             <thead>
                                 <tr style={{ background: '#f1f5f9' }}>
@@ -3751,11 +3925,11 @@ const TreatmentPlanMode = () => {
                             {/* Payment Date Field */}
                             <div className="clinic-form-group" style={{ marginBottom: '16px' }}>
                                 <label>Payment Date *</label>
-                                <input className="clinic-input" type="date" 
+                                <MobileDatePicker className="clinic-input" 
                                     max={todayStr()}
                                     min={todayStr()}
                                     value={todayStr()}
-                                    readOnly
+                                    disabled={true}
                                     style={{ backgroundColor: '#f8fafc', color: '#64748b', cursor: 'not-allowed', borderColor: '#cbd5e1' }}
                                 />
                             </div>
@@ -3763,10 +3937,24 @@ const TreatmentPlanMode = () => {
                             {/* Payment Method — Cash & UPI only */}
                             <div className="clinic-form-group" style={{ marginBottom: '16px' }}>
                                 <label>Payment Method *</label>
-                                <select className="clinic-input" value={payInput.paymentMethod} onChange={e => setPayInput(p => ({ ...p, paymentMethod: e.target.value, upiId: '', upiRef: '', confirmedReceipt: false }))}>
+                                <select className="clinic-input hide-on-mobile" value={payInput.paymentMethod} onChange={e => setPayInput(p => ({ ...p, paymentMethod: e.target.value, upiId: '', upiRef: '', confirmedReceipt: false }))}>
                                     <option>Cash</option>
                                     <option>UPI</option>
                                 </select>
+                                <div className="clinic-custom-month-dropdown show-on-mobile" style={{ width: '100%' }}>
+                                    <div className="custom-dropdown-selected" onClick={() => setShowPayMethodDropdown(!showPayMethodDropdown)}>
+                                        {payInput.paymentMethod || 'Select Payment'} <span>▼</span>
+                                    </div>
+                                    {showPayMethodDropdown && (
+                                        <div className="custom-dropdown-options" style={{ width: '100%', zIndex: 100 }}>
+                                            {['Cash', 'UPI'].map(m => (
+                                                <div key={m} className="custom-dropdown-option" onClick={() => { setPayInput(p => ({ ...p, paymentMethod: m, upiId: '', upiRef: '', confirmedReceipt: false })); setShowPayMethodDropdown(false); }}>
+                                                    {m}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             
                             {/* UPI Section */}
@@ -3869,9 +4057,8 @@ const TreatmentPlanMode = () => {
                             </div>
                             <div className="clinic-form-group" style={{ marginBottom: '12px' }}>
                                 <label>New Visit Date *</label>
-                                <input
+                                <MobileDatePicker
                                     className="clinic-input"
-                                    type="date"
                                     min={todayStr()}
                                     required
                                     value={rescheduleInput.newDate}

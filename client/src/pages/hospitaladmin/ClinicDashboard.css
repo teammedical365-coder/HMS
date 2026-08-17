@@ -17,7 +17,7 @@
     margin-bottom: 20px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.07);
     border: 1px solid #e2e8f0;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 
 .switcher-label {
@@ -27,6 +27,20 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-right: 4px;
+}
+.switcher-buttons {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    flex-grow: 1;
+}
+.switcher-buttons::-webkit-scrollbar {
+    display: none;
 }
 
 .switcher-btn {
@@ -42,6 +56,8 @@
     font-weight: 600;
     cursor: pointer;
     transition: all 0.15s;
+    white-space: nowrap; /* Keep text on one line */
+    flex-shrink: 0; /* Prevent squishing */
 }
 .switcher-btn:hover { border-color: #c7d2fe; background: #eef2ff; color: #6366f1; }
 .switcher-btn.active { box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
@@ -496,6 +512,59 @@
     color: #334155 !important;
 }
 
+/* ── Custom Month Dropdown ── */
+
+.show-on-mobile { display: none !important; }
+
+@media (max-width: 1024px) {
+    .hide-on-mobile { display: none !important; }
+    .show-on-mobile { display: block !important; }
+}
+
+.clinic-custom-month-dropdown {
+    position: relative;
+    width: auto;
+}
+.custom-dropdown-selected {
+    padding: 6px 12px;
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 100px;
+}
+.custom-dropdown-options {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 50; /* Increased to ensure it goes above other elements */
+    max-height: 120px; /* ~3 items */
+    overflow-y: auto;
+    min-width: 100%;
+    white-space: nowrap;
+}
+.custom-dropdown-option {
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #1e293b;
+    border-bottom: 1px solid #f1f5f9;
+}
+.custom-dropdown-option:last-child { border-bottom: none; }
+.custom-dropdown-option:hover { background: #f8fafc; color: #6366f1; }
+
 /* ═══════════════════════════════════════════════
    MOBILE-ONLY RESPONSIVE STYLES
    Only applies to screens ≤ 480px.
@@ -511,32 +580,44 @@
 
     /* ── Global mobile overflow fix ── */
     .clinic-dashboard {
-        overflow-x: hidden;
         max-width: 100vw;
     }
 
-    .clinic-mode-content {
-        overflow-x: hidden;
-    }
+
 
     /* ── 1. Mode Switcher — horizontal scroll ── */
     .clinic-role-switcher {
         flex-wrap: nowrap !important;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        -ms-overflow-style: none;
         padding: 10px 12px;
         gap: 6px;
-    }
-    .clinic-role-switcher::-webkit-scrollbar {
-        display: none;
+        display: flex;
+        align-items: center;
     }
 
     .switcher-label {
         flex-shrink: 0;
         font-size: 11px;
         margin-right: 2px;
+        /* Reset from sticky, just flow normally */
+        position: static;
+        background: transparent;
+        padding: 0;
+        display: block;
+    }
+
+    .switcher-buttons {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        flex-grow: 1;
+        flex-wrap: nowrap !important;
+    }
+    
+    .switcher-buttons::-webkit-scrollbar {
+        display: none;
     }
 
     .switcher-btn {
@@ -563,7 +644,7 @@
     .clinic-kpi-grid .clinic-kpi-item-5,
     .clinic-kpi-grid .clinic-kpi-item-6,
     .clinic-kpi-grid .clinic-kpi-item-7 {
-        display: none;
+        display: none !important;
     }
 
     /* When expanded, show all cards */
@@ -572,7 +653,7 @@
     .clinic-kpi-grid.clinic-kpi-expanded .clinic-kpi-item-5,
     .clinic-kpi-grid.clinic-kpi-expanded .clinic-kpi-item-6,
     .clinic-kpi-grid.clinic-kpi-expanded .clinic-kpi-item-7 {
-        display: flex;
+        display: flex !important;
     }
 
     /* KPI card sizing for mobile */
@@ -610,7 +691,7 @@
     .clinic-card {
         padding: 14px 10px;
         margin-bottom: 12px !important;
-        overflow-x: hidden;
+        /* Removed overflow-x: hidden to prevent absolute dropdown clipping */
     }
 
     /* Revenue header — stack vertically on mobile */
@@ -622,10 +703,16 @@
 
     /* Revenue controls — stack vertically */
     .clinic-revenue-controls {
-        flex-direction: column !important;
-        align-items: flex-start !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        justify-content: space-between !important;
+        align-items: center !important;
         width: 100%;
         gap: 8px !important;
+    }
+
+    .clinic-month-select-container {
+        margin-left: auto;
     }
 
     /* Revenue legend — wrap nicely */
@@ -637,8 +724,7 @@
 
     /* Month dropdown on mobile — full width */
     .clinic-month-select {
-        width: 100% !important;
-        max-width: 100%;
+        width: auto !important;
         font-size: 13px !important;
     }
 
