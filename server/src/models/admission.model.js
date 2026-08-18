@@ -10,6 +10,7 @@ const admissionSchema = new mongoose.Schema({
     status: { type: String, enum: ['Admitted', 'Discharged'], default: 'Admitted' },
     ward: String,
     bedNumber: String,
+    bedId: { type: mongoose.Schema.Types.ObjectId, ref: 'Bed' },
     selectedFacilities: [{
         facilityName: { type: String, required: true },
         pricePerDay: { type: Number, required: true },

@@ -159,6 +159,67 @@ const paymentTransactionSchema = new mongoose.Schema({
     addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
+const bedSchema = new mongoose.Schema({
+    hospitalId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    bedNumber: { type: String, required: true, trim: true },
+    ward: { type: String, required: true, trim: true },
+    bedType: { type: String, enum: ['General', 'ICU', 'Private', 'Semi-Private', 'Other'], default: 'General' },
+    status: { type: String, enum: ['AVAILABLE', 'OCCUPIED', 'MAINTENANCE'], default: 'AVAILABLE' },
+    currentPatient: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    currentAdmission: { type: mongoose.Schema.Types.ObjectId, ref: 'Admission', default: null }
+}, { timestamps: true });
+
+const otRoomSchema = new mongoose.Schema({
+    hospitalId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    name: { type: String, required: true, trim: true },
+    status: { type: String, enum: ['Available', 'Occupied', 'Maintenance'], default: 'Available' },
+    notes: { type: String, default: '' }
+}, { timestamps: true });
+
+const surgeryPlanSchema = new mongoose.Schema({
+    hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', required: true, index: true },
+    patientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    doctorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    surgeonId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment' },
+    referralId: { type: mongoose.Schema.Types.ObjectId, ref: 'Referral' },
+    referringDoctorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    surgery: { type: String, required: true },
+    diagnosis: { type: String },
+    preferredDate: { type: Date, required: true },
+    preferredTime: { type: String, required: true },
+    otRoomId: { type: mongoose.Schema.Types.ObjectId, ref: 'OTRoom' },
+    surgeryDate: { type: Date },
+    startTime: { type: String },
+    endTime: { type: String },
+    admissionRequired: { type: Boolean, default: false },
+    admissionDate: { type: Date },
+    preOpRequired: { type: Boolean, default: false },
+    notes: { type: String },
+    status: { type: String, enum: ['PLANNED', 'SCHEDULED', 'ADMITTED', 'PRE_OP', 'READY_FOR_OT', 'IN_OT', 'SURGERY_COMPLETED', 'POST_OP', 'COMPLETED', 'CANCELLED'], default: 'PLANNED' },
+    actualStartTime: { type: Date },
+    actualEndTime: { type: Date }
+}, { timestamps: true });
+
+const referralSchema = new mongoose.Schema({
+    hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', required: true, index: true },
+    patientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment' },
+    referringDoctorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    referredToDoctorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    reason: { type: String, required: true },
+    notes: { type: String },
+    referralDate: { type: Date, default: Date.now },
+    status: {
+        type: String,
+        enum: ['REFERRED', 'ACCEPTED', 'REJECTED', 'NOT_REQUIRED', 'SURGERY_PLANNED'],
+        default: 'REFERRED'
+    },
+    surgeryPlanId: { type: mongoose.Schema.Types.ObjectId, ref: 'SurgeryPlan' },
+    reviewNotes: { type: String },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+}, { timestamps: true });
+
 // ─── Model Factory ────────────────────────────────────────────────────────────
 
 /**
@@ -166,7 +227,7 @@ const paymentTransactionSchema = new mongoose.Schema({
  * Models are cached on the connection object itself to avoid re-registering.
  *
  * @param {mongoose.Connection} tenantDb
- * @returns {{ User, Appointment, LabReport, PharmacyOrder, FacilityCharge, Role, Admission, PaymentTransaction }}
+ * @returns {{ User, Appointment, LabReport, PharmacyOrder, FacilityCharge, Role, Admission, PaymentTransaction, Bed, OTRoom, SurgeryPlan, Referral }}
  */
 function getTenantModels(tenantDb) {
     if (!tenantDb) {
@@ -191,6 +252,10 @@ function getTenantModels(tenantDb) {
         Role: model('Role', roleSchema),
         Admission: model('Admission', admissionSchema),
         PaymentTransaction: model('PaymentTransaction', paymentTransactionSchema),
+        Bed: model('Bed', bedSchema),
+        OTRoom: model('OTRoom', otRoomSchema),
+        SurgeryPlan: model('SurgeryPlan', surgeryPlanSchema),
+        Referral: model('Referral', referralSchema),
     };
 }
 

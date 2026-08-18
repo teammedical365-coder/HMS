@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doctorAPI, uploadAPI, reportAPI } from '../../utils/api';
+import { doctorAPI, uploadAPI, reportAPI, referralAPI } from '../../utils/api';
 
 const Patient = () => {
     const navigate = useNavigate();
@@ -19,6 +19,7 @@ const Patient = () => {
         chiefComplaint: '', notes: ''
     });
     const [saving, setSaving] = useState(false);
+    const [myReferrals, setMyReferrals] = useState([]);
 
     useEffect(() => {
         fetchAllAppointments();
@@ -331,6 +332,70 @@ const Patient = () => {
                     </button>
                 </div>
             </div>
+
+            {/* ─── REFERRALS TAB ─── */}
+            {activeTab === 'referrals' && (
+                <div className="referrals-list" style={{ padding: '0' }}>
+                    {myReferrals.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#ffffff', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>
+                            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>📋</div>
+                            <h3 style={{ color: '#475569', fontWeight: '700', margin: '0 0 8px' }}>No Referrals Yet</h3>
+                            <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>When other doctors refer patients to you, they will appear here.</p>
+                        </div>
+                    ) : (
+                        <div style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                            <div style={{ padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontWeight: '700', color: '#1e293b' }}>
+                                🔄 Surgery Referrals Assigned to You
+                            </div>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                    <tr style={{ background: '#f1f5f9' }}>
+                                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Patient</th>
+                                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Referred By</th>
+                                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Reason</th>
+                                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Date</th>
+                                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Status</th>
+                                        <th style={{ padding: '10px 16px', textAlign: 'center', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {myReferrals.map(ref => (
+                                        <tr key={ref._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '12px 16px' }}>
+                                                <div style={{ fontWeight: '600', color: '#0f172a', fontSize: '0.88rem' }}>{ref.patientId?.name || 'Unknown'}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>MRN: {ref.patientId?.patientId || ref.patientId?.mrn || '-'}</div>
+                                            </td>
+                                            <td style={{ padding: '12px 16px', color: '#334155', fontSize: '0.85rem' }}>{ref.referringDoctorId?.name || '-'}</td>
+                                            <td style={{ padding: '12px 16px', color: '#334155', fontSize: '0.85rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ref.reason}</td>
+                                            <td style={{ padding: '12px 16px', color: '#64748b', fontSize: '0.82rem' }}>{new Date(ref.referralDate).toLocaleDateString()}</td>
+                                            <td style={{ padding: '12px 16px' }}>
+                                                <span style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: '700', background: ref.status === 'REFERRED' ? '#fef3c7' : ref.status === 'SURGERY_PLANNED' ? '#dcfce7' : ref.status === 'ACCEPTED' ? '#dbeafe' : '#fee2e2', color: ref.status === 'REFERRED' ? '#92400e' : ref.status === 'SURGERY_PLANNED' ? '#166534' : ref.status === 'ACCEPTED' ? '#1e40af' : '#991b1b' }}>
+                                                    {ref.status}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                                                {ref.status === 'REFERRED' ? (
+                                                    <button
+                                                        onClick={() => {
+                                                            const pid = ref.patientId?.patientId || ref.patientId?.mrn || ref.patientId?._id;
+                                                            navigate('/doctor/patient/' + pid, { state: { referralId: ref._id } });
+                                                        }}
+                                                        style={{ padding: '6px 14px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.78rem' }}
+                                                    >
+                                                        Review
+                                                    </button>
+                                                ) : (
+                                                    <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>—</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* ─── CONTENT ─── */}
             <div style={{ ...S.content, padding: 0 }}>

@@ -80,6 +80,13 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
                 { label: 'Departments', path: '/pharmacy/departments', icon: <FiGrid /> },
             ];
         }
+
+        const roleClean = role.replace(/\s+/g, '');
+        if (roleClean === 'otmanager' || roleClean === 'otstaff') {
+            return [
+                { label: 'OT Dashboard', path: '/ot-dashboard', icon: <FiActivity /> },
+            ];
+        }
         if (role === 'accountant') {
             return [
                 { label: 'Finance Dashboard', path: '/accountant/dashboard', icon: <FiPieChart /> },

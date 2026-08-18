@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { doctorAPI, labTestAPI, questionLibraryAPI, hospitalAPI, patientAPI, receptionAPI } from '../../utils/api';
+import { doctorAPI, labTestAPI, questionLibraryAPI, hospitalAPI, patientAPI, receptionAPI, otAPI, adminEntitiesAPI, referralAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './DoctorPatientDetails.css';
@@ -63,6 +63,22 @@ const DoctorPatientDetails = () => {
     // Modal States
     const [showPrescribeModal, setShowPrescribeModal] = useState(false);
     const [pendingDownload, setPendingDownload] = useState(null);
+
+    // Surgery Plan States
+    const [operationRequired, setOperationRequired] = useState(false);
+    const [showSurgeryPlanModal, setShowSurgeryPlanModal] = useState(false);
+    const [surgeonsList, setSurgeonsList] = useState([]);
+    const [surgeryPlanData, setSurgeryPlanData] = useState({
+        surgery: '', diagnosis: '', surgeonId: '', preferredDate: '', preferredTime: '', admissionRequired: false, admissionDate: '', preOpRequired: false, notes: ''
+    });
+
+
+    // Referral States
+    const [showReferralModal, setShowReferralModal] = useState(false);
+    const [referralData, setReferralData] = useState({ referredToDoctorId: '', reason: '', notes: '' });
+    const [patientReferrals, setPatientReferrals] = useState([]);
+    const [showReferralReviewModal, setShowReferralReviewModal] = useState(false);
+    const [activeReferralForReview, setActiveReferralForReview] = useState(null);
 
     // Tab State for Left Panel
     const [activeTab, setActiveTab] = useState('overview');
@@ -234,7 +250,49 @@ const DoctorPatientDetails = () => {
             } catch (err) { /* ignore */ }
         };
         fetchHospital();
-    }, [appointmentId]);
+
+        // Fetch surgeons list
+        const fetchSurgeons = async () => {
+            try {
+                const res = await publicAPI.getDoctors();
+                let docs = (res.doctors || res.data || []).slice();
+                const currentDocId = user?._id || user?.id;
+                if (currentDocId && !docs.some(d => (d.userId?._id || d.userId || d._id) === currentDocId)) {
+                    docs.unshift({
+                        _id: currentDocId,
+                        userId: currentDocId,
+                        name: user.name || 'Current Doctor',
+                        specialty: user.specialty || ''
+                    });
+                }
+                setSurgeonsList(docs);
+            } catch (err) {
+                console.error("fetchSurgeons error:", err);
+                const currentDocId = user?._id || user?.id;
+                if (currentDocId) {
+                    setSurgeonsList([{
+                        _id: currentDocId,
+                        userId: currentDocId,
+                        name: user.name || 'Current Doctor',
+                        specialty: user.specialty || ''
+                    }]);
+                }
+            }
+        };
+        fetchSurgeons();
+    }, [appointmentId, user]);
+
+    useEffect(() => {
+        const fetchPatientReferrals = async () => {
+            try {
+                const pid = appointment?.clinicPatientId?._id || appointment?.userId?._id || appointment?.patientId;
+                if (!pid) return;
+                const res = await referralAPI.getPatientReferrals(pid);
+                if (res.success) setPatientReferrals(res.referrals || []);
+            } catch (err) { /* ignore */ }
+        };
+        if (appointment) fetchPatientReferrals();
+    }, [appointment]);
 
     const handleIntakeChange = (e) => {
         const { name, value } = e.target;
@@ -255,6 +313,80 @@ const DoctorPatientDetails = () => {
     const handleSessionChange = (e) => {
         if (isLocked) return;
         setSessionData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    
+
+    const handleCreateReferral = async (e) => {
+        e.preventDefault();
+        try {
+            const dataToSubmit = {
+                patientId: appointment?.userId?._id || appointment?.patientId || intakeData?.userId,
+                appointmentId: appointment?._id,
+                referredToDoctorId: referralData.referredToDoctorId,
+                reason: referralData.reason,
+                notes: referralData.notes
+            };
+            const res = await referralAPI.create(dataToSubmit);
+            if (res.success) {
+                alert('Referral created successfully!');
+                setShowReferralModal(false);
+                setReferralData({ referredToDoctorId: '', reason: '', notes: '' });
+                // Refresh referrals list
+                const pid = appointment?.userId?._id || appointment?.patientId;
+                if (pid) {
+                    const refRes = await referralAPI.getPatientReferrals(pid);
+                    if (refRes.success) setPatientReferrals(refRes.referrals || []);
+                }
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'Error creating referral');
+        }
+    };
+
+    const handleReviewReferral = async (referralId, status, reviewNotes) => {
+        try {
+            const res = await referralAPI.review(referralId, { status, reviewNotes });
+            if (res.success) {
+                alert(`Referral ${status.toLowerCase()} successfully!`);
+                setShowReferralReviewModal(false);
+                setActiveReferralForReview(null);
+                // Refresh
+                const pid = appointment?.userId?._id || appointment?.patientId;
+                if (pid) {
+                    const refRes = await referralAPI.getPatientReferrals(pid);
+                    if (refRes.success) setPatientReferrals(refRes.referrals || []);
+                }
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'Error reviewing referral');
+        }
+    };
+
+    const handleCreateSurgeryPlan = async (e) => {
+        e.preventDefault();
+        try {
+            const dataToSubmit = {
+                ...surgeryPlanData,
+                patientId: appointment?.userId?._id || appointment?.patientId || intakeData?.userId,
+                appointmentId: appointment?._id,
+                referralId: surgeryPlanData.referralId || undefined,
+                referringDoctorId: surgeryPlanData.referringDoctorId || undefined
+            };
+            const res = await otAPI.createSurgeryPlan(dataToSubmit);
+            if(res.success) {
+                alert('Surgery Plan created successfully!');
+                setShowSurgeryPlanModal(false);
+                setOperationRequired(false);
+                // Reset form
+                setSurgeryPlanData({
+                    surgery: '', diagnosis: '', surgeonId: '', preferredDate: '', preferredTime: '', admissionRequired: false, admissionDate: '', preOpRequired: false, notes: ''
+                });
+                // Re-fetch patient history if needed, but not strictly necessary here.
+            }
+        } catch(err) {
+            alert(err.response?.data?.message || 'Error creating surgery plan');
+        }
     };
 
     const handleSaveProfile = async () => {
@@ -1297,6 +1429,74 @@ const DoctorPatientDetails = () => {
                                 />
                             </div>
 
+                            {!isLocked && (
+                                <div className="dpd-session-field" style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '16px' }}>
+                                    {/* Referral Banner for referred doctor */}
+                    {patientReferrals.filter(r => r.status === 'REFERRED' && (r.referredToDoctorId?._id === user?._id || r.referredToDoctorId === user?._id)).length > 0 && (
+                        <div className="referral-banner" style={{ background: 'linear-gradient(135deg, #fef3c7, #fde68a)', padding: '14px', borderRadius: '12px', border: '2px solid #f59e0b', marginBottom: '16px' }}>
+                            <div style={{ fontWeight: '700', color: '#92400e', fontSize: '14px', marginBottom: '8px' }}>📋 Surgery Referral Pending</div>
+                            {patientReferrals.filter(r => r.status === 'REFERRED' && (r.referredToDoctorId?._id === user?._id || r.referredToDoctorId === user?._id)).map(ref => (
+                                <div key={ref._id} style={{ marginBottom: '8px' }}>
+                                    <div style={{ fontSize: '13px', color: '#78350f' }}>
+                                        <strong>From:</strong> {ref.referringDoctorId?.name || 'Unknown'} &nbsp;|&nbsp;
+                                        <strong>Reason:</strong> {ref.reason}
+                                    </div>
+                                    <button 
+                                        onClick={() => { setActiveReferralForReview(ref); setShowReferralReviewModal(true); }}
+                                        style={{ marginTop: '6px', padding: '6px 16px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
+                                    >
+                                        Review Referral
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <label style={{ display: 'block', marginBottom: '12px', color: '#1e293b', fontWeight: 'bold' }}>🔪 Operation Required?</label>
+                                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                            <input type="radio" name="operationRequired" checked={!operationRequired} onChange={() => setOperationRequired(false)} />
+                                            <span>No</span>
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                            <input type="radio" name="operationRequired" checked={operationRequired} onChange={() => setOperationRequired(true)} />
+                                            <span>Yes</span>
+                                        </label>
+                                    </div>
+                                    {operationRequired && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => {
+                                                    setSurgeryPlanData(prev => ({ 
+                                                        ...prev, 
+                                                        diagnosis: sessionData.diagnosis || prev.diagnosis || '',
+                                                        surgeonId: prev.surgeonId || user?._id || user?.id || ''
+                                                    }));
+                                                    setShowSurgeryPlanModal(true);
+                                                }}
+                                                style={{ padding: '12px 20px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', width: '100%', fontSize: '14px', boxShadow: '0 2px 4px rgba(37,99,235,0.2)' }}
+                                            >
+                                                + Create Surgery Plan (Self / Direct)
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => {
+                                                    setReferralData(prev => ({ 
+                                                        ...prev, 
+                                                        reason: sessionData.diagnosis || ''
+                                                    }));
+                                                    setShowReferralModal(true);
+                                                }}
+                                                style={{ padding: '12px 20px', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', width: '100%', fontSize: '14px', boxShadow: '0 2px 4px rgba(124,58,237,0.2)' }}
+                                            >
+                                                🔄 Refer for Surgery (To Another Doctor)
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="dpd-session-field">
                                 {!isLocked && (
                                     <button
@@ -1543,6 +1743,203 @@ const DoctorPatientDetails = () => {
                     </div>
                 </div>
             )}
+
+            {/* ====== SURGERY PLAN MODAL ====== */}
+            {!isJrDoctor && showSurgeryPlanModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', width: '600px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
+                            <h3 style={{ margin: 0, color: '#0f172a', fontSize: '1.4rem', fontWeight: '800' }}>🔪 Create Surgery Plan</h3>
+                            <button onClick={() => setShowSurgeryPlanModal(false)} style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '16px', cursor: 'pointer', color: '#475569' }}>✕</button>
+                        </div>
+                        
+                        <form onSubmit={handleCreateSurgeryPlan} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', color: '#334155' }}>
+                                <strong>Patient:</strong> {intakeData?.name || appointment?.userId?.name || appointment?.patientId || 'N/A'} <br/>
+                                <strong>MRN / Age / Gender:</strong> {intakeData?.patientUid || appointment?.userId?.patientId || '-'} / {intakeData?.age || '-'} / {intakeData?.gender || '-'}
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Surgery / Procedure *</label>
+                                <input required value={surgeryPlanData.surgery} onChange={e => setSurgeryPlanData(prev => ({...prev, surgery: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Diagnosis / Reason</label>
+                                <input value={surgeryPlanData.diagnosis} onChange={e => setSurgeryPlanData(prev => ({...prev, diagnosis: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Surgeon *</label>
+                                <select required value={surgeryPlanData.surgeonId} onChange={e => setSurgeryPlanData(prev => ({...prev, surgeonId: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', background: '#fff' }}>
+                                    <option value="">-- Select Surgeon --</option>
+                                    {surgeonsList.map(s => {
+                                        const id = s.userId?._id || s.userId || s._id;
+                                        const docName = s.name || s.userId?.name || 'Doctor';
+                                        return (
+                                            <option key={s._id || id} value={id}>Dr. {docName.replace(/^Dr\.?\s*/i, '')} {s.specialty ? `(${s.specialty})` : ''}</option>
+                                        );
+                                    })}
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '16px' }}>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Preferred Date *</label>
+                                    <input type="date" required min={new Date().toISOString().split('T')[0]} value={surgeryPlanData.preferredDate} onChange={e => setSurgeryPlanData(prev => ({...prev, preferredDate: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Preferred Time *</label>
+                                    <input type="time" required value={surgeryPlanData.preferredTime} onChange={e => setSurgeryPlanData(prev => ({...prev, preferredTime: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600', fontSize: '13px', color: '#475569', cursor: 'pointer' }}>
+                                    <input type="checkbox" checked={surgeryPlanData.admissionRequired} onChange={e => setSurgeryPlanData(prev => ({...prev, admissionRequired: e.target.checked}))} />
+                                    Admission Required
+                                </label>
+                            </div>
+
+                            {surgeryPlanData.admissionRequired && (
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Admission Date *</label>
+                                    <input type="date" required={surgeryPlanData.admissionRequired} value={surgeryPlanData.admissionDate} onChange={e => setSurgeryPlanData(prev => ({...prev, admissionDate: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                                </div>
+                            )}
+
+                            <div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600', fontSize: '13px', color: '#475569', cursor: 'pointer' }}>
+                                    <input type="checkbox" checked={surgeryPlanData.preOpRequired} onChange={e => setSurgeryPlanData(prev => ({...prev, preOpRequired: e.target.checked}))} />
+                                    Pre-Operative Preparation Required
+                                </label>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Notes</label>
+                                <textarea value={surgeryPlanData.notes} onChange={e => setSurgeryPlanData(prev => ({...prev, notes: e.target.value}))} placeholder="Any specific requirements..." style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', minHeight: '80px' }} />
+                            </div>
+
+                            <div style={{ marginTop: '10px', paddingTop: '16px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                                <button type="button" onClick={() => setShowSurgeryPlanModal(false)} style={{ padding: '10px 20px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>
+                                <button type="submit" style={{ padding: '10px 24px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Save Surgery Plan</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+
+            {/* ====== REFERRAL MODAL ====== */}
+            {showReferralModal && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', width: '550px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
+                            <h3 style={{ margin: 0, color: '#0f172a', fontSize: '1.4rem', fontWeight: '800' }}>🔄 Refer for Surgery</h3>
+                            <button onClick={() => setShowReferralModal(false)} style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '16px', cursor: 'pointer', color: '#475569' }}>✕</button>
+                        </div>
+                        
+                        <form onSubmit={handleCreateReferral} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', color: '#334155' }}>
+                                <strong>Patient:</strong> {intakeData?.name || appointment?.userId?.name || 'N/A'} <br/>
+                                <strong>MRN:</strong> {intakeData?.patientUid || appointment?.userId?.patientId || '-'}
+                            </div>
+
+                            <div style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px', border: '1px solid #bbf7d0', fontSize: '14px', color: '#166534' }}>
+                                <strong>Referring Doctor:</strong> {user?.name || 'Current Doctor'} (You)
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Refer To Doctor / Surgeon *</label>
+                                <select required value={referralData.referredToDoctorId} onChange={e => setReferralData(prev => ({...prev, referredToDoctorId: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', background: '#fff' }}>
+                                    <option value="">-- Select Doctor --</option>
+                                    {surgeonsList.map(s => {
+                                        const id = s.userId?._id || s.userId || s._id;
+                                        const docName = s.name || s.userId?.name || 'Doctor';
+                                        return (
+                                            <option key={s._id || id} value={id}>Dr. {docName.replace(/^Dr\.?\s*/i, '')} {s.specialty ? `(${s.specialty})` : ''}</option>
+                                        );
+                                    })}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Reason for Referral *</label>
+                                <input required value={referralData.reason} onChange={e => setReferralData(prev => ({...prev, reason: e.target.value}))} placeholder="e.g. Appendectomy required" style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Notes (Optional)</label>
+                                <textarea value={referralData.notes} onChange={e => setReferralData(prev => ({...prev, notes: e.target.value}))} placeholder="Any additional information..." style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', minHeight: '70px' }} />
+                            </div>
+
+                            <div style={{ marginTop: '10px', paddingTop: '16px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                                <button type="button" onClick={() => setShowReferralModal(false)} style={{ padding: '10px 20px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>
+                                <button type="submit" style={{ padding: '10px 24px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Create Referral</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ====== REFERRAL REVIEW MODAL ====== */}
+            {showReferralReviewModal && activeReferralForReview && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', width: '550px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
+                            <h3 style={{ margin: 0, color: '#0f172a', fontSize: '1.4rem', fontWeight: '800' }}>📋 Review Referral</h3>
+                            <button onClick={() => { setShowReferralReviewModal(false); setActiveReferralForReview(null); }} style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '16px', cursor: 'pointer', color: '#475569' }}>✕</button>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+                            <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', color: '#334155' }}>
+                                <strong>Patient:</strong> {activeReferralForReview.patientId?.name || 'N/A'}<br/>
+                                <strong>MRN:</strong> {activeReferralForReview.patientId?.patientId || activeReferralForReview.patientId?.mrn || '-'}
+                            </div>
+                            <div style={{ background: '#fffbeb', padding: '12px', borderRadius: '8px', border: '1px solid #fde68a', fontSize: '14px', color: '#92400e' }}>
+                                <strong>Referred By:</strong> {activeReferralForReview.referringDoctorId?.name || 'N/A'}<br/>
+                                <strong>Reason:</strong> {activeReferralForReview.reason}<br/>
+                                {activeReferralForReview.notes && <><strong>Notes:</strong> {activeReferralForReview.notes}<br/></>}
+                                <strong>Date:</strong> {new Date(activeReferralForReview.referralDate).toLocaleDateString()}
+                            </div>
+                        </div>
+
+                        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+                            <label style={{ display: 'block', fontWeight: '700', marginBottom: '12px', fontSize: '15px', color: '#1e293b' }}>Surgery Required?</label>
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button
+                                    onClick={() => {
+                                        handleReviewReferral(activeReferralForReview._id, 'NOT_REQUIRED', 'Surgery not required after evaluation');
+                                    }}
+                                    style={{ flex: 1, padding: '12px', background: '#fee2e2', color: '#991b1b', border: '2px solid #fecaca', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
+                                >
+                                    ❌ No — Not Required
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        // Accept the referral first
+                                        handleReviewReferral(activeReferralForReview._id, 'ACCEPTED', 'Surgery confirmed after evaluation').then(() => {
+                                            // Now open surgery plan modal pre-filled
+                                            setSurgeryPlanData(prev => ({
+                                                ...prev,
+                                                diagnosis: activeReferralForReview.reason || '',
+                                                surgeonId: user?._id || '',
+                                                referralId: activeReferralForReview._id,
+                                                referringDoctorId: activeReferralForReview.referringDoctorId?._id || ''
+                                            }));
+                                            setShowSurgeryPlanModal(true);
+                                        });
+                                    }}
+                                    style={{ flex: 1, padding: '12px', background: '#dcfce7', color: '#166534', border: '2px solid #bbf7d0', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
+                                >
+                                    ✅ Yes — Create Surgery Plan
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {toast.show && (
                 <>
                     <style>{`

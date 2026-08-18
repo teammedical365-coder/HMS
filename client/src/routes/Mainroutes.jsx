@@ -87,6 +87,7 @@ import PharmacyDepartments from '../pages/pharmacy/PharmacyDepartments';
 // Reception Pages
 import ReceptionDashboard from '../pages/reception/ReceptionDashboard';
 import ReceptionPatients from '../pages/reception/ReceptionPatients';
+import OTDashboard from '../pages/hospitaladmin/OTDashboard';
 
 // Accountant / Finance Pages
 import AccountantDashboard from '../pages/accountant/AccountantDashboard';
@@ -229,6 +230,10 @@ const MainRoutes = () => {
                             <Route path="pharmacy/vendor-returns" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><VendorReturns /></ProtectedRoute>} />
                             <Route path="pharmacy/collections" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyCollections /></ProtectedRoute>} />
                             <Route path="pharmacy/departments" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyDepartments /></ProtectedRoute>} />
+
+
+                            {/* OT Pages */}
+                            <Route path="ot-dashboard" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff']}><OTDashboard /></ProtectedRoute>} />
 
                             {/* Reception Pages */}
                             <Route path="reception/dashboard" element={<ProtectedRoute requiredPermissions={['appointment_manage']}><ReceptionDashboard /></ProtectedRoute>} />

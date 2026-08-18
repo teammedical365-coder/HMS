@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI } from '../../utils/api';
+import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI, bedAPI } from '../../utils/api';
 import { useAuth } from '../../store/hooks';
 import { getSubdomain } from '../../utils/subdomain';
 import toast from 'react-hot-toast';
@@ -69,8 +69,30 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     // Hospitalization modal
     const [hospitalizeModal, setHospitalizeModal] = useState({ open: false, appointment: null });
-    const [hospitalizeForm, setHospitalizeForm] = useState({ ward: '', bedNumber: '', admissionDate: new Date().toISOString().split('T')[0], notes: '', facilityDays: {} });
+    const [hospitalizeForm, setHospitalizeForm] = useState({ ward: '', bedId: '', admissionDate: new Date().toISOString().split('T')[0], notes: '', facilityDays: {} });
     const [hospitalizingSaving, setHospitalizingSaving] = useState(false);
+    const [availableBeds, setAvailableBeds] = useState([]);
+
+    const fetchAvailableBeds = async () => {
+        try {
+            const res = await bedAPI.getBeds({ status: 'AVAILABLE' });
+            if (res.success) {
+                setAvailableBeds(res.beds || []);
+            }
+        } catch (err) {
+            console.error("Failed to fetch beds", err);
+        }
+    };
+
+    useEffect(() => {
+        fetchAvailableBeds();
+    }, []);
+
+    useEffect(() => {
+        if (hospitalizeModal.open) {
+            fetchAvailableBeds();
+        }
+    }, [hospitalizeModal.open]);
 
     const [upiOptions, setUpiOptions] = useState([]);
     const [intakePaymentData, setIntakePaymentData] = useState({ upiId: '', transactionId: '', cardDetails: '', bankReference: '' });
@@ -550,8 +572,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     };
 
     const openHospitalizeModal = (apt) => {
-        setHospitalizeForm({ ward: '', bedNumber: '', admissionDate: new Date().toISOString().split('T')[0], notes: '', facilityDays: {} });
+        setHospitalizeForm({ ward: '', bedId: '', admissionDate: new Date().toISOString().split('T')[0], notes: '', facilityDays: {} });
         setHospitalizeModal({ open: true, appointment: apt });
+        fetchAvailableBeds();
     };
 
     const handleHospitalize = async () => {
@@ -566,13 +589,13 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 totalAmount: f.pricePerDay * Number(hospitalizeForm.facilityDays[f.name]),
             }));
 
+        if (!hospitalizeForm.bedId) return alert('Please select a bed');
         setHospitalizingSaving(true);
         try {
             await admissionAPI.createAdmission({
                 patientId: appointment.userId?._id || appointment.patientId,
                 appointmentId: appointment._id,
-                ward: hospitalizeForm.ward,
-                bedNumber: hospitalizeForm.bedNumber,
+                bedId: hospitalizeForm.bedId,
                 admissionDate: hospitalizeForm.admissionDate,
                 notes: hospitalizeForm.notes,
                 selectedFacilities,
@@ -581,6 +604,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             setHospitalizeModal({ open: false, appointment: null });
             fetchAppointments();
             fetchHospitalizedPatients();
+            fetchAvailableBeds();
         } catch (err) {
             alert(err.response?.data?.message || 'Failed to admit patient');
         } finally {
@@ -1896,7 +1920,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Payment Receipt' });
                                         }} style={{ padding: '6px 12px', background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>📄 Print Receipt</button>
                                         
-                                        <button onClick={() => setHospitalizeModal({ open: true, appointment: apt })} style={{ padding: '6px 12px', background: isHospitalized ? '#fef2f2' : '#eff6ff', color: isHospitalized ? '#ef4444' : '#3b82f6', border: `1px solid ${isHospitalized ? '#fecaca' : '#bfdbfe'}`, borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>{isHospitalized ? 'Hospitalized' : 'Hospitalize'}</button>
+                                        <button onClick={() => openHospitalizeModal(apt)} style={{ padding: '6px 12px', background: isHospitalized ? '#fef2f2' : '#eff6ff', color: isHospitalized ? '#ef4444' : '#3b82f6', border: `1px solid ${isHospitalized ? '#fecaca' : '#bfdbfe'}`, borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>{isHospitalized ? 'Hospitalized' : 'Hospitalize'}</button>
                                         
                                         <button onClick={() => handleCancelAppointment(apt._id)} style={{ padding: '6px 12px', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
                                     </div>
@@ -2093,24 +2117,33 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Ward / Room</label>
-                                <input
-                                    type="text"
-                                    placeholder="e.g. General Ward, ICU"
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Select Ward</label>
+                                <select
                                     value={hospitalizeForm.ward}
-                                    name="ward" onChange={handleHospitalizeFormChange}
+                                    name="ward" 
+                                    onChange={(e) => setHospitalizeForm(prev => ({ ...prev, ward: e.target.value, bedId: '' }))}
                                     style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
-                                />
+                                >
+                                    <option value="">-- Choose Ward --</option>
+                                    {Array.from(new Set(availableBeds.map(b => b.ward))).map(w => (
+                                        <option key={w} value={w}>{w}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Bed Number</label>
-                                <input
-                                    type="text"
-                                    placeholder="e.g. B-12"
-                                    value={hospitalizeForm.bedNumber}
-                                    name="bedNumber" onChange={handleHospitalizeFormChange}
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Select Available Bed</label>
+                                <select
+                                    value={hospitalizeForm.bedId}
+                                    name="bedId" 
+                                    onChange={handleHospitalizeFormChange}
+                                    disabled={!hospitalizeForm.ward}
                                     style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
-                                />
+                                >
+                                    <option value="">-- Choose Bed --</option>
+                                    {availableBeds.filter(b => b.ward === hospitalizeForm.ward).map(b => (
+                                        <option key={b._id} value={b._id}>{b.bedNumber} ({b.bedType})</option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
 

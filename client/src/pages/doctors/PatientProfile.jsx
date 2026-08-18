@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doctorAPI, receptionAPI } from '../../utils/api';
+import { doctorAPI, receptionAPI, otAPI, adminEntitiesAPI } from '../../utils/api';
+import { admissionAPI, bedAPI } from '../../utils/api';
 
 const PatientProfile = () => {
     const { patientId } = useParams();
@@ -9,10 +10,31 @@ const PatientProfile = () => {
     const [appointments, setAppointments] = useState([]);
     const [labReports, setLabReports] = useState([]);
     const [pharmacyOrders, setPharmacyOrders] = useState([]);
+    const [surgeryPlans, setSurgeryPlans] = useState([]);
     const [currentFollowupStatus, setCurrentFollowupStatus] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('overview');
+
+    const [surgeonsList, setSurgeonsList] = useState([]);
+    const [otRoomsList, setOtRoomsList] = useState([]);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
+    
+    const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+    const [workflowActionType, setWorkflowActionType] = useState(null); // 'ADMIT' or 'TRANSFER'
+    const [activeSurgeryId, setActiveSurgeryId] = useState(null);
+    const [workflowBeds, setWorkflowBeds] = useState([]);
+    const [selectedBedId, setSelectedBedId] = useState('');
+
+const [scheduleData, setScheduleData] = useState({
+        id: null,
+        otRoomId: '',
+        surgeryDate: '',
+        startTime: '',
+        endTime: '',
+        surgeonId: ''
+    });
+
 
     useEffect(() => {
         if (patientId) fetchProfile();
@@ -32,6 +54,15 @@ const PatientProfile = () => {
             }
 
             try {
+                const spRes = await otAPI.getPatientSurgeryPlans(patientId);
+                if (spRes.success) {
+                    setSurgeryPlans(spRes.data || []);
+                }
+            } catch (err) {
+                console.warn("Could not fetch surgery plans:", err?.message);
+            }
+
+            try {
                 const resAuto = await receptionAPI.getFollowupStatus(patientId, 'auto');
                 if (resAuto.success) {
                     setCurrentFollowupStatus(resAuto);
@@ -44,6 +75,126 @@ const PatientProfile = () => {
             setError(err.response?.data?.message || err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    
+    useEffect(() => {
+        const fetchExtras = async () => {
+            try {
+                const sRes = await adminEntitiesAPI.getDoctors();
+                if (sRes.success) setSurgeonsList(sRes.data || []);
+            } catch (e) {}
+            try {
+                const rRes = await otAPI.getRooms();
+                if (rRes.success) setOtRoomsList(rRes.rooms.filter(r => r.status !== 'Maintenance') || []);
+            } catch (e) {}
+        };
+        fetchExtras();
+    }, []);
+
+    const handleOpenScheduleModal = (sp) => {
+        setScheduleData({
+            id: sp._id,
+            otRoomId: sp.otRoomId || '',
+            surgeryDate: sp.surgeryDate ? sp.surgeryDate.split('T')[0] : sp.preferredDate ? sp.preferredDate.split('T')[0] : '',
+            startTime: sp.startTime || sp.preferredTime || '',
+            endTime: sp.endTime || '',
+            surgeonId: sp.surgeonId?._id || sp.surgeonId || ''
+        });
+        setShowScheduleModal(true);
+    };
+
+    const handleScheduleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const isEdit = surgeryPlans.find(s => s._id === scheduleData.id)?.status === 'SCHEDULED';
+            const apiCall = isEdit ? otAPI.updateScheduledSurgery : otAPI.scheduleSurgery;
+            const res = await apiCall(scheduleData.id, scheduleData);
+            if (res.success) {
+                alert(res.message);
+                setShowScheduleModal(false);
+                fetchProfile();
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'Error scheduling surgery');
+        }
+    };
+
+    
+    const handleWorkflowTransition = async (id, status) => {
+        try {
+            const res = await otAPI.updateSurgeryWorkflow(id, { status });
+            if (res.success) {
+                alert(res.message);
+                fetchProfile();
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'Error updating workflow');
+        }
+    };
+
+    const handleOpenWorkflowModal = async (id, type) => {
+        setActiveSurgeryId(id);
+        setWorkflowActionType(type);
+        try {
+            const res = await bedAPI.getBeds({ status: 'AVAILABLE' });
+            if (res.success) setWorkflowBeds(res.beds || []);
+            setShowWorkflowModal(true);
+        } catch (err) {
+            alert('Failed to fetch available beds');
+        }
+    };
+
+    const handleWorkflowModalSubmit = async (e) => {
+        e.preventDefault();
+        if (!selectedBedId) return alert('Please select a bed');
+        try {
+            if (workflowActionType === 'ADMIT') {
+                // Admit patient
+                const admRes = await admissionAPI.createAdmission({
+                    patientId,
+                    bedId: selectedBedId,
+                    admissionDate: new Date().toISOString()
+                });
+                if (admRes.success) {
+                    await otAPI.updateSurgeryWorkflow(activeSurgeryId, { status: 'ADMITTED' });
+                    alert('Patient admitted successfully');
+                }
+            } else if (workflowActionType === 'TRANSFER') {
+                // Find admission ID first
+                // Wait, patientProfile fetches 'patient' which has active admission? 
+                // We might need to fetch the patient's active admission.
+                const actAdmRes = await admissionAPI.getPatientAdmissions(patientId);
+                const activeAdm = actAdmRes.admissions?.find(a => a.status === 'Admitted');
+                if (activeAdm) {
+                    const transRes = await admissionAPI.transferBed(activeAdm._id, { bedId: selectedBedId });
+                    if (transRes.success) {
+                        await otAPI.updateSurgeryWorkflow(activeSurgeryId, { status: 'POST_OP' });
+                        alert('Patient transferred successfully');
+                    }
+                } else {
+                    alert('No active admission found to transfer');
+                }
+            }
+            setShowWorkflowModal(false);
+            setSelectedBedId('');
+            fetchProfile();
+        } catch (err) {
+            alert(err.response?.data?.message || 'Error processing request');
+        }
+    };
+
+const handleCancelSurgery = async (id) => {
+        if (!window.confirm("Are you sure you want to cancel this scheduled surgery?")) return;
+        try {
+            const res = await otAPI.cancelSurgery(id);
+            if (res.success) {
+                alert(res.message);
+                fetchProfile();
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'Error cancelling surgery');
         }
     };
 
@@ -255,6 +406,80 @@ const PatientProfile = () => {
         const h = fp;
         return (
             <>
+                {/* Surgery Plans */}
+                {surgeryPlans && surgeryPlans.length > 0 && (
+                    <div style={{ ...C.card, borderLeft: '4px solid #f59e0b', background: 'rgba(245, 158, 11, 0.05)' }}>
+                        <h4 style={{ ...C.cardTitle, color: '#f59e0b' }}>🔪 Operation / Surgery Plans</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {surgeryPlans.map(sp => (
+                                <div key={sp._id} style={{ background: '#fff', color: '#1e293b', padding: '16px', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                                        <div>
+                                            <h5 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800' }}>{sp.surgery}</h5>
+                                            <div style={{ color: '#64748b', fontSize: '0.85rem', marginTop: '4px' }}>
+                                                <strong>Diagnosis:</strong> {sp.diagnosis || 'N/A'}
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            <span style={{ ...C.statusBadge(sp.status), padding: '6px 14px' }}>{sp.status}</span>
+                                            {sp.status === 'PLANNED' && (
+                                                <button onClick={() => handleOpenScheduleModal(sp)} style={{ padding: '6px 12px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Schedule</button>
+                                            )}
+                                            {sp.status === 'SCHEDULED' && (
+                                                <button onClick={() => sp.admissionRequired ? handleOpenWorkflowModal(sp._id, 'ADMIT') : handleWorkflowTransition(sp._id, 'PRE_OP')} style={{ padding: '6px 12px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>{sp.admissionRequired ? 'Admit Patient' : 'Start Pre-Op'}</button>
+                                            )}
+                                            {sp.status === 'ADMITTED' && (
+                                                <button onClick={() => handleWorkflowTransition(sp._id, 'PRE_OP')} style={{ padding: '6px 12px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Start Pre-Op</button>
+                                            )}
+                                            {sp.status === 'PRE_OP' && (
+                                                <button onClick={() => handleWorkflowTransition(sp._id, 'READY_FOR_OT')} style={{ padding: '6px 12px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Mark Ready for OT</button>
+                                            )}
+                                            {sp.status === 'READY_FOR_OT' && (
+                                                <button onClick={() => handleWorkflowTransition(sp._id, 'IN_OT')} style={{ padding: '6px 12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Send to OT</button>
+                                            )}
+                                            {sp.status === 'IN_OT' && (
+                                                <button onClick={() => handleWorkflowTransition(sp._id, 'SURGERY_COMPLETED')} style={{ padding: '6px 12px', background: '#06b6d4', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Complete Surgery</button>
+                                            )}
+                                            {sp.status === 'SURGERY_COMPLETED' && (
+                                                <>
+                                                    <button onClick={() => handleOpenWorkflowModal(sp._id, 'TRANSFER')} style={{ padding: '6px 12px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Transfer & Post-Op</button>
+                                                    <button onClick={() => handleWorkflowTransition(sp._id, 'POST_OP')} style={{ padding: '6px 12px', background: '#64748b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Start Post-Op (Same Bed)</button>
+                                                </>
+                                            )}
+                                            {sp.status === 'SCHEDULED' && (
+                                                <>
+                                                    <button onClick={() => handleOpenScheduleModal(sp)} style={{ padding: '6px 12px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Edit</button>
+                                                    <button onClick={() => handleCancelSurgery(sp._id)} style={{ padding: '6px 12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Cancel</button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginTop: '12px', fontSize: '0.85rem' }}>
+                                        <div><strong>Surgeon:</strong> Dr. {sp.surgeonId?.firstName} {sp.surgeonId?.lastName}</div>
+                                        {sp.actualStartTime && <div><strong>Surgery Started:</strong> {new Date(sp.actualStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>}
+                                        {sp.actualEndTime && <div><strong>Surgery Completed:</strong> {new Date(sp.actualEndTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>}
+                                        {sp.status === 'SCHEDULED' ? (
+                                            <>
+                                                <div><strong>OT Room:</strong> {sp.otRoomId?.name || 'Assigned'}</div>
+                                                <div><strong>Scheduled:</strong> {formatDate(sp.surgeryDate)} <br/> {sp.startTime} - {sp.endTime}</div>
+                                            </>
+                                        ) : (
+                                            <div><strong>Preferred Date:</strong> {sp.preferredDate ? formatDate(sp.preferredDate) : 'N/A'} at {sp.preferredTime || 'N/A'}</div>
+                                        )}
+                                        <div><strong>Admission:</strong> {sp.admissionRequired ? `Yes (${formatDate(sp.admissionDate)})` : 'No'}</div>
+                                        <div><strong>Pre-Op Required:</strong> {sp.preOpRequired ? 'Yes' : 'No'}</div>
+                                    </div>
+                                    {sp.notes && (
+                                        <div style={{ marginTop: '12px', padding: '10px', background: '#f8fafc', borderRadius: '8px', fontSize: '0.85rem' }}>
+                                            <strong>Notes:</strong> {sp.notes}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Obstetric History */}
                 <div style={C.card}>
                     <h4 style={C.cardTitle}>🤰 Obstetric History</h4>

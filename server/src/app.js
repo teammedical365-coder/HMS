@@ -45,6 +45,9 @@ const mfaRoutes = require('./routes/mfa.routes');
 const emailOtpRoutes = require('./routes/emailOtp.routes');
 const searchRoutes = require('./routes/search.routes');
 const consentRoutes = require('./routes/consent.routes');
+const bedRoutes = require('./routes/bed.routes');
+const otRoutes = require('./routes/ot.routes');
+const referralRoutes = require('./routes/referral.routes');
 
 const app = express();
 
@@ -157,6 +160,9 @@ app.use('/api/auth/otp', emailOtpRoutes);
 app.use('/api/patient-auth', patientAuthRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/consent', consentRoutes);
+app.use('/api/beds', bedRoutes);
+app.use('/api/ot', otRoutes);
+app.use('/api/referrals', referralRoutes);
 
 app.get('/', (req, res) => {
     res.send('API is running...');
