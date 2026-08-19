@@ -36,7 +36,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Secure String Injection
         uses: actions/github-script@v7
@@ -92,6 +92,7 @@ jobs:
         working-directory: ./client
         run: |
           npm install
+          npm install @rollup/rollup-linux-x64-gnu
           npm run build
           npx cap sync android
 
