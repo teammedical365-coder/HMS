@@ -28,6 +28,19 @@ const tenantResolver = async (req, res, next) => {
         // Extract raw hostname without port
         const hostname = hostHeader.split(':')[0].toLowerCase();
 
+        // ── Central Admin Domain Interception ──────────────────────────────────
+        // Requests from admin.medical365.in must NEVER be routed through tenant DB.
+        const forwardedHost = req.headers['x-forwarded-host'] || '';
+        const isCentralAdminDomain = hostname === 'admin.medical365.in' 
+            || forwardedHost.includes('admin.medical365.in')
+            || req.headers['x-app-type'] === 'central-admin';
+        
+        if (isCentralAdminDomain) {
+            req.tenant = null;
+            req.isCentralAdmin = true;
+            return next();
+        }
+
         // 1. Skip reserved base platform domains
         if (RESERVED_DOMAINS.has(hostname) || hostname.endsWith('.medical365.in')) {
             req.tenant = null;

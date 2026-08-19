@@ -249,20 +249,32 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
 
         const normalizedEmail = email.toLowerCase().trim();
 
-        let resolvedHospitalId = hospitalId;
-        if (!resolvedHospitalId && (hospitalSlug || tenantId)) {
-            const slugToSearch = hospitalSlug || tenantId;
-            const hospital = await Hospital.findOne({ slug: slugToSearch });
-            if (hospital) {
-                resolvedHospitalId = hospital._id;
-            } else {
-                console.log(`[Auth] Login failed: Tenant slug '${slugToSearch}' not found in database.`);
-                return res.status(404).json({ success: false, message: 'Hospital tenant not found.' });
+        // ── Central Admin Detection ───────────────────────────────────────────
+        // When loginType is 'admin' OR the request originates from admin.medical365.in,
+        // completely bypass hospital tenant resolution. Super Admins live in the
+        // global user collection, not inside any hospital tenant.
+        const isCentralAdminLogin = (loginType === 'admin') || req.isCentralAdmin;
+
+        let resolvedHospitalId = null;
+        if (!isCentralAdminLogin) {
+            resolvedHospitalId = hospitalId;
+            if (!resolvedHospitalId && (hospitalSlug || tenantId)) {
+                const slugToSearch = hospitalSlug || tenantId;
+                const hospital = await Hospital.findOne({ slug: slugToSearch });
+                if (hospital) {
+                    resolvedHospitalId = hospital._id;
+                } else {
+                    console.log(`[Auth] Login failed: Tenant slug '${slugToSearch}' not found in database.`);
+                    return res.status(404).json({ success: false, message: 'Hospital tenant not found.' });
+                }
             }
         }
 
         let user = null;
-        if (resolvedHospitalId) {
+        if (isCentralAdminLogin) {
+            // Central Admin: search global user collection without hospital scoping
+            user = await User.findOne({ email: normalizedEmail });
+        } else if (resolvedHospitalId) {
             // Find user strictly for this hospital
             user = await User.findOne({ email: normalizedEmail, hospitalId: resolvedHospitalId });
             if (!user) {

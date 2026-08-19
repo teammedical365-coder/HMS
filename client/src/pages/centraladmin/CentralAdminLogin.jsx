@@ -58,15 +58,23 @@ const CentralAdminLogin = () => {
 
         try {
             setLocalLoading(true);
-            const response = await adminAPI.login(formData.email, formData.password);
-            if (response.success) {
-                localStorage.setItem('token', response.token);
-                localStorage.setItem('superadmin_token', response.token);
-                localStorage.setItem('user', JSON.stringify(response.user));
+            // Use the OTP authentication flow with loginType 'admin'
+            // This bypasses hospital tenant scoping on the backend
+            const result = await dispatch(sendOtp({
+                email: formData.email,
+                password: formData.password,
+                loginType: 'admin',
+                // Explicitly do NOT send hospitalId or hospitalSlug
+            })).unwrap();
+
+            // If OTP is bypassed (dev mode) and login completed immediately
+            if (result.otpBypassed && !result.activeSessionExists && result.token) {
+                localStorage.setItem('superadmin_token', result.token);
                 window.location.href = '/supremeadmin';
             }
         } catch (err) {
-            setLocalError(err.response?.data?.message || 'Invalid Credentials');
+            const errMsg = typeof err === 'object' ? (err.message || JSON.stringify(err)) : err;
+            setLocalError(errMsg || 'Invalid Credentials');
         } finally {
             setLocalLoading(false);
         }

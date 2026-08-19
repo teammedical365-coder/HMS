@@ -253,7 +253,12 @@ const MainRoutes = () => {
             ) : (
                 <Routes>
                     {/* Unified Universal Staff Login URL */}
-                    <Route path="/login" element={<Login />} />
+                    <Route path="/login" element={(() => {
+                        // If on admin.medical365.in, redirect /login → /supremeadmin (CentralAdminLogin)
+                        const sub = getSubdomain();
+                        if (sub === 'admin') return <Navigate to="/supremeadmin" replace />;
+                        return <Login />;
+                    })()} />
                     
                     {/* Supreme Admin Isolated Login Route */}
                     <Route path="/supremeadmin" element={<CentralAdminLogin />} />
@@ -271,7 +276,12 @@ const MainRoutes = () => {
                     <Route path="/patient/dashboard" element={<PatientProtectedRoute><PatientDashboard /></PatientProtectedRoute>} />
                     <Route path="/patient/book-appointment" element={<PatientProtectedRoute><ReceptionDashboard isPatientPortal={true} /></PatientProtectedRoute>} />
                     
-                    <Route path="*" element={<Navigate to="/login" />} />
+                    {/* Wildcard: admin subdomain goes to CentralAdminLogin, everything else to staff Login */}
+                    <Route path="*" element={(() => {
+                        const sub = getSubdomain();
+                        if (sub === 'admin') return <Navigate to="/supremeadmin" replace />;
+                        return <Navigate to="/login" replace />;
+                    })()} />
                 </Routes>
             )}
         </>
