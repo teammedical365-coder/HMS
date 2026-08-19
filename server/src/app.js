@@ -69,7 +69,7 @@ const isAllowedOrigin = (origin) => {
 
 const HospitalModelForCors = require('./models/hospital.model');
 
-aapp.use(cors({
+app.use(cors({
     origin: async (origin, callback) => {
         // 1. Sabse pehle console log karein taaki Render logs mein pata chale ki Capacitor bhej kya raha hai
         console.log('[CORS Check] Incoming Origin:', origin); 
