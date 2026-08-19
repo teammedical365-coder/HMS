@@ -69,20 +69,43 @@ const isAllowedOrigin = (origin) => {
 
 const HospitalModelForCors = require('./models/hospital.model');
 
-app.use(cors({
+aapp.use(cors({
     origin: async (origin, callback) => {
-        if (isAllowedOrigin(origin)) return callback(null, true);
+        // 1. Sabse pehle console log karein taaki Render logs mein pata chale ki Capacitor bhej kya raha hai
+        console.log('[CORS Check] Incoming Origin:', origin); 
 
-        try {
-            const domainOnly = origin.replace(/^https?:\/\//, '');
-            const hospital = await HospitalModelForCors.findOne({ customDomain: domainOnly }).select('_id').lean();
-            if (hospital) {
-                return callback(null, true);
-            }
-        } catch (err) {
-            console.error('CORS DB Check Error:', err);
+        // 2. Static Origins Check (Aapka function)
+        if (isAllowedOrigin(origin)) {
+            console.log('[CORS Check] Allowed by isAllowedOrigin');
+            return callback(null, true);
         }
 
+        // 3. SAFEGUARD: Agar origin valid string nahi hai, toh aage .replace() mat lagao (crash se bachne ke liye)
+        if (!origin || typeof origin !== 'string') {
+            console.log('[CORS Check] Blocked: Invalid origin format');
+            return callback(new Error('CORS blocked: Invalid origin format'), false);
+        }
+
+        // 4. Database Check for Custom Domains
+        try {
+            const domainOnly = origin.replace(/^https?:\/\//, '');
+            console.log('[CORS Check] Searching DB for domain:', domainOnly);
+
+            const hospital = await HospitalModelForCors.findOne({ customDomain: domainOnly }).select('_id').lean();
+            
+            if (hospital) {
+                console.log('[CORS Check] Domain verified in Database!');
+                return callback(null, true);
+            } else {
+                console.log('[CORS Check] Domain not found in Database.');
+            }
+        } catch (err) {
+            // Agar Database error deta hai (jaise timeout), toh yahan aayega
+            console.error('[CORS ERROR] Database check failed:', err.message);
+        }
+
+        // 5. Agar upar sab fail ho gaya, tabhi block karo
+        console.log('[CORS Check] Request blocked finally for:', origin);
         callback(new Error('CORS blocked: ' + origin), false);
     },
     credentials: true,
