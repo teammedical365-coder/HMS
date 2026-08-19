@@ -55,15 +55,15 @@ router.post('/:id/build-app', verifyCentralAdmin, async (req, res) => {
         const logoUrl = hospital.branding?.logoUrl || 'default';
         const themeColor = hospital.branding?.primaryColor || '#14b8a6';
 
-        // 2. Setup GitHub API Call
+        // 2. Setup GitHub API Call & Configuration
         const owner = process.env.GITHUB_OWNER || 'hms-admin';
         const repo = process.env.GITHUB_REPO || 'hms-white-label';
-        const workflowId = 'white-label-build.yml';
+        const workflowId = 'white-label-build.yml'; // Must match exactly the filename in .github/workflows/
         const githubToken = process.env.GITHUB_PAT;
+        const refBranch = 'main';
 
         if (!githubToken) {
              console.warn('[Build System] GITHUB_PAT is not set. Defaulting to mock local build mode.');
-             // Mock build for development without PAT
              hospital.isWhitelabeled = true;
              hospital.appConfig.buildStatus = 'COMPLETED';
              hospital.appConfig.lastBuiltAt = new Date();
@@ -74,24 +74,42 @@ router.post('/:id/build-app', verifyCentralAdmin, async (req, res) => {
         // 3. Trigger GitHub Action
         const githubUrl = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`;
         
-        await axios.post(githubUrl, {
-            ref: 'main',
-            inputs: {
-                tenantId: id.toString(),
-                hospitalName: safeAppName,
-                applicationId: safeApplicationId,
-                logoUrl: logoUrl,
-                themeColor: themeColor
+        try {
+            await axios.post(githubUrl, {
+                ref: refBranch,
+                inputs: {
+                    tenantId: id.toString(),
+                    hospitalName: safeAppName,
+                    applicationId: safeApplicationId,
+                    logoUrl: logoUrl,
+                    themeColor: themeColor
+                }
+            }, {
+                headers: {
+                    'Accept': 'application/vnd.github+json',
+                    'Authorization': `Bearer ${githubToken}`,
+                    'X-GitHub-Api-Version': '2022-11-28'
+                }
+            });
+        } catch (githubErr) {
+            // 4. Comprehensive Error Diagnostics & Security
+            const statusCode = githubErr.response?.status;
+            
+            if (statusCode === 404) {
+                console.error(`[GitHub Actions Error 404] Failed to trigger workflow. Diagnostic Checklist:
+1) Verify Repository Path: Owner='${owner}', Repo='${repo}'
+2) Verify Workflow File: '${workflowId}' MUST exist on the default branch ('${refBranch}')
+3) Verify Token Scope: The GITHUB_PAT must have 'repo' and 'workflow' permissions.
+Note: GitHub returns 404 instead of 401/403 for missing scopes to prevent repository enumeration.`);
+                throw new Error("Build dispatch failed: Repository or workflow configuration issue (404).");
             }
-        }, {
-            headers: {
-                'Accept': 'application/vnd.github.v3+json',
-                'Authorization': `Bearer ${githubToken}`,
-                'X-GitHub-Api-Version': '2022-11-28'
-            }
-        });
 
-        // 4. Update Database
+            // Log generic error but NEVER log the raw config (which contains the Bearer token)
+            console.error(`[GitHub Actions Error ${statusCode || 'Unknown'}]`, githubErr.response?.data?.message || githubErr.message);
+            throw new Error(`Build dispatch failed: ${githubErr.response?.data?.message || 'Internal pipeline error'}`);
+        }
+
+        // 5. Update Database on Success
         hospital.isWhitelabeled = true;
         hospital.appConfig.buildStatus = 'BUILDING';
         hospital.appConfig.buildStartedAt = new Date();
@@ -105,10 +123,10 @@ router.post('/:id/build-app', verifyCentralAdmin, async (req, res) => {
         });
 
     } catch (err) {
-        console.error('Build trigger error:', err.response?.data || err.message);
-        const errMessage = err.response?.data?.message || 'Failed to trigger build pipeline';
+        // Fallback error handler
+        const errMessage = err.message || 'Failed to trigger build pipeline';
+        console.error('[Build Orchestrator Error]', errMessage);
         
-        // Also update db to FAILED if we had a hospital ID
         try {
             const h = await Hospital.findById(req.params.id);
             if (h) {
@@ -116,7 +134,9 @@ router.post('/:id/build-app', verifyCentralAdmin, async (req, res) => {
                 h.appConfig.buildError = errMessage;
                 await h.save();
             }
-        } catch(e) {}
+        } catch(e) {
+            console.error('Failed to update hospital status after error:', e.message);
+        }
 
         res.status(500).json({ success: false, message: errMessage });
     }
