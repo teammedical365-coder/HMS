@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const liveBackend = 'https://hms-h939.onrender.com';
+const liveBackend = 'https://hms-n6nk.onrender.com';
 
 // Priority: 1. .env URL (VITE_API_URL) -> 2. Production Render Backend
 const rawBaseURL = import.meta.env.VITE_API_URL || liveBackend;

@@ -112,7 +112,7 @@ const Patient = () => {
                         fileName: r.name,
                         url: (r.filename || '').startsWith('http://') || (r.filename || '').startsWith('https://')
                             ? r.filename
-                            : `${import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com'}/api/patients/reports/${encodeURIComponent(r.filename)}`,
+                            : `${import.meta.env.VITE_API_URL || 'https://hms-n6nk.onrender.com'}/api/patients/reports/${encodeURIComponent(r.filename)}`,
                         date: r.uploadedAt
                       }))
                     : (uploadPatient.userId?.fertilityProfile?.previousReports || []);
