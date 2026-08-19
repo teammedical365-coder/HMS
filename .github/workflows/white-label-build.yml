@@ -103,6 +103,13 @@ jobs:
       #       keytool -genkey -v -keystore client/android/app/release.keystore -alias mockkey -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Mock, OU=Dev, O=Mock, L=City, ST=State, C=US"
       #     fi
 
+      - name: Build Web App & Capacitor Sync
+        working-directory: ./client
+        run: |
+          npm install
+          npm run build
+          npx cap sync android
+
       - name: Build APK
         working-directory: ./client/android
         # env:
