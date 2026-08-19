@@ -56,8 +56,8 @@ router.post('/:id/build-app', verifyCentralAdmin, async (req, res) => {
         const themeColor = hospital.branding?.primaryColor || '#14b8a6';
 
         // 2. Setup GitHub API Call & Configuration
-        const owner = process.env.GITHUB_OWNER || 'hms-admin';
-        const repo = process.env.GITHUB_REPO || 'hms-white-label';
+        const owner = process.env.GITHUB_OWNER || 'teammedical365-coder';
+        const repo = process.env.GITHUB_REPO || 'HMS';
         const workflowId = 'white-label-build.yml'; // Must match exactly the filename in .github/workflows/
         const githubToken = process.env.GITHUB_PAT;
         const refBranch = 'main';
