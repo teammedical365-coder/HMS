@@ -954,7 +954,7 @@ const OverviewMode = () => {
 // ═══════════════════════════════════════════════════
 // REPORT VIEWER — inline PDF/image panel
 // ═══════════════════════════════════════════════════
-const baseURL = import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com';
+const baseURL = import.meta.env.VITE_API_URL || 'https://hms-n6nk.onrender.com';
 const reportURL = (filename) => (filename || '').startsWith('http://') || (filename || '').startsWith('https://')
     ? filename
     : `${baseURL}/api/patients/reports/${encodeURIComponent(filename)}`;
