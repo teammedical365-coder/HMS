@@ -22,9 +22,10 @@ const Login = () => {
         admin: '/admin', superadmin: '/superadmin', doctor: '/doctor/patients',
         nurse: '/doctor/patients', lab: '/lab/dashboard', pharmacy: '/pharmacy/dashboard',
         reception: '/reception/dashboard', receptionist: '/reception/dashboard', accountant: '/accountant/dashboard', patient: '/dashboard',
-        hospitaladmin: '/hospitaladmin', 'clinic doctor': '/hospitaladmin'
+        hospitaladmin: '/hospitaladmin', 'clinic doctor': '/hospitaladmin',
+        otmanager: '/ot/dashboard', otstaff: '/ot/dashboard', ot: '/ot/dashboard'
       };
-      const role = (user.role || '').toLowerCase();
+      const role = (user.role || '').toLowerCase().replace(/\s+/g, '');
       let targetPath = redirectMap[role] || searchParams.get('redirect') || '/my-dashboard';
       if (role === 'doctor' && user.clinicType === 'clinic') {
         targetPath = '/hospitaladmin';

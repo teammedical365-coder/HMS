@@ -84,8 +84,13 @@ const HospitalLogin = () => {
     // Redirect after successful login
     useEffect(() => {
         if (isAuthenticated && user) {
-            const role = (user.role || '').toLowerCase();
-            const redirectMap = { nurse: '/doctor/patients' };
+            const role = (user.role || '').toLowerCase().replace(/\s+/g, '');
+            const redirectMap = { 
+                nurse: '/doctor/patients',
+                otmanager: '/ot/dashboard',
+                otstaff: '/ot/dashboard',
+                ot: '/ot/dashboard'
+            };
             const rawPath = redirectMap[role] || user.dashboardPath || 'my-dashboard';
             const cleanPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
             

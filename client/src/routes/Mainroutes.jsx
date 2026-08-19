@@ -87,7 +87,18 @@ import PharmacyDepartments from '../pages/pharmacy/PharmacyDepartments';
 // Reception Pages
 import ReceptionDashboard from '../pages/reception/ReceptionDashboard';
 import ReceptionPatients from '../pages/reception/ReceptionPatients';
-import OTDashboard from '../pages/hospitaladmin/OTDashboard';
+
+// OT Management Pages (Multi-Page System)
+import OTDashboard from '../pages/ot/OTDashboard';
+import OTPlannedSurgeries from '../pages/ot/OTPlannedSurgeries';
+import OTSchedulePage from '../pages/ot/OTSchedulePage';
+import OTRoomsPage from '../pages/ot/OTRoomsPage';
+import OTPreOpPage from '../pages/ot/OTPreOpPage';
+import OTInProgressPage from '../pages/ot/OTInProgressPage';
+import OTPostOpPage from '../pages/ot/OTPostOpPage';
+import OTCompletedPage from '../pages/ot/OTCompletedPage';
+import OTSurgeonsPage from '../pages/ot/OTSurgeonsPage';
+import OTReportsPage from '../pages/ot/OTReportsPage';
 
 // Accountant / Finance Pages
 import AccountantDashboard from '../pages/accountant/AccountantDashboard';
@@ -171,86 +182,95 @@ const MainRoutes = () => {
                         {/* Flat Architecture - Handled by Subdomains */}
                         <Route path="patient/:id/department/:department" element={<ProtectedRoute requiredPermissions={[]}><UnifiedPatientProfile /></ProtectedRoute>} />
                         <Route path="patient/:id" element={<ProtectedRoute requiredPermissions={[]}><UnifiedPatientProfile /></ProtectedRoute>} />
-                            <Route path="my-dashboard" element={<ProtectedRoute requiredPermissions={[]}>
-                              {(() => {
-                                  const u = JSON.parse(localStorage.getItem('user') || '{}');
-                                  if (u.subscriptionPlan === 'starter' && u.role === 'hospitaladmin') {
-                                      return <Navigate to="/hospitaladmin" replace />;
-                                  }
-                                  return <RoleDashboard />;
-                              })()}
-                          </ProtectedRoute>} />
-                            <Route path="appointment" element={<Appointment />} />
-                            <Route path="appointment/success" element={<AppointmentSuccess />} />
-                            <Route path="lab-reports" element={<LabReports />} />
-                            <Route path="dashboard" element={<Dashboard />} />
-                            <Route path="pharmacy" element={<Pharmacy />} />
+                        <Route path="my-dashboard" element={<ProtectedRoute requiredPermissions={[]}>
+                            {(() => {
+                                const u = JSON.parse(localStorage.getItem('user') || '{}');
+                                if (u.subscriptionPlan === 'starter' && u.role === 'hospitaladmin') {
+                                    return <Navigate to="/hospitaladmin" replace />;
+                                }
+                                return <RoleDashboard />;
+                            })()}
+                        </ProtectedRoute>} />
+                        <Route path="appointment" element={<Appointment />} />
+                        <Route path="appointment/success" element={<AppointmentSuccess />} />
+                        <Route path="lab-reports" element={<LabReports />} />
+                        <Route path="dashboard" element={<Dashboard />} />
+                        <Route path="pharmacy" element={<Pharmacy />} />
 
-                            {/* Transitions between roles/admin */}
-                            <Route path="doctor/dashboard" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><Patient /></ProtectedRoute>} />
-                            <Route path="doctor/patients" element={<Patient />} />
-                            <Route path="doctor/patient/:id" element={<ProtectedRoute requiredPermissions={['visit_diagnose']}><DoctorPatientDetails /></ProtectedRoute>} />
-                            <Route path="doctor/ai-assistant" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><AIAssistant /></ProtectedRoute>} />
+                        {/* Transitions between roles/admin */}
+                        <Route path="doctor/dashboard" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><Patient /></ProtectedRoute>} />
+                        <Route path="doctor/patients" element={<Patient />} />
+                        <Route path="doctor/patient/:id" element={<ProtectedRoute requiredPermissions={['visit_diagnose']}><DoctorPatientDetails /></ProtectedRoute>} />
+                        <Route path="doctor/ai-assistant" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><AIAssistant /></ProtectedRoute>} />
 
-                            <Route path="admin" element={<ProtectedRoute requiredPermissions={['admin_view_stats', 'admin_manage_roles']}><AdminMainDashboard /></ProtectedRoute>} />
-                            <Route path="admin/users" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><Admin /></ProtectedRoute>} />
-                            <Route path="admin/doctors" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminDoctors /></ProtectedRoute>} />
-                            <Route path="admin/labs" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminLabs /></ProtectedRoute>} />
-                            <Route path="admin/lab-tests" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminLabTests /></ProtectedRoute>} />
-                            <Route path="admin/pharmacy" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminPharmacy /></ProtectedRoute>} />
-                            <Route path="admin/reception" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminReception /></ProtectedRoute>} />
-                            <Route path="admin/services" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminServices /></ProtectedRoute>} />
-                            <Route path="admin/roles" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminRoles /></ProtectedRoute>} />
-                            <Route path="admin/medicines" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminMedicines /></ProtectedRoute>} />
-                            <Route path="admin/question-library" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminQuestionLibrary /></ProtectedRoute>} />
-                            <Route path="admin/test-packages" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminTestPackages /></ProtectedRoute>} />
-                            <Route path="admin/consent" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><ConsentManagement /></ProtectedRoute>} />
-                            
-                            {/* Dashboard routes — clinic vs full hospital */}
-                            <Route path="hospitaladmin" element={
-                                <ProtectedRoute allowedRoles={['hospitaladmin', 'doctor', 'clinic doctor', 'reception', 'receptionist']}>
-                                      {(() => {
-                                          const u = JSON.parse(localStorage.getItem('user') || '{}');
-                                          const useClinicHub = u.clinicType === 'clinic' || u.subscriptionPlan === 'starter';
-                                          return useClinicHub ? <ClinicDashboard /> : <HospitalAdminDashboard />;
-                                      })()}
-                                </ProtectedRoute>
-                            } />
-                            <Route path="hospitaladmin/question-library" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><HospitalAdminQuestionLibrary /></ProtectedRoute>} />
+                        <Route path="admin" element={<ProtectedRoute requiredPermissions={['admin_view_stats', 'admin_manage_roles']}><AdminMainDashboard /></ProtectedRoute>} />
+                        <Route path="admin/users" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><Admin /></ProtectedRoute>} />
+                        <Route path="admin/doctors" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminDoctors /></ProtectedRoute>} />
+                        <Route path="admin/labs" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminLabs /></ProtectedRoute>} />
+                        <Route path="admin/lab-tests" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminLabTests /></ProtectedRoute>} />
+                        <Route path="admin/pharmacy" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminPharmacy /></ProtectedRoute>} />
+                        <Route path="admin/reception" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminReception /></ProtectedRoute>} />
+                        <Route path="admin/services" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminServices /></ProtectedRoute>} />
+                        <Route path="admin/roles" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminRoles /></ProtectedRoute>} />
+                        <Route path="admin/medicines" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminMedicines /></ProtectedRoute>} />
+                        <Route path="admin/question-library" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminQuestionLibrary /></ProtectedRoute>} />
+                        <Route path="admin/test-packages" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminTestPackages /></ProtectedRoute>} />
+                        <Route path="admin/consent" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><ConsentManagement /></ProtectedRoute>} />
+                        
+                        {/* Dashboard routes — clinic vs full hospital */}
+                        <Route path="hospitaladmin" element={
+                            <ProtectedRoute allowedRoles={['hospitaladmin', 'doctor', 'clinic doctor', 'reception', 'receptionist']}>
+                                  {(() => {
+                                      const u = JSON.parse(localStorage.getItem('user') || '{}');
+                                      const useClinicHub = u.clinicType === 'clinic' || u.subscriptionPlan === 'starter';
+                                      return useClinicHub ? <ClinicDashboard /> : <HospitalAdminDashboard />;
+                                  })()}
+                            </ProtectedRoute>
+                        } />
+                        <Route path="hospitaladmin/question-library" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><HospitalAdminQuestionLibrary /></ProtectedRoute>} />
 
-                            <Route path="lab/dashboard" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><LabDashboard /></ProtectedRoute>} />
-                            <Route path="lab/tests" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><AssignedTests /></ProtectedRoute>} />
-                            <Route path="lab/completed" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><CompletedReports /></ProtectedRoute>} />
+                        <Route path="lab/dashboard" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><LabDashboard /></ProtectedRoute>} />
+                        <Route path="lab/tests" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><AssignedTests /></ProtectedRoute>} />
+                        <Route path="lab/completed" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><CompletedReports /></ProtectedRoute>} />
 
-                            {/* Pharmacy Management Pages */}
-                            <Route path="pharmacy/inventory" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyInventory /></ProtectedRoute>} />
-                            <Route path="pharmacy/orders" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyOrders /></ProtectedRoute>} />
-                            <Route path="pharmacy/purchase-invoices" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PurchaseInvoiceHistory /></ProtectedRoute>} />
-                            <Route path="pharmacy/returns" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyReturns /></ProtectedRoute>} />
-                            <Route path="pharmacy/vendor-returns" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><VendorReturns /></ProtectedRoute>} />
-                            <Route path="pharmacy/collections" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyCollections /></ProtectedRoute>} />
-                            <Route path="pharmacy/departments" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyDepartments /></ProtectedRoute>} />
+                        {/* Pharmacy Management Pages */}
+                        <Route path="pharmacy/inventory" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyInventory /></ProtectedRoute>} />
+                        <Route path="pharmacy/orders" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyOrders /></ProtectedRoute>} />
+                        <Route path="pharmacy/purchase-invoices" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PurchaseInvoiceHistory /></ProtectedRoute>} />
+                        <Route path="pharmacy/returns" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyReturns /></ProtectedRoute>} />
+                        <Route path="pharmacy/vendor-returns" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><VendorReturns /></ProtectedRoute>} />
+                        <Route path="pharmacy/collections" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyCollections /></ProtectedRoute>} />
+                        <Route path="pharmacy/departments" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyDepartments /></ProtectedRoute>} />
 
+                        {/* OT Management Multi-Page System */}
+                        <Route path="ot-dashboard" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff', 'doctor', 'centraladmin', 'superadmin']}><OTDashboard /></ProtectedRoute>} />
+                        <Route path="ot/dashboard" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff', 'doctor', 'centraladmin', 'superadmin']}><OTDashboard /></ProtectedRoute>} />
+                        <Route path="ot/planned" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff', 'doctor', 'centraladmin', 'superadmin']}><OTPlannedSurgeries /></ProtectedRoute>} />
+                        <Route path="ot/schedule" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff', 'doctor', 'centraladmin', 'superadmin']}><OTSchedulePage /></ProtectedRoute>} />
+                        <Route path="ot/rooms" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff', 'doctor', 'centraladmin', 'superadmin']}><OTRoomsPage /></ProtectedRoute>} />
+                        <Route path="ot/pre-op" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff', 'doctor', 'centraladmin', 'superadmin']}><OTPreOpPage /></ProtectedRoute>} />
+                        <Route path="ot/in-progress" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff', 'doctor', 'centraladmin', 'superadmin']}><OTInProgressPage /></ProtectedRoute>} />
+                        <Route path="ot/in-ot" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff', 'doctor', 'centraladmin', 'superadmin']}><OTInProgressPage /></ProtectedRoute>} />
+                        <Route path="ot/post-op" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff', 'doctor', 'centraladmin', 'superadmin']}><OTPostOpPage /></ProtectedRoute>} />
+                        <Route path="ot/completed" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff', 'doctor', 'centraladmin', 'superadmin']}><OTCompletedPage /></ProtectedRoute>} />
+                        <Route path="ot/surgeons" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff', 'doctor', 'centraladmin', 'superadmin']}><OTSurgeonsPage /></ProtectedRoute>} />
+                        <Route path="ot/reports" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff', 'doctor', 'centraladmin', 'superadmin']}><OTReportsPage /></ProtectedRoute>} />
 
-                            {/* OT Pages */}
-                            <Route path="ot-dashboard" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff']}><OTDashboard /></ProtectedRoute>} />
+                        {/* Reception Pages */}
+                        <Route path="reception/dashboard" element={<ProtectedRoute requiredPermissions={['appointment_manage']}><ReceptionDashboard /></ProtectedRoute>} />
+                        <Route path="reception/patients" element={<ProtectedRoute requiredPermissions={['appointment_manage']}><ReceptionPatients /></ProtectedRoute>} />
 
-                            {/* Reception Pages */}
-                            <Route path="reception/dashboard" element={<ProtectedRoute requiredPermissions={['appointment_manage']}><ReceptionDashboard /></ProtectedRoute>} />
-                            <Route path="reception/patients" element={<ProtectedRoute requiredPermissions={['appointment_manage']}><ReceptionPatients /></ProtectedRoute>} />
+                        {/* Accountant / Finance Pages */}
+                        <Route path="accountant/dashboard" element={<ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}><AccountantDashboard /></ProtectedRoute>} />
 
-                            {/* Accountant / Finance Pages */}
-                            <Route path="accountant/dashboard" element={<ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}><AccountantDashboard /></ProtectedRoute>} />
-
-                            {/* Patient Billing Profile — receptionist + accountant + admin */}
-                            <Route path="billing/patient" element={<ProtectedRoute requiredPermissions={['billing_view', 'billing_manage', 'appointment_manage']} allowedRoles={['accountant', 'cashier', 'reception', 'receptionist', 'centraladmin', 'superadmin', 'hospitaladmin']}><PatientBillingProfile /></ProtectedRoute>} />
+                        {/* Patient Billing Profile — receptionist + accountant + admin */}
+                        <Route path="billing/patient" element={<ProtectedRoute requiredPermissions={['billing_view', 'billing_manage', 'appointment_manage']} allowedRoles={['accountant', 'cashier', 'reception', 'receptionist', 'centraladmin', 'superadmin', 'hospitaladmin']}><PatientBillingProfile /></ProtectedRoute>} />
                         {/* Cashier / Billing */}
                         <Route path="cashier/billing" element={<ProtectedRoute requiredPermissions={['billing_view', 'billing_manage', 'appointment_manage']} allowedRoles={['billing', 'cashier', 'reception', 'receptionist', 'centraladmin', 'superadmin', 'hospitaladmin']}><CashierDashboard /></ProtectedRoute>} />
 
                         {/* Supreme Admin remains outside of hospital slugs */}
                         <Route path="/supremeadmin" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><CentralAdminDashboard /></ProtectedRoute>} />
                         <Route path="/supremeadmin/revenue" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><SystemRevenueDashboard /></ProtectedRoute>} />
-
 
                         <Route path="*" element={<Navigate to="/my-dashboard" />} />
                     </Routes>
