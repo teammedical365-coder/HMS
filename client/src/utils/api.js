@@ -1,13 +1,16 @@
 import axios from 'axios';
 
-// Base URL from Environment (Vercel / Local)
-const baseURL = import.meta.env.DEV ? 'http://localhost:3000' : (import.meta.env.VITE_API_URL || 'https://hms-h939.onrender.com');
+const liveBackend = 'https://hms-h939.onrender.com';
+
+// Priority: 1. .env URL (VITE_API_URL) -> 2. Production Render Backend
+const rawBaseURL = import.meta.env.VITE_API_URL || liveBackend;
+
+export const baseURL = rawBaseURL.startsWith('http') ? rawBaseURL : `https://${rawBaseURL}`;
 
 const apiClient = axios.create({
     baseURL: baseURL,
     headers: { 'Content-Type': 'application/json' },
 });
-
 // Request Interceptor
 apiClient.interceptors.request.use(
     (config) => {
@@ -63,11 +66,22 @@ export const authAPI = {
         return response.data;
     },
     // ── Email OTP Authentication ──────────────────────────────────────────
-    sendOtp: async (email, password, hospitalId, loginType) => {
-        const payload = { email, password, loginType };
-        if (hospitalId) payload.hospitalId = hospitalId;
-        const response = await apiClient.post('/api/auth/otp/send', payload);
-        return response.data;
+    sendOtp: async (email, password, hospitalId, hospitalSlug, loginType) => {
+        try {
+            const payload = { email, password, loginType };
+            if (hospitalId) payload.hospitalId = hospitalId;
+            if (hospitalSlug) payload.hospitalSlug = hospitalSlug;
+            const response = await apiClient.post('/api/auth/otp/send', payload);
+            return response.data;
+        } catch (error) {
+            console.error('[Axios Network Error in sendOtp]:', {
+                code: error.code,
+                message: error.message,
+                status: error.response?.status,
+                data: error.response?.data
+            });
+            throw error;
+        }
     },
     verifyOtp: async (preAuthToken, otp) => {
         const response = await apiClient.post('/api/auth/otp/verify', { preAuthToken, otp });

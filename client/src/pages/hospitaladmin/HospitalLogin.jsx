@@ -45,6 +45,28 @@ const HospitalLogin = () => {
         }
     }, []);
 
+    // Intercept SSO token passed from Universal Login
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const ssoToken = params.get('ssoToken');
+        const ssoUser = params.get('ssoUser');
+
+        if (ssoToken && ssoUser) {
+            try {
+                localStorage.setItem('token', ssoToken);
+                localStorage.setItem('user', decodeURIComponent(ssoUser));
+                
+                // Clear URL to prevent token leakage
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+                // Reload to rehydrate state securely
+                window.location.reload();
+            } catch (err) {
+                console.error("SSO Intercept Error:", err);
+            }
+        }
+    }, []);
+
     // Resolve hospital by domain/slug on mount
     useEffect(() => {
         const resolveHospital = async () => {

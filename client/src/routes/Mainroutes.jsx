@@ -94,12 +94,6 @@ import PatientBillingProfile from '../pages/billing/PatientBillingProfile';
 // Subdomains reserved for the platform itself — NOT hospital slugs
 const RESERVED_SUBDOMAINS = ['admin', 'www', 'api'];
 
-const SmartLogin = () => {
-    const subdomain = getSubdomain();
-    if (subdomain && !RESERVED_SUBDOMAINS.includes(subdomain)) return <HospitalLogin />;
-    return <CentralAdminLogin />;
-};
-
 const SmartDashboardRedirector = () => {
     const subdomain = getSubdomain();
     const u = JSON.parse(localStorage.getItem('user') || '{}');
@@ -249,8 +243,11 @@ const MainRoutes = () => {
                 </DashboardLayout>
             ) : (
                 <Routes>
-                    {/* Unified Smart Login URL - Reads current domain/subdomain natively */}
-                    <Route path="/login" element={<SmartLogin />} />
+                    {/* Unified Universal Staff Login URL */}
+                    <Route path="/login" element={<Login />} />
+                    
+                    {/* Supreme Admin Isolated Login Route */}
+                    <Route path="/supremeadmin" element={<CentralAdminLogin />} />
                     
                     {/* Legacy/Signups routing */}
                     <Route path="/signup" element={<Signup />} />

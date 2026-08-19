@@ -1,0 +1,1 @@
+export const HARDCODED_TENANT = { slug: "city-hospital", name: "City Hospital" };

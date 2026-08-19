@@ -52,6 +52,20 @@ const hospitalSchema = new mongoose.Schema({
     }],
     // White-label branding config (per hospital)
     branding: { type: brandingSchema, default: () => ({}) },
+
+    // White-Label Engine Flags & Mobile App Config
+    isWhitelabeled: { type: Boolean, default: false },
+    appConfig: {
+        androidPackageId: { type: String, trim: true, default: '' }, // e.g., com.hospital.crm
+        appVersion: { type: String, trim: true, default: '1.0.0' },
+        appName: { type: String, trim: true, default: '' },
+        buildStatus: { type: String, enum: ['NOT_BUILT', 'BUILDING', 'COMPLETED', 'FAILED'], default: 'NOT_BUILT' },
+        buildStartedAt: { type: Date, default: null },
+        lastBuiltAt: { type: Date, default: null },
+        buildError: { type: String, default: '' },
+        apkUrl: { type: String, default: '' },
+        aabUrl: { type: String, default: '' }
+    },
     // Hospital-managed UPI configurations
     upiIds: [{ label: { type: String, required: true }, upiId: { type: String, required: true } }],
     // Appointment system mode — set by Supreme Admin per hospital

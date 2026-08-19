@@ -192,17 +192,21 @@ export const BrandingProvider = ({ children }) => {
             if (!isBaseDomain) {
                 try {
                     const res = await publicAPI.getTenantConfig(domain);
-                    if (res.success && res.data) {
-                        const merged = { ...DEFAULT_BRANDING, ...res.data.branding };
+                    if (res && res.success && res.tenant) {
+                        const merged = { ...DEFAULT_BRANDING, ...res.tenant.branding };
                         setBranding(merged);
-                        setHospitalName(res.data.name || 'Medical 365');
-                        setHospitalId(res.data._id);
+                        setHospitalName(res.tenant.name || 'Medical 365');
+                        setHospitalId(res.tenant.id);
                         setIsCustomBranded(true);
                         applyBrandingToCSS(merged);
                         fetchedFromDomain = true;
                     }
                 } catch (err) {
-                    console.warn('[Branding] Failed to fetch tenant config for domain:', domain, err?.message);
+                    if (err?.response?.status === 404) {
+                        console.info(`[Branding] Tenant config not found for domain: ${domain}. Using defaults.`);
+                    } else {
+                        console.warn('[Branding] Failed to fetch tenant config for domain:', domain, err?.message);
+                    }
                 }
             }
 

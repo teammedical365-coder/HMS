@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">City Hospital</string>
+    <string name="title_activity_main">City Hospital</string>
+    <string name="package_name">com.medical365.app_6a7eb46c01e0f4ea3817854b</string>
+    <string name="custom_url_scheme">com.medical365.app_6a7eb46c01e0f4ea3817854b</string>
+</resources>

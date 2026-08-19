@@ -39,8 +39,8 @@ router.get('/tenant-config', async (req, res) => {
         let query = {};
         
         if (domain) {
-            // Remove protocol, trailing slash, and port
-            const cleanDomain = domain.replace(/^https?:\/\//, '').split(':')[0].replace(/\/$/, '').toLowerCase();
+            // Remove protocol, query strings, paths, and trailing slash
+            let cleanDomain = domain.replace(/^https?:\/\//i, '').split('/')[0].split('?')[0].split(':')[0].toLowerCase();
             
             if (cleanDomain.endsWith('.medical365.in')) {
                 query.slug = cleanDomain.replace('.medical365.in', '');

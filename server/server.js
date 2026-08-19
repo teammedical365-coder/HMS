@@ -56,8 +56,8 @@ if (DEPLOYMENT_MODE !== 'local') {
 }
 
 // 4. Start Server
-server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT} [mode: ${DEPLOYMENT_MODE}]`);
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server is running on port ${PORT} [mode: ${DEPLOYMENT_MODE}] and listening on all interfaces (0.0.0.0)`);
 
     // 5. Post-startup services (after DB is ready — give it 3s)
     setTimeout(() => {
