@@ -212,6 +212,47 @@ const CentralAdminDashboard = () => {
         }
     }, [success, error]);
 
+    // Handle Global Search auto-open
+    useEffect(() => {
+        const queryParams = new URLSearchParams(location.search);
+        const searchHospitalId = queryParams.get('hospitalId');
+        const plan = queryParams.get('plan');
+
+        if (searchHospitalId) {
+            if (plan === 'starter' || plan === 'basic') {
+                setActiveTab('simple-clinics');
+                const clinic = clinics.find(c => c._id === searchHospitalId);
+                if (clinic && !selectedClinic) {
+                    openClinicDetail(clinic);
+                } else if (!clinic && clinics.length > 0) {
+                    // Try to fetch it explicitly if not loaded
+                    simpleClinicAPI.getClinics(plan).then(res => {
+                        if (res.success) {
+                            const c = res.clinics.find(x => x._id === searchHospitalId);
+                            if (c) openClinicDetail(c);
+                        }
+                    });
+                }
+            } else {
+                if (plan === 'multi_speciality_starter') setActiveTab('multi-speciality');
+                else if (plan === 'clinic_basic') setActiveTab('clinic-basic');
+                else setActiveTab('hospitals');
+
+                const hospital = hospitals.find(h => h._id === searchHospitalId);
+                if (hospital && !selectedHospital) {
+                    openHospitalDetail(hospital);
+                } else if (!hospital && hospitals.length > 0) {
+                    hospitalAPI.getHospitals(plan).then(res => {
+                        if (res.success) {
+                            const h = res.data.data.find(x => x._id === searchHospitalId);
+                            if (h) openHospitalDetail(h);
+                        }
+                    });
+                }
+            }
+        }
+    }, [location.search, hospitals, clinics]);
+
     // Auto-load revenue plans when the tab becomes active
     useEffect(() => {
         const plan = getActivePlanName();
@@ -2305,6 +2346,7 @@ const CentralAdminDashboard = () => {
                                 { icon: '📦', label: 'Test Packages', desc: 'Bundle lab tests into packages', path: '/admin/test-packages', bg: '#f0fdf4', color: '#22c55e' },
                                 { icon: '💊', label: 'Medicine Catalog', desc: 'Global medicine library', path: '/admin/medicines', bg: '#fff7ed', color: '#f97316' },
                                 { icon: '🛠️', label: 'Services', desc: 'Hospital services & pricing', path: '/admin/services', bg: '#fefce8', color: '#eab308' },
+                                { icon: '📝', label: 'Consent Management', desc: 'Manage consent templates', path: '/admin/consent', bg: '#fef2f2', color: '#ef4444' },
                                 { icon: '🧪', label: 'Labs', desc: 'Manage lab departments', tab: 'labs', bg: '#f0f9ff', color: '#0ea5e9' },
                                 { icon: '🏥', label: 'Pharmacy', desc: 'Manage pharmacy departments', tab: 'pharmacy', bg: '#fff1f2', color: '#f43f5e' },
                             ].map((item, i) => (

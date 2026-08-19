@@ -22,8 +22,9 @@ const ProtectedRoute = ({ children, requiredPermissions = [], allowedRoles = [] 
 
     const hasRequiredPermission = requiredPermissions.length === 0 ||
       requiredPermissions.some(perm => userPermissions.includes(perm));
+    const cleanUserRole = userRole.toLowerCase().replace(/\s+/g, '');
     const hasAllowedRole = allowedRoles.length === 0 ||
-      allowedRoles.includes(userRole.toLowerCase());
+      allowedRoles.map(r => r.toLowerCase().replace(/\s+/g, '')).includes(cleanUserRole);
 
     // Allow if EITHER the role OR permission check passes (when both are specified, OR logic)
     // When only one is specified, that check must pass

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '../../store/hooks';
 import { updateUser as updateUserAction } from '../../store/slices/authSlice';
 import { adminAPI, uploadAPI, hospitalAPI } from '../../utils/api';
+import BedManagement from './BedManagement';
+import OTDashboard from './OTDashboard';
 import '../administration/SuperAdmin.css';
 import './HospitalAdminDashboard.css';
 
@@ -515,15 +517,22 @@ const HospitalAdminDashboard = () => {
         }
     };
 
+    const u = JSON.parse(localStorage.getItem('user') || '{}');
     const tabs = [
         { id: 'overview', label: '📊 Overview' },
-        { id: 'staff', label: '👤 Staff' },
-        { id: 'departments', label: '🏢 Departments' },
-        { id: 'facilities', label: '🛏️ Facilities' },
-        { id: 'inventory', label: '💊 Inventory' },
+        { id: 'staff', label: '👥 Staff' },
+        { id: 'departments', label: '🏥 Departments' },
+        { id: 'facilities', label: '🏨 Facilities' },
+        { id: 'beds', label: '🛏️ Beds' },
+        { id: 'inventory', label: '📦 Inventory' },
         { id: 'labpricing', label: '🧪 Lab Pricing' },
-        { id: 'accounts', label: '🏦 Accounts' },
+        { id: 'accounts', label: '💰 Accounts' },
     ];
+    
+    // Add OT tab only if NOT starter plan
+    if (u.subscriptionPlan !== 'starter') {
+        tabs.splice(5, 0, { id: 'ot', label: '🔪 Operation Theatre' });
+    }
 
 
     return (
@@ -947,6 +956,16 @@ const HospitalAdminDashboard = () => {
                             </table>
                         </div>
                     </div>
+                )}
+
+                {/* ===================== BEDS TAB ===================== */}
+                {activeTab === 'beds' && (
+                    <BedManagement />
+                )}
+
+                {/* ===================== OPERATION THEATRE TAB ===================== */}
+                {activeTab === 'ot' && (
+                    <OTDashboard />
                 )}
 
                 {/* ===================== INVENTORY TAB ===================== */}

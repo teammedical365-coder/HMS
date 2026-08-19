@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doctorAPI, uploadAPI, reportAPI } from '../../utils/api';
+import { doctorAPI, uploadAPI, reportAPI, referralAPI, otAPI } from '../../utils/api';
 
 const Patient = () => {
     const navigate = useNavigate();
@@ -19,10 +19,36 @@ const Patient = () => {
         chiefComplaint: '', notes: ''
     });
     const [saving, setSaving] = useState(false);
+    const [myReferrals, setMyReferrals] = useState([]);
+    const [mySurgeryPlans, setMySurgeryPlans] = useState([]);
 
     useEffect(() => {
         fetchAllAppointments();
+        fetchMyReferrals();
+        fetchMySurgeryPlans();
     }, []);
+
+    const fetchMyReferrals = async () => {
+        try {
+            const res = await referralAPI.getMyReferrals();
+            if (res.success) {
+                setMyReferrals(res.referrals || []);
+            }
+        } catch (err) {
+            console.error("Error fetching referrals:", err);
+        }
+    };
+
+    const fetchMySurgeryPlans = async () => {
+        try {
+            const res = await otAPI.getMySurgeryPlans();
+            if (res.success) {
+                setMySurgeryPlans(res.data || []);
+            }
+        } catch (err) {
+            console.error("Error fetching my surgery plans:", err);
+        }
+    };
 
     const fetchAllAppointments = async () => {
         setLoading(true);
@@ -36,8 +62,7 @@ const Patient = () => {
             const isAdminOrStaff = staffRoles.some(r => role.includes(r));
             const isDoctor = role.includes('doctor');
             const isClinicDoctor = isDoctor && user.clinicType === 'clinic';
-            // Doctors always use their own appointments; staff and clinic doctors use the all-appointments view
-            // (clinic appointments are not assigned to individual doctors via doctorUserId)
+            
             const hasViewAllAccess = isClinicDoctor || (!isDoctor && (isAdminOrStaff || permissions.includes('patient_view') || permissions.includes('appointment_view_all')));
 
             const res = hasViewAllAccess
@@ -137,13 +162,12 @@ const Patient = () => {
             };
             await doctorAPI.updatePatientProfile(patientId, profileData);
 
-            // Also save chief complaint in appointment notes if provided
             if (vitals.chiefComplaint || vitals.notes) {
                 try {
                     await doctorAPI.updateSession(vitalsPatient._id, {
                         notes: `Chief Complaint: ${vitals.chiefComplaint}\nNurse Notes: ${vitals.notes}`
                     });
-                } catch (e) { /* optional, don't block */ }
+                } catch (e) {}
             }
 
             alert('Vitals saved successfully!');
@@ -215,8 +239,6 @@ const Patient = () => {
     // Stat counts
     const todayTotal = appointments.filter(a => new Date(a.appointmentDate).toDateString() === todayStr).length;
     const pendingToday = appointments.filter(a => (a.status === 'pending' || a.status === 'confirmed') && new Date(a.appointmentDate).toDateString() === todayStr).length;
-    
-    // User requested specifically: Total Number of Patient and Upcoming Appointment
     const totalPatientsUnique = new Set(appointments.map(a => a.userId?._id || a.patientId)).size;
     const upcomingAppointments = appointments.filter(a => {
         const d = new Date(a.appointmentDate);
@@ -240,24 +262,18 @@ const Patient = () => {
     // ─── STYLES ─────────────────────────────────────────────────────
     const S = {
         page: { minHeight: '100vh', background: 'transparent', fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif", width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden' },
-        topbar: { background: '#ffffff', borderBottom: '1px solid #cbd5e1', padding: '16px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 100, boxSizing: 'border-box' },
-        topLeft: { display: 'flex', alignItems: 'center', gap: '14px' },
-        logo: { width: '44px', height: '44px', borderRadius: '14px', background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem' },
-        title: { margin: 0, color: '#0f172a', fontSize: '1.25rem', fontWeight: '800', letterSpacing: '-0.02em' },
-        subtitle: { margin: 0, color: '#475569', fontSize: '0.8rem', fontWeight: '500' },
-        dateBadge: { background: '#ffffff', padding: '8px 16px', borderRadius: '10px', color: '#334155', fontSize: '0.82rem', border: '1px solid #cbd5e1' },
-        statsRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', padding: '20px 28px 0', boxSizing: 'border-box' },
+        statsRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', padding: '0 0 20px', boxSizing: 'border-box' },
         statCard: (gradient) => ({ background: '#ffffff', borderRadius: '16px', padding: '18px 20px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '14px', transition: 'transform 0.2s', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }),
         statIcon: (gradient) => ({ width: '46px', height: '46px', borderRadius: '13px', background: gradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }),
         statNum: { color: '#0f172a', fontSize: '1.6rem', fontWeight: '800', lineHeight: 1.1 },
         statLabel: { color: '#475569', fontSize: '0.75rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '2px' },
-        controls: { padding: '18px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', flexWrap: 'wrap', boxSizing: 'border-box' },
+        controls: { padding: '0 0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', flexWrap: 'wrap', boxSizing: 'border-box' },
         searchWrap: { position: 'relative', flex: 1, maxWidth: '420px' },
         searchInput: { width: '100%', padding: '11px 16px 11px 42px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px', color: '#0f172a', fontSize: '0.88rem', outline: 'none', transition: 'border 0.2s', boxSizing: 'border-box' },
         searchIcon: { position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', fontSize: '1rem' },
         tabsWrap: { display: 'flex', gap: '4px', background: '#f1f5f9', padding: '4px', borderRadius: '12px', border: '1px solid #cbd5e1' },
         tab: (active) => ({ padding: '8px 20px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '0.82rem', transition: 'all 0.25s', background: active ? 'linear-gradient(135deg, #3b82f6, #6366f1)' : 'transparent', color: active ? '#fff' : '#475569', boxShadow: active ? '0 2px 12px rgba(59,130,246,0.25)' : 'none' }),
-        content: { padding: '0 28px 40px', boxSizing: 'border-box', width: '100%', maxWidth: '100%' },
+        content: { padding: '0 0 40px', boxSizing: 'border-box', width: '100%', maxWidth: '100%' },
         sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' },
         sectionTitle: { color: '#0f172a', fontSize: '1rem', fontWeight: '700', margin: 0 },
         sectionCount: { color: '#475569', fontSize: '0.82rem', fontWeight: '600' },
@@ -268,7 +284,6 @@ const Patient = () => {
         avatar: (color) => ({ width: '36px', height: '36px', borderRadius: '10px', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '800', fontSize: '0.85rem', flexShrink: 0 }),
         btn: (bg, color = '#fff') => ({ padding: '7px 18px', borderRadius: '9px', border: 'none', background: bg, color: color, fontWeight: '700', fontSize: '0.8rem', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }),
         empty: { textAlign: 'center', padding: '60px 20px', background: '#ffffff', borderRadius: '16px', border: '1px dashed #cbd5e1' },
-        // Modal styles
         overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' },
         modal: { background: 'linear-gradient(145deg, #1e293b, #0f172a)', borderRadius: '20px', width: '560px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 24px 64px rgba(0,0,0,0.5)', color: '#f8fafc' },
         modalHeader: { padding: '22px 28px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
@@ -280,18 +295,16 @@ const Patient = () => {
         formTextarea: { padding: '10px 14px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', color: '#f8fafc', fontSize: '0.88rem', outline: 'none', minHeight: '70px', resize: 'vertical', fontFamily: 'inherit' },
         modalFooter: { padding: '18px 28px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'flex-end', gap: '10px' },
         loadingWrap: { textAlign: 'center', padding: '60px 0', color: '#475569' },
-        errorBanner: { background: 'rgba(239,68,68,0.15)', color: '#ef4444', padding: '14px 28px', fontSize: '0.88rem', fontWeight: '600', borderBottom: '1px solid rgba(239,68,68,0.2)' },
+        errorBanner: { background: 'rgba(239,68,68,0.15)', color: '#ef4444', padding: '14px 28px', fontSize: '0.88rem', fontWeight: '600', borderBottom: '1px solid rgba(239,68,68,0.2)', marginBottom: '20px', borderRadius: '12px' },
     };
 
     return (
         <div style={{ ...S.page, background: 'transparent', minHeight: 'auto' }}>
-            {/* Redundant Topbar Removed as it's now in DashboardLayout */}
-
             {/* Error */}
             {error && <div style={S.errorBanner}>⚠️ {error}</div>}
 
             {/* ─── STATS ─── */}
-            <div style={{ ...S.statsRow, padding: '0 0 20px' }}>
+            <div style={S.statsRow}>
                 {[
                     { label: "Total Patients (Unique)", value: totalPatientsUnique, icon: '👥', g: 'linear-gradient(135deg, #3b82f6, #6366f1)' },
                     { label: 'Upcoming Appointments', value: upcomingAppointments, icon: '📅', g: 'linear-gradient(135deg, #f59e0b, #ef4444)' },
@@ -308,7 +321,7 @@ const Patient = () => {
             </div>
 
             {/* ─── SEARCH + TABS ─── */}
-            <div style={{ ...S.controls, padding: '0 0 20px' }}>
+            <div style={S.controls}>
                 <div style={S.searchWrap}>
                     <span style={S.searchIcon}>🔍</span>
                     <input
@@ -329,230 +342,449 @@ const Patient = () => {
                     <button style={S.tab(activeTab === 'all')} onClick={() => setActiveTab('all')}>
                         All Appointments
                     </button>
+                    <button style={S.tab(activeTab === 'referrals')} onClick={() => { setActiveTab('referrals'); fetchMyReferrals(); }}>
+                        Surgery Referrals {myReferrals.length > 0 && <span style={{ marginLeft: '6px', background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px', fontSize: '0.72rem' }}>{myReferrals.length}</span>}
+                    </button>
+                    <button style={S.tab(activeTab === 'surgery_plans')} onClick={() => { setActiveTab('surgery_plans'); fetchMySurgeryPlans(); }}>
+                        🔪 My Surgery Plans {mySurgeryPlans.length > 0 && <span style={{ marginLeft: '6px', background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px', fontSize: '0.72rem' }}>{mySurgeryPlans.length}</span>}
+                    </button>
                 </div>
             </div>
 
-            {/* ─── CONTENT ─── */}
-            <div style={{ ...S.content, padding: 0 }}>
-                {loading ? (
-                    <div style={S.loadingWrap}>
-                        <div style={{ width: '38px', height: '38px', border: '3px solid rgba(255,255,255,0.08)', borderTop: '3px solid #3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 14px' }} />
-                        <p style={{ fontSize: '0.9rem' }}>Loading patients...</p>
-                        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-                    </div>
-                ) : displayList.length === 0 ? (
-                    <div style={S.empty}>
-                        <div style={{ fontSize: '3rem', marginBottom: '10px' }}>{activeTab === 'today' ? '📭' : '📋'}</div>
-                        <h4 style={{ color: '#0f172a', margin: '0 0 6px', fontWeight: '700' }}>
-                            {activeTab === 'today' ? 'No Patients in Today\'s Queue' : 'No Active Appointments'}
-                        </h4>
-                        <p style={{ color: '#475569', margin: 0, fontSize: '0.88rem' }}>
-                            {searchQuery ? 'No results match your search. Try a different term.' : 'Patients will appear here when appointments are booked.'}
-                        </p>
-                    </div>
-                ) : (
-                    <>
-                        <div style={S.sectionHeader}>
-                            <h3 style={S.sectionTitle}>
-                                {activeTab === 'today' ? '🏥 Today\'s Patient Queue' : '📁 All Appointments'}
-                            </h3>
-                            <span style={S.sectionCount}>{displayList.length} patients</span>
+            {/* ─── REFERRALS TAB ─── */}
+            {activeTab === 'referrals' && (
+                <div className="referrals-list" style={{ padding: '0 0 30px' }}>
+                    {myReferrals.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#ffffff', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>
+                            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>📋</div>
+                            <h3 style={{ color: '#475569', fontWeight: '700', margin: '0 0 8px' }}>No Referrals Yet</h3>
+                            <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>When other doctors refer patients to you, they will appear here.</p>
                         </div>
-
-                        <div style={S.tableWrap}>
-                            <table style={S.table}>
+                    ) : (
+                        <div style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+                            <div style={{ padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontWeight: '700', color: '#1e293b' }}>
+                                🔄 Surgery Referrals Assigned to You ({myReferrals.length})
+                            </div>
+                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
-                                    <tr>
-                                        <th style={S.th}>#</th>
-                                        <th style={S.th}>Patient</th>
-                                        <th style={S.th}>Contact</th>
-                                        <th style={S.th}>Doctor</th>
-                                        <th style={S.th}>Time</th>
-                                        <th style={S.th}>Date</th>
-                                        <th style={S.th}>Status</th>
-                                        <th style={S.th}>Action</th>
+                                    <tr style={{ background: '#f1f5f9' }}>
+                                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Patient</th>
+                                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Referred By</th>
+                                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Reason</th>
+                                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Date</th>
+                                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Status</th>
+                                        <th style={{ padding: '10px 16px', textAlign: 'center', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {displayList.map((apt, idx) => {
-                                        const statusS = getStatusStyle(apt.status);
-                                        const hasVitals = apt.userId
-                                            ? apt.userId?.fertilityProfile?.vitals?.weight
-                                            : (apt.clinicPatientId?.vitals?.weight || apt.vitals?.weight);
-                                        return (
-                                            <tr key={apt._id} style={{ transition: 'background 0.15s' }}
-                                                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                            >
-                                                <td style={{ ...S.td, color: '#475569', fontWeight: '600', fontSize: '0.82rem' }}>{idx + 1}</td>
-                                                <td style={S.td}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <div style={S.avatar('linear-gradient(135deg, #6366f1, #8b5cf6)')}>
-                                                            {(apt.userId?.name || apt.clinicPatientId?.name || 'W')[0].toUpperCase()}
-                                                        </div>
-                                                        <div>
-                                                            <div style={{ color: '#0f172a', fontWeight: '700', fontSize: '0.88rem' }}>{apt.userId?.name || apt.clinicPatientId?.name || 'Walk-in'}</div>
-                                                            <div style={{ color: '#475569', fontSize: '0.75rem' }}>MRN: {apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || 'N/A'}</div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td style={{ ...S.td, color: '#334155', fontSize: '0.85rem' }}>{apt.userId?.phone || apt.clinicPatientId?.phone || '-'}</td>
-                                                <td style={S.td}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <div style={S.avatar('linear-gradient(135deg, #10b981, #059669)')}>
-                                                            {(apt.doctorName || 'D')[0].toUpperCase()}
-                                                        </div>
-                                                        <span style={{ color: '#0f172a', fontWeight: '600', fontSize: '0.85rem' }}>
-                                                            {apt.doctorName || 'Not Assigned'}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td style={{ ...S.td, color: '#0f172a', fontWeight: '600', fontSize: '0.85rem' }}>{apt.appointmentTime || '-'}</td>
-                                                <td style={{ ...S.td, color: '#475569', fontSize: '0.82rem' }}>
-                                                    {new Date(apt.appointmentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                                                </td>
-                                                <td style={S.td}>
-                                                    <span style={{
-                                                        background: statusS.bg, color: statusS.color,
-                                                        padding: '4px 12px', borderRadius: '20px',
-                                                        fontSize: '0.75rem', fontWeight: '700', textTransform: 'capitalize'
-                                                    }}>
-                                                        {apt.status}
-                                                    </span>
-                                                </td>
-                                                <td style={S.td}>
-                                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                                        <button
-                                                            onClick={() => {
-                                                                const ptName = (apt.userId?.name || apt.clinicPatientId?.name || 'Walk-in').replace(/\s+/g, '-');
-                                                                const pid = apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || ptName;
-                                                                console.log("DEBUG PATIENT ID OBJECT:", apt);
-                                                                console.log("FINAL CHOSEN PID:", pid);
-                                                                if (pid) navigate(`/patient/${pid}`);
-                                                            }}
-                                                            style={{
-                                                                ...S.btn('rgba(59,130,246,0.1)'),
-                                                                color: '#3b82f6', border: '1px solid #3b82f6',
-                                                                display: 'flex', alignItems: 'center', gap: '5px'
-                                                            }}
-                                                        >
-                                                            👁 Profile
-                                                        </button>
-
-
-                                                        <button
-                                                            onClick={() => {
-                                                                const ptName = (apt.userId?.name || apt.clinicPatientId?.name || 'Walk-in').replace(/\s+/g, '-');
-                                                                const patientMRN = apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || ptName;
-                                                                navigate(`/doctor/patient/${patientMRN}`, { state: { appointmentId: apt._id } });
-                                                            }}
-                                                            style={{
-                                                                ...S.btn('linear-gradient(135deg, #8b5cf6, #d946ef)'),
-                                                                display: 'flex', alignItems: 'center', gap: '5px'
-                                                            }}
-                                                        >
-                                                            📝 Consult Session
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
+                                    {myReferrals.map(ref => (
+                                        <tr key={ref._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '12px 16px' }}>
+                                                <div style={{ fontWeight: '600', color: '#0f172a', fontSize: '0.88rem' }}>{ref.patientId?.name || 'Unknown'}</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>MRN: {ref.patientId?.patientId || ref.patientId?.mrn || '-'}</div>
+                                            </td>
+                                            <td style={{ padding: '12px 16px', color: '#334155', fontSize: '0.85rem' }}>{ref.referringDoctorId?.name || '-'}</td>
+                                            <td style={{ padding: '12px 16px', color: '#334155', fontSize: '0.85rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ref.reason}</td>
+                                            <td style={{ padding: '12px 16px', color: '#64748b', fontSize: '0.82rem' }}>{new Date(ref.referralDate).toLocaleDateString()}</td>
+                                            <td style={{ padding: '12px 16px' }}>
+                                                <span style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: '700', background: ref.status === 'REFERRED' ? '#fef3c7' : ref.status === 'SURGERY_PLANNED' ? '#dcfce7' : ref.status === 'ACCEPTED' ? '#dbeafe' : '#fee2e2', color: ref.status === 'REFERRED' ? '#92400e' : ref.status === 'SURGERY_PLANNED' ? '#166534' : ref.status === 'ACCEPTED' ? '#1e40af' : '#991b1b' }}>
+                                                    {ref.status}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                                                {ref.status === 'REFERRED' ? (
+                                                    <button
+                                                        onClick={() => {
+                                                            const pid = ref.patientId?.patientId || ref.patientId?.mrn || ref.patientId?._id || ref.patientId;
+                                                            const apptId = ref.appointmentId?._id || ref.appointmentId;
+                                                            navigate('/doctor/patient/' + (pid || ref._id), {
+                                                                state: {
+                                                                    referralId: ref._id,
+                                                                    appointmentId: apptId,
+                                                                    referral: ref
+                                                                }
+                                                            });
+                                                        }}
+                                                        style={{ padding: '6px 14px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', fontSize: '0.78rem' }}
+                                                    >
+                                                        Review & Plan
+                                                    </button>
+                                                ) : (
+                                                    <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>—</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
-                    </>
-                )}
-            </div>
+                    )}
+                </div>
+            )}
 
-            {/* ─── VITALS MODAL ─── */}
-            {
-                vitalsPatient && (
-                    <div style={S.overlay} onClick={() => setVitalsPatient(null)}>
-                        <div style={S.modal} onClick={e => e.stopPropagation()}>
-                            {/* Header */}
-                            <div style={S.modalHeader}>
-                                <div>
-                                    <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '1.15rem', fontWeight: '800' }}>
-                                        💉 Enter Vitals
-                                    </h2>
-                                    <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.82rem' }}>
-                                        Patient: <strong style={{ color: '#e2e8f0' }}>{vitalsPatient.userId?.name || vitalsPatient.clinicPatientId?.name || 'Unknown'}</strong> •
-                                        MRN: {vitalsPatient.userId?.patientId || vitalsPatient.clinicPatientId?.patientUid || vitalsPatient.patientId || 'N/A'} •
-                                        Dr. {vitalsPatient.doctorName}
-                                    </p>
-                                </div>
-                                <button onClick={() => setVitalsPatient(null)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1.3rem', cursor: 'pointer' }}>✕</button>
+            {/* ─── MY SURGERY PLANS TAB (SURGEON VIEW) ─── */}
+            {activeTab === 'surgery_plans' && (
+                <div style={{ padding: '0 0 30px' }}>
+                    {mySurgeryPlans.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#ffffff', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>
+                            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🔪</div>
+                            <h3 style={{ color: '#475569', fontWeight: '700', margin: '0 0 8px' }}>No Surgery Plans Assigned</h3>
+                            <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Surgeries planned for you (self-planned or referred by other doctors) will appear here.</p>
+                        </div>
+                    ) : (
+                        <div style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+                            <div style={{ padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontWeight: '800', color: '#0f172a', fontSize: '1rem' }}>
+                                    🔪 My Surgery Plans & OT Status ({mySurgeryPlans.length})
+                                </span>
                             </div>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                    <thead>
+                                        <tr style={{ background: '#f1f5f9' }}>
+                                            <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Plan ID & Procedure</th>
+                                            <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Patient Details</th>
+                                            <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Referring Doctor</th>
+                                            <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>OT Room & Timing</th>
+                                            <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Status</th>
+                                            <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '0.75rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {mySurgeryPlans.map((sp) => {
+                                            const patientName = sp.patientId?.name || 'Patient';
+                                            const patientMrn = sp.patientId?.mrn || sp.patientId?.patientId || '-';
+                                            const refDoc = sp.referringDoctorId?.name ? sp.referringDoctorId.name.replace(/^Dr\.?\s*/i, '') : null;
+                                            const docName = sp.doctorId?.name ? sp.doctorId.name.replace(/^Dr\.?\s*/i, '') : null;
+                                            const pId = sp.patientId?._id || sp.patientId;
 
-                            {/* Body */}
-                            <div style={S.modalBody}>
-                                <div style={S.formGrid}>
-                                    {[
-                                        { key: 'weight', label: 'Weight (kg)', icon: '⚖️', type: 'number' },
-                                        { key: 'height', label: 'Height (cm)', icon: '📏', type: 'number' },
-                                        { key: 'bmi', label: 'BMI (auto)', icon: '📊', type: 'text', readOnly: true },
-                                        { key: 'bloodPressure', label: 'Blood Pressure', icon: '🩸', type: 'text', placeholder: '120/80' },
-                                        { key: 'pulse', label: 'Pulse (bpm)', icon: '💓', type: 'number' },
-                                        { key: 'temperature', label: 'Temp (°F)', icon: '🌡️', type: 'number' },
-                                        { key: 'spo2', label: 'SpO₂ (%)', icon: '🫁', type: 'number' },
-                                        { key: 'respiratoryRate', label: 'Resp Rate (/min)', icon: '💨', type: 'number' },
-                                    ].map(field => (
-                                        <div key={field.key} style={S.formGroup}>
-                                            <label style={S.formLabel}>{field.icon} {field.label}</label>
-                                            <input
-                                                type={field.type}
-                                                value={vitals[field.key]}
-                                                readOnly={field.readOnly}
-                                                placeholder={field.placeholder || ''}
-                                                onChange={e => setVitals({ ...vitals, [field.key]: e.target.value })}
-                                                style={{
-                                                    ...S.formInput,
-                                                    ...(field.readOnly ? { background: 'rgba(255,255,255,0.02)', color: '#64748b' } : {})
-                                                }}
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Chief Complaint */}
-                                <div style={{ ...S.formGroup, marginTop: '16px' }}>
-                                    <label style={S.formLabel}>📋 Chief Complaint</label>
-                                    <textarea
-                                        value={vitals.chiefComplaint}
-                                        onChange={e => setVitals({ ...vitals, chiefComplaint: e.target.value })}
-                                        placeholder="Patient's chief complaint..."
-                                        style={S.formTextarea}
-                                    />
-                                </div>
-
-                                {/* Nurse Notes */}
-                                <div style={{ ...S.formGroup, marginTop: '12px' }}>
-                                    <label style={S.formLabel}>📝 Nurse Notes</label>
-                                    <textarea
-                                        value={vitals.notes}
-                                        onChange={e => setVitals({ ...vitals, notes: e.target.value })}
-                                        placeholder="Any observations or notes..."
-                                        style={S.formTextarea}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Footer */}
-                            <div style={S.modalFooter}>
-                                <button onClick={() => setVitalsPatient(null)} style={{ ...S.btn('rgba(255,255,255,0.08)'), color: '#94a3b8' }}>Cancel</button>
-                                <button
-                                    onClick={handleSaveVitals}
-                                    disabled={saving}
-                                    style={{ ...S.btn('linear-gradient(135deg, #10b981, #059669)'), opacity: saving ? 0.6 : 1, minWidth: '140px' }}
-                                >
-                                    {saving ? '⏳ Saving...' : '✅ Save Vitals'}
-                                </button>
+                                            return (
+                                                <tr key={sp._id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                    <td style={{ padding: '14px 16px' }}>
+                                                        <div style={{ fontWeight: 800, color: '#0f172a' }}>{sp.surgery}</div>
+                                                        {sp.planId && (
+                                                            <span style={{ fontSize: '0.72rem', fontWeight: 800, background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: '4px' }}>
+                                                                {sp.planId}
+                                                            </span>
+                                                        )}
+                                                        {sp.diagnosis && (
+                                                            <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
+                                                                Dx: {sp.diagnosis}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '14px 16px' }}>
+                                                        <div style={{ fontWeight: 700, color: '#1e293b' }}>{patientName}</div>
+                                                        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>MRN: {patientMrn}</div>
+                                                    </td>
+                                                    <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: '#334155' }}>
+                                                        {refDoc || docName ? (
+                                                            <div>Dr. {refDoc || docName}</div>
+                                                        ) : (
+                                                            <div style={{ color: '#94a3b8' }}>Self-Planned</div>
+                                                        )}
+                                                        {sp.assistantSurgeonIds && sp.assistantSurgeonIds.length > 0 && (
+                                                            <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '3px' }}>
+                                                                🤝 Asst: {sp.assistantSurgeonIds.map(a => `Dr. ${(a.name || 'Doctor').replace(/^Dr\.?\s*/i, '')}`).join(', ')}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '14px 16px', fontSize: '0.85rem' }}>
+                                                        {sp.otRoomId?.name ? (
+                                                            <div>
+                                                                <strong style={{ color: '#0f172a' }}>🚪 {sp.otRoomId.name}</strong>
+                                                                <div style={{ fontSize: '0.78rem', color: '#475569', marginTop: '2px' }}>
+                                                                    📅 {sp.surgeryDate ? new Date(sp.surgeryDate).toLocaleDateString('en-IN') : 'TBD'} ({sp.startTime || '--:--'} - {sp.endTime || '--:--'})
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div>
+                                                                <span style={{ color: '#b45309', fontWeight: 700, fontSize: '0.82rem' }}>⏳ OT scheduling pending</span>
+                                                                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                                                                    Pref: {sp.preferredDate ? new Date(sp.preferredDate).toLocaleDateString('en-IN') : 'Flexible'}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {sp.surgeryCost > 0 && (
+                                                            <div style={{ fontSize: '0.74rem', fontWeight: 700, color: sp.paymentStatus === 'PAID' ? '#16a34a' : (sp.paymentStatus === 'PARTIALLY PAID' ? '#b45309' : '#dc2626'), marginTop: '3px' }}>
+                                                                ₹{Number(sp.surgeryCost).toLocaleString('en-IN')} [{sp.paymentStatus || 'UNPAID'}]
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td style={{ padding: '14px 16px' }}>
+                                                        <span style={{
+                                                            padding: '4px 10px',
+                                                            borderRadius: '12px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 800,
+                                                            background: sp.status === 'PLANNED' ? '#fef3c7' : sp.status === 'SCHEDULED' ? '#e0e7ff' : sp.status === 'IN_OT' ? '#fee2e2' : '#dcfce7',
+                                                            color: sp.status === 'PLANNED' ? '#92400e' : sp.status === 'SCHEDULED' ? '#3730a3' : sp.status === 'IN_OT' ? '#b91c1c' : '#166534'
+                                                        }}>
+                                                            {sp.status}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                                                        <button
+                                                            onClick={() => navigate(`/doctor/patients/${pId}`)}
+                                                            style={{ padding: '6px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
+                                                        >
+                                                            View Profile
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
+                    )}
+                </div>
+            )}
+
+            {/* ─── CONTENT (TODAY / ALL APPOINTMENTS) ─── */}
+            {(activeTab === 'today' || activeTab === 'all') && (
+                <div style={S.content}>
+                    {loading ? (
+                        <div style={S.loadingWrap}>
+                            <div style={{ width: '38px', height: '38px', border: '3px solid rgba(255,255,255,0.08)', borderTop: '3px solid #3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 14px' }} />
+                            <p style={{ fontSize: '0.9rem' }}>Loading patients...</p>
+                            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+                        </div>
+                    ) : displayList.length === 0 ? (
+                        <div style={S.empty}>
+                            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>👥</div>
+                            <h3 style={{ color: '#475569', fontWeight: '700', margin: '0 0 8px' }}>
+                                {activeTab === 'today' ? 'No Patients in Queue Today' : 'No Appointments Found'}
+                            </h3>
+                            <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
+                                {searchQuery ? 'Try adjusting your search terms.' : 'Appointments booked by patients will appear here.'}
+                            </p>
+                        </div>
+                    ) : (
+                        <>
+                            <div style={S.sectionHeader}>
+                                <h3 style={S.sectionTitle}>
+                                    {activeTab === 'today' ? "Today's Patient Queue" : 'All Patient Appointments'}
+                                </h3>
+                                <span style={S.sectionCount}>Showing {displayList.length} patients</span>
+                            </div>
+
+                            <div style={S.tableWrap}>
+                                <table style={S.table}>
+                                    <thead>
+                                        <tr>
+                                            <th style={S.th}>#</th>
+                                            <th style={S.th}>Patient</th>
+                                            <th style={S.th}>Contact</th>
+                                            <th style={S.th}>Doctor</th>
+                                            <th style={S.th}>Date & Time</th>
+                                            <th style={S.th}>Status</th>
+                                            <th style={{ ...S.th, textAlign: 'center' }}>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {displayList.map((apt, i) => {
+                                            const statusStyle = getStatusStyle(apt.status);
+                                            const pName = apt.userId?.name || apt.clinicPatientId?.name || 'Walk-in Patient';
+                                            const pPhone = apt.userId?.phone || apt.clinicPatientId?.phone || '—';
+                                            const pEmail = apt.userId?.email || apt.clinicPatientId?.email || '';
+                                            const pGender = apt.userId?.gender || apt.clinicPatientId?.gender || '';
+                                            const pAge = apt.userId?.age || apt.clinicPatientId?.age || '';
+                                            const pId = apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || '—';
+                                            const dName = apt.doctorName || 'Assigned Doctor';
+                                            const colors = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#06b6d4', '#8b5cf6'];
+                                            const avatarColor = colors[i % colors.length];
+
+                                            return (
+                                                <tr
+                                                    key={apt._id}
+                                                    style={{ transition: 'background 0.15s' }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                >
+                                                    <td style={{ ...S.td, color: '#475569', fontWeight: '600', fontSize: '0.8rem' }}>{i + 1}</td>
+                                                    <td style={S.td}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                            <div style={S.avatar(avatarColor)}>
+                                                                {pName.charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <div>
+                                                                <div 
+                                                                    onClick={() => {
+                                                                        const rawId = apt.userId?._id || apt.clinicPatientId?._id || apt.patientId;
+                                                                        if (rawId) navigate(`/doctor/patients/${rawId}`);
+                                                                    }}
+                                                                    style={{ color: '#0f172a', fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer' }}
+                                                                    onMouseEnter={e => e.currentTarget.style.color = '#3b82f6'}
+                                                                    onMouseLeave={e => e.currentTarget.style.color = '#0f172a'}
+                                                                >
+                                                                    {pName}
+                                                                </div>
+                                                                <div style={{ color: '#475569', fontSize: '0.75rem', marginTop: '1px' }}>
+                                                                    ID: {pId} {pGender && `• ${pGender}`} {pAge && `• ${pAge}y`}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td style={S.td}>
+                                                        <div style={{ color: '#334155', fontSize: '0.85rem', fontWeight: '500' }}>📞 {pPhone}</div>
+                                                        {pEmail && <div style={{ color: '#475569', fontSize: '0.75rem' }}>{pEmail}</div>}
+                                                    </td>
+                                                    <td style={S.td}>
+                                                        <span style={{ color: '#0f172a', fontWeight: '600', fontSize: '0.85rem' }}>👨‍⚕️ Dr. {dName}</span>
+                                                    </td>
+                                                    <td style={S.td}>
+                                                        <div style={{ color: '#0f172a', fontWeight: '600', fontSize: '0.85rem' }}>
+                                                            {new Date(apt.appointmentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                        </div>
+                                                        <div style={{ color: '#3b82f6', fontSize: '0.78rem', fontWeight: '600' }}>
+                                                            ⏰ {apt.appointmentTime}
+                                                        </div>
+                                                    </td>
+                                                    <td style={S.td}>
+                                                        <span style={{
+                                                            background: statusStyle.bg,
+                                                            color: statusStyle.color,
+                                                            padding: '4px 12px',
+                                                            borderRadius: '20px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: '700',
+                                                            textTransform: 'capitalize',
+                                                            display: 'inline-block'
+                                                        }}>
+                                                            {apt.status}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ ...S.td, textAlign: 'center' }}>
+                                                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                                            <button
+                                                                onClick={() => openVitalsForm(apt)}
+                                                                style={{
+                                                                    ...S.btn('linear-gradient(135deg, #06b6d4, #3b82f6)'),
+                                                                    display: 'flex', alignItems: 'center', gap: '5px'
+                                                                }}
+                                                            >
+                                                                💉 Vitals
+                                                            </button>
+
+                                                            <button
+                                                                onClick={() => setUploadPatient(apt)}
+                                                                style={{
+                                                                    ...S.btn('linear-gradient(135deg, #f59e0b, #d97706)'),
+                                                                    display: 'flex', alignItems: 'center', gap: '5px'
+                                                                }}
+                                                            >
+                                                                📁 Upload
+                                                            </button>
+
+                                                            <button
+                                                                onClick={() => {
+                                                                    const ptName = (apt.userId?.name || apt.clinicPatientId?.name || 'Walk-in').replace(/\s+/g, '-');
+                                                                    const patientMRN = apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || ptName;
+                                                                    navigate(`/doctor/patient/${patientMRN}`, { state: { appointmentId: apt._id } });
+                                                                }}
+                                                                style={{
+                                                                    ...S.btn('linear-gradient(135deg, #8b5cf6, #d946ef)'),
+                                                                    display: 'flex', alignItems: 'center', gap: '5px'
+                                                                }}
+                                                            >
+                                                                📝 Consult Session
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+
+            {/* ─── VITALS MODAL ─── */}
+            {vitalsPatient && (
+                <div style={S.overlay} onClick={() => setVitalsPatient(null)}>
+                    <div style={S.modal} onClick={e => e.stopPropagation()}>
+                        <div style={S.modalHeader}>
+                            <div>
+                                <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '1.15rem', fontWeight: '800' }}>
+                                    💉 Enter Vitals
+                                </h2>
+                                <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.82rem' }}>
+                                    Patient: <strong style={{ color: '#e2e8f0' }}>{vitalsPatient.userId?.name || vitalsPatient.clinicPatientId?.name || 'Unknown'}</strong> •
+                                    MRN: {vitalsPatient.userId?.patientId || vitalsPatient.clinicPatientId?.patientUid || vitalsPatient.patientId || 'N/A'} •
+                                    Dr. {vitalsPatient.doctorName}
+                                </p>
+                            </div>
+                            <button onClick={() => setVitalsPatient(null)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '1.3rem', cursor: 'pointer' }}>✕</button>
+                        </div>
+
+                        <div style={S.modalBody}>
+                            <div style={S.formGrid}>
+                                {[
+                                    { key: 'weight', label: 'Weight (kg)', icon: '⚖️', type: 'number' },
+                                    { key: 'height', label: 'Height (cm)', icon: '📏', type: 'number' },
+                                    { key: 'bmi', label: 'BMI (auto)', icon: '📊', type: 'text', readOnly: true },
+                                    { key: 'bloodPressure', label: 'Blood Pressure', icon: '🩸', type: 'text', placeholder: '120/80' },
+                                    { key: 'pulse', label: 'Pulse (bpm)', icon: '💓', type: 'number' },
+                                    { key: 'temperature', label: 'Temp (°F)', icon: '🌡️', type: 'number' },
+                                    { key: 'spo2', label: 'SpO₂ (%)', icon: '🫁', type: 'number' },
+                                    { key: 'respiratoryRate', label: 'Resp Rate (/min)', icon: '💨', type: 'number' },
+                                ].map(field => (
+                                    <div key={field.key} style={S.formGroup}>
+                                        <label style={S.formLabel}>{field.icon} {field.label}</label>
+                                        <input
+                                            type={field.type}
+                                            value={vitals[field.key]}
+                                            readOnly={field.readOnly}
+                                            placeholder={field.placeholder || ''}
+                                            onChange={e => setVitals({ ...vitals, [field.key]: e.target.value })}
+                                            style={{
+                                                ...S.formInput,
+                                                ...(field.readOnly ? { background: 'rgba(255,255,255,0.02)', color: '#64748b' } : {})
+                                            }}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div style={{ ...S.formGroup, marginTop: '16px' }}>
+                                <label style={S.formLabel}>📋 Chief Complaint</label>
+                                <textarea
+                                    value={vitals.chiefComplaint}
+                                    onChange={e => setVitals({ ...vitals, chiefComplaint: e.target.value })}
+                                    placeholder="Patient's chief complaint..."
+                                    style={S.formTextarea}
+                                />
+                            </div>
+
+                            <div style={{ ...S.formGroup, marginTop: '12px' }}>
+                                <label style={S.formLabel}>📝 Nurse Notes</label>
+                                <textarea
+                                    value={vitals.notes}
+                                    onChange={e => setVitals({ ...vitals, notes: e.target.value })}
+                                    placeholder="Any observations or notes..."
+                                    style={S.formTextarea}
+                                />
+                            </div>
+                        </div>
+
+                        <div style={S.modalFooter}>
+                            <button onClick={() => setVitalsPatient(null)} style={{ ...S.btn('rgba(255,255,255,0.08)'), color: '#94a3b8' }}>Cancel</button>
+                            <button
+                                onClick={handleSaveVitals}
+                                disabled={saving}
+                                style={{ ...S.btn('linear-gradient(135deg, #10b981, #059669)'), opacity: saving ? 0.6 : 1, minWidth: '140px' }}
+                            >
+                                {saving ? '⏳ Saving...' : '✅ Save Vitals'}
+                            </button>
+                        </div>
                     </div>
-                )
-            }
+                </div>
+            )}
 
             {/* UPload Report Modal */}
             {uploadPatient && (

@@ -1,0 +1,154 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { FiSearch, FiX, FiLoader } from 'react-icons/fi';
+import api from '../utils/api';
+
+const GlobalSearch = () => {
+    const [query, setQuery] = useState('');
+    const [results, setResults] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const searchRef = useRef(null);
+    const navigate = useNavigate();
+
+    // Debounce effect
+    useEffect(() => {
+        const fetchResults = async () => {
+            if (query.trim().length < 2) {
+                setResults([]);
+                setIsOpen(false);
+                return;
+            }
+
+            setIsLoading(true);
+            try {
+                const response = await api.get(`/api/search`, {
+                    params: { q: query }
+                });
+                
+                if (response.data.success) {
+                    setResults(response.data.data);
+                    setIsOpen(true);
+                    setHighlightedIndex(-1);
+                }
+            } catch (error) {
+                console.error("Search error:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        const timeoutId = setTimeout(() => {
+            fetchResults();
+        }, 300);
+
+        return () => clearTimeout(timeoutId);
+    }, [query]);
+
+    // Click outside to close
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (searchRef.current && !searchRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Handle Keyboard Navigation
+    const handleKeyDown = (e) => {
+        if (!isOpen) return;
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setHighlightedIndex(prev => (prev < results.length - 1 ? prev + 1 : prev));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setHighlightedIndex(prev => (prev > 0 ? prev - 1 : 0));
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (highlightedIndex >= 0 && highlightedIndex < results.length) {
+                handleResultClick(results[highlightedIndex]);
+            } else if (results.length > 0) {
+                handleResultClick(results[0]);
+            }
+        } else if (e.key === 'Escape') {
+            setIsOpen(false);
+        }
+    };
+
+    const handleResultClick = (result) => {
+        setIsOpen(false);
+        setQuery('');
+        navigate(result.route);
+    };
+
+    // Group results by type
+    const groupedResults = results.reduce((acc, result) => {
+        if (!acc[result.type]) acc[result.type] = [];
+        acc[result.type].push(result);
+        return acc;
+    }, {});
+
+    let flatIndex = 0; // For mapping highlighted index correctly across groups
+
+    return (
+        <div className="global-search-container" ref={searchRef}>
+            <div className="global-search-input-wrapper">
+                <div className="global-search-icon-left">
+                    <FiSearch size={16} />
+                </div>
+                <input
+                    type="text"
+                    className="global-search-input"
+                    placeholder="Search patients, doctors, MRN..."
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onFocus={() => { if (results.length > 0) setIsOpen(true); }}
+                />
+                <div className="global-search-icon-right">
+                    {isLoading ? (
+                        <FiLoader className="clear-icon animate-spin" size={16} />
+                    ) : query ? (
+                        <FiX className="clear-icon" size={16} onClick={() => { setQuery(''); setResults([]); setIsOpen(false); }} />
+                    ) : null}
+                </div>
+            </div>
+
+            {isOpen && query.length >= 2 && (
+                <div className="global-search-dropdown">
+                    {results.length === 0 && !isLoading ? (
+                        <div className="p-4 text-center text-sm text-gray-500">
+                            No matching results found.
+                        </div>
+                    ) : (
+                        Object.keys(groupedResults).map(type => (
+                            <div key={type} className="global-search-group">
+                                <div className="global-search-group-title">{type}s</div>
+                                {groupedResults[type].map(result => {
+                                    const currentIndex = flatIndex++;
+                                    return (
+                                        <div
+                                            key={result.id}
+                                            className={`global-search-item ${currentIndex === highlightedIndex ? 'highlighted' : ''}`}
+                                            onClick={() => handleResultClick(result)}
+                                            onMouseEnter={() => setHighlightedIndex(currentIndex)}
+                                        >
+                                            <div className="global-search-item-title">{result.title}</div>
+                                            <div className="global-search-item-subtitle">{result.subtitle}</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default GlobalSearch;

@@ -8,6 +8,7 @@ import {
     FiSettings, FiLogOut, FiPieChart, FiClipboard,
     FiFileText, FiPlusSquare, FiDatabase, FiGrid, FiShield, FiMenu, FiX
 } from 'react-icons/fi';
+import GlobalSearch from '../GlobalSearch';
 import './DashboardLayout.css';
 
 const DashboardSidebar = ({ isOpen, setOpen }) => {
@@ -77,6 +78,13 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
                 { label: 'Vendor Returns', path: '/pharmacy/vendor-returns', icon: <FiActivity /> },
                 { label: 'Collections', path: '/pharmacy/collections', icon: <FiPieChart /> },
                 { label: 'Departments', path: '/pharmacy/departments', icon: <FiGrid /> },
+            ];
+        }
+
+        const roleClean = role.replace(/\s+/g, '');
+        if (roleClean === 'otmanager' || roleClean === 'otstaff') {
+            return [
+                { label: 'OT Dashboard', path: '/ot-dashboard', icon: <FiActivity /> },
             ];
         }
         if (role === 'accountant') {
@@ -202,6 +210,8 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                     <span className="path-user-role">{user?.role}</span>
                 </div>
             </div>
+
+            <GlobalSearch />
 
             <div className="topbar-right">
                 <div className="user-profile-widget">

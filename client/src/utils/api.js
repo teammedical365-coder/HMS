@@ -162,6 +162,12 @@ export const doctorAPI = {
     getBookedSlots: async (doctorId, date) => {
         const response = await apiClient.get(`/api/doctor/${doctorId}/booked-slots?date=${date}`);
         return response.data;
+    },
+    getDoctors: async (hospitalId = null) => {
+        let url = '/api/doctor';
+        if (hospitalId) url += `?hospitalId=${encodeURIComponent(hospitalId)}`;
+        const response = await apiClient.get(url);
+        return response.data;
     }
 };
 
@@ -290,6 +296,11 @@ export const publicAPI = {
     },
     getTenantConfig: async (domain) => {
         const url = `/api/public/tenant-config?domain=${encodeURIComponent(domain)}`;
+        return (await apiClient.get(url)).data;
+    },
+    getBookedSlots: async (doctorId, date, hospitalId = '') => {
+        let url = `/api/doctor/${doctorId}/booked-slots?date=${date}`;
+        if (hospitalId) url += `&hospitalId=${encodeURIComponent(hospitalId)}`;
         return (await apiClient.get(url)).data;
     }
 };
@@ -534,6 +545,7 @@ export const billingAPI = {
 
 
 export const admissionAPI = {
+    transferBed: async (id, data) => (await apiClient.put(`/api/admissions/${id}/transfer`, data)).data,
     createAdmission: async (data) => (await apiClient.post('/api/admissions', data)).data,
     getActiveAdmissions: async (params = {}) => (await apiClient.get('/api/admissions/active', { params })).data,
     getPatientAdmissions: async (patientId) => (await apiClient.get(`/api/admissions/patient/${patientId}`)).data,
@@ -703,4 +715,162 @@ export const patientAuthAPI = {
     getDepartmentUpiByRole: async (roleName) => (await patientApiClient.get(`/api/patient-auth/department-upi/${encodeURIComponent(roleName)}`)).data,
 };
 
+export const bedAPI = {
+    getBeds: async (params) => {
+        const response = await apiClient.get('/api/beds', { params });
+        return response.data;
+    },
+    createBed: async (data) => {
+        const response = await apiClient.post('/api/beds', data);
+        return response.data;
+    },
+    updateBed: async (id, data) => {
+        const response = await apiClient.put(`/api/beds/${id}`, data);
+        return response.data;
+    },
+    deleteBed: async (id) => {
+        const response = await apiClient.delete(`/api/beds/${id}`);
+        return response.data;
+    }
+};
+
+export const otAPI = {
+    updateSurgeryWorkflow: async (id, data) => (await apiClient.put(`/api/ot/surgery-plans/${id}/workflow`, data)).data,
+    getDashboardStats: async () => {
+        const response = await apiClient.get('/api/ot/dashboard-stats');
+        return response.data;
+    },
+    getRooms: async () => {
+        const response = await apiClient.get('/api/ot/rooms');
+        return response.data;
+    },
+    createSurgeryPlan: async (data) => {
+        const response = await apiClient.post('/api/ot/surgery-plans', data);
+        return response.data;
+    },
+    getPatientSurgeryPlans: async (patientId) => {
+        const response = await apiClient.get(`/api/ot/surgery-plans/patient/${patientId}`);
+        return response.data;
+    },
+    scheduleSurgery: async (id, data) => {
+        const response = await apiClient.post(`/api/ot/surgery-plans/${id}/schedule`, data);
+        return response.data;
+    },
+    updateScheduledSurgery: async (id, data) => {
+        const response = await apiClient.put(`/api/ot/surgery-plans/${id}/schedule`, data);
+        return response.data;
+    },
+    cancelSurgery: async (id) => {
+        const response = await apiClient.put(`/api/ot/surgery-plans/${id}/cancel`);
+        return response.data;
+    },
+    getScheduledSurgeries: async (date) => {
+        const response = await apiClient.get('/api/ot/surgery-plans/scheduled', { params: { date } });
+        return response.data;
+    },
+    getTodaySchedule: async (date) => {
+        const response = await apiClient.get('/api/ot/today-schedule', { params: { date } });
+        return response.data;
+    },
+    getRoomStatus: async (date) => {
+        const response = await apiClient.get('/api/ot/room-status', { params: { date } });
+        return response.data;
+    },
+    getWorkflowAlerts: async (date) => {
+        const response = await apiClient.get('/api/ot/workflow-alerts', { params: { date } });
+        return response.data;
+    },
+    getPlannedSurgeries: async () => {
+        const response = await apiClient.get('/api/ot/surgery-plans/planned');
+        return response.data;
+    },
+    getMySurgeryPlans: async () => {
+        const response = await apiClient.get('/api/ot/surgery-plans/surgeon/my');
+        return response.data;
+    },
+    getSurgeryPlanById: async (id) => {
+        const response = await apiClient.get(`/api/ot/surgery-plans/${id}`);
+        return response.data;
+    }
+};
+
+export const referralAPI = {
+    create: async (data) => {
+        const response = await apiClient.post('/api/referrals', data);
+        return response.data;
+    },
+    getMyReferrals: async () => {
+        const response = await apiClient.get('/api/referrals/my-referrals');
+        return response.data;
+    },
+    getMySent: async () => {
+        const response = await apiClient.get('/api/referrals/my-sent');
+        return response.data;
+    },
+    getPatientReferrals: async (patientId) => {
+        const response = await apiClient.get(`/api/referrals/patient/${patientId}`);
+        return response.data;
+    },
+    getById: async (id) => {
+        const response = await apiClient.get(`/api/referrals/${id}`);
+        return response.data;
+    },
+    review: async (id, data) => {
+        const response = await apiClient.put(`/api/referrals/${id}/review`, data);
+        return response.data;
+    }
+};
+
 export default apiClient;
+
+export const consentAPI = {
+    getStats: async () => {
+        const response = await apiClient.get('/api/consent/stats');
+        return response.data;
+    },
+    getCategories: async () => {
+        const response = await apiClient.get('/api/consent/categories');
+        return response.data;
+    },
+    createCategory: async (data) => {
+        const response = await apiClient.post('/api/consent/categories', data);
+        return response.data;
+    },
+    updateCategory: async (id, data) => {
+        const response = await apiClient.put('/api/consent/categories/' + id, data);
+        return response.data;
+    },
+    toggleCategory: async (id) => {
+        const response = await apiClient.patch('/api/consent/categories/' + id + '/toggle');
+        return response.data;
+    },
+    deleteCategory: async (id) => {
+        const response = await apiClient.delete('/api/consent/categories/' + id);
+        return response.data;
+    },
+    getTemplates: async (params) => {
+        const response = await apiClient.get('/api/consent/templates', { params });
+        return response.data;
+    },
+    getTemplateById: async (id) => {
+        const response = await apiClient.get('/api/consent/templates/' + id);
+        return response.data;
+    },
+    createTemplate: async (formData) => {
+        const response = await apiClient.post('/api/consent/templates', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+    updateTemplate: async (id, formData) => {
+        const response = await apiClient.put('/api/consent/templates/' + id, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+    deleteTemplate: async (id) => {
+        const response = await apiClient.delete('/api/consent/templates/' + id);
+        return response.data;
+    }
+};
+

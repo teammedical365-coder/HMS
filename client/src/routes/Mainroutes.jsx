@@ -67,6 +67,9 @@ import CashierDashboard from '../pages/cashier/CashierDashboard';
 import AdminLogin from '../pages/administration/AdminLogin';
 import AdminSignup from '../pages/administration/AdminSignup';
 
+// Consent Management
+import ConsentManagement from '../pages/admin/ConsentManagement';
+
 // Lab Pages
 import LabDashboard from '../pages/lab/LabDashboard';
 import AssignedTests from '../pages/lab/AssignedTests';
@@ -84,6 +87,7 @@ import PharmacyDepartments from '../pages/pharmacy/PharmacyDepartments';
 // Reception Pages
 import ReceptionDashboard from '../pages/reception/ReceptionDashboard';
 import ReceptionPatients from '../pages/reception/ReceptionPatients';
+import OTDashboard from '../pages/hospitaladmin/OTDashboard';
 
 // Accountant / Finance Pages
 import AccountantDashboard from '../pages/accountant/AccountantDashboard';
@@ -194,6 +198,7 @@ const MainRoutes = () => {
                             <Route path="admin/medicines" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminMedicines /></ProtectedRoute>} />
                             <Route path="admin/question-library" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminQuestionLibrary /></ProtectedRoute>} />
                             <Route path="admin/test-packages" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><AdminTestPackages /></ProtectedRoute>} />
+                            <Route path="admin/consent" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><ConsentManagement /></ProtectedRoute>} />
                             
                             {/* Dashboard routes — clinic vs full hospital */}
                             <Route path="hospitaladmin" element={
@@ -219,6 +224,10 @@ const MainRoutes = () => {
                             <Route path="pharmacy/vendor-returns" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><VendorReturns /></ProtectedRoute>} />
                             <Route path="pharmacy/collections" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyCollections /></ProtectedRoute>} />
                             <Route path="pharmacy/departments" element={<ProtectedRoute requiredPermissions={['pharmacy_view', 'pharmacy_manage']}><PharmacyDepartments /></ProtectedRoute>} />
+
+
+                            {/* OT Pages */}
+                            <Route path="ot-dashboard" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'otmanager', 'otstaff']}><OTDashboard /></ProtectedRoute>} />
 
                             {/* Reception Pages */}
                             <Route path="reception/dashboard" element={<ProtectedRoute requiredPermissions={['appointment_manage']}><ReceptionDashboard /></ProtectedRoute>} />

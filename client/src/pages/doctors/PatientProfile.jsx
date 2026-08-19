@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doctorAPI, receptionAPI } from '../../utils/api';
+import { doctorAPI, receptionAPI, otAPI, adminEntitiesAPI, admissionAPI, bedAPI } from '../../utils/api';
 
 const PatientProfile = () => {
     const { patientId } = useParams();
@@ -9,10 +9,30 @@ const PatientProfile = () => {
     const [appointments, setAppointments] = useState([]);
     const [labReports, setLabReports] = useState([]);
     const [pharmacyOrders, setPharmacyOrders] = useState([]);
+    const [surgeryPlans, setSurgeryPlans] = useState([]);
     const [currentFollowupStatus, setCurrentFollowupStatus] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('overview');
+
+    const [surgeonsList, setSurgeonsList] = useState([]);
+    const [otRoomsList, setOtRoomsList] = useState([]);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
+    
+    const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+    const [workflowActionType, setWorkflowActionType] = useState(null); // 'ADMIT' or 'TRANSFER'
+    const [activeSurgeryId, setActiveSurgeryId] = useState(null);
+    const [workflowBeds, setWorkflowBeds] = useState([]);
+    const [selectedBedId, setSelectedBedId] = useState('');
+
+    const [scheduleData, setScheduleData] = useState({
+        id: null,
+        otRoomId: '',
+        surgeryDate: '',
+        startTime: '',
+        endTime: '',
+        surgeonId: ''
+    });
 
     useEffect(() => {
         if (patientId) fetchProfile();
@@ -32,6 +52,15 @@ const PatientProfile = () => {
             }
 
             try {
+                const spRes = await otAPI.getPatientSurgeryPlans(patientId);
+                if (spRes.success) {
+                    setSurgeryPlans(spRes.data || []);
+                }
+            } catch (err) {
+                console.warn("Could not fetch surgery plans:", err?.message);
+            }
+
+            try {
                 const resAuto = await receptionAPI.getFollowupStatus(patientId, 'auto');
                 if (resAuto.success) {
                     setCurrentFollowupStatus(resAuto);
@@ -44,6 +73,129 @@ const PatientProfile = () => {
             setError(err.response?.data?.message || err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        const fetchExtras = async () => {
+            try {
+                const sRes = await adminEntitiesAPI.getDoctors();
+                if (sRes.success) setSurgeonsList(sRes.data || []);
+            } catch (e) {}
+            try {
+                const rRes = await otAPI.getRooms();
+                if (rRes.success) setOtRoomsList(rRes.rooms.filter(r => r.status !== 'Maintenance' && r.status !== 'MAINTENANCE') || []);
+            } catch (e) {}
+        };
+        fetchExtras();
+    }, []);
+
+    const handleOpenScheduleModal = (sp) => {
+        setScheduleData({
+            id: sp._id,
+            otRoomId: sp.otRoomId?._id || sp.otRoomId || '',
+            surgeryDate: sp.surgeryDate ? String(sp.surgeryDate).split('T')[0] : sp.preferredDate ? String(sp.preferredDate).split('T')[0] : '',
+            startTime: sp.startTime || sp.preferredTime || '',
+            endTime: sp.endTime || '',
+            surgeonId: sp.surgeonId?._id || sp.surgeonId || ''
+        });
+        setShowScheduleModal(true);
+    };
+
+    const handleScheduleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const isEdit = surgeryPlans.find(s => s._id === scheduleData.id)?.status === 'SCHEDULED';
+            const apiCall = isEdit ? otAPI.updateScheduledSurgery : otAPI.scheduleSurgery;
+            const res = await apiCall(scheduleData.id, scheduleData);
+            if (res.success) {
+                alert(res.message || 'Surgery scheduled successfully');
+                setShowScheduleModal(false);
+                fetchProfile();
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'Error scheduling surgery');
+        }
+    };
+
+    const handleWorkflowTransition = async (id, status) => {
+        try {
+            const res = await otAPI.updateSurgeryWorkflow(id, { status });
+            if (res.success) {
+                alert(res.message || `Status updated to ${status}`);
+                fetchProfile();
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'Error updating workflow');
+        }
+    };
+
+    const handleOpenWorkflowModal = async (id, type) => {
+        setActiveSurgeryId(id);
+        setWorkflowActionType(type);
+        try {
+            const res = await bedAPI.getBeds({ status: 'AVAILABLE' });
+            if (res.success) setWorkflowBeds(res.beds || []);
+            setShowWorkflowModal(true);
+        } catch (err) {
+            alert('Failed to fetch available beds');
+        }
+    };
+
+    const handleWorkflowModalSubmit = async (e) => {
+        e.preventDefault();
+        if (!selectedBedId) return alert('Please select a bed');
+        try {
+            if (workflowActionType === 'ADMIT') {
+                const targetBed = workflowBeds.find(b => b._id === selectedBedId);
+                const admRes = await admissionAPI.createAdmission({
+                    patientId,
+                    ward: targetBed?.ward,
+                    bedId: selectedBedId,
+                    admissionDate: new Date().toISOString().split('T')[0],
+                    admissionTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+                });
+                if (admRes.success) {
+                    await otAPI.updateSurgeryWorkflow(activeSurgeryId, { status: 'ADMITTED' });
+                    alert('Patient admitted successfully');
+                }
+            } else if (workflowActionType === 'TRANSFER') {
+                const actAdmRes = await admissionAPI.getPatientAdmissions(patientId);
+                const activeAdm = actAdmRes.admissions?.find(a => a.status === 'Admitted');
+                if (activeAdm) {
+                    const targetBed = workflowBeds.find(b => b._id === selectedBedId);
+                    const transRes = await admissionAPI.transferBed(activeAdm._id, {
+                        newWard: targetBed?.ward,
+                        newBedId: selectedBedId,
+                        transferDate: new Date().toISOString().split('T')[0],
+                        transferTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+                    });
+                    if (transRes.success) {
+                        await otAPI.updateSurgeryWorkflow(activeSurgeryId, { status: 'POST_OP' });
+                        alert('Patient transferred successfully');
+                    }
+                } else {
+                    alert('No active admission found to transfer');
+                }
+            }
+            setShowWorkflowModal(false);
+            setSelectedBedId('');
+            fetchProfile();
+        } catch (err) {
+            alert(err.response?.data?.message || 'Error processing request');
+        }
+    };
+
+    const handleCancelSurgery = async (id) => {
+        if (!window.confirm("Are you sure you want to cancel this scheduled surgery?")) return;
+        try {
+            const res = await otAPI.cancelSurgery(id);
+            if (res.success) {
+                alert(res.message || 'Surgery cancelled');
+                fetchProfile();
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'Error cancelling surgery');
         }
     };
 
@@ -88,7 +240,27 @@ const PatientProfile = () => {
         th: { padding: '12px 16px', textAlign: 'left', color: '#64748b', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.06em', borderBottom: '1px solid rgba(255,255,255,0.06)' },
         td: { padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: '0.85rem' },
         statusBadge: (s) => {
-            const m = { confirmed: { b: '#dcfce7', c: '#166534' }, completed: { b: '#dbeafe', c: '#1e40af' }, cancelled: { b: '#fee2e2', c: '#991b1b' }, pending: { b: '#fef3c7', c: '#92400e' }, PENDING: { b: '#fef3c7', c: '#92400e' }, DONE: { b: '#dcfce7', c: '#166534' }, IN_PROGRESS: { b: '#dbeafe', c: '#1e40af' }, UPLOADED: { b: '#dcfce7', c: '#166534' }, PAID: { b: '#dcfce7', c: '#166534' } };
+            const m = { 
+                confirmed: { b: '#dcfce7', c: '#166534' }, 
+                completed: { b: '#dbeafe', c: '#1e40af' }, 
+                cancelled: { b: '#fee2e2', c: '#991b1b' }, 
+                pending: { b: '#fef3c7', c: '#92400e' }, 
+                PENDING: { b: '#fef3c7', c: '#92400e' }, 
+                DONE: { b: '#dcfce7', c: '#166534' }, 
+                IN_PROGRESS: { b: '#dbeafe', c: '#1e40af' }, 
+                UPLOADED: { b: '#dcfce7', c: '#166534' }, 
+                PAID: { b: '#dcfce7', c: '#166534' },
+                PLANNED: { b: '#fef3c7', c: '#92400e' },
+                SCHEDULED: { b: '#e0e7ff', c: '#3730a3' },
+                ADMITTED: { b: '#eff6ff', c: '#1d4ed8' },
+                PRE_OP: { b: '#fef3c7', c: '#b45309' },
+                READY_FOR_OT: { b: '#f3e8ff', c: '#6b21a8' },
+                IN_OT: { b: '#fee2e2', c: '#b91c1c' },
+                SURGERY_COMPLETED: { b: '#ccfbf1', c: '#0f766e' },
+                POST_OP: { b: '#ecfeff', c: '#0e7490' },
+                COMPLETED: { b: '#dcfce7', c: '#15803d' },
+                CANCELLED: { b: '#f1f5f9', c: '#64748b' }
+            };
             const v = m[s] || { b: '#f1f5f9', c: '#475569' };
             return { background: v.b, color: v.c, padding: '3px 12px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: '700', textTransform: 'capitalize' };
         },
@@ -122,6 +294,7 @@ const PatientProfile = () => {
 
     const tabs = [
         { key: 'overview', label: '📋 Overview', icon: '' },
+        { key: 'surgery', label: `🔪 Surgery Plans (${surgeryPlans.length})` },
         { key: 'vitals', label: '💓 Vitals' },
         { key: 'medical', label: '🏥 Medical History' },
         { key: 'visits', label: '📅 All Visits' },
@@ -233,6 +406,142 @@ const PatientProfile = () => {
         </>
     );
 
+    const renderSurgeryPlans = () => (
+        <div style={{ ...C.card, borderLeft: '4px solid #7c3aed' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h4 style={{ ...C.cardTitle, color: '#c084fc', margin: 0 }}>🔪 Surgery Plans ({surgeryPlans.length})</h4>
+            </div>
+
+            {surgeryPlans.length === 0 ? (
+                <div style={C.empty}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>📋</div>
+                    <p>No surgery plans found for this patient.</p>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {surgeryPlans.map(sp => {
+                        const surgeonName = sp.surgeonId?.name || (sp.surgeonId?.firstName ? `${sp.surgeonId.firstName} ${sp.surgeonId.lastName || ''}` : 'Surgeon');
+                        const cleanSurgeon = surgeonName.replace(/^Dr\.?\s*/i, '');
+                        const refDocName = sp.referringDoctorId?.name ? sp.referringDoctorId.name.replace(/^Dr\.?\s*/i, '') : null;
+                        const docName = sp.doctorId?.name ? sp.doctorId.name.replace(/^Dr\.?\s*/i, '') : null;
+
+                        return (
+                            <div key={sp._id} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '18px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                            <h5 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '800', color: '#f8fafc' }}>{sp.surgery}</h5>
+                                            {sp.planId && (
+                                                <span style={{ fontSize: '0.75rem', fontWeight: 800, background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: '4px' }}>
+                                                    {sp.planId}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '4px' }}>
+                                            <strong>Diagnosis:</strong> {sp.diagnosis || 'N/A'}
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <span style={{ ...C.statusBadge(sp.status), padding: '6px 14px' }}>{sp.status}</span>
+                                        {sp.status === 'PLANNED' && (
+                                            <button onClick={() => handleOpenScheduleModal(sp)} style={{ padding: '6px 14px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Schedule Surgery</button>
+                                        )}
+                                        {sp.status === 'SCHEDULED' && (
+                                            <button onClick={() => sp.admissionRequired ? handleOpenWorkflowModal(sp._id, 'ADMIT') : handleWorkflowTransition(sp._id, 'PRE_OP')} style={{ padding: '6px 12px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>{sp.admissionRequired ? 'Admit Patient' : 'Start Pre-Op'}</button>
+                                        )}
+                                        {sp.status === 'ADMITTED' && (
+                                            <button onClick={() => handleWorkflowTransition(sp._id, 'PRE_OP')} style={{ padding: '6px 12px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Start Pre-Op</button>
+                                        )}
+                                        {sp.status === 'PRE_OP' && (
+                                            <button onClick={() => handleWorkflowTransition(sp._id, 'READY_FOR_OT')} style={{ padding: '6px 12px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Mark Ready for OT</button>
+                                        )}
+                                        {sp.status === 'READY_FOR_OT' && (
+                                            <button onClick={() => handleWorkflowTransition(sp._id, 'IN_OT')} style={{ padding: '6px 12px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Send to OT</button>
+                                        )}
+                                        {sp.status === 'IN_OT' && (
+                                            <button onClick={() => handleWorkflowTransition(sp._id, 'SURGERY_COMPLETED')} style={{ padding: '6px 12px', background: '#06b6d4', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Complete Surgery</button>
+                                        )}
+                                        {sp.status === 'SURGERY_COMPLETED' && (
+                                            <>
+                                                <button onClick={() => handleOpenWorkflowModal(sp._id, 'TRANSFER')} style={{ padding: '6px 12px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Transfer & Post-Op</button>
+                                                <button onClick={() => handleWorkflowTransition(sp._id, 'POST_OP')} style={{ padding: '6px 12px', background: '#64748b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Start Post-Op</button>
+                                            </>
+                                        )}
+                                        {sp.status === 'SCHEDULED' && (
+                                            <>
+                                                <button onClick={() => handleOpenScheduleModal(sp)} style={{ padding: '6px 12px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Edit</button>
+                                                <button onClick={() => handleCancelSurgery(sp._id)} style={{ padding: '6px 12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>Cancel</button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginTop: '12px', fontSize: '0.85rem' }}>
+                                    <div>
+                                        <span style={{ color: '#94a3b8' }}>Operating Surgeon: </span>
+                                        <strong style={{ color: '#f8fafc' }}>Dr. {cleanSurgeon}</strong>
+                                        {sp.assistantSurgeonIds && sp.assistantSurgeonIds.length > 0 && (
+                                            <div style={{ color: '#cbd5e1', fontSize: '0.8rem', marginTop: '2px' }}>
+                                                🤝 Assistants: {sp.assistantSurgeonIds.map(a => `Dr. ${(a.name || 'Doctor').replace(/^Dr\.?\s*/i, '')}`).join(', ')}
+                                            </div>
+                                        )}
+                                        {(refDocName || docName) && (refDocName !== cleanSurgeon && docName !== cleanSurgeon) && (
+                                            <div style={{ color: '#64748b', fontSize: '0.78rem', marginTop: '2px' }}>
+                                                Referred by: Dr. {refDocName || docName}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {sp.status === 'SCHEDULED' || sp.status === 'ADMITTED' || sp.status === 'PRE_OP' || sp.status === 'READY_FOR_OT' || sp.status === 'IN_OT' || sp.status === 'SURGERY_COMPLETED' || sp.status === 'POST_OP' || sp.status === 'COMPLETED' ? (
+                                        <>
+                                            <div>
+                                                <span style={{ color: '#94a3b8' }}>OT Room: </span>
+                                                <strong style={{ color: '#f8fafc' }}>🚪 {sp.otRoomId?.name || 'Assigned'}</strong>
+                                            </div>
+                                            <div>
+                                                <span style={{ color: '#94a3b8' }}>Scheduled: </span>
+                                                <strong style={{ color: '#f8fafc' }}>{formatDate(sp.surgeryDate)} ({sp.startTime} - {sp.endTime})</strong>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div>
+                                            <span style={{ color: '#94a3b8' }}>OT Status: </span>
+                                            <strong style={{ color: '#fbbf24' }}>⏳ OT scheduling pending</strong>
+                                            <div style={{ color: '#94a3b8', fontSize: '0.78rem', marginTop: '2px' }}>
+                                                Preferred: {sp.preferredDate ? formatDate(sp.preferredDate) : 'Flexible'} {sp.preferredTime || ''}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {sp.surgeryCost > 0 && (
+                                        <div>
+                                            <span style={{ color: '#94a3b8' }}>Surgery Fee: </span>
+                                            <strong style={{ color: '#38bdf8' }}>₹{Number(sp.surgeryCost).toLocaleString('en-IN')}</strong>
+                                            <span style={{ marginLeft: '6px', fontSize: '0.75rem', fontWeight: 700, color: sp.paymentStatus === 'PAID' ? '#4ade80' : (sp.paymentStatus === 'PARTIALLY PAID' ? '#fbbf24' : '#f87171') }}>
+                                                [{sp.paymentStatus || 'UNPAID'}]
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <span style={{ color: '#94a3b8' }}>Admission Required: </span>
+                                        <strong style={{ color: '#f8fafc' }}>{sp.admissionRequired ? 'Yes' : 'No'}</strong>
+                                    </div>
+                                </div>
+
+                                {sp.notes && (
+                                    <div style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', fontSize: '0.85rem', color: '#cbd5e1' }}>
+                                        <strong>Notes:</strong> {sp.notes}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+
     const renderVitals = () => (
         <div style={C.card}>
             <h4 style={C.cardTitle}>💓 Current Vitals {vitals.lastRecorded && <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '500' }}>(Last: {formatDate(vitals.lastRecorded)})</span>}</h4>
@@ -255,6 +564,9 @@ const PatientProfile = () => {
         const h = fp;
         return (
             <>
+                {/* Surgery Plans Summary */}
+                {surgeryPlans && surgeryPlans.length > 0 && renderSurgeryPlans()}
+
                 {/* Obstetric History */}
                 <div style={C.card}>
                     <h4 style={C.cardTitle}>🤰 Obstetric History</h4>
@@ -295,32 +607,22 @@ const PatientProfile = () => {
 
                 {/* Medical History */}
                 <div style={C.card}>
-                    <h4 style={C.cardTitle}>🏥 Past Medical History</h4>
-                    <div style={C.grid2}>
-                        {renderField('Medical History', h.medicalHistory)}
-                        {renderField('Known Allergies', h.allergies || h.drugAllergies)}
-                        {renderField('Current Medications', h.currentMedications)}
-                        {renderField('Family History', h.familyHistory)}
-                        {renderField('Lifestyle / Habits', h.lifestyle)}
-                        {renderField('Old Surgical History', h.surgicalHistory)}
+                    <h4 style={C.cardTitle}>🏥 Chronic Conditions & Habits</h4>
+                    <div style={C.grid3}>
+                        {renderField('Diabetes', h.diabetes)}
+                        {renderField('Hypertension', h.hypertension)}
+                        {renderField('Thyroid', h.thyroid)}
+                        {renderField('Tuberculosis', h.tb)}
+                        {renderField('Allergies', h.allergies)}
+                        {renderField('Smoking', h.smoking)}
+                        {renderField('Alcohol', h.alcohol)}
+                        {renderField('Previous Surgery', h.previousSurgery)}
                     </div>
-
-                    {(h.surgeryHysteroscopy || h.surgeryLaparoscopy || h.surgeryAppendectomy || h.surgeryOther) && (
-                        <div style={{ marginTop: '14px', background: 'rgba(59, 130, 246, 0.05)', padding: '12px', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: '10px' }}>
-                            <h5 style={{ margin: '0 0 10px', fontSize: '0.8rem', color: '#93c5fd' }}>🔪 Specific Surgical History</h5>
-                            <div style={C.grid2}>
-                                {h.surgeryHysteroscopy && renderField('Hysteroscopy', h.surgeryHysteroscopyDetails || 'Checked (No details)')}
-                                {h.surgeryLaparoscopy && renderField('Laparoscopy', h.surgeryLaparoscopyDetails || 'Checked (No details)')}
-                                {h.surgeryAppendectomy && renderField('Appendectomy', h.surgeryAppendectomyDetails || 'Checked (No details)')}
-                                {h.surgeryOther && renderField('Other Surgery', h.surgeryOtherDetails || 'Checked (No details)')}
-                            </div>
-                        </div>
-                    )}
                 </div>
 
-                {/* Spouse/Partner */}
+                {/* Male Factor / Partner History */}
                 <div style={C.card}>
-                    <h4 style={C.cardTitle}>👫 Spouse / Partner Info</h4>
+                    <h4 style={C.cardTitle}>👨 Male Factor / Partner Details</h4>
                     <div style={C.grid3}>
                         {renderField('Spouse Name', h.spouseName)}
                         {renderField('Spouse Age', h.spouseAge)}
@@ -593,6 +895,7 @@ const PatientProfile = () => {
 
                 {/* Tab Content */}
                 {activeTab === 'overview' && renderOverview()}
+                {activeTab === 'surgery' && renderSurgeryPlans()}
                 {activeTab === 'vitals' && renderVitals()}
                 {activeTab === 'medical' && renderMedicalHistory()}
                 {activeTab === 'visits' && renderVisits()}
@@ -600,6 +903,77 @@ const PatientProfile = () => {
                 {activeTab === 'prescriptions' && renderPrescriptions()}
                 {activeTab === 'clinical' && renderClinical()}
             </div>
+
+            {/* Schedule Surgery Modal */}
+            {showScheduleModal && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+                    <div style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '500px', color: '#fff' }}>
+                        <h3 style={{ margin: '0 0 16px', fontSize: '1.2rem', color: '#f8fafc' }}>Schedule Operation / Surgery</h3>
+                        <form onSubmit={handleScheduleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '4px' }}>Operating Surgeon *</label>
+                                <select required value={scheduleData.surgeonId} onChange={e => setScheduleData({ ...scheduleData, surgeonId: e.target.value })} style={{ width: '100%', padding: '10px', background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }}>
+                                    <option value="">Select Surgeon</option>
+                                    {surgeonsList.map(s => <option key={s._id} value={s._id}>Dr. {s.name || `${s.firstName} ${s.lastName || ''}`}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '4px' }}>Assign OT Room *</label>
+                                <select required value={scheduleData.otRoomId} onChange={e => setScheduleData({ ...scheduleData, otRoomId: e.target.value })} style={{ width: '100%', padding: '10px', background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }}>
+                                    <option value="">Select OT Room</option>
+                                    {otRoomsList.map(r => <option key={r._id} value={r._id}>{r.name} ({r.roomNumber || ''})</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '4px' }}>Surgery Date *</label>
+                                <input type="date" required value={scheduleData.surgeryDate} onChange={e => setScheduleData({ ...scheduleData, surgeryDate: e.target.value })} style={{ width: '100%', padding: '10px', background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }} />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '4px' }}>Start Time *</label>
+                                    <input type="time" required value={scheduleData.startTime} onChange={e => setScheduleData({ ...scheduleData, startTime: e.target.value })} style={{ width: '100%', padding: '10px', background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }} />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '4px' }}>End Time *</label>
+                                    <input type="time" required value={scheduleData.endTime} onChange={e => setScheduleData({ ...scheduleData, endTime: e.target.value })} style={{ width: '100%', padding: '10px', background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }} />
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                                <button type="button" onClick={() => setShowScheduleModal(false)} style={{ padding: '10px 16px', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#94a3b8', cursor: 'pointer' }}>Cancel</button>
+                                <button type="submit" style={{ padding: '10px 20px', background: '#7c3aed', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Confirm Schedule</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Workflow Modal (Admit / Transfer) */}
+            {showWorkflowModal && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+                    <div style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '400px', color: '#fff' }}>
+                        <h3 style={{ margin: '0 0 16px', fontSize: '1.2rem', color: '#f8fafc' }}>
+                            {workflowActionType === 'ADMIT' ? '🏥 Admit Patient for Surgery' : '🔄 Transfer Patient Bed'}
+                        </h3>
+                        <form onSubmit={handleWorkflowModalSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '4px' }}>Select Available Bed *</label>
+                                <select required value={selectedBedId} onChange={e => setSelectedBedId(e.target.value)} style={{ width: '100%', padding: '10px', background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }}>
+                                    <option value="">Choose Bed</option>
+                                    {workflowBeds.map(b => (
+                                        <option key={b._id} value={b._id}>
+                                            {b.ward} - Bed {b.bedNumber} ({b.bedType})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                                <button type="button" onClick={() => setShowWorkflowModal(false)} style={{ padding: '10px 16px', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px', color: '#94a3b8', cursor: 'pointer' }}>Cancel</button>
+                                <button type="submit" style={{ padding: '10px 20px', background: '#3b82f6', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>Confirm</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
