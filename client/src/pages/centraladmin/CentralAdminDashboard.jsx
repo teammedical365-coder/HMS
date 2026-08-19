@@ -1,11 +1,82 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI, simpleClinicAPI, revenueAPI } from '../../utils/api';
+import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI, simpleClinicAPI, revenueAPI, baseURL } from '../../utils/api';
 import AdminLabs from '../admin/AdminLabs';
 import AdminPharmacy from '../admin/AdminPharmacy';
 import HospitalBrandingEditor from '../../components/HospitalBrandingEditor';
 import '../administration/SuperAdmin.css';
 import './CentralAdminDashboard.css';
+
+const WhiteLabelBuilder = ({ hospital }) => {
+    const [status, setStatus] = useState(hospital.appConfig?.buildStatus || 'NOT_BUILT');
+    const [apkUrl, setApkUrl] = useState(hospital.appConfig?.apkUrl || '');
+    const [aabUrl, setAabUrl] = useState(hospital.appConfig?.aabUrl || '');
+    const [error, setError] = useState(hospital.appConfig?.buildError || '');
+
+    useEffect(() => {
+        let interval;
+        if (status === 'BUILDING') {
+            interval = setInterval(async () => {
+                try {
+                    const token = JSON.parse(localStorage.getItem('user'))?.token || localStorage.getItem('token') || '';
+                    const res = await (await fetch(`${baseURL}/api/superadmin/hospitals/${hospital._id}/build-status`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })).json();
+                    if (res.success) {
+                        setStatus(res.buildStatus);
+                        if (res.buildStatus === 'COMPLETED') {
+                            setApkUrl(res.apkUrl);
+                            setAabUrl(res.aabUrl);
+                        } else if (res.buildStatus === 'FAILED') {
+                            setError(res.buildError);
+                        }
+                    }
+                } catch (err) {}
+            }, 15000);
+        }
+        return () => clearInterval(interval);
+    }, [status, hospital._id]);
+
+    const handleBuild = async (e) => {
+        e.stopPropagation();
+        setStatus('BUILDING');
+        try {
+            const token = JSON.parse(localStorage.getItem('user'))?.token || localStorage.getItem('token') || '';
+            await fetch(`${baseURL}/api/superadmin/hospitals/${hospital._id}/build-app`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (err) {
+            setStatus('FAILED');
+            setError('Network error');
+        }
+    };
+
+    return (
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', marginTop: '10px', padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }} onClick={e => e.stopPropagation()}>
+            {status === 'NOT_BUILT' && <span style={{fontSize:'12px', color:'#64748b', fontWeight:600}}>Not Built</span>}
+            {status === 'BUILDING' && <span style={{fontSize:'12px', color:'#f59e0b', fontWeight:600}}>Building App (ETA: 3-5 mins)... ⏳</span>}
+            {status === 'COMPLETED' && <span style={{fontSize:'12px', color:'#10b981', fontWeight:600}}>App Ready ✅</span>}
+            {status === 'FAILED' && <span title={error} style={{fontSize:'12px', color:'#ef4444', fontWeight:600}}>Build Failed ❌</span>}
+
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                <button onClick={handleBuild} disabled={status === 'BUILDING'} style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', cursor: status === 'BUILDING' ? 'not-allowed' : 'pointer' }}>
+                    ⚙️ Build Android App
+                </button>
+                {status === 'COMPLETED' && apkUrl && (
+                    <a href={`${baseURL}/api/superadmin/hospitals/${hospital._id}/download/apk`} download target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ background: '#10b981', color: 'white', textDecoration: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px' }}>
+                        📥 Download APK
+                    </a>
+                )}
+                {status === 'COMPLETED' && aabUrl && (
+                    <a href={`${baseURL}/api/superadmin/hospitals/${hospital._id}/download/aab`} download target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ background: '#8b5cf6', color: 'white', textDecoration: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '12px' }}>
+                        🚀 Download AAB
+                    </a>
+                )}
+            </div>
+        </div>
+    );
+};
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -960,7 +1031,7 @@ const CentralAdminDashboard = () => {
                                                 <span style={{ color: '#888', minWidth: '90px' }}>{item.label}</span>
                                                 <span style={{ color: '#333', fontWeight: '500', wordBreak: 'break-word' }}>
                                                     {item.isLink ? (
-                                                        <a href={item.value} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-pink)', textDecoration: 'none' }}>
+                                                        <a href={item.value.startsWith('http') ? item.value : `https://${item.value}`} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-pink)', textDecoration: 'none' }}>
                                                             {item.value}
                                                         </a>
                                                     ) : (
@@ -1794,6 +1865,7 @@ const CentralAdminDashboard = () => {
                                                             🌐 {h.customDomain}
                                                         </a>
                                                     )}
+                                                    <WhiteLabelBuilder hospital={h} />
                                                 </div>
                                             </div>
 

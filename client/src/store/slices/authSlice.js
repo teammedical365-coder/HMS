@@ -8,9 +8,9 @@ import { authAPI, adminAPI, hospitalAdminAPI } from '../../utils/api';
 /** Step 1: Validate credentials and send OTP email (or bypass OTP if disabled) */
 export const sendOtp = createAsyncThunk(
   'auth/sendOtp',
-  async ({ email, password, hospitalId, loginType }, { rejectWithValue }) => {
+  async ({ email, password, hospitalId, hospitalSlug, loginType }, { rejectWithValue }) => {
     try {
-      const response = await authAPI.sendOtp(email, password, hospitalId, loginType);
+      const response = await authAPI.sendOtp(email, password, hospitalId, hospitalSlug, loginType);
       if (response.success) {
         // When OTP is bypassed and no active session, login is complete — persist to localStorage
         if (response.otpBypassed && !response.activeSessionExists && response.token) {
@@ -21,7 +21,10 @@ export const sendOtp = createAsyncThunk(
       }
       return rejectWithValue(response.message || 'Failed to send OTP');
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to send OTP');
+      console.error('[authSlice] sendOtp error caught:', error);
+      const errMsg = error.response?.data?.message || error.message || 'Failed to send OTP';
+      const networkCode = error.code ? ` (${error.code})` : '';
+      return rejectWithValue(errMsg + networkCode);
     }
   }
 );

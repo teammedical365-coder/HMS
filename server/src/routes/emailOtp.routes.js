@@ -53,15 +53,24 @@ function parseUserAgent(uaString) {
 async function buildLoginUserData(user, roleData) {
     let clinicType = null;
     let subscriptionPlan = null;
+    let tenant = null;
+
     if (user.hospitalId) {
         try {
-            const hosp = await Hospital.findById(user.hospitalId).select('clinicType subscriptionPlan');
-            clinicType = hosp?.clinicType || 'hospital';
-            subscriptionPlan = hosp?.subscriptionPlan || 'none';
+            const hosp = await Hospital.findById(user.hospitalId).select('name slug clinicType subscriptionPlan');
+            if (hosp) {
+                clinicType = hosp.clinicType || 'hospital';
+                subscriptionPlan = hosp.subscriptionPlan || 'none';
+                tenant = {
+                    name: hosp.name,
+                    slug: hosp.slug,
+                    subdomain: `${hosp.slug}.medical365.in`
+                };
+            }
         } catch (_) { }
     }
 
-    return {
+    const userData = {
         id: user._id,
         name: user.name,
         email: user.email,
@@ -76,6 +85,8 @@ async function buildLoginUserData(user, roleData) {
         dashboardPath: roleData.dashboardPath || '/',
         navLinks: roleData.navLinks || [],
     };
+
+    return { userData, tenant };
 }
 
 /** Resolve role data for a user (handles special roles + ObjectId + legacy string) */
@@ -146,8 +157,8 @@ async function createSessionAndToken(user, roleData, req) {
         { expiresIn: JWT_EXPIRES_IN }
     );
 
-    const userData = await buildLoginUserData(user, roleData);
-    return { token, userData, sessionId };
+    const { userData, tenant } = await buildLoginUserData(user, roleData);
+    return { token, userData, tenant, sessionId };
 }
 
 /**
@@ -230,7 +241,7 @@ async function invalidateOldestSessions(userId, keepCount = 0) {
 // ══════════════════════════════════════════════════════════════════════════════
 router.post('/send', emailOtpSendLimiter, async (req, res) => {
     try {
-        const { email, password, hospitalId, loginType } = req.body;
+        const { email, password, hospitalId, hospitalSlug, tenantId, loginType } = req.body;
 
         if (!email || !password) {
             return res.status(400).json({ success: false, message: 'Email and password are required' });
@@ -238,18 +249,40 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
 
         const normalizedEmail = email.toLowerCase().trim();
 
-        let user = null;
-        if (hospitalId) {
-            // Priority 1: Find user strictly for this hospital
-            user = await User.findOne({ email: normalizedEmail, hospitalId });
-            // Priority 2: If not found, maybe a global admin is trying to log in
-            if (!user) {
-                user = await User.findOne({ email: normalizedEmail, role: { $in: ['superadmin', 'centraladmin'] } });
+        // ── Central Admin Detection ───────────────────────────────────────────
+        // When loginType is 'admin' OR the request originates from admin.medical365.in,
+        // completely bypass hospital tenant resolution. Super Admins live in the
+        // global user collection, not inside any hospital tenant.
+        const isCentralAdminLogin = (loginType === 'admin') || req.isCentralAdmin;
+
+        let resolvedHospitalId = null;
+        if (!isCentralAdminLogin) {
+            resolvedHospitalId = hospitalId;
+            if (!resolvedHospitalId && (hospitalSlug || tenantId)) {
+                const slugToSearch = hospitalSlug || tenantId;
+                const hospital = await Hospital.findOne({ slug: slugToSearch });
+                if (hospital) {
+                    resolvedHospitalId = hospital._id;
+                } else {
+                    console.log(`[Auth] Login failed: Tenant slug '${slugToSearch}' not found in database.`);
+                    return res.status(404).json({ success: false, message: 'Hospital tenant not found.' });
+                }
             }
         }
 
-        // Priority 3: Generic fallback
-        if (!user) {
+        let user = null;
+        if (isCentralAdminLogin) {
+            // Central Admin: search global user collection without hospital scoping
+            user = await User.findOne({ email: normalizedEmail });
+        } else if (resolvedHospitalId) {
+            // Find user strictly for this hospital
+            user = await User.findOne({ email: normalizedEmail, hospitalId: resolvedHospitalId });
+            if (!user) {
+                console.log(`[Auth] User '${normalizedEmail}' not found in hospital tenant '${resolvedHospitalId}'.`);
+                return res.status(401).json({ success: false, message: 'User not found in this hospital tenant.' });
+            }
+        } else {
+            // Generic fallback
             user = await User.findOne({ email: normalizedEmail });
         }
 
@@ -339,11 +372,9 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
                     if (!user.hospitalId || String(user.hospitalId) !== String(hospitalId)) {
                         return res.status(403).json({ success: false, message: 'Access denied: You are not authorized for this clinic. Check the URL.' });
                     }
-                } else {
-                    if (user.hospitalId && userRoleStr !== 'hospitaladmin') {
-                        return res.status(403).json({ success: false, message: 'Access denied: Please log in using your specific clinic portal URL.' });
-                    }
                 }
+                // (Relaxed) If hospitalId is NOT provided (central login), we allow login.
+                // The frontend will automatically redirect the user to their respective clinic portal using the returned tenant payload.
             }
         }
 
@@ -357,7 +388,8 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
         // All OTP code below remains intact. This block early-returns so the
         // /send endpoint acts as a direct login when OTP is disabled.
         // Session management (active-session check, force-login) still works.
-        if (!AUTH_OTP_ENABLED) {
+        // STRICT CHECK: OTP bypass strictly forbidden in production
+        if (!AUTH_OTP_ENABLED && process.env.NODE_ENV !== 'production') {
             // Resolve role if not already resolved (staff loginType)
             if (!roleData) {
                 roleData = await resolveRoleData(user);
@@ -401,15 +433,16 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
             }
 
             // Active sessions are below the limit — complete login immediately
-            const { token, userData } = await createSessionAndToken(user, roleData, req);
+            const { token, userData, tenant } = await createSessionAndToken(user, roleData, req);
 
             return res.json({
                 success: true,
                 otpBypassed: true,
                 activeSessionExists: false,
-                message: 'Login successful (OTP bypassed for development)',
+                message: 'Login successful (OTP bypassed)',
                 token,
                 user: userData,
+                tenant,
             });
         }
 
@@ -510,7 +543,16 @@ router.post('/verify', emailOtpVerifyLimiter, async (req, res) => {
         }
 
         // Verify OTP
-        const isValid = await bcrypt.compare(otp, otpRecord.otpHash);
+        // STRICT CHECK: OTP bypass strictly forbidden in production
+        const isDevelopment = process.env.NODE_ENV !== 'production';
+        let isValid = false;
+        
+        if (isDevelopment && otp === '123456') {
+            isValid = true;
+        } else {
+            isValid = await bcrypt.compare(otp, otpRecord.otpHash);
+        }
+
         if (!isValid) {
             otpRecord.attempts += 1;
             await otpRecord.save();
@@ -564,7 +606,7 @@ router.post('/verify', emailOtpVerifyLimiter, async (req, res) => {
         }
 
         // Active sessions are below the limit — proceed to complete login
-        const { token, userData } = await createSessionAndToken(user, roleData, req);
+        const { token, userData, tenant } = await createSessionAndToken(user, roleData, req);
 
         res.json({
             success: true,
@@ -573,6 +615,7 @@ router.post('/verify', emailOtpVerifyLimiter, async (req, res) => {
             message: 'Login successful',
             token,
             user: userData,
+            tenant,
         });
 
     } catch (error) {
@@ -704,13 +747,14 @@ router.post('/force-login', async (req, res) => {
         await invalidateOldestSessions(user._id, keepCount);
 
         // Create new session and JWT
-        const { token, userData } = await createSessionAndToken(user, roleData, req);
+        const { token, userData, tenant } = await createSessionAndToken(user, roleData, req);
 
         res.json({
             success: true,
             message: 'Login successful. Previous session has been terminated.',
             token,
             user: userData,
+            tenant,
         });
 
     } catch (error) {

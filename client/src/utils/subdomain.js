@@ -1,8 +1,15 @@
 export const getSubdomain = () => {
+    // 1. Check for explicit tenant override via query parameters (useful for Electron/Testing)
+    const urlParams = new URLSearchParams(window.location.search);
+    const tenantOverride = urlParams.get('tenant');
+    if (tenantOverride) {
+        return tenantOverride;
+    }
+
     const hostname = window.location.hostname;
 
-    // Direct IPs or naked localhost
-    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname === 'localhost') {
+    // Direct IPs, naked localhost, or Vercel development domains
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname === 'localhost' || hostname.endsWith('.vercel.app')) {
         return null;
     }
 

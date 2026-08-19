@@ -39,8 +39,25 @@ router.get('/tenant-config', async (req, res) => {
         let query = {};
         
         if (domain) {
-            // Remove protocol, trailing slash, and port
-            const cleanDomain = domain.replace(/^https?:\/\//, '').split(':')[0].replace(/\/$/, '').toLowerCase();
+            // Remove protocol, query strings, paths, and trailing slash
+            let cleanDomain = domain.replace(/^https?:\/\//i, '').split('/')[0].split('?')[0].split(':')[0].toLowerCase();
+            
+            // Intercept Central Admin domain prior to DB lookup
+            if (cleanDomain.includes('admin.medical365.in')) {
+                return res.status(200).json({
+                    success: true,
+                    tenant: {
+                        id: 'central-admin-system',
+                        isCentralAdmin: true,
+                        name: 'Central Management',
+                        slug: 'admin',
+                        customDomain: 'admin.medical365.in',
+                        branding: {},
+                        theme: 'admin-default',
+                        features: ['ALL_MODULES']
+                    }
+                });
+            }
             
             if (cleanDomain.endsWith('.medical365.in')) {
                 query.slug = cleanDomain.replace('.medical365.in', '');

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Base policy: Strict HTTPS only for all domains -->
+    <base-config cleartextTrafficPermitted="false" />
+
+    <!-- Domain-specific overrides: Allow HTTP (cleartext) ONLY for local IPs -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Android Emulator loopback -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <!-- Standard localhost -->
+        <domain includeSubdomains="false">localhost</domain>
+        <!-- Your Local Network IP -->
+        <domain includeSubdomains="false">192.168.1.X</domain>
+    </domain-config>
+</network-security-config>

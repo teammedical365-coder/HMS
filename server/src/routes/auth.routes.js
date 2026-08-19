@@ -185,16 +185,38 @@ router.post('/signup', signupLimiter, async (req, res) => {
 // Login Route
 router.post('/login', loginLimiter, async (req, res) => {
   try {
-    const { email, password, hospitalId } = req.body;
+    const { email, password, hospitalId, hospitalSlug, tenantId } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ success: false, message: 'Email and password are required' });
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const user = await User.findOne({ email: normalizedEmail });
+    
+    let resolvedHospitalId = hospitalId;
+    if (!resolvedHospitalId && (hospitalSlug || tenantId)) {
+        const slugToSearch = hospitalSlug || tenantId;
+        const hospital = await Hospital.findOne({ slug: slugToSearch });
+        if (hospital) {
+            resolvedHospitalId = hospital._id;
+        } else {
+            console.log(`[Auth] Login failed: Tenant slug '${slugToSearch}' not found in database.`);
+            return res.status(404).json({ success: false, message: 'Hospital tenant not found.' });
+        }
+    }
+
+    let query = { email: normalizedEmail };
+    if (resolvedHospitalId) {
+        query.hospitalId = resolvedHospitalId;
+    }
+
+    const user = await User.findOne(query);
 
     if (!user) {
+      if (resolvedHospitalId) {
+          console.log(`[Auth] User '${normalizedEmail}' not found in hospital tenant '${resolvedHospitalId}'.`);
+          return res.status(401).json({ success: false, message: 'User not found in this hospital tenant.' });
+      }
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
@@ -266,13 +288,9 @@ router.post('/login', loginLimiter, async (req, res) => {
             if (!user.hospitalId || String(user.hospitalId) !== String(hospitalId)) {
                 return res.status(403).json({ success: false, message: 'Access denied: You are not authorized for this clinic. Check the URL.' });
             }
-        } else {
-            // hospitaladmin can always log in via /login (simple clinic admins have no subdomain portal)
-            // Only block non-admin staff who must use their clinic's subdomain portal
-            if (user.hospitalId && userRoleStr !== 'hospitaladmin') {
-                return res.status(403).json({ success: false, message: 'Access denied: Please log in using your specific clinic portal URL.' });
-            }
         }
+        // (Relaxed) If hospitalId is NOT provided (central login), we allow login.
+        // The frontend will automatically redirect the user to their respective clinic portal using the returned tenant payload.
     } else {
         // Global Admins should not be logging in via a specific hospital portal URL (they don't have one)
         if (hospitalId) {
@@ -308,11 +326,19 @@ router.post('/login', loginLimiter, async (req, res) => {
     // Build user response with role data (roleData is already fetched above)
     let clinicType = null;
     let subscriptionPlan = null;
+    let tenant = null;
     if (user.hospitalId) {
       try {
-        const hosp = await Hospital.findById(user.hospitalId).select('clinicType subscriptionPlan');
-        clinicType = hosp?.clinicType || 'hospital';
-        subscriptionPlan = hosp?.subscriptionPlan || 'none';
+        const hosp = await Hospital.findById(user.hospitalId).select('name slug clinicType subscriptionPlan');
+        if (hosp) {
+            clinicType = hosp.clinicType || 'hospital';
+            subscriptionPlan = hosp.subscriptionPlan || 'none';
+            tenant = {
+                name: hosp.name,
+                slug: hosp.slug,
+                subdomain: `${hosp.slug}.medical365.in`
+            };
+        }
       } catch (_) {}
     }
 
@@ -336,7 +362,8 @@ router.post('/login', loginLimiter, async (req, res) => {
       success: true,
       message: 'Login successful',
       user: userData,
-      token
+      token,
+      tenant
     });
   } catch (error) {
     console.error('Login error:', error);

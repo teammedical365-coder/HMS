@@ -109,12 +109,6 @@ import PatientBillingProfile from '../pages/billing/PatientBillingProfile';
 // Subdomains reserved for the platform itself — NOT hospital slugs
 const RESERVED_SUBDOMAINS = ['admin', 'www', 'api'];
 
-const SmartLogin = () => {
-    const subdomain = getSubdomain();
-    if (subdomain && !RESERVED_SUBDOMAINS.includes(subdomain)) return <HospitalLogin />;
-    return <CentralAdminLogin />;
-};
-
 const SmartDashboardRedirector = () => {
     const subdomain = getSubdomain();
     const u = JSON.parse(localStorage.getItem('user') || '{}');
@@ -278,8 +272,16 @@ const MainRoutes = () => {
                 </DashboardLayout>
             ) : (
                 <Routes>
-                    {/* Unified Smart Login URL - Reads current domain/subdomain natively */}
-                    <Route path="/login" element={<SmartLogin />} />
+                    {/* Unified Universal Staff Login URL */}
+                    <Route path="/login" element={(() => {
+                        // If on admin.medical365.in, redirect /login → /supremeadmin (CentralAdminLogin)
+                        const sub = getSubdomain();
+                        if (sub === 'admin') return <Navigate to="/supremeadmin" replace />;
+                        return <Login />;
+                    })()} />
+                    
+                    {/* Supreme Admin Isolated Login Route */}
+                    <Route path="/supremeadmin" element={<CentralAdminLogin />} />
                     
                     {/* Legacy/Signups routing */}
                     <Route path="/signup" element={<Signup />} />
@@ -294,7 +296,12 @@ const MainRoutes = () => {
                     <Route path="/patient/dashboard" element={<PatientProtectedRoute><PatientDashboard /></PatientProtectedRoute>} />
                     <Route path="/patient/book-appointment" element={<PatientProtectedRoute><ReceptionDashboard isPatientPortal={true} /></PatientProtectedRoute>} />
                     
-                    <Route path="*" element={<Navigate to="/login" />} />
+                    {/* Wildcard: admin subdomain goes to CentralAdminLogin, everything else to staff Login */}
+                    <Route path="*" element={(() => {
+                        const sub = getSubdomain();
+                        if (sub === 'admin') return <Navigate to="/supremeadmin" replace />;
+                        return <Navigate to="/login" replace />;
+                    })()} />
                 </Routes>
             )}
         </>

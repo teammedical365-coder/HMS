@@ -51,6 +51,9 @@ const referralRoutes = require('./routes/referral.routes');
 
 const app = express();
 
+// Enable reverse proxy support for Render / Cloudflare rate-limiting
+app.set('trust proxy', 1);
+
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -71,13 +74,24 @@ app.use(helmet({
 }));
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
-const LOCALHOST_RE = /^https?:\/\/([a-zA-Z0-9-]+\.)*(localhost|127\.0\.0\.1)(:\d+)?$/;
 const isAllowedOrigin = (origin) => {
-    if (!origin) return true;
-    if (LOCALHOST_RE.test(origin)) return true;
+    if (!origin) return true; // Allow non-browser clients (Postman, Mobile Apps without origin)
+    
+    // Allow any localhost or local network IPs (e.g., 192.168.x.x, 10.0.2.2)
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) return true;
+    if (origin.match(/^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/)) return true;
+    
+    // Allow Capacitor specific origins
+    if (origin.startsWith('capacitor://') || origin.startsWith('http://capacitor')) return true;
+
+    // Production origins
     if (origin === 'https://medical365.in') return true;
     if (origin === 'https://www.medical365.in') return true;
     if (origin.endsWith('.medical365.in')) return true;
+    if (origin.endsWith('.vercel.app')) return true; // Allow Vercel for Testing
+    
+    // Instead of completely blocking unknown, in dev we might want to just allow it,
+    // but for security we'll let the DB check handle white-labeled domains below.
     return false;
 };
 
@@ -121,6 +135,10 @@ if (process.env.NODE_ENV !== 'test') {
     app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 }
 
+// ── Tenant Resolution Middleware ────────────────────────────────────────────────
+const tenantResolver = require('./middleware/tenantResolver');
+app.use(tenantResolver);
+
 // ── Static uploads ────────────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
@@ -145,7 +163,12 @@ app.use('/api/medicines', medicineRoutes);
 app.use('/api/question-library', questionLibraryRoutes);
 app.use('/api/test-packages', testPackageRoutes);
 app.use('/api/hospitals', hospitalRoutes);
+app.use('/api/superadmin/hospitals', require('./routes/superadmin.build.routes')); // Added superadmin build routes
 app.use('/api/finance', financeRoutes);
+
+// ── Static Downloads for Generated Apps ─────────────────────────────────────────
+app.use('/downloads/apks', express.static(path.join(__dirname, '../public/downloads/apks')));
+app.use('/downloads/aabs', express.static(path.join(__dirname, '../public/downloads/aabs')));
 app.use('/api/billing', billingRoutes);
 app.use('/api/admissions', admissionRoutes);
 app.use('/api/simple-clinics', simpleClinicRoutes);
