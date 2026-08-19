@@ -1,0 +1,159 @@
+name: White-Label Android Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tenantId:
+        description: 'Tenant ID'
+        required: true
+      hospitalName:
+        description: 'Hospital Name'
+        required: true
+      applicationId:
+        description: 'Android Application ID (e.g. com.medical365.xyz)'
+        required: true
+      logoUrl:
+        description: 'URL of the Hospital Logo'
+        required: true
+      themeColor:
+        description: 'Primary Theme Color Hex (e.g. #14b8a6)'
+        required: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Secure String Injection
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            const stringsPath = 'client/android/app/src/main/res/values/strings.xml';
+            const gradlePath = 'client/android/app/build.gradle';
+            
+            const hospitalName = context.payload.inputs.hospitalName;
+            const applicationId = context.payload.inputs.applicationId;
+            
+            // 1. Update strings.xml safely
+            if (fs.existsSync(stringsPath)) {
+                let xml = fs.readFileSync(stringsPath, 'utf8');
+                // Replace content between tags safely
+                xml = xml.replace(/(<string name="app_name">).*?(<\/string>)/, `$1${hospitalName}$2`);
+                xml = xml.replace(/(<string name="title_activity_main">).*?(<\/string>)/, `$1${hospitalName}$2`);
+                xml = xml.replace(/(<string name="package_name">).*?(<\/string>)/, `$1${applicationId}$2`);
+                xml = xml.replace(/(<string name="custom_url_scheme">).*?(<\/string>)/, `$1${applicationId}$2`);
+                fs.writeFileSync(stringsPath, xml);
+                console.log('Updated strings.xml');
+            } else {
+                console.log('strings.xml not found at', stringsPath);
+            }
+            
+            // 2. Update build.gradle safely
+            if (fs.existsSync(gradlePath)) {
+                let gradle = fs.readFileSync(gradlePath, 'utf8');
+                // Use a regex that precisely targets applicationId "..."
+                gradle = gradle.replace(/(applicationId\s+")([^"]+)(")/, `$1${applicationId}$3`);
+                fs.writeFileSync(gradlePath, gradle);
+                console.log('Updated build.gradle');
+            } else {
+                console.log('build.gradle not found at', gradlePath);
+            }
+
+      - name: Replace Logo
+        run: |
+          if [ "${{ github.event.inputs.logoUrl }}" != "default" ]; then
+            echo "Downloading logo from ${{ github.event.inputs.logoUrl }}"
+            # Create mipmap directories if they don't exist
+            mkdir -p client/android/app/src/main/res/mipmap-xxxhdpi
+            curl -L -s "${{ github.event.inputs.logoUrl }}" -o client/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png || echo "Failed to download logo"
+            # For a production pipeline, we should use a script to resize for all densities (mdpi, hdpi, etc)
+            # This is a fallback that copies the high-res one everywhere just to ensure it builds
+            cp client/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png client/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png || true
+            cp client/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png client/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png || true
+            cp client/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png client/android/app/src/main/res/mipmap-hdpi/ic_launcher.png || true
+            cp client/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png client/android/app/src/main/res/mipmap-mdpi/ic_launcher.png || true
+          else
+            echo "Using default logo"
+          fi
+
+      # - name: Decode Keystore
+      #   run: |
+      #     # If the secret is not empty, decode it
+      #     if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+      #       echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > client/android/app/release.keystore
+      #     else
+      #       echo "KEYSTORE_BASE64 secret is not set. Creating a mock keystore for testing."
+      #       keytool -genkey -v -keystore client/android/app/release.keystore -alias mockkey -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Mock, OU=Dev, O=Mock, L=City, ST=State, C=US"
+      #     fi
+
+      - name: Build APK
+        working-directory: ./client/android
+        # env:
+        #   KEYSTORE_FILE: release.keystore
+        #   KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'mockkey' }}
+        #   KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'password123' }}
+        #   KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'password123' }}
+        run: |
+          chmod +x ./gradlew
+          # Build a debug APK for testing the pipeline without secrets
+          ./gradlew assembleDebug
+
+      - name: Find and Move Artifacts
+        run: |
+          mkdir -p output_artifacts
+          # Try to find the release APK, fallback to debug if it failed signing
+          find client/android/app/build/outputs/apk/release -name "*.apk" -exec cp {} output_artifacts/app.apk \; || \
+          find client/android/app/build/outputs/apk/debug -name "*.apk" -exec cp {} output_artifacts/app.apk \;
+          echo "Found APK:"
+          ls -la output_artifacts/
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hospital-app-${{ github.event.inputs.tenantId }}
+          path: output_artifacts/app.apk
+
+      - name: Notify Backend Webhook (Success)
+        if: success()
+        run: |
+          # Use run_id to link to the artifact download
+          ARTIFACT_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          WEBHOOK_SECRET="${{ secrets.GITHUB_WEBHOOK_SECRET || 'dev-secret-123' }}"
+          
+          curl -X POST "https://hms-h939.onrender.com/api/superadmin/hospitals/webhook/github?secret=${WEBHOOK_SECRET}" \
+               -H "Content-Type: application/json" \
+               -d '{
+                 "tenantId": "${{ github.event.inputs.tenantId }}",
+                 "status": "COMPLETED",
+                 "apkUrl": "'"$ARTIFACT_URL"'"
+               }'
+
+      - name: Notify Backend Webhook (Failure)
+        if: failure()
+        run: |
+          WEBHOOK_SECRET="${{ secrets.GITHUB_WEBHOOK_SECRET || 'dev-secret-123' }}"
+          
+          curl -X POST "https://hms-h939.onrender.com/api/superadmin/hospitals/webhook/github?secret=${WEBHOOK_SECRET}" \
+               -H "Content-Type: application/json" \
+               -d '{
+                 "tenantId": "${{ github.event.inputs.tenantId }}",
+                 "status": "FAILED",
+                 "error": "GitHub Action workflow failed"
+               }'

@@ -32,7 +32,7 @@ const WhiteLabelBuilder = ({ hospital }) => {
                         }
                     }
                 } catch (err) {}
-            }, 5000);
+            }, 15000);
         }
         return () => clearInterval(interval);
     }, [status, hospital._id]);
@@ -55,7 +55,7 @@ const WhiteLabelBuilder = ({ hospital }) => {
     return (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', marginTop: '10px', padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }} onClick={e => e.stopPropagation()}>
             {status === 'NOT_BUILT' && <span style={{fontSize:'12px', color:'#64748b', fontWeight:600}}>Not Built</span>}
-            {status === 'BUILDING' && <span style={{fontSize:'12px', color:'#f59e0b', fontWeight:600}}>Building... ⏳</span>}
+            {status === 'BUILDING' && <span style={{fontSize:'12px', color:'#f59e0b', fontWeight:600}}>Building App (ETA: 3-5 mins)... ⏳</span>}
             {status === 'COMPLETED' && <span style={{fontSize:'12px', color:'#10b981', fontWeight:600}}>App Ready ✅</span>}
             {status === 'FAILED' && <span title={error} style={{fontSize:'12px', color:'#ef4444', fontWeight:600}}>Build Failed ❌</span>}
 
