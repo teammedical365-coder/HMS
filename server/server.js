@@ -1,10 +1,11 @@
 // server/server.js
 require('dotenv').config();
 const app = require('./src/app');
-const connectDB = require('./src/db/db'); // <--- Import the DB connection logic
+const connectDB = require('./src/db/db');
 
 const http = require('http');
 const { Server } = require('socket.io');
+const cors = require('cors');
 
 const PORT = process.env.PORT || 3000;
 const DEPLOYMENT_MODE = process.env.DEPLOYMENT_MODE || 'cloud';
@@ -12,11 +13,14 @@ const DEPLOYMENT_MODE = process.env.DEPLOYMENT_MODE || 'cloud';
 // 1. Connect to Database
 connectDB();
 
-// 2. HTTP Server and Socket.io
+// 4. HTTP Server and Socket.io Setup
 const server = http.createServer(app);
-const isAllowedOrigin = (origin) => {
-    if (!origin) return true;
-    if (origin.includes('localhost')) return true;
+
+
+// Socket.io CORS logic
+const isAllowedOriginSocket = (origin) => {
+    if (!origin) return true; 
+    if (origin.includes('localhost')) return true; 
     if (origin === 'https://medical365.in') return true;
     if (origin === 'https://www.medical365.in') return true;
     if (origin.endsWith('.medical365.in')) return true;
@@ -26,7 +30,7 @@ const isAllowedOrigin = (origin) => {
 const io = new Server(server, {
     cors: {
         origin: (origin, callback) => {
-            if (isAllowedOrigin(origin)) return callback(null, true);
+            if (isAllowedOriginSocket(origin)) return callback(null, true);
             callback(new Error('CORS blocked: ' + origin), false);
         },
         methods: ["GET", "POST"]
