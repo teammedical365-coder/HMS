@@ -7,12 +7,45 @@ const auditLog = require('../middleware/audit.middleware');
 
 // Master fallbacks
 const MasterUser = require('../models/user.model');
+const MasterDoctor = require('../models/doctor.model');
 const MasterAppointment = require('../models/appointment.model');
 const MasterLabReport = require('../models/labReport.model');
 const MasterPharmacyOrder = require('../models/pharmacyOrder.model');
 const MasterFacilityCharge = require('../models/facilityCharge.model');
 const MasterAdmission = require('../models/admission.model');
 const MasterPaymentTransaction = require('../models/paymentTransaction.model');
+const MasterSurgeryPlan = require('../models/surgeryPlan.model');
+const MasterOTRoom = require('../models/otRoom.model');
+
+// Helper: populate surgeon, assistants, and otRoom on surgery plans for billing
+const populateBillingSurgeryPlans = async (plans) => {
+    if (!plans || !plans.length) return [];
+    return Promise.all(plans.map(async (doc) => {
+        const item = doc.toObject ? doc.toObject() : { ...doc };
+        if (item.surgeonId) {
+            const raw = typeof item.surgeonId === 'object' && item.surgeonId._id ? item.surgeonId._id : item.surgeonId;
+            let d = await MasterUser.findById(raw).select('name email phone specialization firstName lastName').lean();
+            if (!d) d = await MasterDoctor.findById(raw).select('name email phone specialization firstName lastName').lean();
+            if (!d) d = await MasterDoctor.findOne({ userId: raw }).select('name email phone specialization firstName lastName').lean();
+            if (d) item.surgeonId = d;
+        }
+        if (item.assistantSurgeonIds && Array.isArray(item.assistantSurgeonIds)) {
+            item.assistantSurgeonIds = await Promise.all(item.assistantSurgeonIds.map(async (asId) => {
+                const raw = typeof asId === 'object' && asId._id ? asId._id : asId;
+                let d = await MasterUser.findById(raw).select('name email phone specialization firstName lastName').lean();
+                if (!d) d = await MasterDoctor.findById(raw).select('name email phone specialization firstName lastName').lean();
+                if (!d) d = await MasterDoctor.findOne({ userId: raw }).select('name email phone specialization firstName lastName').lean();
+                return d || { _id: raw, name: 'Doctor' };
+            }));
+        }
+        if (item.otRoomId) {
+            const raw = typeof item.otRoomId === 'object' && item.otRoomId._id ? item.otRoomId._id : item.otRoomId;
+            const r = await MasterOTRoom.findById(raw).select('name status').lean();
+            if (r) item.otRoomId = r;
+        }
+        return item;
+    }));
+};
 
 // Billing access middleware — receptionist also gets billing view
 const verifyBillingAccess = async (req, res, next) => {
@@ -48,6 +81,7 @@ const getModels = (req) => {
         FacilityCharge: MasterFacilityCharge,
         Admission: MasterAdmission,
         PaymentTransaction: MasterPaymentTransaction,
+        SurgeryPlan: MasterSurgeryPlan,
     };
 };
 
@@ -55,7 +89,7 @@ const getModels = (req) => {
 router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
     try {
         const identifier = (req.params.identifier || '').trim();
-        const { User, Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission, PaymentTransaction } = getModels(req);
+        const { User, Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission, PaymentTransaction, SurgeryPlan } = getModels(req);
 
         // Scope patient lookup flexibly to requesting user's hospital or legacy records without hospitalId
         const hospitalFilter = req.user.hospitalId ? {
@@ -113,14 +147,17 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
             return results;
         };
 
-        const [appointments, labReports, pharmacyOrders, facilityCharges, admissions, paymentTransactions] = await Promise.all([
+        const [appointments, labReports, pharmacyOrders, facilityCharges, admissions, paymentTransactions, rawSurgeryPlans] = await Promise.all([
             fetchWithMasterFallback(Appointment, MasterAppointment, { userId: patient._id, ...hFilter }, 'appointmentDate appointmentTime amount paymentStatus serviceName doctorName status createdAt'),
             fetchWithMasterFallback(LabReport, MasterLabReport, { userId: patient._id, ...hFilter }, 'testNames amount paymentStatus testStatus createdAt'),
             fetchWithMasterFallback(PharmacyOrder, MasterPharmacyOrder, { userId: patient._id, ...hFilter }, 'items totalAmount paymentStatus orderStatus createdAt'),
             fetchWithMasterFallback(FacilityCharge, MasterFacilityCharge, { patientId: patient._id, ...hFilter }, 'facilityName pricePerDay days totalAmount paymentStatus createdAt addedBy collectedBy', null, [{path: 'collectedBy', select: 'name'}, {path: 'addedBy', select: 'name'}]),
             fetchWithMasterFallback(Admission, MasterAdmission, { patientId: patient._id, ...hFilter }, null, { admissionDate: -1 }),
-            fetchWithMasterFallback(PaymentTransaction, MasterPaymentTransaction, { patientId: patient._id, ...hFilter }, null, { paymentDate: -1 })
+            fetchWithMasterFallback(PaymentTransaction, MasterPaymentTransaction, { patientId: patient._id, ...hFilter }, null, { paymentDate: -1 }),
+            fetchWithMasterFallback(SurgeryPlan, MasterSurgeryPlan, { patientId: patient._id, ...hFilter }, null, { surgeryDate: -1, createdAt: -1 })
         ]);
+
+        const surgeryPlans = await populateBillingSurgeryPlans(rawSurgeryPlans);
 
         // Calculate ICU charges dynamically for active/past admissions
         const Hospital = require('../models/hospital.model');
@@ -161,7 +198,7 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
                 gender: patient.gender,
                 dob: patient.dob,
             },
-            billing: { appointments, labReports, pharmacyOrders, facilityCharges, admissions, paymentTransactions }
+            billing: { appointments, labReports, pharmacyOrders, facilityCharges, admissions, surgeryPlans, paymentTransactions }
         });
 
     } catch (error) {
@@ -207,10 +244,13 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
             pharmacyOrderIds = [],
             facilityChargeIds = [],
             admissionIds = [],
+            surgeryPlanIds = [],
+            surgeryPayments = {}, // optional map: { [planId]: amountToPay }
             paymentMode = 'Cash',
             patientId,
             amount,
             splitPayments = [],
+            paymentDate,
             transactionId,
             upiId,
             cardDetails,
@@ -219,12 +259,22 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
             proofFileId
         } = req.body;
 
+        // Validation: Payment date cannot be in the future
+        if (paymentDate) {
+            const pDate = new Date(paymentDate);
+            const todayEnd = new Date();
+            todayEnd.setHours(23, 59, 59, 999);
+            if (pDate > todayEnd) {
+                return res.status(400).json({ success: false, message: 'Payment date cannot be in the future' });
+            }
+        }
+
         let rawMode = splitPayments.length > 0 ? [...new Set(splitPayments.map(p => p.method))].join(' / ') : paymentMode;
         if (!rawMode || String(rawMode).trim() === '') rawMode = 'Cash';
         const actualPaymentMode = String(rawMode).trim();
         const totalAmount = splitPayments.length > 0 ? splitPayments.reduce((acc, p) => acc + Number(p.amount), 0) : amount;
 
-        const { Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission, PaymentTransaction } = getModels(req);
+        const { Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission, PaymentTransaction, SurgeryPlan } = getModels(req);
 
         // Calculate and persist ICU charges for any admissions before marking Paid
         if (admissionIds.length > 0) {
@@ -260,6 +310,43 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
             }
         }
 
+        // Process Surgery Plan payments (supports full & partial payments)
+        if (surgeryPlanIds.length > 0) {
+            const plansToPay = await SurgeryPlan.find({ _id: { $in: surgeryPlanIds } });
+            for (const sp of plansToPay) {
+                const totalCost = Number(sp.surgeryCost) || 0;
+                const currentPaid = Number(sp.paidAmount) || 0;
+                const remaining = Math.max(0, totalCost - currentPaid);
+                const payAmt = surgeryPayments[sp._id] !== undefined ? Number(surgeryPayments[sp._id]) : (Number(totalAmount) || remaining);
+
+                if (payAmt > remaining) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        message: `Payment amount (₹${payAmt}) cannot exceed remaining surgery balance (₹${remaining})` 
+                    });
+                }
+
+                const newPaid = currentPaid + payAmt;
+                sp.paidAmount = newPaid;
+                sp.paymentStatus = (newPaid >= totalCost && totalCost > 0) ? 'PAID' : (newPaid > 0 ? 'PARTIALLY PAID' : 'UNPAID');
+                
+                sp.splitPayments = sp.splitPayments || [];
+                if (splitPayments.length > 0) {
+                    splitPayments.forEach(s => sp.splitPayments.push({ ...s, date: paymentDate ? new Date(paymentDate) : new Date() }));
+                } else {
+                    sp.splitPayments.push({ method: actualPaymentMode, amount: payAmt, date: paymentDate ? new Date(paymentDate) : new Date() });
+                }
+                await sp.save();
+
+                // If linked facility charge exists and plan is fully paid, update it too
+                if (sp.facilityChargeId) {
+                    if (sp.paymentStatus === 'PAID') {
+                        await FacilityCharge.findByIdAndUpdate(sp.facilityChargeId, { paymentStatus: 'Paid' });
+                    }
+                }
+            }
+        }
+
         await Promise.all([
             appointmentIds.length > 0 && Appointment.updateMany(
                 { _id: { $in: appointmentIds } }, { $set: { paymentStatus: 'Paid', paymentMethod: actualPaymentMode, splitPayments, status: 'completed' } }),
@@ -290,6 +377,7 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
             if (pharmacyOrderIds.length > 0) descParts.push(`${pharmacyOrderIds.length} Pharmacy Orders`);
             if (facilityChargeIds.length > 0) descParts.push(`${facilityChargeIds.length} Facility Charges`);
             if (admissionIds.length > 0) descParts.push(`${admissionIds.length} ICU/Admissions`);
+            if (surgeryPlanIds.length > 0) descParts.push(`${surgeryPlanIds.length} Surgeries`);
 
             const description = descParts.length > 0 ? `Payment for: ${descParts.join(', ')}` : 'General Payment';
 
@@ -311,13 +399,15 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
                 bankReference,
                 proofUrl,
                 proofFileId,
+                paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
                 description,
                 billedItems: {
                     appointments: appointmentIds,
                     labReports: labReportIds,
                     pharmacyOrders: pharmacyOrderIds,
                     facilityCharges: facilityChargeIds,
-                    admissions: admissionIds
+                    admissions: admissionIds,
+                    surgeryPlans: surgeryPlanIds
                 },
                 addedBy: req.user._id || req.user.userId
             });

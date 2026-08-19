@@ -148,6 +148,12 @@ export const doctorAPI = {
     getBookedSlots: async (doctorId, date) => {
         const response = await apiClient.get(`/api/doctor/${doctorId}/booked-slots?date=${date}`);
         return response.data;
+    },
+    getDoctors: async (hospitalId = null) => {
+        let url = '/api/doctor';
+        if (hospitalId) url += `?hospitalId=${encodeURIComponent(hospitalId)}`;
+        const response = await apiClient.get(url);
+        return response.data;
     }
 };
 
@@ -276,6 +282,11 @@ export const publicAPI = {
     },
     getTenantConfig: async (domain) => {
         const url = `/api/public/tenant-config?domain=${encodeURIComponent(domain)}`;
+        return (await apiClient.get(url)).data;
+    },
+    getBookedSlots: async (doctorId, date, hospitalId = '') => {
+        let url = `/api/doctor/${doctorId}/booked-slots?date=${date}`;
+        if (hospitalId) url += `&hospitalId=${encodeURIComponent(hospitalId)}`;
         return (await apiClient.get(url)).data;
     }
 };
@@ -741,6 +752,30 @@ export const otAPI = {
     },
     getScheduledSurgeries: async (date) => {
         const response = await apiClient.get('/api/ot/surgery-plans/scheduled', { params: { date } });
+        return response.data;
+    },
+    getTodaySchedule: async (date) => {
+        const response = await apiClient.get('/api/ot/today-schedule', { params: { date } });
+        return response.data;
+    },
+    getRoomStatus: async (date) => {
+        const response = await apiClient.get('/api/ot/room-status', { params: { date } });
+        return response.data;
+    },
+    getWorkflowAlerts: async (date) => {
+        const response = await apiClient.get('/api/ot/workflow-alerts', { params: { date } });
+        return response.data;
+    },
+    getPlannedSurgeries: async () => {
+        const response = await apiClient.get('/api/ot/surgery-plans/planned');
+        return response.data;
+    },
+    getMySurgeryPlans: async () => {
+        const response = await apiClient.get('/api/ot/surgery-plans/surgeon/my');
+        return response.data;
+    },
+    getSurgeryPlanById: async (id) => {
+        const response = await apiClient.get(`/api/ot/surgery-plans/${id}`);
         return response.data;
     }
 };

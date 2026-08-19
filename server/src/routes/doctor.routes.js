@@ -815,11 +815,19 @@ router.get('/:doctorId/booked-slots', async (req, res) => {
     try {
         const mongoose = require('mongoose');
         const isObjectId = mongoose.Types.ObjectId.isValid(req.params.doctorId);
-        const doctorQuery = isObjectId
-            ? { _id: req.params.doctorId }
-            : { doctorId: req.params.doctorId };
+        let doctor = null;
 
-        const doctor = await Doctor.findOne(doctorQuery);
+        if (isObjectId) {
+            doctor = await Doctor.findOne({
+                $or: [
+                    { _id: req.params.doctorId },
+                    { userId: req.params.doctorId }
+                ]
+            });
+        } else {
+            doctor = await Doctor.findOne({ doctorId: req.params.doctorId });
+        }
+
         if (!doctor) {
             return res.status(404).json({ success: false, message: 'Doctor not found' });
         }
@@ -845,10 +853,57 @@ router.get('/:doctorId/booked-slots', async (req, res) => {
             return res.status(403).json({ success: false, message: 'Unauthorized: Doctor belongs to another hospital.' });
         }
 
-        const startOfDay = new Date(req.query.date);
+        const parseDateRobust = (dateStr) => {
+            if (!dateStr) return new Date();
+            if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? new Date() : dateStr;
+            const str = String(dateStr).trim();
+            const dmyMatch = str.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+            if (dmyMatch) {
+                const [_, d, m, y] = dmyMatch;
+                return new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T12:00:00Z`);
+            }
+            const ymdMatch = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+            if (ymdMatch) {
+                const [_, y, m, d] = ymdMatch;
+                return new Date(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}T12:00:00Z`);
+            }
+            const parsed = new Date(str);
+            if (isNaN(parsed.getTime())) return new Date();
+            return parsed;
+        };
+
+        const targetDate = parseDateRobust(req.query.date);
+        const startOfDay = new Date(targetDate);
         startOfDay.setUTCHours(0, 0, 0, 0);
-        const endOfDay = new Date(req.query.date);
+        const endOfDay = new Date(targetDate);
         endOfDay.setUTCHours(23, 59, 59, 999);
+
+        // Determine day of the week in English lowercase (e.g. 'monday', 'tuesday')
+        const dayName = targetDate.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }).toLowerCase();
+        const dayConfig = doctor.availability?.[dayName] || { available: true, startTime: '09:00', endTime: '17:30' };
+
+        const isAvailableToday = dayConfig.available !== false;
+        const startTime = dayConfig.startTime || '09:00';
+        const endTime = dayConfig.endTime || '17:30';
+
+        // Helper to generate dynamic 30-min time slots between startTime and endTime
+        const generateTimeSlots = (startStr, endStr, intervalMins = 30) => {
+            const slots = [];
+            const [sH, sM] = startStr.split(':').map(Number);
+            const [eH, eM] = endStr.split(':').map(Number);
+            let current = (sH || 0) * 60 + (sM || 0);
+            const end = (eH || 0) * 60 + (eM || 0);
+
+            while (current < end) {
+                const h = Math.floor(current / 60);
+                const m = current % 60;
+                slots.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+                current += intervalMins;
+            }
+            return slots;
+        };
+
+        const timeSlots = isAvailableToday ? generateTimeSlots(startTime, endTime, 30) : [];
 
         const orConditions = [];
         if (doctor._id && mongoose.Types.ObjectId.isValid(String(doctor._id))) {
@@ -860,23 +915,37 @@ router.get('/:doctorId/booked-slots', async (req, res) => {
         if (mongoose.Types.ObjectId.isValid(String(req.params.doctorId))) {
             orConditions.push({ doctorId: req.params.doctorId });
         }
-        if (orConditions.length === 0) {
-            return res.json({ success: true, bookedSlots: [] });
+
+        let bookedSlots = [];
+        if (orConditions.length > 0) {
+            const query = {
+                $or: orConditions,
+                appointmentDate: { $gte: startOfDay, $lte: endOfDay },
+                status: { $ne: 'cancelled' }
+            };
+
+            if (hospitalIdFilter) {
+                query.hospitalId = hospitalIdFilter;
+            }
+
+            const appointments = await Appointment.find(query);
+            bookedSlots = appointments.map(app => app.appointmentTime).filter(Boolean);
         }
 
-        const query = {
-            $or: orConditions,
-            appointmentDate: { $gte: startOfDay, $lte: endOfDay },
-            status: { $ne: 'cancelled' }
-        };
-
-        if (hospitalIdFilter) {
-            query.hospitalId = hospitalIdFilter;
-        }
-
-        const appointments = await Appointment.find(query);
-        const slots = appointments.map(app => app.appointmentTime).filter(Boolean);
-        res.json({ success: true, bookedSlots: slots });
+        res.json({
+            success: true,
+            bookedSlots,
+            available: isAvailableToday,
+            dayName,
+            startTime,
+            endTime,
+            timeSlots,
+            doctor: {
+                _id: doctor._id,
+                name: doctor.name,
+                availability: doctor.availability
+            }
+        });
     } catch (error) {
         console.error('Error fetching booked slots:', error);
         res.status(500).json({ success: false, message: 'Error fetching booked slots' });

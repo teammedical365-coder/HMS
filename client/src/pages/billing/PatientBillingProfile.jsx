@@ -8,6 +8,38 @@ import './PatientBillingProfile.css';
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n || 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
+const fmtAdmissionDateTime = (dateVal, timeVal, fallbackCreatedAt) => {
+    if (!dateVal && !fallbackCreatedAt) return '—';
+    const baseDate = dateVal ? new Date(dateVal) : new Date(fallbackCreatedAt);
+    const dStr = baseDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    
+    // If explicit time string is present (e.g. "01:00", "10:30 AM", "14:45")
+    if (timeVal && typeof timeVal === 'string' && timeVal.trim()) {
+        const tTrim = timeVal.trim();
+        if (/^\d{1,2}:\d{2}$/.test(tTrim)) {
+            const [h, m] = tTrim.split(':');
+            const d = new Date();
+            d.setHours(parseInt(h, 10), parseInt(m, 10));
+            const formattedTime = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+            return `${dStr}, ${formattedTime}`;
+        }
+        return `${dStr}, ${tTrim}`;
+    }
+    
+    // If fallback createdAt timestamp is present, format real time from it
+    if (fallbackCreatedAt) {
+        const cTime = new Date(fallbackCreatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+        return `${dStr}, ${cTime}`;
+    }
+    
+    // Fallback: check if baseDate has real non-midnight time
+    const dTime = baseDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    if (dTime === '05:30 am' || dTime === '05:30 AM' || dTime === '12:00 am' || dTime === '12:00 AM') {
+        return dStr;
+    }
+    return `${dStr}, ${dTime}`;
+};
+
 const getPharmacyTotal = (p) => {
     if (p.totalAmount && Number(p.totalAmount) > 0) return Number(p.totalAmount);
     if (!p.items || !p.items.length) return 0;
@@ -24,7 +56,7 @@ const PatientBillingProfile = () => {
     const [error, setError] = useState('');
     const [patient, setPatient] = useState(null);
     const [billing, setBilling] = useState(null);
-    const [selected, setSelected] = useState({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [] });
+    const [selected, setSelected] = useState({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [], surgeryPlans: [] });
 
     const [expandedRows, setExpandedRows] = useState({});
 
@@ -79,7 +111,7 @@ const PatientBillingProfile = () => {
         setError('');
         setPatient(null);
         setBilling(null);
-        setSelected({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [] });
+        setSelected({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [], surgeryPlans: [] });
         setSuccessMsg('');
         try {
             const res = await billingAPI.getPatientBills(identifier);
@@ -135,9 +167,9 @@ const PatientBillingProfile = () => {
     };
 
     const toggleAll = (category, items) => {
-        const pendingIds = items.filter(x => x.paymentStatus !== 'Paid').map(x => x._id);
+        const pendingIds = items.filter(x => x.paymentStatus !== 'Paid' && x.paymentStatus !== 'PAID').map(x => x._id);
         setSelected(prev => {
-            const allSelected = pendingIds.every(id => prev[category].includes(id));
+            const allSelected = pendingIds.every(id => (prev[category] || []).includes(id));
             return { ...prev, [category]: allSelected ? [] : pendingIds };
         });
     };
@@ -145,24 +177,34 @@ const PatientBillingProfile = () => {
     const totalSelected = () => {
         if (!billing) return 0;
         let total = 0;
-        billing.appointments.filter(a => selected.appointments.includes(a._id)).forEach(a => total += (Number(a.amount) || 0));
-        billing.labReports.filter(l => selected.labReports.includes(l._id)).forEach(l => total += (Number(l.amount || l.price) || 0));
-        billing.pharmacyOrders.filter(p => selected.pharmacyOrders.includes(p._id)).forEach(p => total += getPharmacyTotal(p));
-        billing.facilityCharges.filter(f => selected.facilityCharges.includes(f._id)).forEach(f => total += (Number(f.totalAmount) || 0));
-        billing.admissions.filter(a => selected.admissions.includes(a._id)).forEach(a => total += (Number(a.totalAmount) || 0));
+        billing.appointments?.filter(a => selected.appointments?.includes(a._id)).forEach(a => total += (Number(a.amount) || 0));
+        billing.labReports?.filter(l => selected.labReports?.includes(l._id)).forEach(l => total += (Number(l.amount || l.price) || 0));
+        billing.pharmacyOrders?.filter(p => selected.pharmacyOrders?.includes(p._id)).forEach(p => total += getPharmacyTotal(p));
+        billing.facilityCharges?.filter(f => selected.facilityCharges?.includes(f._id)).forEach(f => total += (Number(f.totalAmount) || 0));
+        billing.admissions?.filter(a => selected.admissions?.includes(a._id)).forEach(a => total += (Number(a.totalAmount) || 0));
+        billing.surgeryPlans?.filter(s => selected.surgeryPlans?.includes(s._id)).forEach(s => {
+            const cost = Number(s.surgeryCost) || 0;
+            const paid = Number(s.paidAmount) || 0;
+            total += Math.max(0, cost - paid);
+        });
         return total;
     };
 
-    const isPaid = (status) => status && status.toLowerCase() === 'paid';
+    const isPaid = (status) => status && (status.toLowerCase() === 'paid');
 
     const pendingTotal = () => {
         if (!billing) return 0;
         let total = 0;
-        billing.appointments.filter(a => !isPaid(a.paymentStatus)).forEach(a => total += (Number(a.amount) || 0));
-        billing.labReports.filter(l => !isPaid(l.paymentStatus)).forEach(l => total += (Number(l.amount || l.price) || 0));
-        billing.pharmacyOrders.filter(p => !isPaid(p.paymentStatus)).forEach(p => total += getPharmacyTotal(p));
-        billing.facilityCharges.filter(f => !isPaid(f.paymentStatus)).forEach(f => total += (Number(f.totalAmount) || 0));
-        billing.admissions.filter(a => !isPaid(a.paymentStatus)).forEach(a => total += (Number(a.totalAmount) || 0));
+        billing.appointments?.filter(a => !isPaid(a.paymentStatus)).forEach(a => total += (Number(a.amount) || 0));
+        billing.labReports?.filter(l => !isPaid(l.paymentStatus)).forEach(l => total += (Number(l.amount || l.price) || 0));
+        billing.pharmacyOrders?.filter(p => !isPaid(p.paymentStatus)).forEach(p => total += getPharmacyTotal(p));
+        billing.facilityCharges?.filter(f => !isPaid(f.paymentStatus)).forEach(f => total += (Number(f.totalAmount) || 0));
+        billing.admissions?.filter(a => !isPaid(a.paymentStatus)).forEach(a => total += (Number(a.totalAmount) || 0));
+        billing.surgeryPlans?.filter(s => s.paymentStatus !== 'PAID').forEach(s => {
+            const cost = Number(s.surgeryCost) || 0;
+            const paid = Number(s.paidAmount) || 0;
+            total += Math.max(0, cost - paid);
+        });
         return total;
     };
 
@@ -174,6 +216,7 @@ const PatientBillingProfile = () => {
         billing.pharmacyOrders?.forEach(p => total += getPharmacyTotal(p));
         billing.facilityCharges?.forEach(f => total += (Number(f.totalAmount) || 0));
         billing.admissions?.forEach(a => total += (Number(a.totalAmount) || 0));
+        billing.surgeryPlans?.forEach(s => total += (Number(s.surgeryCost) || 0));
         return total;
     };
 
@@ -187,6 +230,7 @@ const PatientBillingProfile = () => {
         billing.pharmacyOrders?.filter(p => isPaid(p.paymentStatus) || isPaid(p.status) || isPaid(p.orderStatus)).forEach(p => modulePaid += getPharmacyTotal(p));
         billing.facilityCharges?.filter(f => isPaid(f.paymentStatus)).forEach(f => modulePaid += (Number(f.totalAmount) || 0));
         billing.admissions?.forEach(a => modulePaid += (Number(a.paidAmount) || (isPaid(a.paymentStatus) ? Number(a.totalAmount) : 0) || 0));
+        billing.surgeryPlans?.forEach(s => modulePaid += (Number(s.paidAmount) || (s.paymentStatus === 'PAID' ? Number(s.surgeryCost) : 0) || 0));
 
         // Sum from payment history
         let historyPaid = 0;
@@ -256,6 +300,7 @@ const PatientBillingProfile = () => {
                 pharmacyOrderIds: selected.pharmacyOrders,
                 facilityChargeIds: selected.facilityCharges,
                 admissionIds: selected.admissions,
+                surgeryPlanIds: selected.surgeryPlans,
                 splitPayments,
                 patientId: patient?._id,
                 amount: total,
@@ -264,7 +309,7 @@ const PatientBillingProfile = () => {
             setSuccessMsg(`Payment of ${fmt(total)} processed successfully via ${paymentMode}.`);
             const res = await billingAPI.getPatientBills(searchQuery.trim());
             if (res.success) setBilling(res.billing);
-            setSelected({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [] });
+            setSelected({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [], surgeryPlans: [] });
         } catch (err) {
             alert(err.response?.data?.message || 'Payment failed');
         } finally {
@@ -472,7 +517,7 @@ const PatientBillingProfile = () => {
                                 <div key={adm._id} className="admission-card active">
                                     <div className="admission-top">
                                         <div>
-                                            <strong>Admitted:</strong> {fmtDate(adm.admissionDate)}
+                                            <strong>Admitted:</strong> {fmtAdmissionDateTime(adm.admissionDate, adm.admissionTime, adm.createdAt)}
                                             {adm.ward && <span className="badge-ward"> Ward: {adm.ward}</span>}
                                             {adm.bedNumber && <span className="badge-bed"> Bed: {adm.bedNumber}</span>}
                                         </div>
@@ -525,6 +570,114 @@ const PatientBillingProfile = () => {
                                     {adm.notes && <p className="admission-notes">Notes: {adm.notes}</p>}
                                 </div>
                             ))}
+                        </div>
+                    )}
+
+                    {/* Scheduled Surgeries & OT Procedures */}
+                    {billing.surgeryPlans && billing.surgeryPlans.length > 0 && (
+                        <div className="billing-section" style={{ borderLeft: '4px solid #7c3aed' }}>
+                            <div className="section-header">
+                                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span>🩺</span> Scheduled Surgeries & OT Procedures ({getSectionBadge(billing.surgeryPlans)})
+                                </h3>
+                                {billing.surgeryPlans.some(s => s.paymentStatus !== 'PAID') && (
+                                    <button className="btn-select-all" onClick={() => toggleAll('surgeryPlans', billing.surgeryPlans)}>
+                                        {billing.surgeryPlans.filter(s => s.paymentStatus !== 'PAID').every(s => selected.surgeryPlans.includes(s._id)) ? 'Deselect All Surgeries' : 'Select All Surgeries'}
+                                    </button>
+                                )}
+                            </div>
+                            <table className="billing-table">
+                                <thead>
+                                    <tr>
+                                        <th></th>
+                                        <th>Date & Time</th>
+                                        <th>Surgery & Clinical Context</th>
+                                        <th>Surgical Team</th>
+                                        <th>OT Room</th>
+                                        <th>Status</th>
+                                        <th>Fee / Remaining</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {billing.surgeryPlans.map(s => {
+                                        const isFullyPaid = s.paymentStatus === 'PAID';
+                                        const cost = Number(s.surgeryCost) || 0;
+                                        const paid = Number(s.paidAmount) || 0;
+                                        const remaining = Math.max(0, cost - paid);
+                                        const surgeonName = s.surgeonId?.name ? (s.surgeonId.name).replace(/^Dr\.?\s*/i, '') : 'Surgeon';
+                                        const assistants = s.assistantSurgeonIds || [];
+
+                                        return (
+                                            <tr key={s._id} className={selected.surgeryPlans.includes(s._id) ? 'selected-row' : ''}>
+                                                <td>
+                                                    {isFullyPaid ? (
+                                                        <span className="paid-icon-check">✓</span>
+                                                    ) : (
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selected.surgeryPlans.includes(s._id)}
+                                                            onChange={() => toggle('surgeryPlans', s._id)}
+                                                        />
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    {fmtAdmissionDateTime(s.surgeryDate, s.startTime, s.preferredDate || s.createdAt)}
+                                                </td>
+                                                <td>
+                                                    <strong>{s.surgery}</strong>
+                                                    {s.diagnosis && (
+                                                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                                            Dx: {s.diagnosis}
+                                                        </div>
+                                                    )}
+                                                    {s.planId && (
+                                                        <span style={{ fontSize: '0.72rem', background: '#e0e7ff', color: '#3730a3', padding: '1px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '2px' }}>
+                                                            {s.planId}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1e293b' }}>
+                                                        👨‍⚕️ Op: Dr. {surgeonName}
+                                                    </div>
+                                                    {assistants.length > 0 ? (
+                                                        <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
+                                                            🤝 Asst: {assistants.map(a => `Dr. ${(a.name || 'Doctor').replace(/^Dr\.?\s*/i, '')}`).join(', ')}
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                                                            No assistants
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    <span style={{ padding: '2px 8px', background: '#f1f5f9', borderRadius: '4px', fontSize: '0.82rem', fontWeight: 600 }}>
+                                                        🚪 {s.otRoomId?.name || 'Assigned OT'}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span className={`status-badge ${s.paymentStatus === 'PAID' ? 'status-paid' : ''}`} style={{
+                                                        background: s.paymentStatus === 'PAID' ? '#dcfce7' : (s.paymentStatus === 'PARTIALLY PAID' ? '#fef3c7' : '#fee2e2'),
+                                                        color: s.paymentStatus === 'PAID' ? '#15803d' : (s.paymentStatus === 'PARTIALLY PAID' ? '#b45309' : '#b91c1c'),
+                                                        border: `1px solid ${s.paymentStatus === 'PAID' ? '#86efac' : (s.paymentStatus === 'PARTIALLY PAID' ? '#fde68a' : '#fca5a5')}`,
+                                                        fontWeight: 700
+                                                    }}>
+                                                        {s.paymentStatus || 'UNPAID'}
+                                                    </span>
+                                                </td>
+                                                <td className="amount-cell">
+                                                    <div style={{ fontWeight: 700, color: '#0f172a' }}>{fmt(cost)}</div>
+                                                    {paid > 0 && paid < cost && (
+                                                        <div style={{ fontSize: '0.75rem', color: '#16a34a' }}>
+                                                            Paid: {fmt(paid)} (Due: {fmt(remaining)})
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     )}
 
@@ -724,8 +877,8 @@ const PatientBillingProfile = () => {
                                 <div key={adm._id} className="admission-card past">
                                     <div className="admission-top">
                                         <div>
-                                            <strong>Admitted:</strong> {fmtDate(adm.admissionDate)}
-                                            <strong style={{ marginLeft: 16 }}>Discharged:</strong> {fmtDate(adm.dischargeDate)}
+                                            <strong>Admitted:</strong> {fmtAdmissionDateTime(adm.admissionDate, adm.admissionTime, adm.createdAt)}
+                                            <strong style={{ marginLeft: 16 }}>Discharged:</strong> {fmtAdmissionDateTime(adm.dischargeDate, adm.dischargeTime, adm.updatedAt)}
                                             {adm.ward && <span className="badge-ward"> Ward: {adm.ward}</span>}
                                             {adm.bedNumber && <span className="badge-bed"> Bed: {adm.bedNumber}</span>}
                                         </div>

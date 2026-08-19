@@ -28,6 +28,70 @@ const isWithin24Hours = (dateString) => {
     return diffHours <= 24;
 };
 
+const combineDateTime = (dateVal, timeStr) => {
+    if (!dateVal) return new Date();
+    const d = new Date(dateVal);
+    if (!timeStr) return d;
+    const match = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+    if (match) {
+        let hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+        const meridiem = match[3];
+        if (meridiem) {
+            if (meridiem.toUpperCase() === 'PM' && hours < 12) hours += 12;
+            if (meridiem.toUpperCase() === 'AM' && hours === 12) hours = 0;
+        }
+        d.setHours(hours, minutes, 0, 0);
+    }
+    return d;
+};
+
+const computeStayDurationAndCost = (startDateTime, endDateTime, dailyRate) => {
+    if (!startDateTime || !endDateTime) return { durationText: '0 Hours', amount: 0, hourlyRate: 0, totalHours: 0, fullDays: 0, remainingHours: 0 };
+    const start = new Date(startDateTime).getTime();
+    const end = new Date(endDateTime).getTime();
+    if (isNaN(start) || isNaN(end) || end < start) {
+        return { durationText: 'Invalid Range', amount: 0, hourlyRate: 0, totalHours: 0, fullDays: 0, remainingHours: 0 };
+    }
+    const diffMs = Math.max(0, end - start);
+    const totalHoursRaw = diffMs / (1000 * 60 * 60);
+    const totalHours = Math.max(0.5, Math.round(totalHoursRaw * 10) / 10);
+    
+    const ratePerDay = Number(dailyRate) || 0;
+    const hourlyRate = Math.round((ratePerDay / 24) * 100) / 100;
+    
+    const fullDays = Math.floor(totalHours / 24);
+    const remainingHours = Math.round((totalHours % 24) * 10) / 10;
+    
+    let durationText = '';
+    let amount = 0;
+
+    if (totalHours < 24) {
+        const billedHrs = Math.max(1, Math.round(totalHours));
+        durationText = `${billedHrs} Hour${billedHrs > 1 ? 's' : ''}`;
+        amount = Math.round(billedHrs * (ratePerDay / 24));
+    } else {
+        if (remainingHours >= 0.5) {
+            const remHrsRound = Math.round(remainingHours);
+            durationText = `${fullDays} Day${fullDays > 1 ? 's' : ''} ${remHrsRound} Hr${remHrsRound > 1 ? 's' : ''}`;
+            amount = Math.round((fullDays * ratePerDay) + (remHrsRound * (ratePerDay / 24)));
+        } else {
+            durationText = `${fullDays} Day${fullDays > 1 ? 's' : ''}`;
+            amount = Math.round(fullDays * ratePerDay);
+        }
+    }
+    
+    return {
+        totalHours: Math.max(1, Math.round(totalHours)),
+        fullDays,
+        remainingHours,
+        durationText,
+        ratePerDay,
+        hourlyRate,
+        amount
+    };
+};
+
 const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -69,9 +133,37 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     // Hospitalization modal
     const [hospitalizeModal, setHospitalizeModal] = useState({ open: false, appointment: null });
-    const [hospitalizeForm, setHospitalizeForm] = useState({ ward: '', bedId: '', admissionDate: new Date().toISOString().split('T')[0], notes: '', facilityDays: {} });
+    const [hospitalizeForm, setHospitalizeForm] = useState({
+        ward: '',
+        bedId: '',
+        admissionDate: new Date().toISOString().split('T')[0],
+        admissionTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+        notes: ''
+    });
     const [hospitalizingSaving, setHospitalizingSaving] = useState(false);
     const [availableBeds, setAvailableBeds] = useState([]);
+
+    // Transfer Modal
+    const [transferModal, setTransferModal] = useState({
+        open: false,
+        admission: null,
+        newWard: '',
+        newBedId: '',
+        transferDate: new Date().toISOString().split('T')[0],
+        transferTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+        notes: '',
+        saving: false
+    });
+
+    // Discharge Modal
+    const [dischargeModal, setDischargeModal] = useState({
+        open: false,
+        admission: null,
+        dischargeDate: new Date().toISOString().split('T')[0],
+        dischargeTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+        notes: '',
+        saving: false
+    });
 
     const fetchAvailableBeds = async () => {
         try {
@@ -572,35 +664,37 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     };
 
     const openHospitalizeModal = (apt) => {
-        setHospitalizeForm({ ward: '', bedId: '', admissionDate: new Date().toISOString().split('T')[0], notes: '', facilityDays: {} });
+        setHospitalizeForm({
+            ward: '',
+            bedId: '',
+            admissionDate: new Date().toISOString().split('T')[0],
+            admissionTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+            notes: ''
+        });
         setHospitalizeModal({ open: true, appointment: apt });
         fetchAvailableBeds();
     };
 
-    const handleHospitalize = async () => {
+    const handleHospitalize = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
         const { appointment } = hospitalizeModal;
-        const facilities = hospitalContext?.facilities || [];
-        const selectedFacilities = facilities
-            .filter(f => hospitalizeForm.facilityDays[f.name] > 0)
-            .map(f => ({
-                facilityName: f.name,
-                pricePerDay: f.pricePerDay,
-                days: Number(hospitalizeForm.facilityDays[f.name]),
-                totalAmount: f.pricePerDay * Number(hospitalizeForm.facilityDays[f.name]),
-            }));
+        if (!hospitalizeForm.ward) return alert('Please select a Ward');
+        if (!hospitalizeForm.bedId) return alert('Please select an available Bed');
+        if (!hospitalizeForm.admissionDate) return alert('Please specify Admission Date');
+        if (!hospitalizeForm.admissionTime) return alert('Please specify Admission Time');
 
-        if (!hospitalizeForm.bedId) return alert('Please select a bed');
         setHospitalizingSaving(true);
         try {
             await admissionAPI.createAdmission({
                 patientId: appointment.userId?._id || appointment.patientId,
                 appointmentId: appointment._id,
+                ward: hospitalizeForm.ward,
                 bedId: hospitalizeForm.bedId,
                 admissionDate: hospitalizeForm.admissionDate,
+                admissionTime: hospitalizeForm.admissionTime,
                 notes: hospitalizeForm.notes,
-                selectedFacilities,
             });
-            alert(`Patient admitted successfully!`);
+            alert('Patient admitted successfully!');
             setHospitalizeModal({ open: false, appointment: null });
             fetchAppointments();
             fetchHospitalizedPatients();
@@ -612,16 +706,211 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         }
     };
 
-    const handleDischargePatient = async (admissionId) => {
-        if (!window.confirm('Are you sure you want to discharge this patient?')) return;
+    const openTransferModal = (adm) => {
+        let rate = Number(adm.wardRatePerDay) || 0;
+        if (rate === 0) {
+            const matching = hospitalContext?.facilities?.find(f => 
+                (f.name || '').toLowerCase().includes((adm.ward || '').toLowerCase()) ||
+                (adm.ward || '').toLowerCase().includes((f.name || '').toLowerCase())
+            );
+            rate = matching?.pricePerDay || ((adm.ward || '').toLowerCase().includes('icu') ? 20000 : 5000);
+        }
+        adm.wardRatePerDay = rate;
+        adm.wardHourlyRate = Math.round((rate / 24) * 100) / 100;
+
+        setTransferModal({
+            open: true,
+            admission: adm,
+            newWard: '',
+            newBedId: '',
+            transferDate: new Date().toISOString().split('T')[0],
+            transferTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+            notes: '',
+            saving: false
+        });
+        fetchAvailableBeds();
+    };
+
+    const handleTransferSubmit = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        const { admission, newWard, newBedId, transferDate, transferTime, notes } = transferModal;
+        if (!newWard) return alert('Please select New Ward');
+        if (!newBedId) return alert('Please select New Bed');
+        if (!transferDate) return alert('Please select Transfer Date');
+        if (!transferTime) return alert('Please select Transfer Time');
+
+        setTransferModal(prev => ({ ...prev, saving: true }));
         try {
-            const res = await admissionAPI.dischargePatient(admissionId, { dischargeDate: new Date() });
+            const res = await admissionAPI.transferBed(admission._id, {
+                newWard,
+                newBedId,
+                transferDate,
+                transferTime,
+                notes
+            });
             if (res.success) {
-                alert('Patient discharged successfully!');
+                alert('Patient transferred successfully!');
+                setTransferModal({ open: false, admission: null, newWard: '', newBedId: '', transferDate: '', transferTime: '', notes: '', saving: false });
                 fetchHospitalizedPatients();
+                fetchAvailableBeds();
+            }
+        } catch (err) {
+            alert(err.response?.data?.message || 'Failed to transfer patient');
+        } finally {
+            setTransferModal(prev => ({ ...prev, saving: false }));
+        }
+    };
+
+    const openDischargeModal = (adm) => {
+        let rate = Number(adm.wardRatePerDay) || 0;
+        if (rate === 0) {
+            const matching = hospitalContext?.facilities?.find(f => 
+                (f.name || '').toLowerCase().includes((adm.ward || '').toLowerCase()) ||
+                (adm.ward || '').toLowerCase().includes((f.name || '').toLowerCase())
+            );
+            rate = matching?.pricePerDay || ((adm.ward || '').toLowerCase().includes('icu') ? 20000 : 5000);
+        }
+        adm.wardRatePerDay = rate;
+        adm.wardHourlyRate = Math.round((rate / 24) * 100) / 100;
+
+        setDischargeModal({
+            open: true,
+            admission: adm,
+            dischargeDate: new Date().toISOString().split('T')[0],
+            dischargeTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+            notes: '',
+            saving: false
+        });
+    };
+
+    const generateDischargeReceiptPDF = (adm, shouldSave = true) => {
+        const doc = new jsPDF();
+        const hName = hospitalContext?.name || 'HOSPITAL';
+        const hAddr = [hospitalContext?.address, hospitalContext?.city, hospitalContext?.state].filter(Boolean).join(', ');
+        const hPhone = hospitalContext?.phone || '';
+        const hEmail = hospitalContext?.email || '';
+        const issuedBy = currentUser?.name || 'Reception Desk';
+        let y = 18;
+
+        doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+        doc.text(hName, 105, y, { align: 'center' }); y += 7;
+        if (hAddr) {
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100);
+            doc.text(hAddr, 105, y, { align: 'center' }); y += 5;
+        }
+        if (hPhone || hEmail) {
+            const contact = [hPhone && `Ph: ${hPhone}`, hEmail && `Email: ${hEmail}`].filter(Boolean).join('  |  ');
+            doc.setFontSize(9); doc.setTextColor(100);
+            doc.text(contact, 105, y, { align: 'center' }); y += 5;
+        }
+        doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(220, 38, 38);
+        doc.text('INPATIENT DISCHARGE BILL & RECEIPT', 105, y, { align: 'center' }); y += 5;
+        doc.setDrawColor(220, 38, 38); doc.setLineWidth(0.5);
+        doc.line(14, y, 196, y); y += 8;
+        doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+
+        const ptName = adm.patientId?.name || 'Inpatient';
+        const ptId = adm.patientId?.patientId || adm.patientId?.mrn || 'N/A';
+        const admDateStr = `${new Date(adm.admissionDate).toLocaleDateString('en-IN')} ${adm.admissionTime || ''}`;
+        const disDateStr = `${new Date(adm.dischargeDate || new Date()).toLocaleDateString('en-IN')} ${adm.dischargeTime || ''}`;
+
+        autoTable(doc, {
+            startY: y,
+            body: [
+                ['Patient Name', ptName, 'MRN / Patient ID', ptId],
+                ['Admission Time', admDateStr, 'Discharge Time', disDateStr],
+                ['Final Ward & Bed', `${adm.ward || 'General Ward'} (Bed ${adm.bedNumber || '-'})`, 'Payment Status', (adm.paymentStatus || 'Paid').toUpperCase() + ' \u2713'],
+            ],
+            theme: 'grid',
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 42 }, 2: { fontStyle: 'bold', cellWidth: 42 } },
+            bodyStyles: { fontSize: 9 },
+        });
+
+        y = doc.lastAutoTable.finalY + 10;
+        doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 41, 59);
+        doc.text('Stay & Ward Breakdown (Hourly / Daily Pro-rated):', 14, y); y += 6;
+
+        let tableRows = [];
+        if (adm.selectedFacilities && adm.selectedFacilities.length > 0) {
+            tableRows = adm.selectedFacilities.map((f, i) => [
+                i + 1,
+                f.facilityName,
+                f.durationText || (f.days > 0 ? `${f.days} Day(s)` : `${f.hours || 1} Hour(s)`),
+                `Rs. ${Number(f.pricePerDay || 0).toLocaleString('en-IN')}/day (${Number(f.hourlyRate || Math.round((f.pricePerDay || 0)/24)).toLocaleString('en-IN')}/hr)`,
+                `Rs. ${Number(f.totalAmount || 0).toLocaleString('en-IN')}`
+            ]);
+        } else {
+            let idx = 1;
+            (adm.transferHistory || []).forEach(th => {
+                tableRows.push([
+                    idx++,
+                    th.fromWard,
+                    th.durationText || `${th.durationDays || 1} Day(s)`,
+                    `Rs. ${Number(th.ratePerDay || 0).toLocaleString('en-IN')}/day`,
+                    `Rs. ${Number(th.segmentAmount || 0).toLocaleString('en-IN')}`
+                ]);
+            });
+            const finalRate = adm.wardRatePerDay || 5000;
+            tableRows.push([
+                idx,
+                adm.ward || 'General Ward',
+                'Final Stay',
+                `Rs. ${Number(finalRate).toLocaleString('en-IN')}/day`,
+                `Rs. ${Number(adm.totalAmount || finalRate).toLocaleString('en-IN')}`
+            ]);
+        }
+
+        autoTable(doc, {
+            startY: y,
+            head: [['#', 'Ward / Service', 'Duration', 'Rate Basis', 'Amount (INR)']],
+            body: tableRows,
+            foot: [['', '', '', 'TOTAL INPATIENT CHARGES:', `Rs. ${Number(adm.totalAmount || 0).toLocaleString('en-IN')}`]],
+            theme: 'striped',
+            headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+            footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold' },
+            columnStyles: { 0: { cellWidth: 10 }, 4: { halign: 'right', fontStyle: 'bold' } }
+        });
+
+        y = doc.lastAutoTable.finalY + 12;
+        doc.setDrawColor(200); doc.line(14, y, 196, y); y += 6;
+        doc.setFontSize(8); doc.setTextColor(120);
+        doc.text(`Issued by: ${issuedBy}`, 14, y);
+        doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 196, y, { align: 'right' });
+        y += 5;
+        doc.text(`Thank you for choosing ${hName}`, 105, y, { align: 'center' });
+
+        const filename = `Discharge_Bill_${ptId}_${new Date().toISOString().split('T')[0]}.pdf`;
+        if (shouldSave) {
+            doc.save(filename);
+        }
+        return { doc, filename };
+    };
+
+    const handleDischargeSubmit = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        const { admission, dischargeDate, dischargeTime, notes } = dischargeModal;
+        if (!dischargeDate) return alert('Please select Discharge Date');
+        if (!dischargeTime) return alert('Please select Discharge Time');
+
+        setDischargeModal(prev => ({ ...prev, saving: true }));
+        try {
+            const res = await admissionAPI.dischargePatient(admission._id, {
+                dischargeDate,
+                dischargeTime,
+                notes
+            });
+            if (res.success) {
+                const pdf = generateDischargeReceiptPDF(res.admission || admission, false);
+                setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Discharge Bill & Receipt' });
+                alert('Patient discharged successfully!');
+                setDischargeModal({ open: false, admission: null, dischargeDate: '', dischargeTime: '', notes: '', saving: false });
+                fetchHospitalizedPatients();
+                fetchAvailableBeds();
             }
         } catch (err) {
             alert(err.response?.data?.message || 'Failed to discharge patient.');
+        } finally {
+            setDischargeModal(prev => ({ ...prev, saving: false }));
         }
     };
 
@@ -1972,14 +2261,26 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     <td>{adm.appointmentId?.department || adm.appointmentId?.serviceName || '-'}</td>
                                     <td>{adm.appointmentId?.doctorName || '-'}</td>
                                     <td>
-                                        <div>{new Date(adm.admissionDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                                        <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>
+                                            {new Date(adm.admissionDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            {adm.admissionTime && <span style={{ color: '#475569', fontSize: '0.78rem', marginLeft: '4px' }}>({adm.admissionTime})</span>}
+                                        </div>
+                                        {adm.transferHistory && adm.transferHistory.length > 0 && (
+                                            <div style={{ fontSize: '0.75rem', color: '#7c3aed', marginTop: '2px', fontWeight: 600 }}>
+                                                🔄 Transferred ({adm.transferHistory.length}x)
+                                            </div>
+                                        )}
                                         {adm.status === 'Discharged' && adm.dischargeDate && (
-                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                                                Discharged: {new Date(adm.dischargeDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            <div style={{ fontSize: '0.8rem', color: '#059669', marginTop: '2px' }}>
+                                                🚪 Discharged: {new Date(adm.dischargeDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                {adm.dischargeTime && <span style={{ fontSize: '0.75rem', marginLeft: '4px' }}>({adm.dischargeTime})</span>}
                                             </div>
                                         )}
                                     </td>
-                                    <td>{adm.ward || '-'}<br /><small>Bed: {adm.bedNumber || '-'}</small></td>
+                                    <td>
+                                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{adm.ward || '-'}</div>
+                                        <div style={{ fontSize: '0.8rem', color: '#2563eb', fontWeight: 700 }}>Bed: {adm.bedNumber || '-'}</div>
+                                    </td>
                                     <td>
                                         <span style={{
                                             display: 'inline-block', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600,
@@ -1990,32 +2291,38 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         </span>
                                     </td>
                                     <td>
-                                        {adm.status === 'Admitted' ? (
-                                            <button 
-                                                onClick={() => handleDischargePatient(adm._id)} 
-                                                style={{ padding: '6px 12px', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
-                                            >
-                                                Discharge
-                                            </button>
-                                        ) : (
-                                            <button 
-                                                onClick={() => {
-                                                    const fakeApt = {
-                                                        ...adm.appointmentId,
-                                                        userId: adm.patientId,
-                                                        patientId: adm.patientId?.patientId,
-                                                        appointmentDate: adm.admissionDate,
-                                                        amount: adm.totalAmount || 0,
-                                                        paymentMethod: 'Hospital Bill'
-                                                    };
-                                                    const pdf = generateReceiptPDF(fakeApt, 'Hospital Bill', false);
-                                                    setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Discharge Summary / Receipt' });
-                                                }} 
-                                                style={{ padding: '6px 12px', background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
-                                            >
-                                                Receipt
-                                            </button>
-                                        )}
+                                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                            {adm.status === 'Admitted' ? (
+                                                <>
+                                                    <button 
+                                                        onClick={() => openTransferModal(adm)} 
+                                                        style={{ padding: '6px 10px', background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                                                    >
+                                                        🔄 Transfer
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => openDischargeModal(adm)} 
+                                                        style={{ padding: '6px 10px', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                                                    >
+                                                        🚪 Discharge
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <button 
+                                                    onClick={() => {
+                                                        try {
+                                                            generateDischargeReceiptPDF(adm, true);
+                                                        } catch (e) {
+                                                            console.error("Error generating discharge bill:", e);
+                                                            alert("Error generating receipt: " + e.message);
+                                                        }
+                                                    }} 
+                                                    style={{ padding: '6px 12px', background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
+                                                >
+                                                    📄 Receipt
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))
@@ -2102,133 +2409,415 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 </div>
             )}
 
+            {/* ====== HOSPITALIZE PATIENT MODAL ====== */}
             {hospitalizeModal.open && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
                     <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
                             <div>
-                                <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700 }}>Hospitalize Patient</h2>
+                                <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700, color: '#0f172a' }}>🏥 Hospitalize Patient</h2>
                                 <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>
-                                    {hospitalizeModal.appointment?.userId?.name} — {hospitalizeModal.appointment?.doctorName}
+                                    {hospitalizeModal.appointment?.userId?.name || 'Patient'} — Dr. {hospitalizeModal.appointment?.doctorName || 'Doctor'}
                                 </p>
                             </div>
-                            <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+                            <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '16px', cursor: 'pointer', color: '#64748b' }}>✕</button>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Select Ward</label>
-                                <select
-                                    value={hospitalizeForm.ward}
-                                    name="ward" 
-                                    onChange={(e) => setHospitalizeForm(prev => ({ ...prev, ward: e.target.value, bedId: '' }))}
-                                    style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
-                                >
-                                    <option value="">-- Choose Ward --</option>
-                                    {Array.from(new Set(availableBeds.map(b => b.ward))).map(w => (
-                                        <option key={w} value={w}>{w}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Select Available Bed</label>
-                                <select
-                                    value={hospitalizeForm.bedId}
-                                    name="bedId" 
-                                    onChange={handleHospitalizeFormChange}
-                                    disabled={!hospitalizeForm.ward}
-                                    style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
-                                >
-                                    <option value="">-- Choose Bed --</option>
-                                    {availableBeds.filter(b => b.ward === hospitalizeForm.ward).map(b => (
-                                        <option key={b._id} value={b._id}>{b.bedNumber} ({b.bedType})</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div style={{ marginBottom: '16px' }}>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Admission Date</label>
-                            <input
-                                type="date"
-                                value={hospitalizeForm.admissionDate}
-                                name="admissionDate" onChange={handleHospitalizeFormChange}
-                                style={{ padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem' }}
-                            />
-                        </div>
-
-                        {(hospitalContext?.facilities?.length > 0) ? (
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>
-                                    Select Facilities &amp; Days
-                                </label>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                    {hospitalContext.facilities.map(f => (
-                                        <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                            <div style={{ flex: 1 }}>
-                                                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{f.name}</div>
-                                                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>₹{f.pricePerDay}/day</div>
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <label style={{ fontSize: '0.82rem', color: '#475569' }}>Days:</label>
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    placeholder="0"
-                                                    value={hospitalizeForm.facilityDays[f.name] || ''}
-                                                    onChange={e => setHospitalizeForm(p => ({ ...p, facilityDays: { ...p.facilityDays, [f.name]: e.target.value } }))}
-                                                    style={{ width: '70px', padding: '6px 10px', border: '1.5px solid #e2e8f0', borderRadius: '7px', fontSize: '0.9rem', textAlign: 'center' }}
-                                                />
-                                            </div>
-                                            {hospitalizeForm.facilityDays[f.name] > 0 && (
-                                                <div style={{ fontWeight: 700, color: '#1d4ed8', fontSize: '0.9rem', minWidth: '70px', textAlign: 'right' }}>
-                                                    ₹{(f.pricePerDay * Number(hospitalizeForm.facilityDays[f.name])).toLocaleString('en-IN')}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
+                        <form onSubmit={handleHospitalize}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Select Ward *</label>
+                                    <select
+                                        required
+                                        value={hospitalizeForm.ward}
+                                        name="ward" 
+                                        onChange={(e) => setHospitalizeForm(prev => ({ ...prev, ward: e.target.value, bedId: '' }))}
+                                        style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box', background: '#fff' }}
+                                    >
+                                        <option value="">-- Choose Ward --</option>
+                                        {Array.from(new Set(availableBeds.map(b => b.ward))).map(w => (
+                                            <option key={w} value={w}>{w}</option>
+                                        ))}
+                                    </select>
                                 </div>
-                                {Object.values(hospitalizeForm.facilityDays).some(d => d > 0) && (
-                                    <div style={{ marginTop: '12px', padding: '10px 14px', background: '#eff6ff', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-                                        <span>Total Facility Cost:</span>
-                                        <span style={{ color: '#1d4ed8' }}>
-                                            ₹{(hospitalContext.facilities.reduce((sum, f) => sum + (f.pricePerDay * (Number(hospitalizeForm.facilityDays[f.name]) || 0)), 0)).toLocaleString('en-IN')}
-                                        </span>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Select Available Bed *</label>
+                                    <select
+                                        required
+                                        value={hospitalizeForm.bedId}
+                                        name="bedId" 
+                                        onChange={(e) => setHospitalizeForm(prev => ({ ...prev, bedId: e.target.value }))}
+                                        disabled={!hospitalizeForm.ward}
+                                        style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box', background: hospitalizeForm.ward ? '#fff' : '#f8fafc' }}
+                                    >
+                                        <option value="">{hospitalizeForm.ward ? '-- Choose Available Bed --' : '-- Select Ward First --'}</option>
+                                        {availableBeds.filter(b => b.ward === hospitalizeForm.ward).map(b => (
+                                            <option key={b._id} value={b._id}>{b.bedNumber} ({b.bedType})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Admission Date *</label>
+                                    <input
+                                        type="date"
+                                        required
+                                        value={hospitalizeForm.admissionDate}
+                                        onChange={(e) => setHospitalizeForm(prev => ({ ...prev, admissionDate: e.target.value }))}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Admission Time *</label>
+                                    <input
+                                        type="time"
+                                        required
+                                        value={hospitalizeForm.admissionTime}
+                                        onChange={(e) => setHospitalizeForm(prev => ({ ...prev, admissionTime: e.target.value }))}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+                            </div>
+
+                            {hospitalizeForm.ward && (() => {
+                                const matchedFacility = hospitalContext?.facilities?.find(f => 
+                                    f.name.toLowerCase().includes(hospitalizeForm.ward.toLowerCase()) || 
+                                    hospitalizeForm.ward.toLowerCase().includes(f.name.toLowerCase())
+                                );
+                                const pricePerDay = matchedFacility?.pricePerDay || 0;
+                                const hourlyRate = Math.round((pricePerDay / 24) * 100) / 100;
+                                return (
+                                    <div style={{ background: '#eff6ff', padding: '14px 16px', borderRadius: '10px', border: '1px solid #bfdbfe', marginBottom: '16px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                            <div>
+                                                <span style={{ fontWeight: 700, color: '#1e40af', fontSize: '1rem' }}>{hospitalizeForm.ward}</span>
+                                                <div style={{ fontSize: '0.8rem', color: '#3b82f6' }}>Dynamic Duration &amp; Inpatient Billing</div>
+                                            </div>
+                                            <div style={{ textAlign: 'right' }}>
+                                                <div style={{ fontWeight: 800, color: '#1d4ed8', fontSize: '1.1rem' }}>
+                                                    ₹{pricePerDay.toLocaleString('en-IN')}/day
+                                                </div>
+                                                <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>
+                                                    (₹{hourlyRate.toLocaleString('en-IN')}/hour)
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div style={{ fontSize: '0.78rem', color: '#475569', background: '#fff', padding: '8px 10px', borderRadius: '6px', border: '1px solid #dbeafe', marginTop: '6px' }}>
+                                            ℹ️ <strong>Hourly &amp; Daily Billing:</strong> Charges will be calculated dynamically based on exact hours and days spent in this ward when transferred or discharged (e.g. 4 hrs in ICU = ₹{(hourlyRate * 4).toLocaleString('en-IN')}).
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div style={{ padding: '12px 14px', background: '#fef9c3', borderRadius: '8px', fontSize: '0.88rem', color: '#92400e', marginBottom: '16px' }}>
-                                No facilities configured. Hospital admin can add facilities from the Hospital Admin Dashboard.
-                            </div>
-                        )}
+                                );
+                            })()}
 
-                        <div style={{ marginBottom: '20px' }}>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Notes (optional)</label>
-                            <textarea
-                                placeholder="Any notes for admission..."
-                                value={hospitalizeForm.notes}
-                                name="notes" onChange={handleHospitalizeFormChange}
-                                rows={2}
-                                style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
-                            />
-                        </div>
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Admission Notes (optional)</label>
+                                <textarea
+                                    placeholder="Any clinical observations or admission reasons..."
+                                    value={hospitalizeForm.notes}
+                                    onChange={(e) => setHospitalizeForm(prev => ({ ...prev, notes: e.target.value }))}
+                                    rows={2}
+                                    style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
+                                />
+                            </div>
 
-                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                            <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleHospitalize}
-                                disabled={hospitalizingSaving}
-                                style={{ padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: hospitalizingSaving ? 0.6 : 1 }}
-                            >
-                                {hospitalizingSaving ? 'Admitting...' : 'Admit Patient'}
-                            </button>
-                        </div>
+                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', paddingTop: '12px', borderTop: '1px solid #f1f5f9' }}>
+                                <button type="button" onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={hospitalizingSaving}
+                                    style={{ padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: hospitalizingSaving ? 0.6 : 1 }}
+                                >
+                                    {hospitalizingSaving ? 'Admitting...' : '✓ Hospitalize Patient'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
+
+            {/* ====== WARD / BED TRANSFER MODAL ====== */}
+            {transferModal.open && transferModal.admission && (() => {
+                const prevTransfer = transferModal.admission.transferHistory && transferModal.admission.transferHistory.length > 0
+                    ? transferModal.admission.transferHistory[transferModal.admission.transferHistory.length - 1]
+                    : null;
+
+                const prevStartDateTime = prevTransfer
+                    ? combineDateTime(prevTransfer.transferDate, prevTransfer.transferTime)
+                    : combineDateTime(transferModal.admission.admissionDate, transferModal.admission.admissionTime);
+
+                const currentTransferDateTime = combineDateTime(transferModal.transferDate, transferModal.transferTime);
+                const liveCalc = computeStayDurationAndCost(prevStartDateTime, currentTransferDateTime, transferModal.admission.wardRatePerDay);
+
+                const newMatchedFacility = hospitalContext?.facilities?.find(f => 
+                    transferModal.newWard && (f.name.toLowerCase().includes(transferModal.newWard.toLowerCase()) || transferModal.newWard.toLowerCase().includes(f.name.toLowerCase()))
+                );
+                const newDaily = newMatchedFacility?.pricePerDay || 0;
+                const newHourly = Math.round((newDaily / 24) * 100) / 100;
+
+                return (
+                    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                        <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
+                                <div>
+                                    <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700, color: '#0f172a' }}>🔄 Transfer Ward / Bed</h2>
+                                    <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>
+                                        Patient: <strong>{transferModal.admission.patientId?.name}</strong> (MRN: {transferModal.admission.patientId?.patientId || '-'})
+                                    </p>
+                                </div>
+                                <button onClick={() => setTransferModal({ open: false, admission: null })} style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '16px', cursor: 'pointer', color: '#64748b' }}>✕</button>
+                            </div>
+
+                            {/* Live Current Ward Stay & Cost Card */}
+                            <div style={{ background: '#f8fafc', padding: '14px 16px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '18px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                                    <div>
+                                        <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Current Stay Segment:</div>
+                                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.05rem' }}>
+                                            {transferModal.admission.ward} (Bed {transferModal.admission.bedNumber})
+                                        </div>
+                                        <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '2px' }}>
+                                            From: {prevStartDateTime.toLocaleDateString('en-IN')} {prevStartDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>Calculated Duration:</div>
+                                        <div style={{ fontWeight: 800, color: '#7c3aed', fontSize: '1.05rem' }}>
+                                            ⏱️ {liveCalc.durationText}
+                                        </div>
+                                        <div style={{ fontWeight: 800, color: '#16a34a', fontSize: '0.95rem', marginTop: '2px' }}>
+                                            Segment Cost: ₹{liveCalc.amount.toLocaleString('en-IN')}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: '#64748b', borderTop: '1px dashed #cbd5e1', paddingTop: '6px' }}>
+                                    Rate: ₹{(transferModal.admission.wardRatePerDay || 0).toLocaleString('en-IN')}/day (₹{liveCalc.hourlyRate}/hr)
+                                </div>
+                            </div>
+
+                            <form onSubmit={handleTransferSubmit}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Select New Ward *</label>
+                                        <select
+                                            required
+                                            value={transferModal.newWard}
+                                            onChange={(e) => setTransferModal(prev => ({ ...prev, newWard: e.target.value, newBedId: '' }))}
+                                            style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box', background: '#fff' }}
+                                        >
+                                            <option value="">-- Choose New Ward --</option>
+                                            {Array.from(new Set(availableBeds.map(b => b.ward))).map(w => (
+                                                <option key={w} value={w}>{w}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Select Available Bed *</label>
+                                        <select
+                                            required
+                                            value={transferModal.newBedId}
+                                            onChange={(e) => setTransferModal(prev => ({ ...prev, newBedId: e.target.value }))}
+                                            disabled={!transferModal.newWard}
+                                            style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box', background: transferModal.newWard ? '#fff' : '#f8fafc' }}
+                                        >
+                                            <option value="">{transferModal.newWard ? '-- Choose New Bed --' : '-- Select Ward First --'}</option>
+                                            {availableBeds.filter(b => b.ward === transferModal.newWard && String(b._id) !== String(transferModal.admission.bedId)).map(b => (
+                                                <option key={b._id} value={b._id}>{b.bedNumber} ({b.bedType})</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {transferModal.newWard && (
+                                    <div style={{ background: '#faf5ff', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e9d5ff', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ fontSize: '0.85rem', color: '#6b21a8', fontWeight: 600 }}>
+                                            New Ward Rate:
+                                        </div>
+                                        <div style={{ fontWeight: 800, color: '#7e22ce', fontSize: '0.95rem' }}>
+                                            ₹{newDaily.toLocaleString('en-IN')}/day (₹{newHourly}/hr)
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Transfer Date *</label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={transferModal.transferDate}
+                                            onChange={(e) => setTransferModal(prev => ({ ...prev, transferDate: e.target.value }))}
+                                            style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Transfer Time *</label>
+                                        <input
+                                            type="time"
+                                            required
+                                            value={transferModal.transferTime}
+                                            onChange={(e) => setTransferModal(prev => ({ ...prev, transferTime: e.target.value }))}
+                                            style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Transfer Reason / Notes</label>
+                                    <textarea
+                                        placeholder="Reason for transferring patient (e.g., condition stabilized, shifted to General Ward)..."
+                                        value={transferModal.notes}
+                                        onChange={(e) => setTransferModal(prev => ({ ...prev, notes: e.target.value }))}
+                                        rows={2}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', paddingTop: '12px', borderTop: '1px solid #f1f5f9' }}>
+                                    <button type="button" onClick={() => setTransferModal({ open: false, admission: null })} style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={transferModal.saving}
+                                        style={{ padding: '10px 24px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: transferModal.saving ? 0.6 : 1 }}
+                                    >
+                                        {transferModal.saving ? 'Transferring...' : `✓ Confirm Transfer (₹${liveCalc.amount.toLocaleString('en-IN')})`}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                );
+            })()}
+
+            {/* ====== DISCHARGE PATIENT MODAL ====== */}
+            {dischargeModal.open && dischargeModal.admission && (() => {
+                const prevTransfer = dischargeModal.admission.transferHistory && dischargeModal.admission.transferHistory.length > 0
+                    ? dischargeModal.admission.transferHistory[dischargeModal.admission.transferHistory.length - 1]
+                    : null;
+
+                const finalStartDateTime = prevTransfer
+                    ? combineDateTime(prevTransfer.transferDate, prevTransfer.transferTime)
+                    : combineDateTime(dischargeModal.admission.admissionDate, dischargeModal.admission.admissionTime);
+
+                const currentDischargeDateTime = combineDateTime(dischargeModal.dischargeDate, dischargeModal.dischargeTime);
+                const finalCalc = computeStayDurationAndCost(finalStartDateTime, currentDischargeDateTime, dischargeModal.admission.wardRatePerDay);
+
+                const pastSegmentsTotal = (dischargeModal.admission.transferHistory || []).reduce((acc, th) => acc + (Number(th.segmentAmount) || 0), 0);
+                const grandTotal = pastSegmentsTotal + finalCalc.amount;
+
+                return (
+                    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+                        <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '620px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
+                                <div>
+                                    <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700, color: '#0f172a' }}>🚪 Discharge Patient &amp; Settle Inpatient Bill</h2>
+                                    <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>
+                                        Patient: <strong>{dischargeModal.admission.patientId?.name}</strong> (MRN: {dischargeModal.admission.patientId?.patientId || '-'})
+                                    </p>
+                                </div>
+                                <button onClick={() => setDischargeModal({ open: false, admission: null })} style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '16px', cursor: 'pointer', color: '#64748b' }}>✕</button>
+                            </div>
+
+                            {/* Itemized Live Stay Breakdown Table */}
+                            <div style={{ background: '#f8fafc', padding: '14px 16px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '18px' }}>
+                                <div style={{ fontWeight: 700, color: '#1e293b', marginBottom: '10px', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>📋 Itemized Stay &amp; Hourly/Daily Calculation:</span>
+                                    <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 'normal' }}>
+                                        Adm: {new Date(dischargeModal.admission.admissionDate).toLocaleDateString('en-IN')} {dischargeModal.admission.admissionTime || ''}
+                                    </span>
+                                </div>
+
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
+                                    <thead>
+                                        <tr style={{ background: '#e2e8f0', color: '#334155', textAlign: 'left' }}>
+                                            <th style={{ padding: '6px 8px', borderRadius: '4px 0 0 4px' }}>Ward</th>
+                                            <th style={{ padding: '6px 8px' }}>Duration</th>
+                                            <th style={{ padding: '6px 8px' }}>Rate</th>
+                                            <th style={{ padding: '6px 8px', textAlign: 'right', borderRadius: '0 4px 4px 0' }}>Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(dischargeModal.admission.transferHistory || []).map((th, idx) => (
+                                            <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                <td style={{ padding: '6px 8px', fontWeight: 600, color: '#0f172a' }}>{th.fromWard}</td>
+                                                <td style={{ padding: '6px 8px', color: '#475569' }}>{th.durationText || `${th.durationDays}d`}</td>
+                                                <td style={{ padding: '6px 8px', color: '#64748b' }}>₹{th.ratePerDay}/d (₹{th.hourlyRate || Math.round(th.ratePerDay/24)}/h)</td>
+                                                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: '#0f172a' }}>₹{Number(th.segmentAmount || 0).toLocaleString('en-IN')}</td>
+                                            </tr>
+                                        ))}
+                                        <tr style={{ background: '#f0fdf4', borderBottom: '1px solid #bbf7d0' }}>
+                                            <td style={{ padding: '6px 8px', fontWeight: 700, color: '#166534' }}>{dischargeModal.admission.ward} (Current)</td>
+                                            <td style={{ padding: '6px 8px', fontWeight: 700, color: '#166534' }}>{finalCalc.durationText}</td>
+                                            <td style={{ padding: '6px 8px', color: '#166534' }}>₹{dischargeModal.admission.wardRatePerDay}/d (₹{finalCalc.hourlyRate}/h)</td>
+                                            <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 800, color: '#166534' }}>₹{finalCalc.amount.toLocaleString('en-IN')}</td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot>
+                                        <tr style={{ background: '#f1f5f9' }}>
+                                            <td colSpan={3} style={{ padding: '8px', fontWeight: 800, color: '#0f172a' }}>TOTAL INPATIENT CHARGES:</td>
+                                            <td style={{ padding: '8px', textAlign: 'right', fontWeight: 900, color: '#2563eb', fontSize: '1.05rem' }}>₹{grandTotal.toLocaleString('en-IN')}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+
+                            <form onSubmit={handleDischargeSubmit}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Discharge Date *</label>
+                                        <input
+                                            type="date"
+                                            required
+                                            value={dischargeModal.dischargeDate}
+                                            onChange={(e) => setDischargeModal(prev => ({ ...prev, dischargeDate: e.target.value }))}
+                                            style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Discharge Time *</label>
+                                        <input
+                                            type="time"
+                                            required
+                                            value={dischargeModal.dischargeTime}
+                                            onChange={(e) => setDischargeModal(prev => ({ ...prev, dischargeTime: e.target.value }))}
+                                            style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Discharge Summary / Notes (optional)</label>
+                                    <textarea
+                                        placeholder="Discharge condition, doctor advice, recovery notes..."
+                                        value={dischargeModal.notes}
+                                        onChange={(e) => setDischargeModal(prev => ({ ...prev, notes: e.target.value }))}
+                                        rows={2}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', paddingTop: '12px', borderTop: '1px solid #f1f5f9' }}>
+                                    <button type="button" onClick={() => setDischargeModal({ open: false, admission: null })} style={{ padding: '10px 20px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={dischargeModal.saving}
+                                        style={{ padding: '10px 24px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: dischargeModal.saving ? 0.6 : 1 }}
+                                    >
+                                        {dischargeModal.saving ? 'Discharging...' : `✓ Confirm Discharge & Print Bill (₹${grandTotal.toLocaleString('en-IN')})`}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                );
+            })()}
         </>
     );
 

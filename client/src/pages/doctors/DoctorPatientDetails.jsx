@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { doctorAPI, labTestAPI, questionLibraryAPI, hospitalAPI, patientAPI, receptionAPI, otAPI, adminEntitiesAPI, referralAPI } from '../../utils/api';
+import { doctorAPI, labTestAPI, questionLibraryAPI, hospitalAPI, patientAPI, receptionAPI, otAPI, adminEntitiesAPI, referralAPI, publicAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './DoctorPatientDetails.css';
@@ -130,16 +130,43 @@ const DoctorPatientDetails = () => {
 
     useEffect(() => {
         const fetchDetails = async () => {
+            setLoading(true);
             try {
-                let currentApptId = appointmentId;
+                let currentApptId = appointmentId || location.state?.appointmentId;
+                let refObj = location.state?.referral || null;
+
+                // 1. If referralId is passed, fetch referral data
+                if (location.state?.referralId && !refObj) {
+                    try {
+                        const refRes = await referralAPI.getById(location.state.referralId);
+                        if (refRes.success && refRes.referral) {
+                            refObj = refRes.referral;
+                        }
+                    } catch(e) { console.error("Error fetching referral by ID", e); }
+                }
+
+                if (refObj) {
+                    setActiveReferralForReview(refObj);
+                    if (!currentApptId && refObj.appointmentId) {
+                        currentApptId = typeof refObj.appointmentId === 'object' ? refObj.appointmentId._id : refObj.appointmentId;
+                    }
+                    setSurgeryPlanData(prev => ({
+                        ...prev,
+                        surgery: refObj.reason || prev.surgery,
+                        diagnosis: refObj.notes || prev.diagnosis
+                    }));
+                }
+
+                // 2. If no appointmentId yet, search across all appointments in the hospital
                 if (!currentApptId && id) {
                     try {
-                        const apptsRes = await doctorAPI.getAppointments();
-                        if (apptsRes.success) {
-                            const ptAppts = apptsRes.appointments.filter(a => 
+                        const apptsRes = await doctorAPI.getAllAppointments().catch(() => null) || await doctorAPI.getAppointments().catch(() => null);
+                        if (apptsRes && apptsRes.success) {
+                            const ptAppts = (apptsRes.appointments || []).filter(a => 
                                 a.userId?.patientId === id || 
                                 a.clinicPatientId?.patientUid === id || 
                                 a.patientId === id ||
+                                (a.userId?._id && a.userId._id.toString() === id.toString()) ||
                                 (a.userId?.name || '').replace(/\s+/g, '-') === id ||
                                 (a.clinicPatientId?.name || '').replace(/\s+/g, '-') === id ||
                                 a._id === id
@@ -149,73 +176,118 @@ const DoctorPatientDetails = () => {
                                 setAppointmentId(currentApptId);
                             }
                         }
-                    } catch(e) { console.error("Error finding appointment by MRN", e); }
+                    } catch(e) { console.error("Error finding appointment", e); }
                 }
 
-                if (!currentApptId) {
-                    setLoading(false);
-                    return;
-                }
-
-                const res = await doctorAPI.getAppointmentDetails(currentApptId);
-                if (res.success) {
-                    setAppointment(res.appointment);
-                    const cp = res.appointment.clinicPatientId || {};
-                    const fert = res.appointment.userId?.fertilityProfile || {};
-                    setIntakeData({
-                        ...cp,
-                        ...fert,
-                        ...(cp.vitals || {}),
-                        age: cp.age || fert.age || res.appointment.userId?.age || '',
-                        gender: cp.gender || fert.gender || res.appointment.userId?.gender || '',
-                        bloodGroup: cp.bloodGroup || fert.bloodGroup || '',
-                        address: cp.address || fert.address || '',
-                        allergies: cp.allergies || fert.allergies || '',
-                        chronicConditions: cp.chronicConditions || fert.chronicConditions || ''
-                    });
-                    
-                    // Lock if completed
-                    if (res.appointment.status === 'completed') {
-                        setIsLocked(true);
-                        setToast({
-                            show: true,
-                            title: '✅ Session Completed Successfully',
-                            message: 'This consultation has already been completed. This record is now read-only.'
+                // 3. If we have an appointment ID, fetch full appointment details
+                if (currentApptId) {
+                    const res = await doctorAPI.getAppointmentDetails(currentApptId);
+                    if (res.success && res.appointment) {
+                        setAppointment(res.appointment);
+                        const cp = res.appointment.clinicPatientId || {};
+                        const fert = res.appointment.userId?.fertilityProfile || {};
+                        setIntakeData({
+                            ...cp,
+                            ...fert,
+                            ...(cp.vitals || {}),
+                            age: cp.age || fert.age || res.appointment.userId?.age || '',
+                            gender: cp.gender || fert.gender || res.appointment.userId?.gender || '',
+                            bloodGroup: cp.bloodGroup || fert.bloodGroup || '',
+                            address: cp.address || fert.address || '',
+                            allergies: cp.allergies || fert.allergies || '',
+                            chronicConditions: cp.chronicConditions || fert.chronicConditions || ''
                         });
-                        setTimeout(() => {
-                            setToast(prev => ({ ...prev, show: false }));
-                        }, 3000);
-                    }
-
-                    const pId = res.appointment.clinicPatientId?._id || res.appointment.clinicPatientId || res.appointment.userId?._id;
-                    const deptContext = res.appointment.department || res.appointment.serviceName || 'Unassigned';
-                    if (pId) {
-                        const histRes = await doctorAPI.getPatientHistory(pId, deptContext);
-                        if (histRes.success) setHistory(histRes.history || histRes.data || []);
                         
-                        try {
-                            const fRes = await receptionAPI.getFollowupStatus(pId, 'auto');
-                            if (fRes.success) setCurrentFollowupStatus(fRes);
-                        } catch(e) { console.error("Error fetching follow-up", e); }
-                    }
+                        // Lock if completed
+                        if (res.appointment.status === 'completed') {
+                            setIsLocked(true);
+                            setToast({
+                                show: true,
+                                title: '✅ Session Completed Successfully',
+                                message: 'This consultation has already been completed. This record is now read-only.'
+                            });
+                            setTimeout(() => {
+                                setToast(prev => ({ ...prev, show: false }));
+                            }, 3000);
+                        }
 
-                    setSessionData({
-                        diagnosis: res.appointment.diagnosis || '',
-                        notes: res.appointment.doctorNotes || '',
-                        medicines: (res.appointment.pharmacy || []).map(p => ({
-                            medicineName: p.medicineName || '',
-                            saltName: p.saltName || '',
-                            dose: p.frequency || '',
-                            days: p.duration || ''
-                        })),
-                        labTests: (res.appointment.labTests || []).join(', ')
-                    });
-                    
-                    if (res.departments) {
-                        setHospitalDepartments(res.departments);
+                        const pId = res.appointment.clinicPatientId?._id || res.appointment.clinicPatientId || res.appointment.userId?._id;
+                        const deptContext = res.appointment.department || res.appointment.serviceName || 'Unassigned';
+                        if (pId) {
+                            const histRes = await doctorAPI.getPatientHistory(pId, deptContext);
+                            if (histRes.success) setHistory(histRes.history || histRes.data || []);
+                            
+                            try {
+                                const fRes = await receptionAPI.getFollowupStatus(pId, 'auto');
+                                if (fRes.success) setCurrentFollowupStatus(fRes);
+                            } catch(e) { console.error("Error fetching follow-up", e); }
+                        }
+
+                        setSessionData({
+                            diagnosis: res.appointment.diagnosis || '',
+                            notes: res.appointment.doctorNotes || '',
+                            medicines: (res.appointment.pharmacy || []).map(p => ({
+                                medicineName: p.medicineName || '',
+                                saltName: p.saltName || '',
+                                dose: p.frequency || '',
+                                days: p.duration || ''
+                            })),
+                            labTests: (res.appointment.labTests || []).join(', ')
+                        });
+                        
+                        if (res.departments) {
+                            setHospitalDepartments(res.departments);
+                        }
+                        setLoading(false);
+                        return;
                     }
+                }
+
+                // 4. Fallback if no appointment is found (e.g. direct referral review or patient MRN)
+                const targetPatientId = refObj?.patientId?._id || (typeof refObj?.patientId === 'string' ? refObj.patientId : null) || id;
+                if (targetPatientId) {
+                    try {
+                        const profRes = await doctorAPI.getFullPatientProfile(targetPatientId).catch(() => null) || 
+                                        await patientAPI.getPatient(targetPatientId).catch(() => null);
+                        if (profRes && (profRes.patient || profRes.user)) {
+                            const pt = profRes.patient || profRes.user;
+                            const loggedUser = JSON.parse(localStorage.getItem('user') || '{}');
+                            const fallbackAppt = {
+                                _id: 'session-' + (pt._id || targetPatientId),
+                                patientId: pt.patientId || pt.mrn || targetPatientId,
+                                userId: pt,
+                                doctorName: loggedUser.name || 'Doctor',
+                                status: 'in-progress',
+                                serviceName: refObj ? 'Surgery Referral Consultation' : 'Doctor Consultation',
+                                appointmentDate: new Date(),
+                                appointmentTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            };
+                            setAppointment(fallbackAppt);
+
+                            const cp = pt.fertilityProfile || {};
+                            setIntakeData({
+                                ...cp,
+                                ...(cp.vitals || {}),
+                                age: pt.age || cp.age || '',
+                                gender: pt.gender || cp.gender || '',
+                                bloodGroup: pt.bloodGroup || cp.bloodGroup || '',
+                                address: pt.address || cp.address || '',
+                                allergies: pt.allergies || cp.allergies || '',
+                                chronicConditions: pt.chronicConditions || cp.chronicConditions || ''
+                            });
+
+                            if (profRes.appointments) {
+                                setHistory(profRes.appointments);
+                            }
+                            setLoading(false);
+                            return;
+                        }
+                    } catch(e) { console.error("Error loading fallback profile", e); }
                 }
             } catch (err) { console.error(err); }
+            finally {
+                setLoading(false);
+            }
 
             try {
                 const testRes = await labTestAPI.getLabTests();
@@ -254,11 +326,12 @@ const DoctorPatientDetails = () => {
         // Fetch surgeons list
         const fetchSurgeons = async () => {
             try {
-                const res = await publicAPI.getDoctors();
+                const hospitalId = user?.hospitalId || appointment?.hospitalId || '';
+                const res = await publicAPI.getDoctors(null, hospitalId || null);
                 let docs = (res.doctors || res.data || []).slice();
                 const currentDocId = user?._id || user?.id;
-                if (currentDocId && !docs.some(d => (d.userId?._id || d.userId || d._id) === currentDocId)) {
-                    docs.unshift({
+                if (currentDocId && !docs.some(d => (d.userId?._id || d.userId || d._id)?.toString() === currentDocId?.toString())) {
+                    docs.push({
                         _id: currentDocId,
                         userId: currentDocId,
                         name: user.name || 'Current Doctor',
@@ -280,7 +353,7 @@ const DoctorPatientDetails = () => {
             }
         };
         fetchSurgeons();
-    }, [appointmentId, user]);
+    }, [appointmentId, user, appointment?.hospitalId]);
 
     useEffect(() => {
         const fetchPatientReferrals = async () => {
@@ -1759,6 +1832,12 @@ const DoctorPatientDetails = () => {
                                 <strong>MRN / Age / Gender:</strong> {intakeData?.patientUid || appointment?.userId?.patientId || '-'} / {intakeData?.age || '-'} / {intakeData?.gender || '-'}
                             </div>
 
+                            {surgeryPlanData.referralId && (
+                                <div style={{ background: '#f5f3ff', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd6fe', fontSize: '13px', color: '#5b21b6', fontWeight: 600 }}>
+                                    🔄 <strong>Referred Surgery Case</strong> (Referral linked to this Surgery Plan)
+                                </div>
+                            )}
+
                             <div>
                                 <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Surgery / Procedure *</label>
                                 <input required value={surgeryPlanData.surgery} onChange={e => setSurgeryPlanData(prev => ({...prev, surgery: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
@@ -1851,16 +1930,32 @@ const DoctorPatientDetails = () => {
 
                             <div>
                                 <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Refer To Doctor / Surgeon *</label>
-                                <select required value={referralData.referredToDoctorId} onChange={e => setReferralData(prev => ({...prev, referredToDoctorId: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', background: '#fff' }}>
+                                <select 
+                                    required 
+                                    value={referralData.referredToDoctorId} 
+                                    onChange={e => setReferralData(prev => ({...prev, referredToDoctorId: e.target.value}))} 
+                                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', background: '#fff' }}
+                                >
                                     <option value="">-- Select Doctor --</option>
-                                    {surgeonsList.map(s => {
-                                        const id = s.userId?._id || s.userId || s._id;
-                                        const docName = s.name || s.userId?.name || 'Doctor';
-                                        return (
-                                            <option key={s._id || id} value={id}>Dr. {docName.replace(/^Dr\.?\s*/i, '')} {s.specialty ? `(${s.specialty})` : ''}</option>
-                                        );
-                                    })}
+                                    {surgeonsList
+                                        .filter(s => {
+                                            const docUserId = (s.userId?._id || s.userId || s._id)?.toString();
+                                            const currentUserId = (user?._id || user?.id)?.toString();
+                                            return docUserId !== currentUserId;
+                                        })
+                                        .map(s => {
+                                            const id = s.userId?._id || s.userId || s._id;
+                                            const docName = s.name || s.userId?.name || 'Doctor';
+                                            return (
+                                                <option key={s._id || id} value={id}>Dr. {docName.replace(/^Dr\.?\s*/i, '')} {s.specialty ? `(${s.specialty})` : ''}</option>
+                                            );
+                                        })}
                                 </select>
+                                {surgeonsList.filter(s => ((s.userId?._id || s.userId || s._id)?.toString() !== (user?._id || user?.id)?.toString())).length === 0 && (
+                                    <small style={{ color: '#ef4444', marginTop: '6px', display: 'block', fontSize: '12px' }}>
+                                        ⚠️ No other doctors found in this hospital to refer to. Please create another doctor in Admin &gt; Staff.
+                                    </small>
+                                )}
                             </div>
 
                             <div>
