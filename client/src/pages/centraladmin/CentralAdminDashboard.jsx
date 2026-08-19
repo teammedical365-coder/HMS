@@ -19,9 +19,9 @@ const WhiteLabelBuilder = ({ hospital }) => {
             interval = setInterval(async () => {
                 try {
                     const token = JSON.parse(localStorage.getItem('user'))?.token || localStorage.getItem('token') || '';
-                    const res = await fetch(`/api/superadmin/hospitals/${hospital._id}/build-status`, {
+                    const res = await (await fetch(`${baseURL}/api/superadmin/hospitals/${hospital._id}/build-status`, {
                         headers: { 'Authorization': `Bearer ${token}` }
-                    }).then(r => r.json());
+                    })).json();
                     if (res.success) {
                         setStatus(res.buildStatus);
                         if (res.buildStatus === 'COMPLETED') {
@@ -42,7 +42,7 @@ const WhiteLabelBuilder = ({ hospital }) => {
         setStatus('BUILDING');
         try {
             const token = JSON.parse(localStorage.getItem('user'))?.token || localStorage.getItem('token') || '';
-            await fetch(`/api/superadmin/hospitals/${hospital._id}/build-app`, {
+            await fetch(`${baseURL}/api/superadmin/hospitals/${hospital._id}/build-app`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -940,7 +940,7 @@ const CentralAdminDashboard = () => {
                                                 <span style={{ color: '#888', minWidth: '90px' }}>{item.label}</span>
                                                 <span style={{ color: '#333', fontWeight: '500', wordBreak: 'break-word' }}>
                                                     {item.isLink ? (
-                                                        <a href={item.value} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-pink)', textDecoration: 'none' }}>
+                                                        <a href={item.value.startsWith('http') ? item.value : `https://${item.value}`} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-pink)', textDecoration: 'none' }}>
                                                             {item.value}
                                                         </a>
                                                     ) : (
@@ -1398,7 +1398,7 @@ const CentralAdminDashboard = () => {
 
                                                     <div className="domain-links" onClick={e => e.stopPropagation()}>
                                                         {h.slug && <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" className="subdomain-link" style={{ display: 'inline-block', marginTop: '6px', background: 'var(--brand-pink)', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none', marginRight: '6px' }}>🌐 {h.slug}.{getBaseHost()}</a>}
-                                                        {h.customDomain && <a href={`http://${h.customDomain}`} target="_blank" rel="noreferrer" className="customdomain-link" style={{ display: 'inline-block', marginTop: '6px', background: '#3b82f6', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none' }}>🌐 {h.customDomain}</a>}
+                                                        {h.customDomain && <a href={h.customDomain.startsWith('http') ? h.customDomain : `https://${h.customDomain}`} target="_blank" rel="noreferrer" className="customdomain-link" style={{ display: 'inline-block', marginTop: '6px', background: '#3b82f6', color: 'white', padding: '2px 6px', fontSize: '10px', borderRadius: '4px', textDecoration: 'none' }}>🌐 {h.customDomain}</a>}
                                                     </div>
 
                                                     {(h.departments && h.departments.length > 0) && (
