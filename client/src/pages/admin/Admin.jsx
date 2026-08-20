@@ -100,6 +100,9 @@ const Admin = () => {
     const [staffHospitalFilter, setStaffHospitalFilter] = useState('');
     const [staffPlanFilter, setStaffPlanFilter] = useState('');
 
+    // Search state
+    const [staffSearchQuery, setStaffSearchQuery] = useState('');
+
     const handleToggleCreateForm = async () => {
         const nextState = !showCreateForm;
         if (nextState && hospital?.clinicType === 'clinic') {
@@ -638,10 +641,24 @@ const Admin = () => {
                     return null;
                 })()}
 
-                {/* Staff list with hospital filter */}
                 <div className="admin-card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
                         <h2>All Staff ({users.length})</h2>
+                        
+                        {/* Search Bar */}
+                        <div style={{ flex: 1, minWidth: '200px', maxWidth: '300px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '0 10px' }}>
+                                <span style={{ color: '#94a3b8' }}>🔍</span>
+                                <input
+                                    type="text"
+                                    placeholder="Search by name, email, or phone..."
+                                    value={staffSearchQuery}
+                                    onChange={e => setStaffSearchQuery(e.target.value)}
+                                    style={{ width: '100%', border: 'none', padding: '8px', outline: 'none' }}
+                                />
+                            </div>
+                        </div>
+
                         {['superadmin', 'centraladmin'].includes(JSON.parse(localStorage.getItem('user') || '{}').role) && (
                             <div style={{ display: 'flex', gap: '10px' }}>
                                 <select className="staff-input" style={{ width: '200px' }} value={staffPlanFilter} onChange={e => { 
@@ -688,6 +705,15 @@ const Admin = () => {
                                 </thead>
                                 <tbody>
                                     {users
+                                        .filter(userItem => {
+                                            if (!staffSearchQuery) return true;
+                                            const q = staffSearchQuery.toLowerCase();
+                                            return (
+                                                (userItem.name && userItem.name.toLowerCase().includes(q)) ||
+                                                (userItem.email && userItem.email.toLowerCase().includes(q)) ||
+                                                (userItem.phone && String(userItem.phone).includes(q))
+                                            );
+                                        })
                                         .map((userItem) => {
                                             const isCurrentUser = (userItem.id || userItem._id) === JSON.parse(localStorage.getItem('user') || '{}').id;
                                             const canModify = !isCurrentUser;

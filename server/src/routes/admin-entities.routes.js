@@ -10,6 +10,7 @@ const Service = require('../models/service.model');
 const User = require('../models/user.model');
 const { verifyAdminOrSuperAdmin } = require('../middleware/auth.middleware');
 const bcrypt = require('bcryptjs');
+const { sendStaffWelcomeEmail } = require('../services/email.service');
 
 /**
  * Returns hospitalId filter for queries.
@@ -80,6 +81,22 @@ router.post('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
     });
 
     await user.save();
+
+    // --- SEND WELCOME EMAIL ---
+    try {
+        let loginUrl = 'https://medical365.in/login';
+        let hName = 'Medical 365';
+        const emailHospId = getHospitalId(req);
+        if (emailHospId) {
+            const emailHosp = await mongoose.model('Hospital').findById(emailHospId).select('name slug customDomain');
+            if (emailHosp) {
+                hName = emailHosp.name || 'Medical 365';
+                loginUrl = emailHosp.customDomain ? `https://${emailHosp.customDomain}/login` : `https://${emailHosp.slug}.medical365.in/login`;
+            }
+        }
+        await sendStaffWelcomeEmail({ email: user.email, password: defaultPassword, name: user.name, role: 'Doctor', hospitalName: hName, loginUrl });
+    } catch (emailErr) { console.error('[admin-entities] Failed to send email:', emailErr.message); }
+    // --------------------------
 
     // Ensure availability has proper structure
     const defaultAvailability = {
@@ -320,6 +337,22 @@ router.post('/labs', verifyAdminOrSuperAdmin, async (req, res) => {
 
     await user.save();
 
+    // --- SEND WELCOME EMAIL ---
+    try {
+        let loginUrl = 'https://medical365.in/login';
+        let hName = 'Medical 365';
+        const emailHospId = getHospitalId(req);
+        if (emailHospId) {
+            const emailHosp = await mongoose.model('Hospital').findById(emailHospId).select('name slug customDomain');
+            if (emailHosp) {
+                hName = emailHosp.name || 'Medical 365';
+                loginUrl = emailHosp.customDomain ? `https://${emailHosp.customDomain}/login` : `https://${emailHosp.slug}.medical365.in/login`;
+            }
+        }
+        await sendStaffWelcomeEmail({ email: user.email, password: defaultPassword, name: user.name, role: 'Lab Technician', hospitalName: hName, loginUrl });
+    } catch (emailErr) { console.error('[admin-entities] Failed to send email:', emailErr.message); }
+    // --------------------------
+
     // Ensure availability has proper structure
     const defaultAvailability = {
       monday: { available: false, startTime: '09:00', endTime: '17:00' },
@@ -454,6 +487,22 @@ router.post('/pharmacies', verifyAdminOrSuperAdmin, async (req, res) => {
 
     await user.save();
 
+    // --- SEND WELCOME EMAIL ---
+    try {
+        let loginUrl = 'https://medical365.in/login';
+        let hName = 'Medical 365';
+        const emailHospId = getHospitalId(req);
+        if (emailHospId) {
+            const emailHosp = await mongoose.model('Hospital').findById(emailHospId).select('name slug customDomain');
+            if (emailHosp) {
+                hName = emailHosp.name || 'Medical 365';
+                loginUrl = emailHosp.customDomain ? `https://${emailHosp.customDomain}/login` : `https://${emailHosp.slug}.medical365.in/login`;
+            }
+        }
+        await sendStaffWelcomeEmail({ email: user.email, password: defaultPassword, name: user.name, role: 'Pharmacist', hospitalName: hName, loginUrl });
+    } catch (emailErr) { console.error('[admin-entities] Failed to send email:', emailErr.message); }
+    // --------------------------
+
     // Ensure availability has proper structure
     const defaultAvailability = {
       monday: { available: false, startTime: '09:00', endTime: '17:00' },
@@ -586,6 +635,22 @@ router.post('/receptions', verifyAdminOrSuperAdmin, async (req, res) => {
     });
 
     await user.save();
+
+    // --- SEND WELCOME EMAIL ---
+    try {
+        let loginUrl = 'https://medical365.in/login';
+        let hName = 'Medical 365';
+        const emailHospId = getHospitalId(req);
+        if (emailHospId) {
+            const emailHosp = await mongoose.model('Hospital').findById(emailHospId).select('name slug customDomain');
+            if (emailHosp) {
+                hName = emailHosp.name || 'Medical 365';
+                loginUrl = emailHosp.customDomain ? `https://${emailHosp.customDomain}/login` : `https://${emailHosp.slug}.medical365.in/login`;
+            }
+        }
+        await sendStaffWelcomeEmail({ email: user.email, password: defaultPassword, name: user.name, role: 'Receptionist', hospitalName: hName, loginUrl });
+    } catch (emailErr) { console.error('[admin-entities] Failed to send email:', emailErr.message); }
+    // --------------------------
 
     // Ensure availability has proper structure
     const defaultAvailability = {

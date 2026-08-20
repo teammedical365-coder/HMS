@@ -262,7 +262,118 @@ Powered by Medical365`;
     }
 }
 
+/**
+ * Send a welcome email to a newly created staff member with their login details.
+ * 
+ * @param {Object} params
+ * @param {string} params.email
+ * @param {string} params.password
+ * @param {string} params.name
+ * @param {string} params.role
+ * @param {string} params.hospitalName
+ * @param {string} params.loginUrl
+ */
+async function sendStaffWelcomeEmail({ email, password, name, role, hospitalName, loginUrl }) {
+    try {
+        if (!email) return;
+
+        const hName = hospitalName || 'Medical 365';
+        
+        const htmlBody = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;font-family:'Segoe UI',Roboto,Arial,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;padding:30px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:32px 40px;text-align:center;">
+                            <h1 style="margin:0;color:#14b8a6;font-size:24px;font-weight:700;letter-spacing:0.5px;">
+                                Welcome to ${hName}
+                            </h1>
+                            <p style="margin:8px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">
+                                Your staff account has been successfully created.
+                            </p>
+                        </td>
+                    </tr>
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding:32px 40px;">
+                            <p style="margin:0 0 20px;font-size:16px;color:#334155;line-height:1.6;">
+                                Hi <strong>${name || 'Staff Member'}</strong>,
+                            </p>
+                            <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+                                You have been invited to join the ${hName} team as a <strong>${role || 'Staff Member'}</strong>. Below are your secure login credentials to access the management portal.
+                            </p>
+
+                            <!-- Credentials Box -->
+                            <div style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin-bottom:28px;">
+                                <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Login Details</p>
+                                <table width="100%" cellpadding="0" cellspacing="0" style="font-size:15px;">
+                                    <tr>
+                                        <td style="padding:6px 0;color:#475569;width:90px;">Email:</td>
+                                        <td style="padding:6px 0;font-weight:700;color:#0f172a;">${email}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:6px 0;color:#475569;">Password:</td>
+                                        <td style="padding:6px 0;font-weight:700;color:#14b8a6;letter-spacing:1px;">${password}</td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- CTA Button -->
+                            <div style="text-align:center;margin-bottom:20px;">
+                                <a href="${loginUrl || 'https://medical365.in'}" style="display:inline-block;background-color:#14b8a6;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 32px;border-radius:6px;box-shadow:0 2px 4px rgba(20,184,166,0.3);">
+                                    Click here to Login
+                                </a>
+                            </div>
+
+                            <p style="margin:0;font-size:13px;color:#94a3b8;text-align:center;">
+                                We recommend changing your password after your first login.
+                            </p>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color:#0f172a;padding:20px 40px;text-align:center;">
+                            <p style="margin:0;font-size:12px;color:#64748b;">
+                                This is an automated email. Please do not reply.
+                            </p>
+                            <p style="margin:8px 0 0;font-size:11px;color:#475569;">
+                                Powered by <span style="color:#14b8a6;font-weight:700;">Medical365</span>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>`;
+
+        const mailOptions = {
+            from: '"Medical365 Notifications" <noreply@medical365.in>',
+            to: email,
+            subject: `Welcome to ${hName} | Your Account Credentials`,
+            html: htmlBody
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(`[email-service] Staff welcome email sent to ${email}`);
+
+    } catch (error) {
+        console.error('[email-service] Failed to send staff welcome email:', error.message);
+    }
+}
+
 module.exports = {
     sendAppointmentConfirmationEmail,
-    sendLoginOtpEmail
+    sendLoginOtpEmail,
+    sendStaffWelcomeEmail
 };

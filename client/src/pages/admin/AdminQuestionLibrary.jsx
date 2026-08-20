@@ -25,6 +25,16 @@ const AdminQuestionLibrary = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [editIndex, setEditIndex] = useState(null);
 
+    // Department Modal State
+    const [showDeptModal, setShowDeptModal] = useState(false);
+    const [selectedDept, setSelectedDept] = useState('');
+    const [customDept, setCustomDept] = useState('');
+
+    // Predefined departments for dropdown
+    const [predefinedDepartments, setPredefinedDepartments] = useState([
+        "General", "Orthopedics", "ENT", "Cardiology", "Neurology", "Pediatrics", "Gynecology", "Dermatology", "Oncology"
+    ]);
+
     // Preview state
     const [showPreview, setShowPreview] = useState(false);
     const [previewIntake, setPreviewIntake] = useState({});
@@ -141,17 +151,32 @@ const AdminQuestionLibrary = () => {
         }
     };
 
-    const handleAddDepartment = () => {
-        const dept = window.prompt("Enter new department name (e.g., Neurology, IVF):");
-        if (!dept || !dept.trim()) return;
-        const cleanDept = dept.trim();
-        if (libraryData[cleanDept]) {
+    const handleAddDepartmentClick = () => {
+        setShowDeptModal(true);
+        setSelectedDept('');
+        setCustomDept('');
+    };
+
+    const confirmAddDepartment = () => {
+        const dept = customDept.trim() || selectedDept.trim();
+        if (!dept) {
+            alert("Please select or enter a department name.");
+            return;
+        }
+        if (libraryData[dept]) {
             alert("Department already exists!");
             return;
         }
-        setLibraryData({ ...libraryData, [cleanDept]: {} });
-        setDepartmentTab(cleanDept);
+        
+        // Add to predefined if new
+        if (customDept.trim() && !predefinedDepartments.includes(customDept.trim())) {
+            setPredefinedDepartments([...predefinedDepartments, customDept.trim()]);
+        }
+
+        setLibraryData({ ...libraryData, [dept]: {} });
+        setDepartmentTab(dept);
         setActiveCategory('');
+        setShowDeptModal(false);
     };
 
     const resetModalState = () => {
@@ -359,7 +384,7 @@ const AdminQuestionLibrary = () => {
                 
                 {allowedDepartments === null && (
                     <button 
-                        onClick={handleAddDepartment}
+                        onClick={handleAddDepartmentClick}
                         style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', padding: '0 10px', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap', fontSize: '0.7rem' }}
                     >
                         + Add Dept
@@ -468,6 +493,53 @@ const AdminQuestionLibrary = () => {
                         <div className="modal-actions" style={{ marginTop: '25px', paddingTop: '15px', borderTop: '1px solid #e2e8f0' }}>
                             <button className="modal-btn modal-btn-cancel" onClick={resetModalState}>Discard</button>
                             <button className="modal-btn modal-btn-submit" onClick={handleAddQuestion}>{editIndex !== null ? 'Update Question' : 'Save Question to Logic Tree'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* Department Modal */}
+            {showDeptModal && (
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: '400px' }}>
+                        <h3 style={{ margin: '0 0 10px 0', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', color: '#0f172a' }}>Add New Department</h3>
+                        
+                        <div style={{ marginBottom: '15px' }}>
+                            <label className="modal-label">Select from Existing List</label>
+                            <select 
+                                className="modal-input" 
+                                value={selectedDept} 
+                                onChange={(e) => {
+                                    setSelectedDept(e.target.value);
+                                    setCustomDept('');
+                                }}
+                            >
+                                <option value="">-- Choose Department --</option>
+                                {predefinedDepartments.map(d => (
+                                    <option key={d} value={d}>{d}</option>
+                                ))}
+                            </select>
+                        </div>
+                        
+                        <div style={{ textAlign: 'center', margin: '10px 0', color: '#94a3b8', fontSize: '12px' }}>OR</div>
+                        
+                        <div>
+                            <label className="modal-label">Type Custom Department Name</label>
+                            <input 
+                                type="text" 
+                                className="modal-input" 
+                                placeholder="e.g. IVF, Pediatrics..." 
+                                value={customDept} 
+                                onChange={(e) => {
+                                    setCustomDept(e.target.value);
+                                    setSelectedDept('');
+                                }} 
+                            />
+                        </div>
+
+                        <div className="modal-actions" style={{ marginTop: '25px', paddingTop: '15px', borderTop: '1px solid #e2e8f0' }}>
+                            <button className="modal-btn modal-btn-cancel" onClick={() => setShowDeptModal(false)}>Cancel</button>
+                            <button className="modal-btn modal-btn-submit" onClick={confirmAddDepartment}>Add Department</button>
                         </div>
                     </div>
                 </div>
