@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Medical 365</title>
     
-    <!-- PWA & iOS Add to Home Screen (Dynamic) -->
-    <link rel="manifest" href="/api/public/manifest.json" crossorigin="use-credentials" />
+  <!-- PWA & iOS Add to Home Screen (Dynamic) -->
+<link rel="manifest" href="https://hms-n6nk.onrender.com/api/public/manifest.json" crossorigin="use-credentials" />
     <meta name="theme-color" content="#14b8a6" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -15,11 +15,11 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     
     <!-- Dynamic Branding Injector for iOS/Safari -->
-    <script>
-      (async function() {
-        try {
-          const response = await fetch('/api/public/manifest.json');
-          if (response.ok) {
+<script>
+  (async function() {
+    try {
+      const response = await fetch('https://hms-n6nk.onrender.com/api/public/manifest.json');
+      if (response.ok) {
             const manifest = await response.json();
             
             // 1. Inject Theme Color dynamically
