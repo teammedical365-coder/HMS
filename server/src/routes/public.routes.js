@@ -109,5 +109,88 @@ router.get('/auth-config', (req, res) => {
     });
 });
 
+// Dynamic PWA Manifest Route
+router.get('/manifest.json', async (req, res) => {
+    try {
+        const hostHeader = req.headers.host || '';
+        let cleanDomain = hostHeader.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0].toLowerCase();
+
+        const Hospital = require('../models/hospital.model');
+        let query = null;
+        
+        if (cleanDomain.endsWith('.medical365.in')) {
+            query = { slug: cleanDomain.replace('.medical365.in', '') };
+        } else if (cleanDomain.endsWith('.localhost')) {
+            query = { slug: cleanDomain.replace('.localhost', '') };
+        } else if (!cleanDomain.includes('localhost') && cleanDomain !== 'medical365.in') {
+            query = { $or: [{ customDomain: cleanDomain }, { slug: cleanDomain }] };
+        }
+
+        let hospital = null;
+        if (query) {
+            hospital = await Hospital.findOne(query).select('name branding').lean();
+        }
+
+        // Define default fallback manifest
+        const manifest = {
+            name: "Medical 365",
+            short_name: "Hospital",
+            start_url: "/",
+            display: "standalone",
+            background_color: "#ffffff",
+            theme_color: "#14b8a6",
+            icons: [
+                {
+                    src: "/icon-192x192.png",
+                    sizes: "192x192",
+                    type: "image/png",
+                    purpose: "any maskable"
+                },
+                {
+                    src: "/icon-512x512.png",
+                    sizes: "512x512",
+                    type: "image/png",
+                    purpose: "any maskable"
+                }
+            ]
+        };
+
+        // If tenant found, override with their branding
+        if (hospital) {
+            manifest.name = hospital.name || manifest.name;
+            manifest.short_name = hospital.name || manifest.short_name;
+            if (hospital.branding?.primaryColor) {
+                manifest.theme_color = hospital.branding.primaryColor;
+            }
+            if (hospital.branding?.logoUrl) {
+                // By using "purpose": "any maskable", standard logos can safely be used
+                // as PWA icons even without exact 192/512 pixel sizing.
+                const logoUrl = hospital.branding.logoUrl;
+                manifest.icons = [
+                    {
+                        src: logoUrl,
+                        sizes: "192x192",
+                        type: "image/png",
+                        purpose: "any maskable"
+                    },
+                    {
+                        src: logoUrl,
+                        sizes: "512x512",
+                        type: "image/png",
+                        purpose: "any maskable"
+                    }
+                ];
+            }
+        }
+
+        res.set('Cache-Control', 'public, max-age=300');
+        // Express res.json automatically sets Content-Type: application/json
+        res.json(manifest);
+    } catch (err) {
+        console.error('Dynamic manifest error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 module.exports = router;
 
