@@ -62,15 +62,35 @@ const Login = () => {
                 return;
             }
 
-            // Normal routing for central admins / system users without specific subdomains
-            const role = (user.role || '').toLowerCase();
+            // Normal routing for system users and staff
             const redirectMap = {
-                superadmin: '/superadmin', centraladmin: '/supremeadmin', admin: '/supremeadmin'
+                admin: '/admin',
+                superadmin: '/superadmin',
+                centraladmin: '/supremeadmin',
+                doctor: '/doctor/patients',
+                nurse: '/doctor/patients',
+                lab: '/lab/dashboard',
+                pharmacy: '/pharmacy/dashboard',
+                reception: '/reception/dashboard',
+                receptionist: '/reception/dashboard',
+                accountant: '/accountant/dashboard',
+                patient: '/dashboard',
+                hospitaladmin: '/hospitaladmin',
+                'clinic doctor': '/hospitaladmin',
+                clinicdoctor: '/hospitaladmin',
+                otmanager: '/ot/dashboard',
+                otstaff: '/ot/dashboard',
+                ot: '/ot/dashboard'
             };
-            const targetPath = redirectMap[role] || searchParams.get('redirect') || '/my-dashboard';
+            const role = (user.role || '').toLowerCase().replace(/\s+/g, '');
+            let targetPath = redirectMap[role] || redirectMap[(user.role || '').toLowerCase()] || searchParams.get('redirect') || '/my-dashboard';
+            if (role === 'doctor' && user.clinicType === 'clinic') {
+                targetPath = '/hospitaladmin';
+            }
             navigate(targetPath, { replace: true });
         }
     }, [isAuthenticated, user, navigate, searchParams, tenant]);
+
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
