@@ -179,6 +179,72 @@ const AdminQuestionLibrary = () => {
         setShowDeptModal(false);
     };
 
+    const handleEditDepartment = async (oldDept) => {
+        const newDept = window.prompt("Enter new name for department:", oldDept);
+        if (!newDept || !newDept.trim() || newDept.trim() === oldDept) return;
+        const cleanName = newDept.trim();
+
+        if (libraryData[cleanName]) {
+            alert("Department with this name already exists!");
+            return;
+        }
+
+        const newLib = { ...libraryData };
+        const categories = newLib[oldDept];
+        delete newLib[oldDept];
+        newLib[cleanName] = categories;
+
+        if (customDept.trim() && !predefinedDepartments.includes(cleanName)) {
+            setPredefinedDepartments([...predefinedDepartments, cleanName]);
+        }
+
+        // Save immediately as requested
+        setSaving(true);
+        try {
+            const res = await questionLibraryAPI.updateLibrary(newLib);
+            if (res.success) {
+                setLibraryData(newLib);
+                if (departmentTab === oldDept) setDepartmentTab(cleanName);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Error renaming department in backend.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDeleteDepartment = async (deptName) => {
+        if (!window.confirm(`Are you sure? This will permanently delete the "${deptName}" department and all its questions.`)) return;
+        
+        const newLib = { ...libraryData };
+        delete newLib[deptName];
+
+        setSaving(true);
+        try {
+            const res = await questionLibraryAPI.updateLibrary(newLib);
+            if (res.success) {
+                setLibraryData(newLib);
+                if (departmentTab === deptName) {
+                    const keys = Object.keys(newLib);
+                    if (keys.length > 0) {
+                        setDepartmentTab(keys[0]);
+                        const cats = Object.keys(newLib[keys[0]] || {});
+                        setActiveCategory(cats.length > 0 ? cats[0] : '');
+                    } else {
+                        setDepartmentTab('');
+                        setActiveCategory('');
+                    }
+                }
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Error deleting department from backend.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const resetModalState = () => {
         setShowAddModal(false);
         setEditIndex(null);
@@ -320,14 +386,14 @@ const AdminQuestionLibrary = () => {
         }
 
         return (
-            <div className="question-row" key={index}>
+            <div className="question-row" key={index} style={{ minWidth: 0, maxWidth: '100%', boxSizing: 'border-box', position: 'relative' }}>
                 <div style={{ position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px', zIndex: 10 }}>
                     <button className="btn-edit-q" onClick={() => handleEditQuestion(index)}>✏️ Edit</button>
                     <button className="btn-delete-q" style={{ position: 'relative', top: '0', right: '0' }} onClick={() => handleDeleteQuestion(cat, index)}>🗑 Del</button>
                 </div>
-                <strong>{item.q}</strong>
+                <strong style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'pre-wrap', display: 'block', maxWidth: '100%', paddingRight: '120px' }}>{item.q}</strong>
                 {item.parentQ && (
-                    <div style={{ fontSize: '11px', color: '#ea580c', background: '#ffedd5', padding: '4px 8px', borderRadius: '4px', marginBottom: '10px', display: 'inline-block' }}>
+                    <div style={{ fontSize: '11px', color: '#ea580c', background: '#ffedd5', padding: '4px 8px', borderRadius: '4px', marginBottom: '10px', display: 'inline-block', wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap', maxWidth: '100%' }}>
                         Only shown if <b>"{item.parentQ}"</b> equals <b>"{item.condition}"</b>
                     </div>
                 )}
@@ -346,7 +412,7 @@ const AdminQuestionLibrary = () => {
     const visibleDepartments = allowedDepartments ? Object.keys(libraryData).filter(dept => allowedDepartments.includes(dept)) : Object.keys(libraryData);
 
     return (
-        <div className="ql-admin-body">
+        <div className="ql-admin-body" style={{ overflowX: 'hidden' }}>
             <div style={{ padding: '10px 16px', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                     <h1 style={{ margin: 0, color: '#1e293b', fontSize: '0.95rem' }}>Question Library Builder</h1>
@@ -377,8 +443,32 @@ const AdminQuestionLibrary = () => {
                             const cats = Object.keys(libraryData[dept] || {});
                             setActiveCategory(cats.length > 0 ? cats[0] : '');
                         }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}
                     >
-                        {dept}
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px', display: 'inline-block' }}>{dept}</span>
+                        
+                        {departmentTab === dept && allowedDepartments === null && (
+                            <div style={{ display: 'flex', gap: '4px', marginLeft: '4px' }}>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); handleEditDepartment(dept); }} 
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '11px', padding: '0', color: '#64748b', opacity: 0.7, transition: 'opacity 0.2s' }}
+                                    title="Rename Department"
+                                    onMouseOver={(e) => e.target.style.opacity = 1}
+                                    onMouseOut={(e) => e.target.style.opacity = 0.7}
+                                >
+                                    ✏️
+                                </button>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteDepartment(dept); }} 
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '11px', padding: '0', color: '#ef4444', opacity: 0.7, transition: 'opacity 0.2s' }}
+                                    title="Delete Department"
+                                    onMouseOver={(e) => e.target.style.opacity = 1}
+                                    onMouseOut={(e) => e.target.style.opacity = 0.7}
+                                >
+                                    🗑️
+                                </button>
+                            </div>
+                        )}
                     </div>
                 ))}
                 
@@ -395,14 +485,19 @@ const AdminQuestionLibrary = () => {
             <div className="ql-admin-container">
                 <aside className="ql-admin-sidebar">
                     <div className="input-card add-category-box" style={{ marginBottom: '10px' }}>
-                        <input type="text" id="new-cat-input" placeholder="New category name..." value={newCatName} onChange={(e) => setNewCatName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory() }} />
+                        <input type="text" id="new-cat-input" placeholder="New category name..." value={newCatName} onChange={(e) => setNewCatName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory() }} maxLength={300} />
+                        {newCatName.length >= 270 && (
+                            <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', marginBottom: '8px' }}>
+                                {newCatName.length}/300 characters
+                            </div>
+                        )}
                         <button className="btn-action bg-teal" onClick={handleAddCategory}>+ Add New Category</button>
                     </div>
 
                     <div id="category-list">
                         {Object.keys(currentCategories).map(cat => (
-                            <div key={cat} className={`sidebar-item ${cat === activeCategory ? 'active' : ''}`} onClick={() => setActiveCategory(cat)}>
-                                <span>{cat}</span>
+                            <div key={cat} className={`sidebar-item ${cat === activeCategory ? 'active' : ''}`} style={{ minWidth: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onClick={() => setActiveCategory(cat)}>
+                                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px', minWidth: 0, display: 'inline-block' }}>{cat}</span>
                                 <div className="cat-actions" style={{ display: 'flex', gap: '8px' }}>
                                     <button onClick={(e) => { e.stopPropagation(); handleEditCategory(cat); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '2px' }} title="Rename">✏️</button>
                                     <button onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '2px' }} title="Delete">🗑️</button>
@@ -449,7 +544,12 @@ const AdminQuestionLibrary = () => {
 
                         <div>
                             <label className="modal-label">Question Text</label>
-                            <textarea className="modal-input" rows="3" placeholder="e.g. Do you smoke? (Enter full details)" value={newQ.q} onChange={(e) => setNewQ({ ...newQ, q: e.target.value })} style={{ resize: 'vertical' }} />
+                            <textarea className="modal-input" rows="3" placeholder="e.g. Do you smoke? (Enter full details)" value={newQ.q} onChange={(e) => { const val = e.target.value; if (val.length > 500) { setNewQ({ ...newQ, q: val.slice(0, 500) }); return; } setNewQ({ ...newQ, q: val }); }} style={{ resize: 'vertical' }} maxLength={500} />
+                            {newQ.q.length >= 450 && (
+                                <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px' }}>
+                                    {newQ.q.length}/500 characters
+                                </div>
+                            )}
                         </div>
 
                         <div>

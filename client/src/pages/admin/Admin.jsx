@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { adminAPI, uploadAPI, hospitalAPI } from '../../utils/api';
 import { getSubscriptionLimits } from '../../utils/subscriptionPlans';
+import toast from 'react-hot-toast';
 import '../administration/SuperAdmin.css';
 
 const HospitalSelect = ({ hospitals, value, onChange }) => {
@@ -86,6 +87,7 @@ const Admin = () => {
     const [updating, setUpdating] = useState(false);
 
     const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const [deletingId, setDeletingId] = useState(null);
 
     // Create Staff Form state
     const [showCreateForm, setShowCreateForm] = useState(false);
@@ -343,15 +345,20 @@ const Admin = () => {
     };
 
     const handleDeleteUser = async (userId) => {
+        toast.dismiss();
+        setDeletingId(userId);
         try {
             const response = await adminAPI.deleteUser(userId);
-            if (response.success) {
-                setSuccess('User deleted successfully!');
-                setDeleteConfirm(null);
-                fetchUsers();
+            if (response.status === 200 || response.success === true) {
+                toast.success('User deleted successfully!');
+                setUsers(prev => prev.filter(u => (u.id || u._id) !== userId));
+            } else {
+                toast.error('Failed to delete user.');
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Error deleting user.');
+            toast.error(err.response?.data?.message || 'Error deleting user.');
+        } finally {
+            setDeletingId(null);
             setDeleteConfirm(null);
         }
     };
@@ -747,7 +754,9 @@ const Admin = () => {
                                                             {canModify && (
                                                                 <>
                                                                     <button onClick={() => openEditModal(userItem)} className="btn-edit">Edit</button>
-                                                                    <button onClick={() => setDeleteConfirm(userItem.id || userItem._id)} className="btn-delete">Delete</button>
+                                                                    <button onClick={() => setDeleteConfirm(userItem.id || userItem._id)} disabled={deletingId === (userItem.id || userItem._id)} className="btn-delete">
+                                                                        {deletingId === (userItem.id || userItem._id) ? 'Deleting...' : 'Delete'}
+                                                                    </button>
                                                                 </>
                                                             )}
                                                         </div>
@@ -868,8 +877,10 @@ const Admin = () => {
                             <h3>Confirm Delete</h3>
                             <p>Are you sure? This action cannot be undone.</p>
                             <div className="modal-buttons">
-                                <button onClick={() => handleDeleteUser(deleteConfirm)} className="btn-confirm-delete">Delete</button>
-                                <button onClick={() => setDeleteConfirm(null)} className="btn-cancel">Cancel</button>
+                                <button onClick={() => handleDeleteUser(deleteConfirm)} disabled={deletingId !== null} className="btn-confirm-delete">
+                                    {deletingId !== null ? 'Deleting...' : 'Delete'}
+                                </button>
+                                <button onClick={() => setDeleteConfirm(null)} disabled={deletingId !== null} className="btn-cancel">Cancel</button>
                             </div>
                         </div>
                     </div>
