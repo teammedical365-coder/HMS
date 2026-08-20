@@ -109,11 +109,20 @@ router.get('/auth-config', (req, res) => {
     });
 });
 
-// Dynamic PWA Manifest Route
+
+// Dynamic PWA Manifest Route (MASTER FIX)
 router.get('/manifest.json', async (req, res) => {
     try {
-        const hostHeader = req.headers.host || '';
-        let cleanDomain = hostHeader.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0].toLowerCase();
+        // 1. Frontend khud batayega wo kaunsa hospital hai (?domain=...)
+        const referer = req.get('referer');
+        let requestingDomain = req.query.domain || 
+                               (referer ? new URL(referer).hostname : null) || 
+                               req.headers.host;
+
+        let cleanDomain = requestingDomain.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0].toLowerCase();
+        
+        // Absolute URL banayenge Chrome ke error ko rokne ke liye
+        const frontendUrl = `https://${cleanDomain}`;
 
         const Hospital = require('../models/hospital.model');
         let query = null;
@@ -131,31 +140,31 @@ router.get('/manifest.json', async (req, res) => {
             hospital = await Hospital.findOne(query).select('name branding').lean();
         }
 
-        // Define default fallback manifest
+        // 2. Default Fallback (With Absolute URLs & Fixed Purpose)
         const manifest = {
             name: "Medical 365",
             short_name: "Hospital",
-            start_url: "/",
+            start_url: `${frontendUrl}/`, // FIX: Absolute URL
             display: "standalone",
             background_color: "#ffffff",
             theme_color: "#14b8a6",
             icons: [
                 {
-                    src: "/icon-192x192.png",
+                    src: `${frontendUrl}/icon-192x192.png`, 
                     sizes: "192x192",
                     type: "image/png",
-                    purpose: "any maskable"
+                    purpose: "any" // FIX: Chrome wants strictly "any"
                 },
                 {
-                    src: "/icon-512x512.png",
+                    src: `${frontendUrl}/icon-512x512.png`,
                     sizes: "512x512",
                     type: "image/png",
-                    purpose: "any maskable"
+                    purpose: "maskable" // FIX: Chrome wants strictly "maskable"
                 }
             ]
         };
 
-        // If tenant found, override with their branding
+        // 3. Agar Hospital mil gaya, toh uski details daalo
         if (hospital) {
             manifest.name = hospital.name || manifest.name;
             manifest.short_name = hospital.name || manifest.short_name;
@@ -163,28 +172,27 @@ router.get('/manifest.json', async (req, res) => {
                 manifest.theme_color = hospital.branding.primaryColor;
             }
             if (hospital.branding?.logoUrl) {
-                // By using "purpose": "any maskable", standard logos can safely be used
-                // as PWA icons even without exact 192/512 pixel sizing.
                 const logoUrl = hospital.branding.logoUrl;
                 manifest.icons = [
                     {
                         src: logoUrl,
                         sizes: "192x192",
                         type: "image/png",
-                        purpose: "any maskable"
+                        purpose: "any"
                     },
                     {
                         src: logoUrl,
                         sizes: "512x512",
                         type: "image/png",
-                        purpose: "any maskable"
+                        purpose: "maskable"
                     }
                 ];
             }
         }
 
+        // CORS allow karein taaki frontend isko read kar sake
+        res.set('Access-Control-Allow-Origin', '*');
         res.set('Cache-Control', 'public, max-age=300');
-        // Express res.json automatically sets Content-Type: application/json
         res.json(manifest);
     } catch (err) {
         console.error('Dynamic manifest error:', err);
@@ -193,4 +201,3 @@ router.get('/manifest.json', async (req, res) => {
 });
 
 module.exports = router;
-
