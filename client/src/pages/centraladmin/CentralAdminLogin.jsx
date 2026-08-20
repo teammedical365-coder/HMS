@@ -117,7 +117,7 @@ const CentralAdminLogin = () => {
                         )}
 
                         <div className="mb-6">
-                            <img src="https://www.medical365.in/logo/medical365fav.jpg" alt="Medical 365" className="h-10 object-contain mb-8" />
+                            <img src="/assets/medical365-logo.png" alt="Medical 365" className="h-10 object-contain mb-8" />
                             
                             {/* Session Expired Banner */}
                             {sessionBanner && (

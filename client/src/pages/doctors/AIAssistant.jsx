@@ -34,6 +34,7 @@ const AIAssistant = () => {
 
     const [selectedReport, setSelectedReport] = useState(null);
     const [summary, setSummary] = useState(null);
+    const [summaryUsage, setSummaryUsage] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -48,6 +49,33 @@ const AIAssistant = () => {
     const [historySummary, setHistorySummary] = useState(null);
     const [isHistoryLoading, setIsHistoryLoading] = useState(false);
     const [historyError, setHistoryError] = useState(null);
+
+    // ── AI Token Tracker Modal State ──
+    const [isTrackerOpen, setIsTrackerOpen] = useState(false);
+    const [trackerStats, setTrackerStats] = useState(null);
+    const [trackerLogs, setTrackerLogs] = useState([]);
+    const [isTrackerLoading, setIsTrackerLoading] = useState(false);
+
+    const fetchTrackerData = async () => {
+        setIsTrackerLoading(true);
+        try {
+            const [statsRes, historyRes] = await Promise.all([
+                reportAPI.getAIUsageStats(),
+                reportAPI.getAIUsageHistory(30)
+            ]);
+            if (statsRes && statsRes.success) setTrackerStats(statsRes.stats);
+            if (historyRes && historyRes.success) setTrackerLogs(historyRes.logs || []);
+        } catch (err) {
+            console.error("Error fetching AI usage tracker data:", err);
+        } finally {
+            setIsTrackerLoading(false);
+        }
+    };
+
+    const handleOpenTracker = () => {
+        setIsTrackerOpen(true);
+        fetchTrackerData();
+    };
 
     // ── AI Clinical Chat state (session-only) ──
     const [chatMessages, setChatMessages] = useState([]);
@@ -95,7 +123,12 @@ const AIAssistant = () => {
 
             const res = await reportAPI.chatWithAssistant(apiMessages);
             if (res.success && res.reply) {
-                const aiMsg = { role: 'ai', text: res.reply, timestamp: new Date() };
+                const aiMsg = { 
+                    role: 'ai', 
+                    text: res.reply, 
+                    usage: res.usage || null,
+                    timestamp: new Date() 
+                };
                 setChatMessages(prev => [...prev, aiMsg]);
             } else {
                 throw new Error(res.message || "Failed to get AI response.");
@@ -194,11 +227,13 @@ const AIAssistant = () => {
         setIsLoading(true);
         setError(null);
         setSummary(null);
+        setSummaryUsage(null);
 
         try {
             const res = await reportAPI.generateAISummary(selectedReport.url, selectedReport.mimeType || selectedReport.mimetype || 'application/pdf');
             if (res.success) {
                 setSummary(res.summary);
+                if (res.usage) setSummaryUsage(res.usage);
             } else {
                 setError(res.message || "Unable to generate summary. Please try again.");
             }
@@ -233,7 +268,8 @@ const AIAssistant = () => {
                 setComparison({
                     latestDate: latestReport.uploadedAt || latestReport.date,
                     previousDate: previousReport.uploadedAt || previousReport.date,
-                    data: res.comparison
+                    data: res.comparison,
+                    usage: res.usage || null
                 });
             } else {
                 setCompareError(res.message || "Unable to compare reports.");
@@ -351,8 +387,19 @@ const AIAssistant = () => {
     return (
         <div className="ai-assistant-container">
             <div className="ai-header">
-                <h1>🤖 AI Assistant</h1>
-                <p>Advanced patient insights and automated report summaries</p>
+                <div className="ai-header-top">
+                    <div>
+                        <h1>🤖 AI Assistant</h1>
+                        <p>Advanced patient insights, automated summaries & real-time analytics</p>
+                    </div>
+                    <button 
+                        className="ai-token-tracker-btn" 
+                        onClick={handleOpenTracker}
+                        title="View Real-Time AI Token Usage & Cost Analytics"
+                    >
+                        ⚡ AI Token Tracker
+                    </button>
+                </div>
             </div>
 
             <div className="ai-grid">
@@ -579,6 +626,13 @@ const AIAssistant = () => {
                                         </p>
                                     </div>
                                 )}
+
+                                {comparison.usage && (
+                                    <div className="ai-token-badge" style={{ marginTop: '14px' }}>
+                                        <span>⚡ Tokens: <strong>{comparison.usage.totalTokens}</strong> (In: {comparison.usage.promptTokens} | Out: {comparison.usage.candidateTokens})</span>
+                                        <span>• Est. Cost: <strong>${comparison.usage.estimatedCostUsd?.toFixed(5) || '0.0001'}</strong></span>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -722,6 +776,15 @@ const AIAssistant = () => {
                                             </ul>
                                         </div>
                                     )}
+
+                                    {/* Real-time Token Consumption Badge */}
+                                    {summaryUsage && (
+                                        <div className="ai-token-badge">
+                                            <span>⚡ Tokens: <strong>{summaryUsage.totalTokens}</strong> (In: {summaryUsage.promptTokens} | Out: {summaryUsage.candidateTokens})</span>
+                                            <span>• Model: <code>{summaryUsage.modelName || 'gemini-1.5-flash'}</code></span>
+                                            <span>• Est. Cost: <strong>${summaryUsage.estimatedCostUsd?.toFixed(5) || '0.00008'}</strong> (~₹{summaryUsage.estimatedCostInr?.toFixed(3) || '0.007'})</span>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -832,6 +895,11 @@ const AIAssistant = () => {
                                                 <span className="ai-chat-time">{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                             </div>
                                             <div className="ai-chat-bubble-text">{msg.text}</div>
+                                            {msg.usage && (
+                                                <div className="ai-chat-token-tag">
+                                                    ⚡ {msg.usage.totalTokens} tokens (${msg.usage.estimatedCostUsd?.toFixed(5) || '0.00005'})
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
 
@@ -882,6 +950,155 @@ const AIAssistant = () => {
                     </div>
                 </div>
             </div>
+
+            {/* ── AI Token Tracker & Analytics Modal ── */}
+            {isTrackerOpen && (
+                <div className="ai-modal-overlay" onClick={() => setIsTrackerOpen(false)}>
+                    <div className="ai-tracker-modal" onClick={e => e.stopPropagation()}>
+                        <div className="ai-tracker-header">
+                            <h2>⚡ AI Token Usage & Cost Analytics</h2>
+                            <button className="ai-tracker-close-btn" onClick={() => setIsTrackerOpen(false)}>✕</button>
+                        </div>
+
+                        <div className="ai-tracker-body">
+                            {isTrackerLoading && !trackerStats && (
+                                <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
+                                    Loading live token analytics...
+                                </div>
+                            )}
+
+                            {trackerStats && (
+                                <>
+                                    {/* KPI Summary Cards */}
+                                    <div className="ai-tracker-kpi-grid">
+                                        <div className="ai-tracker-card highlight">
+                                            <span className="ai-tracker-card-title">Total Tokens Used</span>
+                                            <span className="ai-tracker-card-value">
+                                                {trackerStats.totalTokens ? Number(trackerStats.totalTokens).toLocaleString() : '0'}
+                                            </span>
+                                            <span className="ai-tracker-card-sub">
+                                                Prompt: {Number(trackerStats.totalPromptTokens || 0).toLocaleString()} | Candidate: {Number(trackerStats.totalCandidateTokens || 0).toLocaleString()}
+                                            </span>
+                                        </div>
+
+                                        <div className="ai-tracker-card">
+                                            <span className="ai-tracker-card-title">Total Estimated Cost</span>
+                                            <span className="ai-tracker-card-value" style={{ color: '#16a34a' }}>
+                                                ${trackerStats.totalCostUsd ? trackerStats.totalCostUsd.toFixed(4) : '0.0000'}
+                                            </span>
+                                            <span className="ai-tracker-card-sub">
+                                                ≈ ₹{trackerStats.totalCostInr ? trackerStats.totalCostInr.toFixed(2) : '0.00'} INR
+                                            </span>
+                                        </div>
+
+                                        <div className="ai-tracker-card">
+                                            <span className="ai-tracker-card-title">Today's Usage</span>
+                                            <span className="ai-tracker-card-value">
+                                                {trackerStats.todayTokens ? Number(trackerStats.todayTokens).toLocaleString() : '0'}
+                                            </span>
+                                            <span className="ai-tracker-card-sub">
+                                                {trackerStats.todayRequests || 0} requests today (${(trackerStats.todayCostUsd || 0).toFixed(4)})
+                                            </span>
+                                        </div>
+
+                                        <div className="ai-tracker-card">
+                                            <span className="ai-tracker-card-title">Total AI Calls</span>
+                                            <span className="ai-tracker-card-value">
+                                                {trackerStats.totalRequests || 0}
+                                            </span>
+                                            <span className="ai-tracker-card-sub">
+                                                Active model: gemini-1.5-flash
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Action Type Breakdown */}
+                                    {trackerStats.actionBreakdown && trackerStats.actionBreakdown.length > 0 && (
+                                        <div className="ai-tracker-breakdown">
+                                            <h4>Activity Breakdown</h4>
+                                            <div className="ai-breakdown-tags">
+                                                {trackerStats.actionBreakdown.map((item, i) => (
+                                                    <div key={i} className="ai-breakdown-tag">
+                                                        <strong>{item.actionType.replace('_', ' ')}:</strong>
+                                                        <span>{item.count} calls</span>
+                                                        <span>• {Number(item.tokens).toLocaleString()} tokens</span>
+                                                        <span>(${item.costUsd.toFixed(4)})</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Recent Activity Log Table */}
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                            <h4 style={{ margin: 0, fontSize: '15px', color: '#1e293b' }}>Recent AI Invocations</h4>
+                                            <button 
+                                                onClick={fetchTrackerData} 
+                                                style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', cursor: 'pointer' }}
+                                            >
+                                                🔄 Refresh
+                                            </button>
+                                        </div>
+
+                                        <div className="ai-tracker-table-container">
+                                            <table className="ai-tracker-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Time</th>
+                                                        <th>Action</th>
+                                                        <th>Model</th>
+                                                        <th>Input Tokens</th>
+                                                        <th>Output Tokens</th>
+                                                        <th>Total Tokens</th>
+                                                        <th>Est. Cost</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {trackerLogs.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan="7" style={{ textAlign: 'center', color: '#64748b', padding: '20px' }}>
+                                                                No AI requests recorded yet. Generate a summary or ask a chat question to see live tokens!
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        trackerLogs.map((log) => {
+                                                            let badgeClass = 'ai-action-summary';
+                                                            if (log.actionType === 'CLINICAL_CHAT') badgeClass = 'ai-action-chat';
+                                                            if (log.actionType === 'REPORT_COMPARISON') badgeClass = 'ai-action-compare';
+                                                            if (log.actionType === 'OCR_EXTRACTION') badgeClass = 'ai-action-ocr';
+
+                                                            return (
+                                                                <tr key={log._id}>
+                                                                    <td style={{ whiteSpace: 'nowrap', color: '#64748b' }}>
+                                                                        {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                                    </td>
+                                                                    <td>
+                                                                        <span className={`ai-tracker-action-badge ${badgeClass}`}>
+                                                                            {log.actionType.replace('_', ' ')}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td style={{ fontFamily: 'monospace', fontSize: '11px', color: '#475569' }}>
+                                                                        {log.modelName || 'gemini-1.5-flash'}
+                                                                    </td>
+                                                                    <td>{log.promptTokens || 0}</td>
+                                                                    <td>{log.candidateTokens || 0}</td>
+                                                                    <td><strong>{log.totalTokens || 0}</strong></td>
+                                                                    <td style={{ color: '#16a34a' }}>${(log.estimatedCostUsd || 0).toFixed(5)}</td>
+                                                                </tr>
+                                                            );
+                                                        })
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

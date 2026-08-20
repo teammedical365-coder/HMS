@@ -41,7 +41,7 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
 
         if (role === 'centraladmin' || role === 'superadmin') {
             return [
-                { label: 'System Overview', path: '/supremeadmin', icon: <FiPieChart /> },
+                { label: 'System Overview', path: '/supremeadmin', icon: <FiHome /> },
                 { label: 'Question Library', path: '/admin/question-library', icon: <FiFileText /> },
                 { label: 'Role & Permissions', path: '/admin/roles', icon: <FiShield /> },
                 { label: 'Manage All Staff', path: '/admin/users', icon: <FiUsers /> },
@@ -133,24 +133,13 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
     return (
         <aside className={`erp-sidebar ${isOpen ? 'open' : 'collapsed'} ${isCentralAdmin ? 'ca-erp-sidebar' : ''}`}>
             <div className={`sidebar-brand ${isCentralAdmin ? 'ca-sidebar-brand' : ''}`}>
-                {isCentralAdmin ? (
-                    <div className="ca-brand-container">
-                        <div className="ca-brand-cross-icon">
-                            <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-                                <rect x="11" y="2" width="10" height="28" rx="5" fill="#2563EB" />
-                                <rect x="2" y="11" width="28" height="10" rx="5" fill="#3B82F6" />
-                                <rect x="11" y="11" width="10" height="10" fill="#1D4ED8" />
-                            </svg>
-                        </div>
-                        <span className="ca-brand-title">MEDICAL<span className="ca-brand-num">365</span></span>
-                    </div>
-                ) : (
+                <div className="ca-brand-container">
                     <img
-                        src={branding?.logoUrl || branding?.logo || '/assets/logo.png'}
+                        src={(isCentralAdmin ? '/assets/medical365-logo.png' : (branding?.logoUrl || branding?.logo || '/assets/medical365-logo.png'))}
                         alt={hospitalName || "Medical 365"}
-                        style={{ maxHeight: '36px', maxWidth: '160px', width: 'auto', objectFit: 'contain' }}
+                        style={{ height: '36px', maxWidth: '175px', width: 'auto', objectFit: 'contain' }}
                     />
-                )}
+                </div>
                 <button 
                     className="block lg:hidden p-1 rounded-md hover:bg-gray-100 transition-colors" 
                     onClick={() => setOpen(false)}
@@ -196,28 +185,21 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
                     );
                 })}
 
-                {/* AI Assistant Widget Card inside Sidebar for Central Admin */}
+                {/* Need Help Widget Card inside Sidebar for Central Admin */}
                 {isCentralAdmin && isOpen && (
-                    <div className="ca-sidebar-ai-card">
-                        <div className="ca-sidebar-ai-avatar-wrap">
-                            <svg width="60" height="60" viewBox="0 0 80 80" fill="none">
-                                <circle cx="40" cy="40" r="38" fill="#e0f2fe" fillOpacity="0.6" />
-                                <rect x="22" y="24" width="36" height="32" rx="10" fill="#ffffff" stroke="#93c5fd" strokeWidth="2" />
-                                <rect x="28" y="32" width="24" height="12" rx="6" fill="#0f172a" />
-                                <circle cx="34" cy="38" r="2.5" fill="#38bdf8" />
-                                <circle cx="46" cy="38" r="2.5" fill="#38bdf8" />
-                                <circle cx="40" cy="18" r="3" fill="#3b82f6" />
-                                <path d="M40 21V24" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
-                                <rect x="18" y="34" width="3" height="8" rx="1.5" fill="#60a5fa" />
-                                <rect x="59" y="34" width="3" height="8" rx="1.5" fill="#60a5fa" />
+                    <div className="ca-sidebar-help-card">
+                        <div className="ca-sidebar-help-avatar-wrap">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 18v-6a9 9 0 0 1 18 0v6"></path>
+                                <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path>
                             </svg>
                         </div>
-                        <h4 className="ca-sidebar-ai-title">AI Assistant</h4>
-                        <p className="ca-sidebar-ai-desc">
-                            Hi Admin! I'm here to help you analyze and optimize your hospital operations.
+                        <h4 className="ca-sidebar-help-title">Need Help?</h4>
+                        <p className="ca-sidebar-help-desc">
+                            Check our documentation or contact support.
                         </p>
-                        <button className="ca-sidebar-ai-btn" onClick={() => alert("AI Assistant is ready! How can I assist you today?")}>
-                            <span style={{ fontSize: '12px' }}>✨</span> Chat with AI
+                        <button className="ca-sidebar-help-btn" onClick={() => window.open('mailto:teammedical365@gmail.com')}>
+                            <span style={{ fontSize: '13px' }}>🎧</span> Contact Support
                         </button>
                     </div>
                 )}

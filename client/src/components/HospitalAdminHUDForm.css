@@ -1,0 +1,576 @@
+/* =========================================================
+   HOSPITAL ADMIN FORM - SEAMLESS MERGED CARD & RESPONSIVE
+   ========================================================= */
+
+.had-unified-container {
+  width: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 4px 0 40px;
+  box-sizing: border-box;
+}
+
+/* Single Unified Merged Card (Aligned to Top Baseline) */
+.had-unified-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 24px;
+  padding: 36px 40px;
+  box-shadow: 0 6px 30px -4px rgba(15, 23, 42, 0.05);
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  gap: 38px;
+  align-items: start;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+/* Left Form Column (Wide & Spacious) */
+.had-form-column {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  width: 100%;
+}
+
+.had-card-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.had-icon-box {
+  width: 52px;
+  height: 52px;
+  background-color: #ecfeff;
+  border: 1.5px solid #a5f3fc;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(0, 172, 193, 0.15);
+  animation: hadIconBreath 4s infinite alternate ease-in-out;
+}
+
+@keyframes hadIconBreath {
+  0% { transform: scale(1); box-shadow: 0 4px 14px rgba(0, 172, 193, 0.15); }
+  100% { transform: scale(1.05); box-shadow: 0 6px 20px rgba(0, 172, 193, 0.3); }
+}
+
+.had-title-col h2 {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 850;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.had-badge {
+  font-size: 11px;
+  font-weight: 750;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.had-badge-dot {
+  width: 7px;
+  height: 7px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: hadPulse 1.4s infinite;
+}
+
+@keyframes hadPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+
+.had-title-col p {
+  margin: 4px 0 0;
+  font-size: 0.88rem;
+  color: #64748b;
+}
+
+.had-title-col p strong {
+  color: #008ba3;
+  font-weight: 700;
+  background: #e0f7fa;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+/* Form Structure & Big Spacious Inputs */
+.had-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.had-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 22px;
+  width: 100%;
+}
+
+.had-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.had-label {
+  font-size: 0.82rem;
+  font-weight: 750;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  letter-spacing: 0.5px;
+}
+
+.had-req {
+  color: #00acc1;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.had-input-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.had-f-icon {
+  position: absolute;
+  left: 14px;
+  color: #0099a8;
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: 2;
+  transition: all 0.2s ease;
+}
+
+.had-input,
+.had-select {
+  width: 100%;
+  padding: 13px 16px 13px 44px;
+  background-color: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 0.92rem;
+  color: #0f172a;
+  outline: none;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.had-input::placeholder {
+  color: #94a3b8;
+  font-size: 0.88rem;
+}
+
+.had-input:focus,
+.had-select:focus {
+  border-color: #00acc1;
+  background: #ffffff;
+  box-shadow: 0 0 0 3.5px rgba(0, 172, 193, 0.16), 0 4px 12px rgba(0, 172, 193, 0.08);
+}
+
+.had-input:focus ~ .had-f-icon,
+.had-select:focus ~ .had-f-icon {
+  color: #00bcd4;
+  transform: scale(1.1);
+  opacity: 1;
+}
+
+/* Bottom Row */
+.had-bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  width: 100%;
+}
+
+.had-photo-picker {
+  background: linear-gradient(135deg, #f0fdfa 0%, #f8fafc 100%);
+  border: 1.5px dashed #67e8f9;
+  border-radius: 12px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-sizing: border-box;
+  min-height: 48px;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+.had-photo-picker:hover {
+  border-color: #00acc1;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 172, 193, 0.16);
+  transform: translateY(-1px);
+}
+
+.had-photo-laser {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00f0ff, #10b981, transparent);
+  box-shadow: 0 0 8px #00f0ff;
+  animation: photoLaserScan 2.5s infinite linear;
+  opacity: 0.75;
+}
+
+@keyframes photoLaserScan {
+  0% { top: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.had-photo-shutter {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #00acc1, #008ba3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  flex-shrink: 0;
+  box-shadow: 0 3px 8px rgba(0, 172, 193, 0.25);
+}
+
+.had-photo-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.had-photo-meta strong {
+  font-size: 0.84rem;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.had-photo-meta span {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+/* Submit Button */
+.had-submit-btn {
+  width: 100%;
+  padding: 15px 24px;
+  background: linear-gradient(135deg, #00acc1 0%, #008ba3 50%, #00b4c5 100%);
+  background-size: 200% 200%;
+  color: #ffffff;
+  border: none;
+  border-radius: 14px;
+  font-size: 0.98rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 172, 193, 0.35);
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+  animation: hadGradFlow 6s ease infinite;
+  margin-top: 4px;
+}
+
+@keyframes hadGradFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.had-submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 172, 193, 0.5), 0 0 20px rgba(0, 229, 255, 0.4);
+}
+
+.had-submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* RIGHT VISUAL COLUMN - Seamlessly Integrated & Top-Aligned */
+.had-visual-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+/* BIG HERO ANIMATED HOSPITAL IMAGE */
+.had-hub-image-container {
+  position: relative;
+  width: 100%;
+  height: 310px;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1.5px solid rgba(0, 199, 212, 0.45);
+  box-shadow: 0 8px 26px rgba(0, 172, 193, 0.18);
+  background: #0f172a;
+  box-sizing: border-box;
+}
+
+.had-hub-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  animation: smartHubZoom 14s infinite alternate ease-in-out;
+}
+
+@keyframes smartHubZoom {
+  0% { transform: scale(1); filter: brightness(1); }
+  100% { transform: scale(1.08); filter: brightness(1.06); }
+}
+
+/* Cyber Canvas Vector Overlay on Image */
+.had-hub-canvas-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Holographic Laser Scanline */
+.had-hub-scanline {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  width: 100%;
+  height: 35%;
+  background: linear-gradient(to bottom, transparent, rgba(0, 229, 255, 0.35), rgba(0, 255, 200, 0.4), transparent);
+  pointer-events: none;
+  animation: hubScanAnim 4s infinite linear;
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.6);
+  z-index: 4;
+}
+
+@keyframes hubScanAnim {
+  0% { top: -40%; }
+  100% { top: 140%; }
+}
+
+/* Glowing Radar Sweep Beam */
+.had-radar-sweep {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 180%;
+  height: 180%;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(from 0deg at 50% 50%, rgba(0, 229, 255, 0.22) 0deg, transparent 60deg, transparent 360deg);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: radarRotate 4.5s infinite linear;
+  z-index: 2;
+}
+
+@keyframes radarRotate {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Live Holographic Badges */
+.had-hub-badge {
+  position: absolute;
+  z-index: 6;
+  font-family: 'JetBrains Mono', monospace, sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(5px);
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 240, 255, 0.5);
+  letter-spacing: 0.6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.badge-top {
+  top: 12px;
+  left: 12px;
+}
+
+.badge-bottom {
+  bottom: 12px;
+  right: 12px;
+}
+
+.hbadge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00f0ff;
+  box-shadow: 0 0 6px #00f0ff;
+  animation: hadPulse 1.2s infinite;
+}
+
+.pulse-emerald {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+/* Minimal 3 Points (Clean & Concise) */
+.had-minimal-points {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 2px 4px;
+}
+
+.had-m-point {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.88rem;
+  color: #334155;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.had-m-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #00acc1;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 900;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 172, 193, 0.3);
+}
+
+/* =========================================================
+   COMPREHENSIVE RESPONSIVE STYLES (TABLET & MOBILE)
+   ========================================================= */
+
+/* Tablets & Small Laptops (Max 1100px) */
+@media (max-width: 1100px) {
+  .had-unified-card {
+    grid-template-columns: 1fr;
+    padding: 30px 24px;
+    gap: 32px;
+  }
+  
+  .had-hub-image-container {
+    height: 260px;
+  }
+}
+
+/* Tablets (Max 768px) */
+@media (max-width: 768px) {
+  .had-unified-container {
+    padding: 0 0 24px;
+  }
+
+  .had-unified-card {
+    padding: 24px 18px;
+    border-radius: 18px;
+    gap: 26px;
+  }
+
+  .had-title-col h2 {
+    font-size: 1.25rem;
+  }
+
+  .had-form-grid,
+  .had-bottom-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .had-hub-image-container {
+    height: 220px;
+    border-radius: 16px;
+  }
+
+  .had-m-point {
+    font-size: 0.82rem;
+  }
+}
+
+/* Mobile Phones (Max 480px) */
+@media (max-width: 480px) {
+  .had-unified-card {
+    padding: 18px 14px;
+    border-radius: 14px;
+  }
+
+  .had-card-header {
+    gap: 12px;
+  }
+
+  .had-icon-box {
+    width: 44px;
+    height: 44px;
+  }
+
+  .had-icon-box svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .had-title-col h2 {
+    font-size: 1.15rem;
+  }
+
+  .had-input,
+  .had-select {
+    padding: 12px 14px 12px 40px;
+    font-size: 0.88rem;
+  }
+
+  .had-hub-image-container {
+    height: 190px;
+  }
+
+  .had-submit-btn {
+    padding: 13px 18px;
+    font-size: 0.92rem;
+  }
+}

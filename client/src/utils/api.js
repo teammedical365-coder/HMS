@@ -331,6 +331,14 @@ export const reportAPI = {
     chatWithAssistant: async (messages) => {
         const response = await apiClient.post('/api/reports/chat', { messages });
         return response.data;
+    },
+    getAIUsageStats: async () => {
+        const response = await apiClient.get('/api/reports/ai-usage/stats');
+        return response.data;
+    },
+    getAIUsageHistory: async (limit = 30) => {
+        const response = await apiClient.get(`/api/reports/ai-usage/history?limit=${limit}`);
+        return response.data;
     }
 };
 

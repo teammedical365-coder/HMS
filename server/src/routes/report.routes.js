@@ -4,6 +4,7 @@ const multer = require('multer');
 const { verifyToken } = require('../middleware/auth.middleware');
 const imagekit = require('../utils/imagekit');
 const Report = require('../models/report.model');
+const AIUsageLog = require('../models/aiUsageLog.model');
 const aiService = require('../services/ai/ai.service');
 const axios = require('axios');
 
@@ -49,6 +50,16 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
       }
     }
 
+    const Appointment = require('../models/appointment.model');
+    const appt = await Appointment.findById(appointmentId);
+
+    const userContext = {
+      userId: req.user?._id,
+      userName: req.user?.name || req.user?.username || 'Doctor/Staff',
+      hospitalId: (appt && appt.hospitalId) ? appt.hospitalId : (req.user ? req.user.hospitalId : undefined),
+      patientId: appt ? appt.userId : null
+    };
+
     const result = await imagekit.upload({
       file: file.buffer,
       fileName: `report_${appointmentId}_${Date.now()}_${file.originalname}`,
@@ -59,13 +70,10 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
     // Extract text using Gemini OCR
     let extractedText = "";
     try {
-      extractedText = await aiService.extractReportText(file.buffer.toString('base64'), file.mimetype || 'application/pdf');
+      extractedText = await aiService.extractReportText(file.buffer.toString('base64'), file.mimetype || 'application/pdf', userContext);
     } catch (ocrErr) {
       console.error('[OCR Extraction Error]:', ocrErr.message);
     }
-
-    const Appointment = require('../models/appointment.model');
-    const appt = await Appointment.findById(appointmentId);
 
     const newReport = new Report({
       appointmentId: appointmentId,
@@ -75,7 +83,7 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
       mimeType: file.mimetype,
       size: result.size,
       uploadedByRole: uploaderRole,
-      hospitalId: (appt && appt.hospitalId) ? appt.hospitalId : (req.user ? req.user.hospitalId : undefined),
+      hospitalId: userContext.hospitalId,
       uploadedAt: new Date(),
       extractedText: extractedText
     });
@@ -98,24 +106,27 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
         const User = require('../models/user.model');
         let userDoc = null;
         if (appt.userId) userDoc = await User.findById(appt.userId);
-        if (!userDoc && appt.patientId) {
-          const query = { patientId: appt.patientId };
-          if (appt.hospitalId) query.hospitalId = appt.hospitalId;
-          userDoc = await User.findOne(query) || await User.findOne({ patientId: appt.patientId });
+
+        if (!userDoc && (appt.patientName || appt.patientPhone)) {
+          userDoc = await User.findOne({
+            $or: [
+              { phone: appt.patientPhone },
+              { name: appt.patientName }
+            ]
+          });
         }
+
         if (userDoc) {
           if (!userDoc.fertilityProfile) userDoc.fertilityProfile = {};
-          if (!Array.isArray(userDoc.fertilityProfile.documents)) userDoc.fertilityProfile.documents = [];
-          userDoc.fertilityProfile.documents.push({
-            fileName: file.originalname,
-            docType: 'Medical Report',
+          if (!Array.isArray(userDoc.fertilityProfile.reports)) {
+            userDoc.fertilityProfile.reports = [];
+          }
+          userDoc.fertilityProfile.reports.push({
             url: result.url,
             fileId: result.fileId,
+            name: file.originalname,
+            date: new Date(),
             mimeType: file.mimetype,
-            uploadedAt: new Date(),
-            uploadedBy: uploaderRole,
-            department: appt.department || appt.serviceName || 'General',
-            appointmentId: appt._id,
             extractedText: extractedText
           });
           userDoc.markModified('fertilityProfile');
@@ -123,26 +134,26 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
         }
       }
     } catch (syncErr) {
-      console.error('[Report Sync Error]:', syncErr.message);
+      console.error('[Report Profile Auto-Sync Warning]:', syncErr.message);
     }
 
     res.status(201).json({
       success: true,
-      message: "Report uploaded successfully",
-      report: newReport,
+      message: "Report uploaded successfully!",
+      report: newReport
     });
 
   } catch (error) {
-    console.error('[Report Upload Route] Error:', error);
+    console.error('[Upload Report Route] Error:', error);
     res.status(500).json({
-        success: false,
-        message: "Failed to upload report.",
+      success: false,
+      message: error.message || "Internal server error while uploading report."
     });
   }
 });
 
-// Route: GET /api/reports/:appointmentId
-router.get('/:appointmentId', verifyToken, async (req, res) => {
+// Route: GET /api/reports/appointment/:appointmentId
+router.get('/appointment/:appointmentId', verifyToken, async (req, res) => {
   try {
     const { appointmentId } = req.params;
     const reports = await Report.find({ appointmentId }).sort({ uploadedAt: -1 });
@@ -182,17 +193,24 @@ router.post('/summary', verifyToken, async (req, res) => {
       return res.status(403).json({ success: false, message: "Only doctors can generate AI summaries." });
     }
 
+    const userContext = {
+      userId: req.user?._id,
+      userName: req.user?.name || req.user?.username || 'Doctor',
+      hospitalId: req.user?.hospitalId
+    };
+
     // 1. Download file
     const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
     const buffer = Buffer.from(response.data, 'binary');
     const base64Data = buffer.toString('base64');
     
-    // 2. Generate AI Summary
-    const summaryJson = await aiService.generateReportSummary(base64Data, mimeType);
+    // 2. Generate AI Summary with token tracking
+    const { summary, usage } = await aiService.generateReportSummary(base64Data, mimeType, userContext);
 
     res.status(200).json({
       success: true,
-      summary: summaryJson
+      summary,
+      usage
     });
 
   } catch (error) {
@@ -223,17 +241,24 @@ router.post('/compare', verifyToken, async (req, res) => {
       return res.status(403).json({ success: false, message: "Only doctors can compare reports." });
     }
 
+    const userContext = {
+      userId: req.user?._id,
+      userName: req.user?.name || req.user?.username || 'Doctor',
+      hospitalId: req.user?.hospitalId
+    };
+
     const latestResponse = await axios.get(latestFileUrl, { responseType: 'arraybuffer' });
     const prevResponse = await axios.get(previousFileUrl, { responseType: 'arraybuffer' });
 
     const latestBase64 = Buffer.from(latestResponse.data, 'binary').toString('base64');
     const prevBase64 = Buffer.from(prevResponse.data, 'binary').toString('base64');
 
-    const comparisonJson = await aiService.compareReports(latestBase64, latestMimeType, prevBase64, previousMimeType);
+    const { comparison, usage } = await aiService.compareReports(latestBase64, latestMimeType, prevBase64, previousMimeType, userContext);
 
     res.status(200).json({
       success: true,
-      comparison: comparisonJson
+      comparison,
+      usage
     });
 
   } catch (error) {
@@ -340,17 +365,132 @@ router.post('/chat', verifyToken, async (req, res) => {
       return res.status(400).json({ success: false, message: "messages array is required." });
     }
     
-    const replyText = await aiService.chatWithAssistant(messages);
+    const userContext = {
+      userId: req.user?._id,
+      userName: req.user?.name || req.user?.username || 'Doctor',
+      hospitalId: req.user?.hospitalId
+    };
+
+    const { reply, usage } = await aiService.chatWithAssistant(messages, userContext);
     
     res.status(200).json({
       success: true,
-      reply: replyText
+      reply,
+      usage
     });
   } catch (error) {
     console.error('[AI Chat Route] Error:', error);
     res.status(500).json({
       success: false,
       message: error.message || "Failed to get AI response."
+    });
+  }
+});
+
+// Route: GET /api/reports/ai-usage/stats
+router.get('/ai-usage/stats', verifyToken, async (req, res) => {
+  try {
+    const hospitalId = req.user?.hospitalId;
+    const filter = hospitalId ? { hospitalId } : {};
+
+    // Aggregate totals
+    const totalsArr = await AIUsageLog.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          totalRequests: { $sum: 1 },
+          totalPromptTokens: { $sum: '$promptTokens' },
+          totalCandidateTokens: { $sum: '$candidateTokens' },
+          totalTokens: { $sum: '$totalTokens' },
+          totalCostUsd: { $sum: '$estimatedCostUsd' },
+          totalCostInr: { $sum: '$estimatedCostInr' }
+        }
+      }
+    ]);
+    const totals = totalsArr[0] || {};
+
+    // Today's usage
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const todayTotalsArr = await AIUsageLog.aggregate([
+      { $match: { ...filter, createdAt: { $gte: startOfToday } } },
+      {
+        $group: {
+          _id: null,
+          todayRequests: { $sum: 1 },
+          todayTokens: { $sum: '$totalTokens' },
+          todayCostUsd: { $sum: '$estimatedCostUsd' },
+          todayCostInr: { $sum: '$estimatedCostInr' }
+        }
+      }
+    ]);
+    const todayTotals = todayTotalsArr[0] || {};
+
+    // Breakdown by action
+    const actionBreakdown = await AIUsageLog.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: '$actionType',
+          count: { $sum: 1 },
+          tokens: { $sum: '$totalTokens' },
+          costUsd: { $sum: '$estimatedCostUsd' }
+        }
+      }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      stats: {
+        totalRequests: totals.totalRequests || 0,
+        totalPromptTokens: totals.totalPromptTokens || 0,
+        totalCandidateTokens: totals.totalCandidateTokens || 0,
+        totalTokens: totals.totalTokens || 0,
+        totalCostUsd: totals.totalCostUsd ? Number(totals.totalCostUsd.toFixed(6)) : 0,
+        totalCostInr: totals.totalCostInr ? Number(totals.totalCostInr.toFixed(4)) : 0,
+        todayRequests: todayTotals.todayRequests || 0,
+        todayTokens: todayTotals.todayTokens || 0,
+        todayCostUsd: todayTotals.todayCostUsd ? Number(todayTotals.todayCostUsd.toFixed(6)) : 0,
+        todayCostInr: todayTotals.todayCostInr ? Number(todayTotals.todayCostInr.toFixed(4)) : 0,
+        actionBreakdown: actionBreakdown.map(a => ({
+          actionType: a._id,
+          count: a.count,
+          tokens: a.tokens,
+          costUsd: Number((a.costUsd || 0).toFixed(6))
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('[AI Usage Stats Route] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch AI usage stats."
+    });
+  }
+});
+
+// Route: GET /api/reports/ai-usage/history
+router.get('/ai-usage/history', verifyToken, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 30;
+    const hospitalId = req.user?.hospitalId;
+    const filter = hospitalId ? { hospitalId } : {};
+
+    const logs = await AIUsageLog.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      logs
+    });
+  } catch (error) {
+    console.error('[AI Usage History Route] Error:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch AI usage history."
     });
   }
 });
