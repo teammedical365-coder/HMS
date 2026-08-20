@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { adminAPI, uploadAPI, hospitalAPI } from '../../utils/api';
 import { getSubscriptionLimits } from '../../utils/subscriptionPlans';
+import toast from 'react-hot-toast';
 import '../administration/SuperAdmin.css';
 
 const HospitalSelect = ({ hospitals, value, onChange }) => {
@@ -86,6 +87,7 @@ const Admin = () => {
     const [updating, setUpdating] = useState(false);
 
     const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const [deletingId, setDeletingId] = useState(null);
 
     // Create Staff Form state
     const [showCreateForm, setShowCreateForm] = useState(false);
@@ -99,6 +101,9 @@ const Admin = () => {
     const [hospitals, setHospitals] = useState([]);
     const [staffHospitalFilter, setStaffHospitalFilter] = useState('');
     const [staffPlanFilter, setStaffPlanFilter] = useState('');
+
+    // Search state
+    const [staffSearchQuery, setStaffSearchQuery] = useState('');
 
     const handleToggleCreateForm = async () => {
         const nextState = !showCreateForm;
@@ -340,15 +345,20 @@ const Admin = () => {
     };
 
     const handleDeleteUser = async (userId) => {
+        toast.dismiss();
+        setDeletingId(userId);
         try {
             const response = await adminAPI.deleteUser(userId);
-            if (response.success) {
-                setSuccess('User deleted successfully!');
-                setDeleteConfirm(null);
-                fetchUsers();
+            if (response.status === 200 || response.success === true) {
+                toast.success('User deleted successfully!');
+                setUsers(prev => prev.filter(u => (u.id || u._id) !== userId));
+            } else {
+                toast.error('Failed to delete user.');
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Error deleting user.');
+            toast.error(err.response?.data?.message || 'Error deleting user.');
+        } finally {
+            setDeletingId(null);
             setDeleteConfirm(null);
         }
     };
@@ -638,10 +648,24 @@ const Admin = () => {
                     return null;
                 })()}
 
-                {/* Staff list with hospital filter */}
                 <div className="admin-card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
                         <h2>All Staff ({users.length})</h2>
+                        
+                        {/* Search Bar */}
+                        <div style={{ flex: 1, minWidth: '200px', maxWidth: '300px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '0 10px' }}>
+                                <span style={{ color: '#94a3b8' }}>🔍</span>
+                                <input
+                                    type="text"
+                                    placeholder="Search by name, email, or phone..."
+                                    value={staffSearchQuery}
+                                    onChange={e => setStaffSearchQuery(e.target.value)}
+                                    style={{ width: '100%', border: 'none', padding: '8px', outline: 'none' }}
+                                />
+                            </div>
+                        </div>
+
                         {['superadmin', 'centraladmin'].includes(JSON.parse(localStorage.getItem('user') || '{}').role) && (
                             <div style={{ display: 'flex', gap: '10px' }}>
                                 <select className="staff-input" style={{ width: '200px' }} value={staffPlanFilter} onChange={e => { 
@@ -688,6 +712,15 @@ const Admin = () => {
                                 </thead>
                                 <tbody>
                                     {users
+                                        .filter(userItem => {
+                                            if (!staffSearchQuery) return true;
+                                            const q = staffSearchQuery.toLowerCase();
+                                            return (
+                                                (userItem.name && userItem.name.toLowerCase().includes(q)) ||
+                                                (userItem.email && userItem.email.toLowerCase().includes(q)) ||
+                                                (userItem.phone && String(userItem.phone).includes(q))
+                                            );
+                                        })
                                         .map((userItem) => {
                                             const isCurrentUser = (userItem.id || userItem._id) === JSON.parse(localStorage.getItem('user') || '{}').id;
                                             const canModify = !isCurrentUser;
@@ -721,7 +754,9 @@ const Admin = () => {
                                                             {canModify && (
                                                                 <>
                                                                     <button onClick={() => openEditModal(userItem)} className="btn-edit">Edit</button>
-                                                                    <button onClick={() => setDeleteConfirm(userItem.id || userItem._id)} className="btn-delete">Delete</button>
+                                                                    <button onClick={() => setDeleteConfirm(userItem.id || userItem._id)} disabled={deletingId === (userItem.id || userItem._id)} className="btn-delete">
+                                                                        {deletingId === (userItem.id || userItem._id) ? 'Deleting...' : 'Delete'}
+                                                                    </button>
                                                                 </>
                                                             )}
                                                         </div>
@@ -842,8 +877,10 @@ const Admin = () => {
                             <h3>Confirm Delete</h3>
                             <p>Are you sure? This action cannot be undone.</p>
                             <div className="modal-buttons">
-                                <button onClick={() => handleDeleteUser(deleteConfirm)} className="btn-confirm-delete">Delete</button>
-                                <button onClick={() => setDeleteConfirm(null)} className="btn-cancel">Cancel</button>
+                                <button onClick={() => handleDeleteUser(deleteConfirm)} disabled={deletingId !== null} className="btn-confirm-delete">
+                                    {deletingId !== null ? 'Deleting...' : 'Delete'}
+                                </button>
+                                <button onClick={() => setDeleteConfirm(null)} disabled={deletingId !== null} className="btn-cancel">Cancel</button>
                             </div>
                         </div>
                     </div>

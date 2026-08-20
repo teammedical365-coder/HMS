@@ -166,7 +166,36 @@ const AdminRoles = () => {
         setLoading(true);
         setMessage({ type: '', text: '' });
 
+        const trimmedName = formData.name.trim();
+        if (trimmedName === '') {
+            setMessage({ type: 'error', text: 'Role Name cannot be empty.' });
+            setLoading(false);
+            return;
+        }
+
+        const isDuplicate = roles.some(r => r.name.toLowerCase() === trimmedName.toLowerCase() && r._id !== editingRoleId);
+        if (isDuplicate) {
+            setMessage({ type: 'error', text: 'A role with this name already exists.' });
+            setLoading(false);
+            return;
+        }
+
+        const pathRegex = /^\S+$/;
+        if (formData.dashboardPath && !pathRegex.test(formData.dashboardPath)) {
+            setMessage({ type: 'error', text: 'Dashboard Path cannot contain spaces.' });
+            setLoading(false);
+            return;
+        }
+
         const manualLinks = formData.navLinks.filter(l => l.label.trim() && l.path.trim());
+        for (const link of manualLinks) {
+            if (!pathRegex.test(link.path)) {
+                setMessage({ type: 'error', text: 'Navigation paths cannot contain spaces.' });
+                setLoading(false);
+                return;
+            }
+        }
+
         const autoLinks = getAutoNavLinks(formData.permissions);
 
         // Merge manual and auto links
@@ -241,9 +270,10 @@ const AdminRoles = () => {
                             <input
                                 type="text"
                                 value={formData.name}
-                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                onChange={e => setFormData({ ...formData, name: e.target.value.slice(0, 100) })}
                                 placeholder="e.g. Senior Nurse"
                                 required
+                                maxLength={100}
                             />
                         </div>
                         <div className="form-group">
@@ -251,8 +281,9 @@ const AdminRoles = () => {
                             <input
                                 type="text"
                                 value={formData.description}
-                                onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                onChange={e => setFormData({ ...formData, description: e.target.value.slice(0, 1000) })}
                                 placeholder="What is this role for?"
+                                maxLength={1000}
                             />
                         </div>
                         <div className="form-group">
@@ -260,9 +291,10 @@ const AdminRoles = () => {
                             <input
                                 type="text"
                                 value={formData.dashboardPath}
-                                onChange={e => setFormData({ ...formData, dashboardPath: e.target.value })}
+                                onChange={e => setFormData({ ...formData, dashboardPath: e.target.value.slice(0, 300) })}
                                 placeholder="e.g. /reception/dashboard"
                                 required
+                                maxLength={300}
                             />
                         </div>
 
@@ -277,15 +309,17 @@ const AdminRoles = () => {
                                         type="text"
                                         placeholder="Label (e.g. Patients)"
                                         value={link.label}
-                                        onChange={e => updateNavLink(index, 'label', e.target.value)}
+                                        onChange={e => updateNavLink(index, 'label', e.target.value.slice(0, 300))}
                                         className="nav-input"
+                                        maxLength={300}
                                     />
                                     <input
                                         type="text"
                                         placeholder="Path (e.g. /patients)"
                                         value={link.path}
-                                        onChange={e => updateNavLink(index, 'path', e.target.value)}
+                                        onChange={e => updateNavLink(index, 'path', e.target.value.slice(0, 300))}
                                         className="nav-input"
+                                        maxLength={300}
                                     />
                                     <button
                                         type="button"
@@ -336,25 +370,25 @@ const AdminRoles = () => {
                         {roles.length === 0 && <div className="empty-state">No roles defined yet. Create one!</div>}
 
                         {roles.map(role => (
-                            <div key={role._id} className="role-item">
-                                <div className="role-info">
-                                    <div className="role-title-row">
-                                        <h3>{role.name}</h3>
-                                        <span className="perm-badge">{role.permissions?.length || 0} perms</span>
+                            <div key={role._id} className="role-item" style={{ minWidth: 0 }}>
+                                <div className="role-info" style={{ minWidth: 0 }}>
+                                    <div className="role-title-row" style={{ minWidth: 0 }}>
+                                        <h3 style={{ wordWrap: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap', margin: 0, paddingRight: '10px', minWidth: 0 }}>{role.name}</h3>
+                                        <span className="perm-badge" style={{ flexShrink: 0 }}>{role.permissions?.length || 0} perms</span>
                                         {role.userCount > 0 && (
-                                            <span className="perm-badge" style={{ background: '#1890ff20', color: '#1890ff' }}>
+                                            <span className="perm-badge" style={{ background: '#1890ff20', color: '#1890ff', flexShrink: 0 }}>
                                                 {role.userCount} user{role.userCount !== 1 ? 's' : ''}
                                             </span>
                                         )}
                                         {role.isSystemRole && (
-                                            <span className="perm-badge" style={{ background: '#faad1420', color: '#faad14' }}>
+                                            <span className="perm-badge" style={{ background: '#faad1420', color: '#faad14', flexShrink: 0 }}>
                                                 System
                                             </span>
                                         )}
                                     </div>
-                                    <p className="role-desc">{role.description || "No description provided."}</p>
+                                    <p className="role-desc" style={{ wordWrap: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap', minWidth: 0 }}>{role.description || "No description provided."}</p>
                                     {role.dashboardPath && (
-                                        <p className="role-desc" style={{ fontSize: '11px', color: '#888' }}>
+                                        <p className="role-desc" style={{ fontSize: '11px', color: '#888', wordWrap: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap', minWidth: 0 }}>
                                             Dashboard: {role.dashboardPath}
                                         </p>
                                     )}

@@ -6,6 +6,10 @@ const User = require('../models/user.model');
 const Role = require('../models/role.model');
 const Inventory = require('../models/inventory.model');
 const LabTest = require('../models/labTest.model');
+const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
+const { sendStaffWelcomeEmail } = require('../services/email.service');
 const Doctor = require('../models/doctor.model');
 const Lab = require('../models/lab.model');
 const Pharmacy = require('../models/pharmacy.model');
@@ -450,6 +454,14 @@ router.post('/admin/signup', verifyCentralAdmin, async (req, res) => {
         });
 
         await admin.save();
+
+        // --- SEND WELCOME EMAIL ---
+        try {
+            const hName = hospital.name || 'Medical 365';
+            const loginUrl = hospital.customDomain ? `https://${hospital.customDomain}/login` : `https://${hospital.slug}.medical365.in/login`;
+            await sendStaffWelcomeEmail({ email: admin.email, password: password, name: admin.name, role: 'Hospital Admin', hospitalName: hName, loginUrl });
+        } catch (emailErr) { console.error('[hospital.routes] Failed to send email:', emailErr.message); }
+        // --------------------------
 
         // Link hospital admin to hospital record
         hospital.adminUserId = admin._id;

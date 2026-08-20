@@ -109,5 +109,95 @@ router.get('/auth-config', (req, res) => {
     });
 });
 
-module.exports = router;
 
+// Dynamic PWA Manifest Route (MASTER FIX)
+router.get('/manifest.json', async (req, res) => {
+    try {
+        // 1. Frontend khud batayega wo kaunsa hospital hai (?domain=...)
+        const referer = req.get('referer');
+        let requestingDomain = req.query.domain || 
+                               (referer ? new URL(referer).hostname : null) || 
+                               req.headers.host;
+
+        let cleanDomain = requestingDomain.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0].toLowerCase();
+        
+        // Absolute URL banayenge Chrome ke error ko rokne ke liye
+        const frontendUrl = `https://${cleanDomain}`;
+
+        const Hospital = require('../models/hospital.model');
+        let query = null;
+        
+        if (cleanDomain.endsWith('.medical365.in')) {
+            query = { slug: cleanDomain.replace('.medical365.in', '') };
+        } else if (cleanDomain.endsWith('.localhost')) {
+            query = { slug: cleanDomain.replace('.localhost', '') };
+        } else if (!cleanDomain.includes('localhost') && cleanDomain !== 'medical365.in') {
+            query = { $or: [{ customDomain: cleanDomain }, { slug: cleanDomain }] };
+        }
+
+        let hospital = null;
+        if (query) {
+            hospital = await Hospital.findOne(query).select('name branding').lean();
+        }
+
+        // 2. Default Fallback (With Absolute URLs & Fixed Purpose)
+        const manifest = {
+            name: "Medical 365",
+            short_name: "Hospital",
+            start_url: `${frontendUrl}/`, // FIX: Absolute URL
+            display: "standalone",
+            background_color: "#ffffff",
+            theme_color: "#14b8a6",
+            icons: [
+                {
+                    src: `${frontendUrl}/icon-192x192.png`, 
+                    sizes: "192x192",
+                    type: "image/png",
+                    purpose: "any" // FIX: Chrome wants strictly "any"
+                },
+                {
+                    src: `${frontendUrl}/icon-512x512.png`,
+                    sizes: "512x512",
+                    type: "image/png",
+                    purpose: "maskable" // FIX: Chrome wants strictly "maskable"
+                }
+            ]
+        };
+
+        // 3. Agar Hospital mil gaya, toh uski details daalo
+        if (hospital) {
+            manifest.name = hospital.name || manifest.name;
+            manifest.short_name = hospital.name || manifest.short_name;
+            if (hospital.branding?.primaryColor) {
+                manifest.theme_color = hospital.branding.primaryColor;
+            }
+            if (hospital.branding?.logoUrl) {
+                const logoUrl = hospital.branding.logoUrl;
+                manifest.icons = [
+                    {
+                        src: logoUrl,
+                        sizes: "192x192",
+                        type: "image/png",
+                        purpose: "any"
+                    },
+                    {
+                        src: logoUrl,
+                        sizes: "512x512",
+                        type: "image/png",
+                        purpose: "maskable"
+                    }
+                ];
+            }
+        }
+
+        // CORS allow karein taaki frontend isko read kar sake
+        res.set('Access-Control-Allow-Origin', '*');
+        res.set('Cache-Control', 'public, max-age=300');
+        res.json(manifest);
+    } catch (err) {
+        console.error('Dynamic manifest error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+module.exports = router;

@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const Hospital = require('../models/hospital.model');
 const User = require('../models/user.model');
 const Role = require('../models/role.model');
+const Doctor = require('../models/doctor.model');
+const { sendStaffWelcomeEmail } = require('../services/email.service');
 const ClinicPatient = require('../models/clinicPatient.model');
 const ClinicSubscription = require('../models/clinicSubscription.model');
 const { verifyToken } = require('../middleware/auth.middleware');
@@ -324,6 +326,14 @@ router.post('/:id/manager', verifyCentralAdmin, async (req, res) => {
         });
         await manager.save();
 
+        // --- SEND WELCOME EMAIL ---
+        try {
+            const hName = clinic.name || 'Medical 365';
+            const loginUrl = clinic.customDomain ? `https://${clinic.customDomain}/login` : `https://${clinic.slug}.medical365.in/login`;
+            await sendStaffWelcomeEmail({ email: manager.email, password: password, name: manager.name, role: 'Clinic Manager', hospitalName: hName, loginUrl });
+        } catch (emailErr) { console.error('[simpleClinic.routes] Failed to send email:', emailErr.message); }
+        // --------------------------
+
         clinic.adminUserId = manager._id;
         await clinic.save();
 
@@ -463,6 +473,14 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
             hospitalId: clinic._id,
         });
         await staffMember.save();
+
+        // --- SEND WELCOME EMAIL ---
+        try {
+            const hName = clinic.name || 'Medical 365';
+            const loginUrl = clinic.customDomain ? `https://${clinic.customDomain}/login` : `https://${clinic.slug}.medical365.in/login`;
+            await sendStaffWelcomeEmail({ email: staffMember.email, password: password, name: staffMember.name, role: 'Clinic Doctor', hospitalName: hName, loginUrl });
+        } catch (emailErr) { console.error('[simpleClinic.routes] Failed to send email:', emailErr.message); }
+        // --------------------------
 
         res.status(201).json({
             success: true,

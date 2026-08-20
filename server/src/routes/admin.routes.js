@@ -17,6 +17,7 @@ const Reception = require('../models/reception.model');
 const { JWT_SECRET } = require('../config/jwt');
 const validatePassword = require('../utils/validatePassword');
 const SUBSCRIPTION_PLANS = require('../utils/subscriptionPlans');
+const { sendStaffWelcomeEmail } = require('../services/email.service');
 
 // ==========================================
 // HELPERS
@@ -629,6 +630,34 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
             }
         } catch (profileError) {
             console.error('Error creating linked profile:', profileError);
+        }
+
+        // Dynamic URL Logic for Welcome Email
+        let loginUrl = 'https://medical365.in/login';
+        let hName = 'Medical 365';
+        if (assignedHospitalId) {
+            // hospitalDoc was already fetched above, but it didn't select name/slug/customDomain
+            const emailHosp = await Hospital.findById(assignedHospitalId).select('name slug customDomain');
+            if (emailHosp) {
+                hName = emailHosp.name || 'Medical 365';
+                loginUrl = emailHosp.customDomain 
+                    ? `https://${emailHosp.customDomain}/login` 
+                    : `https://${emailHosp.slug}.medical365.in/login`;
+            }
+        }
+
+        // Send Welcome Email
+        try {
+            await sendStaffWelcomeEmail({
+                email: user.email,
+                password: password, 
+                name: user.name,
+                role: roleDoc.name,
+                hospitalName: hName,
+                loginUrl: loginUrl
+            });
+        } catch (emailError) {
+            console.error('[admin.routes] Error calling sendStaffWelcomeEmail:', emailError.message);
         }
 
         const userData = await buildUserResponse(user);

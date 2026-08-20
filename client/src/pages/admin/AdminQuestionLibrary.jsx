@@ -21,6 +21,16 @@ const AdminQuestionLibrary = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [editIndex, setEditIndex] = useState(null);
 
+    // Department Modal State
+    const [showDeptModal, setShowDeptModal] = useState(false);
+    const [selectedDept, setSelectedDept] = useState('');
+    const [customDept, setCustomDept] = useState('');
+
+    // Predefined departments for dropdown
+    const [predefinedDepartments, setPredefinedDepartments] = useState([
+        "General", "Orthopedics", "ENT", "Cardiology", "Neurology", "Pediatrics", "Gynecology", "Dermatology", "Oncology"
+    ]);
+
     const [showPreview, setShowPreview] = useState(false);
     const [previewIntake, setPreviewIntake] = useState({});
 
@@ -133,17 +143,98 @@ const AdminQuestionLibrary = () => {
         }
     };
 
-    const handleAddDepartment = () => {
-        const dept = window.prompt("Enter new department name (e.g., Neurology, IVF):");
-        if (!dept || !dept.trim()) return;
-        const cleanDept = dept.trim();
-        if (libraryData[cleanDept]) {
+    const handleAddDepartmentClick = () => {
+        setShowDeptModal(true);
+        setSelectedDept('');
+        setCustomDept('');
+    };
+
+    const confirmAddDepartment = () => {
+        const dept = customDept.trim() || selectedDept.trim();
+        if (!dept) {
+            alert("Please select or enter a department name.");
+            return;
+        }
+        if (libraryData[dept]) {
             alert("Department already exists!");
             return;
         }
-        setLibraryData({ ...libraryData, [cleanDept]: {} });
-        setDepartmentTab(cleanDept);
+        
+        // Add to predefined if new
+        if (customDept.trim() && !predefinedDepartments.includes(customDept.trim())) {
+            setPredefinedDepartments([...predefinedDepartments, customDept.trim()]);
+        }
+
+        setLibraryData({ ...libraryData, [dept]: {} });
+        setDepartmentTab(dept);
         setActiveCategory('');
+        setShowDeptModal(false);
+    };
+
+    const handleEditDepartment = async (oldDept) => {
+        const newDept = window.prompt("Enter new name for department:", oldDept);
+        if (!newDept || !newDept.trim() || newDept.trim() === oldDept) return;
+        const cleanName = newDept.trim();
+
+        if (libraryData[cleanName]) {
+            alert("Department with this name already exists!");
+            return;
+        }
+
+        const newLib = { ...libraryData };
+        const categories = newLib[oldDept];
+        delete newLib[oldDept];
+        newLib[cleanName] = categories;
+
+        if (customDept.trim() && !predefinedDepartments.includes(cleanName)) {
+            setPredefinedDepartments([...predefinedDepartments, cleanName]);
+        }
+
+        // Save immediately as requested
+        setSaving(true);
+        try {
+            const res = await questionLibraryAPI.updateLibrary(newLib);
+            if (res.success) {
+                setLibraryData(newLib);
+                if (departmentTab === oldDept) setDepartmentTab(cleanName);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Error renaming department in backend.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDeleteDepartment = async (deptName) => {
+        if (!window.confirm(`Are you sure? This will permanently delete the "${deptName}" department and all its questions.`)) return;
+        
+        const newLib = { ...libraryData };
+        delete newLib[deptName];
+
+        setSaving(true);
+        try {
+            const res = await questionLibraryAPI.updateLibrary(newLib);
+            if (res.success) {
+                setLibraryData(newLib);
+                if (departmentTab === deptName) {
+                    const keys = Object.keys(newLib);
+                    if (keys.length > 0) {
+                        setDepartmentTab(keys[0]);
+                        const cats = Object.keys(newLib[keys[0]] || {});
+                        setActiveCategory(cats.length > 0 ? cats[0] : '');
+                    } else {
+                        setDepartmentTab('');
+                        setActiveCategory('');
+                    }
+                }
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Error deleting department from backend.');
+        } finally {
+            setSaving(false);
+        }
     };
 
     const resetModalState = () => {
@@ -305,7 +396,7 @@ const AdminQuestionLibrary = () => {
             <div className="ql-question-card" key={index}>
                 <div className="ql-question-top">
                     <div className="ql-question-info">
-                        <div className="q-icon">❓</div>
+                        <span className="q-icon">❓</span>
                         <strong>{item.q}</strong>
                         <span className="ql-question-type-badge">{getTypeLabel(item.type)}</span>
                     </div>
@@ -316,7 +407,7 @@ const AdminQuestionLibrary = () => {
                 </div>
                 {item.parentQ && (
                     <div className="ql-condition-badge">
-                        ⚡ Only shown if <b>"{item.parentQ}"</b> equals <b>"{item.condition}"</b>
+                        <span>⚡ Only shown if <b>"{item.parentQ}"</b> equals <b>"{item.condition}"</b></span>
                     </div>
                 )}
                 <div className="ql-input-preview">
@@ -347,7 +438,6 @@ const AdminQuestionLibrary = () => {
 
     return (
         <div className="ql-admin-body">
-            {/* Page Header */}
             <div className="ql-page-header">
                 <div className="ql-page-header-left">
                     <h1>Question Library Builder</h1>
@@ -372,7 +462,7 @@ const AdminQuestionLibrary = () => {
             {/* Department Tabs */}
             <div className="ql-dept-tabs">
                 {visibleDepartments.map(dept => (
-                    <button
+                    <div
                         key={dept}
                         className={`ql-dept-tab ${departmentTab === dept ? 'active' : ''}`}
                         onClick={() => {
@@ -381,21 +471,40 @@ const AdminQuestionLibrary = () => {
                             setActiveCategory(cats.length > 0 ? cats[0] : '');
                         }}
                     >
-                        <span className="dept-icon">{deptIcons[dept] || '🏥'}</span>
-                        {dept}
-                    </button>
+                        <span className="dept-icon">{deptIcons[dept] || '🩺'}</span>
+                        <span>{dept}</span>
+                        {departmentTab === dept && allowedDepartments === null && (
+                            <span style={{ display: 'inline-flex', gap: '4px', marginLeft: '6px' }}>
+                                <span 
+                                    onClick={(e) => { e.stopPropagation(); handleEditDepartment(dept); }} 
+                                    style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7 }}
+                                    title="Rename Department"
+                                >
+                                    ✏️
+                                </span>
+                                <span 
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteDepartment(dept); }} 
+                                    style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7, color: '#ef4444' }}
+                                    title="Delete Department"
+                                >
+                                    🗑️
+                                </span>
+                            </span>
+                        )}
+                    </div>
                 ))}
                 
                 {allowedDepartments === null && (
-                    <button className="ql-btn-add-dept" onClick={handleAddDepartment}>
+                    <button 
+                        className="ql-btn-add-dept"
+                        onClick={handleAddDepartmentClick}
+                    >
                         + Add Dept
                     </button>
                 )}
             </div>
 
-            {/* Main Layout */}
             <div className="ql-main-layout">
-                {/* Sidebar */}
                 <aside className="ql-sidebar">
                     <div className="ql-add-category-card">
                         <input 
@@ -406,7 +515,7 @@ const AdminQuestionLibrary = () => {
                             onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory() }} 
                         />
                         <button className="ql-btn-add-category" onClick={handleAddCategory}>
-                            + Add New Category
+                            + Add Category
                         </button>
                     </div>
 
@@ -417,7 +526,7 @@ const AdminQuestionLibrary = () => {
                             onClick={() => setActiveCategory(cat)}
                         >
                             <div className="ql-cat-name">
-                                <span className="cat-folder-icon">📁</span>
+                                <span className="cat-folder-icon">{cat === activeCategory ? '📂' : '📁'}</span>
                                 <span>{cat}</span>
                             </div>
                             <span className="ql-cat-status">Active</span>
@@ -427,7 +536,9 @@ const AdminQuestionLibrary = () => {
                             </div>
                         </div>
                     ))}
-                    {Object.keys(currentCategories).length === 0 && <p className="ql-no-cats">No categories added yet.</p>}
+                    {Object.keys(currentCategories).length === 0 && (
+                        <div className="ql-no-cats">No categories added yet.</div>
+                    )}
                 </aside>
 
                 {/* Content Panel */}
@@ -460,6 +571,54 @@ const AdminQuestionLibrary = () => {
                     )}
                 </main>
             </div>
+
+            {/* Department Modal */}
+            {showDeptModal && (
+                <div className="ql-modal-overlay">
+                    <div className="ql-modal-content" style={{ maxWidth: '420px' }}>
+                        <h3>Add New Department</h3>
+                        
+                        <div>
+                            <label className="ql-modal-label">Select from Existing List</label>
+                            <select 
+                                className="ql-modal-input"
+                                value={selectedDept} 
+                                onChange={(e) => {
+                                    setSelectedDept(e.target.value);
+                                    setCustomDept('');
+                                }}
+                            >
+                                <option value="">-- Choose Department --</option>
+                                {predefinedDepartments.map(d => (
+                                    <option key={d} value={d}>{d}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div style={{ textAlign: 'center', margin: '6px 0', color: '#94a3b8', fontSize: '12px' }}>OR</div>
+                        
+                        <div>
+                            <label className="ql-modal-label">Type Custom Department Name</label>
+                            <input 
+                                type="text" 
+                                className="ql-modal-input" 
+                                placeholder="e.g., Cardiology, Oncology..." 
+                                value={customDept} 
+                                onChange={(e) => {
+                                    setCustomDept(e.target.value);
+                                    setSelectedDept('');
+                                }} 
+                                onKeyDown={(e) => { if (e.key === 'Enter') confirmAddDepartment() }}
+                            />
+                        </div>
+
+                        <div className="ql-modal-actions">
+                            <button className="ql-modal-btn ql-modal-btn-cancel" onClick={() => setShowDeptModal(false)}>Cancel</button>
+                            <button className="ql-modal-btn ql-modal-btn-submit" onClick={confirmAddDepartment}>Add Department</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Add/Edit Question Modal */}
             {showAddModal && (
@@ -517,7 +676,6 @@ const AdminQuestionLibrary = () => {
                     </div>
                 </div>
             )}
-
             {/* Preview Modal */}
             {showPreview && (
                 <div className="ql-modal-overlay ql-preview-modal">

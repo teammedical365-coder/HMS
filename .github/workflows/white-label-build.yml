@@ -122,7 +122,7 @@ jobs:
           ARTIFACT_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           WEBHOOK_SECRET="${{ secrets.GITHUB_WEBHOOK_SECRET || 'dev-secret-123' }}"
           
-          curl -X POST "https://hms-h939.onrender.com/api/superadmin/hospitals/webhook/github?secret=${WEBHOOK_SECRET}" \
+          curl -X POST "https://hms-n6nk.onrender.com/api/superadmin/hospitals/webhook/github?secret=${WEBHOOK_SECRET}" \
                -H "Content-Type: application/json" \
                -d '{
                  "tenantId": "${{ github.event.inputs.tenantId }}",
@@ -135,10 +135,10 @@ jobs:
         run: |
           WEBHOOK_SECRET="${{ secrets.GITHUB_WEBHOOK_SECRET || 'dev-secret-123' }}"
           
-          curl -X POST "https://hms-h939.onrender.com/api/superadmin/hospitals/webhook/github?secret=${WEBHOOK_SECRET}" \
+          curl -X POST "https://hms-n6nk.onrender.com/api/superadmin/hospitals/webhook/github?secret=${WEBHOOK_SECRET}" \
                -H "Content-Type: application/json" \
                -d '{
                  "tenantId": "${{ github.event.inputs.tenantId }}",
                  "status": "FAILED",
                  "error": "GitHub Action workflow failed"
-               }'
+               }

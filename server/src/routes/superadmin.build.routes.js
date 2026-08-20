@@ -143,6 +143,28 @@ Note: GitHub returns 404 instead of 401/403 for missing scopes to prevent reposi
 });
 
 /**
+ * POST /api/superadmin/hospitals/:id/reset-build
+ * Resets a stuck build status back to NOT_BUILT
+ */
+router.post('/:id/reset-build', verifyCentralAdmin, async (req, res) => {
+    try {
+        const hospital = await Hospital.findById(req.params.id);
+        if (!hospital) {
+            return res.status(404).json({ success: false, message: 'Hospital not found' });
+        }
+        
+        if (hospital.appConfig) {
+            hospital.appConfig.buildStatus = 'NOT_BUILT';
+            await hospital.save();
+        }
+        
+        return res.json({ success: true, message: 'Build status reset successfully' });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+/**
  * POST /api/superadmin/hospitals/webhook/github
  * Webhook called by GitHub Actions when a build finishes.
  */
