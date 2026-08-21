@@ -46,6 +46,9 @@ jobs:
             const path = require('path');
             
             const configPath = 'client/capacitor.config.json';
+            const stringsPath = 'client/android/app/src/main/res/values/strings.xml';
+            const gradlePath = 'client/android/app/build.gradle';
+            
             const hospitalName = context.payload.inputs.hospitalName;
             const applicationId = context.payload.inputs.applicationId;
             
@@ -60,6 +63,27 @@ jobs:
                 console.error('capacitor.config.json not found at', configPath);
                 process.exit(1);
             }
+            
+            // 1. Update strings.xml safely
+            if (fs.existsSync(stringsPath)) {
+                let xml = fs.readFileSync(stringsPath, 'utf8');
+                xml = xml.replace(/(<string name="app_name">).*?(<\/string>)/, `$1${hospitalName}$2`);
+                xml = xml.replace(/(<string name="title_activity_main">).*?(<\/string>)/, `$1${hospitalName}$2`);
+                fs.writeFileSync(stringsPath, xml);
+                console.log('Updated strings.xml');
+            } else {
+                console.log('strings.xml not found at', stringsPath);
+            }
+            
+            // 2. Update build.gradle safely
+            if (fs.existsSync(gradlePath)) {
+                let gradle = fs.readFileSync(gradlePath, 'utf8');
+                gradle = gradle.replace(/(applicationId\s+")([^"]+)(")/, `$1${applicationId}$3`);
+                fs.writeFileSync(gradlePath, gradle);
+                console.log('Updated build.gradle');
+            } else {
+                console.log('build.gradle not found at', gradlePath);
+            }
 
       - name: Download & Process Logo
         run: |
@@ -72,7 +96,10 @@ jobs:
           if [ "$LOGO_URL" != "default" ] && [ "$LOGO_URL" != "" ]; then
             echo "Downloading logo from $LOGO_URL"
             mkdir -p client/assets
-            curl -L -s "$LOGO_URL" -o client/assets/icon.png || echo "Failed to download logo. Will fallback to default if it exists."
+            curl -f -L -s "$LOGO_URL" -o client/assets/icon.png || {
+              echo "::error::Failed to download logo from URL: $LOGO_URL"
+              exit 1
+            }
           else
             echo "Using default logo"
           fi
