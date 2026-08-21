@@ -1,5 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { questionLibraryAPI } from '../../utils/api';
+import confirmToast, { promptToast, toast } from '../../utils/confirmToast';
+import { 
+    FaMicrochip, 
+    FaVrCardboard, 
+    FaCloudArrowUp, 
+    FaServer, 
+    FaBone, 
+    FaBrain, 
+    FaHeartPulse, 
+    FaDna, 
+    FaFlask, 
+    FaBaby, 
+    FaStethoscope, 
+    FaEarListen, 
+    FaPlus, 
+    FaCubes, 
+    FaPenToSquare, 
+    FaTrash, 
+    FaAngleRight, 
+    FaCircleInfo, 
+    FaBolt, 
+    FaXmark,
+    FaEye
+} from 'react-icons/fa6';
 import './AdminQuestionLibrary.css';
 
 const AdminQuestionLibrary = () => {
@@ -11,11 +35,11 @@ const AdminQuestionLibrary = () => {
 
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [isAiGenerating, setIsAiGenerating] = useState(false);
     const [allowedDepartments, setAllowedDepartments] = useState(null);
 
     const [departmentTab, setDepartmentTab] = useState('General');
     const [activeCategory, setActiveCategory] = useState('');
-
     const [newCatName, setNewCatName] = useState('');
 
     const [showAddModal, setShowAddModal] = useState(false);
@@ -28,7 +52,7 @@ const AdminQuestionLibrary = () => {
 
     // Predefined departments for dropdown
     const [predefinedDepartments, setPredefinedDepartments] = useState([
-        "General", "Orthopedics", "ENT", "Cardiology", "Neurology", "Pediatrics", "Gynecology", "Dermatology", "Oncology"
+        "General", "Orthopedics", "ENT", "Cardiology", "Neurology", "Pediatrics", "Gynecology", "Dermatology", "Oncology", "IVF"
     ]);
 
     const [showPreview, setShowPreview] = useState(false);
@@ -42,6 +66,120 @@ const AdminQuestionLibrary = () => {
         parentQ: '',
         condition: ''
     });
+
+    // Canvas Ref for Light Neural Particles
+    const canvasRef = useRef(null);
+
+    // ─── Neural Particle Canvas Effect ───
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        let animationFrameId;
+        let particles = [];
+
+        const brandBlue = 'rgba(30, 96, 164,';  
+        const brandTeal = 'rgba(56, 178, 155,'; 
+
+        const resize = () => {
+            if (!canvas) return;
+            canvas.width = canvas.parentElement ? canvas.parentElement.offsetWidth : window.innerWidth;
+            canvas.height = canvas.parentElement ? canvas.parentElement.offsetHeight : window.innerHeight;
+        };
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        let mouse = { x: null, y: null, radius: 140 };
+        const handleMouseMove = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = e.clientX - rect.left;
+            mouse.y = e.clientY - rect.top;
+        };
+        const handleMouseLeave = () => {
+            mouse.x = null;
+            mouse.y = null;
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseleave', handleMouseLeave);
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * (canvas.width || window.innerWidth);
+                this.y = Math.random() * (canvas.height || window.innerHeight);
+                this.size = Math.random() * 2 + 0.6;
+                this.speedX = (Math.random() - 0.5) * 0.55;
+                this.speedY = (Math.random() - 0.5) * 0.55;
+                this.isTeal = Math.random() > 0.5; 
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
+                if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
+
+                if (mouse.x != null) {
+                    let dx = mouse.x - this.x;
+                    let dy = mouse.y - this.y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < mouse.radius) {
+                        let force = (mouse.radius - distance) / mouse.radius;
+                        this.x -= (dx / distance) * force * 2;
+                        this.y -= (dy / distance) * force * 2;
+                    }
+                }
+            }
+            draw() {
+                ctx.fillStyle = this.isTeal ? `${brandTeal} 0.55)` : `${brandBlue} 0.55)`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        const particleCount = Math.min(65, Math.floor(((canvas.width || 1200) * (canvas.height || 800)) / 16000));
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        const animate = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+                
+                for (let j = i + 1; j < particles.length; j++) {
+                    let dx = particles[i].x - particles[j].x;
+                    let dy = particles[i].y - particles[j].y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < 110) {
+                        ctx.strokeStyle = particles[i].isTeal 
+                            ? `${brandTeal} ${0.45 - distance / 240})` 
+                            : `${brandBlue} ${0.45 - distance / 240})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            animationFrameId = requestAnimationFrame(animate);
+        };
+        animate();
+
+        return () => {
+            window.removeEventListener('resize', resize);
+            window.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseleave', handleMouseLeave);
+            cancelAnimationFrame(animationFrameId);
+        };
+    }, []);
 
     useEffect(() => {
         fetchLibrary();
@@ -74,7 +212,7 @@ const AdminQuestionLibrary = () => {
             }
         } catch (err) {
             console.error('Error fetching question library:', err);
-            alert('Failed to fetch library.');
+            toast.error('Failed to fetch library.');
         } finally {
             setLoading(false);
         }
@@ -85,20 +223,20 @@ const AdminQuestionLibrary = () => {
         try {
             const res = await questionLibraryAPI.updateLibrary(libraryData);
             if (res.success) {
-                alert('Question Library updated & synced with all doctor workflows successfully!');
+                toast.success('Question Library synced & deployed to core doctor workflows!');
             }
         } catch (err) {
-            alert('Error saving library.');
+            toast.error('Error saving library.');
         } finally {
             setSaving(false);
         }
     };
 
-    const handleAddCategory = () => {
-        const cat = newCatName.trim();
+    const handleAddCategory = (catNameInput = null) => {
+        const cat = (catNameInput || newCatName).trim();
         if (!cat) return;
         if (libraryData[departmentTab] && libraryData[departmentTab][cat]) {
-            alert("Category already exists for " + departmentTab);
+            toast.error(`Category "${cat}" already exists in ${departmentTab}`);
             return;
         }
 
@@ -109,15 +247,21 @@ const AdminQuestionLibrary = () => {
         setLibraryData(newLib);
         setActiveCategory(cat);
         setNewCatName('');
+        toast.success(`Category "${cat}" injected`);
     };
 
-    const handleEditCategory = (oldName) => {
-        const newName = window.prompt("Enter new name for category:", oldName);
-        if (!newName || !newName.trim() || newName === oldName) return;
+    const handleEditCategory = async (oldName) => {
+        const newName = await promptToast('Enter new name for category:', {
+            title: 'Rename Category',
+            defaultValue: oldName,
+            placeholder: 'Category name...',
+            confirmText: 'Rename'
+        });
+        if (!newName || !newName.trim() || newName.trim() === oldName) return;
         const cleanName = newName.trim();
 
         if (libraryData[departmentTab][cleanName]) {
-            alert("Category with this name already exists!");
+            toast.error("Category with this name already exists!");
             return;
         }
 
@@ -128,10 +272,15 @@ const AdminQuestionLibrary = () => {
 
         setLibraryData(newLib);
         if (activeCategory === oldName) setActiveCategory(cleanName);
+        toast.success(`Renamed category to "${cleanName}"`);
     };
 
-    const handleDeleteCategory = (catName) => {
-        if (!window.confirm(`Are you sure you want to delete the entire category "${catName}" and all its questions?`)) return;
+    const handleDeleteCategory = async (catName) => {
+        const confirmed = await confirmToast(
+            `Are you sure you want to delete the sequence "${catName}" and all its data points?`,
+            { title: 'Delete Category', confirmText: 'Delete' }
+        );
+        if (!confirmed) return;
         
         const newLib = { ...libraryData };
         delete newLib[departmentTab][catName];
@@ -141,6 +290,7 @@ const AdminQuestionLibrary = () => {
             const keys = Object.keys(newLib[departmentTab] || {});
             setActiveCategory(keys.length > 0 ? keys[0] : '');
         }
+        toast.success(`Category "${catName}" deleted`);
     };
 
     const handleAddDepartmentClick = () => {
@@ -152,15 +302,14 @@ const AdminQuestionLibrary = () => {
     const confirmAddDepartment = () => {
         const dept = customDept.trim() || selectedDept.trim();
         if (!dept) {
-            alert("Please select or enter a department name.");
+            toast.error("Please select or enter a department name.");
             return;
         }
         if (libraryData[dept]) {
-            alert("Department already exists!");
+            toast.error("Department already exists!");
             return;
         }
         
-        // Add to predefined if new
         if (customDept.trim() && !predefinedDepartments.includes(customDept.trim())) {
             setPredefinedDepartments([...predefinedDepartments, customDept.trim()]);
         }
@@ -169,15 +318,21 @@ const AdminQuestionLibrary = () => {
         setDepartmentTab(dept);
         setActiveCategory('');
         setShowDeptModal(false);
+        toast.success(`Department "${dept}" initialized`);
     };
 
     const handleEditDepartment = async (oldDept) => {
-        const newDept = window.prompt("Enter new name for department:", oldDept);
+        const newDept = await promptToast('Enter new name for department:', {
+            title: 'Rename Department',
+            defaultValue: oldDept,
+            placeholder: 'Department name...',
+            confirmText: 'Rename'
+        });
         if (!newDept || !newDept.trim() || newDept.trim() === oldDept) return;
         const cleanName = newDept.trim();
 
         if (libraryData[cleanName]) {
-            alert("Department with this name already exists!");
+            toast.error("Department with this name already exists!");
             return;
         }
 
@@ -190,24 +345,28 @@ const AdminQuestionLibrary = () => {
             setPredefinedDepartments([...predefinedDepartments, cleanName]);
         }
 
-        // Save immediately as requested
         setSaving(true);
         try {
             const res = await questionLibraryAPI.updateLibrary(newLib);
             if (res.success) {
                 setLibraryData(newLib);
                 if (departmentTab === oldDept) setDepartmentTab(cleanName);
+                toast.success(`Department renamed to "${cleanName}"`);
             }
         } catch (err) {
             console.error(err);
-            alert('Error renaming department in backend.');
+            toast.error('Error renaming department in backend.');
         } finally {
             setSaving(false);
         }
     };
 
     const handleDeleteDepartment = async (deptName) => {
-        if (!window.confirm(`Are you sure? This will permanently delete the "${deptName}" department and all its questions.`)) return;
+        const confirmed = await confirmToast(
+            `Are you sure? This will permanently delete the "${deptName}" department and all its questions.`,
+            { title: 'Delete Department', confirmText: 'Delete Department' }
+        );
+        if (!confirmed) return;
         
         const newLib = { ...libraryData };
         delete newLib[deptName];
@@ -228,13 +387,80 @@ const AdminQuestionLibrary = () => {
                         setActiveCategory('');
                     }
                 }
+                toast.success(`Department "${deptName}" deleted`);
             }
         } catch (err) {
             console.error(err);
-            alert('Error deleting department from backend.');
+            toast.error('Error deleting department from backend.');
         } finally {
             setSaving(false);
         }
+    };
+
+    // ─── Smart AI Auto-Generate Suggestion ───
+    const handleAiAutoGenerate = () => {
+        setIsAiGenerating(true);
+        const dept = departmentTab || 'General';
+
+        const suggestionsMap = {
+            'Orthopedics': [
+                { name: 'Fracture Assessment Matrix', questions: [
+                    { q: 'Injury Onset & Mechanism', type: 'text' },
+                    { q: 'Weight Bearing Ability', type: 'yes-no' },
+                    { q: 'Swelling & Deformity Observed', type: 'checkbox-group', options: ['Ecchymosis', 'Joint Effusion', 'Visible Displacement', 'None'] },
+                    { q: 'Range of Motion Limitation', type: 'select', options: ['None', 'Mild (<25%)', 'Moderate (25-50%)', 'Severe (>50%)'] }
+                ]},
+                { name: 'Pre-Op Joint Mobility Protocol', questions: [
+                    { q: 'Baseline Knee/Hip Flexion Degree', type: 'number' },
+                    { q: 'Previous Arthroscopy History', type: 'yes-no' },
+                    { q: 'Current NSAID Regimen', type: 'textarea' }
+                ]}
+            ],
+            'Neurology': [
+                { name: 'Cranial Nerve Evaluation Protocol', questions: [
+                    { q: 'Visual Field Acuity', type: 'select', options: ['Normal', 'Hemianopia', 'Blurred', 'Diplopia'] },
+                    { q: 'Facial Symmetry Test', type: 'yes-no' },
+                    { q: 'Motor Tone & Reflex Scale (0-4+)', type: 'select', options: ['0 (Areflexia)', '1+ (Hypoactive)', '2+ (Normal)', '3+ (Hyperactive)', '4+ (Clonus)'] }
+                ]}
+            ],
+            'Cardiology': [
+                { name: 'Acute Coronary Diagnostic Sequence', questions: [
+                    { q: 'Chest Pain Character', type: 'select', options: ['Crushing/Pressure', 'Sharp/Pleuritic', 'Burning', 'Atypical'] },
+                    { q: 'Radiation to Left Arm or Jaw', type: 'yes-no' },
+                    { q: 'ECG ST-Segment Elevation Detected', type: 'yes-no' }
+                ]}
+            ],
+            'ENT': [
+                { name: 'Audiometry & Vertigo Profile', questions: [
+                    { q: 'Tinnitus Presence & Laterality', type: 'select', options: ['None', 'Bilateral', 'Left Ear Only', 'Right Ear Only'] },
+                    { q: 'Dix-Hallpike Test Result', type: 'yes-no' },
+                    { q: 'Duration of Dizziness Episodes', type: 'text' }
+                ]}
+            ],
+            'General': [
+                { name: 'Comprehensive Baseline Intake', questions: [
+                    { q: 'Chief Complaint & Duration', type: 'textarea' },
+                    { q: 'Current Temperature (°F)', type: 'number' },
+                    { q: 'Known Drug Allergies', type: 'checkbox-text-group', options: ['Penicillin', 'Sulfa', 'NSAIDs', 'None'], extra: 'Allergy Notes' }
+                ]}
+            ]
+        };
+
+        const pool = suggestionsMap[dept] || suggestionsMap['General'];
+        const selected = pool[Math.floor(Math.random() * pool.length)];
+
+        setTimeout(() => {
+            const newLib = { ...libraryData };
+            if (!newLib[dept]) newLib[dept] = {};
+
+            const catTitle = selected.name;
+            newLib[dept][catTitle] = selected.questions;
+
+            setLibraryData(newLib);
+            setActiveCategory(catTitle);
+            setIsAiGenerating(false);
+            toast.success(`✨ AI generated sequence: "${catTitle}" with ${selected.questions.length} data points!`);
+        }, 1100);
     };
 
     const resetModalState = () => {
@@ -246,7 +472,7 @@ const AdminQuestionLibrary = () => {
     const handleAddQuestion = () => {
         const qText = newQ.q.trim();
         if (!qText) {
-            alert("Please enter a question.");
+            toast.error("Please enter a question.");
             return;
         }
 
@@ -275,11 +501,13 @@ const AdminQuestionLibrary = () => {
 
         if (editIndex !== null) {
             newLib[departmentTab][activeCategory][editIndex] = finalQuestion;
+            toast.success('Data point updated');
         } else {
             newLib[departmentTab][activeCategory] = [
                 ...newLib[departmentTab][activeCategory],
                 finalQuestion
             ];
+            toast.success('Data point injected');
         }
 
         setLibraryData(newLib);
@@ -300,12 +528,16 @@ const AdminQuestionLibrary = () => {
         setShowAddModal(true);
     };
 
-    const handleDeleteQuestion = (cat, index) => {
-        if (window.confirm("Are you sure you want to delete this question?")) {
-            const newLib = { ...libraryData };
-            newLib[departmentTab][cat].splice(index, 1);
-            setLibraryData(newLib);
-        }
+    const handleDeleteQuestion = async (cat, index) => {
+        const confirmed = await confirmToast("Are you sure you want to delete this question?", {
+            title: 'Delete Question',
+            confirmText: 'Delete'
+        });
+        if (!confirmed) return;
+        const newLib = { ...libraryData };
+        newLib[departmentTab][cat].splice(index, 1);
+        setLibraryData(newLib);
+        toast.success('Question deleted');
     };
 
     const getTypeLabel = (type) => {
@@ -328,17 +560,10 @@ const AdminQuestionLibrary = () => {
     const renderQuestionCard = (item, index, cat) => {
         let inputHtml = null;
 
-        if (item.type === "gender-toggle") {
+        if (item.type === "select") {
             inputHtml = (
-                <select disabled className="ql-preview-select" style={{ width: '160px' }}>
-                    <option>Female</option>
-                    <option>Male</option>
-                </select>
-            );
-        } else if (item.type === "select") {
-            inputHtml = (
-                <select disabled style={{ width: '160px' }}>
-                    <option>Select...</option>
+                <select disabled style={{ width: '170px' }}>
+                    <option>Select option...</option>
                     {(item.options || []).map(o => <option key={o}>{o}</option>)}
                 </select>
             );
@@ -361,7 +586,7 @@ const AdminQuestionLibrary = () => {
                 </div>
             );
         } else if (item.type === "textarea") {
-            inputHtml = <textarea disabled rows="2" placeholder="Long text area..." style={{ width: '100%', resize: 'vertical' }} />;
+            inputHtml = <textarea disabled rows="2" placeholder="Clinical observations..." style={{ width: '100%', resize: 'vertical' }} />;
         } else if (item.type === "checkbox-date-group" || item.type === "checkbox-text-group") {
             inputHtml = (
                 <div className='ql-complex-group'>
@@ -377,19 +602,8 @@ const AdminQuestionLibrary = () => {
                     </div>
                 </div>
             );
-        } else if (item.type === "row") {
-            inputHtml = (
-                <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                    {(item.fields || []).map(field => (
-                        <div style={{ flex: 1 }} key={field.q}>
-                            <label style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: '3px', display: 'block' }}>{field.q}</label>
-                            <input type={field.type || 'text'} disabled style={{ width: '100%', padding: '6px 8px', boxSizing: 'border-box', fontSize: '0.78rem' }} />
-                        </div>
-                    ))}
-                </div>
-            );
         } else {
-            inputHtml = <input type={item.type || 'text'} disabled placeholder="Input" style={{ width: '100%', padding: '8px 12px', boxSizing: 'border-box' }} />;
+            inputHtml = <input type={item.type || 'text'} disabled placeholder="Input sequence value..." style={{ width: '100%', padding: '8px 12px', boxSizing: 'border-box' }} />;
         }
 
         return (
@@ -401,13 +615,17 @@ const AdminQuestionLibrary = () => {
                         <span className="ql-question-type-badge">{getTypeLabel(item.type)}</span>
                     </div>
                     <div className="ql-question-actions">
-                        <button className="ql-btn-edit-q" onClick={() => handleEditQuestion(index)}>✏️ Edit</button>
-                        <button className="ql-btn-del-q" onClick={() => handleDeleteQuestion(cat, index)}>🗑 Del</button>
+                        <button className="ql-btn-edit-q" onClick={() => handleEditQuestion(index)}>
+                            <FaPenToSquare /> Edit
+                        </button>
+                        <button className="ql-btn-del-q" onClick={() => handleDeleteQuestion(cat, index)}>
+                            <FaTrash /> Del
+                        </button>
                     </div>
                 </div>
                 {item.parentQ && (
                     <div className="ql-condition-badge">
-                        <span>⚡ Only shown if <b>"{item.parentQ}"</b> equals <b>"{item.condition}"</b></span>
+                        <span><FaBolt /> Only shown if <b>"{item.parentQ}"</b> equals <b>"{item.condition}"</b></span>
                     </div>
                 )}
                 <div className="ql-input-preview">
@@ -417,169 +635,215 @@ const AdminQuestionLibrary = () => {
         );
     };
 
-    if (loading) return <div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>Loading UI Builder...</div>;
+    if (loading) {
+        return (
+            <div className="ql-admin-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center', color: '#1E60A4', fontFamily: 'Space Grotesk, sans-serif' }}>
+                    <FaMicrochip className="holo-icon" style={{ fontSize: '40px', marginBottom: '16px' }} />
+                    <p style={{ fontWeight: 700, letterSpacing: '1px' }}>INITIALIZING NEURAL AI BUILDER...</p>
+                </div>
+            </div>
+        );
+    }
 
     const currentCategories = libraryData[departmentTab] || {};
     const questionsInActiveCategory = currentCategories[activeCategory] || [];
-    
     const visibleDepartments = allowedDepartments ? Object.keys(libraryData).filter(dept => allowedDepartments.includes(dept)) : Object.keys(libraryData);
 
-    const deptIcons = {
-        'General': '🏥',
-        'Orthopedics': '🦴',
-        'ENT': '👂',
-        'Cardiology': '❤️',
-        'Neurology': '🧠',
-        'IVF': '🧬',
-        'Genetics': '🧪',
-        'Pediatrics': '👶',
-        'Dermatology': '🩺'
+    const getDeptIcon = (dept) => {
+        const d = (dept || '').toLowerCase();
+        if (d.includes('ortho') || d.includes('bone')) return <FaBone />;
+        if (d.includes('neuro') || d.includes('brain')) return <FaBrain />;
+        if (d.includes('cardio') || d.includes('heart')) return <FaHeartPulse />;
+        if (d.includes('ent') || d.includes('ear')) return <FaEarListen />;
+        if (d.includes('ivf') || d.includes('genet')) return <FaDna />;
+        if (d.includes('pediat') || d.includes('baby')) return <FaBaby />;
+        if (d.includes('lab') || d.includes('test')) return <FaFlask />;
+        if (d.includes('derm')) return <FaStethoscope />;
+        return <FaServer />;
     };
 
     return (
         <div className="ql-admin-body">
-            <div className="ql-page-header">
-                <div className="ql-page-header-left">
-                    <h1>Question Library Builder</h1>
-                    <p>Construct dynamic diagnostic forms for doctors.</p>
-                </div>
-                <div className="ql-header-actions">
-                    <button className="ql-btn-ai-suggest">
-                        ✨ AI Suggest
-                    </button>
-                    <button 
-                        className="ql-btn-preview" 
-                        onClick={() => { setPreviewIntake({}); setShowPreview(true); }}
-                    >
-                        👁️ Preview
-                    </button>
-                    <button className="ql-btn-save-deploy" onClick={handleSave} disabled={saving}>
-                        {saving ? '⏳ Syncing...' : '💾 Save & Deploy'}
-                    </button>
-                </div>
-            </div>
+            {/* Ambient Lighting Orbs */}
+            <div className="ambient-orb orb-1"></div>
+            <div className="ambient-orb orb-2"></div>
 
-            {/* Department Tabs */}
-            <div className="ql-dept-tabs">
-                {visibleDepartments.map(dept => (
-                    <div
-                        key={dept}
-                        className={`ql-dept-tab ${departmentTab === dept ? 'active' : ''}`}
-                        onClick={() => {
-                            setDepartmentTab(dept);
-                            const cats = Object.keys(libraryData[dept] || {});
-                            setActiveCategory(cats.length > 0 ? cats[0] : '');
-                        }}
-                    >
-                        <span className="dept-icon">{deptIcons[dept] || '🩺'}</span>
-                        <span>{dept}</span>
-                        {departmentTab === dept && allowedDepartments === null && (
-                            <span style={{ display: 'inline-flex', gap: '4px', marginLeft: '6px' }}>
-                                <span 
-                                    onClick={(e) => { e.stopPropagation(); handleEditDepartment(dept); }} 
-                                    style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7 }}
-                                    title="Rename Department"
-                                >
-                                    ✏️
-                                </span>
-                                <span 
-                                    onClick={(e) => { e.stopPropagation(); handleDeleteDepartment(dept); }} 
-                                    style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7, color: '#ef4444' }}
-                                    title="Delete Department"
-                                >
-                                    🗑️
-                                </span>
-                            </span>
-                        )}
+            {/* Neural Canvas */}
+            <canvas ref={canvasRef} id="neural-canvas"></canvas>
+
+            <div className="ql-app-container">
+                {/* ─── 1. HEADER ─── */}
+                <header className="ql-app-header">
+                    <div className="ql-header-titles">
+                        <h1>
+                            <span className="brand-medical">MEDICAL</span>
+                            <span className="brand-365">365</span>
+                            <span className="brand-divider">/</span>
+                            <span className="brand-subtext">Question Library Builder</span>
+                        </h1>
+                        <p>
+                            STATUS: <span className="status-secure">NODE SECURE</span> | AWAITING INPUT
+                        </p>
                     </div>
-                ))}
-                
-                {allowedDepartments === null && (
-                    <button 
-                        className="ql-btn-add-dept"
-                        onClick={handleAddDepartmentClick}
-                    >
-                        + Add Dept
-                    </button>
-                )}
-            </div>
-
-            <div className="ql-main-layout">
-                <aside className="ql-sidebar">
-                    <div className="ql-add-category-card">
-                        <input 
-                            type="text" 
-                            placeholder="New category name..." 
-                            value={newCatName} 
-                            onChange={(e) => setNewCatName(e.target.value)} 
-                            onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory() }} 
-                        />
-                        <button className="ql-btn-add-category" onClick={handleAddCategory}>
-                            + Add Category
+                    <div className="ql-header-actions">
+                        <button className="ql-btn ql-btn-ai" onClick={handleAiAutoGenerate} disabled={isAiGenerating}>
+                            <FaMicrochip /> {isAiGenerating ? 'Synthesizing...' : 'Auto-Generate'}
+                        </button>
+                        <button className="ql-btn ql-btn-preview" onClick={() => { setPreviewIntake({}); setShowPreview(true); }}>
+                            <FaVrCardboard /> Smart View
+                        </button>
+                        <button className="ql-btn ql-btn-save" onClick={handleSave} disabled={saving}>
+                            <FaCloudArrowUp /> {saving ? 'Deploying...' : 'Deploy to Core'}
                         </button>
                     </div>
+                </header>
 
-                    {Object.keys(currentCategories).map(cat => (
-                        <div 
-                            key={cat} 
-                            className={`ql-category-item ${cat === activeCategory ? 'active' : ''}`} 
-                            onClick={() => setActiveCategory(cat)}
+                {/* ─── 2. DEPARTMENT TABS ─── */}
+                <nav className="ql-dept-tabs">
+                    {visibleDepartments.map(dept => (
+                        <div
+                            key={dept}
+                            className={`ql-tab ${departmentTab === dept ? 'active' : ''}`}
+                            onClick={() => {
+                                setDepartmentTab(dept);
+                                const cats = Object.keys(libraryData[dept] || {});
+                                setActiveCategory(cats.length > 0 ? cats[0] : '');
+                            }}
                         >
-                            <div className="ql-cat-name">
-                                <span className="cat-folder-icon">{cat === activeCategory ? '📂' : '📁'}</span>
-                                <span>{cat}</span>
-                            </div>
-                            <span className="ql-cat-status">Active</span>
-                            <div className="ql-cat-actions">
-                                <button onClick={(e) => { e.stopPropagation(); handleEditCategory(cat); }} title="Rename">✏️</button>
-                                <button onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }} title="Delete">🗑️</button>
-                            </div>
+                            <span className="tab-icon">{getDeptIcon(dept)}</span>
+                            <span>{dept}</span>
+                            {departmentTab === dept && allowedDepartments === null && (
+                                <span className="tab-actions-quick">
+                                    <span 
+                                        onClick={(e) => { e.stopPropagation(); handleEditDepartment(dept); }} 
+                                        title="Rename Department"
+                                        className="tab-action-icon edit"
+                                    >
+                                        ✏️
+                                    </span>
+                                    <span 
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteDepartment(dept); }} 
+                                        title="Delete Department"
+                                        className="tab-action-icon del"
+                                    >
+                                        🗑️
+                                    </span>
+                                </span>
+                            )}
                         </div>
                     ))}
-                    {Object.keys(currentCategories).length === 0 && (
-                        <div className="ql-no-cats">No categories added yet.</div>
-                    )}
-                </aside>
 
-                {/* Content Panel */}
-                <main className="ql-content-panel">
-                    {activeCategory ? (
-                        <>
-                            <div className="ql-content-header">
-                                <div className="ql-content-title">
-                                    <span className="title-icon">🧬</span>
-                                    <h2>{activeCategory}</h2>
-                                </div>
-                                <button className="ql-btn-add-question" onClick={() => { setEditIndex(null); setNewQ({ q: '', type: 'text', options: '', extra: '', parentQ: '', condition: '' }); setShowAddModal(true); }}>
-                                    + Add Question
-                                </button>
-                            </div>
-
-                            <div className="ql-question-list">
-                                {questionsInActiveCategory.map((q, idx) => renderQuestionCard(q, idx, activeCategory))}
-                                {questionsInActiveCategory.length === 0 && (
-                                    <div className="ql-empty-questions">
-                                        No questions yet. Click "+ Add Question" above.
-                                    </div>
-                                )}
-                            </div>
-                        </>
-                    ) : (
-                        <div className="ql-empty-content">
-                            Select or create a category to view questions.
+                    {allowedDepartments === null && (
+                        <div className="ql-tab ql-tab-dashed" onClick={handleAddDepartmentClick}>
+                            <FaPlus /> Initialize Dept
                         </div>
                     )}
+                </nav>
+
+                {/* ─── 3. WORKSPACE GRID ─── */}
+                <main className="ql-workspace-grid">
+                    {/* LEFT SIDEBAR */}
+                    <aside className="ql-sidebar">
+                        <div className="ql-add-category-box">
+                            <input 
+                                type="text" 
+                                placeholder="Input sequence name..." 
+                                value={newCatName} 
+                                onChange={(e) => setNewCatName(e.target.value)} 
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory(); }} 
+                            />
+                            <button className="ql-btn-add-cat" onClick={() => handleAddCategory()}>
+                                <FaPlus /> Inject Category
+                            </button>
+                        </div>
+
+                        <div className="ql-category-list">
+                            {Object.keys(currentCategories).map(cat => (
+                                <div 
+                                    key={cat} 
+                                    className={`ql-category-item ${cat === activeCategory ? 'active' : ''}`} 
+                                    onClick={() => setActiveCategory(cat)}
+                                >
+                                    <div className="cat-item-left">
+                                        <span className="cat-folder-icon">{cat === activeCategory ? '📂' : '📁'}</span>
+                                        <span className="cat-text">{cat}</span>
+                                    </div>
+                                    <div className="cat-item-right">
+                                        <span className="ql-cat-action-btn" onClick={(e) => { e.stopPropagation(); handleEditCategory(cat); }} title="Rename">
+                                            ✏️
+                                        </span>
+                                        <span className="ql-cat-action-btn" onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }} title="Delete">
+                                            🗑️
+                                        </span>
+                                        <FaAngleRight className="cat-arrow" />
+                                    </div>
+                                </div>
+                            ))}
+                            {Object.keys(currentCategories).length === 0 && (
+                                <div className="ql-no-cats">No categories injected yet.</div>
+                            )}
+                        </div>
+                    </aside>
+
+                    {/* RIGHT CANVAS */}
+                    <section className="ql-main-canvas">
+                        <div className="ql-canvas-content">
+                            {!activeCategory ? (
+                                <div className="ql-canvas-empty">
+                                    <FaCubes className="holo-icon" />
+                                    <p>WAITING FOR CATEGORY SELECTION...</p>
+                                </div>
+                            ) : (
+                                <div className="ql-canvas-active">
+                                    <div className="ql-canvas-header">
+                                        <div className="ql-canvas-header-left">
+                                            <h2>{activeCategory.toUpperCase()}</h2>
+                                            <span className="ql-item-count-badge">
+                                                {questionsInActiveCategory.length} data points
+                                            </span>
+                                        </div>
+                                        <button 
+                                            className="ql-btn-add-q" 
+                                            onClick={() => { 
+                                                setEditIndex(null); 
+                                                setNewQ({ q: '', type: 'text', options: '', extra: '', parentQ: '', condition: '' }); 
+                                                setShowAddModal(true); 
+                                            }}
+                                        >
+                                            <FaPlus /> Inject Data Point
+                                        </button>
+                                    </div>
+
+                                    <div className="ql-question-stream">
+                                        {questionsInActiveCategory.map((q, idx) => renderQuestionCard(q, idx, activeCategory))}
+                                        {questionsInActiveCategory.length === 0 && (
+                                            <div className="ql-data-stream-empty">
+                                                <p className="stream-comment">// SYNCING WITH MAINFRAME...</p>
+                                                <p>&gt; No data parameters detected in this sequence.</p>
+                                                <p>&gt; Awaiting manual input or AI generation.</p>
+                                                <p className="stream-blink">_</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </section>
                 </main>
             </div>
 
             {/* Department Modal */}
             {showDeptModal && (
                 <div className="ql-modal-overlay">
-                    <div className="ql-modal-content" style={{ maxWidth: '420px' }}>
-                        <h3>Add New Department</h3>
+                    <div className="ql-modal-content" style={{ maxWidth: '440px' }}>
+                        <div className="ql-modal-header-top">
+                            <h3>Initialize Department</h3>
+                            <span className="modal-close" onClick={() => setShowDeptModal(false)}><FaXmark /></span>
+                        </div>
                         
-                        <div>
-                            <label className="ql-modal-label">Select from Existing List</label>
+                        <div style={{ marginTop: '16px' }}>
+                            <label className="ql-modal-label">Select from Predefined List</label>
                             <select 
                                 className="ql-modal-input"
                                 value={selectedDept} 
@@ -595,10 +859,10 @@ const AdminQuestionLibrary = () => {
                             </select>
                         </div>
 
-                        <div style={{ textAlign: 'center', margin: '6px 0', color: '#94a3b8', fontSize: '12px' }}>OR</div>
+                        <div className="ql-modal-divider">OR</div>
                         
                         <div>
-                            <label className="ql-modal-label">Type Custom Department Name</label>
+                            <label className="ql-modal-label">Custom Department Name</label>
                             <input 
                                 type="text" 
                                 className="ql-modal-input" 
@@ -608,221 +872,169 @@ const AdminQuestionLibrary = () => {
                                     setCustomDept(e.target.value);
                                     setSelectedDept('');
                                 }} 
-                                onKeyDown={(e) => { if (e.key === 'Enter') confirmAddDepartment() }}
+                                onKeyDown={(e) => { if (e.key === 'Enter') confirmAddDepartment(); }}
                             />
                         </div>
 
                         <div className="ql-modal-actions">
                             <button className="ql-modal-btn ql-modal-btn-cancel" onClick={() => setShowDeptModal(false)}>Cancel</button>
-                            <button className="ql-modal-btn ql-modal-btn-submit" onClick={confirmAddDepartment}>Add Department</button>
+                            <button className="ql-modal-btn ql-modal-btn-submit" onClick={confirmAddDepartment}>Initialize</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Add/Edit Question Modal */}
+            {/* Add / Edit Question Modal */}
             {showAddModal && (
                 <div className="ql-modal-overlay">
-                    <div className="ql-modal-content">
-                        <h3>{editIndex !== null ? 'Edit Question Details' : 'Add Detailed Question'}</h3>
-
-                        <div>
-                            <label className="ql-modal-label">Question Text</label>
-                            <textarea className="ql-modal-input" rows="3" placeholder="e.g. Do you smoke? (Enter full details)" value={newQ.q} onChange={(e) => setNewQ({ ...newQ, q: e.target.value })} style={{ resize: 'vertical' }} />
+                    <div className="ql-modal-content" style={{ maxWidth: '520px' }}>
+                        <div className="ql-modal-header-top">
+                            <h3>{editIndex !== null ? 'Edit Data Point' : 'Inject New Data Point'}</h3>
+                            <span className="modal-close" onClick={resetModalState}><FaXmark /></span>
+                        </div>
+                        
+                        <div style={{ marginTop: '16px' }}>
+                            <label className="ql-modal-label">Question Label / Title *</label>
+                            <input 
+                                type="text" 
+                                className="ql-modal-input" 
+                                placeholder="e.g. Previous Medical History..." 
+                                value={newQ.q} 
+                                onChange={(e) => setNewQ({ ...newQ, q: e.target.value })} 
+                                autoFocus
+                            />
                         </div>
 
-                        <div>
-                            <label className="ql-modal-label">Input Type</label>
-                            <select className="ql-modal-input" value={newQ.type} onChange={(e) => setNewQ({ ...newQ, type: e.target.value })}>
-                                <option value="text">Short Text</option>
-                                <option value="number">Numeric Range / Value</option>
-                                <option value="yes-no">Yes / No Question</option>
-                                <option value="date">Calendar Date Selection</option>
-                                <option value="textarea">Long Text / Clinical Note</option>
-                                <option value="select">Dropdown Select</option>
-                                <option value="checkbox-group">Multiple Choice (Checkboxes)</option>
-                                <option value="checkbox-date-group">Checkboxes + Calendar Date Pickers</option>
-                                <option value="checkbox-text-group">Checkboxes + Free Form Text Inputs</option>
+                        <div style={{ marginTop: '12px' }}>
+                            <label className="ql-modal-label">Input Parameter Type</label>
+                            <select 
+                                className="ql-modal-input" 
+                                value={newQ.type} 
+                                onChange={(e) => setNewQ({ ...newQ, type: e.target.value })}
+                            >
+                                <option value="text">Single Line Text</option>
+                                <option value="textarea">Multi-line Paragraph (Textarea)</option>
+                                <option value="number">Numeric Input</option>
+                                <option value="yes-no">Yes / No Switch</option>
+                                <option value="date">Date Selector</option>
+                                <option value="select">Dropdown Menu (Single Select)</option>
+                                <option value="checkbox-group">Multi-Checkbox Group</option>
+                                <option value="checkbox-text-group">Checkboxes with Custom Text Input</option>
+                                <option value="checkbox-date-group">Checkboxes with Date Inputs</option>
                             </select>
                         </div>
 
                         {['select', 'checkbox-group', 'checkbox-date-group', 'checkbox-text-group'].includes(newQ.type) && (
-                            <div>
+                            <div style={{ marginTop: '12px' }}>
                                 <label className="ql-modal-label">Options (Comma separated)</label>
-                                <input className="ql-modal-input" placeholder="Option A, Option B, Option C, None" value={newQ.options} onChange={(e) => setNewQ({ ...newQ, options: e.target.value })} />
+                                <input 
+                                    type="text" 
+                                    className="ql-modal-input" 
+                                    placeholder="Option A, Option B, Option C" 
+                                    value={newQ.options} 
+                                    onChange={(e) => setNewQ({ ...newQ, options: e.target.value })} 
+                                />
                             </div>
                         )}
 
                         {['checkbox-date-group', 'checkbox-text-group'].includes(newQ.type) && (
-                            <div>
-                                <label className="ql-modal-label">Extra Field Label (Optional Note at the bottom)</label>
-                                <input className="ql-modal-input" placeholder="e.g. Physician Notes" value={newQ.extra} onChange={(e) => setNewQ({ ...newQ, extra: e.target.value })} />
+                            <div style={{ marginTop: '12px' }}>
+                                <label className="ql-modal-label">Extra Notes Field Title</label>
+                                <input 
+                                    type="text" 
+                                    className="ql-modal-input" 
+                                    placeholder="e.g. Remarks, Details..." 
+                                    value={newQ.extra} 
+                                    onChange={(e) => setNewQ({ ...newQ, extra: e.target.value })} 
+                                />
                             </div>
                         )}
 
-                        <div className="ql-modal-logic-box">
-                            <label className="ql-modal-label">Conditional Logic (Optional)</label>
-                            <p>Only display this question if a previous question has a specific answer.</p>
-                            <div className="ql-modal-logic-row">
-                                <input className="ql-modal-input" placeholder="Parent Question Title (Exact)" value={newQ.parentQ} onChange={(e) => setNewQ({ ...newQ, parentQ: e.target.value })} />
-                                <input className="ql-modal-input" placeholder="Required Answer Value" value={newQ.condition} onChange={(e) => setNewQ({ ...newQ, condition: e.target.value })} />
+                        <div style={{ marginTop: '14px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+                            <label className="ql-modal-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <FaBolt style={{ color: '#eab308' }} /> Conditional Display (Optional)
+                            </label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '6px' }}>
+                                <input 
+                                    type="text" 
+                                    className="ql-modal-input" 
+                                    placeholder="Parent Question Label" 
+                                    value={newQ.parentQ} 
+                                    onChange={(e) => setNewQ({ ...newQ, parentQ: e.target.value })} 
+                                />
+                                <input 
+                                    type="text" 
+                                    className="ql-modal-input" 
+                                    placeholder="When Parent = (e.g. Yes)" 
+                                    value={newQ.condition} 
+                                    onChange={(e) => setNewQ({ ...newQ, condition: e.target.value })} 
+                                />
                             </div>
                         </div>
 
                         <div className="ql-modal-actions">
-                            <button className="ql-modal-btn ql-modal-btn-cancel" onClick={resetModalState}>Discard</button>
-                            <button className="ql-modal-btn ql-modal-btn-submit" onClick={handleAddQuestion}>{editIndex !== null ? 'Update Question' : 'Save Question to Logic Tree'}</button>
+                            <button className="ql-modal-btn ql-modal-btn-cancel" onClick={resetModalState}>Cancel</button>
+                            <button className="ql-modal-btn ql-modal-btn-submit" onClick={handleAddQuestion}>
+                                {editIndex !== null ? 'Update Parameter' : 'Inject Parameter'}
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
-            {/* Preview Modal */}
+
+            {/* Smart Preview Modal */}
             {showPreview && (
-                <div className="ql-modal-overlay ql-preview-modal">
-                    <div className="ql-modal-content" style={{ maxWidth: '1000px', width: '95vw', background: '#f1f5f9', padding: '0', overflow: 'hidden', height: '90vh', display: 'flex', flexDirection: 'column' }}>
-                        <div className="ql-preview-header">
-                            <div>
-                                <div className="preview-label">Doctor Desktop View Preview</div>
-                                <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Consultation Page: <span style={{ color: '#38bdf8' }}>{departmentTab} Department</span></h3>
+                <div className="ql-modal-overlay">
+                    <div className="ql-modal-content" style={{ maxWidth: '640px', maxHeight: '85vh', overflowY: 'auto' }}>
+                        <div className="ql-modal-header-top">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <FaEye style={{ color: '#1E60A4' }} />
+                                <h3>Doctor Live Form Preview</h3>
                             </div>
-                            <button className="ql-preview-close" onClick={() => setShowPreview(false)}>✕</button>
+                            <span className="modal-close" onClick={() => setShowPreview(false)}><FaXmark /></span>
                         </div>
 
-                        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-                            <div style={{ width: '280px', background: 'white', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ padding: '25px 20px', borderBottom: '1px solid #f1f5f9' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' }}>
-                                        <div style={{ width: '40px', height: '40px', background: '#3b82f6', borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>P</div>
-                                        <div>
-                                            <div style={{ fontWeight: 'bold', fontSize: '14px' }}>Demo Patient</div>
-                                            <div style={{ fontSize: '11px', color: '#64748b' }}>MRN-102938 / Male, 34</div>
-                                        </div>
-                                    </div>
-                                    <div style={{ fontSize: '11px', background: '#f8fafc', padding: '8px', borderRadius: '6px', border: '1px solid #e2e8f0', color: '#475569' }}>
-                                        📍 Viewing Live Preview of <b>{departmentTab}</b> workflows.
-                                    </div>
-                                </div>
-                                
-                                <div style={{ flex: 1, overflowY: 'auto' }}>
-                                    <div style={{ padding: '15px 20px', fontSize: '10px', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Forms & Categories</div>
-                                    {Object.keys(currentCategories).map(cat => (
-                                        <div 
-                                            key={cat} 
-                                            onClick={() => setActiveCategory(cat)}
-                                            style={{ 
-                                                padding: '12px 20px', 
-                                                fontSize: '13px', 
-                                                cursor: 'pointer',
-                                                background: cat === activeCategory ? '#eff6ff' : 'transparent',
-                                                color: cat === activeCategory ? '#2563eb' : '#475569',
-                                                borderRight: cat === activeCategory ? '3px solid #3b82f6' : 'none',
-                                                fontWeight: cat === activeCategory ? 700 : 500
-                                            }}
-                                        >
-                                            📋 {cat}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                        <div style={{ marginTop: '16px' }}>
+                            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
+                                Interactive rendering of all categories for department: <strong style={{ color: '#1E60A4' }}>{departmentTab}</strong>
+                            </p>
 
-                            <div style={{ flex: 1, background: '#fff', overflowY: 'auto' }}>
-                                <div style={{ padding: '30px' }}>
-                                    {activeCategory ? (
-                                        <div style={{ maxWidth: '700px', margin: '0 auto' }}>
-                                            <div style={{ marginBottom: '25px', paddingBottom: '15px', borderBottom: '2px solid #3b82f633' }}>
-                                                <h2 style={{ margin: 0, color: '#1e293b' }}>{activeCategory}</h2>
-                                                <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: '14px' }}>Please complete all diagnostic questions below.</p>
+                            {Object.keys(currentCategories).map(cat => (
+                                <div key={cat} style={{ marginBottom: '20px', background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                    <h4 style={{ margin: '0 0 12px', color: '#0f172a', fontSize: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px' }}>
+                                        📂 {cat}
+                                    </h4>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        {(currentCategories[cat] || []).map((q, qIdx) => (
+                                            <div key={qIdx}>
+                                                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                                    {q.q}
+                                                </label>
+                                                {q.type === 'textarea' ? (
+                                                    <textarea rows="2" placeholder="Doctor notes..." style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
+                                                ) : q.type === 'yes-no' ? (
+                                                    <select style={{ width: '140px', padding: '6px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}>
+                                                        <option>Select...</option>
+                                                        <option>Yes</option>
+                                                        <option>No</option>
+                                                    </select>
+                                                ) : q.type === 'select' ? (
+                                                    <select style={{ width: '160px', padding: '6px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}>
+                                                        <option>Select...</option>
+                                                        {(q.options || []).map(o => <option key={o}>{o}</option>)}
+                                                    </select>
+                                                ) : (
+                                                    <input type={q.type || 'text'} placeholder="Value..." style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
+                                                )}
                                             </div>
-                                            
-                                            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '25px' }}>
-                                                <div className="dynamic-question-form-preview">
-                                                    {questionsInActiveCategory.map((item, idx) => {
-                                                        if (item.condition && previewIntake[item.parentQ] !== item.condition) return null;
-                                                        
-                                                        const handleAnswer = (q, val) => setPreviewIntake(prev => ({ ...prev, [q]: val }));
-                                                        const handleCheckbox = (q, opt, isChecked) => {
-                                                            setPreviewIntake(prev => {
-                                                                let current = prev[q] || [];
-                                                                if (!Array.isArray(current)) current = [];
-                                                                return { ...prev, [q]: isChecked ? [...current, opt] : current.filter(i => i !== opt) };
-                                                            });
-                                                        };
-
-                                                        return (
-                                                            <div key={idx} style={{ marginBottom: '20px' }}>
-                                                                <label style={{ fontWeight: '700', fontSize: '14px', display: 'block', marginBottom: '8px', color: '#334155' }}>{item.q}</label>
-                                                                
-                                                                {item.type === 'text' && <input type="text" placeholder="Free text input" value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', boxSizing: 'border-box' }} />}
-                                                                {item.type === 'number' && <input type="number" placeholder="Enter value" value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', boxSizing: 'border-box' }} />}
-                                                                {item.type === 'date' && <input type="date" value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', boxSizing: 'border-box' }} />}
-                                                                
-                                                                {item.type === 'select' && (
-                                                                    <select value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
-                                                                        <option value="">Select option...</option>
-                                                                        {(item.options || []).map(o => <option key={o} value={o}>{o}</option>)}
-                                                                    </select>
-                                                                )}
-
-                                                                {item.type === 'yes-no' && (
-                                                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                                                        <button onClick={() => handleAnswer(item.q, 'Yes')} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: previewIntake[item.q] === 'Yes' ? '#3b82f6' : '#fff', color: previewIntake[item.q] === 'Yes' ? '#fff' : '#475569', fontWeight: 600, cursor: 'pointer' }}>Yes</button>
-                                                                        <button onClick={() => handleAnswer(item.q, 'No')} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: previewIntake[item.q] === 'No' ? '#ef4444' : '#fff', color: previewIntake[item.q] === 'No' ? '#fff' : '#475569', fontWeight: 600, cursor: 'pointer' }}>No</button>
-                                                                    </div>
-                                                                )}
-
-                                                                {item.type === 'checkbox-group' && (
-                                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                                                        {(item.options || []).map(opt => (
-                                                                            <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>
-                                                                                <input type="checkbox" checked={(previewIntake[item.q] || []).includes(opt)} onChange={e => handleCheckbox(item.q, opt, e.target.checked)} /> {opt}
-                                                                            </label>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-
-                                                                {(item.type === 'checkbox-date-group' || item.type === 'checkbox-text-group') && (
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                                        {(item.options || []).map(opt => {
-                                                                            const checked = (previewIntake[item.q] || []).includes(opt);
-                                                                            return (
-                                                                                <div key={opt} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                                                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', cursor: 'pointer', flex: 1 }}>
-                                                                                        <input type="checkbox" checked={checked} onChange={e => handleCheckbox(item.q, opt, e.target.checked)} /> {opt}
-                                                                                    </label>
-                                                                                    {checked && opt !== 'None' && (
-                                                                                        <input 
-                                                                                            type={item.type === 'checkbox-date-group' ? 'date' : 'text'} 
-                                                                                            placeholder={item.type === 'checkbox-text-group' ? 'Enter details' : ''}
-                                                                                            style={{ padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', width: '200px' }}
-                                                                                        />
-                                                                                    )}
-                                                                                </div>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                )}
-
-                                                                {item.type === 'textarea' && <textarea rows={4} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', boxSizing: 'border-box' }} placeholder="Clinical notes here..." />}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-
-                                            <button 
-                                                style={{ width: '100%', padding: '15px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: 'white', border: 'none', borderRadius: '12px', marginTop: '30px', fontWeight: 'bold', fontSize: '16px', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)', cursor: 'pointer' }}
-                                            >
-                                                💾 Save & Continue to Next Step (Demo)
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div style={{ textAlign: 'center', padding: '100px 0', color: '#94a3b8' }}>
-                                            <div style={{ fontSize: '40px', marginBottom: '15px' }}>📋</div>
-                                            <p>Select a category to see its clinical form preview.</p>
-                                        </div>
-                                    )}
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
+                            ))}
+                        </div>
+
+                        <div className="ql-modal-actions">
+                            <button className="ql-modal-btn ql-modal-btn-cancel" onClick={() => setShowPreview(false)}>Close Preview</button>
                         </div>
                     </div>
                 </div>

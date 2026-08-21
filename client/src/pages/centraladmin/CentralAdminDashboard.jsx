@@ -5,6 +5,7 @@ import AdminLabs from '../admin/AdminLabs';
 import AdminPharmacy from '../admin/AdminPharmacy';
 import HospitalBrandingEditor from '../../components/HospitalBrandingEditor';
 import HospitalAdminHUDForm from '../../components/HospitalAdminHUDForm';
+import confirmToast, { toast } from '../../utils/confirmToast';
 import '../administration/SuperAdmin.css';
 import './CentralAdminDashboard.css';
 
@@ -516,12 +517,22 @@ const CentralAdminDashboard = () => {
     };
 
     const handleDeleteClinicStaff = async (userId) => {
-        if (!window.confirm('Remove this staff member?')) return;
+        const confirmed = await confirmToast('Are you sure you want to remove this staff member?', { title: 'Remove Staff', confirmText: 'Remove' });
+        if (!confirmed) return;
         try {
             const res = await simpleClinicAPI.deleteStaff(selectedClinic._id, userId);
-            if (res.success) { setSuccess('Staff removed.'); openClinicDetail(selectedClinic); }
-            else setError(res.message);
-        } catch (err) { setError(err.response?.data?.message || err.message); }
+            if (res.success) {
+                toast.success('Staff removed successfully');
+                setSuccess('Staff removed.');
+                openClinicDetail(selectedClinic);
+            } else {
+                toast.error(res.message || 'Error removing staff');
+                setError(res.message);
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || err.message);
+            setError(err.response?.data?.message || err.message);
+        }
     };
 
     const fetchHospitals = async (plan = getActivePlanName()) => {
@@ -1241,16 +1252,19 @@ const CentralAdminDashboard = () => {
                 {/* 2. Category / Plan Navigation Tabs */}
                 <div className="cad-tabs-nav-container">
                     <div className="cad-tabs-scroll-wrapper">
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                className={`cad-tab-pill ${activeTab === tab.id ? 'active' : ''}`}
-                                onClick={() => setActiveTab(tab.id)}
-                            >
-                                <span className="cad-tab-icon">{tab.icon}</span>
-                                <span className="cad-tab-label">{tab.name || tab.label}</span>
-                            </button>
-                        ))}
+                        {tabs.map((tab, tIdx) => {
+                            const tabThemes = ['tab-theme-green', 'tab-theme-blue', 'tab-theme-indigo', 'tab-theme-pink', 'tab-theme-amber', 'tab-theme-teal', 'tab-theme-purple'];
+                            return (
+                                <button
+                                    key={tab.id}
+                                    className={`cad-tab-pill ${tabThemes[tIdx % tabThemes.length]} ${activeTab === tab.id ? 'active' : ''}`}
+                                    onClick={() => setActiveTab(tab.id)}
+                                >
+                                    <span className="cad-tab-icon">{tab.icon}</span>
+                                    <span className="cad-tab-label">{tab.name || tab.label}</span>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 

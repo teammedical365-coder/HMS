@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { consentAPI } from '../../utils/api';
+import confirmToast, { toast } from '../../utils/confirmToast';
 import { 
     FaPlus, 
     FaFolderPlus, 
@@ -47,6 +48,7 @@ const ConsentManagement = () => {
 
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isDraggingFile, setIsDraggingFile] = useState(false);
 
     // Canvas Refs
     const neuralCanvasRef = useRef(null);
@@ -510,38 +512,45 @@ const ConsentManagement = () => {
         try {
             if (editingCategory) {
                 await consentAPI.updateCategory(editingCategory._id, categoryForm);
-                alert(`Category "${categoryForm.name}" updated successfully!`);
             } else {
                 await consentAPI.createCategory(categoryForm);
-                alert(`Category "${categoryForm.name}" created successfully!`);
-                setCategoryForm({ name: '', description: '', sortOrder: 0, isActive: true });
             }
-            fetchAllData();
+            toast.success(editingCategory ? 'Category updated successfully!' : 'Category created successfully!');
             setIsCategoryModalOpen(false);
             setEditingCategory(null);
+            setCategoryForm({ name: '', description: '', sortOrder: 0, isActive: true });
+            fetchAllData();
         } catch (error) {
-            alert(error.response?.data?.message || 'Error saving category');
+            console.error('Error saving category:', error);
+            toast.error(error.response?.data?.message || 'Error saving category');
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const handleDeleteCategory = async (id, name) => {
-        if (!window.confirm(`Are you sure you want to delete category "${name}"?`)) return;
+        const confirmed = await confirmToast(
+            `Are you sure you want to delete category "${name}"?`,
+            { title: 'Delete Category', confirmText: 'Delete' }
+        );
+        if (!confirmed) return;
         try {
             await consentAPI.deleteCategory(id);
+            toast.success(`Category "${name}" deleted`);
             fetchAllData();
         } catch (error) {
-            alert(error.response?.data?.message || 'Error deleting category');
+            toast.error(error.response?.data?.message || 'Error deleting category');
         }
     };
 
     const handleToggleCategory = async (id) => {
         try {
             await consentAPI.toggleCategory(id);
+            toast.success('Category status updated');
             fetchAllData();
         } catch (error) {
             console.error('Error toggling category:', error);
+            toast.error('Failed to update status');
         }
     };
 
@@ -561,53 +570,58 @@ const ConsentManagement = () => {
     // -------------------------------------------------------------
     const handleTemplateSubmit = async (e) => {
         e.preventDefault();
-        if (!templateForm.name.trim() || !templateForm.categoryId) {
-            alert("Please provide template name and select a category.");
-            return;
-        }
-
-        if (!editingTemplate && !templateForm.file) {
-            alert("Please upload a .docx, .doc, or .pdf template file.");
+        if (!templateForm.name || !templateForm.categoryId) {
+            toast.error('Please provide name and category');
             return;
         }
 
         setIsSubmitting(true);
-        const formData = new FormData();
-        formData.append('name', templateForm.name);
-        formData.append('categoryId', templateForm.categoryId);
-        formData.append('description', templateForm.description || '');
-        formData.append('isActive', templateForm.isActive);
-        if (templateForm.file) {
-            formData.append('file', templateForm.file);
-        }
-
         try {
+            const formData = new FormData();
+            formData.append('name', templateForm.name);
+            formData.append('categoryId', templateForm.categoryId);
+            formData.append('description', templateForm.description || '');
+            formData.append('isActive', templateForm.isActive);
+            if (templateForm.file) {
+                formData.append('file', templateForm.file);
+            }
+
             if (editingTemplate) {
                 await consentAPI.updateTemplate(editingTemplate._id, formData);
-                alert(`Template "${templateForm.name}" updated successfully!`);
             } else {
+                if (!templateForm.file) {
+                    toast.error('Please upload a document file (.docx or .pdf)');
+                    setIsSubmitting(false);
+                    return;
+                }
                 await consentAPI.createTemplate(formData);
-                alert(`Template "${templateForm.name}" parsed and registered successfully!`);
-                setTemplateForm({ name: '', categoryId: '', description: '', isActive: true, file: null });
-                if (fileInputRef.current) fileInputRef.current.value = '';
             }
-            fetchAllData();
+
+            toast.success(editingTemplate ? 'Template updated successfully!' : 'Consent Template registered successfully!');
             setIsTemplateModalOpen(false);
             setEditingTemplate(null);
+            setTemplateForm({ name: '', categoryId: '', description: '', isActive: true, file: null });
+            fetchAllData();
         } catch (error) {
-            alert(error.response?.data?.message || 'Error saving template');
+            console.error('Error saving template:', error);
+            toast.error(error.response?.data?.message || 'Error saving template');
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const handleDeleteTemplate = async (id, name) => {
-        if (!window.confirm(`Are you sure you want to delete template "${name}"?`)) return;
+        const confirmed = await confirmToast(
+            `Are you sure you want to delete template "${name}"?`,
+            { title: 'Delete Consent Template', confirmText: 'Delete' }
+        );
+        if (!confirmed) return;
         try {
             await consentAPI.deleteTemplate(id);
+            toast.success(`Template "${name}" deleted`);
             fetchAllData();
         } catch (error) {
-            alert(error.response?.data?.message || 'Error deleting template');
+            toast.error(error.response?.data?.message || 'Error deleting template');
         }
     };
 
@@ -713,7 +727,9 @@ const ConsentManagement = () => {
                                 <form onSubmit={handleCategorySubmit}>
                                     <div className="form-group-custom">
                                         <label>
-                                            <span>Category Name <span style={{ color: '#ef4444' }}>*</span></span>
+                                            <span className="label-title-wrap">
+                                                Category Name <span className="req-star">*</span>
+                                            </span>
                                             <span className="assist-hint" onClick={autoCategory}>
                                                 <FaWandMagicSparkles /> Auto-Suggest
                                             </span>
@@ -729,7 +745,9 @@ const ConsentManagement = () => {
 
                                     <div className="form-group-custom">
                                         <label>
-                                            <span>Description &amp; Scope</span>
+                                            <span className="label-title-wrap">
+                                                Description &amp; Scope
+                                            </span>
                                             <span className="assist-hint" onClick={autoDesc}>
                                                 <FaWandMagicSparkles /> Generate Scope
                                             </span>
@@ -771,13 +789,14 @@ const ConsentManagement = () => {
                                         <FaCloudArrowUp style={{ color: 'var(--brand-green)' }} /> 
                                         <span>Upload New Consent Document</span>
                                     </span>
-                                    <span className="badge-header"><FaShieldHalved /> HIPAA Scanner</span>
                                 </h3>
 
                                 <form onSubmit={handleTemplateSubmit}>
                                     <div className="form-group-custom">
                                         <label>
-                                            <span>Consent Name</span>
+                                            <span className="label-title-wrap">
+                                                Consent Name <span className="req-star">*</span>
+                                            </span>
                                             <span className="assist-hint" onClick={autoConsentName}>
                                                 <FaWandMagicSparkles /> Title Gen
                                             </span>
@@ -792,7 +811,11 @@ const ConsentManagement = () => {
                                     </div>
 
                                     <div className="form-group-custom">
-                                        <label>Choose Category</label>
+                                        <label>
+                                            <span className="label-title-wrap">
+                                                Choose Category <span className="req-star">*</span>
+                                            </span>
+                                        </label>
                                         <select 
                                             value={templateForm.categoryId}
                                             onChange={(e) => setTemplateForm({ ...templateForm, categoryId: e.target.value })}
@@ -807,29 +830,39 @@ const ConsentManagement = () => {
                                     </div>
 
                                     <div className="form-group-custom">
-                                        <label>Description &amp; Key Clauses</label>
+                                        <label>
+                                            <span className="label-title-wrap">
+                                                Description &amp; Key Clauses
+                                            </span>
+                                        </label>
                                         <textarea 
-                                            placeholder="Enter details, procedure notes, or scope regarding this consent form..." 
+                                            placeholder="Enter details, procedure notes, or scope regarding this consent form (optional)..." 
                                             value={templateForm.description}
                                             onChange={(e) => setTemplateForm({ ...templateForm, description: e.target.value })}
                                         ></textarea>
                                     </div>
 
                                     <div className="form-group-custom">
-                                        <label>Upload Document File (.docx / .pdf)</label>
-                                        <div 
-                                            className="file-upload-box" 
-                                            onClick={() => fileInputRef.current?.click()}
-                                        >
-                                            <FaCloudArrowUp className="upload-icon" />
-                                            <p style={{ fontWeight: 700, color: 'var(--text-heading)', fontSize: '14px', margin: '4px 0' }}>
-                                                {templateForm.file ? `Selected File: ${templateForm.file.name}` : 'Click to browse file with Parser'}
-                                            </p>
-                                            <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-                                                Supports .docx, .doc, .pdf (Max: 15MB)
+                                        <label>
+                                            <span className="label-title-wrap">
+                                                Upload Document File (.docx / .pdf) <span className="req-star">*</span>
                                             </span>
+                                        </label>
+                                        <div 
+                                            className={`compact-animated-upload-wrapper ${isDraggingFile ? 'is-dragging' : ''}`}
+                                            onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
+                                            onDragLeave={() => setIsDraggingFile(false)}
+                                            onDrop={(e) => {
+                                                e.preventDefault();
+                                                setIsDraggingFile(false);
+                                                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                                    setTemplateForm(prev => ({ ...prev, file: e.dataTransfer.files[0] }));
+                                                }
+                                            }}
+                                        >
                                             <input 
                                                 type="file" 
+                                                id="consentFileInput"
                                                 ref={fileInputRef}
                                                 style={{ display: 'none' }} 
                                                 accept=".docx,.doc,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
@@ -838,6 +871,49 @@ const ConsentManagement = () => {
                                                     if (file) setTemplateForm({ ...templateForm, file });
                                                 }}
                                             />
+                                            <label 
+                                                htmlFor="consentFileInput" 
+                                                className="compact-upload-animated-btn"
+                                            >
+                                                <FaCloudArrowUp className="upload-btn-icon" />
+                                                <span>{templateForm.file ? 'Change File' : 'Choose Document'}</span>
+                                            </label>
+
+                                            <div className="compact-upload-file-status">
+                                                {templateForm.file ? (
+                                                    <div className="selected-file-badge">
+                                                        <span className={`file-type-pill ${templateForm.file.name?.toLowerCase().endsWith('.pdf') ? 'pdf' : 'docx'}`}>
+                                                            {templateForm.file.name?.toLowerCase().endsWith('.pdf') ? 'PDF' : 'DOCX'}
+                                                        </span>
+                                                        <span className="selected-file-name truncate max-w-[170px] sm:max-w-[230px]" title={templateForm.file.name}>
+                                                            {templateForm.file.name}
+                                                        </span>
+                                                        <span className="selected-file-size">
+                                                            ({(templateForm.file.size / 1024).toFixed(1)} KB)
+                                                        </span>
+                                                        <span className="file-ready-check">
+                                                            <FaCheck /> Ready
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setTemplateForm(prev => ({ ...prev, file: null }));
+                                                                if (fileInputRef.current) fileInputRef.current.value = '';
+                                                            }}
+                                                            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '13px', marginLeft: '4px', display: 'flex', alignItems: 'center' }}
+                                                            title="Remove File"
+                                                        >
+                                                            <FaXmark />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <span className="no-file-text">
+                                                        <FaFileShield style={{ color: 'var(--brand-green)', fontSize: '14px' }} />
+                                                        <span>No file chosen (or drag &amp; drop .docx, .pdf max 15MB)</span>
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="placeholders-tooltip">
                                             💡 <strong>Supported Placeholders:</strong> <code>{'{patient_name}'}</code>, <code>{'{age}'}</code>, <code>{'{gender}'}</code>, <code>{'{doctor_name}'}</code>, <code>{'{hospital_name}'}</code>, <code>{'{today}'}</code>
@@ -860,7 +936,7 @@ const ConsentManagement = () => {
                                         style={{ marginTop: '8px', width: '100%', justifyContent: 'center' }}
                                         disabled={isSubmitting}
                                     >
-                                        <FaMicrochip /> {isSubmitting ? 'Processing & Registering...' : 'Parse & Register'}
+                                        <FaPlus /> {isSubmitting ? 'Saving Consent...' : '+ Add Consent'}
                                     </button>
                                 </form>
                             </div>

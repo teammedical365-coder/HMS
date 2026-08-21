@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { questionLibraryAPI } from '../../utils/api';
+import confirmToast, { promptToast, toast } from '../../utils/confirmToast';
 import '../admin/AdminQuestionLibrary.css';
 
 const HospitalAdminQuestionLibrary = () => {
@@ -98,17 +99,22 @@ const HospitalAdminQuestionLibrary = () => {
         setNewCatName('');
     };
 
-    const handleAddDepartment = () => {
-        const dept = window.prompt("Enter new department name (e.g., Neurology, IVF):");
+    const handleAddDepartment = async () => {
+        const dept = await promptToast("Enter new department name (e.g., Neurology, IVF):", {
+            title: 'Add New Department',
+            placeholder: 'Department name...',
+            confirmText: 'Add'
+        });
         if (!dept || !dept.trim()) return;
         const cleanDept = dept.trim();
         if (libraryData[cleanDept]) {
-            alert("Department already exists!");
+            toast.error("Department already exists!");
             return;
         }
         setLibraryData({ ...libraryData, [cleanDept]: {} });
         setDepartmentTab(cleanDept);
         setActiveCategory('');
+        toast.success(`Department "${cleanDept}" created`);
     };
 
     const resetModalState = () => {
@@ -120,7 +126,7 @@ const HospitalAdminQuestionLibrary = () => {
     const handleAddQuestion = () => {
         const qText = newQ.q.trim();
         if (!qText) {
-            alert("Please enter a question.");
+            toast.error("Please enter a question.");
             return;
         }
 
@@ -149,11 +155,13 @@ const HospitalAdminQuestionLibrary = () => {
 
         if (editIndex !== null) {
             newLib[departmentTab][activeCategory][editIndex] = finalQuestion;
+            toast.success('Question updated');
         } else {
             newLib[departmentTab][activeCategory] = [
                 ...newLib[departmentTab][activeCategory],
                 finalQuestion
             ];
+            toast.success('Question added');
         }
 
         setLibraryData(newLib);
@@ -174,12 +182,16 @@ const HospitalAdminQuestionLibrary = () => {
         setShowAddModal(true);
     };
 
-    const handleDeleteQuestion = (cat, index) => {
-        if (window.confirm("Are you sure you want to delete this question?")) {
-            const newLib = { ...libraryData };
-            newLib[departmentTab][cat].splice(index, 1);
-            setLibraryData(newLib);
-        }
+    const handleDeleteQuestion = async (cat, index) => {
+        const confirmed = await confirmToast("Are you sure you want to delete this question?", {
+            title: 'Delete Question',
+            confirmText: 'Delete'
+        });
+        if (!confirmed) return;
+        const newLib = { ...libraryData };
+        newLib[departmentTab][cat].splice(index, 1);
+        setLibraryData(newLib);
+        toast.success('Question deleted');
     };
 
     const getTypeLabel = (type) => {

@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { Toaster } from 'react-hot-toast'
 import MainRoutes from './routes/Mainroutes'
 import Lenis from 'lenis'
 import './App.css'
@@ -67,6 +68,34 @@ const App = () => {
 
   return (
     <div style={{ width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
+      <Toaster
+        position="top-center"
+        reverseOrder={false}
+        toastOptions={{
+          duration: 3500,
+          style: {
+            background: '#0f172a',
+            color: '#f8fafc',
+            borderRadius: '14px',
+            fontSize: '13.5px',
+            fontWeight: 600,
+            padding: '12px 18px',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.25)',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#ffffff',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#ffffff',
+            },
+          },
+        }}
+      />
       <MainRoutes />
     </div>
   )

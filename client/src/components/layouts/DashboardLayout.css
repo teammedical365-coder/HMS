@@ -2,7 +2,7 @@
 :root {
   --sidebar-width: 270px;
   --sidebar-collapsed: 85px;
-  --topbar-height: 72px;
+  --topbar-height: 70px;
   --bg-erp: #f8fafc;
   --surface-erp: #ffffff;
   --brand-erp: #1e847f;
@@ -10,7 +10,7 @@
   --brand-light: rgba(30, 132, 127, 0.1);
   --text-dark: #1e293b;
   --text-muted: #64748b;
-  --border-erp: rgba(226, 232, 240, 0.8);
+  --border-erp: #e2e8f0;
   --shadow-erp: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-profile: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 }
@@ -29,7 +29,7 @@
   top: 0;
   bottom: 0;
   background-color: #ffffff;
-  border-right: 1px solid var(--border-erp);
+  border-right: 1px solid #e2e8f0;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1000;
   display: flex;
@@ -53,7 +53,8 @@
   font-weight: 800;
   font-size: 1.1rem;
   color: var(--text-dark);
-  border-bottom: 1px solid var(--border-erp);
+  border-bottom: 1px solid #e2e8f0;
+  box-sizing: border-box;
 }
 
 .brand-dot {
@@ -439,12 +440,13 @@
 }
 
 .ca-sidebar-brand {
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
   padding: 0 20px;
-  height: 64px;
+  height: var(--topbar-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  box-sizing: border-box;
 }
 
 .ca-brand-container {
@@ -476,15 +478,56 @@
   color: #0f172a;
 }
 
-.ca-sidebar-link.active {
+.ca-sidebar-link.active,
+.ca-sidebar-link.theme-green.active {
   background-color: #ecfdf5 !important;
   color: #059669 !important;
-  border-left: 3px solid #059669;
-  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.08);
+  border-left: 3.5px solid #059669;
+  box-shadow: 0 2px 10px rgba(5, 150, 105, 0.12);
+}
+.ca-sidebar-link.active .sidebar-link-icon,
+.ca-sidebar-link.theme-green.active .sidebar-link-icon {
+  color: #059669;
 }
 
-.ca-sidebar-link.active .sidebar-link-icon {
-  color: #059669;
+.ca-sidebar-link.theme-blue.active {
+  background-color: #f0f9ff !important;
+  color: #0284c7 !important;
+  border-left: 3.5px solid #0284c7;
+  box-shadow: 0 2px 10px rgba(2, 132, 199, 0.12);
+}
+.ca-sidebar-link.theme-blue.active .sidebar-link-icon {
+  color: #0284c7;
+}
+
+.ca-sidebar-link.theme-teal.active {
+  background-color: #f0fdfa !important;
+  color: #0d9488 !important;
+  border-left: 3.5px solid #0d9488;
+  box-shadow: 0 2px 10px rgba(13, 148, 136, 0.12);
+}
+.ca-sidebar-link.theme-teal.active .sidebar-link-icon {
+  color: #0d9488;
+}
+
+.ca-sidebar-link.theme-purple.active {
+  background-color: #faf5ff !important;
+  color: #8b5cf6 !important;
+  border-left: 3.5px solid #8b5cf6;
+  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.12);
+}
+.ca-sidebar-link.theme-purple.active .sidebar-link-icon {
+  color: #8b5cf6;
+}
+
+.ca-sidebar-link.theme-pink.active {
+  background-color: #fff1f2 !important;
+  color: #e11d48 !important;
+  border-left: 3.5px solid #e11d48;
+  box-shadow: 0 2px 10px rgba(225, 29, 72, 0.12);
+}
+.ca-sidebar-link.theme-pink.active .sidebar-link-icon {
+  color: #e11d48;
 }
 
 /* Sidebar Need Help Card */
@@ -583,6 +626,11 @@
 .ca-erp-topbar {
   background-color: #ffffff;
   border-bottom: 1px solid #e2e8f0;
+  height: var(--topbar-height);
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  box-sizing: border-box;
 }
 
 .ca-topbar-breadcrumb {

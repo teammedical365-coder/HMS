@@ -17,7 +17,7 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
     const { branding, hospitalName } = useBranding();
     const role = (user?.role || '').toLowerCase();
     const location = useLocation();
-    const isCentralAdmin = location.pathname === '/supremeadmin' && (role === 'centraladmin' || role === 'superadmin');
+    const isCentralAdmin = (role === 'centraladmin' || role === 'superadmin');
     
     // Categorized Menus
     const getMenu = () => {
@@ -43,6 +43,7 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
             return [
                 { label: 'System Overview', path: '/supremeadmin', icon: <FiHome /> },
                 { label: 'Question Library', path: '/admin/question-library', icon: <FiFileText /> },
+                { label: 'Consent Hub', path: '/admin/consent', icon: <FiClipboard /> },
                 { label: 'Role & Permissions', path: '/admin/roles', icon: <FiShield /> },
                 { label: 'Manage All Staff', path: '/admin/users', icon: <FiUsers /> },
             ];
@@ -173,11 +174,14 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
                         return currentPath === item.path;
                     };
 
+                    const caThemes = ['theme-green', 'theme-blue', 'theme-teal', 'theme-purple', 'theme-pink'];
+                    const currentThemeClass = isCentralAdmin ? `ca-sidebar-link ${caThemes[idx % caThemes.length]}` : '';
+
                     return (
                         <NavLink 
                             key={idx} 
                             to={item.path} 
-                            className={() => `sidebar-link ${isItemActive() ? 'active' : ''} ${isCentralAdmin ? 'ca-sidebar-link' : ''}`}
+                            className={() => `sidebar-link ${isItemActive() ? 'active' : ''} ${currentThemeClass}`}
                         >
                             <span className="sidebar-link-icon">{item.icon}</span>
                             <span className="sidebar-link-text">{item.label}</span>
@@ -224,7 +228,7 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const role = (user?.role || '').toLowerCase();
-    const isCentralAdmin = location.pathname === '/supremeadmin' && (role === 'centraladmin' || role === 'superadmin');
+    const isCentralAdmin = (role === 'centraladmin' || role === 'superadmin');
 
     const handleLogout = () => {
         dispatch(logout());
@@ -234,6 +238,17 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
     // Helper to get initials
     const getInitials = (name) => {
         return (name || 'U').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+    };
+
+    const getCentralAdminTag = () => {
+        const path = location.pathname;
+        if (path === '/supremeadmin') return 'CENTRAL ADMIN';
+        if (path.includes('question-library')) return 'QUESTION LIBRARY';
+        if (path.includes('consent')) return 'CONSENT HUB';
+        if (path.includes('roles')) return 'ROLES & PERMISSIONS';
+        if (path.includes('users')) return 'MANAGE STAFF';
+        if (path.includes('revenue')) return 'REVENUE ANALYTICS';
+        return 'CENTRAL ADMIN';
     };
 
     return (
@@ -248,7 +263,7 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                     <div className="ca-topbar-breadcrumb">
                         <span className="ca-bc-user-type">Superadmin</span>
                         <span className="ca-bc-divider">/</span>
-                        <span className="ca-bc-tag">CENTRAL ADMIN</span>
+                        <span className="ca-bc-tag">{getCentralAdminTag()}</span>
                     </div>
                 ) : (
                     <div className="breadcrumb-wrap flex flex-nowrap whitespace-nowrap overflow-x-auto overflow-y-hidden items-center">
