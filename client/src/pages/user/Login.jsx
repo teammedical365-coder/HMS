@@ -135,7 +135,7 @@ const Login = () => {
                 className="w-full max-w-md rounded-2xl bg-white p-6 sm:p-8 shadow-xl border border-slate-100"
             >
                 <div className="text-center">
-                    <img src="https://www.medical365.in/logo/medical365fav.jpg" alt="Medical 365" className="max-w-[180px] h-auto mx-auto mb-4" />
+                    <img src="/assets/medical365-logo.png" alt="Medical 365" className="max-w-[180px] h-auto mx-auto mb-4" />
                 </div>
 
                 <div className="text-center mb-6">

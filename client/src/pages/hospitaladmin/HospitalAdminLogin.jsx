@@ -55,7 +55,7 @@ const HospitalAdminLogin = () => {
                     <div className="auth-form-container">
                         <div className="auth-box">
                             <div className="hospital-brand">
-                                <img src="https://www.medical365.in/logo/medical365fav.jpg" alt="Medical 365" style={{ height: '40px', objectFit: 'contain' }} />
+                                <img src="/assets/medical365-logo.png" alt="Medical 365" style={{ height: '40px', objectFit: 'contain' }} />
                             </div>
 
                             <div className="auth-header">

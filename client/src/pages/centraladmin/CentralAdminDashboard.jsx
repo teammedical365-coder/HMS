@@ -4,6 +4,7 @@ import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI,
 import AdminLabs from '../admin/AdminLabs';
 import AdminPharmacy from '../admin/AdminPharmacy';
 import HospitalBrandingEditor from '../../components/HospitalBrandingEditor';
+import HospitalAdminHUDForm from '../../components/HospitalAdminHUDForm';
 import '../administration/SuperAdmin.css';
 import './CentralAdminDashboard.css';
 
@@ -1293,7 +1294,7 @@ const CentralAdminDashboard = () => {
                                 </button>
                                 <button
                                     className="cad-btn-primary"
-                                    onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], whiteLabelEnabled: false, brandingSchema: { appName: '', logoUrl: '', customDomain: '', themeColors: { primary: '#14b8a6', secondary: '#0a2647', background: '#ffffff' } } }); }}
+                                    onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] }); }}
                                 >
                                     {showHospitalForm 
                                         ? 'Cancel' 
@@ -1306,7 +1307,8 @@ const CentralAdminDashboard = () => {
                             </div>
                         </div>
 
-                        {/* Two Information Cards Row */}
+                        {/* Two Information Cards Row - Hidden when form is open */}
+                        {!showHospitalForm && !showHospitalAdminForm && !editHospital && (
                         <div className="cad-plan-cards-grid">
                             {/* Left Card: Plan Operational Provision */}
                             <div className="cad-plan-info-card">
@@ -1411,90 +1413,23 @@ const CentralAdminDashboard = () => {
                                 </div>
                             </div>
                         </div>
+                        )}
 
-                        {/* Hospital Admin Form */}
+                        {/* Futuristic Hospital Admin HUD Form */}
                         {showHospitalAdminForm && (
-                            <div className="cad-form-box">
-                                <h3>👤 Create Hospital Admin Account</h3>
-                                <p>This admin will login at <strong>/login</strong> and see only their hospital's data.</p>
-                                <form onSubmit={handleCreateHospitalAdmin} className="user-form">
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Full Name *</label>
-                                            <input type="text" className="staff-input w-full" placeholder="e.g. Dr. Ramesh Kumar" value={hospitalAdminForm.name} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, name: e.target.value })} required minLength={2} />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Email *</label>
-                                            <input type="email" className="staff-input" placeholder="admin@hospital.com" value={hospitalAdminForm.email} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, email: e.target.value })} required />
-                                        </div>
-                                    </div>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Password *</label>
-                                            <input type="text" className="staff-input w-full" placeholder="Temporary password" value={hospitalAdminForm.password} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, password: e.target.value })} required />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Phone *</label>
-                                            <input type="tel" className="staff-input" placeholder="Phone number" maxLength={10} value={hospitalAdminForm.phone} onChange={e => {
-                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                                setHospitalAdminForm({ ...hospitalAdminForm, phone: cleanVal });
-                                            }} required pattern="\d{10}" title="Phone number must be exactly 10 digits" />
-                                        </div>
-                                    </div>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Age *</label>
-                                            <input 
-                                                type="text" 
-                                                className="staff-input" 
-                                                placeholder="Age" 
-                                                value={hospitalAdminForm.age || ''} 
-                                                onChange={e => {
-                                                    const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 3);
-                                                    setHospitalAdminForm({ ...hospitalAdminForm, age: cleanVal });
-                                                }} 
-                                                required 
-                                            />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Aadhaar Number *</label>
-                                            <input type="text" className="staff-input w-full" placeholder="12-digit Aadhaar" value={hospitalAdminForm.aadhaarNumber} onChange={e => {
-                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 12);
-                                                setHospitalAdminForm({ ...hospitalAdminForm, aadhaarNumber: cleanVal });
-                                            }} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
-                                        </div>
-                                    </div>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label className="staff-label">Profile Photo</label>
-                                            <input type="file" accept="image/*" className="staff-input" style={{ padding: '8px' }}
-                                                onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, file: e.target.files[0] })} />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="staff-label">Assign Hospital *</label>
-                                            <select className="staff-input w-full" value={hospitalAdminForm.hospitalId} onChange={e => setHospitalAdminForm({ ...hospitalAdminForm, hospitalId: e.target.value })} required>
-                                                <option value="">-- Select Hospital --</option>
-                                                {[...hospitals].sort((a, b) => (a.name || '').trim().toLowerCase().localeCompare((b.name || '').trim().toLowerCase())).map(h => <option key={h._id} value={h._id}>{h.name}{h.city ? ` — ${h.city}` : ''}</option>)}
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <button type="submit" disabled={creatingHospitalAdmin} className="cad-btn-primary" style={{ width: '100%' }}>{creatingHospitalAdmin ? 'Creating...' : '✅ Create Hospital Admin'}</button>
-                                </form>
-                            </div>
+                            <HospitalAdminHUDForm
+                                hospitalAdminForm={hospitalAdminForm}
+                                setHospitalAdminForm={setHospitalAdminForm}
+                                handleCreateHospitalAdmin={handleCreateHospitalAdmin}
+                                creatingHospitalAdmin={creatingHospitalAdmin}
+                                hospitals={hospitals}
+                                onClose={() => setShowHospitalAdminForm(false)}
+                            />
                         )}
 
                         {/* Hospital Add/Edit Form matching reference design */}
                         {showHospitalForm && (
                             <div ref={hospitalFormRef} className="cad-create-hospital-page">
-                                {/* Top Breadcrumb */}
-                                <div className="cad-ch-breadcrumb">
-                                    <span className="cad-ch-bc-link" onClick={() => { setShowHospitalForm(false); setEditHospital(null); }}>Superadmin</span>
-                                    <span className="cad-ch-bc-sep">›</span>
-                                    <span className="cad-ch-bc-link" onClick={() => { setShowHospitalForm(false); setEditHospital(null); }}>Hospitals</span>
-                                    <span className="cad-ch-bc-sep">›</span>
-                                    <span className="cad-ch-bc-current">{editHospital ? 'Edit Hospital' : 'Create Hospital'}</span>
-                                </div>
-
                                 <div className="cad-create-hospital-grid">
                                     {/* Left Main Form Card */}
                                     <div className="cad-ch-main-card">
@@ -1511,6 +1446,14 @@ const CentralAdminDashboard = () => {
                                                 <h2>{editHospital ? 'Edit Hospital' : 'Create New Hospital'}</h2>
                                                 <p>{editHospital ? 'Update hospital details and configurations' : 'Add a new hospital to the system'}</p>
                                             </div>
+                                            <button 
+                                                type="button" 
+                                                className="cad-ch-close-btn" 
+                                                onClick={() => { setShowHospitalForm(false); setEditHospital(null); }}
+                                                title="Cancel"
+                                            >
+                                                ✕
+                                            </button>
                                         </div>
 
                                         <form onSubmit={handleSaveHospital} className="cad-ch-form">
@@ -1924,7 +1867,7 @@ const CentralAdminDashboard = () => {
                                         </div>
 
                                         <div className="cad-ch-dots-bg">
-                                            <svg width="220" height="40" viewBox="0 0 220 40" fill="none">
+                                                    <svg width="220" height="40" viewBox="0 0 220 40" fill="none">
                                                 {[0, 1, 2, 3].map(row => (
                                                     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(col => (
                                                         <circle key={`${row}-${col}`} cx={10 + col * 14} cy={6 + row * 10} r="1.5" fill="#86efac" fillOpacity="0.45" />
@@ -1937,82 +1880,84 @@ const CentralAdminDashboard = () => {
                             </div>
                         )}
 
-                        {/* Hospital Cards Grid or Empty State */}
-                        {loadingHospitals ? (
-                            <div className="loading-message">⏳ Loading hospitals...</div>
-                        ) : (() => {
-                            const filteredHospitals = hospitals.filter(h => 
-                                activeTab === 'multi-speciality' 
-                                    ? h.subscriptionPlan === 'multi_speciality_starter' 
-                                    : activeTab === 'clinic-basic'
-                                        ? h.subscriptionPlan === 'clinic_basic'
-                                        : (h.subscriptionPlan !== 'multi_speciality_starter' && h.subscriptionPlan !== 'clinic_basic')
-                            ).sort((a, b) => b._id.localeCompare(a._id));
-                            
-                            if (filteredHospitals.length === 0) {
+                        {/* Hospital Cards Grid or Empty State - Hidden when form is open */}
+                        {!showHospitalForm && !showHospitalAdminForm && !editHospital && (
+                            loadingHospitals ? (
+                                <div className="loading-message">⏳ Loading hospitals...</div>
+                            ) : (() => {
+                                const filteredHospitals = hospitals.filter(h => 
+                                    activeTab === 'multi-speciality' 
+                                        ? h.subscriptionPlan === 'multi_speciality_starter' 
+                                        : activeTab === 'clinic-basic'
+                                            ? h.subscriptionPlan === 'clinic_basic'
+                                            : (h.subscriptionPlan !== 'multi_speciality_starter' && h.subscriptionPlan !== 'clinic_basic')
+                                ).sort((a, b) => b._id.localeCompare(a._id));
+                                
+                                if (filteredHospitals.length === 0) {
+                                    return (
+                                        <div className="cad-empty-banner">
+                                            <span className="cad-empty-icon">📄</span>
+                                            <span>No hospitals found for this plan. Add your first hospital above.</span>
+                                        </div>
+                                    );
+                                }
+
                                 return (
-                                    <div className="cad-empty-banner">
-                                        <span className="cad-empty-icon">📄</span>
-                                        <span>No hospitals found for this plan. Add your first hospital above.</span>
+                                    <div className="cad-hospitals-grid">
+                                        {filteredHospitals.map(h => (
+                                            <div key={h._id} className="cad-hospital-card" onClick={() => openHospitalDetail(h)}>
+                                                <div className="cad-hospital-card-header">
+                                                    <div className="cad-hospital-logo-box">
+                                                        {h.branding?.logoUrl ? (
+                                                            <img src={h.branding.logoUrl} alt={h.name} />
+                                                        ) : (
+                                                            <span style={{ fontSize: '24px' }}>🏥</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="cad-hospital-info">
+                                                        <h3 className="cad-hospital-name">
+                                                            {h.branding?.appName || h.name}
+                                                        </h3>
+                                                        {h.branding?.tagline && (
+                                                            <p className="cad-hospital-tagline">{h.branding.tagline}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="cad-hospital-meta-list">
+                                                    {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
+                                                    {h.phone && <span>📞 {h.phone}</span>}
+                                                    {h.email && <span>✉️ {h.email}</span>}
+
+                                                    <div className="cad-domain-badge-wrap" onClick={e => e.stopPropagation()}>
+                                                        {h.slug && (
+                                                            <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" className="cad-domain-badge">
+                                                                🌐 {h.slug}.{getBaseHost()}
+                                                            </a>
+                                                        )}
+                                                        {h.customDomain && (
+                                                            <a href={`http://${h.customDomain}`} target="_blank" rel="noreferrer" className="cad-domain-badge">
+                                                                🌐 {h.customDomain}
+                                                            </a>
+                                                        )}
+                                                        <WhiteLabelBuilder hospital={h} />
+                                                    </div>
+                                                </div>
+
+                                                <div className="cad-hospital-card-footer">
+                                                    <div className="cad-hospital-click-hint">📊 Click to view full analytics →</div>
+                                                    <div className="cad-hospital-btn-group" onClick={e => e.stopPropagation()}>
+                                                        <button className="cad-btn-sm-branding" onClick={() => setBrandingHospital(h)}>🎨 Branding</button>
+                                                        <button className="cad-btn-sm-edit" onClick={() => openEditHospital(h)}>Edit</button>
+                                                        <button className="cad-btn-sm-delete" onClick={() => setDeleteHospitalConfirm(h._id)}>Delete</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 );
-                            }
-
-                            return (
-                                <div className="cad-hospitals-grid">
-                                    {filteredHospitals.map(h => (
-                                        <div key={h._id} className="cad-hospital-card" onClick={() => openHospitalDetail(h)}>
-                                            <div className="cad-hospital-card-header">
-                                                <div className="cad-hospital-logo-box">
-                                                    {h.branding?.logoUrl ? (
-                                                        <img src={h.branding.logoUrl} alt={h.name} />
-                                                    ) : (
-                                                        <span style={{ fontSize: '24px' }}>🏥</span>
-                                                    )}
-                                                </div>
-                                                <div className="cad-hospital-info">
-                                                    <h3 className="cad-hospital-name">
-                                                        {h.branding?.appName || h.name}
-                                                    </h3>
-                                                    {h.branding?.tagline && (
-                                                        <p className="cad-hospital-tagline">{h.branding.tagline}</p>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <div className="cad-hospital-meta-list">
-                                                {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
-                                                {h.phone && <span>📞 {h.phone}</span>}
-                                                {h.email && <span>✉️ {h.email}</span>}
-
-                                                <div className="cad-domain-badge-wrap" onClick={e => e.stopPropagation()}>
-                                                    {h.slug && (
-                                                        <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" className="cad-domain-badge">
-                                                            🌐 {h.slug}.{getBaseHost()}
-                                                        </a>
-                                                    )}
-                                                    {h.customDomain && (
-                                                        <a href={`http://${h.customDomain}`} target="_blank" rel="noreferrer" className="cad-domain-badge">
-                                                            🌐 {h.customDomain}
-                                                        </a>
-                                                    )}
-                                                    <WhiteLabelBuilder hospital={h} />
-                                                </div>
-                                            </div>
-
-                                            <div className="cad-hospital-card-footer">
-                                                <div className="cad-hospital-click-hint">📊 Click to view full analytics →</div>
-                                                <div className="cad-hospital-btn-group" onClick={e => e.stopPropagation()}>
-                                                    <button className="cad-btn-sm-branding" onClick={() => setBrandingHospital(h)}>🎨 Branding</button>
-                                                    <button className="cad-btn-sm-edit" onClick={() => openEditHospital(h)}>Edit</button>
-                                                    <button className="cad-btn-sm-delete" onClick={() => setDeleteHospitalConfirm(h._id)}>Delete</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            );
-                        })()}
+                            })()
+                        )}
                     </div>
                 )}
 
@@ -2040,7 +1985,8 @@ const CentralAdminDashboard = () => {
                             </div>
                         </div>
 
-                        {/* Two Information Cards */}
+                        {/* Two Information Cards - Hidden when clinic form is open */}
+                        {!showClinicForm && !editClinic && (
                         <div className="cad-plan-cards-grid">
                             <div className="cad-plan-info-card">
                                 <div className="cad-info-card-header">
@@ -2104,6 +2050,7 @@ const CentralAdminDashboard = () => {
                                 </div>
                             </div>
                         </div>
+                        )}
 
                             {/* Add / Edit Clinic Form */}
                             {showClinicForm && (
@@ -2169,71 +2116,73 @@ const CentralAdminDashboard = () => {
                                 </div>
                             )}
 
-                            {/* Clinics List */}
-                            {loadingClinics ? (
-                                <div className="loading-message">⏳ Loading clinics...</div>
-                            ) : (() => {
-                                const filteredClinics = clinics.filter(clinic => 
-                                    activeTab === 'clinic-basic' 
-                                        ? clinic.subscriptionPlan === 'clinic_basic'
-                                        : clinic.subscriptionPlan !== 'clinic_basic'
-                                ).sort((a, b) => b._id.localeCompare(a._id));
+                            {/* Clinics List - Hidden when clinic form is open */}
+                            {!showClinicForm && !editClinic && (
+                                loadingClinics ? (
+                                    <div className="loading-message">⏳ Loading clinics...</div>
+                                ) : (() => {
+                                    const filteredClinics = clinics.filter(clinic => 
+                                        activeTab === 'clinic-basic' 
+                                            ? clinic.subscriptionPlan === 'clinic_basic'
+                                            : clinic.subscriptionPlan !== 'clinic_basic'
+                                    ).sort((a, b) => b._id.localeCompare(a._id));
 
-                                if (filteredClinics.length === 0) {
+                                    if (filteredClinics.length === 0) {
+                                        return (
+                                            <div className="cad-empty-banner">
+                                                <span className="cad-empty-icon">🏪</span>
+                                                <span>No clinics found in this plan. Click <strong>+ Add Starter Clinic</strong> to get started.</span>
+                                            </div>
+                                        );
+                                    }
+
                                     return (
-                                        <div className="cad-empty-banner">
-                                            <span className="cad-empty-icon">🏪</span>
-                                            <span>No clinics found in this plan. Click <strong>+ Add Starter Clinic</strong> to get started.</span>
+                                        <div className="cad-hospitals-grid">
+                                            {filteredClinics.map(clinic => (
+                                            <div key={clinic._id} className="cad-hospital-card" onClick={() => openClinicDetail(clinic)}>
+                                                <div className="cad-hospital-card-header">
+                                                    <div className="cad-hospital-logo-box">
+                                                        <span style={{ fontSize: '22px' }}>🏪</span>
+                                                    </div>
+                                                    <div className="cad-hospital-info">
+                                                        <h3 className="cad-hospital-name">{clinic.name}</h3>
+                                                        <p className="cad-hospital-tagline">{clinic.city}{clinic.state ? `, ${clinic.state}` : ''}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="cad-hospital-meta-list">
+                                                    {clinic.phone && <span>📞 {clinic.phone}</span>}
+                                                    {clinic.email && <span>✉️ {clinic.email}</span>}
+                                                    <div>💰 Consultation Fee: {formatCurrency(clinic.defaultFee)}</div>
+                                                    {clinic.slug && (
+                                                        <div className="cad-domain-badge-wrap" onClick={e => e.stopPropagation()}>
+                                                            <a href={`${window.location.protocol}//${clinic.slug}.${getBaseHost()}`} target="_blank" rel="noopener noreferrer" className="cad-domain-badge">
+                                                                🔗 {clinic.slug}.{getBaseHost()}
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                    {clinic.adminUserId && (
+                                                        <span style={{ marginTop: '4px', color: '#16a34a', fontWeight: 600 }}>👤 Admin: {clinic.adminUserId.name}</span>
+                                                    )}
+                                                </div>
+                                                <div className="cad-hospital-card-footer">
+                                                    <div className="cad-hospital-click-hint">📊 Click to view full analytics →</div>
+                                                    <div className="cad-hospital-btn-group" onClick={e => e.stopPropagation()}>
+                                                        <button className="cad-btn-sm-edit"
+                                                            onClick={() => { setEditClinic(clinic); setClinicForm({ name: clinic.name, slug: clinic.slug || '', address: clinic.address || '', city: clinic.city || '', state: clinic.state || '', phone: clinic.phone || '', email: clinic.email || '', website: clinic.website || '', defaultFee: clinic.defaultFee || 0 }); setShowClinicForm(true); }}>
+                                                            ✏️ Edit
+                                                        </button>
+                                                        <button className="cad-btn-sm-delete"
+                                                            onClick={() => setDeleteClinicConfirm(clinic._id)}>
+                                                            🗑️ Delete
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            ))}
                                         </div>
                                     );
-                                }
-
-                                return (
-                                    <div className="cad-hospitals-grid">
-                                        {filteredClinics.map(clinic => (
-                                        <div key={clinic._id} className="cad-hospital-card" onClick={() => openClinicDetail(clinic)}>
-                                            <div className="cad-hospital-card-header">
-                                                <div className="cad-hospital-logo-box">
-                                                    <span style={{ fontSize: '22px' }}>🏪</span>
-                                                </div>
-                                                <div className="cad-hospital-info">
-                                                    <h3 className="cad-hospital-name">{clinic.name}</h3>
-                                                    <p className="cad-hospital-tagline">{clinic.city}{clinic.state ? `, ${clinic.state}` : ''}</p>
-                                                </div>
-                                            </div>
-                                            <div className="cad-hospital-meta-list">
-                                                {clinic.phone && <span>📞 {clinic.phone}</span>}
-                                                {clinic.email && <span>✉️ {clinic.email}</span>}
-                                                <div>💰 Consultation Fee: {formatCurrency(clinic.defaultFee)}</div>
-                                                {clinic.slug && (
-                                                    <div className="cad-domain-badge-wrap" onClick={e => e.stopPropagation()}>
-                                                        <a href={`${window.location.protocol}//${clinic.slug}.${getBaseHost()}`} target="_blank" rel="noopener noreferrer" className="cad-domain-badge">
-                                                            🔗 {clinic.slug}.{getBaseHost()}
-                                                        </a>
-                                                    </div>
-                                                )}
-                                                {clinic.adminUserId && (
-                                                    <span style={{ marginTop: '4px', color: '#16a34a', fontWeight: 600 }}>👤 Admin: {clinic.adminUserId.name}</span>
-                                                )}
-                                            </div>
-                                            <div className="cad-hospital-card-footer">
-                                                <div className="cad-hospital-click-hint">📊 Click to view full analytics →</div>
-                                                <div className="cad-hospital-btn-group" onClick={e => e.stopPropagation()}>
-                                                    <button className="cad-btn-sm-edit"
-                                                        onClick={() => { setEditClinic(clinic); setClinicForm({ name: clinic.name, slug: clinic.slug || '', address: clinic.address || '', city: clinic.city || '', state: clinic.state || '', phone: clinic.phone || '', email: clinic.email || '', website: clinic.website || '', defaultFee: clinic.defaultFee || 0 }); setShowClinicForm(true); }}>
-                                                        ✏️ Edit
-                                                    </button>
-                                                    <button className="cad-btn-sm-delete"
-                                                        onClick={() => setDeleteClinicConfirm(clinic._id)}>
-                                                        🗑️ Delete
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        ))}
-                                    </div>
-                                );
-                            })()}
+                                })()
+                            )}
                     </div>
                 )}
 

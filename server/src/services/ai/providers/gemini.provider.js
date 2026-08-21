@@ -8,7 +8,20 @@ class GeminiProvider {
         this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
     }
 
-    async analyzeImage(prompt, base64Image, mimeType, modelName = "gemini-1.5-pro-latest") {
+    _extractUsage(result, modelName) {
+        const meta = result?.response?.usageMetadata || {};
+        const promptTokens = meta.promptTokenCount || 0;
+        const candidateTokens = meta.candidatesTokenCount || 0;
+        const totalTokens = meta.totalTokenCount || (promptTokens + candidateTokens);
+        return {
+            promptTokens,
+            candidateTokens,
+            totalTokens,
+            modelName
+        };
+    }
+
+    async analyzeImage(prompt, base64Image, mimeType, modelName = (process.env.GEMINI_MODEL || "gemini-3.6-flash")) {
         const model = this.genAI.getGenerativeModel({ model: modelName });
         const imageParts = [{
             inlineData: {
@@ -17,10 +30,13 @@ class GeminiProvider {
             }
         }];
         const result = await model.generateContent([prompt, ...imageParts]);
-        return result.response.text();
+        return {
+            text: result.response.text(),
+            usage: this._extractUsage(result, modelName)
+        };
     }
 
-    async compareImages(prompt, img1Base64, mime1, img2Base64, mime2, modelName = "gemini-1.5-pro-latest") {
+    async compareImages(prompt, img1Base64, mime1, img2Base64, mime2, modelName = (process.env.GEMINI_MODEL || "gemini-3.6-flash")) {
         const model = this.genAI.getGenerativeModel({ model: modelName });
         const imageParts = [
             {
@@ -37,10 +53,13 @@ class GeminiProvider {
             }
         ];
         const result = await model.generateContent([prompt, ...imageParts]);
-        return result.response.text();
+        return {
+            text: result.response.text(),
+            usage: this._extractUsage(result, modelName)
+        };
     }
 
-    async chatCompletion(systemPrompt, messages, modelName = "gemini-1.5-pro-latest") {
+    async chatCompletion(systemPrompt, messages, modelName = (process.env.GEMINI_MODEL || "gemini-3.6-flash")) {
         // Gemini expects messages in a specific format for multi-turn chat, or we can just send it as a single prompt
         const model = this.genAI.getGenerativeModel({ model: modelName, systemInstruction: systemPrompt });
         
@@ -56,7 +75,10 @@ class GeminiProvider {
 
         const latestMessage = messages[messages.length - 1].content;
         const result = await chat.sendMessage(latestMessage);
-        return result.response.text();
+        return {
+            text: result.response.text(),
+            usage: this._extractUsage(result, modelName)
+        };
     }
 }
 

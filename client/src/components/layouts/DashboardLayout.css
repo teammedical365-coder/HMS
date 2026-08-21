@@ -441,33 +441,24 @@
 .ca-sidebar-brand {
   border-bottom: 1px solid #f1f5f9;
   padding: 0 20px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .ca-brand-container {
   display: flex;
   align-items: center;
-  gap: 10px;
   user-select: none;
 }
 
-.ca-brand-cross-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  filter: drop-shadow(0 2px 4px rgba(37, 99, 235, 0.25));
-}
-
-.ca-brand-title {
-  font-size: 1.15rem;
-  font-weight: 850;
-  color: #0f172a;
-  letter-spacing: -0.02em;
-  font-family: 'Inter', -apple-system, sans-serif;
-}
-
-.ca-brand-num {
-  color: #2563eb;
-  font-weight: 850;
+.ca-brand-container img {
+  height: 34px;
+  max-width: 170px;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 
 .ca-sidebar-link {
@@ -486,43 +477,49 @@
 }
 
 .ca-sidebar-link.active {
-  background-color: #eff6ff !important;
-  color: #2563eb !important;
-  border-left: 3px solid #2563eb;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+  background-color: #ecfdf5 !important;
+  color: #059669 !important;
+  border-left: 3px solid #059669;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.08);
 }
 
 .ca-sidebar-link.active .sidebar-link-icon {
-  color: #2563eb;
+  color: #059669;
 }
 
-/* Sidebar AI Assistant Card */
-.ca-sidebar-ai-card {
+/* Sidebar Need Help Card */
+.ca-sidebar-help-card {
   margin: 32px 6px 16px;
   padding: 20px 14px 16px;
-  background: linear-gradient(180deg, #f0f7ff 0%, #ffffff 100%);
-  border: 1px solid #dbeafe;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+  border: 1px solid #dcfce7;
   border-radius: 20px;
   text-align: center;
-  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.06);
+  box-shadow: 0 4px 16px rgba(5, 150, 105, 0.06);
   position: relative;
 }
 
-.ca-sidebar-ai-avatar-wrap {
+.ca-sidebar-help-avatar-wrap {
   display: flex;
   justify-content: center;
-  margin-bottom: 6px;
-  filter: drop-shadow(0 4px 8px rgba(37, 99, 235, 0.15));
+  align-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  background: #ecfdf5;
+  border: 1.5px solid #a7f3d0;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.12);
 }
 
-.ca-sidebar-ai-title {
-  margin: 0 0 6px;
+.ca-sidebar-help-title {
+  margin: 0 0 4px;
   font-size: 0.95rem;
   font-weight: 800;
-  color: #0f172a;
+  color: #064e3b;
 }
 
-.ca-sidebar-ai-desc {
+.ca-sidebar-help-desc {
   margin: 0 0 14px;
   font-size: 0.78rem;
   color: #64748b;
@@ -530,7 +527,7 @@
   padding: 0 4px;
 }
 
-.ca-sidebar-ai-btn {
+.ca-sidebar-help-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -539,18 +536,18 @@
   padding: 8px 14px;
   border-radius: 10px;
   background: #ffffff;
-  border: 1px solid #bfdbfe;
-  color: #2563eb;
+  border: 1.5px solid #a7f3d0;
+  color: #059669;
   font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.05);
+  box-shadow: 0 2px 4px rgba(5, 150, 105, 0.05);
   transition: all 0.2s;
 }
 
-.ca-sidebar-ai-btn:hover {
-  background: #eff6ff;
-  border-color: #93c5fd;
+.ca-sidebar-help-btn:hover {
+  background: #ecfdf5;
+  border-color: #059669;
   transform: translateY(-1px);
 }
 
@@ -745,14 +742,59 @@
 }
 
 @media (max-width: 768px) {
-  .ca-user-details-col,
-  .ca-chevron-arrow,
+  /* Hide profile chip entirely from topbar on mobile — it shows in sidebar */
+  .ca-user-profile-chip {
+    display: none !important;
+  }
+
+  /* Hide the AI star button on mobile */
+  .ca-action-circle-btn:not(.ca-notif-btn) {
+    display: none !important;
+  }
+
+  /* Keep notification visible, push to right */
+  .ca-topbar-actions {
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  /* Breadcrumb: hide "Superadmin /" keep only CENTRAL ADMIN tag in one line */
   .ca-bc-user-type,
   .ca-bc-divider {
     display: none !important;
   }
-  .ca-topbar-actions {
+
+  .ca-topbar-breadcrumb {
+    gap: 0;
+  }
+
+  .ca-bc-tag {
+    white-space: nowrap;
+    font-size: 0.68rem;
+    padding: 2px 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Extra small: tighten topbar further */
+  .erp-topbar {
+    padding: 0 8px !important;
+    gap: 6px;
+  }
+
+  .topbar-left {
     gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .ca-bc-tag {
+    font-size: 0.62rem;
+    padding: 2px 6px;
+  }
+
+  .ca-action-circle-btn {
+    width: 32px;
+    height: 32px;
   }
 }
 

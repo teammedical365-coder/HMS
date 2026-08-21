@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { questionLibraryAPI } from '../../utils/api';
-import './AdminQuestionLibrary.css'; // Custom built styles based on user's theme
+import './AdminQuestionLibrary.css';
 
 const AdminQuestionLibrary = () => {
-    // State for the overarching JSON structure
     const [libraryData, setLibraryData] = useState({
         "General": {},
         "Orthopedics": {},
@@ -14,14 +13,11 @@ const AdminQuestionLibrary = () => {
     const [saving, setSaving] = useState(false);
     const [allowedDepartments, setAllowedDepartments] = useState(null);
 
-    // active states
     const [departmentTab, setDepartmentTab] = useState('General');
     const [activeCategory, setActiveCategory] = useState('');
 
-    // Input states for sidebar
     const [newCatName, setNewCatName] = useState('');
 
-    // Add Modal state
     const [showAddModal, setShowAddModal] = useState(false);
     const [editIndex, setEditIndex] = useState(null);
 
@@ -35,15 +31,13 @@ const AdminQuestionLibrary = () => {
         "General", "Orthopedics", "ENT", "Cardiology", "Neurology", "Pediatrics", "Gynecology", "Dermatology", "Oncology"
     ]);
 
-    // Preview state
     const [showPreview, setShowPreview] = useState(false);
     const [previewIntake, setPreviewIntake] = useState({});
 
-    // Form fields for new Question
     const [newQ, setNewQ] = useState({
         q: '',
         type: 'text',
-        options: '', // comma-separated
+        options: '',
         extra: '',
         parentQ: '',
         condition: ''
@@ -59,14 +53,12 @@ const AdminQuestionLibrary = () => {
             const res = await questionLibraryAPI.getLibrary();
             let data = res.data?.data;
             if (!data || Object.keys(data).length === 0) {
-                // Initial Empty Structure fallback
                 data = { "General": {}, "Orthopedics": {}, "ENT": {} };
             }
 
             setLibraryData(data);
             setAllowedDepartments(res.allowedDepartments || null);
 
-            // Determine visible departments based on restrictions
             const visibleDepts = res.allowedDepartments ? Object.keys(data).filter(d => res.allowedDepartments.includes(d)) : Object.keys(data);
             let defaultDept = 'General';
             
@@ -78,7 +70,7 @@ const AdminQuestionLibrary = () => {
                     setActiveCategory(firstDeptCats[0]);
                 }
             } else {
-                setDepartmentTab('General'); // Fallback if no valid departments exist
+                setDepartmentTab('General');
             }
         } catch (err) {
             console.error('Error fetching question library:', err);
@@ -284,7 +276,6 @@ const AdminQuestionLibrary = () => {
         if (editIndex !== null) {
             newLib[departmentTab][activeCategory][editIndex] = finalQuestion;
         } else {
-            // Add question
             newLib[departmentTab][activeCategory] = [
                 ...newLib[departmentTab][activeCategory],
                 finalQuestion
@@ -317,55 +308,72 @@ const AdminQuestionLibrary = () => {
         }
     };
 
-    const renderQuestionBuilder = (item, index, cat) => {
+    const getTypeLabel = (type) => {
+        const map = {
+            'text': 'TEXT',
+            'number': 'NUMERIC',
+            'yes-no': 'YES/NO',
+            'date': 'DATE',
+            'textarea': 'LONG TEXT',
+            'select': 'DROPDOWN',
+            'checkbox-group': 'MULTI-CHECK',
+            'checkbox-date-group': 'CHECK+DATE',
+            'checkbox-text-group': 'CHECK+TEXT',
+            'gender-toggle': 'GENDER',
+            'row': 'ROW'
+        };
+        return map[type] || 'CLINICAL';
+    };
+
+    const renderQuestionCard = (item, index, cat) => {
         let inputHtml = null;
 
         if (item.type === "gender-toggle") {
             inputHtml = (
-                <select disabled className="modal-input" style={{ width: '160px' }}>
+                <select disabled className="ql-preview-select" style={{ width: '160px' }}>
                     <option>Female</option>
                     <option>Male</option>
                 </select>
             );
         } else if (item.type === "select") {
             inputHtml = (
-                <select disabled className="modal-input" style={{ width: '160px' }}>
+                <select disabled style={{ width: '160px' }}>
                     <option>Select...</option>
                     {(item.options || []).map(o => <option key={o}>{o}</option>)}
                 </select>
             );
         } else if (item.type === "yes-no") {
             inputHtml = (
-                <select disabled className="modal-input" style={{ width: '160px' }}>
+                <select disabled style={{ width: '160px' }}>
                     <option>Select...</option>
                     <option>Yes</option>
                     <option>No</option>
                 </select>
             );
         } else if (item.type === "date") {
-            inputHtml = <input type="date" disabled className="modal-input" style={{ width: '200px' }} />;
+            inputHtml = <input type="date" disabled style={{ width: '200px' }} />;
         } else if (item.type === "checkbox-group") {
             inputHtml = (
-                <div className='checkbox-box'>
+                <div className='ql-checkbox-grid'>
                     {(item.options || []).map(opt => (
                         <label key={opt}><input type='checkbox' disabled /> {opt}</label>
                     ))}
                 </div>
             );
         } else if (item.type === "textarea") {
-            inputHtml = <textarea disabled rows="3" placeholder="Long text area..." className="modal-input" style={{ width: '100%', resize: 'vertical' }} />;
+            inputHtml = <textarea disabled rows="2" placeholder="Long text area..." style={{ width: '100%', resize: 'vertical' }} />;
         } else if (item.type === "checkbox-date-group" || item.type === "checkbox-text-group") {
             inputHtml = (
-                <div className='complex-group'>
+                <div className='ql-complex-group'>
                     {(item.options || []).map(opt => (
-                        <div className="complex-row" key={opt}>
+                        <div className="ql-complex-row" key={opt}>
                             <label><input type='checkbox' disabled /> {opt}</label>
-                            {opt !== 'None' && <input type={item.type === 'checkbox-date-group' ? 'date' : 'text'} disabled placeholder="Input..." className="row-date-picker" style={{ width: '120px', padding: '4px 6px', marginLeft: '10px', fontSize: '0.75rem' }} />}
+                            {opt !== 'None' && <input type={item.type === 'checkbox-date-group' ? 'date' : 'text'} disabled placeholder="Input..." style={{ width: '120px', padding: '4px 8px', marginLeft: '10px', fontSize: '0.78rem' }} />}
                         </div>
                     ))}
-                    <div className="extra-field">
+                    <div className="ql-extra-field">
                         <span>{item.extra || 'Remarks'}:</span>
-                        <input type="text" disabled placeholder="Details..." style={{ width: '100%', padding: '4px 6px', boxSizing: 'border-box', fontSize: '0.75rem' }} />
+                        <input type="text" disabled placeholder="Details..." style={{ width: '100%', padding: '6px 8px', boxSizing: 'border-box', fontSize: '0.78rem' }} />
                     </div>
                 </div>
             );
@@ -374,187 +382,258 @@ const AdminQuestionLibrary = () => {
                 <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
                     {(item.fields || []).map(field => (
                         <div style={{ flex: 1 }} key={field.q}>
-                            <label style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '3px', display: 'block' }}>{field.q}</label>
-                            <input type={field.type || 'text'} disabled style={{ width: '100%', padding: '6px', boxSizing: 'border-box', fontSize: '0.75rem' }} />
+                            <label style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: '3px', display: 'block' }}>{field.q}</label>
+                            <input type={field.type || 'text'} disabled style={{ width: '100%', padding: '6px 8px', boxSizing: 'border-box', fontSize: '0.78rem' }} />
                         </div>
                     ))}
                 </div>
             );
         } else {
-            // text or number
-            inputHtml = <input type={item.type || 'text'} disabled placeholder="Input" style={{ width: '100%', padding: '6px', boxSizing: 'border-box', fontSize: '0.75rem' }} />;
+            inputHtml = <input type={item.type || 'text'} disabled placeholder="Input" style={{ width: '100%', padding: '8px 12px', boxSizing: 'border-box' }} />;
         }
 
         return (
-            <div className="question-row" key={index} style={{ minWidth: 0, maxWidth: '100%', boxSizing: 'border-box', position: 'relative' }}>
-                <div style={{ position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px', zIndex: 10 }}>
-                    <button className="btn-edit-q" onClick={() => handleEditQuestion(index)}>✏️ Edit</button>
-                    <button className="btn-delete-q" style={{ position: 'relative', top: '0', right: '0' }} onClick={() => handleDeleteQuestion(cat, index)}>🗑 Del</button>
+            <div className="ql-question-card" key={index}>
+                <div className="ql-question-top">
+                    <div className="ql-question-info">
+                        <span className="q-icon">❓</span>
+                        <strong>{item.q}</strong>
+                        <span className="ql-question-type-badge">{getTypeLabel(item.type)}</span>
+                    </div>
+                    <div className="ql-question-actions">
+                        <button className="ql-btn-edit-q" onClick={() => handleEditQuestion(index)}>✏️ Edit</button>
+                        <button className="ql-btn-del-q" onClick={() => handleDeleteQuestion(cat, index)}>🗑 Del</button>
+                    </div>
                 </div>
-                <strong style={{ wordWrap: 'break-word', overflowWrap: 'break-word', whiteSpace: 'pre-wrap', display: 'block', maxWidth: '100%', paddingRight: '120px' }}>{item.q}</strong>
                 {item.parentQ && (
-                    <div style={{ fontSize: '11px', color: '#ea580c', background: '#ffedd5', padding: '4px 8px', borderRadius: '4px', marginBottom: '10px', display: 'inline-block', wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap', maxWidth: '100%' }}>
-                        Only shown if <b>"{item.parentQ}"</b> equals <b>"{item.condition}"</b>
+                    <div className="ql-condition-badge">
+                        <span>⚡ Only shown if <b>"{item.parentQ}"</b> equals <b>"{item.condition}"</b></span>
                     </div>
                 )}
-                <div className="input-group">
+                <div className="ql-input-preview">
                     {inputHtml}
                 </div>
             </div>
         );
     };
 
-    if (loading) return <div>Loading UI Builder...</div>;
+    if (loading) return <div style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>Loading UI Builder...</div>;
 
     const currentCategories = libraryData[departmentTab] || {};
     const questionsInActiveCategory = currentCategories[activeCategory] || [];
     
     const visibleDepartments = allowedDepartments ? Object.keys(libraryData).filter(dept => allowedDepartments.includes(dept)) : Object.keys(libraryData);
 
+    const deptIcons = {
+        'General': '🏥',
+        'Orthopedics': '🦴',
+        'ENT': '👂',
+        'Cardiology': '❤️',
+        'Neurology': '🧠',
+        'IVF': '🧬',
+        'Genetics': '🧪',
+        'Pediatrics': '👶',
+        'Dermatology': '🩺'
+    };
+
     return (
-        <div className="ql-admin-body" style={{ overflowX: 'hidden' }}>
-            <div style={{ padding: '10px 16px', background: 'white', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                    <h1 style={{ margin: 0, color: '#1e293b', fontSize: '0.95rem' }}>Question Library Builder</h1>
-                    <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.7rem' }}>Construct dynamic diagnostic forms for doctors.</p>
+        <div className="ql-admin-body">
+            <div className="ql-page-header">
+                <div className="ql-page-header-left">
+                    <h1>Question Library Builder</h1>
+                    <p>Construct dynamic diagnostic forms for doctors.</p>
                 </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
+                <div className="ql-header-actions">
+                    <button className="ql-btn-ai-suggest">
+                        ✨ AI Suggest
+                    </button>
                     <button 
-                        className="btn-action" 
+                        className="ql-btn-preview" 
                         onClick={() => { setPreviewIntake({}); setShowPreview(true); }}
-                        style={{ background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '4px' }}
                     >
                         👁️ Preview
                     </button>
-                    <button className="btn-save" onClick={handleSave} disabled={saving}>
+                    <button className="ql-btn-save-deploy" onClick={handleSave} disabled={saving}>
                         {saving ? '⏳ Syncing...' : '💾 Save & Deploy'}
                     </button>
                 </div>
             </div>
 
-            {/* Department Navbar */}
-            <div className="gender-navbar" style={{ display: 'flex', overflowX: 'auto', gap: '4px', padding: '6px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+            {/* Department Tabs */}
+            <div className="ql-dept-tabs">
                 {visibleDepartments.map(dept => (
                     <div
                         key={dept}
-                        className={`gender-tab ${departmentTab === dept ? 'active' : ''}`}
+                        className={`ql-dept-tab ${departmentTab === dept ? 'active' : ''}`}
                         onClick={() => {
                             setDepartmentTab(dept);
                             const cats = Object.keys(libraryData[dept] || {});
                             setActiveCategory(cats.length > 0 ? cats[0] : '');
                         }}
-                        style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}
                     >
-                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px', display: 'inline-block' }}>{dept}</span>
-                        
+                        <span className="dept-icon">{deptIcons[dept] || '🩺'}</span>
+                        <span>{dept}</span>
                         {departmentTab === dept && allowedDepartments === null && (
-                            <div style={{ display: 'flex', gap: '4px', marginLeft: '4px' }}>
-                                <button 
+                            <span style={{ display: 'inline-flex', gap: '4px', marginLeft: '6px' }}>
+                                <span 
                                     onClick={(e) => { e.stopPropagation(); handleEditDepartment(dept); }} 
-                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '11px', padding: '0', color: '#64748b', opacity: 0.7, transition: 'opacity 0.2s' }}
+                                    style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7 }}
                                     title="Rename Department"
-                                    onMouseOver={(e) => e.target.style.opacity = 1}
-                                    onMouseOut={(e) => e.target.style.opacity = 0.7}
                                 >
                                     ✏️
-                                </button>
-                                <button 
+                                </span>
+                                <span 
                                     onClick={(e) => { e.stopPropagation(); handleDeleteDepartment(dept); }} 
-                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '11px', padding: '0', color: '#ef4444', opacity: 0.7, transition: 'opacity 0.2s' }}
+                                    style={{ cursor: 'pointer', fontSize: '11px', opacity: 0.7, color: '#ef4444' }}
                                     title="Delete Department"
-                                    onMouseOver={(e) => e.target.style.opacity = 1}
-                                    onMouseOut={(e) => e.target.style.opacity = 0.7}
                                 >
                                     🗑️
-                                </button>
-                            </div>
+                                </span>
+                            </span>
                         )}
                     </div>
                 ))}
                 
                 {allowedDepartments === null && (
                     <button 
+                        className="ql-btn-add-dept"
                         onClick={handleAddDepartmentClick}
-                        style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px', padding: '0 10px', cursor: 'pointer', fontWeight: '600', whiteSpace: 'nowrap', fontSize: '0.7rem' }}
                     >
                         + Add Dept
                     </button>
                 )}
             </div>
 
-            <div className="ql-admin-container">
-                <aside className="ql-admin-sidebar">
-                    <div className="input-card add-category-box" style={{ marginBottom: '10px' }}>
-                        <input type="text" id="new-cat-input" placeholder="New category name..." value={newCatName} onChange={(e) => setNewCatName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory() }} maxLength={300} />
-                        {newCatName.length >= 270 && (
-                            <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', marginBottom: '8px' }}>
-                                {newCatName.length}/300 characters
-                            </div>
-                        )}
-                        <button className="btn-action bg-teal" onClick={handleAddCategory}>+ Add New Category</button>
+            <div className="ql-main-layout">
+                <aside className="ql-sidebar">
+                    <div className="ql-add-category-card">
+                        <input 
+                            type="text" 
+                            placeholder="New category name..." 
+                            value={newCatName} 
+                            onChange={(e) => setNewCatName(e.target.value)} 
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory() }} 
+                        />
+                        <button className="ql-btn-add-category" onClick={handleAddCategory}>
+                            + Add Category
+                        </button>
                     </div>
 
-                    <div id="category-list">
-                        {Object.keys(currentCategories).map(cat => (
-                            <div key={cat} className={`sidebar-item ${cat === activeCategory ? 'active' : ''}`} style={{ minWidth: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onClick={() => setActiveCategory(cat)}>
-                                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px', minWidth: 0, display: 'inline-block' }}>{cat}</span>
-                                <div className="cat-actions" style={{ display: 'flex', gap: '8px' }}>
-                                    <button onClick={(e) => { e.stopPropagation(); handleEditCategory(cat); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '2px' }} title="Rename">✏️</button>
-                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '2px' }} title="Delete">🗑️</button>
-                                </div>
+                    {Object.keys(currentCategories).map(cat => (
+                        <div 
+                            key={cat} 
+                            className={`ql-category-item ${cat === activeCategory ? 'active' : ''}`} 
+                            onClick={() => setActiveCategory(cat)}
+                        >
+                            <div className="ql-cat-name">
+                                <span className="cat-folder-icon">{cat === activeCategory ? '📂' : '📁'}</span>
+                                <span>{cat}</span>
                             </div>
-                        ))}
-                        {Object.keys(currentCategories).length === 0 && <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center' }}>No categories added yet.</p>}
-                    </div>
+                            <span className="ql-cat-status">Active</span>
+                            <div className="ql-cat-actions">
+                                <button onClick={(e) => { e.stopPropagation(); handleEditCategory(cat); }} title="Rename">✏️</button>
+                                <button onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }} title="Delete">🗑️</button>
+                            </div>
+                        </div>
+                    ))}
+                    {Object.keys(currentCategories).length === 0 && (
+                        <div className="ql-no-cats">No categories added yet.</div>
+                    )}
                 </aside>
 
-                <main className="ql-admin-main">
+                {/* Content Panel */}
+                <main className="ql-content-panel">
                     {activeCategory ? (
                         <>
-                            <div className="content-header">
-                                <h2 id="display-title">{activeCategory.toUpperCase()}</h2>
-
-                                <button className="btn-action bg-dark" onClick={() => { setEditIndex(null); setNewQ({ q: '', type: 'text', options: '', extra: '', parentQ: '', condition: '' }); setShowAddModal(true); }}>
+                            <div className="ql-content-header">
+                                <div className="ql-content-title">
+                                    <span className="title-icon">🧬</span>
+                                    <h2>{activeCategory}</h2>
+                                </div>
+                                <button className="ql-btn-add-question" onClick={() => { setEditIndex(null); setNewQ({ q: '', type: 'text', options: '', extra: '', parentQ: '', condition: '' }); setShowAddModal(true); }}>
                                     + Add Question
                                 </button>
                             </div>
 
-                            <div id="question-wrapper">
-                                {questionsInActiveCategory.map((q, idx) => renderQuestionBuilder(q, idx, activeCategory))}
+                            <div className="ql-question-list">
+                                {questionsInActiveCategory.map((q, idx) => renderQuestionCard(q, idx, activeCategory))}
                                 {questionsInActiveCategory.length === 0 && (
-                                    <div style={{ padding: '30px', textAlign: 'center', border: '1px dashed #e2e8f0', borderRadius: '8px', color: '#94a3b8', fontSize: '0.78rem' }}>
+                                    <div className="ql-empty-questions">
                                         No questions yet. Click "+ Add Question" above.
                                     </div>
                                 )}
                             </div>
                         </>
                     ) : (
-                        <div style={{ padding: '30px', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', color: '#64748b', fontSize: '0.78rem' }}>
+                        <div className="ql-empty-content">
                             Select or create a category to view questions.
                         </div>
                     )}
                 </main>
             </div>
 
-            {/* Modal for adding questions */}
+            {/* Department Modal */}
+            {showDeptModal && (
+                <div className="ql-modal-overlay">
+                    <div className="ql-modal-content" style={{ maxWidth: '420px' }}>
+                        <h3>Add New Department</h3>
+                        
+                        <div>
+                            <label className="ql-modal-label">Select from Existing List</label>
+                            <select 
+                                className="ql-modal-input"
+                                value={selectedDept} 
+                                onChange={(e) => {
+                                    setSelectedDept(e.target.value);
+                                    setCustomDept('');
+                                }}
+                            >
+                                <option value="">-- Choose Department --</option>
+                                {predefinedDepartments.map(d => (
+                                    <option key={d} value={d}>{d}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div style={{ textAlign: 'center', margin: '6px 0', color: '#94a3b8', fontSize: '12px' }}>OR</div>
+                        
+                        <div>
+                            <label className="ql-modal-label">Type Custom Department Name</label>
+                            <input 
+                                type="text" 
+                                className="ql-modal-input" 
+                                placeholder="e.g., Cardiology, Oncology..." 
+                                value={customDept} 
+                                onChange={(e) => {
+                                    setCustomDept(e.target.value);
+                                    setSelectedDept('');
+                                }} 
+                                onKeyDown={(e) => { if (e.key === 'Enter') confirmAddDepartment() }}
+                            />
+                        </div>
+
+                        <div className="ql-modal-actions">
+                            <button className="ql-modal-btn ql-modal-btn-cancel" onClick={() => setShowDeptModal(false)}>Cancel</button>
+                            <button className="ql-modal-btn ql-modal-btn-submit" onClick={confirmAddDepartment}>Add Department</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Add/Edit Question Modal */}
             {showAddModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content">
-                        <h3 style={{ margin: '0 0 10px 0', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', color: '#0f172a' }}>{editIndex !== null ? 'Edit Question Details' : 'Add Detailed Question'}</h3>
+                <div className="ql-modal-overlay">
+                    <div className="ql-modal-content">
+                        <h3>{editIndex !== null ? 'Edit Question Details' : 'Add Detailed Question'}</h3>
 
                         <div>
-                            <label className="modal-label">Question Text</label>
-                            <textarea className="modal-input" rows="3" placeholder="e.g. Do you smoke? (Enter full details)" value={newQ.q} onChange={(e) => { const val = e.target.value; if (val.length > 500) { setNewQ({ ...newQ, q: val.slice(0, 500) }); return; } setNewQ({ ...newQ, q: val }); }} style={{ resize: 'vertical' }} maxLength={500} />
-                            {newQ.q.length >= 450 && (
-                                <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px' }}>
-                                    {newQ.q.length}/500 characters
-                                </div>
-                            )}
+                            <label className="ql-modal-label">Question Text</label>
+                            <textarea className="ql-modal-input" rows="3" placeholder="e.g. Do you smoke? (Enter full details)" value={newQ.q} onChange={(e) => setNewQ({ ...newQ, q: e.target.value })} style={{ resize: 'vertical' }} />
                         </div>
 
                         <div>
-                            <label className="modal-label">Input Type</label>
-                            <select className="modal-input" value={newQ.type} onChange={(e) => setNewQ({ ...newQ, type: e.target.value })}>
+                            <label className="ql-modal-label">Input Type</label>
+                            <select className="ql-modal-input" value={newQ.type} onChange={(e) => setNewQ({ ...newQ, type: e.target.value })}>
                                 <option value="text">Short Text</option>
                                 <option value="number">Numeric Range / Value</option>
                                 <option value="yes-no">Yes / No Question</option>
@@ -569,97 +648,47 @@ const AdminQuestionLibrary = () => {
 
                         {['select', 'checkbox-group', 'checkbox-date-group', 'checkbox-text-group'].includes(newQ.type) && (
                             <div>
-                                <label className="modal-label">Options (Comma separated)</label>
-                                <input className="modal-input" placeholder="Option A, Option B, Option C, None" value={newQ.options} onChange={(e) => setNewQ({ ...newQ, options: e.target.value })} />
+                                <label className="ql-modal-label">Options (Comma separated)</label>
+                                <input className="ql-modal-input" placeholder="Option A, Option B, Option C, None" value={newQ.options} onChange={(e) => setNewQ({ ...newQ, options: e.target.value })} />
                             </div>
                         )}
 
                         {['checkbox-date-group', 'checkbox-text-group'].includes(newQ.type) && (
                             <div>
-                                <label className="modal-label">Extra Field Label (Optional Note at the bottom)</label>
-                                <input className="modal-input" placeholder="e.g. Physician Notes" value={newQ.extra} onChange={(e) => setNewQ({ ...newQ, extra: e.target.value })} />
+                                <label className="ql-modal-label">Extra Field Label (Optional Note at the bottom)</label>
+                                <input className="ql-modal-input" placeholder="e.g. Physician Notes" value={newQ.extra} onChange={(e) => setNewQ({ ...newQ, extra: e.target.value })} />
                             </div>
                         )}
 
-                        <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '10px' }}>
-                            <label className="modal-label" style={{ color: '#475569', marginBottom: '8px' }}>Conditional Logic (Optional)</label>
-                            <p style={{ margin: '0 0 10px 0', fontSize: '11px', color: '#64748b' }}>Only display this question if a previous question has a specific answer.</p>
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                                <input className="modal-input" placeholder="Parent Question Title (Exact)" title="Must match the exact text of the parent question" value={newQ.parentQ} onChange={(e) => setNewQ({ ...newQ, parentQ: e.target.value })} />
-                                <input className="modal-input" placeholder="Required Answer Value" title="If parent question answer is this, me shows up" value={newQ.condition} onChange={(e) => setNewQ({ ...newQ, condition: e.target.value })} />
+                        <div className="ql-modal-logic-box">
+                            <label className="ql-modal-label">Conditional Logic (Optional)</label>
+                            <p>Only display this question if a previous question has a specific answer.</p>
+                            <div className="ql-modal-logic-row">
+                                <input className="ql-modal-input" placeholder="Parent Question Title (Exact)" value={newQ.parentQ} onChange={(e) => setNewQ({ ...newQ, parentQ: e.target.value })} />
+                                <input className="ql-modal-input" placeholder="Required Answer Value" value={newQ.condition} onChange={(e) => setNewQ({ ...newQ, condition: e.target.value })} />
                             </div>
                         </div>
 
-                        <div className="modal-actions" style={{ marginTop: '25px', paddingTop: '15px', borderTop: '1px solid #e2e8f0' }}>
-                            <button className="modal-btn modal-btn-cancel" onClick={resetModalState}>Discard</button>
-                            <button className="modal-btn modal-btn-submit" onClick={handleAddQuestion}>{editIndex !== null ? 'Update Question' : 'Save Question to Logic Tree'}</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            
-            {/* Department Modal */}
-            {showDeptModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content" style={{ maxWidth: '400px' }}>
-                        <h3 style={{ margin: '0 0 10px 0', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px', color: '#0f172a' }}>Add New Department</h3>
-                        
-                        <div style={{ marginBottom: '15px' }}>
-                            <label className="modal-label">Select from Existing List</label>
-                            <select 
-                                className="modal-input" 
-                                value={selectedDept} 
-                                onChange={(e) => {
-                                    setSelectedDept(e.target.value);
-                                    setCustomDept('');
-                                }}
-                            >
-                                <option value="">-- Choose Department --</option>
-                                {predefinedDepartments.map(d => (
-                                    <option key={d} value={d}>{d}</option>
-                                ))}
-                            </select>
-                        </div>
-                        
-                        <div style={{ textAlign: 'center', margin: '10px 0', color: '#94a3b8', fontSize: '12px' }}>OR</div>
-                        
-                        <div>
-                            <label className="modal-label">Type Custom Department Name</label>
-                            <input 
-                                type="text" 
-                                className="modal-input" 
-                                placeholder="e.g. IVF, Pediatrics..." 
-                                value={customDept} 
-                                onChange={(e) => {
-                                    setCustomDept(e.target.value);
-                                    setSelectedDept('');
-                                }} 
-                            />
-                        </div>
-
-                        <div className="modal-actions" style={{ marginTop: '25px', paddingTop: '15px', borderTop: '1px solid #e2e8f0' }}>
-                            <button className="modal-btn modal-btn-cancel" onClick={() => setShowDeptModal(false)}>Cancel</button>
-                            <button className="modal-btn modal-btn-submit" onClick={confirmAddDepartment}>Add Department</button>
+                        <div className="ql-modal-actions">
+                            <button className="ql-modal-btn ql-modal-btn-cancel" onClick={resetModalState}>Discard</button>
+                            <button className="ql-modal-btn ql-modal-btn-submit" onClick={handleAddQuestion}>{editIndex !== null ? 'Update Question' : 'Save Question to Logic Tree'}</button>
                         </div>
                     </div>
                 </div>
             )}
             {/* Preview Modal */}
             {showPreview && (
-                <div className="modal-overlay" style={{ zIndex: 10000 }}>
-                    <div className="modal-content" style={{ maxWidth: '1000px', width: '95vw', background: '#f1f5f9', padding: '0', overflow: 'hidden', height: '90vh', display: 'flex', flexDirection: 'column' }}>
-                        {/* Fake Header */}
-                        <div style={{ background: '#1e293b', padding: '15px 25px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="ql-modal-overlay ql-preview-modal">
+                    <div className="ql-modal-content" style={{ maxWidth: '1000px', width: '95vw', background: '#f1f5f9', padding: '0', overflow: 'hidden', height: '90vh', display: 'flex', flexDirection: 'column' }}>
+                        <div className="ql-preview-header">
                             <div>
-                                <div style={{ fontSize: '10px', textTransform: 'uppercase', opacity: 0.7, fontWeight: 800, letterSpacing: '0.05em' }}>Doctor Desktop View Preview</div>
+                                <div className="preview-label">Doctor Desktop View Preview</div>
                                 <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Consultation Page: <span style={{ color: '#38bdf8' }}>{departmentTab} Department</span></h3>
                             </div>
-                            <button onClick={() => setShowPreview(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer' }}>✕</button>
+                            <button className="ql-preview-close" onClick={() => setShowPreview(false)}>✕</button>
                         </div>
 
-                        {/* Preview Body */}
                         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-                            {/* Fake Doctor Sidebar */}
                             <div style={{ width: '280px', background: 'white', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
                                 <div style={{ padding: '25px 20px', borderBottom: '1px solid #f1f5f9' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' }}>
@@ -696,7 +725,6 @@ const AdminQuestionLibrary = () => {
                                 </div>
                             </div>
 
-                            {/* Main Preview Content */}
                             <div style={{ flex: 1, background: '#fff', overflowY: 'auto' }}>
                                 <div style={{ padding: '30px' }}>
                                     {activeCategory ? (
@@ -707,7 +735,6 @@ const AdminQuestionLibrary = () => {
                                             </div>
                                             
                                             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '25px' }}>
-                                                {/* Reuse the real Dynamic Form Component */}
                                                 <div className="dynamic-question-form-preview">
                                                     {questionsInActiveCategory.map((item, idx) => {
                                                         if (item.condition && previewIntake[item.parentQ] !== item.condition) return null;
@@ -721,14 +748,13 @@ const AdminQuestionLibrary = () => {
                                                             });
                                                         };
 
-                                                        // Manual render logic since we can't easily import DynamicQuestionForm without issues sometimes in nested structures OR we just want direct control
                                                         return (
                                                             <div key={idx} style={{ marginBottom: '20px' }}>
                                                                 <label style={{ fontWeight: '700', fontSize: '14px', display: 'block', marginBottom: '8px', color: '#334155' }}>{item.q}</label>
                                                                 
-                                                                {item.type === 'text' && <input type="text" placeholder="Free text input" value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }} />}
-                                                                {item.type === 'number' && <input type="number" placeholder="Enter value" value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }} />}
-                                                                {item.type === 'date' && <input type="date" value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }} />}
+                                                                {item.type === 'text' && <input type="text" placeholder="Free text input" value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', boxSizing: 'border-box' }} />}
+                                                                {item.type === 'number' && <input type="number" placeholder="Enter value" value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', boxSizing: 'border-box' }} />}
+                                                                {item.type === 'date' && <input type="date" value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', boxSizing: 'border-box' }} />}
                                                                 
                                                                 {item.type === 'select' && (
                                                                     <select value={previewIntake[item.q] || ''} onChange={e => handleAnswer(item.q, e.target.value)} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }}>
@@ -739,8 +765,8 @@ const AdminQuestionLibrary = () => {
 
                                                                 {item.type === 'yes-no' && (
                                                                     <div style={{ display: 'flex', gap: '10px' }}>
-                                                                        <button onClick={() => handleAnswer(item.q, 'Yes')} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: previewIntake[item.q] === 'Yes' ? '#3b82f6' : '#fff', color: previewIntake[item.q] === 'Yes' ? '#fff' : '#475569', fontWeight: 600 }}>Yes</button>
-                                                                        <button onClick={() => handleAnswer(item.q, 'No')} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: previewIntake[item.q] === 'No' ? '#ef4444' : '#fff', color: previewIntake[item.q] === 'No' ? '#fff' : '#475569', fontWeight: 600 }}>No</button>
+                                                                        <button onClick={() => handleAnswer(item.q, 'Yes')} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: previewIntake[item.q] === 'Yes' ? '#3b82f6' : '#fff', color: previewIntake[item.q] === 'Yes' ? '#fff' : '#475569', fontWeight: 600, cursor: 'pointer' }}>Yes</button>
+                                                                        <button onClick={() => handleAnswer(item.q, 'No')} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: previewIntake[item.q] === 'No' ? '#ef4444' : '#fff', color: previewIntake[item.q] === 'No' ? '#fff' : '#475569', fontWeight: 600, cursor: 'pointer' }}>No</button>
                                                                     </div>
                                                                 )}
 
@@ -776,7 +802,7 @@ const AdminQuestionLibrary = () => {
                                                                     </div>
                                                                 )}
 
-                                                                {item.type === 'textarea' && <textarea rows={4} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px' }} placeholder="Clinical notes here..." />}
+                                                                {item.type === 'textarea' && <textarea rows={4} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '8px', boxSizing: 'border-box' }} placeholder="Clinical notes here..." />}
                                                             </div>
                                                         );
                                                     })}
@@ -784,7 +810,7 @@ const AdminQuestionLibrary = () => {
                                             </div>
 
                                             <button 
-                                                style={{ width: '100%', padding: '15px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: 'white', border: 'none', borderRadius: '12px', marginTop: '30px', fontWeight: 'bold', fontSize: '16px', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}
+                                                style={{ width: '100%', padding: '15px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', color: 'white', border: 'none', borderRadius: '12px', marginTop: '30px', fontWeight: 'bold', fontSize: '16px', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)', cursor: 'pointer' }}
                                             >
                                                 💾 Save & Continue to Next Step (Demo)
                                             </button>
