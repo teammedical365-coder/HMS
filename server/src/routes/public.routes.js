@@ -210,8 +210,11 @@ router.get('/branding', async (req, res) => {
 
         const Hospital = require('../models/hospital.model');
         const query = {};
-        if (domain) query['brandingSchema.customDomain'] = domain;
-        if (slug) query.slug = slug;
+        if (domain) {
+            const cleanDomain = domain.toLowerCase().trim().replace(/^https?:\/\//i, '').split('/')[0].split('?')[0].split(':')[0];
+            query.customDomain = new RegExp('^' + cleanDomain + '$', 'i');
+        }
+        if (slug) query.slug = slug.toLowerCase().trim();
 
         const hospital = await Hospital.findOne(query);
 
@@ -235,8 +238,11 @@ router.get('/manifest', async (req, res) => {
 
         if (domain || slug) {
             const query = {};
-            if (domain) query['brandingSchema.customDomain'] = domain;
-            if (slug) query.slug = slug;
+            if (domain) {
+                const cleanDomain = domain.toLowerCase().trim().replace(/^https?:\/\//i, '').split('/')[0].split('?')[0].split(':')[0];
+                query.customDomain = new RegExp('^' + cleanDomain + '$', 'i');
+            }
+            if (slug) query.slug = slug.toLowerCase().trim();
             hospital = await Hospital.findOne(query);
         }
 

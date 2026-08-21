@@ -8,7 +8,7 @@
  *   - Stored in localStorage so it persists across page refreshes
  */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { hospitalAPI, publicAPI } from '../utils/api';
+import { hospitalAPI, publicAPI, baseURL } from '../utils/api';
 import socket from '../utils/socket';
 
 // Default Medical 365 branding (platform defaults)
@@ -196,7 +196,7 @@ export const BrandingProvider = ({ children }) => {
             // If we are on a custom domain, try to fetch the tenant config using Phase 2 endpoint
             if (!isBaseDomain) {
                 try {
-                    const response = await fetch(`/api/public/branding?domain=${domain}`);
+                    const response = await fetch(`${baseURL}/api/public/branding?domain=${domain}`);
                     if (response.ok) {
                         const res = await response.json();
                         if (res && res.branding) {
