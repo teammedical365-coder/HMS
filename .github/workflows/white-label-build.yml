@@ -88,18 +88,31 @@ jobs:
       - name: Download & Process Logo
         run: |
           LOGO_URL="${{ github.event.inputs.logoUrl }}"
-          # Check if the URL is relative (starts with /)
-          if [[ "$LOGO_URL" == /* ]]; then
-            LOGO_URL="https://hms-n6nk.onrender.com${LOGO_URL}"
-          fi
           
           if [ "$LOGO_URL" != "default" ] && [ "$LOGO_URL" != "" ]; then
-            echo "Downloading logo from $LOGO_URL"
             mkdir -p client/assets
-            curl -f -L -s "$LOGO_URL" -o client/assets/icon.png || {
-              echo "::error::Failed to download logo from URL: $LOGO_URL"
-              exit 1
-            }
+            
+            # Check if it is a Base64 encoded string
+            if [[ "$LOGO_URL" == data:image/* ]]; then
+              echo "Processing Base64 logo..."
+              # Strip the data URI prefix (e.g., data:image/png;base64,)
+              BASE64_DATA=$(echo "$LOGO_URL" | sed 's/^data:image\/[^;]*;base64,//')
+              echo "$BASE64_DATA" | base64 -d > client/assets/icon.png || {
+                echo "::error::Failed to decode Base64 logo"
+                exit 1
+              }
+            else
+              # Check if the URL is relative (starts with /)
+              if [[ "$LOGO_URL" == /* ]]; then
+                LOGO_URL="https://hms-n6nk.onrender.com${LOGO_URL}"
+              fi
+              
+              echo "Downloading logo from $LOGO_URL"
+              curl -f -L -s "$LOGO_URL" -o client/assets/icon.png || {
+                echo "::error::Failed to download logo from URL: $LOGO_URL"
+                exit 1
+              }
+            fi
           else
             echo "Using default logo"
           fi
