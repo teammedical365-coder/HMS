@@ -133,6 +133,9 @@ jobs:
             echo "No custom icon.png found. Skipping asset generation."
           fi
           
+          # Inject the White-Label Tenant ID into the Vite build environment
+          echo "VITE_APP_TENANT_ID=${{ github.event.inputs.tenantId }}" > .env.production.local
+          
           npm run build
           npx cap sync android
 

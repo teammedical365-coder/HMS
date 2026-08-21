@@ -200,21 +200,26 @@ router.get('/manifest.json', async (req, res) => {
     }
 });
 
-// Endpoint 1: Fetch branding details based on requested domain/slug
+// Endpoint 1: Fetch branding details based on requested domain/slug/tenantId
 router.get('/branding', async (req, res) => {
     try {
-        const { domain, slug } = req.query;
-        if (!domain && !slug) {
-            return res.status(400).json({ error: 'Please provide a domain or slug' });
+        const { domain, slug, tenantId } = req.query;
+        if (!domain && !slug && !tenantId) {
+            return res.status(400).json({ error: 'Please provide a domain, slug, or tenantId' });
         }
 
         const Hospital = require('../models/hospital.model');
         const query = {};
-        if (domain) {
-            const cleanDomain = domain.toLowerCase().trim().replace(/^https?:\/\//i, '').split('/')[0].split('?')[0].split(':')[0];
-            query.customDomain = new RegExp('^' + cleanDomain + '$', 'i');
+        
+        if (tenantId) {
+            query._id = tenantId;
+        } else {
+            if (domain) {
+                const cleanDomain = domain.toLowerCase().trim().replace(/^https?:\/\//i, '').split('/')[0].split('?')[0].split(':')[0];
+                query.customDomain = new RegExp('^' + cleanDomain + '$', 'i');
+            }
+            if (slug) query.slug = slug.toLowerCase().trim();
         }
-        if (slug) query.slug = slug.toLowerCase().trim();
 
         const hospital = await Hospital.findOne(query);
 
