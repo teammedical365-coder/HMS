@@ -188,15 +188,25 @@ export const BrandingProvider = ({ children }) => {
     // Auto-detect white-label domain on mount
     useEffect(() => {
         const initBranding = async () => {
-            const domain = window.location.hostname;
-            // Treat localhost specially for dev, though you can test domains locally by modifying hosts
-            const isBaseDomain = domain === 'medical365.in' || domain === 'www.medical365.in' || domain === 'localhost';
+            const injectedTenantId = import.meta.env.VITE_APP_TENANT_ID;
             let fetchedFromDomain = false;
 
-            // If we are on a custom domain, try to fetch the tenant config using Phase 2 endpoint
-            if (!isBaseDomain) {
-                try {
-                    const response = await fetch(`${baseURL}/api/public/branding?domain=${domain}`);
+            try {
+                let response = null;
+                const domain = window.location.hostname;
+
+                if (injectedTenantId) {
+                    // Mobile build specific injection overrides hostname
+                    response = await fetch(`${baseURL}/api/public/branding?tenantId=${injectedTenantId}`);
+                } else {
+                    // Web browser normal flow
+                    const isBaseDomain = domain === 'medical365.in' || domain === 'www.medical365.in' || domain === 'localhost';
+                    if (!isBaseDomain) {
+                        response = await fetch(`${baseURL}/api/public/branding?domain=${domain}`);
+                    }
+                }
+
+                if (response) {
                     if (response.ok) {
                         const res = await response.json();
                         if (res && res.branding) {
@@ -216,13 +226,13 @@ export const BrandingProvider = ({ children }) => {
                             fetchedFromDomain = true;
                         }
                     } else if (response.status === 404) {
-                        console.info(`[Branding] White-label config not found for domain: ${domain}. Using defaults.`);
+                        console.info(`[Branding] White-label config not found. Using defaults.`);
                     } else {
-                        console.warn('[Branding] Failed to fetch white-label config for domain:', domain);
+                        console.error('[Branding] Failed to fetch custom branding', response.status);
                     }
-                } catch (err) {
-                    console.warn('[Branding] Network error fetching tenant config for domain:', domain, err?.message);
                 }
+            } catch (error) {
+                console.error('[Branding] Network error fetching branding:', error);
             }
 
             // Fallback to localStorage if no custom domain branding was fetched
