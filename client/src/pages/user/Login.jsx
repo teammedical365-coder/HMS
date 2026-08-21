@@ -10,10 +10,12 @@ import OtpVerification from '../../components/OtpVerification';
 import ActiveSessionModal from '../../components/ActiveSessionModal';
 import { Capacitor } from '@capacitor/core';
 import { baseURL } from '../../utils/api';
+import { useBranding } from '../../context/BrandingContext';
 import './Login.css';
 
 const Login = () => {
     const navigate = useNavigate();
+    const { branding } = useBranding();
     const [searchParams] = useSearchParams();
     const dispatch = useAppDispatch();
     const { loading, error, isAuthenticated, user, otpStep, preAuthToken, otpEmail, activeSession, otpSuccessMsg, tenant } = useAuth();
@@ -135,7 +137,7 @@ const Login = () => {
                 className="w-full max-w-md rounded-2xl bg-white p-6 sm:p-8 shadow-xl border border-slate-100"
             >
                 <div className="text-center">
-                    <img src="/assets/medical365-logo.png" alt="Medical 365" className="max-w-[180px] h-auto mx-auto mb-4" />
+                    <img src={branding?.logoUrl || "/assets/medical365-logo.png"} alt={branding?.appName || "Medical 365"} className="max-h-20 w-auto max-w-[220px] mx-auto mb-4 object-contain" />
                 </div>
 
                 <div className="text-center mb-6">
