@@ -107,44 +107,36 @@
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--panel-border);
-  border-radius: 20px;
-  padding: 18px 28px;
+  border-radius: 16px;
+  padding: 16px 24px;
   box-shadow: var(--shadow-subtle);
 }
 
 .ql-header-titles h1 {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
-  letter-spacing: -0.5px;
+  color: #1e293b;
+  letter-spacing: -0.3px;
+  margin: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0;
 }
-
-.brand-medical { color: var(--brand-blue); }
-.brand-365 { color: var(--brand-teal); }
-.brand-divider { color: #cbd5e1; font-weight: 300; margin: 0 4px; }
-.brand-subtext { font-size: 19px; color: #1e293b; font-weight: 700; }
 
 .ql-header-titles p {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: inherit;
   margin-top: 4px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  font-weight: 600;
-}
-
-.status-secure {
-  color: var(--brand-teal);
-  font-weight: 750;
+  margin-bottom: 0;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
 }
 
 .ql-header-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
 }
 
@@ -152,72 +144,42 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 20px;
-  border-radius: 12px;
+  padding: 9px 18px;
+  border-radius: 10px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.2s ease;
   border: 1.5px solid transparent;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   background: #ffffff;
   font-family: inherit;
 }
 
-.ql-btn-ai {
-  background: rgba(56, 178, 155, 0.1);
-  color: var(--brand-teal);
-  border-color: rgba(56, 178, 155, 0.35);
-  position: relative;
-  overflow: hidden;
-}
-
-.ql-btn-ai::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 50%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(56, 178, 155, 0.25), transparent);
-  animation: btnScan 2.4s infinite;
-}
-
-@keyframes btnScan {
-  100% { left: 200%; }
-}
-
-.ql-btn-ai:hover { 
-  background: var(--brand-teal); 
-  color: #ffffff; 
-  box-shadow: var(--glow-teal); 
-  border-color: var(--brand-teal);
-}
-
 .ql-btn-preview {
-  color: var(--brand-blue);
-  border-color: rgba(30, 96, 164, 0.25);
+  color: #475569;
+  background: #f8fafc;
+  border-color: #e2e8f0;
 }
 
 .ql-btn-preview:hover { 
-  background: rgba(30, 96, 164, 0.06); 
-  border-color: var(--brand-blue); 
+  background: #f1f5f9; 
+  color: #1e293b;
+  border-color: #cbd5e1;
 }
 
 .ql-btn-save {
-  background: linear-gradient(135deg, var(--brand-blue), var(--brand-teal));
+  background: linear-gradient(135deg, #1E60A4, #38B29B);
   color: #ffffff;
   border: none;
-  box-shadow: var(--glow-teal);
+  box-shadow: 0 4px 14px rgba(30, 96, 164, 0.25);
 }
 
 .ql-btn-save:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(56, 178, 155, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(30, 96, 164, 0.35);
 }
 
-.ql-btn-save:disabled, .ql-btn-ai:disabled {
+.ql-btn-save:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
