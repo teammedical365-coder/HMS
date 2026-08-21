@@ -132,7 +132,7 @@ router.get('/resolve/:slug', async (req, res) => {
 // Create a new hospital
 router.post('/', verifyCentralAdmin, async (req, res) => {
     try {
-        const { name, address, city, state, phone, email, website, logo, departments, slug: customSlug, plan } = req.body;
+        const { name, address, city, state, phone, email, website, logo, departments, slug: customSlug, plan, whiteLabelEnabled, brandingSchema } = req.body;
         if (!name) return res.status(400).json({ success: false, message: 'Hospital name is required' });
 
         const RESERVED_SLUGS = ['api', 'admin', 'login', 'logout', 'signup', 'register', 'uploads',
@@ -159,7 +159,7 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             slug = `${baseSlug}-${counter++}`;
         }
 
-        const hospitalData = { name, slug, address, city, state, phone, email, website, logo, departments: departments || [] };
+        const hospitalData = { name, slug, address, city, state, phone, email, website, logo, departments: departments || [], whiteLabelEnabled, brandingSchema };
         if (plan === 'multi_speciality_starter') {
             hospitalData.subscriptionPlan = 'multi_speciality_starter';
             hospitalData.tier = { maxDoctors: 15, maxStaff: 25 };
@@ -252,7 +252,7 @@ router.get('/tenant-status', verifyCentralAdmin, async (req, res) => {
 // Update a hospital
 const updateHospital = async (req, res) => {
     try {
-        const { name, address, city, state, phone, email, website, logo, isActive, departments, slug, appointmentMode, customDomain, plan } = req.body;
+        const { name, address, city, state, phone, email, website, logo, isActive, departments, slug, appointmentMode, customDomain, plan, whiteLabelEnabled, brandingSchema } = req.body;
         const hospital = await Hospital.findOne({ _id: req.params.id, clinicType: { $ne: 'clinic' } });
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
@@ -298,6 +298,8 @@ const updateHospital = async (req, res) => {
         if (isActive !== undefined) hospital.isActive = isActive;
         if (departments !== undefined) hospital.departments = departments;
         if (appointmentMode !== undefined && ['slot', 'token'].includes(appointmentMode)) hospital.appointmentMode = appointmentMode;
+        if (whiteLabelEnabled !== undefined) hospital.whiteLabelEnabled = whiteLabelEnabled;
+        if (brandingSchema !== undefined) hospital.brandingSchema = brandingSchema;
 
         if (plan === 'multi_speciality_starter') {
             hospital.subscriptionPlan = 'multi_speciality_starter';
