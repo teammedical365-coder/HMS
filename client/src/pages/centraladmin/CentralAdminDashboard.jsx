@@ -110,7 +110,7 @@ const CentralAdminDashboard = () => {
     const [hospitals, setHospitals] = useState([]);
     const [loadingHospitals, setLoadingHospitals] = useState(false);
     const [showHospitalForm, setShowHospitalForm] = useState(false);
-    const [hospitalForm, setHospitalForm] = useState({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] });
+    const [hospitalForm, setHospitalForm] = useState({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], whiteLabelEnabled: false, brandingSchema: { appName: '', logoUrl: '', customDomain: '', themeColors: { primary: '#14b8a6', secondary: '#0a2647', background: '#ffffff' } } });
     const [editHospital, setEditHospital] = useState(null);
     const [savingHospital, setSavingHospital] = useState(false);
     const [deleteHospitalConfirm, setDeleteHospitalConfirm] = useState(null);
@@ -632,12 +632,19 @@ const CentralAdminDashboard = () => {
             if (activeTab === 'multi-speciality') plan = 'multi_speciality_starter';
             else if (activeTab === 'clinic-basic') plan = 'clinic_basic';
 
+            const payload = {
+                ...hospitalForm,
+                plan,
+                whiteLabelEnabled: hospitalForm.whiteLabelEnabled,
+                brandingSchema: hospitalForm.brandingSchema
+            };
+
             if (editHospital) {
-                const res = await hospitalAPI.updateHospital(editHospital._id, { ...hospitalForm, plan });
+                const res = await hospitalAPI.updateHospital(editHospital._id, payload);
                 if (res.success) { setSuccess('Hospital updated!'); setEditHospital(null); setShowHospitalForm(false); fetchHospitals(); }
             } else {
-                const res = await hospitalAPI.createHospital({ ...hospitalForm, plan });
-                if (res.success) { setSuccess('Hospital created!'); setShowHospitalForm(false); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] }); fetchHospitals(); }
+                const res = await hospitalAPI.createHospital(payload);
+                if (res.success) { setSuccess('Hospital created!'); setShowHospitalForm(false); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], whiteLabelEnabled: false, brandingSchema: { appName: '', logoUrl: '', customDomain: '', themeColors: { primary: '#14b8a6', secondary: '#0a2647', background: '#ffffff' } } }); fetchHospitals(); }
             }
         } catch (err) { setError(err.response?.data?.message || 'Error saving hospital.'); }
         finally { setSavingHospital(false); }
@@ -657,8 +664,31 @@ const CentralAdminDashboard = () => {
     };
 
     const openEditHospital = (h) => {
+        console.log("Hospital Data from DB:", h);
         setEditHospital(h);
-        setHospitalForm({ name: h.name, slug: h.slug || '', customDomain: h.customDomain || '', address: h.address || '', city: h.city || '', state: h.state || '', phone: h.phone || '', email: h.email || '', website: h.website || '', departments: h.departments || [] });
+        setHospitalForm({ 
+            name: h.name, 
+            slug: h.slug || '', 
+            customDomain: h.customDomain || '', 
+            address: h.address || '', 
+            city: h.city || '', 
+            state: h.state || '', 
+            phone: h.phone || '', 
+            email: h.email || '', 
+            website: h.website || '', 
+            departments: h.departments || [], 
+            whiteLabelEnabled: h.whiteLabelEnabled || false, 
+            brandingSchema: { 
+                appName: h.brandingSchema?.appName || '', 
+                logoUrl: h.brandingSchema?.logoUrl || '', 
+                customDomain: h.brandingSchema?.customDomain || '', 
+                themeColors: { 
+                    primary: h.brandingSchema?.themeColors?.primary || '#14b8a6', 
+                    secondary: h.brandingSchema?.themeColors?.secondary || '#0a2647', 
+                    background: h.brandingSchema?.themeColors?.background || '#ffffff' 
+                } 
+            } 
+        });
         setShowHospitalAdminForm(false);
         setShowHospitalForm(true);
         setTimeout(() => hospitalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
@@ -1256,40 +1286,24 @@ const CentralAdminDashboard = () => {
                                 </div>
                             </div>
                             <div className="cad-plan-actions-row">
-                                {(showHospitalForm || editHospital) ? (
-                                    <button
-                                        className="cad-btn-secondary"
-                                        onClick={() => { setShowHospitalForm(false); setEditHospital(null); }}
-                                    >
-                                        Cancel
-                                    </button>
-                                ) : showHospitalAdminForm ? (
-                                    <button
-                                        className="cad-btn-secondary"
-                                        onClick={() => { setShowHospitalAdminForm(false); }}
-                                    >
-                                        Cancel
-                                    </button>
-                                ) : (
-                                    <>
-                                        <button
-                                            className="cad-btn-secondary"
-                                            onClick={() => { setShowHospitalAdminForm(true); setShowHospitalForm(false); setEditHospital(null); }}
-                                        >
-                                            + Add Hospital Admin
-                                        </button>
-                                        <button
-                                            className="cad-btn-primary"
-                                            onClick={() => { setShowHospitalForm(true); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] }); }}
-                                        >
-                                            {activeTab === 'hospitals' 
-                                                ? '+ Add Enterprise Hospital' 
-                                                : activeTab === 'multi-speciality' 
-                                                    ? '+ Add Multi-Speciality' 
-                                                    : '+ Add Clinic Basic'}
-                                        </button>
-                                    </>
-                                )}
+                                <button
+                                    className="cad-btn-secondary"
+                                    onClick={() => { setShowHospitalAdminForm(!showHospitalAdminForm); setShowHospitalForm(false); setEditHospital(null); }}
+                                >
+                                    {showHospitalAdminForm ? 'Cancel' : '+ Add Hospital Admin'}
+                                </button>
+                                <button
+                                    className="cad-btn-primary"
+                                    onClick={() => { setShowHospitalForm(!showHospitalForm); setShowHospitalAdminForm(false); setEditHospital(null); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [] }); }}
+                                >
+                                    {showHospitalForm 
+                                        ? 'Cancel' 
+                                        : activeTab === 'hospitals' 
+                                            ? '+ Add Enterprise Hospital' 
+                                            : activeTab === 'multi-speciality' 
+                                                ? '+ Add Multi-Speciality' 
+                                                : '+ Add Clinic Basic'}
+                                </button>
                             </div>
                         </div>
 
@@ -1472,23 +1486,7 @@ const CentralAdminDashboard = () => {
                                                 </div>
                                             </div>
 
-                                            {/* Row 2: Custom White-Label Domain */}
-                                            <div className="cad-ch-row-full">
-                                                <div className="cad-ch-field-group">
-                                                    <label className="cad-ch-label">
-                                                        Custom White-Label Domain
-                                                        <span className="cad-ch-info-icon" title="Custom domain mapped via CNAME (Optional)">ⓘ</span>
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        className="cad-ch-input"
-                                                        placeholder="e.g. portal.cityhospital.com"
-                                                        value={hospitalForm.customDomain || ''}
-                                                        onChange={e => setHospitalForm({ ...hospitalForm, customDomain: e.target.value.toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '') })}
-                                                    />
-                                                    <span className="cad-ch-help-text">Optional. Maps via DNS CNAME.</span>
-                                                </div>
-                                            </div>
+
 
                                             {/* Row 3: City, State, Phone */}
                                             <div className="cad-ch-row-3col">
@@ -1652,6 +1650,104 @@ const CentralAdminDashboard = () => {
                                                         )}
                                                     </div>
                                                 </div>
+                                            </div>
+
+                                            {/* White-Label & Branding Settings */}
+                                            <div style={{ marginTop: '24px', padding: '20px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <div>
+                                                        <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#1e293b', margin: 0 }}>White-Label & Branding Settings</h3>
+                                                        <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>Configure custom domains, themes, and logos for this hospital.</p>
+                                                    </div>
+                                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={hospitalForm.whiteLabelEnabled} 
+                                                            onChange={e => setHospitalForm({ ...hospitalForm, whiteLabelEnabled: e.target.checked })}
+                                                            style={{ width: '18px', height: '18px', accentColor: '#059669', cursor: 'pointer' }}
+                                                        />
+                                                        <span style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.95rem' }}>Enable White-Label</span>
+                                                    </label>
+                                                </div>
+
+                                                {hospitalForm.whiteLabelEnabled && (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+                                                        <div className="cad-ch-row-2col">
+                                                            <div className="cad-ch-field-group">
+                                                                <label className="cad-ch-label">Custom Domain <span className="cad-ch-info-icon" title="e.g. portal.cityhospital.com">ⓘ</span></label>
+                                                                <input
+                                                                    type="text"
+                                                                    className="cad-ch-input"
+                                                                    placeholder="portal.cityhospital.com"
+                                                                    value={hospitalForm.customDomain || ''}
+                                                                    onChange={e => setHospitalForm({ ...hospitalForm, customDomain: e.target.value.toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '') })}
+                                                                />
+                                                            </div>
+                                                            <div className="cad-ch-field-group">
+                                                                <label className="cad-ch-label">App Name</label>
+                                                                <input
+                                                                    type="text"
+                                                                    className="cad-ch-input"
+                                                                    placeholder="e.g. City Care"
+                                                                    value={hospitalForm.brandingSchema?.appName || ''}
+                                                                    onChange={e => setHospitalForm({ ...hospitalForm, brandingSchema: { ...hospitalForm.brandingSchema, appName: e.target.value } })}
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="cad-ch-row-full">
+                                                            <div className="cad-ch-field-group">
+                                                                <label className="cad-ch-label">Logo URL</label>
+                                                                <input
+                                                                    type="text"
+                                                                    className="cad-ch-input"
+                                                                    placeholder="https://example.com/logo.png"
+                                                                    value={hospitalForm.brandingSchema?.logoUrl || ''}
+                                                                    onChange={e => setHospitalForm({ ...hospitalForm, brandingSchema: { ...hospitalForm.brandingSchema, logoUrl: e.target.value } })}
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="cad-ch-row-3col">
+                                                            <div className="cad-ch-field-group">
+                                                                <label className="cad-ch-label">Primary Color</label>
+                                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                                    <input
+                                                                        type="color"
+                                                                        value={hospitalForm.brandingSchema?.themeColors?.primary || '#14b8a6'}
+                                                                        onChange={e => setHospitalForm({ ...hospitalForm, brandingSchema: { ...hospitalForm.brandingSchema, themeColors: { ...hospitalForm.brandingSchema?.themeColors, primary: e.target.value } } })}
+                                                                        style={{ height: '42px', width: '42px', padding: '0', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                                                    />
+                                                                    <input type="text" className="cad-ch-input" style={{ flex: 1 }} value={hospitalForm.brandingSchema?.themeColors?.primary || '#14b8a6'} readOnly />
+                                                                </div>
+                                                            </div>
+                                                            <div className="cad-ch-field-group">
+                                                                <label className="cad-ch-label">Secondary Color</label>
+                                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                                    <input
+                                                                        type="color"
+                                                                        value={hospitalForm.brandingSchema?.themeColors?.secondary || '#0a2647'}
+                                                                        onChange={e => setHospitalForm({ ...hospitalForm, brandingSchema: { ...hospitalForm.brandingSchema, themeColors: { ...hospitalForm.brandingSchema?.themeColors, secondary: e.target.value } } })}
+                                                                        style={{ height: '42px', width: '42px', padding: '0', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                                                    />
+                                                                    <input type="text" className="cad-ch-input" style={{ flex: 1 }} value={hospitalForm.brandingSchema?.themeColors?.secondary || '#0a2647'} readOnly />
+                                                                </div>
+                                                            </div>
+                                                            <div className="cad-ch-field-group">
+                                                                <label className="cad-ch-label">Background Color</label>
+                                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                                    <input
+                                                                        type="color"
+                                                                        value={hospitalForm.brandingSchema?.themeColors?.background || '#ffffff'}
+                                                                        onChange={e => setHospitalForm({ ...hospitalForm, brandingSchema: { ...hospitalForm.brandingSchema, themeColors: { ...hospitalForm.brandingSchema?.themeColors, background: e.target.value } } })}
+                                                                        style={{ height: '42px', width: '42px', padding: '0', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                                                    />
+                                                                    <input type="text" className="cad-ch-input" style={{ flex: 1 }} value={hospitalForm.brandingSchema?.themeColors?.background || '#ffffff'} readOnly />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Submit Button */}

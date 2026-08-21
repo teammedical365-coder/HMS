@@ -200,4 +200,96 @@ router.get('/manifest.json', async (req, res) => {
     }
 });
 
+// Endpoint 1: Fetch branding details based on requested domain/slug
+router.get('/branding', async (req, res) => {
+    try {
+        const { domain, slug } = req.query;
+        if (!domain && !slug) {
+            return res.status(400).json({ error: 'Please provide a domain or slug' });
+        }
+
+        const Hospital = require('../models/hospital.model');
+        const query = {};
+        if (domain) query['brandingSchema.customDomain'] = domain;
+        if (slug) query.slug = slug;
+
+        const hospital = await Hospital.findOne(query);
+
+        if (!hospital || !hospital.whiteLabelEnabled) {
+            return res.status(404).json({ error: 'Branding not found or white-label disabled' });
+        }
+
+        res.json({ branding: hospital.brandingSchema });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error fetching branding details' });
+    }
+});
+
+// Endpoint 2: Dynamic PWA Manifest (Phase 2 White-Label Request)
+router.get('/manifest', async (req, res) => {
+    try {
+        const { domain, slug } = req.query;
+        let hospital = null;
+        
+        const Hospital = require('../models/hospital.model');
+
+        if (domain || slug) {
+            const query = {};
+            if (domain) query['brandingSchema.customDomain'] = domain;
+            if (slug) query.slug = slug;
+            hospital = await Hospital.findOne(query);
+        }
+
+        // The default Medical 365 manifest object
+        const defaultManifest = {
+            name: "Medical 365",
+            short_name: "Medical 365",
+            start_url: "/",
+            display: "standalone",
+            background_color: "#ffffff",
+            theme_color: "#14b8a6",
+            icons: [
+                {
+                    src: "/icons/default-icon-192.png",
+                    sizes: "192x192",
+                    type: "image/png"
+                },
+                {
+                    src: "/icons/default-icon-512.png",
+                    sizes: "512x512",
+                    type: "image/png"
+                }
+            ]
+        };
+
+        // If white-label is enabled, merge custom branding over the default manifest
+        if (hospital && hospital.whiteLabelEnabled && hospital.brandingSchema) {
+            const dynamicManifest = {
+                ...defaultManifest,
+                name: hospital.brandingSchema.appName || defaultManifest.name,
+                short_name: hospital.brandingSchema.appName || defaultManifest.short_name,
+                theme_color: hospital.brandingSchema.themeColors?.primary || defaultManifest.theme_color,
+                icons: [
+                    {
+                        src: hospital.brandingSchema.logoUrl || defaultManifest.icons[0].src,
+                        sizes: "192x192", 
+                        type: "image/png"
+                    },
+                    {
+                        src: hospital.brandingSchema.logoUrl || defaultManifest.icons[1].src,
+                        sizes: "512x512",
+                        type: "image/png"
+                    }
+                ]
+            };
+            return res.json(dynamicManifest);
+        }
+
+        // Otherwise return the default config
+        res.json(defaultManifest);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error generating manifest' });
+    }
+});
+
 module.exports = router;

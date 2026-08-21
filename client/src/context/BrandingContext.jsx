@@ -72,6 +72,11 @@ function applyBrandingToCSS(branding) {
     root.style.setProperty('--brand-50',  `rgba(${hex2rgb(primary)}, 0.08)`);
     root.style.setProperty('--brand-100', `rgba(${hex2rgb(primary)}, 0.14)`);
 
+    // Add CSS properties as requested by White-Label Phase 4
+    root.style.setProperty('--primary-color', primary);
+    root.style.setProperty('--secondary-color', secondary);
+    root.style.setProperty('--bg-color', bg);
+
     // Navy overrides (use secondaryColor as the deep dark)
     root.style.setProperty('--navy-900', secondary);
     root.style.setProperty('--navy-800', secondary);
@@ -188,25 +193,35 @@ export const BrandingProvider = ({ children }) => {
             const isBaseDomain = domain === 'medical365.in' || domain === 'www.medical365.in' || domain === 'localhost';
             let fetchedFromDomain = false;
 
-            // If we are on a custom domain, try to fetch the tenant config
+            // If we are on a custom domain, try to fetch the tenant config using Phase 2 endpoint
             if (!isBaseDomain) {
                 try {
-                    const res = await publicAPI.getTenantConfig(domain);
-                    if (res && res.success && res.tenant) {
-                        const merged = { ...DEFAULT_BRANDING, ...res.tenant.branding };
-                        setBranding(merged);
-                        setHospitalName(res.tenant.name || 'Medical 365');
-                        setHospitalId(res.tenant.id);
-                        setIsCustomBranded(true);
-                        applyBrandingToCSS(merged);
-                        fetchedFromDomain = true;
+                    const response = await fetch(`/api/public/branding?domain=${domain}`);
+                    if (response.ok) {
+                        const res = await response.json();
+                        if (res && res.branding) {
+                            // Extract Phase 1 themeColors
+                            const customTheme = res.branding.themeColors || {};
+                            const merged = { 
+                                ...DEFAULT_BRANDING, 
+                                ...res.branding,
+                                primaryColor: customTheme.primary || DEFAULT_BRANDING.primaryColor,
+                                secondaryColor: customTheme.secondary || DEFAULT_BRANDING.secondaryColor,
+                                backgroundColor: customTheme.background || DEFAULT_BRANDING.backgroundColor
+                            };
+                            setBranding(merged);
+                            setHospitalName(res.branding.appName || 'Medical 365');
+                            setIsCustomBranded(true);
+                            applyBrandingToCSS(merged);
+                            fetchedFromDomain = true;
+                        }
+                    } else if (response.status === 404) {
+                        console.info(`[Branding] White-label config not found for domain: ${domain}. Using defaults.`);
+                    } else {
+                        console.warn('[Branding] Failed to fetch white-label config for domain:', domain);
                     }
                 } catch (err) {
-                    if (err?.response?.status === 404) {
-                        console.info(`[Branding] Tenant config not found for domain: ${domain}. Using defaults.`);
-                    } else {
-                        console.warn('[Branding] Failed to fetch tenant config for domain:', domain, err?.message);
-                    }
+                    console.warn('[Branding] Network error fetching tenant config for domain:', domain, err?.message);
                 }
             }
 

@@ -24,6 +24,14 @@ const brandingSchema = new mongoose.Schema({
     twitterUrl:    { type: String, default: '' },
     // Footer
     footerText:    { type: String, default: '' },  // e.g. "© 2025 AKG Hospital. All rights reserved."
+    
+    // NEW FIELDS added as per White-Label Architecture request
+    customDomain:  { type: String, default: '' },
+    themeColors: {
+        primary: { type: String, default: '#14b8a6' },
+        secondary: { type: String, default: '#0a2647' },
+        background: { type: String, default: '#ffffff' }
+    }
 }, { _id: false });
 
 const hospitalSchema = new mongoose.Schema({
@@ -52,9 +60,11 @@ const hospitalSchema = new mongoose.Schema({
     }],
     // White-label branding config (per hospital)
     branding: { type: brandingSchema, default: () => ({}) },
+    brandingSchema: { type: brandingSchema, default: () => ({}) }, // Added as per White-Label Architecture Phase 1 request
 
     // White-Label Engine Flags & Mobile App Config
     isWhitelabeled: { type: Boolean, default: false },
+    whiteLabelEnabled: { type: Boolean, default: false }, // Added as per White-Label Architecture Phase 1 request
     appConfig: {
         androidPackageId: { type: String, trim: true, default: '' }, // e.g., com.hospital.crm
         appVersion: { type: String, trim: true, default: '1.0.0' },
