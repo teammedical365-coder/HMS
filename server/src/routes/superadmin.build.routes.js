@@ -41,7 +41,7 @@ router.post('/:id/build-app', verifyCentralAdmin, async (req, res) => {
 
         // 1. Rigorous Manual Validation & Sanitization
         // Remove special characters that could break scripts or paths
-        const safeAppName = (hospital.branding?.appName || hospital.name || 'City Hospital')
+        const safeAppName = (hospital.brandingSchema?.appName || hospital.branding?.appName || hospital.name || 'City Hospital')
             .replace(/[^a-zA-Z0-9\s]/g, '')
             .trim();
         
