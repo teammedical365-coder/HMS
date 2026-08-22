@@ -249,6 +249,11 @@ router.get('/:id/build-status', verifyCentralAdmin, async (req, res) => {
 router.get('/:id/download/apk', async (req, res) => {
     try {
         const hospital = await Hospital.findById(req.params.id);
+
+        if (hospital?.appConfig?.apkUrl && hospital.appConfig.apkUrl.startsWith('http')) {
+            return res.redirect(hospital.appConfig.apkUrl);
+        }
+
         const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
         
         let filePath = path.join(__dirname, '../../public/downloads/apks', `${safeName}-release.apk`);
