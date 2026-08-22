@@ -676,25 +676,15 @@ const AdminQuestionLibrary = () => {
                 {/* ─── 1. HEADER ─── */}
                 <header className="ql-app-header">
                     <div className="ql-header-titles">
-                        <h1>
-                            <span className="brand-medical">MEDICAL</span>
-                            <span className="brand-365">365</span>
-                            <span className="brand-divider">/</span>
-                            <span className="brand-subtext">Question Library Builder</span>
-                        </h1>
-                        <p>
-                            STATUS: <span className="status-secure">NODE SECURE</span> | AWAITING INPUT
-                        </p>
+                        <h1>Question Library Builder</h1>
+                        <p>Construct dynamic diagnostic forms for doctors.</p>
                     </div>
                     <div className="ql-header-actions">
-                        <button className="ql-btn ql-btn-ai" onClick={handleAiAutoGenerate} disabled={isAiGenerating}>
-                            <FaMicrochip /> {isAiGenerating ? 'Synthesizing...' : 'Auto-Generate'}
-                        </button>
                         <button className="ql-btn ql-btn-preview" onClick={() => { setPreviewIntake({}); setShowPreview(true); }}>
-                            <FaVrCardboard /> Smart View
+                            <FaEye /> Preview
                         </button>
                         <button className="ql-btn ql-btn-save" onClick={handleSave} disabled={saving}>
-                            <FaCloudArrowUp /> {saving ? 'Deploying...' : 'Deploy to Core'}
+                            <FaCloudArrowUp /> {saving ? 'Syncing...' : 'Save & Deploy'}
                         </button>
                     </div>
                 </header>
