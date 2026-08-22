@@ -165,13 +165,9 @@ jobs:
           ARTIFACT_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           WEBHOOK_SECRET="${{ secrets.GITHUB_WEBHOOK_SECRET || 'dev-secret-123' }}"
           
-          curl -X POST "https://hms-n6nk.onrender.com/api/superadmin/hospitals/webhook/github?secret=${WEBHOOK_SECRET}" \
-               -H "Content-Type: application/json" \
-               -d '{
-                 "tenantId": "${{ github.event.inputs.tenantId }}",
-                 "status": "COMPLETED",
-                 "apkUrl": "'"$ARTIFACT_URL"'"
-               }'
+          curl -X POST "https://hms-n6nk.onrender.com/api/superadmin/hospitals/webhook/github/upload?secret=${WEBHOOK_SECRET}" \
+               -F "apk=@output_artifacts/app.apk" \
+               -F "tenantId=${{ github.event.inputs.tenantId }}"
 
       - name: Notify Backend Webhook (Failure)
         if: failure()

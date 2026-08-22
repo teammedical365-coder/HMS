@@ -3,9 +3,32 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
+const multer = require('multer');
 
 const Hospital = require('../models/hospital.model');
 const { verifyToken } = require('../middleware/auth.middleware');
+
+// Configure multer for APK uploads
+const apkStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dest = path.join(__dirname, '../../public/downloads/apks');
+        if (!fs.existsSync(dest)) {
+            fs.mkdirSync(dest, { recursive: true });
+        }
+        cb(null, dest);
+    },
+    filename: async (req, file, cb) => {
+        try {
+            const tenantId = req.body.tenantId;
+            const hospital = await Hospital.findById(tenantId);
+            const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
+            cb(null, `${safeName}-release.apk`);
+        } catch (err) {
+            cb(err);
+        }
+    }
+});
+const uploadApk = multer({ storage: apkStorage });
 
 // Central Admin verify middleware
 const verifyCentralAdmin = async (req, res, next) => {
@@ -211,6 +234,45 @@ router.post('/webhook/github', async (req, res) => {
 });
 
 /**
+ * POST /api/superadmin/hospitals/webhook/github/upload
+ * Webhook for direct APK file upload from GitHub Actions
+ */
+router.post('/webhook/github/upload', uploadApk.single('apk'), async (req, res) => {
+    try {
+        const { secret } = req.query;
+        const expectedSecret = process.env.GITHUB_WEBHOOK_SECRET || 'dev-secret-123';
+        if (secret !== expectedSecret) {
+            return res.status(403).json({ success: false, message: 'Unauthorized webhook request' });
+        }
+
+        const { tenantId } = req.body;
+        if (!tenantId || !req.file) {
+            return res.status(400).json({ success: false, message: 'Missing tenantId or APK file' });
+        }
+
+        const hospital = await Hospital.findById(tenantId);
+        if (!hospital) {
+            return res.status(404).json({ success: false, message: 'Tenant not found' });
+        }
+
+        hospital.appConfig.buildStatus = 'COMPLETED';
+        hospital.appConfig.lastBuiltAt = new Date();
+        hospital.appConfig.buildError = '';
+        
+        // Ensure apkUrl points back to the local static route instead of github
+        const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
+        hospital.appConfig.apkUrl = `/downloads/apks/${safeName}-release.apk`;
+        
+        await hospital.save();
+        return res.json({ success: true, message: 'APK uploaded and build status updated successfully' });
+
+    } catch (err) {
+        console.error('Upload webhook error:', err);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+/**
  * GET /api/superadmin/hospitals/:id/build-status
  */
 router.get('/:id/build-status', verifyCentralAdmin, async (req, res) => {
@@ -249,11 +311,6 @@ router.get('/:id/build-status', verifyCentralAdmin, async (req, res) => {
 router.get('/:id/download/apk', async (req, res) => {
     try {
         const hospital = await Hospital.findById(req.params.id);
-
-        if (hospital?.appConfig?.apkUrl && hospital.appConfig.apkUrl.startsWith('http')) {
-            return res.redirect(hospital.appConfig.apkUrl);
-        }
-
         const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
         
         let filePath = path.join(__dirname, '../../public/downloads/apks', `${safeName}-release.apk`);
