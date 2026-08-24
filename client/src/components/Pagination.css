@@ -1,0 +1,231 @@
+/* ============================================================
+   Medical365 — Premium Animated Pagination
+   ============================================================ */
+
+.med365-pagination-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  margin-top: 16px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  gap: 16px;
+  flex-wrap: wrap;
+  animation: med365PaginationEntrance 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+@keyframes med365PaginationEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- Left: Showing info --- */
+.med365-pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.med365-pagination-info .info-text {
+  line-height: 1.5;
+}
+
+.med365-pagination-info .info-highlight {
+  color: #1e293b;
+  font-weight: 700;
+}
+
+/* --- Right: Controls container --- */
+.med365-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --- Base Button Styles --- */
+.med365-page-nav-btn,
+.med365-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.med365-page-btn {
+  min-width: 38px;
+  height: 38px;
+  padding: 0 8px;
+}
+
+.med365-page-nav-btn {
+  height: 38px;
+  padding: 0 14px;
+  gap: 8px;
+}
+
+/* --- Nav Arrow Animations --- */
+.nav-arrow {
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 1;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.med365-page-nav-btn:not(.disabled):hover .prev-arrow {
+  transform: translateX(-3px);
+}
+
+.med365-page-nav-btn:not(.disabled):hover .next-arrow {
+  transform: translateX(3px);
+}
+
+/* --- Hover & Active States for Buttons --- */
+.med365-page-nav-btn:not(.disabled):hover,
+.med365-page-btn:not(.active):hover {
+  background: #f8fafc;
+  color: #0f766e;
+  border-color: #99f6e4;
+  transform: translateY(-1.5px);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.12);
+}
+
+.med365-page-nav-btn:not(.disabled):active,
+.med365-page-btn:not(.active):active {
+  transform: scale(0.95);
+}
+
+/* --- Disabled State --- */
+.med365-page-nav-btn.disabled,
+.med365-page-nav-btn:disabled {
+  opacity: 0.45;
+  background: #f1f5f9;
+  color: #94a3b8;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+  box-shadow: none;
+}
+
+/* --- Active Page Button --- */
+.med365-page-btn.active {
+  background: linear-gradient(135deg, #1E60A4, #38B29B);
+  color: #ffffff;
+  border-color: transparent;
+  font-weight: 750;
+  box-shadow: 0 4px 14px rgba(30, 96, 164, 0.35);
+  transform: scale(1.05);
+  cursor: default;
+}
+
+.med365-page-btn.active:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 18px rgba(30, 96, 164, 0.45);
+}
+
+/* --- Ellipsis --- */
+.med365-page-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 38px;
+  color: #94a3b8;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 2px;
+  user-select: none;
+}
+
+/* --- Desktop Numbers Container --- */
+.med365-page-numbers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* --- Mobile Indicator (Hidden on Desktop) --- */
+.med365-page-mobile-indicator {
+  display: none;
+  font-size: 0.85rem;
+  color: #475569;
+  font-weight: 500;
+  padding: 0 4px;
+}
+
+.med365-page-mobile-indicator strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+/* ============================================================
+   Responsive Media Queries
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .med365-pagination-wrapper {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .med365-pagination-info {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .med365-pagination-controls {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 540px) {
+  .med365-page-numbers {
+    display: none;
+  }
+
+  .med365-page-mobile-indicator {
+    display: block;
+  }
+
+  .med365-page-nav-btn {
+    padding: 0 10px;
+    font-size: 0.82rem;
+  }
+
+  .med365-pagination-controls {
+    justify-content: space-between;
+    width: 100%;
+  }
+}

@@ -26,20 +26,139 @@ import {
 } from 'react-icons/fa6';
 import './AdminQuestionLibrary.css';
 
+const defaultQuestionLibraryData = {
+    "ENT": {
+        "Clinical History & Intake": [
+            { q: "When did the ear/throat/nose pain or irritation first start?", type: "text" },
+            { q: "Have you consulted a doctor or taken any treatment for this previously?", type: "yes-no" },
+            { q: "Are you currently taking any medicines (antibiotics, pain killers, nasal sprays)?", type: "textarea" },
+            { q: "Does anyone in your family (parents/siblings) have a history of allergies or sinus/hearing issues?", type: "yes-no" },
+            { q: "Which primary symptoms are you currently experiencing?", type: "checkbox-group", options: ["Ear Pain / Discharge", "Throat Soreness / Pain Swallowing", "Nasal Congestion / Blockage", "Hearing Loss / Ringing (Tinnitus)", "Dizziness / Vertigo", "Frequent Sneezing / Cold"] },
+            { q: "Pain Severity Level (Scale 1 to 10)", type: "select", options: ["1 - Very Mild", "3 - Mild", "5 - Moderate", "7 - Severe", "9 - Very Severe", "10 - Unbearable"] }
+        ]
+    },
+    "Cardiology": {
+        "Cardiac Symptoms & Risk Profile": [
+            { q: "When did you first notice the chest discomfort, heaviness, or palpitations?", type: "text" },
+            { q: "Have you ever had an ECG, 2D Echo, Angiography, or TMT test done before?", type: "yes-no" },
+            { q: "Are you currently taking any blood pressure, blood thinner (Aspirin), or cholesterol medicines?", type: "textarea" },
+            { q: "Is there a family history of heart attack, hypertension, or sudden cardiac issues (Parents/Siblings)?", type: "yes-no" },
+            { q: "Nature and sensation of chest discomfort", type: "select", options: ["Heavy Pressure / Squeezing", "Sharp / Stabbing", "Burning / Acidity-like", "Shortness of Breath on Exertion", "No Chest Pain (Only Palpitations)"] },
+            { q: "Does the discomfort radiate to left arm, neck, shoulder, jaw, or back?", type: "yes-no" }
+        ]
+    },
+    "Orthopedics": {
+        "Joint & Bone Assessment": [
+            { q: "When did the bone/joint/back pain begin, and was it caused by an injury or fall?", type: "text" },
+            { q: "Have you had prior X-rays, MRI scans, or physiotherapy for this condition?", type: "yes-no" },
+            { q: "What pain relief tablets, ointments, or calcium/vitamin D supplements are you taking?", type: "textarea" },
+            { q: "Does any family member suffer from Arthritis, Gout, Spondylitis, or Osteoporosis?", type: "yes-no" },
+            { q: "Are you able to put weight on the affected limb and walk without support?", type: "yes-no" },
+            { q: "Associated symptoms observed", type: "checkbox-group", options: ["Joint Swelling / Warmth", "Morning Stiffness (>30 mins)", "Joint Clicking / Locking", "Numbness / Tingling in Limbs", "Restricted Joint Movement"] }
+        ]
+    },
+    "Pediatrics": {
+        "Child Health & Development": [
+            { q: "When did the child's fever, cough, vomiting, or symptoms first appear?", type: "text" },
+            { q: "Has the child visited a clinic or received emergency pediatric care for this episode?", type: "yes-no" },
+            { q: "What syrups, drops, or fever medicines (with dose & time) were given?", type: "textarea" },
+            { q: "Is the child's vaccination / immunization schedule completely up-to-date?", type: "yes-no" },
+            { q: "Feeding, fluid intake, and active urine output status", type: "select", options: ["Normal Feeding & Playful", "Mildly Reduced Oral Intake", "Lethargic / Decreased Urine Output", "Refusing All Feeds / Vomiting Everything"] },
+            { q: "Family history of childhood asthma, eczema, or food allergies", type: "yes-no" }
+        ]
+    },
+    "Gynecology & Obstetrics": {
+        "Women's Health & Obstetric Profile": [
+            { q: "What was the date of your Last Menstrual Period (LMP)?", type: "text" },
+            { q: "Have you consulted a gynecologist or had prior pelvic ultrasound scans?", type: "yes-no" },
+            { q: "Are you currently taking any hormonal pills, thyroid medication, iron, or folic acid?", type: "textarea" },
+            { q: "Is there a family history of PCOD/PCOS, Fibroids, Diabetes, or Gynae issues?", type: "yes-no" },
+            { q: "Primary complaints and symptoms experienced", type: "checkbox-group", options: ["Irregular / Delayed Periods", "Severe Cramps / Pelvic Pain", "Heavy Bleeding with Clots", "Abnormal Vaginal Discharge / Itching", "Morning Sickness / Nausea", "Difficulty in Conceiving"] },
+            { q: "Obstetric history: Total prior pregnancies (Gravida / Para / Living / Abortion)", type: "text" }
+        ]
+    },
+    "Dermatology": {
+        "Skin & Hair Assessment": [
+            { q: "When did the skin rash, itching, boil, or hair loss first appear?", type: "text" },
+            { q: "Have you applied any steroid creams, home remedies, or taken skin treatments before?", type: "yes-no" },
+            { q: "List all oral medicines, supplements, soaps, oils, or cosmetics started recently", type: "textarea" },
+            { q: "Does anyone in your family have Psoriasis, Eczema, Fungal infections, or Vitiligo?", type: "yes-no" },
+            { q: "Characteristics and triggers of the skin condition", type: "checkbox-group", options: ["Intense Itching (Worse at night)", "Burning / Painful Sensation", "Spreading to Other Body Parts", "Flaking / Peeling Skin", "Pus-filled Lesions / Blisters", "Triggered by Sun / Sweat"] },
+            { q: "Any known food, drug, or chemical allergies?", type: "text" }
+        ]
+    },
+    "Ophthalmology": {
+        "Eye Health & Vision Intake": [
+            { q: "When did you first notice blurriness, redness, irritation, or vision changes?", type: "text" },
+            { q: "Do you currently wear eyeglasses or contact lenses?", type: "yes-no" },
+            { q: "Are you using any eye drops (lubricant, antibiotic, anti-glaucoma, steroid)?", type: "textarea" },
+            { q: "Is there a family history of Glaucoma, Cataract, or Diabetic Retinopathy?", type: "yes-no" },
+            { q: "Which eye is affected and what are the primary symptoms?", type: "checkbox-group", options: ["Right Eye Only", "Left Eye Only", "Both Eyes", "Redness & Excessive Watering", "Foreign Body Sensation / Grittiness", "Night Blindness / Glare Sensitivity", "Floaters / Flashes of Light"] },
+            { q: "Do you have a history of Diabetes or High Blood Pressure?", type: "yes-no" }
+        ]
+    },
+    "Neurology": {
+        "Neurological Screening Protocol": [
+            { q: "When did the headaches, dizziness, tremors, or weakness first begin?", type: "text" },
+            { q: "Have you ever had an MRI/CT Brain scan, EEG, or consultation with a neurologist?", type: "yes-no" },
+            { q: "Are you currently taking any anti-seizure, nerve pain, or migraine medicines?", type: "textarea" },
+            { q: "Is there a family history of Stroke, Epilepsy, Parkinson's, or chronic migraines?", type: "yes-no" },
+            { q: "Symptoms experienced during or between episodes", type: "checkbox-group", options: ["One-sided Throbbing Headache", "Numbness / Tingling in Arms/Legs", "Fainting / Loss of Consciousness", "Hand Tremors / Muscle Jerks", "Slurred Speech / Difficulty Speaking", "Balance / Walking Difficulty"] },
+            { q: "Severity and impact on daily activities", type: "select", options: ["Mild - Does not affect daily work", "Moderate - Disables temporarily during episodes", "Severe - Unable to perform normal work / bedridden"] }
+        ]
+    },
+    "Gastroenterology": {
+        "Digestive & GI Tract Evaluation": [
+            { q: "When did the stomach pain, indigestion, acidity, or bowel irregularity begin?", type: "text" },
+            { q: "Have you undergone an Endoscopy, Colonoscopy, or Abdominal Ultrasound previously?", type: "yes-no" },
+            { q: "What antacids (Pan-D, Omez), laxatives, or digestive syrups do you consume regularly?", type: "textarea" },
+            { q: "Is there a family history of Gastric Ulcers, Gallstones, Fatty Liver, or Colon Polyps?", type: "yes-no" },
+            { q: "Primary digestive complaints noted", type: "checkbox-group", options: ["Heartburn / Chest Acid Burning (GERD)", "Stomach Bloating / Excessive Gas", "Chronic Constipation", "Frequent Loose Stools / Diarrhea", "Post-Meal Nausea / Vomiting", "Black Stool / Blood in Stool"] },
+            { q: "Pain relation to food consumption", type: "select", options: ["Increases after eating spicy/oily food", "Relieved after eating food/milk", "Severe on empty stomach", "No fixed relation to meals"] }
+        ]
+    },
+    "Pulmonology": {
+        "Respiratory & Chest Health": [
+            { q: "Since how many days/months have you had the cough, breathlessness, or wheezing?", type: "text" },
+            { q: "Have you had a Chest X-ray, HRCT Chest, or Pulmonary Function Test (PFT/Spirometry)?", type: "yes-no" },
+            { q: "Do you use an inhaler (Rotahaler/Metered dose), nebulizer, or steroid syrups?", type: "textarea" },
+            { q: "Is there a family history of Asthma, Chronic Bronchitis, TB, or Dust Allergy?", type: "yes-no" },
+            { q: "Nature of cough and sputum production", type: "select", options: ["Dry Persistent Cough", "Wet Cough with Clear White Sputum", "Thick Yellow/Green Sputum", "Cough with Blood Streaks (Hemoptysis)", "Night-time Wheezing / Breathlessness"] },
+            { q: "Tobacco / Smoking history and environmental exposure", type: "select", options: ["Non-Smoker (No exposure)", "Active Smoker (>5 cigarettes/day)", "Former Smoker (Quit)", "Heavy Dust / Chemical Factory Exposure"] }
+        ]
+    },
+    "General Medicine": {
+        "Baseline Clinical History": [
+            { q: "What is your main health concern or problem, and when did it start?", type: "textarea" },
+            { q: "Have you been hospitalized or had surgery in the past 2-3 years?", type: "yes-no" },
+            { q: "List all ongoing daily medications, dosages, and health supplements", type: "textarea" },
+            { q: "Family history of chronic conditions (Diabetes, High BP, Kidney Disease, Thyroid)?", type: "yes-no" },
+            { q: "Constitutional symptoms present currently", type: "checkbox-group", options: ["Fever / Chills", "Unexplained Weight Loss", "Extreme Fatigue / Weakness", "Loss of Appetite", "Disturbed Sleep / Insomnia", "Generalized Body Aches"] },
+            { q: "Any known drug allergies (e.g. Penicillin, Sulfa, Paracetamol, Aspirin)?", type: "text" }
+        ]
+    },
+    "Dentistry": {
+        "Dental & Oral Health History": [
+            { q: "When did the toothache, sensitivity, swelling, or gum bleeding start?", type: "text" },
+            { q: "When was your last dental check-up, cleaning (scaling), or tooth filling done?", type: "text" },
+            { q: "Are you taking pain relievers, antibiotics, or blood-thinning medications?", type: "textarea" },
+            { q: "Is there a family history of early tooth loss, gum problems, or jaw disorders?", type: "yes-no" },
+            { q: "Primary dental and oral complaints", type: "checkbox-group", options: ["Sharp Pain on Biting / Chewing", "Hot & Cold Sensitivity", "Bleeding / Swollen / Receding Gums", "Bad Breath (Halitosis)", "Mobile / Loose Tooth", "Jaw Joint (TMJ) Pain / Clicking"] },
+            { q: "Oral hygiene and habits", type: "select", options: ["Brushing Once Daily", "Brushing Twice Daily", "Night Teeth Grinding (Bruxism)", "Tobacco / Gutkha / Pan Masala Habit", "None"] }
+        ]
+    }
+};
+
 const AdminQuestionLibrary = () => {
-    const [libraryData, setLibraryData] = useState({
-        "General": {},
-        "Orthopedics": {},
-        "ENT": {}
-    });
+    const [libraryData, setLibraryData] = useState(defaultQuestionLibraryData);
 
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [isAiGenerating, setIsAiGenerating] = useState(false);
     const [allowedDepartments, setAllowedDepartments] = useState(null);
 
-    const [departmentTab, setDepartmentTab] = useState('General');
-    const [activeCategory, setActiveCategory] = useState('');
+    const [departmentTab, setDepartmentTab] = useState('ENT');
+    const [activeCategory, setActiveCategory] = useState('Clinical History & Intake');
     const [newCatName, setNewCatName] = useState('');
 
     const [showAddModal, setShowAddModal] = useState(false);
@@ -52,7 +171,9 @@ const AdminQuestionLibrary = () => {
 
     // Predefined departments for dropdown
     const [predefinedDepartments, setPredefinedDepartments] = useState([
-        "General", "Orthopedics", "ENT", "Cardiology", "Neurology", "Pediatrics", "Gynecology", "Dermatology", "Oncology", "IVF"
+        "ENT", "Cardiology", "Orthopedics", "Pediatrics", "Gynecology & Obstetrics", 
+        "Dermatology", "Ophthalmology", "Neurology", "Gastroenterology", "Pulmonology", 
+        "General Medicine", "Dentistry"
     ]);
 
     const [showPreview, setShowPreview] = useState(false);
@@ -67,120 +188,6 @@ const AdminQuestionLibrary = () => {
         condition: ''
     });
 
-    // Canvas Ref for Light Neural Particles
-    const canvasRef = useRef(null);
-
-    // ─── Neural Particle Canvas Effect ───
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const ctx = canvas.getContext('2d');
-        let animationFrameId;
-        let particles = [];
-
-        const brandBlue = 'rgba(30, 96, 164,';  
-        const brandTeal = 'rgba(56, 178, 155,'; 
-
-        const resize = () => {
-            if (!canvas) return;
-            canvas.width = canvas.parentElement ? canvas.parentElement.offsetWidth : window.innerWidth;
-            canvas.height = canvas.parentElement ? canvas.parentElement.offsetHeight : window.innerHeight;
-        };
-
-        window.addEventListener('resize', resize);
-        resize();
-
-        let mouse = { x: null, y: null, radius: 140 };
-        const handleMouseMove = (e) => {
-            const rect = canvas.getBoundingClientRect();
-            mouse.x = e.clientX - rect.left;
-            mouse.y = e.clientY - rect.top;
-        };
-        const handleMouseLeave = () => {
-            mouse.x = null;
-            mouse.y = null;
-        };
-
-        window.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseleave', handleMouseLeave);
-
-        class Particle {
-            constructor() {
-                this.x = Math.random() * (canvas.width || window.innerWidth);
-                this.y = Math.random() * (canvas.height || window.innerHeight);
-                this.size = Math.random() * 2 + 0.6;
-                this.speedX = (Math.random() - 0.5) * 0.55;
-                this.speedY = (Math.random() - 0.5) * 0.55;
-                this.isTeal = Math.random() > 0.5; 
-            }
-            update() {
-                this.x += this.speedX;
-                this.y += this.speedY;
-
-                if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
-                if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
-
-                if (mouse.x != null) {
-                    let dx = mouse.x - this.x;
-                    let dy = mouse.y - this.y;
-                    let distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance < mouse.radius) {
-                        let force = (mouse.radius - distance) / mouse.radius;
-                        this.x -= (dx / distance) * force * 2;
-                        this.y -= (dy / distance) * force * 2;
-                    }
-                }
-            }
-            draw() {
-                ctx.fillStyle = this.isTeal ? `${brandTeal} 0.55)` : `${brandBlue} 0.55)`;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-
-        const particleCount = Math.min(65, Math.floor(((canvas.width || 1200) * (canvas.height || 800)) / 16000));
-        for (let i = 0; i < particleCount; i++) {
-            particles.push(new Particle());
-        }
-
-        const animate = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            for (let i = 0; i < particles.length; i++) {
-                particles[i].update();
-                particles[i].draw();
-                
-                for (let j = i + 1; j < particles.length; j++) {
-                    let dx = particles[i].x - particles[j].x;
-                    let dy = particles[i].y - particles[j].y;
-                    let distance = Math.sqrt(dx * dx + dy * dy);
-                    
-                    if (distance < 110) {
-                        ctx.strokeStyle = particles[i].isTeal 
-                            ? `${brandTeal} ${0.45 - distance / 240})` 
-                            : `${brandBlue} ${0.45 - distance / 240})`;
-                        ctx.lineWidth = 0.5;
-                        ctx.beginPath();
-                        ctx.moveTo(particles[i].x, particles[i].y);
-                        ctx.lineTo(particles[j].x, particles[j].y);
-                        ctx.stroke();
-                    }
-                }
-            }
-            animationFrameId = requestAnimationFrame(animate);
-        };
-        animate();
-
-        return () => {
-            window.removeEventListener('resize', resize);
-            window.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseleave', handleMouseLeave);
-            cancelAnimationFrame(animationFrameId);
-        };
-    }, []);
-
     useEffect(() => {
         fetchLibrary();
     }, []);
@@ -191,30 +198,48 @@ const AdminQuestionLibrary = () => {
             const res = await questionLibraryAPI.getLibrary();
             let data = res.data?.data;
             if (!data || Object.keys(data).length === 0) {
-                data = { "General": {}, "Orthopedics": {}, "ENT": {} };
+                data = defaultQuestionLibraryData;
+            } else {
+                // Ensure all 12 departments are always merged in
+                data = { ...defaultQuestionLibraryData, ...data };
             }
 
             setLibraryData(data);
             setAllowedDepartments(res.allowedDepartments || null);
 
             const visibleDepts = res.allowedDepartments ? Object.keys(data).filter(d => res.allowedDepartments.includes(d)) : Object.keys(data);
-            let defaultDept = 'General';
+            let defaultDept = visibleDepts.length > 0 ? visibleDepts[0] : 'ENT';
             
-            if (visibleDepts.length > 0) {
-                defaultDept = visibleDepts[0];
-                setDepartmentTab(defaultDept);
-                const firstDeptCats = Object.keys(data[defaultDept] || {});
-                if (firstDeptCats.length > 0) {
-                    setActiveCategory(firstDeptCats[0]);
-                }
-            } else {
-                setDepartmentTab('General');
+            setDepartmentTab(defaultDept);
+            const firstDeptCats = Object.keys(data[defaultDept] || {});
+            if (firstDeptCats.length > 0) {
+                setActiveCategory(firstDeptCats[0]);
             }
         } catch (err) {
             console.error('Error fetching question library:', err);
             toast.error('Failed to fetch library.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleResetToStandard = async () => {
+        const confirmed = await confirmToast(
+            "Do you want to reset & load all 12 standard medical departments (ENT, Cardiology, Orthopedics, Pediatrics, Gynecology, etc.) with 60+ clinical intake questions?",
+            { title: 'Load 12 Medical Departments', confirmText: 'Load All 12 Depts' }
+        );
+        if (!confirmed) return;
+        setLibraryData(defaultQuestionLibraryData);
+        setDepartmentTab('ENT');
+        setActiveCategory('Clinical History & Intake');
+        setSaving(true);
+        try {
+            await questionLibraryAPI.updateLibrary(defaultQuestionLibraryData);
+            toast.success('✨ Successfully loaded and deployed all 12 Medical Departments!');
+        } catch (err) {
+            toast.error('Error updating standard library in database.');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -403,45 +428,116 @@ const AdminQuestionLibrary = () => {
         const dept = departmentTab || 'General';
 
         const suggestionsMap = {
-            'Orthopedics': [
-                { name: 'Fracture Assessment Matrix', questions: [
-                    { q: 'Injury Onset & Mechanism', type: 'text' },
-                    { q: 'Weight Bearing Ability', type: 'yes-no' },
-                    { q: 'Swelling & Deformity Observed', type: 'checkbox-group', options: ['Ecchymosis', 'Joint Effusion', 'Visible Displacement', 'None'] },
-                    { q: 'Range of Motion Limitation', type: 'select', options: ['None', 'Mild (<25%)', 'Moderate (25-50%)', 'Severe (>50%)'] }
-                ]},
-                { name: 'Pre-Op Joint Mobility Protocol', questions: [
-                    { q: 'Baseline Knee/Hip Flexion Degree', type: 'number' },
-                    { q: 'Previous Arthroscopy History', type: 'yes-no' },
-                    { q: 'Current NSAID Regimen', type: 'textarea' }
-                ]}
-            ],
-            'Neurology': [
-                { name: 'Cranial Nerve Evaluation Protocol', questions: [
-                    { q: 'Visual Field Acuity', type: 'select', options: ['Normal', 'Hemianopia', 'Blurred', 'Diplopia'] },
-                    { q: 'Facial Symmetry Test', type: 'yes-no' },
-                    { q: 'Motor Tone & Reflex Scale (0-4+)', type: 'select', options: ['0 (Areflexia)', '1+ (Hypoactive)', '2+ (Normal)', '3+ (Hyperactive)', '4+ (Clonus)'] }
+            'ENT': [
+                { name: 'Audiometry & Vertigo Profile', questions: [
+                    { q: 'When did the ear pain, throat soreness, or nasal blockage start?', type: 'text' },
+                    { q: 'Have you had prior ENT surgeries, tonsillectomy, or ear discharge?', type: 'yes-no' },
+                    { q: 'Current antibiotic or nasal drop regimen', type: 'textarea' },
+                    { q: 'Family history of hearing loss, sinus, or allergic rhinitis', type: 'yes-no' },
+                    { q: 'Primary ENT symptoms', type: 'checkbox-group', options: ['Ear Pain / Discharge', 'Throat Soreness', 'Nasal Congestion', 'Hearing Loss / Tinnitus', 'Dizziness / Vertigo'] },
+                    { q: 'Pain Severity Scale (1 - 10)', type: 'select', options: ['1 - Very Mild', '3 - Mild', '5 - Moderate', '7 - Severe', '9 - Very Severe', '10 - Unbearable'] }
                 ]}
             ],
             'Cardiology': [
                 { name: 'Acute Coronary Diagnostic Sequence', questions: [
-                    { q: 'Chest Pain Character', type: 'select', options: ['Crushing/Pressure', 'Sharp/Pleuritic', 'Burning', 'Atypical'] },
-                    { q: 'Radiation to Left Arm or Jaw', type: 'yes-no' },
-                    { q: 'ECG ST-Segment Elevation Detected', type: 'yes-no' }
+                    { q: 'Chest Pain Character & Sensation', type: 'select', options: ['Crushing / Squeezing', 'Sharp / Stabbing', 'Burning / Acidity-like', 'Shortness of breath on exertion'] },
+                    { q: 'Radiation to Left Arm, Jaw, or Back', type: 'yes-no' },
+                    { q: 'Previous ECG, 2D Echo, or Angiography done', type: 'yes-no' },
+                    { q: 'Current BP, Blood Thinner, or Statin Medicines', type: 'textarea' },
+                    { q: 'Family history of Heart Attack or High Blood Pressure', type: 'yes-no' }
                 ]}
             ],
-            'ENT': [
-                { name: 'Audiometry & Vertigo Profile', questions: [
-                    { q: 'Tinnitus Presence & Laterality', type: 'select', options: ['None', 'Bilateral', 'Left Ear Only', 'Right Ear Only'] },
-                    { q: 'Dix-Hallpike Test Result', type: 'yes-no' },
-                    { q: 'Duration of Dizziness Episodes', type: 'text' }
+            'Orthopedics': [
+                { name: 'Joint Mobility & Fracture Assessment', questions: [
+                    { q: 'Injury Onset & Mechanism (Fall / Twist / Trauma)', type: 'text' },
+                    { q: 'Weight Bearing Ability on Affected Limb', type: 'yes-no' },
+                    { q: 'Prior X-rays or Orthopedic Consultations', type: 'yes-no' },
+                    { q: 'Current NSAIDs or Pain Reliever Dosage', type: 'textarea' },
+                    { q: 'Swelling & Deformity Observed', type: 'checkbox-group', options: ['Joint Effusion', 'Morning Stiffness', 'Locking / Clicking', 'Numbness in Limbs'] },
+                    { q: 'Range of Motion Limitation', type: 'select', options: ['None', 'Mild (<25%)', 'Moderate (25-50%)', 'Severe (>50%)'] }
                 ]}
             ],
-            'General': [
+            'Pediatrics': [
+                { name: 'Pediatric Intake & Development', questions: [
+                    { q: 'Onset of fever, cough, or symptoms in the child', type: 'text' },
+                    { q: 'Is the immunization / vaccination schedule up-to-date?', type: 'yes-no' },
+                    { q: 'Medications or fever syrups administered recently', type: 'textarea' },
+                    { q: 'Feeding and fluid intake status', type: 'select', options: ['Normal & Active', 'Reduced Oral Intake', 'Poor Urine Output', 'Refusing Feeds'] },
+                    { q: 'Family history of childhood asthma or food allergies', type: 'yes-no' }
+                ]}
+            ],
+            'Gynecology & Obstetrics': [
+                { name: 'Women’s Health & Obstetric Intake', questions: [
+                    { q: 'Date of Last Menstrual Period (LMP)', type: 'text' },
+                    { q: 'Prior ultrasound scans or gynecologist consultations', type: 'yes-no' },
+                    { q: 'Current hormonal or iron/folic acid medicines', type: 'textarea' },
+                    { q: 'Family history of PCOD, Fibroids, or Diabetes', type: 'yes-no' },
+                    { q: 'Primary gynecological complaints', type: 'checkbox-group', options: ['Irregular Periods', 'Severe Cramps', 'Heavy Bleeding', 'White Discharge / Itching', 'Nausea / Morning Sickness'] },
+                    { q: 'Obstetric History (Gravida / Para / Living / Abortion)', type: 'text' }
+                ]}
+            ],
+            'Dermatology': [
+                { name: 'Dermatological Lesion Profile', questions: [
+                    { q: 'Duration & body location of rash/itching', type: 'text' },
+                    { q: 'Previous use of steroid creams or treatments', type: 'yes-no' },
+                    { q: 'List of recent soaps, cosmetics, or new oral tablets', type: 'textarea' },
+                    { q: 'Family history of Psoriasis, Eczema, or Fungal infections', type: 'yes-no' },
+                    { q: 'Skin symptoms observed', type: 'checkbox-group', options: ['Intense Itching', 'Burning Sensation', 'Dry Flaking Skin', 'Blisters / Pus Lesions'] }
+                ]}
+            ],
+            'Ophthalmology': [
+                { name: 'Ocular & Visual Acuity Intake', questions: [
+                    { q: 'Onset of blurriness, redness, or eye strain', type: 'text' },
+                    { q: 'Currently wearing glasses or contact lenses', type: 'yes-no' },
+                    { q: 'Current eye drops in use (Lubricant / Antibiotic / Steroid)', type: 'textarea' },
+                    { q: 'Family history of Glaucoma or Cataract', type: 'yes-no' },
+                    { q: 'Symptoms experienced', type: 'checkbox-group', options: ['Right Eye', 'Left Eye', 'Both Eyes', 'Redness & Watering', 'Photophobia (Light sensitivity)'] }
+                ]}
+            ],
+            'Neurology': [
+                { name: 'Cranial & Peripheral Nerve Evaluation', questions: [
+                    { q: 'Onset & frequency of headaches or numbness', type: 'text' },
+                    { q: 'Prior Brain MRI/CT scan or EEG done', type: 'yes-no' },
+                    { q: 'Current anti-epileptic or migraine medication', type: 'textarea' },
+                    { q: 'Family history of Stroke, Epilepsy, or Migraine', type: 'yes-no' },
+                    { q: 'Neurological symptoms noted', type: 'checkbox-group', options: ['One-sided Headache', 'Limb Numbness', 'Fainting / Blackouts', 'Hand Tremors', 'Slurred Speech'] }
+                ]}
+            ],
+            'Gastroenterology': [
+                { name: 'GI Tract & Digestive Screening', questions: [
+                    { q: 'When did the stomach pain, acidity, or bloating start?', type: "text" },
+                    { q: 'Prior Endoscopy or Abdominal Ultrasound done', type: "yes-no" },
+                    { q: 'Current antacids, PPIs, or laxative usage', type: "textarea" },
+                    { q: 'Family history of Ulcers, Gallstones, or Fatty Liver', type: "yes-no" },
+                    { q: 'Primary digestive symptoms', type: "checkbox-group", options: ['Heartburn / GERD', 'Abdominal Gas', 'Constipation', 'Loose Stools', 'Post-meal Vomiting'] }
+                ]}
+            ],
+            'Pulmonology': [
+                { name: 'Respiratory & Sputum Assessment', questions: [
+                    { q: 'Duration of cough, breathlessness, or wheezing', type: 'text' },
+                    { q: 'Prior Chest X-ray or Spirometry (PFT) test done', type: 'yes-no' },
+                    { q: 'Current inhaler or nebulizer regimen', type: 'textarea' },
+                    { q: 'Family history of Asthma or Tuberculosis', type: 'yes-no' },
+                    { q: 'Cough characteristics', type: 'select', options: ['Dry Cough', 'Clear Sputum', 'Yellow/Green Sputum', 'Blood in Sputum (Hemoptysis)'] }
+                ]}
+            ],
+            'General Medicine': [
                 { name: 'Comprehensive Baseline Intake', questions: [
                     { q: 'Chief Complaint & Duration', type: 'textarea' },
-                    { q: 'Current Temperature (°F)', type: 'number' },
-                    { q: 'Known Drug Allergies', type: 'checkbox-text-group', options: ['Penicillin', 'Sulfa', 'NSAIDs', 'None'], extra: 'Allergy Notes' }
+                    { q: 'Hospitalization or surgery in past 2 years', type: 'yes-no' },
+                    { q: 'Daily Medications & Health Supplements', type: 'textarea' },
+                    { q: 'Family history of Diabetes, High BP, or Thyroid', type: 'yes-no' },
+                    { q: 'Constitutional Symptoms', type: 'checkbox-group', options: ['Fever', 'Weight Loss', 'Fatigue', 'Loss of Appetite', 'Body Aches'] },
+                    { q: 'Known Drug Allergies', type: 'text' }
+                ]}
+            ],
+            'Dentistry': [
+                { name: 'Dental & Periodontal Intake', questions: [
+                    { q: 'Onset of tooth pain, sensitivity, or swelling', type: 'text' },
+                    { q: 'Date of last dental cleaning or cavity filling', type: 'text' },
+                    { q: 'Current pain relievers or antibiotic usage', type: 'textarea' },
+                    { q: 'Family history of early tooth loss or gum issues', type: 'yes-no' },
+                    { q: 'Dental symptoms', type: 'checkbox-group', options: ['Chewing Pain', 'Hot/Cold Sensitivity', 'Bleeding Gums', 'Bad Breath', 'Loose Tooth'] }
                 ]}
             ]
         };
@@ -603,7 +699,7 @@ const AdminQuestionLibrary = () => {
                 </div>
             );
         } else {
-            inputHtml = <input type={item.type || 'text'} disabled placeholder="Input sequence value..." style={{ width: '100%', padding: '8px 12px', boxSizing: 'border-box' }} />;
+            inputHtml = <input type={item.type || 'text'} disabled placeholder="Enter response / notes..." style={{ width: '100%', padding: '8px 12px', boxSizing: 'border-box' }} />;
         }
 
         return (
@@ -638,9 +734,9 @@ const AdminQuestionLibrary = () => {
     if (loading) {
         return (
             <div className="ql-admin-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ textAlign: 'center', color: '#1E60A4', fontFamily: 'Space Grotesk, sans-serif' }}>
+                <div style={{ textAlign: 'center', color: '#0d9488' }}>
                     <FaMicrochip className="holo-icon" style={{ fontSize: '40px', marginBottom: '16px' }} />
-                    <p style={{ fontWeight: 700, letterSpacing: '1px' }}>INITIALIZING NEURAL AI BUILDER...</p>
+                    <p style={{ fontWeight: 800, letterSpacing: '0.5px' }}>INITIALIZING CLINICAL QUESTION LIBRARY...</p>
                 </div>
             </div>
         );
@@ -652,26 +748,22 @@ const AdminQuestionLibrary = () => {
 
     const getDeptIcon = (dept) => {
         const d = (dept || '').toLowerCase();
-        if (d.includes('ortho') || d.includes('bone')) return <FaBone />;
-        if (d.includes('neuro') || d.includes('brain')) return <FaBrain />;
+        if (d.includes('ent') || d.includes('ear') || d.includes('throat')) return <FaEarListen />;
         if (d.includes('cardio') || d.includes('heart')) return <FaHeartPulse />;
-        if (d.includes('ent') || d.includes('ear')) return <FaEarListen />;
-        if (d.includes('ivf') || d.includes('genet')) return <FaDna />;
-        if (d.includes('pediat') || d.includes('baby')) return <FaBaby />;
-        if (d.includes('lab') || d.includes('test')) return <FaFlask />;
-        if (d.includes('derm')) return <FaStethoscope />;
-        return <FaServer />;
+        if (d.includes('ortho') || d.includes('bone') || d.includes('joint')) return <FaBone />;
+        if (d.includes('pediat') || d.includes('baby') || d.includes('child')) return <FaBaby />;
+        if (d.includes('gyn') || d.includes('obs') || d.includes('women')) return <FaDna />;
+        if (d.includes('derm') || d.includes('skin') || d.includes('hair')) return <FaFlask />;
+        if (d.includes('opht') || d.includes('eye') || d.includes('vision')) return <FaEye />;
+        if (d.includes('neuro') || d.includes('brain') || d.includes('nerve')) return <FaBrain />;
+        if (d.includes('gastro') || d.includes('stomach') || d.includes('digest')) return <FaCubes />;
+        if (d.includes('pulm') || d.includes('chest') || d.includes('respir') || d.includes('lung')) return <FaMicrochip />;
+        if (d.includes('dent') || d.includes('oral') || d.includes('tooth')) return <FaStethoscope />;
+        return <FaStethoscope />;
     };
 
     return (
         <div className="ql-admin-body">
-            {/* Ambient Lighting Orbs */}
-            <div className="ambient-orb orb-1"></div>
-            <div className="ambient-orb orb-2"></div>
-
-            {/* Neural Canvas */}
-            <canvas ref={canvasRef} id="neural-canvas"></canvas>
-
             <div className="ql-app-container">
                 {/* ─── 1. HEADER ─── */}
                 <header className="ql-app-header">
@@ -680,6 +772,9 @@ const AdminQuestionLibrary = () => {
                         <p>Construct dynamic diagnostic forms for doctors.</p>
                     </div>
                     <div className="ql-header-actions">
+                        <button className="ql-btn ql-btn-reset" onClick={handleResetToStandard} disabled={saving} title="Reload all 12 standard medical departments">
+                            <FaMicrochip /> Reset 12 Depts
+                        </button>
                         <button className="ql-btn ql-btn-preview" onClick={() => { setPreviewIntake({}); setShowPreview(true); }}>
                             <FaEye /> Preview
                         </button>
@@ -726,7 +821,7 @@ const AdminQuestionLibrary = () => {
 
                     {allowedDepartments === null && (
                         <div className="ql-tab ql-tab-dashed" onClick={handleAddDepartmentClick}>
-                            <FaPlus /> Initialize Dept
+                            <FaPlus /> Add Department
                         </div>
                     )}
                 </nav>
@@ -738,13 +833,13 @@ const AdminQuestionLibrary = () => {
                         <div className="ql-add-category-box">
                             <input 
                                 type="text" 
-                                placeholder="Input sequence name..." 
+                                placeholder="Enter category name..." 
                                 value={newCatName} 
                                 onChange={(e) => setNewCatName(e.target.value)} 
                                 onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory(); }} 
                             />
                             <button className="ql-btn-add-cat" onClick={() => handleAddCategory()}>
-                                <FaPlus /> Inject Category
+                                <FaPlus /> Add Category
                             </button>
                         </div>
 
@@ -771,7 +866,7 @@ const AdminQuestionLibrary = () => {
                                 </div>
                             ))}
                             {Object.keys(currentCategories).length === 0 && (
-                                <div className="ql-no-cats">No categories injected yet.</div>
+                                <div className="ql-no-cats">No categories added yet.</div>
                             )}
                         </div>
                     </aside>
@@ -782,15 +877,15 @@ const AdminQuestionLibrary = () => {
                             {!activeCategory ? (
                                 <div className="ql-canvas-empty">
                                     <FaCubes className="holo-icon" />
-                                    <p>WAITING FOR CATEGORY SELECTION...</p>
+                                    <p>Select a category or add a new category to view questions.</p>
                                 </div>
                             ) : (
                                 <div className="ql-canvas-active">
                                     <div className="ql-canvas-header">
                                         <div className="ql-canvas-header-left">
-                                            <h2>{activeCategory.toUpperCase()}</h2>
+                                            <h2>{activeCategory}</h2>
                                             <span className="ql-item-count-badge">
-                                                {questionsInActiveCategory.length} data points
+                                                {questionsInActiveCategory.length} Questions
                                             </span>
                                         </div>
                                         <button 
@@ -801,7 +896,7 @@ const AdminQuestionLibrary = () => {
                                                 setShowAddModal(true); 
                                             }}
                                         >
-                                            <FaPlus /> Inject Data Point
+                                            <FaPlus /> Add Question
                                         </button>
                                     </div>
 
@@ -809,10 +904,8 @@ const AdminQuestionLibrary = () => {
                                         {questionsInActiveCategory.map((q, idx) => renderQuestionCard(q, idx, activeCategory))}
                                         {questionsInActiveCategory.length === 0 && (
                                             <div className="ql-data-stream-empty">
-                                                <p className="stream-comment">// SYNCING WITH MAINFRAME...</p>
-                                                <p>&gt; No data parameters detected in this sequence.</p>
-                                                <p>&gt; Awaiting manual input or AI generation.</p>
-                                                <p className="stream-blink">_</p>
+                                                <p>No questions added yet in this category.</p>
+                                                <p style={{ marginTop: '6px', color: '#64748b' }}>Click <b>+ Add Question</b> above to add a new question.</p>
                                             </div>
                                         )}
                                     </div>
@@ -828,7 +921,7 @@ const AdminQuestionLibrary = () => {
                 <div className="ql-modal-overlay">
                     <div className="ql-modal-content" style={{ maxWidth: '440px' }}>
                         <div className="ql-modal-header-top">
-                            <h3>Initialize Department</h3>
+                            <h3>Add New Department</h3>
                             <span className="modal-close" onClick={() => setShowDeptModal(false)}><FaXmark /></span>
                         </div>
                         
@@ -868,7 +961,7 @@ const AdminQuestionLibrary = () => {
 
                         <div className="ql-modal-actions">
                             <button className="ql-modal-btn ql-modal-btn-cancel" onClick={() => setShowDeptModal(false)}>Cancel</button>
-                            <button className="ql-modal-btn ql-modal-btn-submit" onClick={confirmAddDepartment}>Initialize</button>
+                            <button className="ql-modal-btn ql-modal-btn-submit" onClick={confirmAddDepartment}>Add Department</button>
                         </div>
                     </div>
                 </div>
@@ -879,7 +972,7 @@ const AdminQuestionLibrary = () => {
                 <div className="ql-modal-overlay">
                     <div className="ql-modal-content" style={{ maxWidth: '520px' }}>
                         <div className="ql-modal-header-top">
-                            <h3>{editIndex !== null ? 'Edit Data Point' : 'Inject New Data Point'}</h3>
+                            <h3>{editIndex !== null ? 'Edit Question' : 'Add New Question'}</h3>
                             <span className="modal-close" onClick={resetModalState}><FaXmark /></span>
                         </div>
                         
@@ -896,7 +989,7 @@ const AdminQuestionLibrary = () => {
                         </div>
 
                         <div style={{ marginTop: '12px' }}>
-                            <label className="ql-modal-label">Input Parameter Type</label>
+                            <label className="ql-modal-label">Question Answer Type</label>
                             <select 
                                 className="ql-modal-input" 
                                 value={newQ.type} 
@@ -965,7 +1058,7 @@ const AdminQuestionLibrary = () => {
                         <div className="ql-modal-actions">
                             <button className="ql-modal-btn ql-modal-btn-cancel" onClick={resetModalState}>Cancel</button>
                             <button className="ql-modal-btn ql-modal-btn-submit" onClick={handleAddQuestion}>
-                                {editIndex !== null ? 'Update Parameter' : 'Inject Parameter'}
+                                {editIndex !== null ? 'Update Question' : '+ Add Question'}
                             </button>
                         </div>
                     </div>

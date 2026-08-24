@@ -240,13 +240,52 @@ export const receptionAPI = {
     }
 };
 
+// Lightweight in-memory cache for static metadata
+const metaCache = new Map();
+const CACHE_TTL_MS = 25000; // 25s
+
+export const invalidateMetaCache = (prefix = '') => {
+    if (!prefix) {
+        metaCache.clear();
+        return;
+    }
+    for (const key of metaCache.keys()) {
+        if (key.startsWith(prefix)) {
+            metaCache.delete(key);
+        }
+    }
+};
+
+const getCachedOrFetch = async (key, fetcher) => {
+    const cached = metaCache.get(key);
+    const now = Date.now();
+    if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
+        return cached.data;
+    }
+    const data = await fetcher();
+    metaCache.set(key, { data, timestamp: now });
+    return data;
+};
+
 export const adminAPI = {
     login: async (email, password) => (await apiClient.post('/api/admin/login', { email, password })).data,
     signup: async (name, email, password, phone) => (await apiClient.post('/api/admin/signup', { name, email, password, phone })).data,
-    getUsers: async (plan, hospitalId) => {
+    getUsers: async (plan, hospitalId, page, limit, search) => {
         let url = '/api/admin/users?';
-        if (plan) url += `plan=${encodeURIComponent(plan)}&`;
-        if (hospitalId) url += `hospitalId=${encodeURIComponent(hospitalId)}&`;
+        if (typeof plan === 'object' && plan !== null) {
+            const params = plan;
+            if (params.plan) url += `plan=${encodeURIComponent(params.plan)}&`;
+            if (params.hospitalId) url += `hospitalId=${encodeURIComponent(params.hospitalId)}&`;
+            if (params.page !== undefined && params.page !== null && params.page !== '') url += `page=${encodeURIComponent(params.page)}&`;
+            if (params.limit !== undefined && params.limit !== null && params.limit !== '') url += `limit=${encodeURIComponent(params.limit)}&`;
+            if (params.search) url += `search=${encodeURIComponent(params.search)}&`;
+        } else {
+            if (plan) url += `plan=${encodeURIComponent(plan)}&`;
+            if (hospitalId) url += `hospitalId=${encodeURIComponent(hospitalId)}&`;
+            if (page !== undefined && page !== null && page !== '') url += `page=${encodeURIComponent(page)}&`;
+            if (limit !== undefined && limit !== null && limit !== '') url += `limit=${encodeURIComponent(limit)}&`;
+            if (search) url += `search=${encodeURIComponent(search)}&`;
+        }
         return (await apiClient.get(url)).data;
     },
     createUser: async (data) => (await apiClient.post('/api/admin/users', data)).data,
@@ -255,11 +294,20 @@ export const adminAPI = {
     getRoles: async (plan) => {
         let url = '/api/admin/roles';
         if (plan) url += `?plan=${encodeURIComponent(plan)}`;
-        return (await apiClient.get(url)).data;
+        return getCachedOrFetch(`roles_${plan || 'all'}`, async () => (await apiClient.get(url)).data);
     },
-    createRole: async (data) => (await apiClient.post('/api/admin/roles', data)).data,
-    updateRole: async (id, data) => (await apiClient.put(`/api/admin/roles/${id}`, data)).data,
-    deleteRole: async (id) => (await apiClient.delete(`/api/admin/roles/${id}`)).data,
+    createRole: async (data) => {
+        invalidateMetaCache('roles');
+        return (await apiClient.post('/api/admin/roles', data)).data;
+    },
+    updateRole: async (id, data) => {
+        invalidateMetaCache('roles');
+        return (await apiClient.put(`/api/admin/roles/${id}`, data)).data;
+    },
+    deleteRole: async (id) => {
+        invalidateMetaCache('roles');
+        return (await apiClient.delete(`/api/admin/roles/${id}`)).data;
+    },
 };
 
 export const adminEntitiesAPI = {
@@ -478,11 +526,20 @@ export const hospitalAPI = {
     getHospitals: async (plan) => {
         let url = '/api/hospitals';
         if (plan) url += `?plan=${encodeURIComponent(plan)}`;
-        return (await apiClient.get(url)).data;
+        return getCachedOrFetch(`hospitals_${plan || 'all'}`, async () => (await apiClient.get(url)).data);
     },
-    createHospital: async (data) => (await apiClient.post('/api/hospitals', data)).data,
-    updateHospital: async (id, data) => (await apiClient.put(`/api/hospitals/${id}`, data)).data,
-    deleteHospital: async (id) => (await apiClient.delete(`/api/hospitals/${id}`)).data,
+    createHospital: async (data) => {
+        invalidateMetaCache('hospitals');
+        return (await apiClient.post('/api/hospitals', data)).data;
+    },
+    updateHospital: async (id, data) => {
+        invalidateMetaCache('hospitals');
+        return (await apiClient.put(`/api/hospitals/${id}`, data)).data;
+    },
+    deleteHospital: async (id) => {
+        invalidateMetaCache('hospitals');
+        return (await apiClient.delete(`/api/hospitals/${id}`)).data;
+    },
     getMyHospital: async () => (await apiClient.get('/api/hospitals/my-hospital')).data,
     // UPI management (Hospital Admin) — legacy
     getUpiIds: async () => (await apiClient.get('/api/hospitals/my-hospital/upi-ids')).data,

@@ -68,6 +68,23 @@ async function buildUserResponse(user) {
         roleName = roleData ? roleData.name : String(user.role);
     }
 
+    let hospitalName = null;
+    let subscriptionPlan = null;
+    if (user.hospitalId) {
+        try {
+            const hosp = await Hospital.findById(user.hospitalId).select('name subscriptionPlan clinicType clinicPlan');
+            if (hosp) {
+                hospitalName = hosp.name;
+                subscriptionPlan = hosp.subscriptionPlan;
+                if (!subscriptionPlan || subscriptionPlan === 'none') {
+                    subscriptionPlan = hosp.clinicType === 'clinic' ? 'starter' : 'enterprise';
+                }
+            }
+        } catch (e) {
+            // ignore lookup error
+        }
+    }
+
     return {
         id: user._id,
         name: user.name,
@@ -77,6 +94,9 @@ async function buildUserResponse(user) {
         roleId: user.role,
         patientId: user.patientId || null,
         hospitalId: user.hospitalId || null,
+        hospitalName: hospitalName,
+        subscriptionPlan: subscriptionPlan,
+        plan: subscriptionPlan,
         permissions: roleData ? roleData.permissions : [],
         dashboardPath: roleData ? roleData.dashboardPath : '/',
         navLinks: roleData ? roleData.navLinks : [],
@@ -355,18 +375,32 @@ router.post('/login', async (req, res) => {
 // 3. USER MANAGEMENT — HOSPITAL-SCOPED
 // ==========================================
 
-// Get all users — scoped by hospital, excluding patients and admin roles
+// Get all users — scoped by hospital, excluding patients and admin roles with optional server-side pagination & search
 router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
         const isCentral = req.user.role === 'centraladmin' || req.user.role === 'superadmin';
         const filter = getHospitalFilter(req);
 
-        // Exclude system admin roles from the staff list
-        const systemRoles = ['centraladmin', 'superadmin', 'hospitaladmin'];
+        // Exclude system admin roles and patient/user roles from the staff list
+        const systemRoles = ['centraladmin', 'superadmin', 'hospitaladmin', 'patient', 'user'];
 
-        // Also find the Patient role ObjectId to exclude it
-        const patientRole = await Role.findOne({ name: { $regex: /^patient$/i } });
-        const patientRoleId = patientRole ? patientRole._id : null;
+        // Find Role ObjectIds to exclude (patients, users, and doctors if non-central)
+        const excludeRoleDocs = await Role.find({
+            name: {
+                $in: [
+                    /^patient$/i,
+                    /^user$/i,
+                    ...(!isCentral ? [/doctor/i, /^clinic doctor$/i] : [])
+                ]
+            }
+        }).select('_id');
+        const excludeRoleIds = excludeRoleDocs.map(r => r._id);
+
+        const allExcludedRoles = [
+            ...systemRoles,
+            ...excludeRoleIds,
+            ...(!isCentral ? ['doctor', 'Doctor', 'clinic doctor', 'Clinic Doctor'] : [])
+        ];
 
         let planFilter = {};
         if (isCentral) {
@@ -398,22 +432,71 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
             }
         }
 
-        const finalFilter = { ...filter, ...planFilter, role: { $nin: systemRoles } };
+        // Search query filter
+        let searchFilter = {};
+        if (req.query.search && req.query.search.trim()) {
+            const s = req.query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const sRegex = new RegExp(s, 'i');
+            searchFilter.$or = [
+                { name: sRegex },
+                { email: sRegex },
+                { phone: sRegex }
+            ];
+        }
 
-        const users = await User.find(finalFilter, { password: 0 }).sort({ createdAt: -1 });
+        const finalFilter = {
+            ...filter,
+            ...planFilter,
+            ...searchFilter,
+            role: { $nin: allExcludedRoles }
+        };
 
-        // Build full response and filter out patients
+        const isPaginated = req.query.page !== undefined && req.query.page !== null && req.query.page !== '';
+        const pageNum = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limitNum = Math.max(1, parseInt(req.query.limit, 10) || 10);
+        const skipNum = (pageNum - 1) * limitNum;
+
+        let totalRecords = 0;
+        let users = [];
+
+        if (isPaginated) {
+            totalRecords = await User.countDocuments(finalFilter);
+            users = await User.find(finalFilter, { password: 0 })
+                .sort({ createdAt: -1 })
+                .skip(skipNum)
+                .limit(limitNum);
+        } else {
+            users = await User.find(finalFilter, { password: 0 }).sort({ createdAt: -1 });
+            totalRecords = users.length;
+        }
+
+        // Build full response and filter out patients/doctors if any slipped through mixed role definitions
         const usersWithRoles = await Promise.all(users.map(async (u) => {
             return await buildUserResponse(u);
         }));
 
-        // Filter patients out of staff list
-        const staffOnly = usersWithRoles.filter(u =>
-            !['patient'].includes((typeof u.role === 'string' ? u.role : (u.role?.name || '')).toLowerCase())
-        );
+        const staffOnly = usersWithRoles.filter(u => {
+            const r = (typeof u.role === 'string' ? u.role : (u.role?.name || '')).toLowerCase();
+            if (['patient', 'user'].includes(r)) return false;
+            if (!isCentral && r.includes('doctor')) return false;
+            return true;
+        });
 
-        res.json({ success: true, users: staffOnly });
+        const totalPages = isPaginated ? (Math.ceil(totalRecords / limitNum) || 1) : 1;
+
+        res.json({
+            success: true,
+            users: staffOnly,
+            data: staffOnly,
+            pagination: {
+                currentPage: isPaginated ? pageNum : 1,
+                pageSize: isPaginated ? limitNum : staffOnly.length,
+                totalRecords: isPaginated ? totalRecords : staffOnly.length,
+                totalPages: totalPages
+            }
+        });
     } catch (error) {
+        console.error('Error fetching users:', error);
         res.status(500).json({ success: false, message: 'Error fetching users' });
     }
 });
