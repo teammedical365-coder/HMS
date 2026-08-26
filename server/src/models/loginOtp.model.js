@@ -12,7 +12,7 @@ const loginOtpSchema = new mongoose.Schema({
     attempts:     { type: Number, default: 0 },               // max 5 invalid attempts
     lastResendAt: { type: Date, default: null },              // enforce 30s cooldown
     preAuthToken: { type: String, required: true },           // short-lived JWT tying this OTP flow
-    loginType:    { type: String, enum: ['staff', 'admin', 'hospitaladmin'], default: 'staff' },
+    loginType:    { type: String, enum: ['staff', 'admin', 'hospitaladmin', 'patient'], default: 'staff' },
     hospitalId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', default: null },
 }, { timestamps: true });
 

@@ -201,8 +201,6 @@ const MainRoutes = () => {
     
     return (
         <>
-            {!isAuthenticated && !window.location.pathname.startsWith('/patient') && !window.location.pathname.startsWith('/supremeadmin') && <Navbar />}
-
             <RouteErrorBoundary>
                 <Suspense fallback={<RouteLoadingFallback />}>
                     {isAuthenticated ? (

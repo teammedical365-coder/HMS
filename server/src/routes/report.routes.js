@@ -6,13 +6,18 @@ const imagekit = require('../utils/imagekit');
 const Report = require('../models/report.model');
 const AIUsageLog = require('../models/aiUsageLog.model');
 const aiService = require('../services/ai/ai.service');
+const { validateMedia } = require('../services/ai/mediaValidator');
 const axios = require('axios');
 
 // Configure Multer for memory storage (Required for ImageKit)
+const SUPPORTED_UPLOAD_TYPES = [
+  'image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'
+];
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 20 * 1024 * 1024, // 20MB limit
   },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
@@ -174,7 +179,7 @@ router.get('/appointment/:appointmentId', verifyToken, async (req, res) => {
 // Route: POST /api/reports/summary
 router.post('/summary', verifyToken, async (req, res) => {
   try {
-    const { fileUrl, mimeType } = req.body;
+    const { fileUrl, mimeType, fileName } = req.body;
     
     if (!fileUrl) {
       return res.status(400).json({ success: false, message: "fileUrl is required." });
@@ -202,10 +207,17 @@ router.post('/summary', verifyToken, async (req, res) => {
     // 1. Download file
     const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
     const buffer = Buffer.from(response.data, 'binary');
+
+    // 2. Validate media
+    const validation = validateMedia(buffer, mimeType, fileName);
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, message: validation.error, code: validation.code });
+    }
+
     const base64Data = buffer.toString('base64');
     
-    // 2. Generate AI Summary with token tracking
-    const { summary, usage } = await aiService.generateReportSummary(base64Data, mimeType, userContext);
+    // 3. Generate AI Summary with content-aware prompt routing
+    const { summary, usage } = await aiService.generateReportSummary(base64Data, validation.mimeType, userContext, fileName || '');
 
     res.status(200).json({
       success: true,
@@ -215,9 +227,74 @@ router.post('/summary', verifyToken, async (req, res) => {
 
   } catch (error) {
     console.error('[Generate Summary Route] Error:', error);
+    // Classify error for frontend
+    if (error.status === 401 || error.statusText === 'Unauthorized') {
+      return res.status(503).json({ success: false, message: 'AI analysis is temporarily unavailable. Please try again later.' });
+    }
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      return res.status(503).json({ success: false, message: 'Unable to reach the AI service. Please check your connection.' });
+    }
     res.status(500).json({
       success: false,
       message: error.message || "Failed to generate AI summary."
+    });
+  }
+});
+
+// Route: POST /api/reports/analyze — General media analysis with optional question
+router.post('/analyze', verifyToken, async (req, res) => {
+  try {
+    const { fileUrl, mimeType, question, fileName } = req.body;
+
+    if (!fileUrl) {
+      return res.status(400).json({ success: false, message: "fileUrl is required." });
+    }
+
+    // Only allow access if Doctor
+    let isDoctor = false;
+    if (req.user && req.user.role) {
+      const roleStr = (req.user._roleData?.name || req.user.role).toString().toLowerCase();
+      if (roleStr.includes('doctor')) isDoctor = true;
+    }
+    if (!isDoctor) {
+      return res.status(403).json({ success: false, message: "Only doctors can use AI analysis." });
+    }
+
+    const userContext = {
+      userId: req.user?._id,
+      userName: req.user?.name || req.user?.username || 'Doctor',
+      hospitalId: req.user?.hospitalId
+    };
+
+    // 1. Download file
+    const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+    const buffer = Buffer.from(response.data, 'binary');
+
+    // 2. Validate
+    const validation = validateMedia(buffer, mimeType, fileName);
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, message: validation.error, code: validation.code });
+    }
+
+    const base64Data = buffer.toString('base64');
+
+    // 3. Analyze with optional question
+    const { analysis, usage } = await aiService.analyzeMedia(base64Data, validation.mimeType, userContext, question || '', fileName || '');
+
+    res.status(200).json({
+      success: true,
+      analysis,
+      usage
+    });
+
+  } catch (error) {
+    console.error('[Analyze Media Route] Error:', error);
+    if (error.status === 401 || error.statusText === 'Unauthorized') {
+      return res.status(503).json({ success: false, message: 'AI analysis is temporarily unavailable. Please try again later.' });
+    }
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to analyze media."
     });
   }
 });
@@ -357,10 +434,10 @@ router.post('/search', verifyToken, async (req, res) => {
   }
 });
 
-// Route: POST /api/reports/chat
+// Route: POST /api/reports/chat — supports optional media attachments
 router.post('/chat', verifyToken, async (req, res) => {
   try {
-    const { messages } = req.body;
+    const { messages, mediaUrls } = req.body;
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ success: false, message: "messages array is required." });
     }
@@ -371,6 +448,32 @@ router.post('/chat', verifyToken, async (req, res) => {
       hospitalId: req.user?.hospitalId
     };
 
+    // If media attachments are provided, download them and use chatWithMedia
+    if (mediaUrls && Array.isArray(mediaUrls) && mediaUrls.length > 0) {
+      const mediaInputs = [];
+      for (const media of mediaUrls.slice(0, 5)) { // Max 5 attachments
+        try {
+          const mediaResponse = await axios.get(media.url, { responseType: 'arraybuffer' });
+          const mediaBuffer = Buffer.from(mediaResponse.data, 'binary');
+          const validation = validateMedia(mediaBuffer, media.mimeType);
+          if (validation.valid) {
+            mediaInputs.push({
+              data: mediaBuffer.toString('base64'),
+              mimeType: validation.mimeType
+            });
+          }
+        } catch (dlErr) {
+          console.warn('[Chat Media Download Warning]:', dlErr.message);
+        }
+      }
+
+      if (mediaInputs.length > 0) {
+        const { reply, usage } = await aiService.chatWithMedia(messages, mediaInputs, userContext);
+        return res.status(200).json({ success: true, reply, usage });
+      }
+    }
+
+    // Fall back to text-only chat
     const { reply, usage } = await aiService.chatWithAssistant(messages, userContext);
     
     res.status(200).json({
@@ -380,6 +483,9 @@ router.post('/chat', verifyToken, async (req, res) => {
     });
   } catch (error) {
     console.error('[AI Chat Route] Error:', error);
+    if (error.status === 401 || error.statusText === 'Unauthorized') {
+      return res.status(503).json({ success: false, message: 'AI assistant is temporarily unavailable. Please try again later.' });
+    }
     res.status(500).json({
       success: false,
       message: error.message || "Failed to get AI response."

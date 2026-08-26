@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
 import { publicAPI, patientAuthAPI } from '../../utils/api';
-import './PatientPortalLogin.css';
-import PasswordInput from '../../components/PasswordInput';
+import NeuralAuthPortal from '../../components/auth/NeuralAuthPortal';
 
 const PatientPortalLogin = () => {
     const { loadBranding } = useBranding();
@@ -11,10 +10,14 @@ const PatientPortalLogin = () => {
     
     const [hospital, setHospital] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [loginId, setLoginId] = useState('');
-    const [password, setPassword] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
+    const [successMsg, setSuccessMsg] = useState('');
+
+    // OTP states
+    const [otpStep, setOtpStep] = useState(null); // null | 'otp'
+    const [preAuthToken, setPreAuthToken] = useState(null);
+    const [otpRecipient, setOtpRecipient] = useState('');
 
     useEffect(() => {
         const resolveHospital = async () => {
@@ -41,13 +44,13 @@ const PatientPortalLogin = () => {
             }
         };
         resolveHospital();
-    }, []);
+    }, [loadBranding]);
 
-    const handleLogin = async (e) => {
-        e.preventDefault();
+    const handleLoginSubmit = async ({ id, password }) => {
         setErrorMsg('');
+        setSuccessMsg('');
 
-        if (!loginId.trim() || !password) {
+        if (!id || !password) {
             setErrorMsg('Email/Mobile and Password are required.');
             return;
         }
@@ -59,89 +62,122 @@ const PatientPortalLogin = () => {
 
         setIsSubmitting(true);
         try {
-            const res = await patientAuthAPI.login(loginId.trim(), password, hospital.id);
-            if (res.success) {
-                localStorage.setItem('patientToken', res.token);
-                localStorage.setItem('patientUser', JSON.stringify(res.user));
-                navigate('/patient/dashboard');
+            // Initiate Patient OTP Verification
+            const res = await patientAuthAPI.sendOtp(id.trim(), password, hospital.id);
+            if (res.success && res.preAuthToken) {
+                setPreAuthToken(res.preAuthToken);
+                setOtpRecipient(res.email || res.mobile || id);
+                setOtpStep('otp');
+                setSuccessMsg(res.message || 'Verification code transmitted.');
+            } else {
+                setErrorMsg(res.message || 'Failed to initiate OTP verification.');
             }
         } catch (err) {
-            console.error('Login error:', err);
+            console.error('Patient Login error:', err);
             setErrorMsg(err.response?.data?.message || 'Invalid credentials or login failed.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
+    const handleVerifyOtp = async (otp) => {
+        if (!preAuthToken) return;
+        setIsSubmitting(true);
+        setErrorMsg('');
+
+        try {
+            const res = await patientAuthAPI.verifyOtp(preAuthToken, otp);
+            if (res.success && res.token) {
+                localStorage.setItem('patientToken', res.token);
+                localStorage.setItem('patientUser', JSON.stringify(res.user));
+                navigate('/patient/dashboard');
+            } else {
+                setErrorMsg(res.message || 'OTP verification failed.');
+            }
+        } catch (err) {
+            console.error('Patient OTP verify error:', err);
+            setErrorMsg(err.response?.data?.message || 'Incorrect OTP code.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleResendOtp = async () => {
+        if (!preAuthToken) return;
+        setIsSubmitting(true);
+        setErrorMsg('');
+        setSuccessMsg('');
+
+        try {
+            const res = await patientAuthAPI.resendOtp(preAuthToken);
+            if (res.success) {
+                setSuccessMsg(res.message || 'New verification code transmitted.');
+            } else {
+                setErrorMsg(res.message || 'Failed to resend code.');
+            }
+        } catch (err) {
+            setErrorMsg(err.response?.data?.message || 'Failed to resend OTP.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleAbortOtp = () => {
+        setOtpStep(null);
+        setPreAuthToken(null);
+        setErrorMsg('');
+        setSuccessMsg('');
+    };
+
     if (loading) {
         return (
-            <div className="patient-portal-container">
-                <div style={{ color: '#3b82f6', fontWeight: 600 }}>Loading Portal...</div>
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#030712', color: '#0ea5e9', fontFamily: 'JetBrains Mono, monospace' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <i className="fa-solid fa-circle-notch fa-spin" style={{ fontSize: '24px' }}></i>
+                    <span>Initializing Patient Health Node...</span>
+                </div>
             </div>
         );
     }
 
-    return (
-        <div className="patient-portal-container">
-            <div className="patient-portal-card">
-                <div className="hospital-branding">
-                    {hospital?.logo ? (
-                        <img src={hospital.logo} alt="Hospital Logo" />
-                    ) : (
-                        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏥</div>
-                    )}
-                    <h1>{hospital?.name || 'Welcome to Our Hospital'}</h1>
-                    <div className="portal-title">Patient Portal</div>
-                </div>
-
-                {errorMsg && (
-                    <div style={{ width: '100%', padding: '10px', marginBottom: '16px', background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: '8px', fontSize: '0.9rem', textAlign: 'center' }}>
-                        {errorMsg}
-                    </div>
-                )}
-
-                <form className="patient-login-form" onSubmit={handleLogin}>
-                    <div className="input-group">
-                        <label>Mobile Number / Email</label>
-                        <input 
-                            type="text" 
-                            placeholder="Enter your registered mobile or email" 
-                            required 
-                            value={loginId}
-                            onChange={(e) => { setLoginId(e.target.value); setErrorMsg(''); }}
-                        />
-                    </div>
-                    
-                    <div className="input-group">
-                        <label>Password</label>
-                        <PasswordInput 
-                            placeholder="Enter your password" 
-                            required 
-                            value={password}
-                            onChange={(e) => { setPassword(e.target.value); setErrorMsg(''); }}
-                        />
-                    </div>
-
-                    <Link to="/patient/forgot-password" style={{ alignSelf: 'flex-end', textDecoration: 'none' }}>
-                        <button type="button" className="forgot-password">
-                            Forgot Password?
-                        </button>
-                    </Link>
-
-                    <button type="submit" className="btn-primary" disabled={isSubmitting}>
-                        {isSubmitting ? 'Logging in...' : 'Secure Login'}
-                    </button>
-                </form>
-
-                <div className="divider">New to our portal?</div>
-
-                <Link to="/patient/signup" style={{ width: '100%', textDecoration: 'none' }}>
-                    <button type="button" className="btn-secondary" style={{ width: '100%' }}>
-                        Create Patient Account
-                    </button>
+    const patientExtraFooter = (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                <Link to="/patient/forgot-password" style={{ color: '#64748b', textDecoration: 'none', fontWeight: 600, transition: 'color 0.2s' }}>
+                    Forgot Secure Code?
+                </Link>
+                <Link to="/patient/signup" style={{ color: '#a855f7', fontWeight: 700, textDecoration: 'none' }}>
+                    Register Patient Account →
                 </Link>
             </div>
         </div>
+    );
+
+    return (
+        <NeuralAuthPortal
+            portalType="patient"
+            title="Patient Portal"
+            subtitle={`Access personal digital health records for ${hospital?.name || 'our patient network'}.`}
+            idLabel="Mobile Number or Email"
+            idPlaceholder="Enter registered mobile or email"
+            idType="text"
+            passkeyLabel="Password"
+            passkeyPlaceholder="••••••••"
+            branding={{
+                name: hospital?.name,
+                logoUrl: hospital?.logo
+            }}
+            onLoginSubmit={handleLoginSubmit}
+            onVerifyOtp={handleVerifyOtp}
+            onResendOtp={handleResendOtp}
+            onAbortOtp={handleAbortOtp}
+            otpStep={otpStep}
+            otpEmail={otpRecipient}
+            loading={isSubmitting}
+            error={errorMsg}
+            successMsg={successMsg}
+            extraFooter={patientExtraFooter}
+        />
     );
 };
 

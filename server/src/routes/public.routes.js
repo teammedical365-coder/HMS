@@ -209,25 +209,56 @@ router.get('/branding', async (req, res) => {
         }
 
         const Hospital = require('../models/hospital.model');
-        const query = {};
+        let query = {};
         
         if (tenantId) {
             query._id = tenantId;
         } else {
-            if (domain) {
-                const cleanDomain = domain.toLowerCase().trim().replace(/^https?:\/\//i, '').split('/')[0].split('?')[0].split(':')[0];
-                query.customDomain = new RegExp('^' + cleanDomain + '$', 'i');
+            let searchSlug = slug ? slug.toLowerCase().trim() : null;
+            let cleanDomain = domain ? domain.toLowerCase().trim().replace(/^https?:\/\//i, '').split('/')[0].split('?')[0].split(':')[0] : null;
+
+            if (cleanDomain) {
+                if (cleanDomain.endsWith('.medical365.in')) {
+                    searchSlug = cleanDomain.replace('.medical365.in', '');
+                } else if (cleanDomain.endsWith('.localhost')) {
+                    searchSlug = cleanDomain.replace('.localhost', '');
+                }
             }
-            if (slug) query.slug = slug.toLowerCase().trim();
+
+            const conditions = [];
+            if (searchSlug) {
+                const noDash = searchSlug.replace(/-/g, '');
+                const withDash = searchSlug.replace(/\s+/g, '-');
+                conditions.push(
+                    { slug: searchSlug },
+                    { slug: noDash },
+                    { slug: withDash },
+                    { slug: new RegExp(`^${searchSlug.replace(/-/g, '[-]?')}$`, 'i') }
+                );
+            }
+            if (cleanDomain) {
+                conditions.push(
+                    { customDomain: cleanDomain },
+                    { customDomain: new RegExp(`^${cleanDomain}$`, 'i') }
+                );
+            }
+
+            query = conditions.length > 0 ? { $or: conditions } : {};
         }
 
         const hospital = await Hospital.findOne(query);
 
-        if (!hospital || !hospital.whiteLabelEnabled) {
-            return res.status(404).json({ error: 'Branding not found or white-label disabled' });
+        if (!hospital) {
+            return res.status(404).json({ error: 'Branding not found' });
         }
 
-        res.json({ branding: hospital.brandingSchema });
+        const brandingData = hospital.brandingSchema || hospital.branding || {};
+        res.json({ 
+            success: true,
+            hospitalName: hospital.name,
+            hospitalId: hospital._id,
+            branding: brandingData 
+        });
     } catch (error) {
         res.status(500).json({ error: 'Server error fetching branding details' });
     }

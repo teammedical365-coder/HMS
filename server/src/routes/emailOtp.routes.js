@@ -278,13 +278,30 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
         if (!isCentralAdminLogin) {
             resolvedHospitalId = hospitalId;
             if (!resolvedHospitalId && (hospitalSlug || tenantId)) {
-                const slugToSearch = hospitalSlug || tenantId;
-                const hospital = await Hospital.findOne({ slug: slugToSearch });
+                const rawSlug = String(hospitalSlug || tenantId).toLowerCase().trim();
+                let cleanSlug = rawSlug;
+                if (cleanSlug.endsWith('.medical365.in')) {
+                    cleanSlug = cleanSlug.replace('.medical365.in', '');
+                } else if (cleanSlug.endsWith('.localhost')) {
+                    cleanSlug = cleanSlug.replace('.localhost', '');
+                }
+                const noDashSlug = cleanSlug.replace(/-/g, '');
+                const withDashSlug = cleanSlug.replace(/\s+/g, '-');
+
+                const hospital = await Hospital.findOne({
+                    $or: [
+                        { slug: cleanSlug },
+                        { slug: noDashSlug },
+                        { slug: withDashSlug },
+                        { customDomain: rawSlug },
+                        { customDomain: cleanSlug }
+                    ]
+                });
+
                 if (hospital) {
                     resolvedHospitalId = hospital._id;
                 } else {
-                    console.log(`[Auth] Login failed: Tenant slug '${slugToSearch}' not found in database.`);
-                    return res.status(404).json({ success: false, message: 'Hospital tenant not found.' });
+                    console.log(`[Auth] Login note: Tenant slug '${rawSlug}' not found in database.`);
                 }
             }
         }
@@ -295,8 +312,22 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
             } else if (resolvedHospitalId) {
                 user = await User.findOne({ email: normalizedEmail, hospitalId: resolvedHospitalId });
                 if (!user) {
-                    console.log(`[Auth] User '${normalizedEmail}' not found in hospital tenant '${resolvedHospitalId}'.`);
-                    return res.status(401).json({ success: false, message: 'User not found in this hospital tenant.' });
+                    // Check if user exists by email in the system
+                    const fallbackUser = await User.findOne({ email: normalizedEmail });
+                    if (fallbackUser) {
+                        if (['superadmin', 'centraladmin'].includes(fallbackUser.role)) {
+                            user = fallbackUser;
+                            isCentralAdminLogin = true;
+                        } else if (fallbackUser.role === 'hospitaladmin') {
+                            // Allow Hospital Admin to login
+                            user = fallbackUser;
+                        } else {
+                            console.log(`[Auth] User '${normalizedEmail}' belongs to hospital '${fallbackUser.hospitalId}', not requested tenant '${resolvedHospitalId}'.`);
+                            return res.status(401).json({ success: false, message: 'User not found in this hospital tenant.' });
+                        }
+                    } else {
+                        return res.status(401).json({ success: false, message: 'Invalid email or password' });
+                    }
                 }
             } else {
                 user = await User.findOne({ email: normalizedEmail });

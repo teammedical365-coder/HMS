@@ -1,32 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAuth } from '../../store/hooks';
 import { sendOtp, verifyOtp, resendOtp, forceLogin, clearError, resetOtpFlow } from '../../store/slices/authSlice';
-import '../user/Login.css';
-import PasswordInput from '../../components/PasswordInput';
-import OtpVerification from '../../components/OtpVerification';
-import ActiveSessionModal from '../../components/ActiveSessionModal';
+import NeuralAuthPortal from '../../components/auth/NeuralAuthPortal';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const dispatch = useAppDispatch();
   const { loading, error, isAuthenticated, user, otpStep, preAuthToken, otpEmail, activeSession, otpSuccessMsg } = useAuth();
-
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
-  });
-  const [sessionBanner, setSessionBanner] = useState(null);
-
-  // Check for session expired message
-  useEffect(() => {
-    const msg = sessionStorage.getItem('sessionExpiredMessage');
-    if (msg) {
-      setSessionBanner(msg);
-      sessionStorage.removeItem('sessionExpiredMessage');
-    }
-  }, []);
 
   useEffect(() => {
     dispatch(clearError());
@@ -51,24 +32,11 @@ const AdminLogin = () => {
     }
   }, [isAuthenticated, user, navigate]);
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+  const handleLoginSubmit = ({ id, password }) => {
     dispatch(clearError());
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    dispatch(clearError());
-    if (!formData.email || !formData.password) return;
-    setSessionBanner(null);
-
-    // Use OTP flow instead of direct admin login
-    await dispatch(sendOtp({
-      email: formData.email,
-      password: formData.password,
+    dispatch(sendOtp({
+      email: id,
+      password: password,
       loginType: 'admin',
     }));
   };
@@ -93,133 +61,29 @@ const AdminLogin = () => {
     dispatch(resetOtpFlow());
   };
 
-  const handleGoBack = () => {
-    navigate("/"); // Go back to home page
-  };
-
   return (
-    <div className="auth-page">
-      <div className="auth-container">
-        <div className="auth-card">
-          {/* Back Button — only on credentials step */}
-          {!otpStep && (
-            <button
-              onClick={handleGoBack}
-              className="back-button"
-              type="button"
-            >
-              <span className="back-icon">←</span>
-              <span>Go Back</span>
-            </button>
-          )}
-
-          <div className="auth-header">
-            <h1>Central Admin Login</h1>
-            <p>Sign in to your Central Admin account</p>
-          </div>
-
-          {/* Session Expired Banner */}
-          {sessionBanner && (
-            <div style={{
-              background: '#fef3c7',
-              border: '1px solid #fbbf24',
-              borderRadius: '8px',
-              padding: '0.75rem 1rem',
-              marginBottom: '1rem',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              color: '#92400e',
-            }}>
-              ⚠️ {sessionBanner}
-            </div>
-          )}
-
-          {/* ── Step 1: Credentials ── */}
-          {!otpStep && (
-            <>
-              {error && (
-                <div className="error-message">
-                  {error}
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="auth-form">
-                <div className="form-group">
-                  <label htmlFor="email">Email Address</label>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="Enter your email"
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="password">Password</label>
-                  <PasswordInput
-                    id="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="Enter your password"
-                    required
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="auth-button"
-                  disabled={loading}
-                >
-                  {loading ? 'Authenticating...' : 'Sign In'}
-                </button>
-              </form>
-
-              <div className="auth-footer">
-                <p>
-                  Don't have a Central Admin account?{' '}
-                  <Link to="/supremeadmin/signup" className="auth-link">
-                    Sign Up
-                  </Link>
-                </p>
-                <p style={{ marginTop: '12px', fontSize: '0.85rem', color: 'var(--text-gray)' }}>
-                  Regular users should use{' '}
-                  <Link to="/login" className="auth-link" style={{ fontSize: '0.85rem' }}>
-                    user login
-                  </Link>
-                </p>
-              </div>
-            </>
-          )}
-
-          {/* ── Step 2: OTP Verification ── */}
-          {otpStep === 'otp' && (
-            <OtpVerification
-              email={otpEmail}
-              onVerify={handleVerifyOtp}
-              onResend={handleResendOtp}
-              onBack={handleBackToLogin}
-              loading={loading}
-              error={error}
-              successMsg={otpSuccessMsg}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Active Session Modal */}
-      {otpStep === 'session_check' && activeSession && (
-        <ActiveSessionModal
-          activeSession={activeSession}
-          onForceLogin={handleForceLogin}
-          onCancel={handleCancelSession}
-          loading={loading}
-        />
-      )}
-    </div>
+    <NeuralAuthPortal
+      portalType="admin"
+      title="Admin Portal"
+      subtitle="Access administrator medical management workspace."
+      idLabel="Administrator Email"
+      idPlaceholder="admin@medical365.in"
+      idType="email"
+      passkeyLabel="Password"
+      passkeyPlaceholder="••••••••"
+      onLoginSubmit={handleLoginSubmit}
+      onVerifyOtp={handleVerifyOtp}
+      onResendOtp={handleResendOtp}
+      onAbortOtp={handleBackToLogin}
+      onForceLogin={handleForceLogin}
+      onCancelSession={handleCancelSession}
+      otpStep={otpStep}
+      otpEmail={otpEmail}
+      activeSession={activeSession}
+      loading={loading}
+      error={error}
+      successMsg={otpSuccessMsg}
+    />
   );
 };
 

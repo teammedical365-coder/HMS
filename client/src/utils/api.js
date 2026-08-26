@@ -364,8 +364,12 @@ export const reportAPI = {
         const response = await apiClient.get(`/api/reports/${appointmentId}`);
         return response.data;
     },
-    generateAISummary: async (fileUrl, mimeType) => {
-        const response = await apiClient.post('/api/reports/summary', { fileUrl, mimeType });
+    generateAISummary: async (fileUrl, mimeType, fileName) => {
+        const response = await apiClient.post('/api/reports/summary', { fileUrl, mimeType, fileName });
+        return response.data;
+    },
+    analyzeMedia: async (fileUrl, mimeType, question, fileName) => {
+        const response = await apiClient.post('/api/reports/analyze', { fileUrl, mimeType, question, fileName });
         return response.data;
     },
     searchReports: async (patientId, keyword) => {
@@ -376,8 +380,8 @@ export const reportAPI = {
         const response = await apiClient.post('/api/reports/compare', { latestFileUrl, latestMimeType, previousFileUrl, previousMimeType });
         return response.data;
     },
-    chatWithAssistant: async (messages) => {
-        const response = await apiClient.post('/api/reports/chat', { messages });
+    chatWithAssistant: async (messages, mediaUrls) => {
+        const response = await apiClient.post('/api/reports/chat', { messages, mediaUrls });
         return response.data;
     },
     getAIUsageStats: async () => {
@@ -746,6 +750,18 @@ export const patientAuthAPI = {
     },
     login: async (loginId, password, hospitalId) => {
         const response = await patientApiClient.post('/api/patient-auth/login', { loginId, password, hospitalId });
+        return response.data;
+    },
+    sendOtp: async (loginId, password, hospitalId) => {
+        const response = await patientApiClient.post('/api/patient-auth/send-otp', { loginId, password, hospitalId });
+        return response.data;
+    },
+    verifyOtp: async (preAuthToken, otp) => {
+        const response = await patientApiClient.post('/api/patient-auth/verify-otp', { preAuthToken, otp });
+        return response.data;
+    },
+    resendOtp: async (preAuthToken) => {
+        const response = await patientApiClient.post('/api/patient-auth/resend-otp', { preAuthToken });
         return response.data;
     },
     forgotPassword: async (email, hospitalId) => {
