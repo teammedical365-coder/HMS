@@ -38,15 +38,22 @@ const App = () => {
 
       if (roleStr) socket.emit('join', roleStr);
 
-      socket.on('new_notification', (notification) => {
+      const handleNewNotification = (notification) => {
         dispatch({ type: 'notifications/addNotification', payload: notification });
-      });
+      };
+
+      socket.on('new_notification', handleNewNotification);
+
+      return () => {
+        socket.off('new_notification', handleNewNotification);
+        socket.disconnect();
+      };
     } else {
       socket.disconnect();
     }
 
     return () => { socket.disconnect(); };
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, dispatch]);
 
   // Smooth scrolling
   useEffect(() => {

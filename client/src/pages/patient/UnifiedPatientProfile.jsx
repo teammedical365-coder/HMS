@@ -66,11 +66,11 @@ const HospitalPatientProfileContent = () => {
     const [aiSummaries, setAiSummaries] = useState({});
     const [aiErrors, setAiErrors] = useState({});
 
-    const handleGenerateSummary = async (fileUrl, mimeType, index) => {
+    const handleGenerateSummary = async (fileUrl, mimeType, index, fileName) => {
         setAiLoading(prev => ({ ...prev, [index]: true }));
         setAiErrors(prev => ({ ...prev, [index]: null }));
         try {
-            const res = await reportAPI.generateAISummary(fileUrl, mimeType);
+            const res = await reportAPI.generateAISummary(fileUrl, mimeType, fileName);
             if (res.success) {
                 setAiSummaries(prev => ({ ...prev, [index]: res.summary }));
             } else {
@@ -78,7 +78,8 @@ const HospitalPatientProfileContent = () => {
             }
         } catch (error) {
             console.error("AI Summary error:", error);
-            setAiErrors(prev => ({ ...prev, [index]: 'An error occurred while generating summary.' }));
+            const errMsg = error?.response?.data?.message || error.message || 'An error occurred while generating summary.';
+            setAiErrors(prev => ({ ...prev, [index]: errMsg }));
         } finally {
             setAiLoading(prev => ({ ...prev, [index]: false }));
         }

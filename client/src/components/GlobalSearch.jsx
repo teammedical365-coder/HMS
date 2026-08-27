@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiSearch, FiX, FiLoader } from 'react-icons/fi';
+import { FiSearch, FiX, FiLoader, FiArrowLeft } from 'react-icons/fi';
 import api from '../utils/api';
 
 const GlobalSearch = () => {
@@ -9,7 +9,10 @@ const GlobalSearch = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [mobileExpanded, setMobileExpanded] = useState(false);
     const searchRef = useRef(null);
+    const mobileInputRef = useRef(null);
+    const desktopInputRef = useRef(null);
     const navigate = useNavigate();
 
     // Debounce effect
@@ -51,11 +54,14 @@ const GlobalSearch = () => {
         const handleClickOutside = (event) => {
             if (searchRef.current && !searchRef.current.contains(event.target)) {
                 setIsOpen(false);
+                if (mobileExpanded) {
+                    setMobileExpanded(false);
+                }
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [mobileExpanded, query]);
 
     // Handle Keyboard Navigation
     const handleKeyDown = (e) => {
@@ -76,13 +82,25 @@ const GlobalSearch = () => {
             }
         } else if (e.key === 'Escape') {
             setIsOpen(false);
+            setMobileExpanded(false);
         }
     };
 
     const handleResultClick = (result) => {
         setIsOpen(false);
+        setMobileExpanded(false);
         setQuery('');
         navigate(result.route);
+    };
+
+    const toggleMobileSearch = () => {
+        setMobileExpanded(prev => {
+            const next = !prev;
+            if (next) {
+                setTimeout(() => mobileInputRef.current?.focus(), 100);
+            }
+            return next;
+        });
     };
 
     // Group results by type
@@ -92,18 +110,39 @@ const GlobalSearch = () => {
         return acc;
     }, {});
 
-    let flatIndex = 0; // For mapping highlighted index correctly across groups
+    let flatIndex = 0;
 
     return (
-        <div className="global-search-container" ref={searchRef}>
-            <div className="global-search-input-wrapper">
+        <div className={`global-search-container ${mobileExpanded ? 'mobile-active' : ''}`} ref={searchRef}>
+            {/* Mobile Search Icon Button (Trigger) */}
+            <button 
+                type="button" 
+                className="global-search-mobile-btn"
+                onClick={toggleMobileSearch}
+                title="Search"
+            >
+                <FiSearch size={18} />
+            </button>
+
+            {/* Main Search Input (Desktop bar & Mobile Overlay) */}
+            <div className={`global-search-input-wrapper ${mobileExpanded ? 'mobile-expanded-bar' : ''}`}>
+                {mobileExpanded && (
+                    <button 
+                        type="button" 
+                        className="mobile-search-back-btn"
+                        onClick={() => { setMobileExpanded(false); setIsOpen(false); }}
+                    >
+                        <FiArrowLeft size={18} />
+                    </button>
+                )}
                 <div className="global-search-icon-left">
                     <FiSearch size={16} />
                 </div>
                 <input
+                    ref={mobileExpanded ? mobileInputRef : desktopInputRef}
                     type="text"
                     className="global-search-input"
-                    placeholder="Search patients, doctors, MRN..."
+                    placeholder="Search patients, doctors, staff, records..."
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -114,10 +153,13 @@ const GlobalSearch = () => {
                         <FiLoader className="clear-icon animate-spin" size={16} />
                     ) : query ? (
                         <FiX className="clear-icon" size={16} onClick={() => { setQuery(''); setResults([]); setIsOpen(false); }} />
+                    ) : mobileExpanded ? (
+                        <FiX className="clear-icon" size={16} onClick={() => { setMobileExpanded(false); setIsOpen(false); }} />
                     ) : null}
                 </div>
             </div>
 
+            {/* Dropdown Results */}
             {isOpen && query.length >= 2 && (
                 <div className="global-search-dropdown">
                     {results.length === 0 && !isLoading ? (

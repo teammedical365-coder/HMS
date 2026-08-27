@@ -251,39 +251,87 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
 
         // ── Central Admin Detection ───────────────────────────────────────────
         // When loginType is 'admin' OR the request originates from admin.medical365.in,
-        // completely bypass hospital tenant resolution. Super Admins live in the
-        // global user collection, not inside any hospital tenant.
-        const isCentralAdminLogin = (loginType === 'admin') || req.isCentralAdmin;
+        // OR the user account in DB has global superadmin/centraladmin role,
+        // completely bypass hospital tenant resolution.
+        let isCentralAdminLogin = (loginType === 'admin') || req.isCentralAdmin;
+        let user = null;
+
+        if (!isCentralAdminLogin) {
+            // Check if user is a global Central/Super Admin logging in from any portal
+            const possibleGlobalUser = await User.findOne({ email: normalizedEmail });
+            if (possibleGlobalUser) {
+                let roleName = '';
+                if (mongoose.Types.ObjectId.isValid(possibleGlobalUser.role)) {
+                    const rDoc = await Role.findById(possibleGlobalUser.role);
+                    roleName = (rDoc?.name || '').toLowerCase();
+                } else if (typeof possibleGlobalUser.role === 'string') {
+                    roleName = possibleGlobalUser.role.toLowerCase();
+                }
+                if (['superadmin', 'centraladmin'].includes(roleName)) {
+                    isCentralAdminLogin = true;
+                    user = possibleGlobalUser;
+                }
+            }
+        }
 
         let resolvedHospitalId = null;
         if (!isCentralAdminLogin) {
             resolvedHospitalId = hospitalId;
             if (!resolvedHospitalId && (hospitalSlug || tenantId)) {
-                const slugToSearch = hospitalSlug || tenantId;
-                const hospital = await Hospital.findOne({ slug: slugToSearch });
+                const rawSlug = String(hospitalSlug || tenantId).toLowerCase().trim();
+                let cleanSlug = rawSlug;
+                if (cleanSlug.endsWith('.medical365.in')) {
+                    cleanSlug = cleanSlug.replace('.medical365.in', '');
+                } else if (cleanSlug.endsWith('.localhost')) {
+                    cleanSlug = cleanSlug.replace('.localhost', '');
+                }
+                const noDashSlug = cleanSlug.replace(/-/g, '');
+                const withDashSlug = cleanSlug.replace(/\s+/g, '-');
+
+                const hospital = await Hospital.findOne({
+                    $or: [
+                        { slug: cleanSlug },
+                        { slug: noDashSlug },
+                        { slug: withDashSlug },
+                        { customDomain: rawSlug },
+                        { customDomain: cleanSlug }
+                    ]
+                });
+
                 if (hospital) {
                     resolvedHospitalId = hospital._id;
                 } else {
-                    console.log(`[Auth] Login failed: Tenant slug '${slugToSearch}' not found in database.`);
-                    return res.status(404).json({ success: false, message: 'Hospital tenant not found.' });
+                    console.log(`[Auth] Login note: Tenant slug '${rawSlug}' not found in database.`);
                 }
             }
         }
 
-        let user = null;
-        if (isCentralAdminLogin) {
-            // Central Admin: search global user collection without hospital scoping
-            user = await User.findOne({ email: normalizedEmail });
-        } else if (resolvedHospitalId) {
-            // Find user strictly for this hospital
-            user = await User.findOne({ email: normalizedEmail, hospitalId: resolvedHospitalId });
-            if (!user) {
-                console.log(`[Auth] User '${normalizedEmail}' not found in hospital tenant '${resolvedHospitalId}'.`);
-                return res.status(401).json({ success: false, message: 'User not found in this hospital tenant.' });
+        if (!user) {
+            if (isCentralAdminLogin) {
+                user = await User.findOne({ email: normalizedEmail });
+            } else if (resolvedHospitalId) {
+                user = await User.findOne({ email: normalizedEmail, hospitalId: resolvedHospitalId });
+                if (!user) {
+                    // Check if user exists by email in the system
+                    const fallbackUser = await User.findOne({ email: normalizedEmail });
+                    if (fallbackUser) {
+                        if (['superadmin', 'centraladmin'].includes(fallbackUser.role)) {
+                            user = fallbackUser;
+                            isCentralAdminLogin = true;
+                        } else if (fallbackUser.role === 'hospitaladmin') {
+                            // Allow Hospital Admin to login
+                            user = fallbackUser;
+                        } else {
+                            console.log(`[Auth] User '${normalizedEmail}' belongs to hospital '${fallbackUser.hospitalId}', not requested tenant '${resolvedHospitalId}'.`);
+                            return res.status(401).json({ success: false, message: 'User not found in this hospital tenant.' });
+                        }
+                    } else {
+                        return res.status(401).json({ success: false, message: 'Invalid email or password' });
+                    }
+                }
+            } else {
+                user = await User.findOne({ email: normalizedEmail });
             }
-        } else {
-            // Generic fallback
-            user = await User.findOne({ email: normalizedEmail });
         }
 
         if (!user) {
@@ -291,7 +339,7 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
         }
 
         // ── Login-type–specific validation ────────────────────────────────────
-        const effectiveLoginType = loginType || 'staff';
+        const effectiveLoginType = isCentralAdminLogin ? 'admin' : (loginType || 'staff');
         let roleData = null;
 
         if (effectiveLoginType === 'admin') {

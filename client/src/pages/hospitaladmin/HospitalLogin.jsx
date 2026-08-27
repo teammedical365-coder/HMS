@@ -1,39 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAuth } from '../../store/hooks';
-import { sendOtp, verifyOtp, resendOtp, forceLogin, clearError, resetOtpFlow, setSessionExpiredMessage } from '../../store/slices/authSlice';
+import { sendOtp, verifyOtp, resendOtp, forceLogin, clearError, resetOtpFlow } from '../../store/slices/authSlice';
 import { useBranding } from '../../context/BrandingContext';
 import { getSubdomain } from '../../utils/subdomain';
-import api, { publicAPI } from '../../utils/api';
-import { motion, AnimatePresence } from 'framer-motion';
-import { HiOutlineMail, HiOutlineLockClosed } from 'react-icons/hi';
-import { RiHospitalLine } from 'react-icons/ri';
-import '../user/Login.css';
-import './HospitalLogin.css';
-import PasswordInput from '../../components/PasswordInput';
-import OtpVerification from '../../components/OtpVerification';
-import ActiveSessionModal from '../../components/ActiveSessionModal';
+import { publicAPI } from '../../utils/api';
+import NeuralAuthPortal from '../../components/auth/NeuralAuthPortal';
 
 /**
- * HospitalLogin — Subdomain-based hospital login page
- * URL: [subdomain].myurl.com/login  (e.g. akg-hospital.myurl.com/login)
- *
- * 1. Reads subdomain from window location
- * 2. Fetches hospital info (name, logo) from /api/hospitals/resolve/:slug
- * 3. Embeds hospitalId in the login dispatch so JWT gets the hospitalId
- * 4. After login, automatically redirects to the user's role dashboard
+ * HospitalLogin — Subdomain-based hospital login page with NeuralAuthPortal
+ * URL: [subdomain].medical365.in/login
  */
 const HospitalLogin = () => {
     const hospitalSlug = getSubdomain();
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
-    const { loading, error, isAuthenticated, user, otpStep, preAuthToken, otpEmail, activeSession, otpSuccessMsg, sessionExpiredMessage } = useAuth();
+    const { loading, error, isAuthenticated, user, otpStep, preAuthToken, otpEmail, activeSession, otpSuccessMsg } = useAuth();
     const { loadBranding } = useBranding();
 
     const [hospital, setHospital] = useState(null);
     const [hospitalLoading, setHospitalLoading] = useState(true);
     const [hospitalError, setHospitalError] = useState('');
-    const [formData, setFormData] = useState({ email: '', password: '' });
     const [sessionBanner, setSessionBanner] = useState(null);
 
     // Check for session expired message
@@ -84,8 +71,6 @@ const HospitalLogin = () => {
                         city: res.tenant.branding?.city || ''
                     });
                     
-                    // 🎨 Apply this hospital's specific branding (colors, logo, title) 
-                    // to the login page *before* the user even signs in.
                     if (res.tenant.id) {
                         loadBranding(res.tenant.id);
                     }
@@ -101,7 +86,7 @@ const HospitalLogin = () => {
             }
         };
         resolveHospital();
-    }, [hospitalSlug]);
+    }, [hospitalSlug, loadBranding]);
 
     // Redirect after successful login
     useEffect(() => {
@@ -116,32 +101,23 @@ const HospitalLogin = () => {
             const rawPath = redirectMap[role] || user.dashboardPath || 'my-dashboard';
             const cleanPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
             
-            // Re-mount the software onto the flat authenticated path
             navigate(cleanPath, { replace: true });
         }
-    }, [isAuthenticated, user, navigate, hospitalSlug]);
+    }, [isAuthenticated, user, navigate]);
 
     useEffect(() => {
         dispatch(clearError());
         dispatch(resetOtpFlow());
     }, [dispatch]);
 
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+    const handleLoginSubmit = ({ id, password }) => {
         dispatch(clearError());
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        dispatch(clearError());
-        if (!formData.email || !formData.password) return;
         setSessionBanner(null);
-
-        // Use OTP flow instead of direct login
-        await dispatch(sendOtp({
-            email: formData.email,
-            password: formData.password,
+        dispatch(sendOtp({
+            email: id,
+            password: password,
             hospitalId: hospital?._id,
+            hospitalSlug: hospital?.slug || hospitalSlug,
             loginType: 'staff',
         }));
     };
@@ -168,25 +144,24 @@ const HospitalLogin = () => {
 
     if (hospitalLoading) {
         return (
-            <div className="hospital-login-loading">
-                <div className="hospital-login-spinner"></div>
-                <p>Loading hospital portal...</p>
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#030712', color: '#0ea5e9', fontFamily: 'JetBrains Mono, monospace' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <i className="fa-solid fa-circle-notch fa-spin" style={{ fontSize: '24px' }}></i>
+                    <span>Connecting to Hospital Node...</span>
+                </div>
             </div>
         );
     }
 
     if (hospitalError) {
         return (
-            <div className="hospital-login-error-page">
-                <div className="hospital-login-error-card">
-                    <span className="error-icon">🏥</span>
-                    <h2>Hospital Not Found</h2>
-                    <p>{hospitalError}</p>
-                    <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-                        URL: <code>/{hospitalSlug}/login</code>
-                    </p>
-                    <button onClick={() => navigate('/login')} className="btn-primary" style={{ marginTop: '16px' }}>
-                        Go to General Login
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#030712', color: '#fff', padding: '20px' }}>
+                <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '20px', padding: '40px', maxWidth: '480px', textAlign: 'center' }}>
+                    <span style={{ fontSize: '48px', display: 'block', marginBottom: '16px' }}>🏥</span>
+                    <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '10px' }}>Hospital Node Offline</h2>
+                    <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '24px' }}>{hospitalError}</p>
+                    <button onClick={() => navigate('/login')} style={{ padding: '12px 24px', background: '#9d4edd', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 700, cursor: 'pointer' }}>
+                        Go to Central Uplink
                     </button>
                 </div>
             </div>
@@ -194,179 +169,33 @@ const HospitalLogin = () => {
     }
 
     return (
-        <section className="auth-section">
-            <AnimatePresence>
-                <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="auth-container"
-                >
-                    <div className="auth-blob blob-1"></div>
-                    <div className="auth-blob blob-2"></div>
-
-                    <motion.div 
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.1 }}
-                        className="auth-card"
-                    >
-                        {/* Left Side: Form */}
-                        <div className="auth-form-container">
-                            <div className="auth-box show">
-                                {/* Hospital Branding */}
-                                <div className="hospital-brand">
-                                    {hospital?.logo ? (
-                                        <img src={hospital.logo} alt={hospital.name} className="hospital-logo" />
-                                    ) : (
-                                        <div className="hospital-logo-placeholder"><RiHospitalLine /></div>
-                                    )}
-                                    <div className="hospital-brand-text">
-                                        <h2>{hospital?.name}</h2>
-                                        <p>{hospital?.city ? `${hospital.city} • ` : ''}Staff Portal</p>
-                                    </div>
-                                </div>
-
-                                {/* Session Expired Banner */}
-                                {sessionBanner && (
-                                    <motion.div
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: 'auto', opacity: 1 }}
-                                        style={{
-                                            background: '#fef3c7',
-                                            border: '1px solid #fbbf24',
-                                            borderRadius: '12px',
-                                            padding: '0.85rem 1rem',
-                                            marginBottom: '1.25rem',
-                                            fontSize: '0.85rem',
-                                            fontWeight: 600,
-                                            color: '#92400e',
-                                        }}
-                                    >
-                                        ⚠️ {sessionBanner}
-                                    </motion.div>
-                                )}
-
-                                <AnimatePresence mode="wait">
-                                    {/* ── Step 1: Credentials ── */}
-                                    {!otpStep && (
-                                        <motion.div
-                                            key="credentials"
-                                            initial={{ opacity: 0, x: -20 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            exit={{ opacity: 0, x: -20 }}
-                                        >
-                                            <div className="auth-header">
-                                                <h3>Welcome Back</h3>
-                                                <p>Sign in with your hospital-issued credentials.</p>
-                                            </div>
-
-                                            {error && (
-                                                <motion.div 
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: 'auto', opacity: 1 }}
-                                                    className="error-message"
-                                                >
-                                                    {error}
-                                                </motion.div>
-                                            )}
-
-                                            <form onSubmit={handleSubmit} className="modern-form">
-                                                <div className="auth-input-group">
-                                                    <label>Email Address</label>
-                                                    <div className="input-field-wrapper">
-                                                        <HiOutlineMail className="input-icon" />
-                                                        <input
-                                                            type="email" 
-                                                            name="email"
-                                                            placeholder="name@hospital.com"
-                                                            value={formData.email}
-                                                            onChange={handleChange} 
-                                                            required
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="auth-input-group">
-                                                    <label>Password</label>
-                                                    <div className="input-field-wrapper">
-                                                        <HiOutlineLockClosed className="input-icon" />
-                                                        <PasswordInput
-                                                            name="password"
-                                                            placeholder="••••••••"
-                                                            value={formData.password}
-                                                            onChange={handleChange} 
-                                                            required
-                                                        />
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="form-options">
-                                                    <label className="checkbox-label">
-                                                        <input type="checkbox" />
-                                                        <span>Remember me</span>
-                                                    </label>
-                                                    <a href="#" className="forgot-link">Forgot password?</a>
-                                                </div>
-
-                                                <button className="btn-primary btn-block" type="submit" disabled={loading}>
-                                                    {loading ? <span className="loader-dots">Authenticating...</span> : 'Sign In to Portal'}
-                                                </button>
-                                            </form>
-                                        </motion.div>
-                                    )}
-
-                                    {/* ── Step 2: OTP Verification ── */}
-                                    {otpStep === 'otp' && (
-                                        <OtpVerification
-                                            key="otp"
-                                            email={otpEmail}
-                                            onVerify={handleVerifyOtp}
-                                            onResend={handleResendOtp}
-                                            onBack={handleBackToLogin}
-                                            loading={loading}
-                                            error={error}
-                                            successMsg={otpSuccessMsg}
-                                        />
-                                    )}
-                                </AnimatePresence>
-
-                                <div className="auth-footer-note" style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-                                    <img src="https://www.medical365.in/logo/medical365fav.jpg" alt="Medical 365" style={{ height: '18px', objectFit: 'contain' }} />
-                                    <span>Safe & Secure Industrial-Grade Clinical System</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Right Side: Visual */}
-                        <div className="auth-visual">
-                            <img
-                                src="https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?q=80&w=1000&auto=format&fit=crop"
-                                alt="Modern Healthcare"
-                                className="auth-hero-img"
-                            />
-                            <div className="auth-visual-overlay"></div>
-                            <div className="auth-content show">
-                                <div className="visual-badge">Secure Access</div>
-                                <h2>Isolated <br /> Medical Ecosystem.</h2>
-                                <p>
-                                    Your data resides in a dedicated instance for {hospital?.name}.
-                                    Powered by Medical 365 Enterprise Security.
-                                </p>
-                            </div>
-                        </div>
-                    </motion.div>
-                </motion.div>
-            </AnimatePresence>
-
-            {/* Active Session Modal */}
-            {otpStep === 'session_check' && activeSession && (
-                <ActiveSessionModal
-                    activeSession={activeSession}
-                    onForceLogin={handleForceLogin}
-                    onCancel={handleCancelSession}
-                    loading={loading}
-                />
-            )}
-        </section>
+        <NeuralAuthPortal
+            portalType="hospital"
+            title={hospital?.name ? `${hospital.name} Portal` : 'Clinical Portal'}
+            subtitle={`Access high-performance medical workspace for ${hospital?.name || 'Hospital Portal'}.`}
+            idLabel="Staff Email or ID"
+            idPlaceholder="Enter your email or ID"
+            idType="text"
+            passkeyLabel="Password"
+            passkeyPlaceholder="••••••••"
+            branding={{
+                name: hospital?.name,
+                logoUrl: hospital?.logo
+            }}
+            onLoginSubmit={handleLoginSubmit}
+            onVerifyOtp={handleVerifyOtp}
+            onResendOtp={handleResendOtp}
+            onAbortOtp={handleBackToLogin}
+            onForceLogin={handleForceLogin}
+            onCancelSession={handleCancelSession}
+            otpStep={otpStep}
+            otpEmail={otpEmail}
+            activeSession={activeSession}
+            loading={loading}
+            error={error}
+            successMsg={otpSuccessMsg}
+            sessionBanner={sessionBanner}
+        />
     );
 };
 

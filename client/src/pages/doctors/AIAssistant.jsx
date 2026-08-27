@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiSearch, FiUser, FiFileText } from 'react-icons/fi';
+import { FiSearch, FiUser, FiFileText, FiImage, FiPaperclip, FiX } from 'react-icons/fi';
 import { reportAPI, patientAPI, doctorAPI } from '../../utils/api';
 import './AIAssistant.css';
+
+// Helper: detect if a MIME type is an image
+const isImageMime = (mime) => mime && mime.startsWith('image/');
+const isPdfMime = (mime) => mime === 'application/pdf';
 
 const highlightKeyword = (text, keyword) => {
     if (!keyword || !text) return text;
@@ -83,6 +87,10 @@ const AIAssistant = () => {
     const [isChatLoading, setIsChatLoading] = useState(false);
     const chatEndRef = useRef(null);
     const chatTextareaRef = useRef(null);
+    const chatFileInputRef = useRef(null);
+
+    // Chat media attachment state
+    const [chatAttachments, setChatAttachments] = useState([]); // [{url, mimeType, name, previewUrl}]
 
     const CHAT_SUGGESTIONS = [
         'Explain this report',
@@ -103,9 +111,11 @@ const AIAssistant = () => {
         const text = (overrideText || chatInput).trim();
         if (!text || !selectedPatient) return;
 
-        const doctorMsg = { role: 'doctor', text, timestamp: new Date() };
+        const currentAttachments = [...chatAttachments];
+        const doctorMsg = { role: 'doctor', text, timestamp: new Date(), attachments: currentAttachments.length > 0 ? currentAttachments : undefined };
         setChatMessages(prev => [...prev, doctorMsg]);
         setChatInput('');
+        setChatAttachments([]);
         if (chatTextareaRef.current) chatTextareaRef.current.style.height = 'auto';
         setIsChatLoading(true);
 
@@ -121,7 +131,10 @@ const AIAssistant = () => {
             // Append the new message with patient context
             apiMessages.push({ role: 'user', content: patientContext + text });
 
-            const res = await reportAPI.chatWithAssistant(apiMessages);
+            // Build media URLs for attachments (from selected report + any chat attachments)
+            const mediaUrls = currentAttachments.map(a => ({ url: a.url, mimeType: a.mimeType }));
+
+            const res = await reportAPI.chatWithAssistant(apiMessages, mediaUrls.length > 0 ? mediaUrls : undefined);
             if (res.success && res.reply) {
                 const aiMsg = { 
                     role: 'ai', 
@@ -230,7 +243,9 @@ const AIAssistant = () => {
         setSummaryUsage(null);
 
         try {
-            const res = await reportAPI.generateAISummary(selectedReport.url, selectedReport.mimeType || selectedReport.mimetype || 'application/pdf');
+            const mime = selectedReport.mimeType || selectedReport.mimetype || 'application/pdf';
+            const fname = selectedReport.fileName || selectedReport.name || '';
+            const res = await reportAPI.generateAISummary(selectedReport.url, mime, fname);
             if (res.success) {
                 setSummary(res.summary);
                 if (res.usage) setSummaryUsage(res.usage);
@@ -239,10 +254,28 @@ const AIAssistant = () => {
             }
         } catch (err) {
             console.error("AI Summary error:", err);
-            setError("Unable to generate summary. Please try again.");
+            const errMsg = err?.response?.data?.message || err.message || "Unable to generate summary. Please try again.";
+            setError(errMsg);
         } finally {
             setIsLoading(false);
         }
+    };
+
+    // Attach a report to the chat context
+    const handleAttachToChat = (report) => {
+        if (!report || !report.url) return;
+        const already = chatAttachments.find(a => a.url === report.url);
+        if (already) return;
+        setChatAttachments(prev => [...prev, {
+            url: report.url,
+            mimeType: report.mimeType || report.mimetype || 'application/pdf',
+            name: report.fileName || report.name || 'File',
+            previewUrl: isImageMime(report.mimeType || report.mimetype) ? report.url : null
+        }]);
+    };
+
+    const handleRemoveAttachment = (index) => {
+        setChatAttachments(prev => prev.filter((_, i) => i !== index));
     };
 
     const handleCompareReports = async () => {
@@ -721,18 +754,44 @@ const AIAssistant = () => {
                     {/* AI Summary Section */}
                     <div className="ai-card">
                         <h3 className="ai-card-title">🤖 AI Report Summary</h3>
+                        
+                        {/* Show selected file preview */}
+                        {selectedReport && (
+                            <div className="ai-selected-file-preview">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                    <span style={{ fontSize: '1.4rem' }}>
+                                        {isImageMime(selectedReport.mimeType || selectedReport.mimetype) ? '🖼️' : '📄'}
+                                    </span>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {selectedReport.fileName || selectedReport.name || 'Document'}
+                                        </div>
+                                        <div style={{ fontSize: '11px', color: '#64748b' }}>
+                                            {(selectedReport.mimeType || selectedReport.mimetype || 'unknown').toUpperCase().replace('APPLICATION/', '').replace('IMAGE/', '')}
+                                        </div>
+                                    </div>
+                                    {isImageMime(selectedReport.mimeType || selectedReport.mimetype) && selectedReport.url && (
+                                        <img src={selectedReport.url} alt="Preview" style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e2e8f0' }} />
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         <button 
                             className="ai-btn-primary"
                             onClick={handleGenerateSummary}
                             disabled={isLoading || !selectedReport}
                             style={{ opacity: isLoading || !selectedReport ? 0.7 : 1 }}
                         >
-                            {isLoading ? '⏳ Generating Summary...' : 'Generate Summary'}
+                            {isLoading 
+                                ? (isImageMime(selectedReport?.mimeType || selectedReport?.mimetype) ? '🔍 Analyzing Image...' : '⏳ Generating Summary...') 
+                                : 'Generate Summary'
+                            }
                         </button>
                         
                         {error && (
-                            <div style={{ color: 'red', marginBottom: '16px', fontSize: '14px', textAlign: 'center', marginTop: '10px' }}>
-                                {error}
+                            <div className="ai-error-msg" style={{ marginTop: '10px' }}>
+                                ⚠️ {error}
                             </div>
                         )}
 
@@ -747,28 +806,73 @@ const AIAssistant = () => {
                             {summary && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                     
+                                    {/* Content Type / Report Type Badge */}
                                     <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                        <h4 style={{ color: '#334155', margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Report Type</h4>
-                                        <p style={{ color: '#0f172a', margin: '0', fontSize: '15px', fontWeight: '500' }}>{summary.ReportType}</p>
+                                        <h4 style={{ color: '#334155', margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                            {summary.ContentType ? 'Content Type' : 'Report Type'}
+                                        </h4>
+                                        <p style={{ color: '#0f172a', margin: '0', fontSize: '15px', fontWeight: '500' }}>
+                                            {summary.ContentType || summary.ReportType || 'Unknown'}
+                                        </p>
+                                        {summary.ImageType && (
+                                            <p style={{ color: '#475569', margin: '4px 0 0 0', fontSize: '13px' }}>Type: {summary.ImageType}</p>
+                                        )}
+                                        {summary.BodyRegion && summary.BodyRegion !== 'Not Identifiable' && (
+                                            <p style={{ color: '#475569', margin: '2px 0 0 0', fontSize: '13px' }}>Region: {summary.BodyRegion}</p>
+                                        )}
+                                        {summary.ImageQuality && (
+                                            <p style={{ color: summary.ImageQuality === 'Insufficient' ? '#dc2626' : '#475569', margin: '2px 0 0 0', fontSize: '13px', fontWeight: summary.ImageQuality === 'Insufficient' ? 600 : 400 }}>
+                                                Quality: {summary.ImageQuality}
+                                            </p>
+                                        )}
                                     </div>
 
+                                    {/* Overall Summary */}
                                     <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                                         <h4 style={{ color: '#334155', margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Overall Summary</h4>
-                                        <p style={{ color: '#0f172a', margin: '0', fontSize: '14px', lineHeight: '1.5' }}>{summary.OverallSummary}</p>
+                                        <p style={{ color: '#0f172a', margin: '0', fontSize: '14px', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{summary.OverallSummary}</p>
                                     </div>
 
-                                    <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                        <h4 style={{ color: '#334155', margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Important Findings</h4>
-                                        <ul style={{ color: '#0f172a', margin: '0', fontSize: '14px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                            {summary.ImportantFindings?.map((finding, idx) => (
-                                                <li key={idx}>{finding}</li>
-                                            ))}
-                                        </ul>
-                                    </div>
+                                    {/* Visible Observations (for image analysis) */}
+                                    {summary.VisibleObservations && summary.VisibleObservations.length > 0 && (
+                                        <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                                            <h4 style={{ color: '#166534', margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Visible Observations</h4>
+                                            <ul style={{ color: '#14532d', margin: '0', fontSize: '14px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                {summary.VisibleObservations.map((obs, idx) => (
+                                                    <li key={idx}>{obs}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
 
+                                    {/* Important Findings (for text reports) */}
+                                    {summary.ImportantFindings && summary.ImportantFindings.length > 0 && (
+                                        <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                            <h4 style={{ color: '#334155', margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Important Findings</h4>
+                                            <ul style={{ color: '#0f172a', margin: '0', fontSize: '14px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                {summary.ImportantFindings.map((finding, idx) => (
+                                                    <li key={idx}>{finding}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {/* Notable Findings (for image analysis) */}
+                                    {summary.NotableFindings && summary.NotableFindings.length > 0 && (
+                                        <div style={{ background: '#fffbeb', padding: '16px', borderRadius: '8px', border: '1px solid #fde68a' }}>
+                                            <h4 style={{ color: '#92400e', margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Notable Findings</h4>
+                                            <ul style={{ color: '#78350f', margin: '0', fontSize: '14px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                {summary.NotableFindings.map((finding, idx) => (
+                                                    <li key={idx}>{finding}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {/* Abnormal Values (for text reports) */}
                                     {summary.AbnormalValues && summary.AbnormalValues.length > 0 && (
                                         <div style={{ background: '#fef2f2', padding: '16px', borderRadius: '8px', border: '1px solid #fecaca' }}>
-                                            <h4 style={{ color: '#dc2626', margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Abnormal Findings</h4>
+                                            <h4 style={{ color: '#dc2626', margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Abnormal Values</h4>
                                             <ul style={{ color: '#991b1b', margin: '0', fontSize: '14px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                                 {summary.AbnormalValues.map((val, idx) => (
                                                     <li key={idx}>{val}</li>
@@ -777,11 +881,27 @@ const AIAssistant = () => {
                                         </div>
                                     )}
 
+                                    {/* Extracted Text (for scanned images) */}
+                                    {summary.ExtractedText && summary.ExtractedText.trim() && (
+                                        <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                            <h4 style={{ color: '#334155', margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Extracted Text</h4>
+                                            <pre style={{ color: '#0f172a', margin: '0', fontSize: '13px', lineHeight: '1.5', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{summary.ExtractedText}</pre>
+                                        </div>
+                                    )}
+
+                                    {/* Medical Disclaimer */}
+                                    {summary.Disclaimer && (
+                                        <div className="ai-medical-disclaimer">
+                                            <span style={{ fontSize: '14px' }}>⚕️</span>
+                                            <span>{summary.Disclaimer}</span>
+                                        </div>
+                                    )}
+
                                     {/* Real-time Token Consumption Badge */}
                                     {summaryUsage && (
                                         <div className="ai-token-badge">
                                             <span>⚡ Tokens: <strong>{summaryUsage.totalTokens}</strong> (In: {summaryUsage.promptTokens} | Out: {summaryUsage.candidateTokens})</span>
-                                            <span>• Model: <code>{summaryUsage.modelName || 'gemini-1.5-flash'}</code></span>
+                                            <span>• Model: <code>{summaryUsage.modelName || 'gemini-3.6-flash'}</code></span>
                                             <span>• Est. Cost: <strong>${summaryUsage.estimatedCostUsd?.toFixed(5) || '0.00008'}</strong> (~₹{summaryUsage.estimatedCostInr?.toFixed(3) || '0.007'})</span>
                                         </div>
                                     )}
@@ -894,7 +1014,20 @@ const AIAssistant = () => {
                                                 <span className="ai-chat-role-tag">{msg.role === 'doctor' ? '🩺 You' : '🤖 AI'}</span>
                                                 <span className="ai-chat-time">{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                             </div>
-                                            <div className="ai-chat-bubble-text">{msg.text}</div>
+                                            {/* Show attached media thumbnails in chat */}
+                                            {msg.attachments && msg.attachments.length > 0 && (
+                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                                                    {msg.attachments.map((att, ai) => (
+                                                        <div key={ai} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', color: '#475569' }}>
+                                                            {att.previewUrl ? (
+                                                                <img src={att.previewUrl} alt="" style={{ width: '20px', height: '20px', objectFit: 'cover', borderRadius: '3px' }} />
+                                                            ) : <span>📄</span>}
+                                                            <span>{att.name}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <div className="ai-chat-bubble-text" style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div>
                                             {msg.usage && (
                                                 <div className="ai-chat-token-tag">
                                                     ⚡ {msg.usage.totalTokens} tokens (${msg.usage.estimatedCostUsd?.toFixed(5) || '0.00005'})
@@ -926,12 +1059,43 @@ const AIAssistant = () => {
                                     ))}
                                 </div>
 
+                                {/* Chat Attachments Preview */}
+                                {chatAttachments.length > 0 && (
+                                    <div className="ai-chat-attachments-bar">
+                                        {chatAttachments.map((att, idx) => (
+                                            <div key={idx} className="ai-chat-attachment-chip">
+                                                {att.previewUrl ? (
+                                                    <img src={att.previewUrl} alt="" style={{ width: '24px', height: '24px', objectFit: 'cover', borderRadius: '4px' }} />
+                                                ) : (
+                                                    <span style={{ fontSize: '14px' }}>📄</span>
+                                                )}
+                                                <span className="ai-chat-attachment-name">{att.name}</span>
+                                                <button onClick={() => handleRemoveAttachment(idx)} className="ai-chat-attachment-remove" title="Remove"><FiX size={12} /></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
                                 {/* Input Area */}
                                 <div className="ai-chat-input-area">
+                                    {/* Attach file button */}
+                                    <button
+                                        className="ai-chat-attach-btn"
+                                        onClick={() => {
+                                            if (selectedReport && selectedReport.url) {
+                                                handleAttachToChat(selectedReport);
+                                            } else {
+                                                alert('Select a report from the left panel to attach it to the chat.');
+                                            }
+                                        }}
+                                        title="Attach selected report to chat"
+                                    >
+                                        <FiPaperclip size={16} />
+                                    </button>
                                     <textarea
                                         ref={chatTextareaRef}
                                         className="ai-chat-input"
-                                        placeholder="Type your clinical question..."
+                                        placeholder={chatAttachments.length > 0 ? "Ask about the attached file(s)..." : "Type your clinical question..."}
                                         value={chatInput}
                                         onChange={handleTextareaInput}
                                         onKeyDown={handleChatKeyDown}
@@ -1007,7 +1171,7 @@ const AIAssistant = () => {
                                                 {trackerStats.totalRequests || 0}
                                             </span>
                                             <span className="ai-tracker-card-sub">
-                                                Active model: gemini-1.5-flash
+                                                Active model: gemini-3.6-flash
                                             </span>
                                         </div>
                                     </div>

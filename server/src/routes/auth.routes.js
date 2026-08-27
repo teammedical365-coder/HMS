@@ -195,22 +195,47 @@ router.post('/login', loginLimiter, async (req, res) => {
     
     let resolvedHospitalId = hospitalId;
     if (!resolvedHospitalId && (hospitalSlug || tenantId)) {
-        const slugToSearch = hospitalSlug || tenantId;
-        const hospital = await Hospital.findOne({ slug: slugToSearch });
+        const rawSlug = String(hospitalSlug || tenantId).toLowerCase().trim();
+        let cleanSlug = rawSlug;
+        if (cleanSlug.endsWith('.medical365.in')) {
+            cleanSlug = cleanSlug.replace('.medical365.in', '');
+        } else if (cleanSlug.endsWith('.localhost')) {
+            cleanSlug = cleanSlug.replace('.localhost', '');
+        }
+        const noDashSlug = cleanSlug.replace(/-/g, '');
+        const withDashSlug = cleanSlug.replace(/\s+/g, '-');
+
+        const hospital = await Hospital.findOne({
+            $or: [
+                { slug: cleanSlug },
+                { slug: noDashSlug },
+                { slug: withDashSlug },
+                { customDomain: rawSlug },
+                { customDomain: cleanSlug }
+            ]
+        });
+
         if (hospital) {
             resolvedHospitalId = hospital._id;
         } else {
-            console.log(`[Auth] Login failed: Tenant slug '${slugToSearch}' not found in database.`);
-            return res.status(404).json({ success: false, message: 'Hospital tenant not found.' });
+            console.log(`[Auth] Login note: Tenant slug '${rawSlug}' not found in database.`);
         }
     }
 
-    let query = { email: normalizedEmail };
+    let user = null;
     if (resolvedHospitalId) {
-        query.hospitalId = resolvedHospitalId;
+        user = await User.findOne({ email: normalizedEmail, hospitalId: resolvedHospitalId });
     }
-
-    const user = await User.findOne(query);
+    if (!user) {
+        const fallbackUser = await User.findOne({ email: normalizedEmail });
+        if (fallbackUser) {
+            if (['superadmin', 'centraladmin', 'hospitaladmin'].includes(fallbackUser.role)) {
+                user = fallbackUser;
+            } else if (!resolvedHospitalId || String(fallbackUser.hospitalId) === String(resolvedHospitalId)) {
+                user = fallbackUser;
+            }
+        }
+    }
 
     if (!user) {
       if (resolvedHospitalId) {

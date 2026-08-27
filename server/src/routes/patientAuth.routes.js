@@ -256,6 +256,272 @@ router.post('/login', async (req, res) => {
     }
 });
 
+// Helper: Mask email for privacy
+function maskEmail(email) {
+    if (!email || !email.includes('@')) return email || '';
+    const [local, domain] = email.split('@');
+    if (local.length <= 2) return `${local[0]}*@${domain}`;
+    return `${local[0]}${'*'.repeat(Math.min(local.length - 2, 5))}${local[local.length - 1]}@${domain}`;
+}
+
+// POST /api/patient-auth/send-otp
+// Send 6-digit OTP for patient login
+router.post('/send-otp', async (req, res) => {
+    try {
+        const { loginId, password, hospitalId } = req.body;
+        if (!loginId || !hospitalId) {
+            return res.status(400).json({ success: false, message: 'Email or Mobile and Hospital context are required.' });
+        }
+
+        const query = {
+            $or: [
+                { email: loginId.toLowerCase() },
+                { mobile: loginId }
+            ],
+            hospitalId
+        };
+
+        const patient = await PatientAuth.findOne(query);
+        if (!patient) {
+            return res.status(401).json({ success: false, message: 'Patient account not found in this hospital.' });
+        }
+
+        if (patient.status !== 'Active') {
+            return res.status(401).json({ success: false, message: 'Account is inactive. Please contact hospital reception.' });
+        }
+
+        // If password is provided, verify credentials first
+        if (password) {
+            const isMatch = await patient.comparePassword(password);
+            if (!isMatch) {
+                return res.status(401).json({ success: false, message: 'Invalid credentials.' });
+            }
+        }
+
+        const crypto = require('crypto');
+        const bcrypt = require('bcryptjs');
+        const jwt = require('jsonwebtoken');
+        const { v4: uuidv4 } = require('uuid');
+        const LoginOtp = require('../models/loginOtp.model');
+        const { JWT_SECRET } = require('../config/jwt');
+        const { sendLoginOtpEmail } = require('../services/email.service');
+
+        const plainOtp = String(crypto.randomInt(100000, 999999));
+        const otpHash = await bcrypt.hash(plainOtp, 10);
+        const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+        const preAuthToken = jwt.sign(
+            {
+                otp_pending: true,
+                patientAuthId: String(patient._id),
+                hospitalId: String(hospitalId),
+                email: patient.email,
+                mobile: patient.mobile,
+                name: patient.name,
+                jti: uuidv4()
+            },
+            JWT_SECRET,
+            { expiresIn: '10m' }
+        );
+
+        // Store OTP
+        await LoginOtp.findOneAndUpdate(
+            { userId: patient._id },
+            {
+                userId: patient._id,
+                otpHash,
+                expiresAt,
+                attempts: 0,
+                lastResendAt: new Date(),
+                preAuthToken,
+                loginType: 'patient',
+                hospitalId
+            },
+            { upsert: true, new: true }
+        );
+
+        // Send Email OTP if email exists
+        if (patient.email) {
+            try {
+                await sendLoginOtpEmail({ email: patient.email, otp: plainOtp, userName: patient.name });
+            } catch (mailErr) {
+                console.error('[PatientAuth] Failed to send email OTP:', mailErr.message);
+            }
+        }
+
+        // Output to console for fast dev access
+        console.log(`\x1b[35m[PATIENT OTP]\x1b[0m Login OTP for ${patient.name} (${patient.email || patient.mobile}): \x1b[32m\x1b[1m${plainOtp}\x1b[0m`);
+
+        res.json({
+            success: true,
+            message: `Verification code sent to ${patient.email ? maskEmail(patient.email) : patient.mobile}`,
+            preAuthToken,
+            email: maskEmail(patient.email),
+            mobile: patient.mobile ? `******${patient.mobile.slice(-4)}` : null
+        });
+    } catch (error) {
+        console.error('Patient Send OTP Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to initiate OTP verification.' });
+    }
+});
+
+// POST /api/patient-auth/verify-otp
+// Verify patient 6-digit OTP code
+router.post('/verify-otp', async (req, res) => {
+    try {
+        const { preAuthToken, otp } = req.body;
+        if (!preAuthToken || !otp) {
+            return res.status(400).json({ success: false, message: 'Verification token and OTP are required.' });
+        }
+
+        const jwt = require('jsonwebtoken');
+        const bcrypt = require('bcryptjs');
+        const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/jwt');
+        const LoginOtp = require('../models/loginOtp.model');
+        const { v4: uuidv4 } = require('uuid');
+
+        let decoded;
+        try {
+            decoded = jwt.verify(preAuthToken, JWT_SECRET);
+        } catch {
+            return res.status(401).json({ success: false, message: 'Verification session expired. Please start over.', otpExpired: true });
+        }
+
+        if (!decoded?.patientAuthId) {
+            return res.status(401).json({ success: false, message: 'Invalid verification token.' });
+        }
+
+        const otpDoc = await LoginOtp.findOne({ userId: decoded.patientAuthId, preAuthToken });
+        if (!otpDoc) {
+            return res.status(401).json({ success: false, message: 'OTP session not found or already verified. Please request a new code.' });
+        }
+
+        if (new Date() > otpDoc.expiresAt) {
+            await LoginOtp.deleteOne({ _id: otpDoc._id });
+            return res.status(401).json({ success: false, message: 'OTP has expired. Please request a new code.', otpExpired: true });
+        }
+
+        const isMatch = await bcrypt.compare(String(otp).trim(), otpDoc.otpHash);
+        if (!isMatch) {
+            otpDoc.attempts = (otpDoc.attempts || 0) + 1;
+            if (otpDoc.attempts >= 5) {
+                await LoginOtp.deleteOne({ _id: otpDoc._id });
+                return res.status(401).json({ success: false, message: 'Too many incorrect attempts. Please request a new code.', otpExpired: true });
+            }
+            await otpDoc.save();
+            return res.status(401).json({ success: false, message: `Incorrect OTP code. ${5 - otpDoc.attempts} attempts remaining.` });
+        }
+
+        // Clean up OTP record
+        await LoginOtp.deleteOne({ _id: otpDoc._id });
+
+        const patient = await PatientAuth.findById(decoded.patientAuthId);
+        if (!patient) {
+            return res.status(404).json({ success: false, message: 'Patient account not found.' });
+        }
+
+        // Generate full Patient token
+        const token = jwt.sign(
+            {
+                jti: uuidv4(),
+                patientId: patient._id,
+                email: patient.email,
+                hospitalId: String(patient.hospitalId),
+                role: 'patient'
+            },
+            JWT_SECRET,
+            { expiresIn: JWT_EXPIRES_IN }
+        );
+
+        let mrn = null;
+        if (patient.linkedPatientProfileId) {
+            const User = require('../models/user.model');
+            const linkedProfile = await User.findById(patient.linkedPatientProfileId);
+            if (linkedProfile) mrn = linkedProfile.mrn || linkedProfile.patientId || null;
+        }
+
+        res.json({
+            success: true,
+            message: 'Verification successful.',
+            token,
+            user: {
+                id: patient._id,
+                name: patient.name,
+                email: patient.email,
+                mobile: patient.mobile,
+                hospitalId: patient.hospitalId,
+                role: 'patient',
+                registrationStatus: patient.linkedPatientProfileId ? 'Completed' : 'Pending',
+                linkedPatientProfileId: patient.linkedPatientProfileId,
+                mrn: mrn
+            }
+        });
+    } catch (error) {
+        console.error('Patient Verify OTP Error:', error);
+        res.status(500).json({ success: false, message: 'Error during OTP verification.' });
+    }
+});
+
+// POST /api/patient-auth/resend-otp
+router.post('/resend-otp', async (req, res) => {
+    try {
+        const { preAuthToken } = req.body;
+        if (!preAuthToken) {
+            return res.status(400).json({ success: false, message: 'preAuthToken is required.' });
+        }
+
+        const jwt = require('jsonwebtoken');
+        const crypto = require('crypto');
+        const bcrypt = require('bcryptjs');
+        const { JWT_SECRET } = require('../config/jwt');
+        const LoginOtp = require('../models/loginOtp.model');
+        const { sendLoginOtpEmail } = require('../services/email.service');
+
+        let decoded;
+        try {
+            decoded = jwt.verify(preAuthToken, JWT_SECRET);
+        } catch {
+            return res.status(401).json({ success: false, message: 'Session expired. Please start over.' });
+        }
+
+        const otpDoc = await LoginOtp.findOne({ userId: decoded.patientAuthId, preAuthToken });
+        if (!otpDoc) {
+            return res.status(404).json({ success: false, message: 'OTP session not found.' });
+        }
+
+        // 30s Cooldown Check
+        if (otpDoc.lastResendAt && (Date.now() - new Date(otpDoc.lastResendAt).getTime()) < 30000) {
+            const remaining = Math.ceil((30000 - (Date.now() - new Date(otpDoc.lastResendAt).getTime())) / 1000);
+            return res.status(429).json({ success: false, message: `Please wait ${remaining}s before requesting a new code.` });
+        }
+
+        const plainOtp = String(crypto.randomInt(100000, 999999));
+        otpDoc.otpHash = await bcrypt.hash(plainOtp, 10);
+        otpDoc.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+        otpDoc.attempts = 0;
+        otpDoc.lastResendAt = new Date();
+        await otpDoc.save();
+
+        if (decoded.email) {
+            try {
+                await sendLoginOtpEmail({ email: decoded.email, otp: plainOtp, userName: decoded.name });
+            } catch (mailErr) {
+                console.error('[PatientAuth] Failed to send resend email OTP:', mailErr.message);
+            }
+        }
+
+        console.log(`\x1b[35m[PATIENT OTP RESEND]\x1b[0m New OTP for ${decoded.name} (${decoded.email}): \x1b[32m\x1b[1m${plainOtp}\x1b[0m`);
+
+        res.json({
+            success: true,
+            message: 'A new verification code has been transmitted.'
+        });
+    } catch (error) {
+        console.error('Patient Resend OTP Error:', error);
+        res.status(500).json({ success: false, message: 'Failed to resend OTP.' });
+    }
+});
+
 // POST /api/patient-auth/forgot-password
 // Request reset password token
 router.post('/forgot-password', async (req, res) => {

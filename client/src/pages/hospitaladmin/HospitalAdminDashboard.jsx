@@ -6,6 +6,7 @@ import { adminAPI, uploadAPI, hospitalAPI } from '../../utils/api';
 import BedManagement from './BedManagement';
 import OTDashboard from './OTDashboard';
 import '../administration/SuperAdmin.css';
+import '../centraladmin/CentralAdminDashboard.css';
 import './HospitalAdminDashboard.css';
 
 const HospitalAdminDashboard = () => {
@@ -48,6 +49,8 @@ const HospitalAdminDashboard = () => {
     const [customEndDate, setCustomEndDate] = useState('');
     const [hospitalStats, setHospitalStats] = useState(null);
     const [loadingStats, setLoadingStats] = useState(false);
+    const [chartRange, setChartRange] = useState('this_month');
+    const [appliedCustomAnim, setAppliedCustomAnim] = useState(false);
 
     // --- Accounts State ---
     const [accountsSubTab, setAccountsSubTab] = useState('upi');
@@ -573,136 +576,323 @@ const HospitalAdminDashboard = () => {
                 </div>
 
                 {/* ===================== OVERVIEW TAB ===================== */}
-                {activeTab === 'overview' && (
-                    <>
-                        {/* ---- DATE FILTER BAR ---- */}
-                        <div className="admin-card date-filter-card">
-                            <h3>📅 Analytics Timeframe</h3>
-                            <div className="date-filter-controls">
-                                <div className="preset-buttons">
-                                    <button className={datePreset === 'all' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('all')}>All Time</button>
-                                    <button className={datePreset === 'today' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('today')}>Today</button>
-                                    <button className={datePreset === '30' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('30')}>Last 30 Days</button>
-                                    <button className={datePreset === '60' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('60')}>Last 60 Days</button>
-                                    <button className={datePreset === '90' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('90')}>Last 90 Days</button>
-                                </div>
-                                <div className="custom-date-inputs">
-                                    <input type="date" className="date-input" value={customStartDate} onChange={(e) => { setDatePreset('custom'); setCustomStartDate(e.target.value); }} />
-                                    <span>to</span>
-                                    <input type="date" className="date-input" value={customEndDate} onChange={(e) => { setDatePreset('custom'); setCustomEndDate(e.target.value); }} />
-                                    <button className="btn-save" onClick={handleApplyCustomDate}>Apply Custom</button>
-                                </div>
-                            </div>
-                        </div>
+                {activeTab === 'overview' && (() => {
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const now = new Date();
+                    const curM = monthNames[now.getMonth()];
+                    const prevM = monthNames[(now.getMonth() - 1 + 12) % 12];
+                    const dateLabels = chartRange === 'last_month' 
+                        ? [`01 ${prevM}`, `05 ${prevM}`, `10 ${prevM}`, `15 ${prevM}`, `20 ${prevM}`, `25 ${prevM}`, `30 ${prevM}`]
+                        : chartRange === 'this_year'
+                            ? ['Jan', 'Mar', 'May', 'Jul', 'Sep', 'Nov', 'Dec']
+                            : [`01 ${curM}`, `05 ${curM}`, `10 ${curM}`, `15 ${curM}`, `20 ${curM}`, `25 ${curM}`, `30 ${curM}`];
 
-                        {/* Stats Grid */}
-                        {loadingStats ? (
-                            <div className="hospital-kpi-grid">
-                                {[1, 2, 3, 4, 5, 6].map((i) => (
-                                    <div key={i} style={{ 
-                                        padding: '24px', 
-                                        borderRadius: '16px', 
-                                        background: '#f8fafc', 
-                                        border: '1px solid #e2e8f0',
-                                        animation: 'pulse 1.5s infinite ease-in-out' 
-                                    }}>
-                                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#e2e8f0', marginBottom: '16px' }}></div>
-                                        <div style={{ width: '60%', height: '24px', background: '#e2e8f0', borderRadius: '4px', marginBottom: '12px' }}></div>
-                                        <div style={{ width: '40%', height: '14px', background: '#e2e8f0', borderRadius: '4px', marginBottom: '8px' }}></div>
-                                        <div style={{ width: '80%', height: '12px', background: '#e2e8f0', borderRadius: '4px' }}></div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : hospitalStats?.stats ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                                <div className="kpi-card kpi-blue w-full">
-                                    <div className="kpi-icon">👩‍⚕️</div>
-                                    <div className="kpi-value">{hospitalStats.stats.totalStaff}</div>
-                                    <div className="kpi-label">Total Staff</div>
-                                    <div className="kpi-sub">Active staff members</div>
-                                </div>
-                                <div className="kpi-card kpi-green w-full">
-                                    <div className="kpi-icon">🧑‍🤝‍🧑</div>
-                                    <div className="kpi-value">{hospitalStats.stats.totalPatients}</div>
-                                    <div className="kpi-label">Unique Patients</div>
-                                    <div className="kpi-sub">In selected period</div>
-                                </div>
-                                <div className="kpi-card kpi-purple w-full">
-                                    <div className="kpi-icon">📅</div>
-                                    <div className="kpi-value">{hospitalStats.stats.totalAppointments}</div>
-                                    <div className="kpi-label">Total Appointments</div>
-                                    <div className="kpi-sub">In selected period</div>
-                                </div>
-                                <div className="kpi-card kpi-orange w-full">
-                                    <div className="kpi-icon">💰</div>
-                                    <div className="kpi-value">{formatCurrency(hospitalStats.stats.totalRevenue)}</div>
-                                    <div className="kpi-label">Total Revenue</div>
-                                    <div className="kpi-sub">From paid appointments</div>
-                                </div>
-                                <div className="kpi-card kpi-teal w-full">
-                                    <div className="kpi-icon">✅</div>
-                                    <div className="kpi-value">{hospitalStats.stats.completedAppointments}</div>
-                                    <div className="kpi-label">Completed</div>
-                                    <div className="kpi-sub">{hospitalStats.stats.pendingAppointments} pending/upcoming</div>
-                                </div>
-                                <div className="kpi-card kpi-pink w-full">
-                                    <div className="kpi-icon">🧪</div>
-                                    <div className="kpi-value">{hospitalStats.stats.labReportCount}</div>
-                                    <div className="kpi-label">Lab Reports</div>
-                                    <div className="kpi-sub">{hospitalStats.stats.pendingLabReports} pending</div>
-                                </div>
-                            </div>
-                        ) : null}
-
-                        {/* My Profile Card */}
-                        <div className="admin-card" style={{ marginTop: '24px' }}>
-                            <h2>👤 My Profile</h2>
-                            <div className="flex flex-col sm:flex-row items-center gap-5">
-                                <div className="flex-shrink-0">
-                                    {profileFile ? (
-                                        <img src={URL.createObjectURL(profileFile)} alt="Preview" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--brand-500, #14b8a6)' }} />
-                                    ) : currentUser?.avatar ? (
-                                        <img src={currentUser.avatar} alt={currentUser.name} style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--brand-500, #14b8a6)' }} />
-                                    ) : (
-                                        <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 700, color: '#6366f1', border: '3px solid #c7d2fe' }}>
-                                            {(currentUser?.name || 'A').charAt(0).toUpperCase()}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="w-full">
-                                    <p style={{ margin: '0 0 4px', fontWeight: 600, fontSize: '16px', color: '#1e293b' }}>{currentUser?.name}</p>
-                                    <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#64748b' }}>{currentUser?.email}</p>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <input type="file" accept="image/*" id="profilePhotoInput" style={{ display: 'none' }}
-                                            onChange={e => setProfileFile(e.target.files[0])} />
-                                        <label htmlFor="profilePhotoInput" className="px-4 py-2 bg-slate-100 text-slate-700 border border-slate-300 rounded-lg cursor-pointer text-xs font-semibold hover:bg-slate-200">
-                                            📷 Choose Photo
-                                        </label>
-                                        {profileFile && (
-                                            <button onClick={handleSaveProfilePhoto} disabled={savingProfile} className="btn-save px-4 py-2 text-xs">
-                                                {savingProfile ? 'Saving...' : 'Save Photo'}
-                                            </button>
+                    return (
+                        <>
+                            {/* Hospital Card */}
+                            <section className="hospital-card">
+                                <div className="hospital-info">
+                                    <div className="hospital-image">
+                                        {hospitalInfo?.branding?.logoUrl ? (
+                                            <img src={hospitalInfo.branding.logoUrl} alt="Logo" />
+                                        ) : (
+                                            <span>🏥</span>
                                         )}
                                     </div>
+                                    <div>
+                                        <h1>{hospitalInfo?.name || 'Ayush Health care'}</h1>
+                                        <div className="details">
+                                            <span>📍 {hospitalInfo?.city ? `${hospitalInfo.city}${hospitalInfo.state ? `, ${hospitalInfo.state}` : ''}` : 'Jaipur, Rajasthan'}</span>
+                                            {hospitalInfo?.phone && <span>☎ {hospitalInfo.phone}</span>}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
 
-                        {/* Hospital Info */}
-                        {hospitalInfo && (
+                                <div className="status-indicator">
+                                    ● ACTIVE
+                                </div>
+                            </section>
+
+                            {/* Analytics Timeframe */}
+                            <section className="analytics">
+                                <div className="analytics-head">
+                                    <div className="analytics-title">
+                                        <div className="icon">⌁</div>
+                                        Analytics Timeframe
+                                    </div>
+                                    <div className="analytics-sub">
+                                        Choose a reporting period
+                                    </div>
+                                </div>
+
+                                <div className="periods">
+                                    <button 
+                                        className={`period ${datePreset === 'all' ? 'active' : ''}`} 
+                                        onClick={() => handleDatePresetChange('all')}
+                                    >
+                                        All Time
+                                    </button>
+                                    <button 
+                                        className={`period ${datePreset === 'today' ? 'active' : ''}`} 
+                                        onClick={() => handleDatePresetChange('today')}
+                                    >
+                                        Today
+                                    </button>
+                                    <button 
+                                        className={`period ${datePreset === '30' ? 'active' : ''}`} 
+                                        onClick={() => handleDatePresetChange('30')}
+                                    >
+                                        30 Days
+                                    </button>
+                                </div>
+
+                                <div className="custom">
+                                    <input 
+                                        className="date-picker-input" 
+                                        type="date" 
+                                        value={customStartDate} 
+                                        onChange={(e) => { setDatePreset('custom'); setCustomStartDate(e.target.value); }} 
+                                    />
+                                    <span style={{ color: '#90a0ac', fontSize: '11px', fontWeight: 600 }}>to</span>
+                                    <input 
+                                        className="date-picker-input" 
+                                        type="date" 
+                                        value={customEndDate} 
+                                        onChange={(e) => { setDatePreset('custom'); setCustomEndDate(e.target.value); }} 
+                                    />
+                                    <button 
+                                        className="apply-btn" 
+                                        onClick={() => {
+                                            handleApplyCustomDate();
+                                            setAppliedCustomAnim(true);
+                                            setTimeout(() => setAppliedCustomAnim(false), 900);
+                                        }}
+                                    >
+                                        {appliedCustomAnim ? '✓ Applied' : 'Apply Custom'}
+                                    </button>
+                                </div>
+                            </section>
+
+                            {/* KPI Cards */}
+                            {loadingStats ? (
+                                <div className="hospital-kpi-grid" style={{ marginTop: '16px' }}>
+                                    {[1, 2, 3, 4].map((i) => (
+                                        <div key={i} style={{ 
+                                            padding: '24px', 
+                                            borderRadius: '18px', 
+                                            background: '#fff', 
+                                            border: '1px solid #dfecec',
+                                            animation: 'pulse 1.5s infinite ease-in-out',
+                                            minHeight: '150px'
+                                        }}>
+                                            <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: '#e2e8f0', marginBottom: '16px' }}></div>
+                                            <div style={{ width: '60%', height: '24px', background: '#e2e8f0', borderRadius: '4px', marginBottom: '12px' }}></div>
+                                            <div style={{ width: '40%', height: '14px', background: '#e2e8f0', borderRadius: '4px' }}></div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <section className="kpis">
+                                    <article className="kpi">
+                                        <div className="kpi-icon">♙</div>
+                                        <strong>{hospitalStats?.stats?.totalStaff ?? 0}</strong>
+                                        <label>Total Staff</label>
+                                        <small>Active staff members</small>
+                                        <div className="kpi-line"></div>
+                                    </article>
+
+                                    <article className="kpi">
+                                        <div className="kpi-icon">♧</div>
+                                        <strong>{hospitalStats?.stats?.totalPatients ?? 0}</strong>
+                                        <label>Unique Patients</label>
+                                        <small>In selected period</small>
+                                        <div className="kpi-line"></div>
+                                    </article>
+
+                                    <article className="kpi">
+                                        <div className="kpi-icon">▦</div>
+                                        <strong>{hospitalStats?.stats?.totalAppointments ?? 0}</strong>
+                                        <label>Total Appointments</label>
+                                        <small>In selected period</small>
+                                        <div className="kpi-line"></div>
+                                    </article>
+
+                                    <article className="kpi">
+                                        <div className="kpi-icon">₹</div>
+                                        <strong>{formatCurrency(hospitalStats?.stats?.totalRevenue ?? 0)}</strong>
+                                        <label>Total Revenue</label>
+                                        <small>From paid appointments</small>
+                                        <div className="kpi-line"></div>
+                                    </article>
+                                </section>
+                            )}
+
+                            {/* Bottom Panels (Appointments Overview & Quick Summary) */}
+                            <section className="bottom">
+                                {/* Appointment Chart Panel */}
+                                <div className="panel">
+                                    <div className="panel-head">
+                                        <div className="panel-title">
+                                            <div className="mini">▦</div>
+                                            Appointments Overview
+                                        </div>
+                                        <select value={chartRange} onChange={e => setChartRange(e.target.value)}>
+                                            <option value="this_month">This Month</option>
+                                            <option value="last_month">Last Month</option>
+                                            <option value="this_year">This Year</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="chart">
+                                        <div className="gridline one"></div>
+                                        <div className="gridline two"></div>
+                                        <div className="gridline three"></div>
+                                        <div className="gridline four"></div>
+
+                                        <svg className="line-svg" viewBox="0 0 800 210" preserveAspectRatio="none">
+                                            <defs>
+                                                <linearGradient id="areaGradHaOverview" x1="0" x2="0" y1="0" y2="1">
+                                                    <stop offset="0%" stopColor="#7560ee" stopOpacity="0.25" />
+                                                    <stop offset="100%" stopColor="#7560ee" stopOpacity="0" />
+                                                </linearGradient>
+                                            </defs>
+                                            <path
+                                                d={
+                                                    chartRange === 'last_month'
+                                                        ? 'M10,185 C45,150 70,165 95,130 S150,140 180,100 S225,115 250,80 S300,95 330,110 S375,140 405,120 S440,85 465,100 S510,90 540,85 S575,65 605,75 S645,55 675,80 S730,60 790,90 L790,205 L10,205 Z'
+                                                        : chartRange === 'this_year'
+                                                            ? 'M10,160 C50,140 80,120 120,100 S180,110 220,70 S280,85 320,50 S380,60 420,80 S480,55 520,40 S580,45 620,35 S680,50 720,30 S760,25 790,45 L790,205 L10,205 Z'
+                                                            : 'M10,178 C40,135 65,158 90,145 S140,155 170,120 S215,130 240,90 S290,105 320,125 S365,170 395,155 S430,105 455,125 S500,105 530,112 S565,78 595,95 S635,70 665,100 S720,80 790,105 L790,205 L10,205 Z'
+                                                }
+                                                fill="url(#areaGradHaOverview)"
+                                            />
+                                            <path
+                                                d={
+                                                    chartRange === 'last_month'
+                                                        ? 'M10,185 C45,150 70,165 95,130 S150,140 180,100 S225,115 250,80 S300,95 330,110 S375,140 405,120 S440,85 465,100 S510,90 540,85 S575,65 605,75 S645,55 675,80 S730,60 790,90'
+                                                        : chartRange === 'this_year'
+                                                            ? 'M10,160 C50,140 80,120 120,100 S180,110 220,70 S280,85 320,50 S380,60 420,80 S480,55 520,40 S580,45 620,35 S680,50 720,30 S760,25 790,45'
+                                                            : 'M10,178 C40,135 65,158 90,145 S140,155 170,120 S215,130 240,90 S290,105 320,125 S365,170 395,155 S430,105 455,125 S500,105 530,112 S565,78 595,95 S635,70 665,100 S720,80 790,105'
+                                                }
+                                                fill="none"
+                                                stroke="#7658ed"
+                                                strokeWidth="4"
+                                                strokeLinecap="round"
+                                            />
+                                        </svg>
+                                    </div>
+
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        color: '#91a0ad',
+                                        fontSize: '10px',
+                                        fontWeight: 600,
+                                        padding: '0 10px 0 35px',
+                                    }}>
+                                        {dateLabels.map((lbl, i) => (
+                                            <span key={i}>{lbl}</span>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Quick Summary Panel */}
+                                <div className="panel">
+                                    <div className="panel-title">
+                                        <div className="mini">▣</div>
+                                        Quick Summary
+                                    </div>
+
+                                    <div className="quick-list">
+                                        <div className="quick">
+                                            <div className="quick-icon">✓</div>
+                                            <div className="quick-text">
+                                                <b>Completed</b>
+                                                <span>Completed appointments</span>
+                                            </div>
+                                            <strong>{hospitalStats?.stats?.completedAppointments ?? 0}</strong>
+                                        </div>
+
+                                        <div className="quick">
+                                            <div className="quick-icon">◷</div>
+                                            <div className="quick-text">
+                                                <b>Pending / Upcoming</b>
+                                                <span>Upcoming appointments</span>
+                                            </div>
+                                            <strong>{hospitalStats?.stats?.pendingAppointments ?? 0}</strong>
+                                        </div>
+
+                                        <div className="quick">
+                                            <div className="quick-icon">♜</div>
+                                            <div className="quick-text">
+                                                <b>Lab Reports</b>
+                                                <span>Pending reports</span>
+                                            </div>
+                                            <strong>{hospitalStats?.stats?.pendingLabReports ?? (hospitalStats?.stats?.labReportCount ?? 0)}</strong>
+                                        </div>
+
+                                        <div className="quick">
+                                            <div className="quick-icon">▣</div>
+                                            <div className="quick-text">
+                                                <b>Pharmacy Orders</b>
+                                                <span>Pending pharmacy orders</span>
+                                            </div>
+                                            <strong>{hospitalStats?.stats?.pharmacyOrderCount ?? 0}</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            {/* My Profile Card */}
                             <div className="admin-card" style={{ marginTop: '24px' }}>
-                                <h2>🏥 My Hospital</h2>
-                                <div className="ha-hospital-info">
-                                    <div><strong>Name:</strong> {hospitalInfo.name}</div>
-                                    {hospitalInfo.city && <div><strong>City:</strong> {hospitalInfo.city}{hospitalInfo.state ? `, ${hospitalInfo.state}` : ''}</div>}
-                                    {hospitalInfo.phone && <div><strong>Phone:</strong> {hospitalInfo.phone}</div>}
-                                    {hospitalInfo.email && <div><strong>Email:</strong> {hospitalInfo.email}</div>}
-                                    {hospitalInfo.address && <div><strong>Address:</strong> {hospitalInfo.address}</div>}
+                                <h2>👤 My Profile</h2>
+                                <div className="flex flex-col sm:flex-row items-center gap-5">
+                                    <div className="flex-shrink-0">
+                                        {profileFile ? (
+                                            <img src={URL.createObjectURL(profileFile)} alt="Preview" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--brand-500, #14b8a6)' }} />
+                                        ) : currentUser?.avatar ? (
+                                            <img src={currentUser.avatar} alt={currentUser.name} style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--brand-500, #14b8a6)' }} />
+                                        ) : (
+                                            <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 700, color: '#6366f1', border: '3px solid #c7d2fe' }}>
+                                                {(currentUser?.name || 'A').charAt(0).toUpperCase()}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="w-full">
+                                        <p style={{ margin: '0 0 4px', fontWeight: 600, fontSize: '16px', color: '#1e293b' }}>{currentUser?.name}</p>
+                                        <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#64748b' }}>{currentUser?.email}</p>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <input type="file" accept="image/*" id="profilePhotoInput" style={{ display: 'none' }}
+                                                onChange={e => setProfileFile(e.target.files[0])} />
+                                            <label htmlFor="profilePhotoInput" className="px-4 py-2 bg-slate-100 text-slate-700 border border-slate-300 rounded-lg cursor-pointer text-xs font-semibold hover:bg-slate-200">
+                                                📷 Choose Photo
+                                            </label>
+                                            {profileFile && (
+                                                <button onClick={handleSaveProfilePhoto} disabled={savingProfile} className="btn-save px-4 py-2 text-xs">
+                                                    {savingProfile ? 'Saving...' : 'Save Photo'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        )}
-                    </>
-                )}
+
+                            {/* Hospital Info */}
+                            {hospitalInfo && (
+                                <div className="admin-card" style={{ marginTop: '24px' }}>
+                                    <h2>🏥 My Hospital</h2>
+                                    <div className="ha-hospital-info">
+                                        <div><strong>Name:</strong> {hospitalInfo.name}</div>
+                                        {hospitalInfo.city && <div><strong>City:</strong> {hospitalInfo.city}{hospitalInfo.state ? `, ${hospitalInfo.state}` : ''}</div>}
+                                        {hospitalInfo.phone && <div><strong>Phone:</strong> {hospitalInfo.phone}</div>}
+                                        {hospitalInfo.email && <div><strong>Email:</strong> {hospitalInfo.email}</div>}
+                                        {hospitalInfo.address && <div><strong>Address:</strong> {hospitalInfo.address}</div>}
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    );
+                })()}
 
                 {/* ===================== STAFF TAB ===================== */}
                 {activeTab === 'staff' && (

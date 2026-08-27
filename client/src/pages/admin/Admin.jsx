@@ -4,6 +4,7 @@ import { adminAPI, uploadAPI, hospitalAPI } from '../../utils/api';
 import { getSubscriptionLimits } from '../../utils/subscriptionPlans';
 import toast from 'react-hot-toast';
 import '../administration/SuperAdmin.css';
+import './Admin.css';
 
 const HospitalSelect = ({ hospitals, value, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -22,7 +23,7 @@ const HospitalSelect = ({ hospitals, value, onChange }) => {
     const selectedName = value ? (hospitals.find(h => h._id === value)?.name || 'Unknown') : 'All Hospitals';
 
     return (
-        <div ref={dropdownRef} style={{ position: 'relative', width: '240px' }}>
+        <div ref={dropdownRef} className="staff-hospital-select-box" style={{ position: 'relative', width: '100%' }}>
             <div 
                 className="staff-input" 
                 onClick={() => setIsOpen(!isOpen)} 
@@ -80,6 +81,13 @@ const Admin = () => {
     const [roles, setRoles] = useState([]);
     const [hospital, setHospital] = useState(null);
 
+    // Infinite Scroll State
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const observerRef = useRef(null);
+
     const [editModal, setEditModal] = useState(false);
     const [editForm, setEditForm] = useState({
         id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: '', department: ''
@@ -104,6 +112,32 @@ const Admin = () => {
 
     // Search state
     const [staffSearchQuery, setStaffSearchQuery] = useState('');
+    const [staffSearchExpanded, setStaffSearchExpanded] = useState(false);
+    const searchTimeoutRef = useRef(null);
+    const staffSearchInputRef = useRef(null);
+
+    const getPlanBadge = (userItem) => {
+        let rawPlan = userItem?.subscriptionPlan || userItem?.plan;
+        if (!rawPlan && userItem?.hospitalId) {
+            const hId = typeof userItem.hospitalId === 'object' ? (userItem.hospitalId._id || userItem.hospitalId.id) : String(userItem.hospitalId);
+            const hosp = hospitals.find(h => String(h._id) === String(hId));
+            if (hosp) {
+                rawPlan = hosp.subscriptionPlan || (hosp.clinicType === 'clinic' ? 'starter' : 'enterprise');
+            }
+        }
+        if (!rawPlan && hospital) {
+            rawPlan = hospital.subscriptionPlan || (hospital.clinicType === 'clinic' ? 'starter' : 'enterprise');
+        }
+        if (!rawPlan) return { label: 'Starter Clinic', key: 'starter' };
+
+        const p = String(rawPlan).toLowerCase();
+        if (p === 'starter' || p === 'simple_clinic') return { label: 'Starter Clinic', key: 'starter' };
+        if (p === 'clinic_basic') return { label: 'Clinic Basic', key: 'clinic_basic' };
+        if (p === 'multi_speciality_starter') return { label: 'Multi-Speciality', key: 'multi_speciality' };
+        if (p === 'enterprise') return { label: 'Enterprise', key: 'enterprise' };
+        if (p === 'none') return { label: 'Starter Clinic', key: 'starter' };
+        return { label: p.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), key: p };
+    };
 
     const handleToggleCreateForm = async () => {
         const nextState = !showCreateForm;
@@ -249,32 +283,131 @@ const Admin = () => {
         }
     };
 
-    const fetchUsers = async (plan = staffPlanFilter, hospitalId = staffHospitalFilter) => {
+    const fetchUsers = async (
+        plan = staffPlanFilter, 
+        hospitalId = staffHospitalFilter, 
+        targetPage = 1, 
+        limit = 15, 
+        search = staffSearchQuery,
+        isAppend = false
+    ) => {
         try {
-            setLoadingUsers(true);
-            const response = await adminAPI.getUsers(plan, hospitalId);
+            if (isAppend) {
+                setLoadingMore(true);
+            } else {
+                setLoadingUsers(true);
+            }
+            const response = await adminAPI.getUsers(plan, hospitalId, targetPage, limit, search);
             if (response.success) {
                 const userObj = JSON.parse(localStorage.getItem('user') || '{}');
                 const isCentral = ['superadmin', 'centraladmin'].includes(userObj.role);
-                const staffUsers = response.users.filter(u => {
-                    const r = (u.role || '').toLowerCase();
+                const staffUsers = (response.users || response.data || []).filter(u => {
+                    const r = (typeof u.role === 'string' ? u.role : (u.role?.name || '')).toLowerCase();
                     if (['patient', 'user'].includes(r)) return false;
                     if (!isCentral && r.includes('doctor')) return false;
                     return true;
                 });
-                setUsers(staffUsers);
+
+                if (isAppend) {
+                    setUsers(prev => {
+                        const existingIds = new Set(prev.map(item => item.id || item._id));
+                        const uniqueNew = staffUsers.filter(item => !existingIds.has(item.id || item._id));
+                        return [...prev, ...uniqueNew];
+                    });
+                } else {
+                    setUsers(staffUsers);
+                }
+
+                if (response.pagination) {
+                    setPage(response.pagination.currentPage);
+                    setTotalRecords(response.pagination.totalRecords);
+                    setHasMore(response.pagination.currentPage < response.pagination.totalPages);
+                } else {
+                    setTotalRecords(staffUsers.length);
+                    setHasMore(false);
+                }
             }
         } catch (err) {
             console.error('Error fetching users:', err);
             setError('Error fetching users');
         } finally {
             setLoadingUsers(false);
+            setLoadingMore(false);
         }
     };
 
-    // ... (rest of code)
+    // Infinite Scroll IntersectionObserver trigger
+    useEffect(() => {
+        if (loadingUsers || loadingMore || !hasMore) return;
 
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasMore && !loadingMore && !loadingUsers) {
+                    const nextPage = page + 1;
+                    fetchUsers(staffPlanFilter, staffHospitalFilter, nextPage, 15, staffSearchQuery, true);
+                }
+            },
+            { threshold: 0.1, rootMargin: '120px' }
+        );
 
+        if (observerRef.current) {
+            observer.observe(observerRef.current);
+        }
+
+        return () => {
+            if (observerRef.current) {
+                observer.unobserve(observerRef.current);
+            }
+            observer.disconnect();
+        };
+    }, [hasMore, loadingMore, loadingUsers, page, staffPlanFilter, staffHospitalFilter, staffSearchQuery]);
+
+    // Debounced Search Handler
+    const handleSearchChange = (e) => {
+        const query = e.target.value;
+        setStaffSearchQuery(query);
+        setPage(1);
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        searchTimeoutRef.current = setTimeout(() => {
+            fetchUsers(staffPlanFilter, staffHospitalFilter, 1, 15, query, false);
+        }, 300);
+    };
+
+    const handleClearSearch = () => {
+        setStaffSearchQuery('');
+        setPage(1);
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+        fetchUsers(staffPlanFilter, staffHospitalFilter, 1, 15, '', false);
+    };
+
+    const handlePlanFilterChange = (e) => {
+        const newPlan = e.target.value;
+        setStaffPlanFilter(newPlan);
+        setStaffHospitalFilter('');
+        setPage(1);
+        fetchUsers(newPlan, '', 1, 15, staffSearchQuery, false);
+        fetchHospitals(newPlan);
+    };
+
+    const handleHospitalFilterChange = (newHosp) => {
+        setStaffHospitalFilter(newHosp);
+        setPage(1);
+        fetchUsers(staffPlanFilter, newHosp, 1, 15, staffSearchQuery, false);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+        };
+    }, []);
 
     // Open Edit Modal
     const openEditModal = (userItem) => {
@@ -335,7 +468,7 @@ const Admin = () => {
             if (response.success) {
                 setSuccess('User updated successfully!');
                 setEditModal(false);
-                fetchUsers();
+                fetchUsers(staffPlanFilter, staffHospitalFilter, currentPage, pageSize, staffSearchQuery);
             }
         } catch (err) {
             setError(err.response?.data?.message || 'Error updating user.');
@@ -351,7 +484,9 @@ const Admin = () => {
             const response = await adminAPI.deleteUser(userId);
             if (response.status === 200 || response.success === true) {
                 toast.success('User deleted successfully!');
-                setUsers(prev => prev.filter(u => (u.id || u._id) !== userId));
+                const targetPage = (users.length === 1 && currentPage > 1) ? currentPage - 1 : currentPage;
+                setCurrentPage(targetPage);
+                fetchUsers(staffPlanFilter, staffHospitalFilter, targetPage, pageSize, staffSearchQuery);
             } else {
                 toast.error('Failed to delete user.');
             }
@@ -435,7 +570,8 @@ const Admin = () => {
                 setSuccess(`✅ ${response.user?.role?.name || 'Staff'} account created! They can log in with: ${createForm.email}`);
                 setCreateForm({ name: '', email: '', password: '', phone: '', age: '', aadhaar: '', roleId: '', file: null, department: '', hospitalId: '' });
                 setShowCreateForm(false);
-                fetchUsers();
+                setPage(1);
+                fetchUsers(staffPlanFilter, staffHospitalFilter, 1, 15, staffSearchQuery, false);
             }
         } catch (err) {
             console.error("Creation error:", err);
@@ -454,28 +590,21 @@ const Admin = () => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
 
     return (
-        <div className="superadmin-page">
+        <div className="superadmin-page staff-management-page">
             <div className="superadmin-container">
-                {/* Header */}
-                <div className="admin-header">
-                    <div>
-                        <h1>Admin Dashboard</h1>
-                        <p>Manage staff accounts, roles, and permissions</p>
-                    </div>
-                    <div className="admin-user-info">
-                        <span>Welcome, {user.name}</span>
-                        <button onClick={handleLogout} className="logout-btn">Logout</button>
-                    </div>
-                </div>
-
                 {error && <div className="error-message">{error}</div>}
                 {success && <div className="success-message">{success}</div>}
 
-                {/* Create Staff Account */}
-                <div className="admin-card" style={{ marginBottom: '20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showCreateForm ? '20px' : '0' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <h2 style={{ margin: '0' }}>Create Staff Account</h2>
+                {/* ANIMATED TOP CARD: Create Staff Account */}
+                <div className="staff-create-card">
+                    <div className="staff-create-header">
+                        <div className="staff-create-title-wrap">
+                            <div className="staff-create-icon-badge">
+                                👥
+                            </div>
+                            <div>
+                                <h2>Create Staff Account</h2>
+                            </div>
                             {hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter') && (() => {
                                 const limits = getSubscriptionLimits(hospital.subscriptionPlan);
                                 const maxStaff = limits.maxStaff;
@@ -488,12 +617,14 @@ const Admin = () => {
                                 if (remaining === 0) return null;
 
                                 return (
-                                    <span style={{ background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 600 }}>
+                                    <span className="staff-quota-pill">
+                                        <span className="staff-quota-dot" />
                                         {remaining} left
                                     </span>
                                 );
                             })()}
                         </div>
+
                         {(() => {
                             let isStaffQuotaFull = false;
                             if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
@@ -509,15 +640,24 @@ const Admin = () => {
                             if (isStaffQuotaFull) return null;
                             
                             return (
-                                <button onClick={handleToggleCreateForm} className="btn-edit" style={{ background: showCreateForm ? '#f1f5f9' : '#eef2ff', color: showCreateForm ? '#64748b' : '#4f46e5', border: 'none', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    {showCreateForm ? '✕ Close' : '+ Add Staff'}
+                                <button 
+                                    onClick={handleToggleCreateForm} 
+                                    className={`btn-add-staff-animated ${showCreateForm ? 'close-mode' : ''}`}
+                                    title={showCreateForm ? "Close Form" : "Add Staff"}
+                                >
+                                    <span className="staff-btn-label-desktop">
+                                        {showCreateForm ? '✕ Close Form' : '+ Add Staff'}
+                                    </span>
+                                    <span className="staff-btn-label-mobile">
+                                        {showCreateForm ? '✕' : '+ Add Staff'}
+                                    </span>
                                 </button>
                             );
                         })()}
                     </div>
 
                     {showCreateForm && (
-                        <>
+                        <div className="staff-form-expandable">
                             {hospital?.clinicType === 'clinic' && clinicDoctorExists && (
                                 <div style={{ background: '#fef2f2', color: '#dc2626', padding: '12px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #fecaca', fontSize: '14px' }}>
                                     ⚠️ This clinic already has an assigned Clinic Doctor. Only 1 Doctor account is permitted under this plan.
@@ -605,16 +745,16 @@ const Admin = () => {
                                 
                                 <div className="form-group" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                                     <button type="button" onClick={() => setShowCreateForm(false)} className="btn-cancel" style={{ padding: '10px 20px', fontSize: '14px' }}>Cancel</button>
-                                    <button type="submit" disabled={creating} className="primary-btn" style={{ background: '#0f766e', color: 'white', border: 'none', padding: '10px 24px', borderRadius: '4px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}>
+                                    <button type="submit" disabled={creating} className="primary-btn" style={{ background: 'linear-gradient(135deg, #0d9488, #2563eb)', color: 'white', border: 'none', padding: '10px 24px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>
                                         {creating ? 'Creating...' : 'Create Staff Account'}
                                     </button>
                                 </div>
                             </form>
-                        </>
+                        </div>
                     )}
                 </div>
 
-                {/* Quota Card */}
+                {/* Quota Card if applicable */}
                 {(() => {
                     if (hospital && (hospital.subscriptionPlan === 'clinic_basic' || hospital.subscriptionPlan === 'multi_speciality_starter')) {
                         const limits = getSubscriptionLimits(hospital.subscriptionPlan);
@@ -626,7 +766,7 @@ const Admin = () => {
                         const remaining = Math.max(0, maxStaff - staffCount);
                         
                         return (
-                            <div className="admin-card" style={{ marginBottom: '20px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                            <div className="staff-create-card" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '20px 24px' }}>
                                 <h3 style={{ margin: '0 0 12px 0', fontSize: '15px' }}>📊 Subscription Quota (Staff)</h3>
                                 <div style={{ display: 'flex', gap: '20px' }}>
                                     <div style={{ background: '#fff', padding: '12px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', flex: 1 }}>
@@ -636,120 +776,210 @@ const Admin = () => {
                                     <div style={{ background: remaining === 0 ? '#fee2e2' : '#f0fdf4', padding: '12px 16px', borderRadius: '8px', border: `1px solid ${remaining === 0 ? '#fecaca' : '#bbf7d0'}`, flex: 1 }}>
                                         <div style={{ color: remaining === 0 ? '#dc2626' : '#16a34a', fontSize: '12px', fontWeight: 600 }}>Remaining</div>
                                         <div style={{ fontSize: '20px', fontWeight: 700, color: remaining === 0 ? '#dc2626' : '#16a34a' }}>{remaining}</div>
-                                    </div></div>
+                                    </div>
+                                </div>
                                 {remaining === 0 && (
                                     <div style={{ color: '#dc2626', fontSize: '13px', fontWeight: 600, marginTop: '16px', background: '#fee2e2', padding: '12px 16px', borderRadius: '8px', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         ⚠️ Staff quota has been fully utilized. Upgrade your plan to add more staff.
                                     </div>
                                 )}
-</div>
+                            </div>
                         );
                     }
                     return null;
                 })()}
 
-                <div className="admin-card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-                        <h2>All Staff ({users.length})</h2>
-                        
-                        {/* Search Bar */}
-                        <div style={{ flex: 1, minWidth: '200px', maxWidth: '300px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '0 10px' }}>
-                                <span style={{ color: '#94a3b8' }}>🔍</span>
+                {/* ALL STAFF SECTION (With 5 Rainbow Themes & Infinite Scroll) */}
+                <div className="staff-main-card">
+                    <div className="staff-main-header">
+                        <div className="staff-title-and-search-row">
+                            <h2 className="staff-title-text">
+                                All Staff <span className="staff-count-badge">{totalRecords}</span>
+                            </h2>
+                            
+                            {/* Expandable Search in same row as All Staff */}
+                            <div className={`staff-expandable-search-box ${staffSearchExpanded || staffSearchQuery ? 'is-expanded' : ''}`}>
+                                <button 
+                                    type="button"
+                                    className="staff-search-icon-btn"
+                                    onClick={() => {
+                                        setStaffSearchExpanded(prev => {
+                                            const next = !prev;
+                                            if (next) {
+                                                setTimeout(() => staffSearchInputRef.current?.focus(), 150);
+                                            }
+                                            return next;
+                                        });
+                                    }}
+                                    title="Search staff"
+                                >
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="11" cy="11" r="8"/>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                                    </svg>
+                                </button>
                                 <input
+                                    ref={staffSearchInputRef}
                                     type="text"
-                                    placeholder="Search by name, email, or phone..."
+                                    placeholder="Search name, email, phone..."
                                     value={staffSearchQuery}
-                                    onChange={e => setStaffSearchQuery(e.target.value)}
-                                    style={{ width: '100%', border: 'none', padding: '8px', outline: 'none' }}
+                                    onChange={handleSearchChange}
+                                    className="staff-search-expandable-input"
                                 />
+                                {staffSearchQuery ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleClearSearch}
+                                        className="staff-search-clear-btn"
+                                        title="Clear search"
+                                    >
+                                        ✕
+                                    </button>
+                                ) : staffSearchExpanded ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setStaffSearchExpanded(false)}
+                                        className="staff-search-clear-btn"
+                                        title="Close search"
+                                    >
+                                        ✕
+                                    </button>
+                                ) : null}
                             </div>
                         </div>
 
+                        {/* Dual Filters in ONE SINGLE LINE on mobile */}
                         {['superadmin', 'centraladmin'].includes(JSON.parse(localStorage.getItem('user') || '{}').role) && (
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                                <select className="staff-input" style={{ width: '200px' }} value={staffPlanFilter} onChange={e => { 
-                                    const newPlan = e.target.value;
-                                    setStaffPlanFilter(newPlan); 
-                                    setStaffHospitalFilter(''); 
-                                    fetchUsers(newPlan, '');
-                                    fetchHospitals(newPlan);
-                                }}>
+                            <div className="staff-filters-dual-row">
+                                <select className="staff-input staff-filter-plan-select" value={staffPlanFilter} onChange={handlePlanFilterChange}>
                                     <option value="">All Plans</option>
                                     <option value="starter">Simple Clinics (Starter)</option>
                                     <option value="clinic_basic">Clinic Basic</option>
                                     <option value="multi_speciality_starter">Multi-Speciality Starter</option>
                                     <option value="enterprise">Enterprise</option>
                                 </select>
-                                <HospitalSelect 
-                                    hospitals={hospitals} 
-                                    value={staffHospitalFilter} 
-                                    onChange={(newHosp) => {
-                                        setStaffHospitalFilter(newHosp);
-                                        fetchUsers(staffPlanFilter, newHosp);
-                                    }} 
-                                />
+                                <div className="staff-filter-hospital-wrap">
+                                    <HospitalSelect 
+                                        hospitals={hospitals} 
+                                        value={staffHospitalFilter} 
+                                        onChange={handleHospitalFilterChange} 
+                                    />
+                                </div>
                             </div>
                         )}
                     </div>
-                    {loadingUsers ? (
-                        <div className="loading-message">Loading users...</div>
-                    ) : users.length === 0 ? (
-                        <div className="empty-message">No users found for this selection</div>
-                    ) : (
-                        <div className="users-table">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Avatar</th>
-                                        <th>Name</th>
-                                        <th>Hospital</th>
-                                        <th>Role</th>
-                                        <th>Email</th>
-                                        <th>Phone</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {users
-                                        .filter(userItem => {
-                                            if (!staffSearchQuery) return true;
-                                            const q = staffSearchQuery.toLowerCase();
-                                            return (
-                                                (userItem.name && userItem.name.toLowerCase().includes(q)) ||
-                                                (userItem.email && userItem.email.toLowerCase().includes(q)) ||
-                                                (userItem.phone && String(userItem.phone).includes(q))
-                                            );
-                                        })
-                                        .map((userItem) => {
+
+                    <div className="staff-table-wrapper">
+                        {loadingUsers && users.length === 0 ? (
+                            <div className="users-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th className="staff-col-avatar">Avatar</th>
+                                            <th className="staff-col-name">Name</th>
+                                            <th className="staff-col-hospital">Hospital</th>
+                                            <th className="staff-col-plan">Plan Name</th>
+                                            <th className="staff-col-role">Role</th>
+                                            <th className="staff-col-email">Email</th>
+                                            <th className="staff-col-phone">Phone</th>
+                                            <th className="staff-col-actions">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {[0, 1, 2, 3, 4].map((s) => (
+                                            <tr key={s} className={`staff-skeleton-row staff-row-theme-${s % 5}`}>
+                                                <td className="staff-col-avatar"><div className="staff-skeleton-circle"></div></td>
+                                                <td className="staff-col-name"><div className="staff-skeleton-line" style={{ width: '140px' }}></div></td>
+                                                <td className="staff-col-hospital"><div className="staff-skeleton-line" style={{ width: '100px' }}></div></td>
+                                                <td className="staff-col-plan"><div className="staff-skeleton-line" style={{ width: '95px' }}></div></td>
+                                                <td className="staff-col-role"><div className="staff-skeleton-line" style={{ width: '90px' }}></div></td>
+                                                <td className="staff-col-email"><div className="staff-skeleton-line" style={{ width: '160px' }}></div></td>
+                                                <td className="staff-col-phone"><div className="staff-skeleton-line" style={{ width: '100px' }}></div></td>
+                                                <td className="staff-col-actions"><div className="staff-skeleton-line" style={{ width: '110px' }}></div></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : users.length === 0 ? (
+                            <div className="staff-empty-state">
+                                <span className="staff-empty-icon">👥</span>
+                                <h3>No staff found</h3>
+                                <p>No staff members match your current search or filters.</p>
+                                {(staffSearchQuery || staffPlanFilter || staffHospitalFilter) && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => {
+                                            setStaffSearchQuery('');
+                                            setStaffPlanFilter('');
+                                            setStaffHospitalFilter('');
+                                            setPage(1);
+                                            fetchUsers('', '', 1, 15, '', false);
+                                        }}
+                                        className="btn-cancel"
+                                        style={{ marginTop: '14px', padding: '8px 18px', fontSize: '13px', borderRadius: '8px' }}
+                                    >
+                                        Clear Filters
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="users-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th className="staff-col-avatar">Avatar</th>
+                                            <th className="staff-col-name">Name</th>
+                                            <th className="staff-col-hospital">Hospital</th>
+                                            <th className="staff-col-plan">Plan Name</th>
+                                            <th className="staff-col-role">Role</th>
+                                            <th className="staff-col-email">Email</th>
+                                            <th className="staff-col-phone">Phone</th>
+                                            <th className="staff-col-actions">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {users.map((userItem, index) => {
                                             const isCurrentUser = (userItem.id || userItem._id) === JSON.parse(localStorage.getItem('user') || '{}').id;
                                             const canModify = !isCurrentUser;
+                                            // 5 Rainbow Themes: 0: Green, 1: Purple, 2: Pink, 3: Blue, 4: Red
+                                            const colorThemeClass = `staff-row-theme-${index % 5}`;
+                                            const planInfo = getPlanBadge(userItem);
 
                                             return (
-                                                <tr key={userItem.id || userItem._id}>
-                                                    <td>
+                                                <tr 
+                                                    key={userItem.id || userItem._id} 
+                                                    className={`staff-table-row ${colorThemeClass}`}
+                                                    style={{ animationDelay: `${(index % 15) * 25}ms` }}
+                                                >
+                                                    <td className="staff-col-avatar">
                                                         {userItem.avatar ? (
-                                                            <img src={userItem.avatar} alt={userItem.name} style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+                                                            <img src={userItem.avatar} alt={userItem.name} className="staff-avatar-img" />
                                                         ) : (
-                                                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#6366f1', fontSize: '14px' }}>
-                                                                {userItem.name?.charAt(0).toUpperCase()}
+                                                            <div className="staff-avatar-circle-themed">
+                                                                {userItem.name?.charAt(0).toUpperCase() || 'S'}
                                                             </div>
                                                         )}
                                                     </td>
-                                                    <td style={{ fontWeight: 500 }}>{userItem.name}</td>
-                                                    <td>
-                                                        <span style={{ background: '#f0f9ff', color: '#0284c7', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>
-                                                            {userItem.hospitalId ? (hospitals.find(h => h._id === String(userItem.hospitalId))?.name || hospital?.name || 'Unknown') : '⚠️ No hospital'}
+                                                    <td className="staff-col-name">{userItem.name}</td>
+                                                    <td className="staff-col-hospital">
+                                                        <span className="staff-hosp-tag">
+                                                            {userItem.hospitalId ? (hospitals.find(h => h._id === String(userItem.hospitalId))?.name || userItem.hospitalName || hospital?.name || 'Unknown') : '⚠️ No hospital'}
                                                         </span>
                                                     </td>
-                                                    <td>
-                                                        <span className={`role-badge role-${(userItem.role || '').toLowerCase()}`}>
+                                                    <td className="staff-col-plan">
+                                                        <span className={`staff-plan-tag staff-plan-${planInfo.key}`}>
+                                                            {planInfo.label}
+                                                        </span>
+                                                    </td>
+                                                    <td className="staff-col-role">
+                                                        <span className="staff-role-tag">
                                                             {(userItem.role || 'No Role').toUpperCase()}
                                                         </span>
                                                     </td>
-                                                    <td>{userItem.email}</td>
-                                                    <td>{userItem.phone || '—'}</td>
-                                                    <td>
+                                                    <td className="staff-col-email">{userItem.email}</td>
+                                                    <td className="staff-col-phone">{userItem.phone || '—'}</td>
+                                                    <td className="staff-col-actions">
                                                         <div className="action-buttons">
                                                             {canModify && (
                                                                 <>
@@ -764,10 +994,26 @@ const Admin = () => {
                                                 </tr>
                                             );
                                         })}
-                                </tbody>
-                            </table>
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {/* Infinite Scroll Sentinel */}
+                        <div ref={observerRef} className="staff-infinite-sentinel">
+                            {loadingMore && (
+                                <div className="staff-infinite-loader">
+                                    <div className="staff-infinite-spinner" />
+                                    <span>Loading more staff members...</span>
+                                </div>
+                            )}
+                            {!hasMore && users.length > 0 && !loadingUsers && (
+                                <span className="staff-all-loaded-text">
+                                    ✨ All {totalRecords} staff records loaded
+                                </span>
+                            )}
                         </div>
-                    )}
+                    </div>
                 </div>
 
 

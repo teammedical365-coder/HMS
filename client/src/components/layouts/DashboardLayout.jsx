@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, useAppDispatch } from '../../store/hooks';
 import { logout } from '../../store/slices/authSlice';
@@ -7,7 +7,8 @@ import {
     FiHome, FiUsers, FiCalendar, FiActivity, FiPackage,
     FiSettings, FiLogOut, FiPieChart, FiClipboard,
     FiFileText, FiPlusSquare, FiDatabase, FiGrid, FiShield, FiMenu, FiX,
-    FiClock, FiBox, FiUserCheck, FiHeart, FiCheckCircle, FiUser
+    FiClock, FiBox, FiUserCheck, FiHeart, FiCheckCircle, FiUser,
+    FiChevronDown, FiChevronRight
 } from 'react-icons/fi';
 import GlobalSearch from '../GlobalSearch';
 import './DashboardLayout.css';
@@ -229,6 +230,18 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
     const location = useLocation();
     const role = (user?.role || '').toLowerCase();
     const isCentralAdmin = (role === 'centraladmin' || role === 'superadmin');
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const handleLogout = () => {
         dispatch(logout());
@@ -278,82 +291,119 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                 )}
             </div>
 
-            <GlobalSearch />
-
             <div className="topbar-right">
-                {isCentralAdmin ? (
-                    <div className="ca-topbar-actions">
-                        <button className="ca-action-circle-btn" title="AI Intelligence">
-                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/>
-                            </svg>
-                        </button>
-                        <button className="ca-action-circle-btn ca-notif-btn" title="Notifications">
-                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
-                                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
-                            </svg>
-                            <span className="ca-notif-badge">3</span>
-                        </button>
-                        <div className="ca-user-profile-chip">
-                            <div className="ca-avatar-wrapper">
-                                <div className="ca-avatar-circle">
-                                    {user?.avatar ? (
-                                        <img src={user.avatar} alt={user.name} />
-                                    ) : (
-                                        <span>{getInitials(user?.name) || 'PH'}</span>
-                                    )}
-                                </div>
-                                <div className="ca-avatar-online" />
+                <div className="ca-topbar-actions" ref={dropdownRef}>
+                    <GlobalSearch />
+
+                    <button className="ca-action-circle-btn ca-notif-btn" title="Notifications">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+                            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+                        </svg>
+                        <span className="ca-notif-badge">3</span>
+                    </button>
+
+                    <div 
+                        className={`ca-user-profile-circle-btn ${dropdownOpen ? 'active' : ''}`}
+                        onClick={() => setDropdownOpen(prev => !prev)}
+                        title={user?.name ? `${user.name} (${user.role || 'User'})` : 'Account & Profile'}
+                    >
+                        <div className="ca-avatar-wrapper">
+                            <div className="ca-avatar-circle">
+                                {user?.avatar ? (
+                                    <img src={user.avatar} alt={user.name} />
+                                ) : (
+                                    <span>{getInitials(user?.name) || 'PH'}</span>
+                                )}
                             </div>
-                            <div className="ca-user-details-col">
-                                <span className="ca-user-name-text">{user?.name || 'Pawan Harish'}</span>
-                                <span className="ca-user-role-text">Super Admin</span>
-                            </div>
-                            <span className="ca-chevron-arrow">▾</span>
-                            <div className="profile-dropdown-content">
-                                <div className="p-header">
-                                    <strong className="capitalize">{user?.name || 'Pawan Harish'}</strong>
-                                    <span>{user?.email}</span>
-                                    <span className="p-role-badge">{user?.role || 'Super Admin'}</span>
-                                </div>
-                                <div className="p-footer">
-                                    <button onClick={handleLogout} className="btn-p-logout">
-                                        <FiLogOut size={14} /> Logout Session
-                                    </button>
-                                </div>
-                            </div>
+                            <div className="ca-avatar-online" />
                         </div>
+
+                        {/* Dropdown Modal Card (Compact & Clean) */}
+                        {dropdownOpen && (
+                            <div className="ca-profile-dropdown-card" onClick={(e) => e.stopPropagation()}>
+                                {/* Speech Bubble Pointer Arrow */}
+                                <div className="ca-dropdown-pointer" />
+
+                                {/* Header Row with Cyber Avatar & Security Graphic */}
+                                <div className="ca-drop-header">
+                                    {/* Wave Watermark Background */}
+                                    <div className="ca-drop-cyber-wave" />
+
+                                    {/* Left Avatar with Orbital Ring and Shield */}
+                                    <div className="ca-drop-avatar-wrap">
+                                        <div className="ca-avatar-orbital-ring">
+                                            <span className="ca-orbital-node node-1" />
+                                            <span className="ca-orbital-node node-2" />
+                                        </div>
+                                        <div className="ca-drop-avatar">
+                                            {user?.avatar ? (
+                                                <img src={user.avatar} alt={user.name} />
+                                            ) : (
+                                                <span>{getInitials(user?.name) || 'PH'}</span>
+                                            )}
+                                        </div>
+                                        <div className="ca-avatar-shield-badge" title="Security Verified">
+                                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                                <path d="M9 12l2 2 4-4"/>
+                                            </svg>
+                                        </div>
+                                    </div>
+
+                                    {/* Center User Info */}
+                                    <div className="ca-drop-user-info">
+                                        <h3 className="ca-drop-name">{user?.name || 'Pawan Harish'}</h3>
+                                        <p className="ca-drop-email">{user?.email || 'pawanharish2@gmail.com'}</p>
+                                        <div className="ca-drop-badge-tag">
+                                            <span className="ca-crown-icon">👑</span>
+                                            <span className="ca-badge-text">{(user?.role || 'CENTRALADMIN').toUpperCase().replace(/\s+/g, '')}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Right 3D Security Shield Graphic */}
+                                    <div className="ca-drop-shield-graphic">
+                                        <div className="ca-shield-orbit-ring">
+                                            <span className="ca-shield-particle" />
+                                        </div>
+                                        <div className="ca-shield-hex-box">
+                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                                                <path d="M12 2L3 6.5v6c0 5.55 3.84 10.74 9 12.5 5.16-1.76 9-6.95 9-12.5v-6L12 2z" fill="url(#shieldCyberGrad)" />
+                                                <path d="M12 7.5a2 2 0 0 0-2 2v1.5h4V9.5a2 2 0 0 0-2-2z" stroke="#ffffff" strokeWidth="1.3" />
+                                                <rect x="8.5" y="11" width="7" height="5" rx="1.2" fill="#ffffff" />
+                                                <circle cx="12" cy="13.5" r="0.8" fill="#4338ca" />
+                                                <defs>
+                                                    <linearGradient id="shieldCyberGrad" x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
+                                                        <stop stopColor="#38bdf8"/>
+                                                        <stop offset="0.5" stopColor="#6366f1"/>
+                                                        <stop offset="1" stopColor="#a855f7"/>
+                                                    </linearGradient>
+                                                </defs>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Single Compact Last Login Card */}
+                                <div className="ca-drop-login-card">
+                                    <div className="ca-login-icon-box">
+                                        <FiClock size={15} />
+                                    </div>
+                                    <div className="ca-login-texts">
+                                        <span className="ca-login-label">Last Login</span>
+                                        <span className="ca-login-value">Today, 09:42 AM</span>
+                                    </div>
+                                </div>
+
+                                {/* Logout Session Button */}
+                                <button onClick={handleLogout} className="ca-drop-logout-btn">
+                                    <FiLogOut size={15} />
+                                    <span>Logout</span>
+                                </button>
+                            </div>
+                        )}
                     </div>
-                ) : (
-                    <div className="user-profile-widget">
-                        <div className="profile-text-info">
-                            <span className="user-disp-name truncate max-w-[100px] sm:max-w-none capitalize">{(user?.role || '').toLowerCase().includes('doctor') ? 'Dr. ' : ''}{user?.name || 'User'}</span>
-                        </div>
-                        <div className="profile-avatar-wrap">
-                            <div className="profile-avatar" style={{ overflow: 'hidden', padding: 0 }}>
-                                {user?.avatar
-                                    ? <img src={user.avatar} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }} />
-                                    : getInitials(user?.name)
-                                }
-                            </div>
-                            <div className="online-indicator" />
-                            
-                            <div className="profile-dropdown-content">
-                                <div className="p-header">
-                                    <strong className="capitalize">{user?.name}</strong>
-                                    <span>{user?.email}</span>
-                                    <span className="p-role-badge">{user?.role}</span>
-                                </div>
-                                <div className="p-footer">
-                                    <button onClick={handleLogout} className="btn-p-logout">
-                                        <FiLogOut size={14} /> Logout Session
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                </div>
             </div>
         </header>
     );

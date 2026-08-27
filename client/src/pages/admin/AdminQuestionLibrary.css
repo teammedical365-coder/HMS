@@ -3,78 +3,54 @@
    ============================================================ */
 
 :root {
-  --brand-blue: #1E60A4; 
-  --brand-teal: #38B29B;
+  --brand-blue: #2563eb; 
+  --brand-teal: #0d9488;
 
-  --bg-base: #f0f7f9;
-  --panel-glass: rgba(255, 255, 255, 0.88);
-  --panel-border: rgba(30, 96, 164, 0.15); 
+  --bg-base: #f8fafc;
+  --panel-glass: rgba(255, 255, 255, 0.96);
+  --panel-border: #e2e8f0; 
   
   --text-main: #0f172a;
   --text-muted: #64748b;
   
-  --glow-blue: 0 4px 20px rgba(30, 96, 164, 0.2);
-  --glow-teal: 0 4px 20px rgba(56, 178, 155, 0.3);
+  --glow-blue: 0 4px 20px rgba(37, 99, 235, 0.16);
+  --glow-teal: 0 4px 20px rgba(13, 148, 136, 0.18);
   
-  --shadow-subtle: 0 10px 30px rgba(0, 0, 0, 0.04);
+  --shadow-subtle: 0 4px 20px rgba(15, 23, 42, 0.05);
 }
 
 .ql-admin-body {
-  background-color: var(--bg-base);
+  background: #f8fafc;
   color: var(--text-main);
-  min-height: 100vh;
+  min-height: calc(100vh - 70px);
   position: relative;
   overflow-x: hidden;
   display: flex;
   justify-content: center;
-  padding: 30px 36px;
-  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  padding: 20px 24px;
+  font-family: var(--font-primary, 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   box-sizing: border-box;
+  width: 100%;
 }
 
-/* =========================================
-   1. AI NEURAL CANVAS & SOFT GLOW ORBS
-   ========================================= */
-#neural-canvas {
+/* Subtle Clean Grid Pattern */
+.ql-admin-body::before {
+  content: '';
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(circle at center, rgba(13, 148, 136, 0.06) 1.2px, transparent 1.2px),
+    linear-gradient(to right, rgba(13, 148, 136, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(13, 148, 136, 0.03) 1px, transparent 1px);
+  background-size: 28px 28px, 56px 56px, 56px 56px;
   pointer-events: none;
-}
-
-.ambient-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(120px);
   z-index: 0;
-  opacity: 0.6;
-  animation: pulseOrb 12s infinite alternate ease-in-out;
-  pointer-events: none;
-}
-
-.orb-1 {
-  width: 550px;
-  height: 550px;
-  background: rgba(56, 178, 155, 0.2);
-  top: -80px;
-  left: -80px;
-}
-
-.orb-2 {
-  width: 650px;
-  height: 650px;
-  background: rgba(30, 96, 164, 0.15);
-  bottom: -120px;
-  right: -80px;
-  animation-delay: -5s;
-}
-
-@keyframes pulseOrb {
-  0% { transform: scale(1) translate(0, 0); opacity: 0.4; }
-  100% { transform: scale(1.1) translate(20px, -20px); opacity: 0.7; }
+  opacity: 0.8;
 }
 
 /* =========================================
@@ -87,7 +63,7 @@
   max-width: 1440px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 20px;
   animation: bootUp 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -103,35 +79,37 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--panel-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--panel-border);
-  border-radius: 16px;
-  padding: 16px 24px;
-  box-shadow: var(--shadow-subtle);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  padding: 16px 8px;
+  box-shadow: none;
 }
 
 .ql-header-titles h1 {
   font-size: 22px;
   font-weight: 800;
-  color: #1e293b;
+  color: #0f4c47;
   letter-spacing: -0.3px;
   margin: 0;
   display: flex;
   align-items: center;
   gap: 8px;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
 }
 
 .ql-header-titles p {
   font-size: 13px;
-  color: var(--text-muted);
+  color: #1a7a6e;
   font-family: inherit;
   margin-top: 4px;
   margin-bottom: 0;
   text-transform: none;
   letter-spacing: normal;
-  font-weight: 500;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
 }
 
 .ql-header-actions {
@@ -155,6 +133,19 @@
   font-family: inherit;
 }
 
+.ql-btn-reset {
+  color: #0d9488;
+  background: #f0fdf4;
+  border-color: #a7f3d0;
+}
+
+.ql-btn-reset:hover {
+  background: #dcfce7;
+  color: #047857;
+  border-color: #6ee7b7;
+  transform: translateY(-1px);
+}
+
 .ql-btn-preview {
   color: #475569;
   background: #f8fafc;
@@ -168,15 +159,15 @@
 }
 
 .ql-btn-save {
-  background: linear-gradient(135deg, #1E60A4, #38B29B);
+  background: linear-gradient(135deg, #0d9488, #2563eb);
   color: #ffffff;
   border: none;
-  box-shadow: 0 4px 14px rgba(30, 96, 164, 0.25);
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.25);
 }
 
 .ql-btn-save:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(30, 96, 164, 0.35);
+  box-shadow: 0 6px 18px rgba(13, 148, 136, 0.35);
 }
 
 .ql-btn-save:disabled {
@@ -214,16 +205,22 @@
 }
 
 .ql-tab:hover {
-  border-color: var(--brand-blue);
+  border-color: #cbd5e1;
   color: var(--brand-blue);
   background: #ffffff;
+  transform: translateY(-1px);
 }
 
 .ql-tab.active {
-  background: rgba(30, 96, 164, 0.08);
-  border-color: var(--brand-blue);
-  color: var(--brand-blue);
-  box-shadow: 0 2px 8px rgba(30, 96, 164, 0.15);
+  background: linear-gradient(135deg, #0d9488, #2563eb) !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.3) !important;
+  transform: translateY(-1px);
+}
+
+.ql-tab.active .tab-icon {
+  color: #ffffff !important;
 }
 
 .ql-tab-dashed {
@@ -234,7 +231,7 @@
 }
 
 .ql-tab-dashed:hover {
-  background: rgba(56, 178, 155, 0.08);
+  background: rgba(13, 148, 136, 0.08);
   border-color: var(--brand-teal);
   color: var(--brand-teal);
 }
@@ -643,17 +640,29 @@
 
 .ql-question-card {
   background: #ffffff;
-  border: 1px solid rgba(30, 96, 164, 0.16);
-  border-radius: 16px;
-  padding: 16px 20px;
-  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04);
-  transition: all 0.2s ease;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: qlCardFadeIn 0.3s ease forwards;
+}
+
+@keyframes qlCardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .ql-question-card:hover {
-  border-color: var(--brand-teal);
-  box-shadow: 0 6px 20px rgba(56, 178, 155, 0.15);
-  transform: translateY(-1.5px);
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-2px);
 }
 
 .ql-question-top {

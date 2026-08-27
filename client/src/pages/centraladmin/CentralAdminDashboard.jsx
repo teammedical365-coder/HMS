@@ -139,6 +139,8 @@ const CentralAdminDashboard = () => {
     const [datePreset, setDatePreset] = useState('all'); // all, today, 30, 60, 90, custom
     const [customStartDate, setCustomStartDate] = useState('');
     const [customEndDate, setCustomEndDate] = useState('');
+    const [chartRange, setChartRange] = useState('this_month');
+    const [appliedCustomAnim, setAppliedCustomAnim] = useState(false);
 
     // Staff
     const [roles, setRoles] = useState([]);
@@ -817,131 +819,283 @@ const CentralAdminDashboard = () => {
     if (selectedHospital) {
         const s = hospitalStats?.stats;
         const h = hospitalStats?.hospital || selectedHospital;
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const now = new Date();
+        const curM = monthNames[now.getMonth()];
+        const prevM = monthNames[(now.getMonth() - 1 + 12) % 12];
+        const dateLabels = chartRange === 'last_month' 
+            ? [`01 ${prevM}`, `05 ${prevM}`, `10 ${prevM}`, `15 ${prevM}`, `20 ${prevM}`, `25 ${prevM}`, `30 ${prevM}`]
+            : chartRange === 'this_year'
+                ? ['Jan', 'Mar', 'May', 'Jul', 'Sep', 'Nov', 'Dec']
+                : [`01 ${curM}`, `05 ${curM}`, `10 ${curM}`, `15 ${curM}`, `20 ${curM}`, `25 ${curM}`, `30 ${curM}`];
+
         return (
             <div className="centraladmin-page">
-                <div className="centraladmin-container">
+                <div className="centraladmin-container" style={{ maxWidth: '1250px', margin: '0 auto' }}>
                     {/* Back Header */}
-                    <div className="centraladmin-header-details" style={{ background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: 'var(--shadow-sm)', marginBottom: '24px' }}>
-                        {/* Top Row: Back Button */}
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-                            <button onClick={closeHospitalDetail} className="back-btn-light" style={{ display: 'inline-flex', alignItems: 'center', margin: 0 }}>
-                                ← Back to Hospitals
-                            </button>
-                            <span className={`status-badge ${h.isActive ? 'status-active' : 'status-inactive'}`} style={{
-                                padding: '6px 14px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', borderRadius: '20px',
-                                border: h.isActive ? '1px solid #15803d' : '1px solid #b91c1c',
-                                background: h.isActive ? '#dcfce7' : '#fee2e2',
-                                color: h.isActive ? '#15803d' : '#b91c1c', display: 'inline-flex', alignItems: 'center', height: 'fit-content'
-                            }}>
-                                {h.isActive ? 'ACTIVE' : 'INACTIVE'}
-                            </span>
-                        </div>
-
-                        {/* Bottom Row: Flex container with justify-content: space-between */}
-                        <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full">
-                            {/* Left Column: Logo + Name & Contact Details */}
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'nowrap' }}>
-                                {h.branding?.logoUrl ? (
-                                    <img src={h.branding.logoUrl} alt="Logo" style={{ width: '48px', height: '48px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', padding: '4px', flexShrink: 0 }} />
-                                ) : (
-                                    <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', border: '1px solid #cbd5e1', flexShrink: 0 }}>🏥</div>
-                                )}
-                                <div style={{ minWidth: 0 }}>
-                                    <h1 style={{ fontSize: 'clamp(1.2rem, 4.5vw, 1.6rem)', fontWeight: 850, color: '#1e293b', margin: 0, lineHeight: '1.2', wordBreak: 'break-word' }}>
-                                        {h.name}
-                                    </h1>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: '#64748b', fontSize: 'clamp(0.8rem, 3vw, 0.92rem)', marginTop: '4px', flexWrap: 'wrap' }}>
-                                        {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
-                                        {h.phone && <span>📞 {h.phone}</span>}
-                                    </div>
-                                </div>
-                            </div>
-
-                        </div>
+                    <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <button 
+                            onClick={closeHospitalDetail} 
+                            className="back-btn-light" 
+                            style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                margin: 0,
+                                padding: '8px 16px',
+                                borderRadius: '10px',
+                                background: '#fff',
+                                border: '1px solid #dce7ea',
+                                color: '#334155',
+                                fontWeight: 700,
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                                boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
+                            }}
+                        >
+                            ← Back to Hospitals
+                        </button>
                     </div>
 
+                    {/* Hospital Card */}
+                    <section className="hospital-card">
+                        <div className="hospital-info">
+                            <div className="hospital-image">
+                                {h.branding?.logoUrl ? (
+                                    <img src={h.branding.logoUrl} alt="Logo" />
+                                ) : (
+                                    <span>🏥</span>
+                                )}
+                            </div>
+                            <div>
+                                <h1>{h.name}</h1>
+                                <div className="details">
+                                    <span>📍 {h.city ? `${h.city}${h.state ? `, ${h.state}` : ''}` : 'Jaipur, Rajasthan'}</span>
+                                    {h.phone && <span>☎ {h.phone}</span>}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className={`status-indicator ${h.isActive ? '' : 'inactive'}`}>
+                            ● {h.isActive ? 'ACTIVE' : 'INACTIVE'}
+                        </div>
+                    </section>
+
                     {loadingStats ? (
-                        <div className="loading-message" style={{ padding: '60px', textAlign: 'center', fontSize: '18px' }}>
+                        <div className="loading-message" style={{ padding: '60px', textAlign: 'center', fontSize: '18px', background: '#fff', borderRadius: '20px', border: '1px solid #dfecec', marginTop: '16px' }}>
                             ⏳ Loading hospital analytics...
                         </div>
                     ) : s ? (
                         <>
-                            {/* ---- DATE FILTER BAR ---- */}
-                            <div className="admin-card date-filter-card w-full max-w-full min-w-0 overflow-hidden">
-                                <h3>📅 Analytics Timeframe</h3>
-                                <div className="date-filter-controls flex flex-col md:flex-row flex-wrap gap-4 w-full">
-                                    <div className="preset-buttons flex flex-row flex-wrap gap-2 w-full">
-                                        <button className={datePreset === 'all' ? 'preset-btn active' : 'preset-btn'} style={{ flex: '1 1 auto', textAlign: 'center', padding: '8px 12px' }} onClick={() => handleDatePresetChange('all')}>All Time</button>
-                                        <button className={datePreset === 'today' ? 'preset-btn active' : 'preset-btn'} style={{ flex: '1 1 auto', textAlign: 'center', padding: '8px 12px' }} onClick={() => handleDatePresetChange('today')}>Today</button>
-                                        <button className={datePreset === '30' ? 'preset-btn active' : 'preset-btn'} style={{ flex: '1 1 auto', textAlign: 'center', padding: '8px 12px' }} onClick={() => handleDatePresetChange('30')}>30 Days</button>
+                            {/* Analytics Timeframe */}
+                            <section className="analytics">
+                                <div className="analytics-head">
+                                    <div className="analytics-title">
+                                        <div className="icon">⌁</div>
+                                        Analytics Timeframe
                                     </div>
-                                    <div className="custom-date-inputs flex flex-wrap items-center gap-3 w-full mt-2">
-                                        <input 
-                                            type="date" 
-                                            className="date-input flex-1 sm:flex-none" 
-                                            value={customStartDate} 
-                                            onChange={(e) => { setDatePreset('custom'); setCustomStartDate(e.target.value); }} 
-                                        />
-                                        
-                                        <span style={{ fontSize: '14px', color: '#64748b', fontWeight: '500' }}>to</span>
-                                        
-                                        <input 
-                                            type="date" 
-                                            className="date-input flex-1 sm:flex-none" 
-                                            value={customEndDate} 
-                                            onChange={(e) => { setDatePreset('custom'); setCustomEndDate(e.target.value); }} 
-                                        />
-                                        
-                                        <button 
-                                            className="btn-save w-full sm:w-auto" 
-                                            style={{ whiteSpace: 'nowrap' }} 
-                                            onClick={handleApplyCustomDate}
-                                        >
-                                            Apply Custom
-                                        </button>
+                                    <div className="analytics-sub">
+                                        Choose a reporting period
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* ---- KPI STATS ROW ---- */}
-                            <div className="hospital-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-full min-w-0">
-                                <div className="kpi-card kpi-blue">
-                                    <div className="kpi-icon">👩‍⚕️</div>
-                                    <div className="kpi-value">{s.totalStaff}</div>
-                                    <div className="kpi-label">Total Staff</div>
-                                    <div className="kpi-sub">Active staff members</div>
+                                <div className="periods">
+                                    <button 
+                                        className={`period ${datePreset === 'all' ? 'active' : ''}`} 
+                                        onClick={() => handleDatePresetChange('all')}
+                                    >
+                                        All Time
+                                    </button>
+                                    <button 
+                                        className={`period ${datePreset === 'today' ? 'active' : ''}`} 
+                                        onClick={() => handleDatePresetChange('today')}
+                                    >
+                                        Today
+                                    </button>
+                                    <button 
+                                        className={`period ${datePreset === '30' ? 'active' : ''}`} 
+                                        onClick={() => handleDatePresetChange('30')}
+                                    >
+                                        30 Days
+                                    </button>
                                 </div>
-                                <div className="kpi-card kpi-green">
-                                    <div className="kpi-icon">🧑‍🤝‍🧑</div>
-                                    <div className="kpi-value">{s.totalPatients}</div>
-                                    <div className="kpi-label">Unique Patients</div>
-                                    <div className="kpi-sub">In selected period</div>
+
+                                <div className="custom">
+                                    <input 
+                                        className="date-picker-input" 
+                                        type="date" 
+                                        value={customStartDate} 
+                                        onChange={(e) => { setDatePreset('custom'); setCustomStartDate(e.target.value); }} 
+                                    />
+                                    <span style={{ color: '#90a0ac', fontSize: '11px', fontWeight: 600 }}>to</span>
+                                    <input 
+                                        className="date-picker-input" 
+                                        type="date" 
+                                        value={customEndDate} 
+                                        onChange={(e) => { setDatePreset('custom'); setCustomEndDate(e.target.value); }} 
+                                    />
+                                    <button 
+                                        className="apply-btn" 
+                                        onClick={() => {
+                                            handleApplyCustomDate();
+                                            setAppliedCustomAnim(true);
+                                            setTimeout(() => setAppliedCustomAnim(false), 900);
+                                        }}
+                                    >
+                                        {appliedCustomAnim ? '✓ Applied' : 'Apply Custom'}
+                                    </button>
                                 </div>
-                                <div className="kpi-card kpi-purple">
-                                    <div className="kpi-icon">📅</div>
-                                    <div className="kpi-value">{s.totalAppointments}</div>
-                                    <div className="kpi-label">Total Appointments</div>
-                                    <div className="kpi-sub">In selected period</div>
+                            </section>
+
+                            {/* KPI Cards */}
+                            <section className="kpis">
+                                <article className="kpi">
+                                    <div className="kpi-icon">♙</div>
+                                    <strong>{s.totalStaff ?? 0}</strong>
+                                    <label>Total Staff</label>
+                                    <small>Active staff members</small>
+                                    <div className="kpi-line"></div>
+                                </article>
+
+                                <article className="kpi">
+                                    <div className="kpi-icon">♧</div>
+                                    <strong>{s.totalPatients ?? 0}</strong>
+                                    <label>Unique Patients</label>
+                                    <small>In selected period</small>
+                                    <div className="kpi-line"></div>
+                                </article>
+
+                                <article className="kpi">
+                                    <div className="kpi-icon">▦</div>
+                                    <strong>{s.totalAppointments ?? 0}</strong>
+                                    <label>Total Appointments</label>
+                                    <small>In selected period</small>
+                                    <div className="kpi-line"></div>
+                                </article>
+
+                                <article className="kpi">
+                                    <div className="kpi-icon">₹</div>
+                                    <strong>{formatCurrency(s.totalRevenue ?? 0)}</strong>
+                                    <label>Total Revenue</label>
+                                    <small>From paid appointments</small>
+                                    <div className="kpi-line"></div>
+                                </article>
+                            </section>
+
+                            {/* Bottom Panels (Appointments Overview & Quick Summary) */}
+                            <section className="bottom">
+                                {/* Appointment Chart Panel */}
+                                <div className="panel">
+                                    <div className="panel-head">
+                                        <div className="panel-title">
+                                            <div className="mini">▦</div>
+                                            Appointments Overview
+                                        </div>
+                                        <select value={chartRange} onChange={e => setChartRange(e.target.value)}>
+                                            <option value="this_month">This Month</option>
+                                            <option value="last_month">Last Month</option>
+                                            <option value="this_year">This Year</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="chart">
+                                        <div className="gridline one"></div>
+                                        <div className="gridline two"></div>
+                                        <div className="gridline three"></div>
+                                        <div className="gridline four"></div>
+
+                                        <svg className="line-svg" viewBox="0 0 800 210" preserveAspectRatio="none">
+                                            <defs>
+                                                <linearGradient id="areaGradOverview" x1="0" x2="0" y1="0" y2="1">
+                                                    <stop offset="0%" stopColor="#7560ee" stopOpacity="0.25" />
+                                                    <stop offset="100%" stopColor="#7560ee" stopOpacity="0" />
+                                                </linearGradient>
+                                            </defs>
+                                            <path
+                                                d={
+                                                    chartRange === 'last_month'
+                                                        ? 'M10,185 C45,150 70,165 95,130 S150,140 180,100 S225,115 250,80 S300,95 330,110 S375,140 405,120 S440,85 465,100 S510,90 540,85 S575,65 605,75 S645,55 675,80 S730,60 790,90 L790,205 L10,205 Z'
+                                                        : chartRange === 'this_year'
+                                                            ? 'M10,160 C50,140 80,120 120,100 S180,110 220,70 S280,85 320,50 S380,60 420,80 S480,55 520,40 S580,45 620,35 S680,50 720,30 S760,25 790,45 L790,205 L10,205 Z'
+                                                            : 'M10,178 C40,135 65,158 90,145 S140,155 170,120 S215,130 240,90 S290,105 320,125 S365,170 395,155 S430,105 455,125 S500,105 530,112 S565,78 595,95 S635,70 665,100 S720,80 790,105 L790,205 L10,205 Z'
+                                                }
+                                                fill="url(#areaGradOverview)"
+                                            />
+                                            <path
+                                                d={
+                                                    chartRange === 'last_month'
+                                                        ? 'M10,185 C45,150 70,165 95,130 S150,140 180,100 S225,115 250,80 S300,95 330,110 S375,140 405,120 S440,85 465,100 S510,90 540,85 S575,65 605,75 S645,55 675,80 S730,60 790,90'
+                                                        : chartRange === 'this_year'
+                                                            ? 'M10,160 C50,140 80,120 120,100 S180,110 220,70 S280,85 320,50 S380,60 420,80 S480,55 520,40 S580,45 620,35 S680,50 720,30 S760,25 790,45'
+                                                            : 'M10,178 C40,135 65,158 90,145 S140,155 170,120 S215,130 240,90 S290,105 320,125 S365,170 395,155 S430,105 455,125 S500,105 530,112 S565,78 595,95 S635,70 665,100 S720,80 790,105'
+                                                }
+                                                fill="none"
+                                                stroke="#7658ed"
+                                                strokeWidth="4"
+                                                strokeLinecap="round"
+                                            />
+                                        </svg>
+                                    </div>
+
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        color: '#91a0ad',
+                                        fontSize: '10px',
+                                        fontWeight: 600,
+                                        padding: '0 10px 0 35px',
+                                    }}>
+                                        {dateLabels.map((lbl, i) => (
+                                            <span key={i}>{lbl}</span>
+                                        ))}
+                                    </div>
                                 </div>
-                                <div className="kpi-card kpi-orange">
-                                    <div className="kpi-icon">💰</div>
-                                    <div className="kpi-value">{formatCurrency(s.totalRevenue)}</div>
-                                    <div className="kpi-label">Total Revenue</div>
-                                    <div className="kpi-sub">From paid appointments</div>
+
+                                {/* Quick Summary Panel */}
+                                <div className="panel">
+                                    <div className="panel-title">
+                                        <div className="mini">▣</div>
+                                        Quick Summary
+                                    </div>
+
+                                    <div className="quick-list">
+                                        <div className="quick">
+                                            <div className="quick-icon">✓</div>
+                                            <div className="quick-text">
+                                                <b>Completed</b>
+                                                <span>Completed appointments</span>
+                                            </div>
+                                            <strong>{s.completedAppointments ?? 0}</strong>
+                                        </div>
+
+                                        <div className="quick">
+                                            <div className="quick-icon">◷</div>
+                                            <div className="quick-text">
+                                                <b>Pending / Upcoming</b>
+                                                <span>Upcoming appointments</span>
+                                            </div>
+                                            <strong>{s.pendingAppointments ?? 0}</strong>
+                                        </div>
+
+                                        <div className="quick">
+                                            <div className="quick-icon">♜</div>
+                                            <div className="quick-text">
+                                                <b>Lab Reports</b>
+                                                <span>Pending reports</span>
+                                            </div>
+                                            <strong>{s.pendingLabReports ?? (s.labReportCount ?? 0)}</strong>
+                                        </div>
+
+                                        <div className="quick">
+                                            <div className="quick-icon">▣</div>
+                                            <div className="quick-text">
+                                                <b>Pharmacy Orders</b>
+                                                <span>Pending pharmacy orders</span>
+                                            </div>
+                                            <strong>{s.pharmacyOrderCount ?? 0}</strong>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="kpi-card kpi-teal">
-                                    <div className="kpi-icon">✅</div>
-                                    <div className="kpi-value">{s.completedAppointments}</div>
-                                    <div className="kpi-label">Completed</div>
-                                    <div className="kpi-sub">{s.pendingAppointments} pending/upcoming</div>
-                                </div>
-                                <div className="kpi-card kpi-pink">
-                                    <div className="kpi-icon">🧪</div>
-                                    <div className="kpi-value">{s.labReportCount}</div>
-                                    <div className="kpi-label">Lab Reports</div>
-                                    <div className="kpi-sub">{s.pendingLabReports} pending · {s.pharmacyOrderCount} pharmacy orders</div>
-                                </div>
-                            </div>
+                            </section>
 
                             {/* ---- FEATURE QUICK ACTIONS ---- */}
                             <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '24px' }}>

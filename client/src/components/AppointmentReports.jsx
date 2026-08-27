@@ -176,15 +176,38 @@ const AppointmentReports = ({ appointmentId, prescriptions = [] }) => {
                                     </h4>
                                     
                                     <div style={{ marginBottom: '10px' }}>
-                                        <strong style={{ fontSize: '12px', color: '#4c1d95' }}>Report Type:</strong>
-                                        <div style={{ fontSize: '13px', color: '#334155', marginTop: '2px' }}>{aiSummaries[i].ReportType || 'Unknown'}</div>
+                                        <strong style={{ fontSize: '12px', color: '#4c1d95' }}>
+                                            {aiSummaries[i].ContentType ? 'Content Type:' : 'Report Type:'}
+                                        </strong>
+                                        <div style={{ fontSize: '13px', color: '#334155', marginTop: '2px' }}>
+                                            {aiSummaries[i].ContentType || aiSummaries[i].ReportType || 'Unknown'}
+                                        </div>
+                                        {aiSummaries[i].ImageType && (
+                                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>Type: {aiSummaries[i].ImageType}</div>
+                                        )}
+                                        {aiSummaries[i].ImageQuality && (
+                                            <div style={{ fontSize: '12px', color: aiSummaries[i].ImageQuality === 'Insufficient' ? '#dc2626' : '#64748b', marginTop: '2px' }}>Quality: {aiSummaries[i].ImageQuality}</div>
+                                        )}
                                     </div>
                                     
                                     <div style={{ marginBottom: '10px' }}>
                                         <strong style={{ fontSize: '12px', color: '#4c1d95' }}>Overall Summary:</strong>
-                                        <div style={{ fontSize: '13px', color: '#334155', marginTop: '2px', lineHeight: '1.5' }}>{aiSummaries[i].OverallSummary || 'No summary available.'}</div>
+                                        <div style={{ fontSize: '13px', color: '#334155', marginTop: '2px', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{aiSummaries[i].OverallSummary || 'No summary available.'}</div>
                                     </div>
+
+                                    {/* Visible Observations (for image analysis) */}
+                                    {aiSummaries[i].VisibleObservations && aiSummaries[i].VisibleObservations.length > 0 && (
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <strong style={{ fontSize: '12px', color: '#166534' }}>Visible Observations:</strong>
+                                            <ul style={{ margin: '4px 0 0 0', paddingLeft: '20px', fontSize: '13px', color: '#14532d' }}>
+                                                {aiSummaries[i].VisibleObservations.map((obs, idx) => (
+                                                    <li key={idx} style={{ marginBottom: '3px' }}>{obs}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
                                     
+                                    {/* Important Findings (for text reports) */}
                                     {aiSummaries[i].ImportantFindings && aiSummaries[i].ImportantFindings.length > 0 && (
                                         <div style={{ marginBottom: '10px' }}>
                                             <strong style={{ fontSize: '12px', color: '#4c1d95' }}>Important Findings:</strong>
@@ -195,15 +218,35 @@ const AppointmentReports = ({ appointmentId, prescriptions = [] }) => {
                                             </ul>
                                         </div>
                                     )}
+
+                                    {/* Notable Findings (for image analysis) */}
+                                    {aiSummaries[i].NotableFindings && aiSummaries[i].NotableFindings.length > 0 && (
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <strong style={{ fontSize: '12px', color: '#92400e' }}>Notable Findings:</strong>
+                                            <ul style={{ margin: '4px 0 0 0', paddingLeft: '20px', fontSize: '13px', color: '#78350f' }}>
+                                                {aiSummaries[i].NotableFindings.map((finding, idx) => (
+                                                    <li key={idx} style={{ marginBottom: '3px' }}>{finding}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
                                     
                                     {aiSummaries[i].AbnormalValues && aiSummaries[i].AbnormalValues.length > 0 && (
-                                        <div>
+                                        <div style={{ marginBottom: '10px' }}>
                                             <strong style={{ fontSize: '12px', color: '#ef4444' }}>Abnormal Values:</strong>
                                             <ul style={{ margin: '4px 0 0 0', paddingLeft: '20px', fontSize: '13px', color: '#b91c1c' }}>
                                                 {aiSummaries[i].AbnormalValues.map((val, idx) => (
                                                     <li key={idx} style={{ marginBottom: '3px' }}>{val}</li>
                                                 ))}
                                             </ul>
+                                        </div>
+                                    )}
+
+                                    {/* Medical Disclaimer */}
+                                    {aiSummaries[i].Disclaimer && (
+                                        <div style={{ marginTop: '10px', padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '11px', color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                                            <span>⚕️</span>
+                                            <span>{aiSummaries[i].Disclaimer}</span>
                                         </div>
                                     )}
                                 </div>

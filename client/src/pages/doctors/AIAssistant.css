@@ -786,3 +786,107 @@
 .ai-action-compare { background: #fef3c7; color: #92400e; }
 .ai-action-ocr { background: #dcfce7; color: #166534; }
 
+/* ── Multimodal AI Styles ── */
+
+/* Medical Disclaimer */
+.ai-medical-disclaimer {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-left: 4px solid #f59e0b;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #92400e;
+    line-height: 1.5;
+}
+
+/* Error Message */
+.ai-error-msg {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 14px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    color: #991b1b;
+    font-size: 13px;
+    text-align: center;
+    justify-content: center;
+}
+
+/* Chat Attachment Bar */
+.ai-chat-attachments-bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+}
+
+.ai-chat-attachment-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: #ede9fe;
+    border: 1px solid #c4b5fd;
+    border-radius: 20px;
+    font-size: 12px;
+    color: #5b21b6;
+    max-width: 200px;
+}
+
+.ai-chat-attachment-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 120px;
+    font-weight: 500;
+}
+
+.ai-chat-attachment-remove {
+    background: none;
+    border: none;
+    color: #7c3aed;
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    border-radius: 50%;
+    transition: background 0.2s;
+}
+
+.ai-chat-attachment-remove:hover {
+    background: rgba(124, 58, 237, 0.15);
+}
+
+/* Chat Attach Button */
+.ai-chat-attach-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.ai-chat-attach-btn:hover {
+    background: #e2e8f0;
+    color: #7c3aed;
+    border-color: #7c3aed;
+}
+
+/* Media Analysis action badge */
+.ai-action-media { background: #fce7f3; color: #9d174d; }
+.ai-action-media-qa { background: #e0e7ff; color: #3730a3; }
