@@ -4,17 +4,14 @@
 
 .role-dashboard {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 15% 25%, rgba(20, 184, 166, 0.07) 0%, transparent 55%),
-    radial-gradient(circle at 85% 80%, rgba(99, 102, 241, 0.07) 0%, transparent 55%),
-    var(--surface-1);
-  padding: 40px 20px;
+  background: var(--surface-1);
+  padding: 0 0 40px 0;
   font-family: var(--font-primary);
 }
 
 .role-dashboard .dashboard-container {
-  max-width: 1100px;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
 }
 
 /* ---- Welcome Hero ---- */

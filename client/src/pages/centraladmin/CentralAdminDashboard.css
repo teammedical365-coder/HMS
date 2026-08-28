@@ -109,6 +109,39 @@
   font-weight: 450;
 }
 
+.cad-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 18px;
+  background: #ffffff;
+  color: #2563eb;
+  border: 1.5px solid #bfdbfe;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.cad-refresh-btn:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.16);
+}
+
+.cad-spin {
+  animation: cad-rotate-spin 0.8s linear infinite;
+}
+
+@keyframes cad-rotate-spin {
+  100% { transform: rotate(360deg); }
+}
+
 .cad-revenue-analytics-btn {
   display: inline-flex;
   align-items: center;
@@ -2029,4 +2062,2751 @@
   .periods { justify-content: flex-start; flex-wrap: wrap; }
   .kpis { grid-template-columns: 1fr; }
   .custom { flex-wrap: wrap; }
+}
+
+/* =========================================================
+   EXACT HIGH-FIDELITY MEDICAL365 SAAS DASHBOARD THEME (IMAGE 1)
+   ========================================================= */
+
+.cad-dashboard-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 1. Hero Hospital Profile Card */
+.cad-hero-banner-card {
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  padding: 24px 28px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.cad-hero-banner-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+}
+
+.cad-hero-left-block {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  z-index: 2;
+}
+
+.cad-hero-hospital-img {
+  width: 96px;
+  height: 72px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.cad-hero-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cad-hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cad-hero-title {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.3px;
+}
+
+.cad-badge-active {
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 8px;
+  letter-spacing: 0.5px;
+}
+
+.cad-hero-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.cad-hero-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cad-hero-bg-graphics {
+  position: absolute;
+  right: 60px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.cad-hero-ecg-svg {
+  width: 180px;
+  height: 50px;
+}
+
+.cad-hero-shield-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: #f3e8ff;
+  color: #7c3aed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.12);
+}
+
+.cad-hero-dots-menu {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 2;
+  transition: all 0.2s;
+}
+
+.cad-hero-dots-menu:hover {
+  background: #edf2f7;
+  color: #0f172a;
+}
+
+.cad-hero-columns-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding-top: 18px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.cad-hero-col-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cad-hero-col-label {
+  font-size: 0.76rem;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.cad-hero-col-value {
+  font-size: 0.95rem;
+  color: #1e293b;
+  font-weight: 700;
+}
+
+/* 2. Section Headers */
+.cad-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cad-section-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cad-section-title-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.cad-section-title {
+  margin: 0;
+  font-size: 1.12rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.2px;
+}
+
+.cad-section-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cad-select-btn {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 7px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.cad-pill-action-btn {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cad-pill-action-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.cad-link-action {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #6366f1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.cad-link-action:hover {
+  text-decoration: underline;
+}
+
+/* 3. Analytics KPI 5-Card Grid */
+.cad-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+}
+
+.cad-kpi-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  position: relative;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.cad-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.04);
+}
+
+.cad-kpi-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.cad-kpi-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.cad-kpi-label {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.cad-kpi-value {
+  margin: 4px 0 6px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.4px;
+}
+
+.cad-kpi-trend {
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.trend-up {
+  color: #16a34a;
+}
+
+.trend-down {
+  color: #dc2626;
+}
+
+.cad-kpi-sparkline {
+  width: 100%;
+  height: 28px;
+  margin-top: 4px;
+}
+
+/* 4. Two-Column Middle Grid */
+.cad-two-column-grid {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 16px;
+}
+
+.cad-chart-card,
+.cad-activities-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+}
+
+.cad-period-toggle-group {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.cad-period-toggle-btn {
+  background: transparent;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cad-period-toggle-btn.active {
+  background: #6366f1;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+}
+
+.cad-chart-canvas-wrapper {
+  display: flex;
+  gap: 12px;
+  height: 190px;
+  margin-top: 16px;
+  position: relative;
+}
+
+.cad-chart-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-align: right;
+  width: 28px;
+}
+
+.cad-chart-plot-area {
+  flex: 1;
+  position: relative;
+  height: 100%;
+}
+
+.cad-chart-gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-bottom: 1px dashed #f1f5f9;
+}
+
+.cad-chart-svg {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+}
+
+.cad-chart-x-axis {
+  display: flex;
+  justify-content: space-between;
+  padding-left: 40px;
+  padding-right: 10px;
+  margin-top: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.cad-chart-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.cad-chart-metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cad-chart-metric-num {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.num-blue { color: #3b82f6; }
+.num-green { color: #10b981; }
+.num-orange { color: #f59e0b; }
+.num-red { color: #ef4444; }
+
+.cad-chart-metric-lbl {
+  font-size: 0.74rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+/* Activities List */
+.cad-activities-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.cad-activity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  gap: 12px;
+}
+
+.cad-activity-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cad-activity-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.cad-activity-text {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cad-activity-time {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 5. Quick Admin Actions Grid */
+.cad-quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+}
+
+.cad-action-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 14px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.cad-action-card:hover {
+  transform: translateY(-2px);
+  border-color: #cbd5e1;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.05);
+}
+
+.cad-action-card-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cad-action-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.cad-action-card-title {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.25;
+}
+
+.cad-action-card-chevron {
+  font-size: 16px;
+  color: #94a3b8;
+  font-weight: bold;
+}
+
+/* 6. Hospital At A Glance Grid */
+.cad-glance-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+}
+
+.cad-glance-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.cad-glance-label {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.cad-glance-value {
+  margin: 4px 0 6px;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.cad-glance-trend {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #16a34a;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cad-glance-watermark {
+  font-size: 40px;
+  opacity: 0.12;
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  pointer-events: none;
+}
+
+/* 7. System Alerts Grid */
+.cad-alerts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.cad-alert-card {
+  border-radius: 16px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid;
+}
+
+.alert-red {
+  background: #fff5f5;
+  border-color: #fecaca;
+}
+
+.alert-gold {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.cad-alert-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.cad-alert-icon-circle {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.alert-red .cad-alert-icon-circle {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.alert-gold .cad-alert-icon-circle {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.cad-alert-title {
+  margin: 0 0 3px;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.alert-red .cad-alert-title { color: #991b1b; }
+.alert-gold .cad-alert-title { color: #92400e; }
+
+.cad-alert-desc {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.cad-alert-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  white-space: nowrap;
+}
+
+/* 8. Hospital Info Card & 3D Building Illustration */
+.cad-info-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 24px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+}
+
+.cad-info-meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cad-info-meta-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.cad-info-meta-label {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.cad-info-meta-val {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.cad-info-illustration-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.cad-info-building-svg {
+  width: 100%;
+  max-height: 180px;
+}
+
+/* 9. Monthly Timeline Card */
+.cad-timeline-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+}
+
+.cad-timeline-track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  margin-top: 24px;
+  padding: 0 40px;
+}
+
+.cad-timeline-connecting-line {
+  position: absolute;
+  left: 60px;
+  right: 60px;
+  top: 22px;
+  height: 3px;
+  background: #e2e8f0;
+  z-index: 1;
+}
+
+.cad-timeline-node-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 2;
+  position: relative;
+}
+
+.cad-timeline-node-circle {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  border: 3px solid #ffffff;
+}
+
+.node-cyan { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+.node-purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.node-teal { background: linear-gradient(135deg, #14b8a6, #0d9488); }
+.node-orange { background: linear-gradient(135deg, #f97316, #ea580c); }
+.node-pink { background: linear-gradient(135deg, #ec4899, #db2777); }
+
+.cad-timeline-node-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.cad-timeline-node-value {
+  font-size: 1rem;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+/* 10. Dashboard Footer */
+.cad-dashboard-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-top: 1px solid #e2e8f0;
+  margin-top: 8px;
+}
+
+.cad-footer-heart {
+  color: #ef4444;
+  margin: 0 2px;
+}
+
+/* Responsive Grid Adjustments for Dashboard HUD */
+@media (max-width: 1200px) {
+  .cad-analytics-grid { grid-template-columns: repeat(3, 1fr); }
+  .cad-quick-actions-grid { grid-template-columns: repeat(3, 1fr); }
+  .cad-glance-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 900px) {
+  .cad-two-column-grid { grid-template-columns: 1fr; }
+  .cad-info-card { grid-template-columns: 1fr; }
+  .cad-alerts-grid { grid-template-columns: 1fr; }
+  .cad-hero-columns-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .cad-analytics-grid { grid-template-columns: 1fr; }
+  .cad-quick-actions-grid { grid-template-columns: 1fr; }
+  .cad-glance-grid { grid-template-columns: 1fr; }
+  .cad-hero-columns-row { grid-template-columns: 1fr; }
+  .cad-hero-banner-top { flex-direction: column; align-items: flex-start; gap: 14px; }
+  .cad-hero-bg-graphics { display: none; }
+  .cad-timeline-track { flex-direction: column; gap: 20px; }
+  .cad-timeline-connecting-line { display: none; }
+}
+
+/* =========================================================
+   EXACT HOSPITAL DETAIL HUD (MATCHING UPLOADED SCREENSHOT)
+   ========================================================= */
+
+.h-detail-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ==========================================================================
+   1. Hospital Profile Hero Header Banner (Ultra Compact & Sleek)
+   ========================================================================== */
+.h-detail-hero-banner {
+  position: relative;
+  background: linear-gradient(135deg, #ffffff 0%, #f8faff 50%, #f0f4ff 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 12px 24px 10px 24px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 145px;
+}
+
+/* Left Organic Deep Blue/Indigo Wave */
+.h-detail-hero-waves {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 195px;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.h-detail-hero-wave-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Bottom Left Cyan Dot Matrix */
+.h-detail-dark-dot-matrix {
+  position: absolute;
+  bottom: 12px;
+  left: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+  width: 48px;
+  pointer-events: none;
+}
+
+.h-matrix-dot.blue-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #38bdf8;
+  opacity: 0.55;
+}
+
+/* Top-Left: Hospital Profile Tag (Over Blue Wave) */
+.h-detail-profile-pill-top-left {
+  position: absolute;
+  top: 10px;
+  left: 18px;
+  z-index: 12;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  color: #ffffff;
+  padding: 2.5px 10px;
+  border-radius: 18px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  box-shadow: 0 2px 8px rgba(10, 24, 78, 0.2);
+}
+
+.h-detail-profile-shield-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Right Column: Stacked Back Button on top-right, ECG Heartbeat Widget below */
+.h-detail-hero-right-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 185px;
+  z-index: 10;
+}
+
+.h-detail-back-btn-container {
+  display: flex;
+  align-items: center;
+}
+
+.h-detail-back-btn-glow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3.5px 12px 3.5px 4px;
+  border-radius: 30px;
+  background: rgba(14, 25, 75, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.74rem;
+  cursor: pointer;
+  box-shadow: 0 3px 12px rgba(10, 24, 78, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+}
+
+.h-detail-back-arrow-wrap {
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  background: #1e2978;
+  border: 1.5px solid #38bdf8;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 0 10px #38bdf8, 0 0 18px rgba(56, 189, 248, 0.6);
+  transition: all 0.3s ease;
+}
+
+.h-detail-back-arrow {
+  font-size: 12px;
+  font-weight: 900;
+  transition: transform 0.3s ease;
+  line-height: 1;
+}
+
+.h-detail-back-ring-pulse {
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  border-radius: 50%;
+  border: 1.5px solid #38bdf8;
+  opacity: 0.85;
+  animation: back-ring-wave 2.2s infinite ease-out;
+  pointer-events: none;
+}
+
+@keyframes back-ring-wave {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.9;
+  }
+  60% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+.h-detail-back-text {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.h-detail-back-hospital-icon {
+  color: #38bdf8;
+  opacity: 0.9;
+  display: flex;
+  align-items: center;
+  margin-left: 1px;
+  transition: transform 0.3s ease;
+}
+
+.h-detail-back-btn-glow:hover {
+  background: rgba(22, 38, 110, 0.95);
+  border-color: #7dd3fc;
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 5px 16px rgba(56, 189, 248, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3);
+}
+
+.h-detail-back-btn-glow:hover .h-detail-back-arrow-wrap {
+  border-color: #bae6fd;
+  box-shadow: 0 0 14px #38bdf8, 0 0 24px rgba(56, 189, 248, 0.9);
+  background: #2563eb;
+}
+
+.h-detail-back-btn-glow:hover .h-detail-back-arrow {
+  transform: translateX(-2px);
+}
+
+.h-detail-back-btn-glow:hover .h-detail-back-hospital-icon {
+  transform: scale(1.15);
+  color: #bae6fd;
+}
+
+.h-detail-back-btn-glow:active {
+  transform: scale(0.97);
+}
+
+/* Main Hero Upper Content */
+.h-detail-hero-content {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
+/* 3D Hexagon Hospital Logo with Orbital Planetary Rings */
+.h-detail-hex-logo-container {
+  width: 78px;
+  height: 86px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 6px 14px rgba(10, 24, 78, 0.2));
+  position: relative;
+  margin-top: 24px;
+  margin-left: 2px;
+  transition: transform 0.3s ease;
+}
+
+.h-detail-hex-logo-container:hover {
+  transform: scale(1.04);
+}
+
+/* Orbital Rings around Hexagon */
+.h-detail-hex-orbit-ring {
+  position: absolute;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  pointer-events: none;
+  animation: hex-orbit-spin 18s linear infinite;
+}
+
+@keyframes hex-orbit-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.h-detail-hex-orbit-node {
+  position: absolute;
+  width: 4.5px;
+  height: 4.5px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 5px #38bdf8;
+}
+
+.h-detail-hex-orbit-node.node-a {
+  top: 6px;
+  right: 0px;
+}
+
+.h-detail-hex-orbit-node.node-b {
+  bottom: 8px;
+  left: -2px;
+}
+
+.h-detail-hex-orbit-node.node-c {
+  bottom: 0px;
+  right: 16px;
+}
+
+.h-detail-hex-outer {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(145deg, #ffffff 0%, #f0fdf4 100%);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3.5px;
+}
+
+.h-detail-hex-inner {
+  width: 88%;
+  height: 88%;
+  background: #ffffff;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.h-detail-hex-img {
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
+}
+
+.h-detail-red-cross-box {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.h-cross-arm-h {
+  position: absolute;
+  width: 28px;
+  height: 9px;
+  background: linear-gradient(135deg, #f43f5e 0%, #e11d48 50%, #be123c 100%);
+  border-radius: 2.5px;
+  box-shadow: 0 2px 6px rgba(225, 29, 72, 0.3);
+}
+
+.h-cross-arm-v {
+  position: absolute;
+  width: 9px;
+  height: 28px;
+  background: linear-gradient(135deg, #f43f5e 0%, #e11d48 50%, #be123c 100%);
+  border-radius: 2.5px;
+  box-shadow: 0 2px 6px rgba(225, 29, 72, 0.3);
+}
+
+/* Center Info (Completely on White Background) */
+.h-detail-hero-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  margin-left: 16px;
+  margin-top: 1px;
+}
+
+/* Top 5x4 Dot Matrix */
+.h-detail-center-dot-matrix {
+  display: grid;
+  grid-template-columns: repeat(5, 3.5px);
+  gap: 5px;
+  width: 40px;
+  margin-bottom: 2px;
+  pointer-events: none;
+}
+
+.h-center-matrix-dot {
+  width: 2.5px;
+  height: 2.5px;
+  border-radius: 50%;
+  background: #94a3b8;
+  opacity: 0.45;
+}
+
+.h-detail-hero-title {
+  margin: 0;
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #0b192c;
+  letter-spacing: -0.4px;
+  line-height: 1.12;
+}
+
+/* Progress Accent Bar */
+.h-detail-hero-accent-bar {
+  position: relative;
+  width: 175px;
+  max-width: 100%;
+  height: 2.5px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  margin: 2px 0 6px 0;
+}
+
+.h-detail-accent-bar-fill {
+  width: 55px;
+  height: 100%;
+  background: #2563eb;
+  border-radius: 3px;
+}
+
+.h-detail-accent-bar-dot {
+  position: absolute;
+  right: 0;
+  top: -1.25px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #0284c7;
+}
+
+/* Meta Pills: Location & Phone */
+.h-detail-hero-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.h-detail-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #1e293b;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
+}
+
+.h-detail-meta-chip-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+}
+
+.h-detail-meta-chip-icon.pin-icon {
+  background: #ede9fe;
+  color: #4f46e5;
+}
+
+.h-detail-meta-chip-icon.phone-icon {
+  background: #ccfbf1;
+  color: #0d9488;
+}
+
+.h-detail-meta-sep {
+  width: 1px;
+  height: 16px;
+  background: #cbd5e1;
+}
+
+/* Right Section: Animated ECG Heartbeat Widget matching Image 2 */
+.h-detail-hero-ecg-widget {
+  width: 185px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  pointer-events: none;
+  position: relative;
+  margin-top: 2px;
+}
+
+.h-detail-hero-ecg-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 2px 8px rgba(56, 189, 248, 0.15));
+}
+
+/* Continuous flowing stroke animation */
+.h-detail-ecg-animated-path {
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  animation: ecg-trace-flow 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  filter: drop-shadow(0 0 3px rgba(56, 189, 248, 0.8));
+}
+
+@keyframes ecg-trace-flow {
+  0% {
+    stroke-dashoffset: 400;
+    opacity: 0.3;
+  }
+  15% {
+    opacity: 1;
+  }
+  65% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  85% {
+    stroke-dashoffset: 0;
+    opacity: 0.6;
+  }
+  100% {
+    stroke-dashoffset: -400;
+    opacity: 0.3;
+  }
+}
+
+/* Radar Signal Ripple Waves */
+.h-detail-ecg-ripple.ripple-1 {
+  animation: ecg-radar-wave-1 2.2s infinite ease-out;
+  transform-origin: center;
+}
+
+.h-detail-ecg-ripple.ripple-2 {
+  animation: ecg-radar-wave-2 2.2s infinite ease-out 0.45s;
+  transform-origin: center;
+}
+
+@keyframes ecg-radar-wave-1 {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.95;
+  }
+  70% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes ecg-radar-wave-2 {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.8;
+  }
+  70% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+/* ==========================================================================
+   Bottom Floating Stats & Real-time Status Bar (Ultra Compact)
+   ========================================================================== */
+.h-detail-hero-bottom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  padding: 4px 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  margin-top: 1px;
+  position: relative;
+  z-index: 6;
+}
+
+.h-detail-bottom-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.h-detail-bottom-stat-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.h-detail-bottom-stat-icon.icon-shield {
+  background: #ede9fe;
+  color: #6366f1;
+}
+
+.h-detail-bottom-stat-icon.icon-doctors {
+  background: #ccfbf1;
+  color: #0d9488;
+}
+
+.h-detail-bottom-stat-icon.icon-patients {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.h-detail-bottom-stat-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.h-detail-bottom-stat-label {
+  font-size: 0.62rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.h-detail-bottom-stat-val {
+  font-size: 0.78rem;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.h-detail-bottom-stat-sep {
+  width: 1px;
+  height: 18px;
+  background: #e2e8f0;
+}
+
+.h-detail-bottom-stat-right {
+  display: flex;
+  align-items: center;
+}
+
+.h-detail-bottom-status-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ecfdf5;
+  border: 1px solid #86efac;
+  border-radius: 12px;
+  padding: 3px 10px;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.12);
+}
+
+.h-detail-bottom-live-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #16a34a;
+  box-shadow: 0 0 5px #16a34a;
+  animation: live-dot-glow 1.5s infinite alternate;
+}
+
+.h-detail-bottom-status-name {
+  font-size: 0.66rem;
+  font-weight: 900;
+  color: #15803d;
+  letter-spacing: 0.4px;
+}
+
+.h-detail-bottom-ecg-svg-wrap {
+  width: 36px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.h-detail-bottom-ecg-svg {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes live-dot-glow {
+  0% {
+    box-shadow: 0 0 2px #16a34a;
+    transform: scale(0.9);
+  }
+  100% {
+    box-shadow: 0 0 8px #16a34a;
+    transform: scale(1.2);
+  }
+}
+
+/* 2. Analytics Timeframe Card */
+.h-detail-timeframe-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+}
+
+.h-detail-timeframe-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.h-detail-timeframe-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.h-detail-purple-icon-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: #ede9fe;
+  color: #6366f1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.h-detail-timeframe-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.h-detail-timeframe-subtitle {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.h-detail-timeframe-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.h-detail-date-picker-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.h-detail-date-input {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  color: #1e293b;
+  font-weight: 600;
+  background: #ffffff;
+  outline: none;
+  font-family: inherit;
+}
+
+.h-detail-apply-btn {
+  background: #6366f1;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 18px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+  transition: all 0.15s;
+}
+
+.h-detail-apply-btn:hover {
+  background: #4f46e5;
+}
+
+.h-detail-preset-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.h-detail-preset-btn {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 7px 18px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.h-detail-preset-btn.active {
+  background: #6366f1;
+  color: #ffffff;
+  border-color: #6366f1;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+}
+
+/* 3. KPI Cards Grid */
+.h-detail-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.h-detail-kpi-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  position: relative;
+  overflow: hidden;
+}
+
+.h-detail-kpi-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+.kpi-icon-green { background: #dcfce7; color: #16a34a; }
+.kpi-icon-blue { background: #e0f2fe; color: #0284c7; }
+.kpi-icon-purple { background: #ede9fe; color: #7c3aed; }
+.kpi-icon-orange { background: #fef3c7; color: #d97706; }
+
+.h-detail-kpi-val {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.4px;
+}
+
+.h-detail-kpi-lbl {
+  margin: 4px 0 2px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.h-detail-kpi-sub {
+  margin: 0;
+  font-size: 0.74rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.h-detail-kpi-bar {
+  height: 3.5px;
+  border-radius: 4px;
+  margin-top: 14px;
+  width: 100%;
+}
+
+.kpi-bar-green { background: #10b981; }
+.kpi-bar-blue { background: #3b82f6; }
+.kpi-bar-purple { background: #8b5cf6; }
+.kpi-bar-orange { background: #f59e0b; }
+
+/* 4. Two-Column Middle Grid */
+.h-detail-middle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.h-detail-chart-card,
+.h-detail-summary-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+}
+
+.h-detail-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.h-detail-select {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #334155;
+  background: #f8fafc;
+  outline: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.h-detail-chart-body {
+  display: flex;
+  gap: 10px;
+  height: 180px;
+  position: relative;
+  margin-top: 8px;
+}
+
+.h-detail-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-align: right;
+  width: 24px;
+}
+
+.h-detail-plot {
+  flex: 1;
+  position: relative;
+  height: 100%;
+}
+
+.h-detail-gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-bottom: 1px dashed #f1f5f9;
+}
+
+.h-detail-x-axis {
+  display: flex;
+  justify-content: space-between;
+  padding-left: 36px;
+  padding-right: 8px;
+  margin-top: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.h-detail-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.h-detail-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+}
+
+.h-detail-summary-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.h-detail-summary-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.h-detail-summary-text h5 {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.h-detail-summary-text p {
+  margin: 2px 0 0;
+  font-size: 0.72rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.h-detail-summary-num {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+/* 5. Quick Feature Management */
+.h-detail-features-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 22px 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.h-detail-features-title {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.h-detail-features-sub {
+  margin: 0 0 16px;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.h-detail-features-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+
+.h-detail-feat-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid;
+}
+
+.h-detail-feat-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.95);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.feat-blue-box { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.feat-teal-box { background: #f0f9ff; color: #0284c7; border-color: #bae6fd; }
+.feat-purple-box { background: #faf5ff; color: #7e22ce; border-color: #e9d5ff; }
+.feat-magenta-box { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
+.feat-green-box { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+.feat-orange-box { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+.feat-emerald-box { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+.feat-gold-box { background: #fefce8; color: #a16207; border-color: #fef08a; }
+.feat-pink-box { background: #fff1f2; color: #be123c; border-color: #fecdd3; }
+
+/* 6. Appointment System Mode Card */
+.h-detail-apptmode-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 22px 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.h-detail-apptmode-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.h-detail-apptmode-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.h-detail-mode-badge {
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 10px;
+  border-radius: 12px;
+  border: 1px solid #bfdbfe;
+}
+
+.h-detail-apptmode-sub {
+  margin: 0 0 16px;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.h-detail-mode-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.h-detail-mode-card {
+  border-radius: 14px;
+  padding: 16px 18px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  transition: all 0.15s;
+}
+
+.h-detail-mode-card.active {
+  border-color: #6366f1;
+  background: #f5f3ff;
+}
+
+.h-detail-mode-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.h-detail-mode-text-box h5 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.h-detail-rec-badge {
+  background: #6366f1;
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 8px;
+}
+
+.h-detail-mode-text-box p {
+  margin: 0;
+  font-size: 0.76rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.h-detail-save-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.h-detail-save-btn {
+  background: #6366f1;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 20px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
+}
+
+.h-detail-saved-text {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   7. Hospital Info (Colorful Single Column with AI Neural Hub Animation)
+   ========================================================================== */
+.h-detail-hospital-info-card {
+  background: linear-gradient(135deg, #ffffff 0%, #fbfdff 60%, #f4fbf7 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 22px;
+  padding: 24px 28px;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.h-detail-info-card-layout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 36px;
+}
+
+.h-detail-info-left-col {
+  flex: 1.25;
+  min-width: 0;
+}
+
+.h-detail-info-header-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.h-detail-ai-gradient-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #8b5cf6 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  flex-shrink: 0;
+  animation: icon-pulse-subtle 3s infinite alternate ease-in-out;
+}
+
+@keyframes icon-pulse-subtle {
+  0% { transform: scale(0.96); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25); }
+  100% { transform: scale(1.04); box-shadow: 0 6px 18px rgba(99, 102, 241, 0.45); }
+}
+
+.h-detail-info-header-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.h-ai-sync-pill {
+  background: linear-gradient(135deg, #ecfdf5 0%, #e0f2fe 100%);
+  border: 1px solid #67e8f9;
+  color: #0891b2;
+  font-size: 0.72rem;
+  font-weight: 800;
+  border-radius: 20px;
+  padding: 2px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.3px;
+}
+
+.h-ai-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #06b6d4;
+  box-shadow: 0 0 6px #06b6d4;
+  animation: dot-pulse-glow 1.5s infinite alternate;
+}
+
+/* Colorful Meta List */
+.h-detail-meta-list-colorful {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.h-detail-meta-row-colorful {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.h-detail-meta-row-colorful:hover {
+  transform: translateX(4px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+.h-detail-row-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  min-width: 140px;
+}
+
+.h-detail-chip-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+
+.h-detail-row-key {
+  font-weight: 700;
+  font-size: 0.83rem;
+}
+
+.h-detail-row-val {
+  color: #0f172a;
+  font-weight: 700;
+  font-size: 0.86rem;
+  word-break: break-all;
+  text-align: right;
+}
+
+/* Distinct Themes for Each Item */
+.theme-blue .h-detail-chip-icon { background: #eff6ff; color: #2563eb; }
+.theme-blue .h-detail-row-key { color: #1d4ed8; }
+.theme-blue:hover { border-color: #bfdbfe; background: #fafcff; }
+
+.theme-amber .h-detail-chip-icon { background: #fffbeb; color: #d97706; }
+.theme-amber .h-detail-row-key { color: #b45309; }
+.theme-amber:hover { border-color: #fde68a; background: #fffdfa; }
+
+.theme-purple .h-detail-chip-icon { background: #f5f3ff; color: #7c3aed; }
+.theme-purple .h-detail-row-key { color: #6d28d9; }
+.theme-purple:hover { border-color: #ddd6fe; background: #faf9ff; }
+
+.theme-pink .h-detail-chip-icon { background: #fdf2f8; color: #db2777; }
+.theme-pink .h-detail-row-key { color: #be185d; }
+.theme-pink:hover { border-color: #fbcfe8; background: #fffafc; }
+
+.theme-emerald .h-detail-chip-icon { background: #ecfdf5; color: #059669; }
+.theme-emerald .h-detail-row-key { color: #047857; }
+.theme-emerald:hover { border-color: #a7f3d0; background: #f6fef9; }
+
+.theme-cyan .h-detail-chip-icon { background: #ecfeff; color: #0891b2; }
+.theme-cyan .h-detail-row-key { color: #0e7490; }
+.theme-cyan:hover { border-color: #a5f3fc; background: #f6feff; }
+
+.h-admin-tag {
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  border: 1px solid #ddd6fe;
+  color: #6d28d9;
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 0.82rem;
+}
+
+.h-detail-login-pill-link {
+  background: linear-gradient(135deg, #ecfdf5 0%, #e6fffa 100%);
+  border: 1px solid #6ee7b7;
+  color: #047857;
+  font-weight: 700;
+  border-radius: 8px;
+  padding: 4px 10px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  transition: all 0.2s ease;
+}
+
+.h-detail-login-pill-link:hover {
+  background: #d1fae5;
+  border-color: #34d399;
+  color: #065f46;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+  transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   Right Side: Futuristic AI Neural Cloud & Holographic Security Hub
+   ========================================================================== */
+.h-detail-info-right-ai-col {
+  flex: 0.95;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, rgba(34, 211, 238, 0.12) 0%, rgba(99, 102, 241, 0.06) 45%, rgba(240, 253, 250, 0.35) 75%, transparent 100%);
+  border-radius: 22px;
+  padding: 16px 20px 18px 20px;
+  position: relative;
+  min-height: 255px;
+  border: 1px solid rgba(167, 243, 208, 0.7);
+  box-shadow: inset 0 0 20px rgba(34, 211, 238, 0.05);
+  overflow: hidden;
+}
+
+.h-ai-hologram-stage {
+  position: relative;
+  width: 190px;
+  height: 190px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 900px;
+}
+
+/* Colorful Aurora Ambient Glow */
+.h-ai-aurora-glow {
+  position: absolute;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.4) 0%, rgba(139, 92, 246, 0.3) 50%, rgba(16, 185, 129, 0.2) 100%);
+  filter: blur(22px);
+  animation: aurora-morph 6s infinite alternate ease-in-out;
+  pointer-events: none;
+}
+
+@keyframes aurora-morph {
+  0% { transform: scale(0.8) rotate(0deg); opacity: 0.6; }
+  50% { transform: scale(1.15) rotate(180deg); opacity: 0.9; }
+  100% { transform: scale(0.9) rotate(360deg); opacity: 0.7; }
+}
+
+/* 3D Multi-axis Gyro Holographic Orbit Rings */
+.h-ai-gyro-ring {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  transform-style: preserve-3d;
+}
+
+.h-ai-gyro-ring.gyro-1 {
+  width: 175px;
+  height: 175px;
+  border: 2px dashed #06b6d4;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
+  animation: gyro-orbit-1 18s linear infinite;
+}
+
+.h-ai-gyro-ring.gyro-2 {
+  width: 140px;
+  height: 140px;
+  border: 2px solid rgba(139, 92, 246, 0.6);
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.35);
+  animation: gyro-orbit-2 12s linear infinite;
+}
+
+.h-ai-gyro-ring.gyro-3 {
+  width: 105px;
+  height: 105px;
+  border: 1.5px dotted #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+  animation: gyro-orbit-3 8s linear infinite;
+}
+
+@keyframes gyro-orbit-1 {
+  0% { transform: rotateX(65deg) rotateY(15deg) rotateZ(0deg); }
+  100% { transform: rotateX(65deg) rotateY(15deg) rotateZ(360deg); }
+}
+
+@keyframes gyro-orbit-2 {
+  0% { transform: rotateX(-50deg) rotateY(40deg) rotateZ(360deg); }
+  100% { transform: rotateX(-50deg) rotateY(40deg) rotateZ(0deg); }
+}
+
+@keyframes gyro-orbit-3 {
+  0% { transform: rotateX(25deg) rotateY(-60deg) rotateZ(0deg); }
+  100% { transform: rotateX(25deg) rotateY(-60deg) rotateZ(360deg); }
+}
+
+/* Floating AI Satellite Badges */
+.h-ai-floating-node {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  padding: 3px 8px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  z-index: 8;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s ease;
+}
+
+.h-ai-floating-node.node-ai-engine {
+  top: 6px;
+  right: 10px;
+  color: #0284c7;
+  border-color: #7dd3fc;
+  animation: float-ai-1 4.5s ease-in-out infinite alternate;
+}
+
+.h-ai-floating-node.node-ai-quantum {
+  bottom: 22px;
+  left: 6px;
+  color: #7c3aed;
+  border-color: #c4b5fd;
+  animation: float-ai-2 5s ease-in-out infinite alternate;
+}
+
+.h-ai-floating-node.node-ai-cloud {
+  bottom: 22px;
+  right: 6px;
+  color: #059669;
+  border-color: #6ee7b7;
+  animation: float-ai-3 4s ease-in-out infinite alternate;
+}
+
+@keyframes float-ai-1 {
+  0% { transform: translateY(0px) scale(0.95); }
+  100% { transform: translateY(8px) scale(1.05); }
+}
+
+@keyframes float-ai-2 {
+  0% { transform: translateX(0px) translateY(0px); }
+  100% { transform: translateX(6px) translateY(-6px); }
+}
+
+@keyframes float-ai-3 {
+  0% { transform: translateX(0px) translateY(0px); }
+  100% { transform: translateX(-6px) translateY(-5px); }
+}
+
+/* Center AI Holographic Core Shield with Laser Scanner */
+.h-ai-center-shield-orb {
+  position: relative;
+  width: 74px;
+  height: 74px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdfa 50%, #e0f2fe 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 30px rgba(6, 182, 212, 0.28), inset 0 2px 6px #ffffff;
+  border: 2px solid #a5f3fc;
+  z-index: 6;
+  overflow: hidden;
+  animation: orb-levitate 3.5s ease-in-out infinite alternate;
+}
+
+@keyframes orb-levitate {
+  0% { transform: translateY(0px) scale(1); }
+  100% { transform: translateY(-5px) scale(1.04); }
+}
+
+.h-ai-laser-scanner {
+  position: absolute;
+  top: -10%;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, transparent 0%, #22d3ee 50%, transparent 100%);
+  box-shadow: 0 0 10px #22d3ee, 0 0 20px #06b6d4;
+  z-index: 8;
+  animation: laser-sweep 2.4s ease-in-out infinite;
+}
+
+@keyframes laser-sweep {
+  0% { top: -10%; opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { top: 110%; opacity: 0; }
+}
+
+.h-ai-core-cross {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 4px 10px rgba(6, 182, 212, 0.4));
+}
+
+/* AI Synapse Equalizer Waves */
+.h-ai-synapse-bars {
+  position: absolute;
+  bottom: 0px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 20px;
+  z-index: 7;
+}
+
+.synapse-bar {
+  width: 3px;
+  background: linear-gradient(180deg, #22d3ee 0%, #6366f1 100%);
+  border-radius: 2px;
+  animation: synapse-bounce 1.2s ease-in-out infinite alternate;
+}
+
+.synapse-bar.bar-1 { height: 6px; animation-delay: 0.1s; background: #06b6d4; }
+.synapse-bar.bar-2 { height: 14px; animation-delay: 0.3s; background: #10b981; }
+.synapse-bar.bar-3 { height: 18px; animation-delay: 0.2s; background: #8b5cf6; }
+.synapse-bar.bar-4 { height: 11px; animation-delay: 0.4s; background: #ec4899; }
+.synapse-bar.bar-5 { height: 8px; animation-delay: 0.15s; background: #3b82f6; }
+
+@keyframes synapse-bounce {
+  0% { height: 4px; }
+  50% { height: 18px; }
+  100% { height: 6px; }
+}
+
+/* AI Status Pill */
+.h-ai-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfeff 50%, #eff6ff 100%);
+  border: 1px solid #67e8f9;
+  border-radius: 20px;
+  padding: 5px 16px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #0e7490;
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.15);
+  letter-spacing: 0.3px;
+}
+
+.h-ai-live-sparkle {
+  color: #06b6d4;
+  animation: sparkle-spin 2.5s infinite linear;
+}
+
+@keyframes sparkle-spin {
+  0% { transform: rotate(0deg) scale(0.9); }
+  50% { transform: rotate(180deg) scale(1.2); }
+  100% { transform: rotate(360deg) scale(0.9); }
+}
+
+@media (max-width: 900px) {
+  .h-detail-info-card-layout {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .h-detail-info-right-ai-col {
+    width: 100%;
+  }
+}
+
+/* Role Filter Group on Staff Table */
+.h-detail-role-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.h-detail-role-filter-btn {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 5px 12px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+
+.h-detail-role-filter-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.h-detail-role-filter-btn.active {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.25);
+}
+
+.h-detail-role-count-tag {
+  background: rgba(0, 0, 0, 0.07);
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.h-detail-role-filter-btn.active .h-detail-role-count-tag {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+/* 8. Monthly Revenue Card */
+.h-detail-revenue-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 22px 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.h-detail-rev-val {
+  margin: 8px 0 2px;
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.h-detail-rev-sub {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+/* 9. Tables: Staff Members & Recent Appointments */
+.h-detail-table-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 22px 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  overflow: hidden;
+}
+
+.h-detail-staff-table-wrap {
+  margin-top: 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  max-height: 295px; /* Shows 5 staff rows before scrolling */
+  overflow-y: auto;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+}
+
+.h-detail-staff-table-wrap::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.h-detail-staff-table-wrap::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 4px;
+}
+
+.h-detail-staff-table-wrap::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.h-detail-staff-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.h-detail-staff-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 0;
+  border-radius: 0;
+  border: none;
+}
+
+.h-detail-staff-table thead tr th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #252a5c;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  padding: 11px 16px;
+  text-align: left;
+}
+
+.h-detail-staff-table tbody tr td {
+  padding: 12px 16px;
+  font-size: 0.82rem;
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+  font-weight: 500;
+}
+
+.h-detail-staff-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.h-detail-avatar-circle {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #ede9fe;
+  color: #6366f1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.h-detail-role-tag {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #334155;
+  text-transform: uppercase;
+}
+
+/* Appointments Table */
+.h-detail-appt-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 14px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.h-detail-appt-table thead tr th {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  padding: 11px 16px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.h-detail-appt-table tbody tr td {
+  padding: 12px 16px;
+  font-size: 0.82rem;
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+  font-weight: 500;
+}
+
+.h-detail-status-completed {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 10px;
+}
+
+/* Responsive adjustments for Hospital Detail HUD */
+@media (max-width: 1024px) {
+  .h-detail-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .h-detail-middle-grid { grid-template-columns: 1fr; }
+  .h-detail-features-grid { grid-template-columns: repeat(3, 1fr); }
+  .h-detail-breakdown-card { grid-template-columns: 1fr; }
+  .h-detail-mode-options-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  .h-detail-kpi-grid { grid-template-columns: 1fr; }
+  .h-detail-features-grid { grid-template-columns: repeat(2, 1fr); }
+  .h-detail-hero-banner { padding: 18px 16px; }
+  .h-detail-hero-content { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .h-detail-hero-right { width: 100%; flex-direction: row; justify-content: space-between; align-items: center; }
+  .h-detail-timeframe-controls { flex-direction: column; align-items: flex-start; }
 }

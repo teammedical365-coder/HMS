@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { receptionAPI, publicAPI } from '../utils/api';
 import './RoleDashboard.css';
+import './hospitaladmin/HospitalAdminDashboard.css';
 import { FiSearch, FiCalendar, FiUsers, FiActivity, FiTrash2, FiEdit2, FiLayers } from 'react-icons/fi';
 
 // Icon mapping — maps common path keywords to emojis
@@ -623,73 +624,349 @@ const RoleDashboard = () => {
                     </div>
                 ) : (
                     /* ────────────────────────────────────────────────────────
-                       STANDARD MENU VIEW FOR OTHER ROLES
+                       HOSPITAL ADMIN OR STANDARD MENU VIEW FOR OTHER ROLES
                        ──────────────────────────────────────────────────────── */
-                    <>
-                        {/* Welcome Hero */}
-                        <div className="welcome-hero">
-                            <span className="welcome-emoji">👋</span>
-                            <div className="role-badge-large">{roleName}</div>
-                            <h1>{greeting}, <span>{userName}</span></h1>
-                            <p>Here's your workspace. Pick any section to get started.</p>
-                        </div>
+                    (roleName || '').toLowerCase() === 'hospitaladmin' || (roleName || '').toLowerCase() === 'hospital admin' ? (
+                        <>
+                            {/* 1. Exact Hero Header Banner matching Reference Image 2 */}
+                            <div className="ha-hero-header-card">
+                                {/* Top-Left 5x5 Dot Matrix Pattern */}
+                                <div className="ha-hero-dot-matrix">
+                                    {[...Array(25)].map((_, i) => (
+                                        <span key={i} className="ha-dot" />
+                                    ))}
+                                </div>
 
-                        {/* Quick Access Cards */}
-                        {navLinks.length > 0 ? (
-                            <>
-                                <div className="section-title">⚡ Quick Access</div>
-                                <div className="nav-cards-grid">
-                                    {navLinks.map((link, index) => (
-                                        <div
-                                            key={index}
-                                            className="nav-card"
-                                            onClick={() => navigate(link.path)}
-                                        >
-                                            <div className="nav-card-icon">
-                                                {getIconForPath(link.path, link.label)}
-                                            </div>
-                                            <div className="nav-card-content">
-                                                <h3>{link.label}</h3>
-                                                <p>{getDescForLink(link.label)}</p>
-                                            </div>
-                                            <span className="nav-card-arrow">→</span>
-                                        </div>
-                                    ))}
+                                {/* Floating Ambient Sparkles */}
+                                <div className="ha-hero-sparkles">
+                                    <span className="ha-sparkle sp-1">+</span>
+                                    <span className="ha-sparkle sp-2">✦</span>
+                                    <span className="ha-sparkle sp-3">•</span>
+                                    <span className="ha-sparkle sp-4">+</span>
                                 </div>
-                            </>
-                        ) : (roleName || '').toLowerCase() === 'hospitaladmin' || (roleName || '').toLowerCase() === 'hospital admin' ? (
-                            <div className="admin-card" style={{ marginTop: '24px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-                                    <h2 style={{ margin: 0 }}>⚡ Quick Operations</h2>
+
+                                {/* Bottom-Left Smooth Organic Contoured Waves */}
+                                <div className="ha-hero-wave-container">
+                                    <svg className="ha-hero-wave-svg" viewBox="0 0 450 140" preserveAspectRatio="none">
+                                        <defs>
+                                            <linearGradient id="haSoftWaveGrad1_rd" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                <stop offset="0%" stopColor="#bfdbfe" stopOpacity="0.45" />
+                                                <stop offset="60%" stopColor="#93c5fd" stopOpacity="0.25" />
+                                                <stop offset="100%" stopColor="#e0f2fe" stopOpacity="0.05" />
+                                            </linearGradient>
+                                            <linearGradient id="haSoftWaveGrad2_rd" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.5" />
+                                                <stop offset="50%" stopColor="#818cf8" stopOpacity="0.3" />
+                                                <stop offset="100%" stopColor="#c084fc" stopOpacity="0" />
+                                            </linearGradient>
+                                        </defs>
+                                        <path d="M 0 60 C 90 20 180 90 290 50 C 370 20 410 70 450 60 L 450 140 L 0 140 Z" fill="url(#haSoftWaveGrad1_rd)" />
+                                        <path d="M 0 60 C 90 20 180 90 290 50 C 370 20 410 70 450 60" fill="none" stroke="url(#haSoftWaveGrad2_rd)" strokeWidth="2.5" />
+                                        <path d="M 0 95 C 110 65 200 125 320 85 C 380 65 420 100 450 95" fill="none" stroke="#60a5fa" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.6" />
+                                    </svg>
                                 </div>
-                                <p style={{ color: '#888', fontSize: '14px', margin: '0 0 20px' }}>
-                                    Jump to the areas you manage most frequently. Contact your Central Admin to manage question libraries, test packages, or medicine catalogs.
-                                </p>
-                                <div className="ha-ops-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px' }}>
-                                    {operationLinks.map((item, i) => (
-                                        <div
-                                            key={i}
-                                            className="ha-op-card"
-                                            onClick={() => navigate(item.path)}
-                                            style={{ background: item.bg, border: '1px solid ' + item.color + '30', display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s ease' }}
-                                        >
-                                            <span className="ha-op-icon" style={{ color: item.color, fontSize: '28px' }}>{item.icon}</span>
-                                            <div>
-                                                <h4 style={{ color: item.color, margin: '0 0 4px', fontSize: '1rem', fontWeight: 'bold' }}>{item.label}</h4>
-                                                <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>{item.desc}</p>
+
+                                {/* Main Inner Flex Content */}
+                                <div className="ha-hero-inner-content">
+                                    {/* Left: 3D Glowing Blue Cross in Crystal Orb with Orbital Swirls */}
+                                    <div className="ha-hero-orb-container">
+                                        <div className="ha-orb-halo-glow" />
+                                        <div className="ha-orb-swirl-ring ring-1" />
+                                        <div className="ha-orb-swirl-ring ring-2" />
+                                        <div className="ha-orb-swirl-node node-1" />
+                                        <div className="ha-orb-swirl-node node-2" />
+
+                                        <div className="ha-orb-crystal-sphere">
+                                            <div className="ha-orb-cross-3d">
+                                                <span className="ha-orb-cross-arm-h" />
+                                                <span className="ha-orb-cross-arm-v" />
+                                                <span className="ha-orb-cross-core-shine" />
                                             </div>
                                         </div>
-                                    ))}
+                                    </div>
+
+                                    {/* Center: Welcome / Greeting Info (Single Line with Cycle Animation) */}
+                                    <div className="ha-hero-center-info">
+                                        {/* Greeting & Username in ONE single line */}
+                                        <div className="ha-hero-title-single-line-wrap">
+                                            <h1 className="ha-hero-greeting-single-line">
+                                                <span className="ha-greeting-prefix">{greeting},</span>{' '}
+                                                <span className="ha-animated-username-loop">
+                                                    <span className="ha-guillemet">»</span> {userName || 'Kunal Sharma'} <span className="ha-guillemet">«</span>
+                                                </span>
+                                            </h1>
+                                        </div>
+
+                                        {/* Subtitle */}
+                                        <p className="ha-hero-subtitle-text">Here's your workspace. Pick any section to get started.</p>
+
+                                        {/* Short Cyan Underline Bar */}
+                                        <div className="ha-hero-teal-accent-bar" />
+                                    </div>
+
+                                    {/* Right: 3D Hospital Building Illustration */}
+                                    <div className="ha-hero-right-building">
+                                        <svg className="ha-hero-building-svg" viewBox="0 0 320 210" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <defs>
+                                                <radialGradient id="haSunGlow_rd" cx="50%" cy="50%" r="50%">
+                                                    <stop offset="0%" stopColor="#fef08a" stopOpacity="0.85" />
+                                                    <stop offset="60%" stopColor="#fef9c3" stopOpacity="0.35" />
+                                                    <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+                                                </radialGradient>
+                                                <linearGradient id="haBldgGlass_rd" x1="0" y1="0" x2="1" y2="1">
+                                                    <stop offset="0%" stopColor="#bae6fd" />
+                                                    <stop offset="100%" stopColor="#60a5fa" />
+                                                </linearGradient>
+                                                <linearGradient id="haBldgTower_rd" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor="#3b82f6" />
+                                                    <stop offset="100%" stopColor="#1d4ed8" />
+                                                </linearGradient>
+                                            </defs>
+
+                                            {/* Sun Aura */}
+                                            <circle cx="280" cy="42" r="28" fill="url(#haSunGlow_rd)" />
+                                            <circle cx="280" cy="42" r="12" fill="#ffffff" />
+
+                                            {/* Flying Birds */}
+                                            <path d="M190 48 Q194 44 198 48 Q202 44 206 48" stroke="#94a3b8" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+                                            <path d="M214 56 Q217 53 220 56 Q223 53 226 56" stroke="#94a3b8" strokeWidth="1.1" fill="none" strokeLinecap="round" />
+
+                                            {/* City Skyline Silhouette in soft pale blue */}
+                                            <path d="M25 180 V115 H50 V95 H72 V125 H95 V85 H118 V145 H145 V105 H168 V135 H192 V100 H215 V125 H238 V85 H265 V120 H295 V180 Z" fill="#e2e8f0" fillOpacity="0.45" />
+
+                                            {/* Left Building Wing */}
+                                            <rect x="75" y="65" width="70" height="115" rx="4" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.2" />
+                                            {[0, 1, 2, 3].map(row => (
+                                                <g key={`hlw-${row}`}>
+                                                    <rect x="82" y={75 + row * 22} width="14" height="14" rx="2" fill="url(#haBldgGlass_rd)" />
+                                                    <rect x="102" y={75 + row * 22} width="14" height="14" rx="2" fill="url(#haBldgGlass_rd)" />
+                                                    <rect x="122" y={75 + row * 22} width="14" height="14" rx="2" fill="url(#haBldgGlass_rd)" />
+                                                </g>
+                                            ))}
+
+                                            {/* Right Building Wing */}
+                                            <rect x="195" y="65" width="70" height="115" rx="4" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.2" />
+                                            {[0, 1, 2, 3].map(row => (
+                                                <g key={`hrw-${row}`}>
+                                                    <rect x="202" y={75 + row * 22} width="14" height="14" rx="2" fill="url(#haBldgGlass_rd)" />
+                                                    <rect x="222" y={75 + row * 22} width="14" height="14" rx="2" fill="url(#haBldgGlass_rd)" />
+                                                    <rect x="242" y={75 + row * 22} width="14" height="14" rx="2" fill="url(#haBldgGlass_rd)" />
+                                                </g>
+                                            ))}
+
+                                            {/* Center Tower & Blue Cross Sign */}
+                                            <rect x="135" y="46" width="70" height="134" rx="6" fill="#f8fafc" stroke="#94a3b8" strokeWidth="1.2" />
+                                            <rect x="145" y="52" width="50" height="70" rx="3" fill="url(#haBldgTower_rd)" />
+                                            {/* Cross on Tower */}
+                                            <path d="M170 68 v22 M159 79 h22" stroke="#ffffff" strokeWidth="4.5" strokeLinecap="round" />
+
+                                            {/* Entrance Canopy */}
+                                            <rect x="132" y="128" width="76" height="14" rx="3" fill="#ffffff" stroke="#94a3b8" strokeWidth="1.2" />
+                                            <text x="170" y="138" fontSize="7" fontWeight="900" fill="#1d4ed8" textAnchor="middle" letterSpacing="0.8">HOSPITAL</text>
+
+                                            {/* Sliding Doors */}
+                                            <rect x="148" y="142" width="44" height="38" rx="2" fill="#bfdbfe" fillOpacity="0.7" stroke="#60a5fa" />
+                                            <line x1="170" y1="142" x2="170" y2="180" stroke="#2563eb" strokeWidth="1.5" />
+
+                                            {/* Green Trees & Shrubs */}
+                                            <circle cx="58" cy="176" r="14" fill="#22c55e" />
+                                            <circle cx="70" cy="179" r="10" fill="#16a34a" />
+                                            <circle cx="140" cy="180" r="8" fill="#15803d" />
+                                            <circle cx="200" cy="180" r="8" fill="#15803d" />
+                                            <circle cx="270" cy="176" r="13" fill="#22c55e" />
+                                            <circle cx="282" cy="179" r="10" fill="#16a34a" />
+                                        </svg>
+                                    </div>
                                 </div>
                             </div>
-                        ) : (
-                            <div className="empty-state">
-                                <span className="empty-icon">📭</span>
-                                <h3>No pages assigned yet</h3>
-                                <p>Contact your superadmin to set up navigation links for your role.</p>
+
+                            {/* 2. Exact Quick Operations Section matching Reference Image 2 */}
+                            <div className="ha-quick-ops-card">
+                                {/* Header */}
+                                <div className="ha-quick-ops-header">
+                                    <div className="ha-quick-ops-lightning-icon">
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                                        </svg>
+                                    </div>
+                                    <div className="ha-quick-ops-title-group">
+                                        <h3 className="ha-quick-ops-title">Quick Operations</h3>
+                                        <p className="ha-quick-ops-subtitle">
+                                            Jump to the areas you manage most frequently. Contact your Central Admin to manage question libraries, test packages, or medicine catalogs.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* 6 Grid Action Cards (3x2) */}
+                                <div className="ha-quick-ops-grid">
+                                    {/* 1. Doctors */}
+                                    <div 
+                                        className="ha-quick-card card-doctors" 
+                                        onClick={() => navigate('/admin/doctors')}
+                                        role="button"
+                                        tabIndex={0}
+                                    >
+                                        <div className="ha-quick-card-icon-box icon-doctors">
+                                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                                <circle cx="9" cy="7" r="4" />
+                                                <path d="M19 8v6M22 11h-6" />
+                                            </svg>
+                                        </div>
+                                        <div className="ha-quick-card-info">
+                                            <h4 className="ha-quick-card-name">Doctors</h4>
+                                            <p className="ha-quick-card-desc">Manage doctor profiles & schedules</p>
+                                        </div>
+                                        <span className="ha-quick-card-chevron">›</span>
+                                    </div>
+
+                                    {/* 2. Labs */}
+                                    <div 
+                                        className="ha-quick-card card-labs" 
+                                        onClick={() => navigate('/admin/lab-tests')}
+                                        role="button"
+                                        tabIndex={0}
+                                    >
+                                        <div className="ha-quick-card-icon-box icon-labs">
+                                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9333ea" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M9 3h6M10 3v7l-4.5 8.5A2 2 0 0 0 7.25 21h9.5a2 2 0 0 0 1.75-2.5L14 10V3" />
+                                                <path d="M7 16h10" />
+                                            </svg>
+                                        </div>
+                                        <div className="ha-quick-card-info">
+                                            <h4 className="ha-quick-card-name">Labs</h4>
+                                            <p className="ha-quick-card-desc">Configure lab departments</p>
+                                        </div>
+                                        <span className="ha-quick-card-chevron">›</span>
+                                    </div>
+
+                                    {/* 3. Pharmacy */}
+                                    <div 
+                                        className="ha-quick-card card-pharmacy" 
+                                        onClick={() => navigate('/pharmacy/inventory')}
+                                        role="button"
+                                        tabIndex={0}
+                                    >
+                                        <div className="ha-quick-card-icon-box icon-pharmacy">
+                                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" />
+                                                <path d="m8.5 8.5 7 7" />
+                                            </svg>
+                                        </div>
+                                        <div className="ha-quick-card-info">
+                                            <h4 className="ha-quick-card-name">Pharmacy</h4>
+                                            <p className="ha-quick-card-desc">Pharmacy inventory & orders</p>
+                                        </div>
+                                        <span className="ha-quick-card-chevron">›</span>
+                                    </div>
+
+                                    {/* 4. Services */}
+                                    <div 
+                                        className="ha-quick-card card-services" 
+                                        onClick={() => navigate('/admin/services')}
+                                        role="button"
+                                        tabIndex={0}
+                                    >
+                                        <div className="ha-quick-card-icon-box icon-services">
+                                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                                            </svg>
+                                        </div>
+                                        <div className="ha-quick-card-info">
+                                            <h4 className="ha-quick-card-name">Services</h4>
+                                            <p className="ha-quick-card-desc">Hospital services & pricing</p>
+                                        </div>
+                                        <span className="ha-quick-card-chevron">›</span>
+                                    </div>
+
+                                    {/* 5. Manage Users */}
+                                    <div 
+                                        className="ha-quick-card card-users" 
+                                        onClick={() => navigate('/admin/users')}
+                                        role="button"
+                                        tabIndex={0}
+                                    >
+                                        <div className="ha-quick-card-icon-box icon-users">
+                                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                                <circle cx="9" cy="7" r="4" />
+                                                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                            </svg>
+                                        </div>
+                                        <div className="ha-quick-card-info">
+                                            <h4 className="ha-quick-card-name">Manage Users</h4>
+                                            <p className="ha-quick-card-desc">View and manage all staff</p>
+                                        </div>
+                                        <span className="ha-quick-card-chevron">›</span>
+                                    </div>
+
+                                    {/* 6. Question Library */}
+                                    <div 
+                                        className="ha-quick-card card-questions" 
+                                        onClick={() => navigate('/hospitaladmin/question-library')}
+                                        role="button"
+                                        tabIndex={0}
+                                    >
+                                        <div className="ha-quick-card-icon-box icon-questions">
+                                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e11d48" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                                <polyline points="14 2 14 8 20 8" />
+                                                <circle cx="12" cy="17" r="0.5" fill="#e11d48" />
+                                                <path d="M10 13a2 2 0 1 1 3.5 1.5c-.5.5-1.5 1-1.5 1.5" />
+                                            </svg>
+                                        </div>
+                                        <div className="ha-quick-card-info">
+                                            <h4 className="ha-quick-card-name">Question Library</h4>
+                                            <p className="ha-quick-card-desc">Manage diagnostic questions</p>
+                                        </div>
+                                        <span className="ha-quick-card-chevron">›</span>
+                                    </div>
+                                </div>
                             </div>
-                        )}
-                    </>
+                        </>
+                    ) : (
+                        <>
+                            {/* Welcome Hero for other roles */}
+                            <div className="welcome-hero">
+                                <span className="welcome-emoji">👋</span>
+                                <div className="role-badge-large">{roleName}</div>
+                                <h1>{greeting}, <span>{userName}</span></h1>
+                                <p>Here's your workspace. Pick any section to get started.</p>
+                            </div>
+
+                            {/* Quick Access Cards */}
+                            {navLinks.length > 0 ? (
+                                <>
+                                    <div className="section-title">⚡ Quick Access</div>
+                                    <div className="nav-cards-grid">
+                                        {navLinks.map((link, index) => (
+                                            <div
+                                                key={index}
+                                                className="nav-card"
+                                                onClick={() => navigate(link.path)}
+                                            >
+                                                <div className="nav-card-icon">
+                                                    {getIconForPath(link.path, link.label)}
+                                                </div>
+                                                <div className="nav-card-content">
+                                                    <h3>{link.label}</h3>
+                                                    <p>{getDescForLink(link.label)}</p>
+                                                </div>
+                                                <span className="nav-card-arrow">→</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="empty-state">
+                                    <span className="empty-icon">📭</span>
+                                    <h3>No pages assigned yet</h3>
+                                    <p>Contact your superadmin to set up navigation links for your role.</p>
+                                </div>
+                            )}
+                        </>
+                    )
                 )}
 
                 {/* VITALS MODAL */}

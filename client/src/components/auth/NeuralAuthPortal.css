@@ -776,74 +776,418 @@
 /* ==========================================================
    RESPONSIVE DESIGN (Laptops, Tablets, Mobiles)
    ========================================================== */
-@media (max-width: 1200px) {
+
+/* Laptops & Tablets (Dual-Panel Side-by-Side like Desktop: 769px to 1200px) */
+@media (max-width: 1200px) and (min-width: 769px) {
+  .med-portal-page {
+    height: 100vh;
+    min-height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
   .med-main-content {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
     padding: 12px 24px;
-    gap: 16px;
+    gap: 20px;
+    width: 100%;
+    max-width: 1100px;
+    margin: auto;
+    flex: 1;
+    min-height: 0;
   }
+
+  .med-left-section {
+    flex: 1.15;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    padding-right: 8px;
+    text-align: left;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .med-brand-row {
+    justify-content: flex-start;
+    margin-bottom: 2px;
+  }
+
+  .med-brand-logo-img {
+    height: 42px;
+    max-width: 190px;
+  }
+
   .med-hero-text h1 {
-    font-size: 24px;
+    font-size: 23px;
+    line-height: 1.18;
+    margin: 0 0 3px 0;
+    text-align: left;
   }
+
+  .med-hero-desc {
+    font-size: 11.5px;
+    max-width: 380px;
+    margin: 0 0 4px 0;
+    line-height: 1.4;
+    text-align: left;
+  }
+
+  /* Center stage: Features on Left, Surgeon on Right */
+  .med-hero-stage {
+    position: relative;
+    width: 100%;
+    height: 340px;
+    min-height: 340px;
+    max-height: 340px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    margin: 4px 0;
+  }
+
+  .med-feature-stack {
+    position: relative;
+    width: 190px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 5;
+    text-align: left;
+  }
+
+  .med-feature-card {
+    padding: 7px 10px;
+    border-radius: 11px;
+    gap: 8px;
+  }
+
+  .med-feature-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+
+  .med-feature-info h4 {
+    font-size: 11px;
+    margin: 0 0 1px 0;
+  }
+
+  .med-feature-info p {
+    font-size: 9.5px;
+    margin: 0;
+  }
+
   .med-doctor-container {
-    width: 320px;
-    height: 400px;
+    position: absolute;
+    right: 0px;
+    top: 0;
+    bottom: 0;
+    width: 290px;
+    height: 340px;
+    z-index: 4;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    pointer-events: none;
   }
+
+  .med-hologram-halo {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 270px;
+    height: 270px;
+  }
+
+  .med-ecg-bottom-bar {
+    width: 100%;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 8;
+  }
+
+  .med-heart-badge-circle {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+  }
+
+  .med-trusted-badge {
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+
+  .med-ecg-svg-track {
+    flex: 1;
+    height: 32px;
+  }
+
   .med-right-card-wrapper {
-    width: 410px;
+    width: 390px;
+    max-width: 46%;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 20;
+  }
+
+  .med-auth-card {
+    padding: 26px 26px;
+    border-radius: 24px;
+  }
+
+  .med-card-header {
+    margin-bottom: 16px;
+  }
+
+  .med-colorful-title {
+    font-size: 24px;
+    margin-bottom: 3px;
+  }
+
+  .med-card-header p {
+    font-size: 12px;
+  }
+
+  .med-input-box {
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+
+  .med-btn-primary {
+    padding: 11px;
+    font-size: 13.5px;
+  }
+
+  .med-footer-note {
+    padding: 7px 10px;
+    font-size: 11px;
+    margin-top: 10px;
+  }
+
+  .med-footer-row {
+    padding: 8px 24px;
+    font-size: 10.5px;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
   }
 }
 
-@media (max-width: 960px) {
+/* Mobile Screens (Phones < 768px) */
+@media (max-width: 768px) {
   .med-portal-page {
     height: auto;
     min-height: 100vh;
+    max-height: none;
+    overflow-x: hidden;
     overflow-y: auto;
-  }
-  .med-main-content {
-    flex-direction: column;
-    padding: 24px 16px;
-    gap: 28px;
-  }
-  .med-left-section {
-    max-width: 100%;
-    padding-right: 0;
-  }
-  .med-hero-stage {
-    min-height: 300px;
-    justify-content: center;
-  }
-  .med-feature-stack {
-    width: 100%;
-    max-width: 300px;
-  }
-  .med-doctor-container {
-    position: relative;
-    right: auto;
-    bottom: auto;
-    width: 290px;
-    height: 360px;
-    margin: 16px auto 0 auto;
+    padding: 0;
   }
 
+  .med-main-content {
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 16px 24px;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .med-left-section {
+    width: 100%;
+    max-width: 100%;
+    padding-right: 0;
+    align-items: center;
+    text-align: center;
+    gap: 8px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* 1. Only Logo */
+  .med-brand-row {
+    justify-content: center;
+    margin: 4px 0 6px 0;
+  }
+
+  .med-brand-logo-img {
+    height: 42px;
+    max-width: 200px;
+  }
+
+  /* Hide Hero Text & Subtitle on Phones */
+  .med-hero-text {
+    display: none !important;
+  }
+
+  /* 2. Only Surgeon Image & Rotating Halo */
+  .med-hero-stage {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: auto;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  .med-doctor-container {
+    position: relative !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 200px !important;
+    height: 235px !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    justify-content: center;
+    align-items: flex-end;
+  }
+
+  .med-hologram-halo {
+    width: 190px !important;
+    height: 190px !important;
+  }
+
+  /* Hide Feature Cards on Phones */
+  .med-feature-stack {
+    display: none !important;
+  }
+
+  /* Hide ECG Bottom Bar on Phones */
+  .med-ecg-bottom-bar {
+    display: none !important;
+  }
+
+  /* 3. Form Card directly under Surgeon Image */
   .med-right-card-wrapper {
     width: 100%;
-    max-width: 440px;
+    max-width: 100%;
+    margin: 4px auto 0 auto;
   }
+
+  .med-auth-card {
+    padding: 24px 18px;
+    border-radius: 22px;
+    width: 100%;
+    box-sizing: border-box;
+    box-shadow: 0 10px 30px rgba(14, 165, 233, 0.12);
+  }
+
+  .med-colorful-title {
+    font-size: 22px;
+    margin-bottom: 4px;
+  }
+
+  .med-card-header p {
+    font-size: 12px;
+  }
+
+  .med-card-header {
+    margin-bottom: 16px;
+  }
+
+  .med-input-box {
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .med-input-icon {
+    font-size: 17px;
+  }
+
+  .med-floating-input {
+    font-size: 13px;
+  }
+
+  .med-input-label {
+    font-size: 9.5px;
+  }
+
+  .med-btn-primary {
+    padding: 12px;
+    font-size: 13.5px;
+    border-radius: 12px;
+  }
+
+  .med-otp-grid {
+    gap: 5px;
+    justify-content: center;
+    margin-bottom: 14px;
+  }
+
+  .med-otp-grid input {
+    width: 40px;
+    height: 44px;
+    font-size: 18px;
+    border-radius: 8px;
+  }
+
   .med-footer-row {
-    padding: 10px 16px;
+    padding: 12px 16px;
     flex-direction: column;
     gap: 6px;
     text-align: center;
+    font-size: 10px;
+    background: rgba(255, 255, 255, 0.9);
   }
 }
 
-@media (max-width: 480px) {
-  .med-auth-card {
-    padding: 24px 20px;
+/* Extra Small Mobile Screens (< 380px) */
+@media (max-width: 380px) {
+  .med-main-content {
+    padding: 12px 10px 18px;
+    gap: 8px;
   }
+
+  .med-brand-logo-img {
+    height: 36px;
+    max-width: 170px;
+  }
+
+  .med-doctor-container {
+    width: 170px !important;
+    height: 200px !important;
+  }
+
+  .med-hologram-halo {
+    width: 160px !important;
+    height: 160px !important;
+  }
+
+  .med-auth-card {
+    padding: 20px 14px;
+    border-radius: 16px;
+  }
+
+  .med-colorful-title {
+    font-size: 20px;
+  }
+
+  .med-otp-grid {
+    gap: 3px;
+  }
+
   .med-otp-grid input {
-    width: 38px;
-    height: 44px;
-    font-size: 18px;
+    width: 34px;
+    height: 40px;
+    font-size: 16px;
+    border-radius: 6px;
   }
 }

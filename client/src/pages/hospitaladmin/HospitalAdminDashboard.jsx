@@ -495,8 +495,6 @@ const HospitalAdminDashboard = () => {
         }
     };
 
-    const formatCurrency = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
-
     const handleSaveProfilePhoto = async () => {
         if (!profileFile) return;
         setSavingProfile(true);
@@ -520,58 +518,166 @@ const HospitalAdminDashboard = () => {
         }
     };
 
+    const formatCurrency = (amount) => {
+        const val = Number(amount) || 0;
+        if (val >= 10000000) {
+            return `₹ ${(val / 10000000).toFixed(2)} Cr`;
+        }
+        if (val >= 100000) {
+            return `₹ ${(val / 100000).toFixed(2)} L`;
+        }
+        return `₹ ${val.toLocaleString('en-IN')}`;
+    };
+
     const u = JSON.parse(localStorage.getItem('user') || '{}');
     const tabs = [
-        { id: 'overview', label: '📊 Overview' },
-        { id: 'staff', label: '👥 Staff' },
-        { id: 'departments', label: '🏥 Departments' },
-        { id: 'facilities', label: '🏨 Facilities' },
-        { id: 'beds', label: '🛏️ Beds' },
-        { id: 'inventory', label: '📦 Inventory' },
-        { id: 'labpricing', label: '🧪 Lab Pricing' },
-        { id: 'accounts', label: '💰 Accounts' },
+        { id: 'overview', label: 'Overview' },
+        { id: 'staff', label: 'Staff' },
+        { id: 'departments', label: 'Departments' },
+        { id: 'facilities', label: 'Facilities' },
+        { id: 'beds', label: 'Beds' },
+        { id: 'labpricing', label: 'Lab Pricing' },
+        { id: 'accounts', label: 'Accounts' },
     ];
-    
-    // Add OT tab only if NOT starter plan
-    if (u.subscriptionPlan !== 'starter') {
-        tabs.splice(5, 0, { id: 'ot', label: '🔪 Operation Theatre' });
-    }
-
 
     return (
         <div className="hospitaladmin-page">
             <div className="hospitaladmin-container">
-                {/* Header */}
-                {/* Redundant Header Removed (now in TopBar) */}
-                <div style={{ marginBottom: '32px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                         <span style={{ fontSize: '0.75rem', fontWeight: 800, background: 'var(--brand-50, #f0fdfa)', color: 'var(--brand-600, #14b8a6)', padding: '4px 10px', borderRadius: '4px', letterSpacing: '0.05em' }}>
-                            {hospitalInfo ? `🏥 ${hospitalInfo.name.toUpperCase()}` : 'HOSPITAL ADMIN'}
-                         </span>
+                {/* 1. AI-Powered Hero Header Banner (Matching Image 1) */}
+                <div className="ha-ai-hero-banner">
+                    {/* Circuit / Neural Network Background overlay */}
+                    <div className="ha-ai-circuit-bg" />
+
+                    <div className="ha-ai-hero-left">
+                        <div className="ha-ai-powered-pill">
+                            <span className="ha-ai-chip-icon">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="4" y="4" width="16" height="16" rx="2" />
+                                    <rect x="9" y="9" width="6" height="6" />
+                                    <line x1="9" y1="1" x2="9" y2="4" />
+                                    <line x1="15" y1="1" x2="15" y2="4" />
+                                    <line x1="9" y1="20" x2="9" y2="23" />
+                                    <line x1="15" y1="20" x2="15" y2="23" />
+                                    <line x1="20" y1="9" x2="23" y2="9" />
+                                    <line x1="20" y1="14" x2="23" y2="14" />
+                                    <line x1="1" y1="9" x2="4" y2="9" />
+                                    <line x1="1" y1="14" x2="4" y2="14" />
+                                </svg>
+                            </span>
+                            <span>AI POWERED</span>
+                        </div>
+                        <h1 className="ha-ai-hero-title">Hospital Administration Dashboard</h1>
+                        <p className="ha-ai-hero-subtitle">
+                            Manage staff, departments, and hospital operations with AI intelligence.
+                        </p>
                     </div>
-                    <h1 style={{ fontSize: '1.8rem', fontWeight: 850, margin: '8px 0 4px', color: '#1e293b' }}>Hospital Administration Dashboard</h1>
-                    <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Manage staff, departments, and hospital operations</p>
+
+                    {/* Right: High-Definition Realistic Modern Hospital Campus Visual */}
+                    <div className="ha-ai-right-building">
+                        <img 
+                            src="/assets/realistic_hospital_banner_art.png" 
+                            alt="Realistic Modern Hospital Campus" 
+                            className="ha-ai-hospital-img" 
+                        />
+                    </div>
                 </div>
 
                 {error && <div className="error-message">⚠️ {error}</div>}
                 {success && <div className="success-message">✅ {success}</div>}
 
-                {/* Tab Nav */}
-                <div className="ha-tabs">
-                    {tabs.filter(t => t.id !== 'accounts').map(tab => (
-                        <button
-                            key={tab.id}
-                            className={`ha-tab ${activeTab === tab.id ? 'ha-tab-active' : ''}`}
-                            onClick={() => setActiveTab(tab.id)}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
+                {/* 2. Floating Modern Tab Navigation Bar */}
+                <div className="ha-ai-tabs-card">
+                    {tabs.filter(t => t.id !== 'accounts').map(tab => {
+                        const isTabActive = activeTab === tab.id;
+                        return (
+                            <button
+                                key={tab.id}
+                                className={`ha-ai-tab-btn tab-${tab.id} ${isTabActive ? 'active' : ''}`}
+                                onClick={() => setActiveTab(tab.id)}
+                            >
+                                <div className="ha-ai-tab-icon-wrap">
+                                    <div className="ha-tab-icon-glow" />
+                                    {tab.id === 'overview' && (
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                                            <path d="M7 16v-4 M12 16v-7 M17 16v-2" />
+                                        </svg>
+                                    )}
+                                    {tab.id === 'staff' && (
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                            <circle cx="9" cy="7" r="4" />
+                                            <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                        </svg>
+                                    )}
+                                    {tab.id === 'departments' && (
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <rect x="4" y="2" width="16" height="20" rx="2" />
+                                            <path d="M9 22v-4h6v4 M8 6h.01 M16 6h.01 M8 10h.01 M16 10h.01 M8 14h.01 M16 14h.01" />
+                                        </svg>
+                                    )}
+                                    {tab.id === 'facilities' && (
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                                            <path d="M12 11v6 M9 14h6" />
+                                        </svg>
+                                    )}
+                                    {tab.id === 'beds' && (
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M2 4v16 M2 8h18a2 2 0 0 1 2 2v10 M2 17h20 M6 8v9" />
+                                        </svg>
+                                    )}
+                                    {tab.id === 'ot' && (
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="m14.5 12.5-8 8a2.12 2.12 0 1 1-3-3l8-8" />
+                                            <path d="m16 10 4-4a2.83 2.83 0 0 0-4-4l-4 4" />
+                                            <path d="m17 7 1 1" />
+                                        </svg>
+                                    )}
+                                    {tab.id === 'inventory' && (
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+                                            <path d="m3.3 7 8.7 5 8.7-5 M12 22V12" />
+                                        </svg>
+                                    )}
+                                    {tab.id === 'labpricing' && (
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M10 2v7.31L4.89 20A2 2 0 0 0 6.64 23h10.72a2 2 0 0 0 1.75-3L14 9.31V2" />
+                                            <path d="M8.5 2h7 M14 9.3h-4 M7 18h10" />
+                                        </svg>
+                                    )}
+                                </div>
+                                <span className="ha-ai-tab-label">{tab.label}</span>
+                                {isTabActive && (
+                                    <div className="ha-active-neon-slider">
+                                        <span className="ha-active-spark" />
+                                    </div>
+                                )}
+                            </button>
+                        );
+                    })}
                     <button
-                        className={`ha-tab ${activeTab === 'accounts' ? 'ha-tab-active' : ''}`}
+                        className={`ha-ai-tab-btn tab-accounts ${activeTab === 'accounts' ? 'active' : ''}`}
                         onClick={() => setActiveTab('accounts')}
                     >
-                        🏦 Accounts
+                        <div className="ha-ai-tab-icon-wrap">
+                            <div className="ha-tab-icon-glow" />
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="3" y1="21" x2="21" y2="21" />
+                                <line x1="6" y1="18" x2="6" y2="11" />
+                                <line x1="10" y1="18" x2="10" y2="11" />
+                                <line x1="14" y1="18" x2="14" y2="11" />
+                                <line x1="18" y1="18" x2="18" y2="11" />
+                                <polygon points="12 2 20 7 4 7" />
+                            </svg>
+                        </div>
+                        <span className="ha-ai-tab-label">Accounts</span>
+                        {activeTab === 'accounts' && (
+                            <div className="ha-active-neon-slider">
+                                <span className="ha-active-spark" />
+                            </div>
+                        )}
                     </button>
                 </div>
 
@@ -589,143 +695,187 @@ const HospitalAdminDashboard = () => {
 
                     return (
                         <>
-                            {/* Hospital Card */}
-                            <section className="hospital-card">
-                                <div className="hospital-info">
-                                    <div className="hospital-image">
-                                        {hospitalInfo?.branding?.logoUrl ? (
-                                            <img src={hospitalInfo.branding.logoUrl} alt="Logo" />
-                                        ) : (
-                                            <span>🏥</span>
-                                        )}
+                            {/* Analytics Timeframe Bar */}
+                            <div className="ha-ai-timeframe-bar">
+                                <div className="ha-ai-timeframe-title">
+                                    <span className="ha-ai-timeframe-icon">📈</span>
+                                    <span>Analytics Timeframe</span>
+                                </div>
+
+                                <div className="ha-ai-timeframe-controls">
+                                    <div className="ha-ai-custom-date-inputs">
+                                        <input 
+                                            className="ha-ai-date-picker" 
+                                            type="date" 
+                                            value={customStartDate} 
+                                            onChange={(e) => { setDatePreset('custom'); setCustomStartDate(e.target.value); }} 
+                                        />
+                                        <span className="ha-ai-to-label">to</span>
+                                        <input 
+                                            className="ha-ai-date-picker" 
+                                            type="date" 
+                                            value={customEndDate} 
+                                            onChange={(e) => { setDatePreset('custom'); setCustomEndDate(e.target.value); }} 
+                                        />
+                                        <button 
+                                            className="ha-ai-apply-btn" 
+                                            onClick={() => {
+                                                handleApplyCustomDate();
+                                                setAppliedCustomAnim(true);
+                                                setTimeout(() => setAppliedCustomAnim(false), 900);
+                                            }}
+                                        >
+                                            {appliedCustomAnim ? '✓ Applied' : 'Apply Custom'}
+                                        </button>
                                     </div>
-                                    <div>
-                                        <h1>{hospitalInfo?.name || 'Ayush Health care'}</h1>
-                                        <div className="details">
-                                            <span>📍 {hospitalInfo?.city ? `${hospitalInfo.city}${hospitalInfo.state ? `, ${hospitalInfo.state}` : ''}` : 'Jaipur, Rajasthan'}</span>
-                                            {hospitalInfo?.phone && <span>☎ {hospitalInfo.phone}</span>}
+
+                                    <div className="ha-ai-preset-pills">
+                                        <button 
+                                            className={`ha-ai-preset-btn ${datePreset === 'all' ? 'active' : ''}`} 
+                                            onClick={() => handleDatePresetChange('all')}
+                                        >
+                                            All Time
+                                        </button>
+                                        <button 
+                                            className={`ha-ai-preset-btn ${datePreset === 'today' ? 'active' : ''}`} 
+                                            onClick={() => handleDatePresetChange('today')}
+                                        >
+                                            Today
+                                        </button>
+                                        <button 
+                                            className={`ha-ai-preset-btn ${datePreset === '30' ? 'active' : ''}`} 
+                                            onClick={() => handleDatePresetChange('30')}
+                                        >
+                                            30 Days
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 5 KPI Metric Cards Row */}
+                            <div className="ha-ai-kpis-grid">
+                                {/* 1. Total Patients */}
+                                <div className="ha-ai-kpi-card card-patients">
+                                    <div className="ha-ai-kpi-header">
+                                        <div className="ha-ai-kpi-icon-box icon-patients">
+                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                                <circle cx="9" cy="7" r="4" />
+                                                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                                                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                            </svg>
+                                        </div>
+                                        <div className="ha-ai-kpi-meta">
+                                            <span className="ha-ai-kpi-label">Total Patients</span>
+                                            <h3 className="ha-ai-kpi-val">
+                                                {(hospitalStats?.stats?.totalPatients ?? stats.totalPatients ?? 0).toLocaleString()}
+                                            </h3>
                                         </div>
                                     </div>
-                                </div>
-
-                                <div className="status-indicator">
-                                    ● ACTIVE
-                                </div>
-                            </section>
-
-                            {/* Analytics Timeframe */}
-                            <section className="analytics">
-                                <div className="analytics-head">
-                                    <div className="analytics-title">
-                                        <div className="icon">⌁</div>
-                                        Analytics Timeframe
-                                    </div>
-                                    <div className="analytics-sub">
-                                        Choose a reporting period
+                                    <div className="ha-ai-kpi-footer">
+                                        <span className="ha-ai-kpi-trend trend-up">● Active Patients</span>
+                                        <svg className="ha-ai-kpi-sparkline" viewBox="0 0 80 25" fill="none">
+                                            <path d="M 2 20 Q 20 15 40 18 T 78 5" stroke="#10b981" strokeWidth="2" strokeLinecap="round" />
+                                        </svg>
                                     </div>
                                 </div>
 
-                                <div className="periods">
-                                    <button 
-                                        className={`period ${datePreset === 'all' ? 'active' : ''}`} 
-                                        onClick={() => handleDatePresetChange('all')}
-                                    >
-                                        All Time
-                                    </button>
-                                    <button 
-                                        className={`period ${datePreset === 'today' ? 'active' : ''}`} 
-                                        onClick={() => handleDatePresetChange('today')}
-                                    >
-                                        Today
-                                    </button>
-                                    <button 
-                                        className={`period ${datePreset === '30' ? 'active' : ''}`} 
-                                        onClick={() => handleDatePresetChange('30')}
-                                    >
-                                        30 Days
-                                    </button>
-                                </div>
-
-                                <div className="custom">
-                                    <input 
-                                        className="date-picker-input" 
-                                        type="date" 
-                                        value={customStartDate} 
-                                        onChange={(e) => { setDatePreset('custom'); setCustomStartDate(e.target.value); }} 
-                                    />
-                                    <span style={{ color: '#90a0ac', fontSize: '11px', fontWeight: 600 }}>to</span>
-                                    <input 
-                                        className="date-picker-input" 
-                                        type="date" 
-                                        value={customEndDate} 
-                                        onChange={(e) => { setDatePreset('custom'); setCustomEndDate(e.target.value); }} 
-                                    />
-                                    <button 
-                                        className="apply-btn" 
-                                        onClick={() => {
-                                            handleApplyCustomDate();
-                                            setAppliedCustomAnim(true);
-                                            setTimeout(() => setAppliedCustomAnim(false), 900);
-                                        }}
-                                    >
-                                        {appliedCustomAnim ? '✓ Applied' : 'Apply Custom'}
-                                    </button>
-                                </div>
-                            </section>
-
-                            {/* KPI Cards */}
-                            {loadingStats ? (
-                                <div className="hospital-kpi-grid" style={{ marginTop: '16px' }}>
-                                    {[1, 2, 3, 4].map((i) => (
-                                        <div key={i} style={{ 
-                                            padding: '24px', 
-                                            borderRadius: '18px', 
-                                            background: '#fff', 
-                                            border: '1px solid #dfecec',
-                                            animation: 'pulse 1.5s infinite ease-in-out',
-                                            minHeight: '150px'
-                                        }}>
-                                            <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: '#e2e8f0', marginBottom: '16px' }}></div>
-                                            <div style={{ width: '60%', height: '24px', background: '#e2e8f0', borderRadius: '4px', marginBottom: '12px' }}></div>
-                                            <div style={{ width: '40%', height: '14px', background: '#e2e8f0', borderRadius: '4px' }}></div>
+                                {/* 2. Total Doctors */}
+                                <div className="ha-ai-kpi-card card-doctors">
+                                    <div className="ha-ai-kpi-header">
+                                        <div className="ha-ai-kpi-icon-box icon-doctors">
+                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <circle cx="12" cy="7" r="4" />
+                                                <path d="M5.5 21a8.5 8.5 0 0 1 13 0" />
+                                                <path d="M16 11h3a2 2 0 0 1 2 2v2a3 3 0 0 1-3 3h-1" />
+                                            </svg>
                                         </div>
-                                    ))}
+                                        <div className="ha-ai-kpi-meta">
+                                            <span className="ha-ai-kpi-label">Total Doctors</span>
+                                            <h3 className="ha-ai-kpi-val">
+                                                {hospitalStats?.stats?.totalDoctors ?? hospitalStats?.stats?.doctorCount ?? stats.totalDoctors ?? 0}
+                                            </h3>
+                                        </div>
+                                    </div>
+                                    <div className="ha-ai-kpi-footer">
+                                        <span className="ha-ai-kpi-trend trend-up">● Hospital Doctors</span>
+                                        <svg className="ha-ai-kpi-sparkline" viewBox="0 0 80 25" fill="none">
+                                            <path d="M 2 22 Q 25 10 50 16 T 78 4" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" />
+                                        </svg>
+                                    </div>
                                 </div>
-                            ) : (
-                                <section className="kpis">
-                                    <article className="kpi">
-                                        <div className="kpi-icon">♙</div>
-                                        <strong>{hospitalStats?.stats?.totalStaff ?? 0}</strong>
-                                        <label>Total Staff</label>
-                                        <small>Active staff members</small>
-                                        <div className="kpi-line"></div>
-                                    </article>
 
-                                    <article className="kpi">
-                                        <div className="kpi-icon">♧</div>
-                                        <strong>{hospitalStats?.stats?.totalPatients ?? 0}</strong>
-                                        <label>Unique Patients</label>
-                                        <small>In selected period</small>
-                                        <div className="kpi-line"></div>
-                                    </article>
+                                {/* 3. Total Appointments */}
+                                <div className="ha-ai-kpi-card card-appointments">
+                                    <div className="ha-ai-kpi-header">
+                                        <div className="ha-ai-kpi-icon-box icon-appointments">
+                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <rect x="3" y="4" width="18" height="18" rx="2" />
+                                                <line x1="16" y1="2" x2="16" y2="6" />
+                                                <line x1="8" y1="2" x2="8" y2="6" />
+                                                <line x1="3" y1="10" x2="21" y2="10" />
+                                            </svg>
+                                        </div>
+                                        <div className="ha-ai-kpi-meta">
+                                            <span className="ha-ai-kpi-label">Total Appointments</span>
+                                            <h3 className="ha-ai-kpi-val">
+                                                {(hospitalStats?.stats?.totalAppointments ?? 0).toLocaleString()}
+                                            </h3>
+                                        </div>
+                                    </div>
+                                    <div className="ha-ai-kpi-footer">
+                                        <span className="ha-ai-kpi-trend trend-up">● Booked Records</span>
+                                        <svg className="ha-ai-kpi-sparkline" viewBox="0 0 80 25" fill="none">
+                                            <path d="M 2 20 Q 20 18 45 8 T 78 4" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" />
+                                        </svg>
+                                    </div>
+                                </div>
 
-                                    <article className="kpi">
-                                        <div className="kpi-icon">▦</div>
-                                        <strong>{hospitalStats?.stats?.totalAppointments ?? 0}</strong>
-                                        <label>Total Appointments</label>
-                                        <small>In selected period</small>
-                                        <div className="kpi-line"></div>
-                                    </article>
+                                {/* 4. Total Revenue */}
+                                <div className="ha-ai-kpi-card card-revenue">
+                                    <div className="ha-ai-kpi-header">
+                                        <div className="ha-ai-kpi-icon-box icon-revenue">
+                                            <span style={{ fontSize: '18px', fontWeight: 900, color: '#ea580c' }}>₹</span>
+                                        </div>
+                                        <div className="ha-ai-kpi-meta">
+                                            <span className="ha-ai-kpi-label">Total Revenue</span>
+                                            <h3 className="ha-ai-kpi-val">
+                                                {formatCurrency(hospitalStats?.stats?.totalRevenue ?? 0)}
+                                            </h3>
+                                        </div>
+                                    </div>
+                                    <div className="ha-ai-kpi-footer">
+                                        <span className="ha-ai-kpi-trend trend-up">● Billed Invoices</span>
+                                        <svg className="ha-ai-kpi-sparkline" viewBox="0 0 80 25" fill="none">
+                                            <path d="M 2 22 Q 22 18 45 12 T 78 3" stroke="#ea580c" strokeWidth="2" strokeLinecap="round" />
+                                        </svg>
+                                    </div>
+                                </div>
 
-                                    <article className="kpi">
-                                        <div className="kpi-icon">₹</div>
-                                        <strong>{formatCurrency(hospitalStats?.stats?.totalRevenue ?? 0)}</strong>
-                                        <label>Total Revenue</label>
-                                        <small>From paid appointments</small>
-                                        <div className="kpi-line"></div>
-                                    </article>
-                                </section>
-                            )}
+                                {/* 5. Occupancy Rate */}
+                                <div className="ha-ai-kpi-card card-occupancy">
+                                    <div className="ha-ai-kpi-header">
+                                        <div className="ha-ai-kpi-icon-box icon-occupancy">
+                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0d9488" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M2 4v16 M2 8h18a2 2 0 0 1 2 2v10 M2 17h20 M6 8v9" />
+                                            </svg>
+                                        </div>
+                                        <div className="ha-ai-kpi-meta">
+                                            <span className="ha-ai-kpi-label">Occupancy Rate</span>
+                                            <h3 className="ha-ai-kpi-val">
+                                                {`${hospitalStats?.stats?.occupancyRate ?? 0}%`}
+                                            </h3>
+                                        </div>
+                                    </div>
+                                    <div className="ha-ai-kpi-footer">
+                                        <span className="ha-ai-kpi-trend trend-up">● Bed Utilization</span>
+                                        <svg className="ha-ai-kpi-sparkline" viewBox="0 0 80 25" fill="none">
+                                            <path d="M 2 18 Q 25 22 50 10 T 78 6" stroke="#0d9488" strokeWidth="2" strokeLinecap="round" />
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+
 
                             {/* Bottom Panels (Appointments Overview & Quick Summary) */}
                             <section className="bottom">
@@ -843,50 +993,209 @@ const HospitalAdminDashboard = () => {
                                 </div>
                             </section>
 
-                            {/* My Profile Card */}
-                            <div className="admin-card" style={{ marginTop: '24px' }}>
-                                <h2>👤 My Profile</h2>
-                                <div className="flex flex-col sm:flex-row items-center gap-5">
-                                    <div className="flex-shrink-0">
-                                        {profileFile ? (
-                                            <img src={URL.createObjectURL(profileFile)} alt="Preview" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--brand-500, #14b8a6)' }} />
-                                        ) : currentUser?.avatar ? (
-                                            <img src={currentUser.avatar} alt={currentUser.name} style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--brand-500, #14b8a6)' }} />
-                                        ) : (
-                                            <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', fontWeight: 700, color: '#6366f1', border: '3px solid #c7d2fe' }}>
-                                                {(currentUser?.name || 'A').charAt(0).toUpperCase()}
-                                            </div>
-                                        )}
+                            {/* 1. Modern Glassmorphic "My Profile" Card (Matching Image 2) */}
+                            <div className="ha-profile-modern-card">
+                                <div className="ha-profile-header">
+                                    <div className="ha-card-title-badge">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                            <circle cx="12" cy="7" r="4" />
+                                        </svg>
                                     </div>
-                                    <div className="w-full">
-                                        <p style={{ margin: '0 0 4px', fontWeight: 600, fontSize: '16px', color: '#1e293b' }}>{currentUser?.name}</p>
-                                        <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#64748b' }}>{currentUser?.email}</p>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <input type="file" accept="image/*" id="profilePhotoInput" style={{ display: 'none' }}
-                                                onChange={e => setProfileFile(e.target.files[0])} />
-                                            <label htmlFor="profilePhotoInput" className="px-4 py-2 bg-slate-100 text-slate-700 border border-slate-300 rounded-lg cursor-pointer text-xs font-semibold hover:bg-slate-200">
-                                                📷 Choose Photo
+                                    <div className="ha-card-title-wrap">
+                                        <h3 className="ha-card-title">My Profile</h3>
+                                        <div className="ha-title-underline" />
+                                    </div>
+                                </div>
+
+                                <div className="ha-profile-body">
+                                    {/* Left: Avatar with Double Glow Rings & Edit Pencil Badge */}
+                                    <div className="ha-avatar-glow-ring">
+                                        <div className="ha-avatar-container">
+                                            {profileFile ? (
+                                                <img src={URL.createObjectURL(profileFile)} alt="Preview" className="ha-avatar-img" />
+                                            ) : currentUser?.avatar ? (
+                                                <img src={currentUser.avatar} alt={currentUser.name} className="ha-avatar-img" />
+                                            ) : (
+                                                <div className="ha-avatar-initials">
+                                                    {(currentUser?.name || 'K').charAt(0).toUpperCase()}
+                                                </div>
+                                            )}
+                                            {/* Edit Pencil Badge */}
+                                            <button 
+                                                type="button" 
+                                                className="ha-avatar-edit-badge" 
+                                                title="Change Photo"
+                                                onClick={() => document.getElementById('profilePhotoInput')?.click()}
+                                            >
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M12 20h9" />
+                                                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Middle: User Info & Actions */}
+                                    <div className="ha-profile-info-block">
+                                        <h4 className="ha-profile-name">{currentUser?.name || 'Hospital Admin'}</h4>
+                                        <p className="ha-profile-email">{currentUser?.email || ''}</p>
+                                        
+                                        <div className="ha-profile-actions">
+                                            <input 
+                                                type="file" 
+                                                accept="image/*" 
+                                                id="profilePhotoInput" 
+                                                style={{ display: 'none' }}
+                                                onChange={e => setProfileFile(e.target.files[0])} 
+                                            />
+                                            <label htmlFor="profilePhotoInput" className="ha-choose-photo-btn">
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                                                    <circle cx="12" cy="13" r="4" />
+                                                </svg>
+                                                <span>Choose Photo</span>
                                             </label>
+                                            
                                             {profileFile && (
-                                                <button onClick={handleSaveProfilePhoto} disabled={savingProfile} className="btn-save px-4 py-2 text-xs">
+                                                <button onClick={handleSaveProfilePhoto} disabled={savingProfile} className="ha-save-photo-btn">
                                                     {savingProfile ? 'Saving...' : 'Save Photo'}
                                                 </button>
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* Right: 3D Holographic AI Security Shield & Floating Orbs */}
+                                    <div className="ha-profile-hologram-wrap">
+                                        <svg className="ha-hologram-svg" viewBox="0 0 280 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <defs>
+                                                <linearGradient id="shieldGrad" x1="0" y1="0" x2="1" y2="1">
+                                                    <stop offset="0%" stopColor="#e0f2fe" stopOpacity="0.8" />
+                                                    <stop offset="100%" stopColor="#bae6fd" stopOpacity="0.2" />
+                                                </linearGradient>
+                                                <linearGradient id="userGlowGrad" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor="#0ea5e9" />
+                                                    <stop offset="100%" stopColor="#3b82f6" />
+                                                </linearGradient>
+                                            </defs>
+                                            
+                                            {/* Planetary Orbit Rings */}
+                                            <ellipse cx="140" cy="90" rx="105" ry="42" stroke="#38bdf8" strokeWidth="1.2" strokeDasharray="3 4" transform="rotate(-15 140 90)" opacity="0.6" />
+                                            <ellipse cx="140" cy="90" rx="95" ry="36" stroke="#60a5fa" strokeWidth="1.2" transform="rotate(25 140 90)" opacity="0.5" />
+                                            <circle cx="140" cy="90" r="70" fill="none" stroke="#e0f2fe" strokeWidth="1" opacity="0.4" />
+                                            
+                                            {/* Central Security Shield */}
+                                            <path d="M 140 32 C 168 32 186 44 192 62 C 192 108 158 140 140 152 C 122 140 88 108 88 62 C 94 44 112 32 140 32 Z" 
+                                                fill="url(#shieldGrad)" stroke="#38bdf8" strokeWidth="1.8" strokeLinejoin="round" />
+                                            
+                                            {/* User Silhouette Inside Shield */}
+                                            <circle cx="140" cy="74" r="16" stroke="url(#userGlowGrad)" strokeWidth="3" fill="none" />
+                                            <path d="M 118 122 C 118 104 128 98 140 98 C 152 98 162 104 162 122" stroke="url(#userGlowGrad)" strokeWidth="3" strokeLinecap="round" fill="none" />
+                                            
+                                            {/* Floating Micro Orbs */}
+                                            {/* Heartbeat Orb */}
+                                            <g transform="translate(68, 38)">
+                                                <circle cx="14" cy="14" r="14" fill="#eff6ff" stroke="#93c5fd" strokeWidth="1.2" />
+                                                <path d="M 8 15 L 11 15 L 13 11 L 15 18 L 17 13 L 19 15 L 21 15" stroke="#0284c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                            </g>
+                                            
+                                            {/* Users Group Orb */}
+                                            <g transform="translate(208, 118)">
+                                                <circle cx="14" cy="14" r="14" fill="#ecfeff" stroke="#a5f3fc" strokeWidth="1.2" />
+                                                <path d="M 11 12 A 3 3 0 1 0 11 6 A 3 3 0 1 0 11 12 Z M 17 11 A 2.5 2.5 0 1 0 17 6 M 6 20 C 6 17 8.5 15 11 15 C 13.5 15 16 17 16 20 M 16 15 C 18 15 21 16.5 21 19" 
+                                                    stroke="#0891b2" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+                                            </g>
+                                            
+                                            {/* Particle Sparkles */}
+                                            <circle cx="64" cy="132" r="3" fill="#38bdf8" />
+                                            <circle cx="218" cy="46" r="2.5" fill="#60a5fa" />
+                                            <path d="M 52 74 L 56 74 M 54 72 L 54 76" stroke="#93c5fd" strokeWidth="1.5" strokeLinecap="round" />
+                                            <path d="M 235 94 L 239 94 M 237 92 L 237 96" stroke="#93c5fd" strokeWidth="1.5" strokeLinecap="round" />
+                                        </svg>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Hospital Info */}
+                            {/* 2. Modern Glassmorphic "My Hospital" Card (Matching Image 2) */}
                             {hospitalInfo && (
-                                <div className="admin-card" style={{ marginTop: '24px' }}>
-                                    <h2>🏥 My Hospital</h2>
-                                    <div className="ha-hospital-info">
-                                        <div><strong>Name:</strong> {hospitalInfo.name}</div>
-                                        {hospitalInfo.city && <div><strong>City:</strong> {hospitalInfo.city}{hospitalInfo.state ? `, ${hospitalInfo.state}` : ''}</div>}
-                                        {hospitalInfo.phone && <div><strong>Phone:</strong> {hospitalInfo.phone}</div>}
-                                        {hospitalInfo.email && <div><strong>Email:</strong> {hospitalInfo.email}</div>}
-                                        {hospitalInfo.address && <div><strong>Address:</strong> {hospitalInfo.address}</div>}
+                                <div className="ha-hospital-modern-card">
+                                    <div className="ha-hospital-header">
+                                        <div className="ha-card-title-badge">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M3 21h18" />
+                                                <path d="M5 21V7l8-4v18" />
+                                                <path d="M19 21V11l-6-3" />
+                                                <path d="M9 9h1" />
+                                                <path d="M9 13h1" />
+                                                <path d="M9 17h1" />
+                                            </svg>
+                                        </div>
+                                        <div className="ha-card-title-wrap">
+                                            <h3 className="ha-card-title">My Hospital</h3>
+                                            <div className="ha-title-underline" />
+                                        </div>
+                                    </div>
+
+                                    {/* 4-Column Structured Glass Pill Bar */}
+                                    <div className="ha-hospital-pill-grid">
+                                        {/* Column 1: Hospital Name */}
+                                        <div className="ha-hospital-pill-col">
+                                            <div className="ha-hospital-icon-badge badge-hospital">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M3 21h18" />
+                                                    <path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16" />
+                                                    <line x1="12" y1="7" x2="12" y2="13" />
+                                                    <line x1="9" y1="10" x2="15" y2="10" />
+                                                </svg>
+                                            </div>
+                                            <div className="ha-hospital-pill-info">
+                                                <span className="ha-hospital-pill-label">Name</span>
+                                                <span className="ha-hospital-pill-value">{hospitalInfo.name || '—'}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Column 2: City / Location */}
+                                        <div className="ha-hospital-pill-col">
+                                            <div className="ha-hospital-icon-badge badge-city">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                                                    <circle cx="12" cy="10" r="3" />
+                                                </svg>
+                                            </div>
+                                            <div className="ha-hospital-pill-info">
+                                                <span className="ha-hospital-pill-label">City</span>
+                                                <span className="ha-hospital-pill-value">
+                                                    {hospitalInfo.city ? `${hospitalInfo.city}${hospitalInfo.state ? `, ${hospitalInfo.state}` : ''}` : (hospitalInfo.address || '—')}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Column 3: Phone */}
+                                        <div className="ha-hospital-pill-col">
+                                            <div className="ha-hospital-icon-badge badge-phone">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0d9488" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                                </svg>
+                                            </div>
+                                            <div className="ha-hospital-pill-info">
+                                                <span className="ha-hospital-pill-label">Phone</span>
+                                                <span className="ha-hospital-pill-value">{hospitalInfo.phone || '—'}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Column 4: Email */}
+                                        <div className="ha-hospital-pill-col">
+                                            <div className="ha-hospital-icon-badge badge-email">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                                                    <polyline points="22,6 12,13 2,6" />
+                                                </svg>
+                                            </div>
+                                            <div className="ha-hospital-pill-info">
+                                                <span className="ha-hospital-pill-label">Email</span>
+                                                <span className="ha-hospital-pill-value">{hospitalInfo.email || '—'}</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             )}

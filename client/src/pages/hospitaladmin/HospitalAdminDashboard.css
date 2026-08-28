@@ -1,69 +1,566 @@
 /* ============================================================
-   Hospital Admin Dashboard — Green-Teal Theme
+   Hospital Admin Dashboard — Modern Premium Blue Theme (Exact Screenshot Match)
    ============================================================ */
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
 
 .hospitaladmin-page {
     min-height: 100vh;
-    padding: 40px;
-    background: radial-gradient(circle at top right, var(--brand-50), var(--brand-100), var(--surface-1));
-    font-family: var(--font-primary);
+    padding: 0;
+    background: #f8fafc;
+    font-family: 'Outfit', sans-serif;
     box-sizing: border-box;
 }
 
 .hospitaladmin-container {
-    max-width: 1400px;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
 }
 
-/* Header */
-.hospitaladmin-header {
+/* ============================================================
+   1. Hero Header Banner (Exact Screenshot - Beautiful, +5% Height & Zero Outer Padding)
+   ============================================================ */
+.ha-hero-header-card {
+    position: relative;
+    background: linear-gradient(135deg, #ffffff 0%, #f4f8ff 45%, #e8f2fe 100%);
+    border: 1.5px solid #dbeafe;
+    border-top: none;
+    border-radius: 0 0 22px 22px;
+    padding: 28px 38px;
+    min-height: 178px;
+    box-shadow: 0 6px 24px rgba(37, 99, 235, 0.05);
+    overflow: hidden;
+    margin: 0 0 20px 0;
+    box-sizing: border-box;
+}
+
+/* Top-Left Dot Matrix */
+.ha-hero-dot-matrix {
+    position: absolute;
+    top: 16px;
+    left: 22px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 7px;
+    width: 50px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.ha-dot {
+    width: 3.5px;
+    height: 3.5px;
+    border-radius: 50%;
+    background: #93c5fd;
+    opacity: 0.65;
+}
+
+/* Floating Ambient Sparkles */
+.ha-hero-sparkles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.ha-sparkle {
+    position: absolute;
+    color: #38bdf8;
+    font-weight: 800;
+    font-size: 15px;
+    opacity: 0.7;
+    animation: sparkle-float 4s infinite ease-in-out;
+}
+
+.ha-sparkle.sp-1 { top: 28px; left: 40px; font-size: 18px; color: #38bdf8; animation-delay: 0s; }
+.ha-sparkle.sp-2 { top: 18px; left: 180px; font-size: 12px; color: #818cf8; animation-delay: 1.2s; }
+.ha-sparkle.sp-3 { top: 105px; left: 100px; font-size: 8px; color: #38bdf8; animation-delay: 2.1s; }
+.ha-sparkle.sp-4 { top: 26px; right: 220px; font-size: 14px; color: #60a5fa; animation-delay: 0.8s; }
+
+@keyframes sparkle-float {
+    0%, 100% { transform: translateY(0) scale(1); opacity: 0.6; }
+    50% { transform: translateY(-3px) scale(1.15); opacity: 0.95; }
+}
+
+/* Bottom Left Smooth Contoured Organic Waves */
+.ha-hero-wave-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 480px;
+    height: 105px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.ha-hero-wave-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* Main Inner Flex Content */
+.ha-hero-inner-content {
+    position: relative;
+    z-index: 5;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 32px;
-    padding: 32px 40px;
-    background: var(--gradient-brand);
-    border-radius: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: var(--shadow-brand);
-    color: white;
+    justify-content: space-between;
+    gap: 28px;
+    width: 100%;
 }
 
-.hospitaladmin-header .admin-user-info span {
-    color: rgba(255, 255, 255, 0.9);
+/* Left: 3D Glowing Blue Cross in Crystal Orb with Orbital Swirls */
+.ha-hero-orb-container {
+    width: 125px;
+    height: 125px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-left: 4px;
 }
 
-.ha-header-content {
+.ha-orb-halo-glow {
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.4) 0%, rgba(37, 99, 235, 0.18) 50%, transparent 75%);
+    filter: blur(9px);
+}
+
+.ha-orb-swirl-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1.5px solid rgba(56, 189, 248, 0.55);
+    pointer-events: none;
+}
+
+.ha-orb-swirl-ring.ring-1 {
+    width: 116px;
+    height: 116px;
+    animation: ha-orb-spin 14s linear infinite;
+}
+
+.ha-orb-swirl-ring.ring-2 {
+    width: 98px;
+    height: 98px;
+    border-style: dashed;
+    border-color: rgba(96, 165, 250, 0.45);
+    animation: ha-orb-spin-rev 18s linear infinite;
+}
+
+@keyframes ha-orb-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes ha-orb-spin-rev {
+    0% { transform: rotate(360deg); }
+    100% { transform: rotate(0deg); }
+}
+
+.ha-orb-swirl-node {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #38bdf8;
+    box-shadow: 0 0 7px #38bdf8;
+}
+
+.ha-orb-swirl-node.node-1 { top: 10px; right: 10px; }
+.ha-orb-swirl-node.node-2 { bottom: 12px; left: 8px; }
+
+.ha-orb-crystal-sphere {
+    width: 86px;
+    height: 86px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.95) 0%, rgba(224, 242, 254, 0.8) 45%, rgba(186, 230, 253, 0.6) 80%, rgba(56, 189, 248, 0.4) 100%);
+    box-shadow: 0 7px 20px rgba(37, 99, 235, 0.2), inset 0 2px 4px rgba(255, 255, 255, 0.95), inset 0 -4px 7px rgba(2, 132, 199, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition: transform 0.3s ease;
+}
+
+.ha-hero-orb-container:hover .ha-orb-crystal-sphere {
+    transform: scale(1.05);
+}
+
+.ha-orb-cross-3d {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ha-orb-cross-arm-h {
+    position: absolute;
+    width: 38px;
+    height: 12.5px;
+    background: linear-gradient(135deg, #38bdf8 0%, #0284c7 50%, #1d4ed8 100%);
+    border-radius: 3.5px;
+    box-shadow: 0 3px 7px rgba(2, 132, 199, 0.45);
+}
+
+.ha-orb-cross-arm-v {
+    position: absolute;
+    width: 12.5px;
+    height: 38px;
+    background: linear-gradient(135deg, #38bdf8 0%, #0284c7 50%, #1d4ed8 100%);
+    border-radius: 3.5px;
+    box-shadow: 0 3px 7px rgba(2, 132, 199, 0.45);
+}
+
+.ha-orb-cross-core-shine {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    top: 10px;
+    left: 10px;
+    filter: blur(1px);
+}
+
+/* Center Greeting & Info (Single Line Layout + Animated Presence Loop) */
+.ha-hero-center-info {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+    margin-left: 6px;
 }
 
-.ha-hospital-badge {
-    display: inline-block;
-    padding: 4px 14px;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: white;
-    width: fit-content;
-    margin-bottom: 4px;
+.ha-hero-title-single-line-wrap {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    margin: 0;
 }
 
-.hospitaladmin-header h1 {
-    font-size: 2rem;
+.ha-hero-greeting-single-line {
+    font-size: 2.15rem;
+    font-weight: 850;
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 10px;
+    letter-spacing: -0.4px;
+    line-height: 1.15;
+}
+
+.ha-greeting-prefix {
+    color: #0f172a;
     font-weight: 800;
-    color: white;
+}
+
+.ha-animated-username-loop {
+    background: linear-gradient(90deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 900;
+    display: inline-block;
+    animation: username-presence-loop 4.5s ease-in-out infinite;
+}
+
+@keyframes username-presence-loop {
+    0% {
+        opacity: 0;
+        transform: translateY(6px) scale(0.96);
+        filter: blur(2px);
+    }
+    10% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+    80% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+    92% {
+        opacity: 0;
+        transform: translateY(-5px) scale(0.98);
+        filter: blur(1.5px);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(6px) scale(0.96);
+        filter: blur(2px);
+    }
+}
+
+.ha-guillemet {
+    color: #06b6d4;
+    font-weight: 800;
+    opacity: 0.9;
+}
+
+.ha-hero-subtitle-text {
+    color: #64748b;
+    font-size: 0.95rem;
+    margin: 4px 0 0 0;
+    font-weight: 500;
+}
+
+.ha-hero-teal-accent-bar {
+    width: 48px;
+    height: 3.5px;
+    background: #06b6d4;
+    border-radius: 2px;
+    margin-top: 8px;
+}
+
+/* Right Hospital Building Illustration */
+.ha-hero-right-building {
+    width: 270px;
+    height: 160px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
+.ha-hero-building-svg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* ============================================================
+   2. Quick Operations Section (100% Exact to Screenshot - Spacious)
+   ============================================================ */
+.ha-quick-ops-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    padding: 24px 28px;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.03);
+    margin: 0 0 20px 0;
+}
+
+.ha-quick-ops-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.ha-quick-ops-lightning-icon {
+    width: 42px;
+    height: 42px;
+    background: #ecfeff;
+    border: 1.5px solid #a5f3fc;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.ha-quick-ops-title-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.ha-quick-ops-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #0f172a;
     margin: 0;
 }
 
-.hospitaladmin-header p {
-    color: rgba(255, 255, 255, 0.75);
-    font-size: 1rem;
+.ha-quick-ops-subtitle {
+    font-size: 0.84rem;
+    color: #64748b;
+    margin: 3px 0 0 0;
+    line-height: 1.4;
+}
+
+.ha-quick-ops-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.ha-quick-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 18px;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    user-select: none;
+}
+
+.ha-quick-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.ha-quick-card:active {
+    transform: scale(0.98);
+}
+
+/* Card Themes */
+.ha-quick-card.card-doctors {
+    background: #f0f7ff;
+    border: 1.5px solid #dbeafe;
+}
+.ha-quick-card.card-doctors .ha-quick-card-icon-box {
+    background: #dbeafe;
+}
+.ha-quick-card.card-doctors .ha-quick-card-name {
+    color: #2563eb;
+}
+.ha-quick-card.card-doctors .ha-quick-card-chevron {
+    color: #3b82f6;
+}
+
+.ha-quick-card.card-labs {
+    background: #fbf5ff;
+    border: 1.5px solid #f3e8ff;
+}
+.ha-quick-card.card-labs .ha-quick-card-icon-box {
+    background: #f3e8ff;
+}
+.ha-quick-card.card-labs .ha-quick-card-name {
+    color: #9333ea;
+}
+.ha-quick-card.card-labs .ha-quick-card-chevron {
+    color: #a855f7;
+}
+
+.ha-quick-card.card-pharmacy {
+    background: #fff9f0;
+    border: 1.5px solid #ffedd5;
+}
+.ha-quick-card.card-pharmacy .ha-quick-card-icon-box {
+    background: #ffedd5;
+}
+.ha-quick-card.card-pharmacy .ha-quick-card-name {
+    color: #ea580c;
+}
+.ha-quick-card.card-pharmacy .ha-quick-card-chevron {
+    color: #f97316;
+}
+
+.ha-quick-card.card-services {
+    background: #f2fbf5;
+    border: 1.5px solid #dcfce7;
+}
+.ha-quick-card.card-services .ha-quick-card-icon-box {
+    background: #dcfce7;
+}
+.ha-quick-card.card-services .ha-quick-card-name {
+    color: #16a34a;
+}
+.ha-quick-card.card-services .ha-quick-card-chevron {
+    color: #22c55e;
+}
+
+.ha-quick-card.card-users {
+    background: #f0f9ff;
+    border: 1.5px solid #e0f2fe;
+}
+.ha-quick-card.card-users .ha-quick-card-icon-box {
+    background: #e0f2fe;
+}
+.ha-quick-card.card-users .ha-quick-card-name {
+    color: #0284c7;
+}
+.ha-quick-card.card-users .ha-quick-card-chevron {
+    color: #0ea5e9;
+}
+
+.ha-quick-card.card-questions {
+    background: #fff1f5;
+    border: 1.5px solid #ffe4e6;
+}
+.ha-quick-card.card-questions .ha-quick-card-icon-box {
+    background: #ffe4e6;
+}
+.ha-quick-card.card-questions .ha-quick-card-name {
+    color: #e11d48;
+}
+.ha-quick-card.card-questions .ha-quick-card-chevron {
+    color: #f43f5e;
+}
+
+.ha-quick-card-icon-box {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.ha-quick-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.ha-quick-card-name {
+    font-size: 1.05rem;
+    font-weight: 800;
     margin: 0;
+}
+
+.ha-quick-card-desc {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin: 0;
+    font-weight: 500;
+}
+
+.ha-quick-card-chevron {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-left: auto;
+    transition: transform 0.2s ease;
+}
+
+.ha-quick-card:hover .ha-quick-card-chevron {
+    transform: translateX(4px);
+}
+
+@media (max-width: 1024px) {
+    .ha-quick-ops-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .ha-quick-ops-grid {
+        grid-template-columns: 1fr;
+    }
+    .ha-hero-inner-content {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .ha-hero-right-building {
+        display: none;
+    }
 }
 
 /* Tab Navigation */
@@ -433,3 +930,1138 @@
         align-items: flex-start;
     }
 }
+
+/* ============================================================
+   AI POWERED MEDICAL HERO BANNER (Realistic 3D Artwork, Bigger Size, 0 Outer Padding)
+   ============================================================ */
+.ha-ai-hero-banner {
+    position: relative;
+    background: linear-gradient(135deg, #ffffff 0%, #f0fdfa 35%, #e0f2fe 75%, #ede9fe 100%);
+    border: 1.5px solid #cffafe;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    border-radius: 0 0 28px 28px;
+    padding: 38px 48px;
+    min-height: 230px;
+    box-shadow: 0 12px 36px rgba(6, 182, 212, 0.08);
+    overflow: hidden;
+    margin: 0 0 24px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    box-sizing: border-box;
+}
+
+.ha-ai-circuit-bg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(rgba(14, 165, 233, 0.15) 1px, transparent 1px);
+    background-size: 20px 20px;
+    opacity: 0.7;
+    z-index: 1;
+}
+
+.ha-ai-hero-left {
+    position: relative;
+    z-index: 3;
+    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ha-ai-powered-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #ecfeff;
+    border: 1.5px solid #a5f3fc;
+    color: #0284c7;
+    font-size: 0.78rem;
+    font-weight: 800;
+    padding: 5px 14px;
+    border-radius: 20px;
+    letter-spacing: 0.6px;
+    width: fit-content;
+    box-shadow: 0 2px 8px rgba(6, 182, 212, 0.15);
+}
+
+.ha-ai-chip-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ha-ai-hero-title {
+    font-size: 2.35rem;
+    font-weight: 900;
+    color: #0f172a;
+    margin: 0;
+    letter-spacing: -0.6px;
+    line-height: 1.18;
+}
+
+.ha-ai-hero-subtitle {
+    font-size: 1.02rem;
+    color: #475569;
+    margin: 0;
+    font-weight: 500;
+    line-height: 1.45;
+}
+
+.ha-ai-right-building {
+    position: relative;
+    z-index: 3;
+    width: 460px;
+    max-width: 48%;
+    height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
+.ha-ai-hospital-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: right center;
+    border-radius: 16px;
+    filter: drop-shadow(0 12px 30px rgba(15, 23, 42, 0.16));
+    animation: ha-hospital-float 5s ease-in-out infinite;
+}
+
+@keyframes ha-hospital-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+/* ============================================================
+   FLOATING MODERN TAB BAR (State-of-the-Art Interactive Animations)
+   ============================================================ */
+.ha-ai-tabs-card {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1.5px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 10px 14px;
+    margin: 0 0 20px 0;
+    box-shadow: 0 10px 30px -6px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    box-sizing: border-box;
+    width: 100%;
+    position: relative;
+}
+
+.ha-ai-tab-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 8px 16px 8px;
+    border-radius: 18px;
+    border: 1.5px solid transparent;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    position: relative;
+    overflow: visible;
+    transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    white-space: nowrap;
+    user-select: none;
+}
+
+/* Hover State */
+.ha-ai-tab-btn:hover {
+    color: #0f172a;
+    transform: translateY(-4px);
+    background: rgba(241, 245, 249, 0.8);
+    border-color: rgba(203, 213, 225, 0.6);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+.ha-ai-tab-btn:hover .ha-ai-tab-icon-wrap {
+    transform: translateY(-3px) scale(1.14) rotate(4deg);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+}
+
+/* Active State */
+.ha-ai-tab-btn.active {
+    background: linear-gradient(180deg, #f0fdfa 0%, #e0f2fe 100%);
+    border-color: #38bdf8;
+    color: #0284c7 !important;
+    font-weight: 800;
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 10px 25px -4px rgba(14, 165, 233, 0.22), 0 2px 6px rgba(14, 165, 233, 0.1);
+}
+
+/* Diagonal Light Shine Sweep */
+.ha-ai-tab-btn.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -150%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+    transform: skewX(-25deg);
+    animation: ha-light-sweep 3.5s infinite ease-in-out;
+    pointer-events: none;
+    border-radius: 18px;
+}
+
+@keyframes ha-light-sweep {
+    0%, 30% { left: -150%; }
+    70%, 100% { left: 200%; }
+}
+
+/* Icon Orb Wrapper */
+.ha-ai-tab-icon-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    position: relative;
+    transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+/* Dedicated Active Themed Gradients for Each Tab */
+.ha-ai-tab-btn.tab-overview.active .ha-ai-tab-icon-wrap {
+    background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+    color: #ffffff;
+    border-color: #38bdf8;
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45);
+    animation: ha-icon-float 3s infinite ease-in-out;
+}
+
+.ha-ai-tab-btn.tab-staff.active .ha-ai-tab-icon-wrap {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    color: #ffffff;
+    border-color: #a78bfa;
+    box-shadow: 0 6px 18px rgba(139, 92, 246, 0.45);
+    animation: ha-icon-float 3s infinite ease-in-out;
+}
+
+.ha-ai-tab-btn.tab-departments.active .ha-ai-tab-icon-wrap {
+    background: linear-gradient(135deg, #0d9488 0%, #10b981 100%);
+    color: #ffffff;
+    border-color: #2dd4bf;
+    box-shadow: 0 6px 18px rgba(13, 148, 136, 0.45);
+    animation: ha-icon-float 3s infinite ease-in-out;
+}
+
+.ha-ai-tab-btn.tab-facilities.active .ha-ai-tab-icon-wrap {
+    background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+    color: #ffffff;
+    border-color: #fbbf24;
+    box-shadow: 0 6px 18px rgba(234, 88, 12, 0.45);
+    animation: ha-icon-float 3s infinite ease-in-out;
+}
+
+.ha-ai-tab-btn.tab-beds.active .ha-ai-tab-icon-wrap {
+    background: linear-gradient(135deg, #06b6d4 0%, #0284c7 100%);
+    color: #ffffff;
+    border-color: #38bdf8;
+    box-shadow: 0 6px 18px rgba(6, 182, 212, 0.45);
+    animation: ha-icon-float 3s infinite ease-in-out;
+}
+
+.ha-ai-tab-btn.tab-ot.active .ha-ai-tab-icon-wrap {
+    background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+    color: #ffffff;
+    border-color: #fb7185;
+    box-shadow: 0 6px 18px rgba(244, 63, 94, 0.45);
+    animation: ha-icon-float 3s infinite ease-in-out;
+}
+
+.ha-ai-tab-btn.tab-inventory.active .ha-ai-tab-icon-wrap {
+    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+    color: #ffffff;
+    border-color: #c084fc;
+    box-shadow: 0 6px 18px rgba(168, 85, 247, 0.45);
+    animation: ha-icon-float 3s infinite ease-in-out;
+}
+
+.ha-ai-tab-btn.tab-labpricing.active .ha-ai-tab-icon-wrap {
+    background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+    color: #ffffff;
+    border-color: #34d399;
+    box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
+    animation: ha-icon-float 3s infinite ease-in-out;
+}
+
+.ha-ai-tab-btn.tab-accounts.active .ha-ai-tab-icon-wrap {
+    background: linear-gradient(135deg, #eab308 0%, #d97706 100%);
+    color: #ffffff;
+    border-color: #fde047;
+    box-shadow: 0 6px 18px rgba(234, 179, 8, 0.45);
+    animation: ha-icon-float 3s infinite ease-in-out;
+}
+
+@keyframes ha-icon-float {
+    0%, 100% { transform: translateY(0) scale(1.06); }
+    50% { transform: translateY(-4px) scale(1.12); }
+}
+
+/* Neon Active Bottom Slider & Travelling Spark */
+.ha-active-neon-slider {
+    position: absolute;
+    bottom: 2px;
+    left: 15%;
+    right: 15%;
+    height: 3px;
+    background: linear-gradient(90deg, #0ea5e9 0%, #38bdf8 50%, #6366f1 100%);
+    border-radius: 4px;
+    box-shadow: 0 0 10px rgba(14, 165, 233, 0.9), 0 0 4px #38bdf8;
+    overflow: hidden;
+}
+
+.ha-active-spark {
+    position: absolute;
+    top: 0;
+    left: -50%;
+    width: 50%;
+    height: 100%;
+    background: #ffffff;
+    box-shadow: 0 0 8px #ffffff, 0 0 14px #38bdf8;
+    animation: ha-spark-slide 2s infinite ease-in-out;
+}
+
+@keyframes ha-spark-slide {
+    0% { left: -50%; }
+    100% { left: 150%; }
+}
+
+/* Tab Label */
+.ha-ai-tab-label {
+    font-size: 0.84rem;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    transition: all 0.25s ease;
+}
+
+.ha-ai-tab-btn.active .ha-ai-tab-label {
+    font-weight: 800;
+    color: #0284c7;
+    letter-spacing: -0.1px;
+}
+
+.ha-ai-tab-btn:active {
+    transform: scale(0.95) translateY(0) !important;
+}
+
+/* Tab View Switch Entrance Animation */
+.ha-ai-timeframe-bar,
+.ha-ai-kpis-grid,
+.hospitaladmin-container .panel,
+.hospitaladmin-container .staff-table-card,
+.hospitaladmin-container .departments-grid,
+.hospitaladmin-container .facilities-grid,
+.hospitaladmin-container .bed-matrix-card {
+    animation: haTabContentEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes haTabContentEnter {
+    0% {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================================
+   HOSPITAL PROFILE & AI INSIGHTS 2-COLUMN GRID (Image 1)
+   ============================================================ */
+.ha-ai-top-row-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 18px;
+    margin: 0 0 20px 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ha-ai-hospital-profile-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.03);
+    box-sizing: border-box;
+}
+
+.ha-ai-hosp-icon-wrap {
+    width: 68px;
+    height: 68px;
+    border-radius: 16px;
+    background: #eff6ff;
+    border: 1.5px solid #dbeafe;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.ha-ai-hosp-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 14px;
+}
+
+.ha-ai-hosp-info-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.ha-ai-hosp-name {
+    font-size: 1.45rem;
+    font-weight: 850;
+    color: #0f172a;
+    margin: 0 0 6px 0;
+    letter-spacing: -0.3px;
+}
+
+.ha-ai-hosp-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 0.86rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.ha-ai-hosp-status-block {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.ha-ai-status-label {
+    font-size: 0.74rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.ha-ai-status-active-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #16a34a;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+}
+
+.ha-ai-green-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #22c55e;
+}
+
+/* Right Card: AI Insights */
+.ha-ai-insights-card {
+    background: linear-gradient(135deg, #ffffff 0%, #faf5ff 100%);
+    border: 1px solid #f3e8ff;
+    border-radius: 18px;
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.04);
+    box-sizing: border-box;
+}
+
+.ha-ai-insights-left {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+}
+
+.ha-ai-insights-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    background: #f5f3ff;
+    border: 1px solid #ddd6fe;
+    border-radius: 20px;
+    color: #7c3aed;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    width: fit-content;
+}
+
+.ha-ai-insights-text {
+    font-size: 0.94rem;
+    color: #334155;
+    margin: 0;
+    line-height: 1.35;
+}
+
+.ha-highlight-stat {
+    color: #7c3aed;
+    font-weight: 800;
+}
+
+.ha-ai-insights-chart {
+    width: 140px;
+    height: 50px;
+    flex-shrink: 0;
+}
+
+.ha-ai-sparkline-svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* ============================================================
+   ANALYTICS TIMEFRAME BAR (Exact Match to Image 1)
+   ============================================================ */
+.ha-ai-timeframe-bar {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 14px 22px;
+    margin: 0 0 16px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.03);
+    flex-wrap: wrap;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ha-ai-timeframe-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.ha-ai-timeframe-icon {
+    font-size: 18px;
+}
+
+.ha-ai-timeframe-controls {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.ha-ai-custom-date-inputs {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ha-ai-date-picker {
+    padding: 7px 14px;
+    border-radius: 10px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #334155;
+    font-size: 0.85rem;
+    font-family: inherit;
+    font-weight: 600;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.ha-ai-date-picker:focus {
+    border-color: #3b82f6;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.ha-ai-to-label {
+    color: #94a3b8;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.ha-ai-apply-btn {
+    padding: 8px 18px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+    color: #ffffff;
+    border: none;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+    transition: all 0.2s ease;
+}
+
+.ha-ai-apply-btn:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+}
+
+.ha-ai-preset-pills {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ha-ai-preset-btn {
+    padding: 7px 18px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ha-ai-preset-btn:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+.ha-ai-preset-btn.active {
+    background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+    color: #ffffff;
+    border-color: transparent;
+    box-shadow: 0 3px 10px rgba(59, 130, 246, 0.3);
+}
+
+/* ============================================================
+   5 KPI METRIC CARDS ROW (Exact Match to Image 1)
+   ============================================================ */
+.ha-ai-kpis-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    margin: 0 0 20px 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.ha-ai-kpi-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 14px;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.03);
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ha-ai-kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07);
+}
+
+.ha-ai-kpi-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.ha-ai-kpi-icon-box {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.ha-ai-kpi-icon-box.icon-patients { background: #eff6ff; }
+.ha-ai-kpi-icon-box.icon-doctors { background: #f0fdfa; }
+.ha-ai-kpi-icon-box.icon-appointments { background: #faf5ff; }
+.ha-ai-kpi-icon-box.icon-revenue { background: #fff7ed; }
+.ha-ai-kpi-icon-box.icon-occupancy { background: #f0fdf4; }
+
+.ha-ai-kpi-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.ha-ai-kpi-label {
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.ha-ai-kpi-val {
+    font-size: 1.45rem;
+    font-weight: 850;
+    color: #0f172a;
+    margin: 0;
+    letter-spacing: -0.3px;
+    line-height: 1.15;
+}
+
+.ha-ai-kpi-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-top: 6px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.ha-ai-kpi-trend {
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+.ha-ai-kpi-trend.trend-up {
+    color: #10b981;
+}
+
+.ha-ai-kpi-sparkline {
+    width: 70px;
+    height: 20px;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 1280px) {
+    .ha-ai-kpis-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .ha-ai-top-row-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .ha-ai-kpis-grid {
+        grid-template-columns: 1fr;
+    }
+    .ha-ai-hero-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 24px 20px;
+    }
+    .ha-ai-center-brain,
+    .ha-ai-right-building {
+        display: none;
+    }
+    .ha-ai-timeframe-bar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+/* ============================================================
+   MODERN "MY PROFILE" & "MY HOSPITAL" CARDS (Compact & Sleek)
+   ============================================================ */
+.ha-profile-modern-card,
+.ha-hospital-modern-card {
+    background: #ffffff;
+    border-radius: 18px;
+    border: 1.5px solid #edf2f7;
+    box-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+    padding: 18px 24px;
+    margin: 0 0 16px 0;
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.ha-profile-modern-card:hover,
+.ha-hospital-modern-card:hover {
+    box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.07);
+    border-color: #e2e8f0;
+}
+
+/* Card Headers */
+.ha-profile-header,
+.ha-hospital-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.ha-card-title-badge {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border: 1.5px solid #bfdbfe;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #2563eb;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.1);
+}
+
+.ha-card-title-badge svg {
+    width: 16px;
+    height: 16px;
+}
+
+.ha-card-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.ha-card-title {
+    font-size: 1.05rem;
+    font-weight: 850;
+    color: #0f172a;
+    margin: 0;
+    letter-spacing: -0.2px;
+}
+
+.ha-title-underline {
+    width: 32px;
+    height: 2.5px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+}
+
+/* Profile Body */
+.ha-profile-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    position: relative;
+}
+
+.ha-avatar-glow-ring {
+    position: relative;
+    padding: 5px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.35) 0%, rgba(99, 102, 241, 0.25) 100%);
+    box-shadow: 0 0 18px rgba(56, 189, 248, 0.25);
+    flex-shrink: 0;
+}
+
+.ha-avatar-container {
+    width: 66px;
+    height: 66px;
+    border-radius: 50%;
+    position: relative;
+    border: 2.5px solid #ffffff;
+    box-shadow: 0 3px 12px rgba(15, 23, 42, 0.08);
+    overflow: visible;
+}
+
+.ha-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+}
+
+.ha-avatar-initials {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    font-weight: 850;
+    letter-spacing: -0.5px;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.ha-avatar-edit-badge {
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 1.5px solid #38bdf8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(14, 165, 233, 0.35);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 2;
+}
+
+.ha-avatar-edit-badge svg {
+    width: 11px;
+    height: 11px;
+}
+
+.ha-avatar-edit-badge:hover {
+    transform: scale(1.2);
+    background: #f0f9ff;
+    border-color: #0284c7;
+}
+
+.ha-profile-info-block {
+    flex: 1;
+    padding-left: 20px;
+    border-left: 1.5px solid #f1f5f9;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.ha-profile-name {
+    font-size: 1.15rem;
+    font-weight: 850;
+    color: #0f172a;
+    margin: 0;
+    letter-spacing: -0.3px;
+}
+
+.ha-profile-email {
+    font-size: 0.82rem;
+    color: #64748b;
+    margin: 0 0 8px 0;
+    font-weight: 500;
+}
+
+.ha-profile-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ha-choose-photo-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    background: #eff6ff;
+    border: 1.5px solid #bfdbfe;
+    border-radius: 10px;
+    color: #2563eb;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    box-shadow: 0 2px 5px rgba(37, 99, 235, 0.08);
+}
+
+.ha-choose-photo-btn:hover {
+    background: #dbeafe;
+    border-color: #93c5fd;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.12);
+}
+
+.ha-save-photo-btn {
+    padding: 6px 16px;
+    background: linear-gradient(135deg, #0ea5e9, #2563eb);
+    border: none;
+    border-radius: 10px;
+    color: #ffffff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    box-shadow: 0 3px 10px rgba(14, 165, 233, 0.25);
+}
+
+.ha-save-photo-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(14, 165, 233, 0.35);
+}
+
+.ha-profile-hologram-wrap {
+    width: 200px;
+    height: 110px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    flex-shrink: 0;
+}
+
+.ha-hologram-svg {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 3px 12px rgba(56, 189, 248, 0.2));
+}
+
+/* ============================================================
+   MY HOSPITAL CARD - 4 COLUMN STRUCTURED GLASS PILL GRID
+   ============================================================ */
+.ha-hospital-pill-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    align-items: center;
+    background: linear-gradient(135deg, rgba(240, 249, 255, 0.55) 0%, rgba(248, 250, 252, 0.85) 100%);
+    border: 1.5px solid #e0f2fe;
+    border-radius: 16px;
+    padding: 14px 20px;
+    box-shadow: 0 2px 8px rgba(14, 165, 233, 0.04);
+}
+
+.ha-hospital-pill-col {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 3px 16px;
+    border-right: 1.5px solid #e2e8f0;
+}
+
+.ha-hospital-pill-col:last-child {
+    border-right: none;
+}
+
+.ha-hospital-pill-col:first-child {
+    padding-left: 4px;
+}
+
+.ha-hospital-icon-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+    transition: transform 0.25s ease;
+}
+
+.ha-hospital-icon-badge svg {
+    width: 18px;
+    height: 18px;
+}
+
+.ha-hospital-pill-col:hover .ha-hospital-icon-badge {
+    transform: scale(1.08);
+}
+
+.badge-hospital {
+    background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+    color: #0284c7;
+    border: 1px solid #7dd3fc;
+}
+
+.badge-city {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    color: #3b82f6;
+    border: 1px solid #93c5fd;
+}
+
+.badge-phone {
+    background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
+    color: #0d9488;
+    border: 1px solid #5eead4;
+}
+
+.badge-email {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    color: #0284c7;
+    border: 1px solid #7dd3fc;
+}
+
+.ha-hospital-pill-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.ha-hospital-pill-label {
+    font-size: 0.7rem;
+    color: #64748b;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.ha-hospital-pill-value {
+    font-size: 0.92rem;
+    color: #0f172a;
+    font-weight: 850;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.2px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+    .ha-hospital-pill-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+    }
+    .ha-hospital-pill-col {
+        border-right: none;
+        padding: 6px 10px;
+    }
+    .ha-profile-body {
+        flex-wrap: wrap;
+    }
+    .ha-profile-hologram-wrap {
+        display: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .ha-hospital-pill-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    .ha-profile-body {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .ha-profile-info-block {
+        padding-left: 0;
+        border-left: none;
+    }
+}

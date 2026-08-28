@@ -18,6 +18,7 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
     const { branding, hospitalName } = useBranding();
     const role = (user?.role || '').toLowerCase();
     const location = useLocation();
+    const navigate = useNavigate();
     const isCentralAdmin = (role === 'centraladmin' || role === 'superadmin');
     
     // Categorized Menus
@@ -58,8 +59,7 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
                 ];
             }
             return [
-                { label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiPieChart /> },
-                { label: 'OT Operations', path: '/ot/dashboard', icon: <FiActivity /> },
+                { label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiHome /> },
                 { label: 'Clinical Questions', path: '/hospitaladmin/question-library', icon: <FiFileText /> },
                 { label: 'Staff Management', path: '/admin/users', icon: <FiUsers /> },
                 { label: 'Doctors Feed', path: '/admin/doctors', icon: <FiActivity /> },
@@ -176,7 +176,7 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
                     };
 
                     const caThemes = ['theme-green', 'theme-blue', 'theme-teal', 'theme-purple', 'theme-pink'];
-                    const currentThemeClass = isCentralAdmin ? `ca-sidebar-link ${caThemes[idx % caThemes.length]}` : '';
+                    const currentThemeClass = `ca-sidebar-link ${caThemes[idx % caThemes.length]}`;
 
                     return (
                         <NavLink 
@@ -190,22 +190,48 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
                     );
                 })}
 
-                {/* Need Help Widget Card inside Sidebar for Central Admin */}
-                {isCentralAdmin && isOpen && (
-                    <div className="ca-sidebar-help-card">
-                        <div className="ca-sidebar-help-avatar-wrap">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M3 18v-6a9 9 0 0 1 18 0v6"></path>
-                                <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path>
+                {/* AI Assistant Card inside Sidebar (Image + AI Assistant title only) */}
+                {(role === 'hospitaladmin' || isCentralAdmin) && isOpen && (
+                    <div className="ha-sidebar-ai-card">
+                        {/* Cute 3D AI Robot Illustration with glowing pedestal */}
+                        <div className="ha-sidebar-ai-bot-wrap">
+                            <svg className="ha-sidebar-ai-bot-svg" viewBox="0 0 160 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <radialGradient id="haBotGlow" cx="50%" cy="50%" r="50%">
+                                        <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
+                                        <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+                                    </radialGradient>
+                                    <linearGradient id="haBotBody" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#ffffff" />
+                                        <stop offset="100%" stopColor="#e0f2fe" />
+                                    </linearGradient>
+                                    <linearGradient id="haBotVisor" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#0f172a" />
+                                        <stop offset="100%" stopColor="#1e293b" />
+                                    </linearGradient>
+                                </defs>
+                                <ellipse cx="80" cy="125" rx="55" ry="12" fill="url(#haBotGlow)" />
+                                <ellipse cx="80" cy="125" rx="42" ry="8" stroke="#38bdf8" strokeWidth="1.5" strokeDasharray="4 3" />
+                                <ellipse cx="80" cy="122" rx="30" ry="6" stroke="#0ea5e9" strokeWidth="1.8" />
+                                <ellipse cx="80" cy="92" rx="26" ry="20" fill="url(#haBotBody)" stroke="#93c5fd" strokeWidth="1.2" />
+                                <path d="M 68 86 Q 80 94 92 86" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" />
+                                <ellipse cx="44" cy="85" rx="7" ry="14" fill="#ffffff" stroke="#93c5fd" strokeWidth="1.2" />
+                                <ellipse cx="116" cy="85" rx="7" ry="14" fill="#ffffff" stroke="#93c5fd" strokeWidth="1.2" />
+                                <rect x="52" y="38" width="56" height="42" rx="18" fill="url(#haBotBody)" stroke="#93c5fd" strokeWidth="1.4" />
+                                <rect x="58" y="44" width="44" height="26" rx="12" fill="url(#haBotVisor)" />
+                                <ellipse cx="68" cy="56" rx="5" ry="6" fill="#38bdf8" />
+                                <ellipse cx="92" cy="56" rx="5" ry="6" fill="#38bdf8" />
+                                <ellipse cx="69" cy="54" rx="2" ry="2" fill="#ffffff" />
+                                <ellipse cx="93" cy="54" rx="2" ry="2" fill="#ffffff" />
+                                <line x1="80" y1="38" x2="80" y2="28" stroke="#93c5fd" strokeWidth="2.5" strokeLinecap="round" />
+                                <circle cx="80" cy="26" r="4" fill="#0ea5e9" />
+                                <circle cx="80" cy="26" r="2" fill="#ffffff" />
                             </svg>
                         </div>
-                        <h4 className="ca-sidebar-help-title">Need Help?</h4>
-                        <p className="ca-sidebar-help-desc">
-                            Check our documentation or contact support.
-                        </p>
-                        <button className="ca-sidebar-help-btn" onClick={() => window.open('mailto:teammedical365@gmail.com')}>
-                            <span style={{ fontSize: '13px' }}>🎧</span> Contact Support
-                        </button>
+
+                        <div className="ha-sidebar-ai-footer">
+                            <h4 className="ha-sidebar-ai-title">AI Assistant</h4>
+                        </div>
                     </div>
                 )}
             </nav>

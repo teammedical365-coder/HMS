@@ -820,29 +820,29 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
 
         const totalStaff = await User.countDocuments({
             hospitalId,
-            role: { $nin: ['centraladmin', 'superadmin', 'hospitaladmin', patientRoleId].filter(Boolean) }
+            role: { $nin: ['centraladmin', 'superadmin', 'hospitaladmin', 'patient', patientRoleId].filter(Boolean) }
         });
 
-        // Staff by role
+        // Staff by role (excluding patient, centraladmin, superadmin, hospitaladmin)
         const staffByRole = await User.aggregate([
             {
                 $match: {
                     hospitalId: new mongoose.Types.ObjectId(hospitalId),
-                    role: { $nin: ['centraladmin', 'superadmin', 'hospitaladmin'] }
+                    role: { $nin: ['centraladmin', 'superadmin', 'hospitaladmin', 'patient', patientRoleId].filter(Boolean) }
                 }
             },
             { $group: { _id: '$role', count: { $sum: 1 } } }
         ]);
 
         // Resolve role names for staff breakdown
-        const staffBreakdown = await Promise.all(staffByRole.map(async (item) => {
+        const staffBreakdown = (await Promise.all(staffByRole.map(async (item) => {
             let name = String(item._id);
             if (mongoose.Types.ObjectId.isValid(item._id)) {
                 const r = await Role.findById(item._id);
                 if (r) name = r.name;
             }
             return { role: name, count: item.count };
-        }));
+        }))).filter(item => item.role && item.role.toLowerCase() !== 'patient');
 
         // 2. Doctor count
         const doctorCount = await Doctor.countDocuments({ hospitalId });
@@ -852,6 +852,12 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
 
         // 4. Pharmacy count
         const pharmacyCount = await Pharmacy.countDocuments({ hospitalId });
+
+        // 4b. Bed Occupancy
+        const Bed = require('../models/bed.model');
+        const totalBeds = await Bed.countDocuments({ hospitalId });
+        const occupiedBeds = await Bed.countDocuments({ hospitalId, status: 'OCCUPIED' });
+        const occupancyRate = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
 
         // 5. Patients - unique patients seen by doctors in this hospital (filtered by date if applicable)
         const doctorIds = await Doctor.find({ hospitalId }).select('_id doctorId userId');
@@ -1010,8 +1016,12 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
                 // Staff
                 totalStaff,
                 doctorCount,
+                totalDoctors: doctorCount,
                 labCount,
                 pharmacyCount,
+                totalBeds,
+                occupiedBeds,
+                occupancyRate,
                 staffBreakdown,
                 // Patients
                 totalPatients,

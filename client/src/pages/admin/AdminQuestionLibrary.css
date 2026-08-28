@@ -146,6 +146,27 @@
   transform: translateY(-1px);
 }
 
+.ql-btn-refresh {
+  color: #2563eb;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.ql-btn-refresh:hover {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: #93c5fd;
+  transform: translateY(-1px);
+}
+
+.ql-btn-refresh .refresh-spin {
+  animation: ql-spin 0.8s linear infinite;
+}
+
+@keyframes ql-spin {
+  100% { transform: rotate(360deg); }
+}
+
 .ql-btn-preview {
   color: #475569;
   background: #f8fafc;

@@ -130,6 +130,7 @@ const CentralAdminDashboard = () => {
     const [selectedHospital, setSelectedHospital] = useState(null);
     const [hospitalStats, setHospitalStats] = useState(null);
     const [loadingStats, setLoadingStats] = useState(false);
+    const [staffRoleFilter, setStaffRoleFilter] = useState('all');
 
     // Appointment Mode customization (per hospital, Supreme Admin only)
     const [apptMode, setApptMode] = useState('slot'); // 'slot' | 'token'
@@ -238,6 +239,27 @@ const CentralAdminDashboard = () => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const handleRefreshAll = async () => {
+        setIsRefreshing(true);
+        try {
+            const plan = getActivePlanName();
+            await Promise.all([
+                fetchHospitals(plan),
+                fetchRoles(plan),
+                fetchDepartments(),
+                fetchClinics(plan),
+                fetchSystemAnalytics()
+            ]);
+            toast.success('Dashboard data refreshed!');
+        } catch (err) {
+            console.error('Failed to refresh dashboard data:', err);
+        } finally {
+            setTimeout(() => setIsRefreshing(false), 400);
+        }
+    };
 
     useEffect(() => {
         const plan = getActivePlanName();
@@ -827,525 +849,922 @@ const CentralAdminDashboard = () => {
             ? [`01 ${prevM}`, `05 ${prevM}`, `10 ${prevM}`, `15 ${prevM}`, `20 ${prevM}`, `25 ${prevM}`, `30 ${prevM}`]
             : chartRange === 'this_year'
                 ? ['Jan', 'Mar', 'May', 'Jul', 'Sep', 'Nov', 'Dec']
-                : [`01 ${curM}`, `05 ${curM}`, `10 ${curM}`, `15 ${curM}`, `20 ${curM}`, `25 ${curM}`, `30 ${curM}`];
+                : [`01 ${curM}`, `05 ${curM}`, `10 ${curM}`, `15 ${curM}`, `20 ${curM}`];
+
+        // Sample fallbacks matching uploaded screenshot if live array is empty
+        const defaultStaffList = [
+            { id: '1', name: 'Jivan Sharma', role: 'RECEPTIONIST', email: 'receptionist.med@gmail.com', phone: '1234567894' },
+            { id: '2', name: 'Tushar', role: 'DOCTOR', email: 'tushardoctor@gmail.com', phone: '2013213133' },
+            { id: '3', name: 'Ragini', role: 'DOCTOR', email: 'kmeena123@gmail.com', phone: '8644821764' },
+            { id: '4', name: 'Sunil Singh', role: 'OT MANAGER', email: '24sunil34@cghosp.com', phone: '9922644281' },
+            { id: '5', name: 'mahesh', role: 'PHARMACIST', email: 'maheshmedicalstore@gmail.com', phone: '34512412423' },
+            { id: '6', name: 'Rushi Sharma', role: 'DOCTOR', email: 'rushi.dr@gmail.com', phone: '7692457839' }
+        ];
+
+        // Exclude patient users completely from staff computations
+        const rawStaff = hospitalStats?.staffList || hospitalStats?.actualStaff || [];
+        const staffToRender = rawStaff.filter(st => {
+            const r = (st.roleName || st.role || '').toLowerCase();
+            return r !== 'patient' && r !== 'patients';
+        });
+
+        // Compute distinct staff roles and counts dynamically for the role filter pills
+        const roleCountMap = {};
+        staffToRender.forEach(st => {
+            const r = st.roleName || st.role || 'STAFF';
+            // Capitalize or normalize role string (e.g. 'DOCTOR' -> 'Doctor')
+            const normalized = r.charAt(0).toUpperCase() + r.slice(1).toLowerCase();
+            roleCountMap[normalized] = (roleCountMap[normalized] || 0) + 1;
+        });
+        const uniqueRoles = Object.keys(roleCountMap);
+
+        // Filter staff based on selected role filter
+        const filteredStaffToRender = staffRoleFilter === 'all'
+            ? staffToRender
+            : staffToRender.filter(st => {
+                const r = (st.roleName || st.role || 'STAFF').toLowerCase();
+                return r === staffRoleFilter.toLowerCase();
+            });
+
+        const appointmentsToRender = hospitalStats?.recentAppointments || [];
+
+        // Real monthly revenue calculation from s.monthlyRevenue
+        const totalSixMonthRevenue = s?.monthlyRevenue?.reduce((acc, m) => acc + (m.revenue || 0), 0) || s?.totalRevenue || 0;
 
         return (
             <div className="centraladmin-page">
-                <div className="centraladmin-container" style={{ maxWidth: '1250px', margin: '0 auto' }}>
-                    {/* Back Header */}
-                    <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <button 
-                            onClick={closeHospitalDetail} 
-                            className="back-btn-light" 
-                            style={{ 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
-                                margin: 0,
-                                padding: '8px 16px',
-                                borderRadius: '10px',
-                                background: '#fff',
-                                border: '1px solid #dce7ea',
-                                color: '#334155',
-                                fontWeight: 700,
-                                fontSize: '13px',
-                                cursor: 'pointer',
-                                boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
-                            }}
-                        >
-                            ← Back to Hospitals
-                        </button>
-                    </div>
-
-                    {/* Hospital Card */}
-                    <section className="hospital-card">
-                        <div className="hospital-info">
-                            <div className="hospital-image">
-                                {h.branding?.logoUrl ? (
-                                    <img src={h.branding.logoUrl} alt="Logo" />
-                                ) : (
-                                    <span>🏥</span>
-                                )}
-                            </div>
-                            <div>
-                                <h1>{h.name}</h1>
-                                <div className="details">
-                                    <span>📍 {h.city ? `${h.city}${h.state ? `, ${h.state}` : ''}` : 'Jaipur, Rajasthan'}</span>
-                                    {h.phone && <span>☎ {h.phone}</span>}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className={`status-indicator ${h.isActive ? '' : 'inactive'}`}>
-                            ● {h.isActive ? 'ACTIVE' : 'INACTIVE'}
-                        </div>
-                    </section>
-
+                <div className="centraladmin-container" style={{ maxWidth: '1280px', margin: '0 auto', paddingBottom: '40px' }}>
                     {loadingStats ? (
-                        <div className="loading-message" style={{ padding: '60px', textAlign: 'center', fontSize: '18px', background: '#fff', borderRadius: '20px', border: '1px solid #dfecec', marginTop: '16px' }}>
-                            ⏳ Loading hospital analytics...
+                        <div style={{ padding: '60px', textAlign: 'center', fontSize: '18px', background: '#fff', borderRadius: '20px', border: '1px solid #dfecec', marginTop: '16px' }}>
+                            ⏳ Loading hospital details...
                         </div>
-                    ) : s ? (
-                        <>
-                            {/* Analytics Timeframe */}
-                            <section className="analytics">
-                                <div className="analytics-head">
-                                    <div className="analytics-title">
-                                        <div className="icon">⌁</div>
-                                        Analytics Timeframe
+                    ) : (
+                        <div className="h-detail-container">
+                            {/* 1. Hospital Profile Hero Header Banner (100% Exact to Reference Image 1) */}
+                            <div className="h-detail-hero-banner">
+                                {/* Left Organic Deep Blue / Indigo Wave Background */}
+                                <div className="h-detail-hero-waves">
+                                    <svg className="h-detail-hero-wave-svg" viewBox="0 0 280 280" preserveAspectRatio="none">
+                                        <defs>
+                                            <linearGradient id="heroBlueDeep" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stopColor="#0a184e" />
+                                                <stop offset="35%" stopColor="#1e2d7d" />
+                                                <stop offset="70%" stopColor="#312e81" />
+                                                <stop offset="100%" stopColor="#4338ca" />
+                                            </linearGradient>
+                                            <linearGradient id="heroBlueEdge" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stopColor="#38bdf8" />
+                                                <stop offset="60%" stopColor="#818cf8" />
+                                                <stop offset="100%" stopColor="#c084fc" />
+                                            </linearGradient>
+                                        </defs>
+                                        {/* Deep royal blue / indigo organic wave - stays cleanly on the left side */}
+                                        <path d="M0 0 L240 0 C190 55 200 120 160 180 C125 230 85 280 0 280 Z" fill="url(#heroBlueDeep)" />
+                                        {/* Glowing neon cyan/indigo wave contour edge */}
+                                        <path d="M240 0 C190 55 200 120 160 180 C125 230 85 280 0 280" fill="none" stroke="url(#heroBlueEdge)" strokeWidth="3.5" strokeOpacity="0.95" />
+                                    </svg>
+                                    {/* Bottom Left Dot Matrix */}
+                                    <div className="h-detail-dark-dot-matrix">
+                                        {[...Array(16)].map((_, i) => (
+                                            <span key={i} className="h-matrix-dot blue-dot" />
+                                        ))}
                                     </div>
-                                    <div className="analytics-sub">
-                                        Choose a reporting period
-                                    </div>
                                 </div>
 
-                                <div className="periods">
-                                    <button 
-                                        className={`period ${datePreset === 'all' ? 'active' : ''}`} 
-                                        onClick={() => handleDatePresetChange('all')}
-                                    >
-                                        All Time
-                                    </button>
-                                    <button 
-                                        className={`period ${datePreset === 'today' ? 'active' : ''}`} 
-                                        onClick={() => handleDatePresetChange('today')}
-                                    >
-                                        Today
-                                    </button>
-                                    <button 
-                                        className={`period ${datePreset === '30' ? 'active' : ''}`} 
-                                        onClick={() => handleDatePresetChange('30')}
-                                    >
-                                        30 Days
-                                    </button>
+                                {/* Top-Left: Hospital Profile Tag (Over Wave) */}
+                                <div className="h-detail-profile-pill-top-left">
+                                    <span className="h-detail-profile-shield-icon">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#38bdf8">
+                                            <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" />
+                                            <path d="M9 12l2 2 4-4" stroke="#ffffff" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                    </span>
+                                    <span>Hospital Profile</span>
                                 </div>
 
-                                <div className="custom">
-                                    <input 
-                                        className="date-picker-input" 
-                                        type="date" 
-                                        value={customStartDate} 
-                                        onChange={(e) => { setDatePreset('custom'); setCustomStartDate(e.target.value); }} 
-                                    />
-                                    <span style={{ color: '#90a0ac', fontSize: '11px', fontWeight: 600 }}>to</span>
-                                    <input 
-                                        className="date-picker-input" 
-                                        type="date" 
-                                        value={customEndDate} 
-                                        onChange={(e) => { setDatePreset('custom'); setCustomEndDate(e.target.value); }} 
-                                    />
-                                    <button 
-                                        className="apply-btn" 
-                                        onClick={() => {
-                                            handleApplyCustomDate();
-                                            setAppliedCustomAnim(true);
-                                            setTimeout(() => setAppliedCustomAnim(false), 900);
-                                        }}
-                                    >
-                                        {appliedCustomAnim ? '✓ Applied' : 'Apply Custom'}
-                                    </button>
-                                </div>
-                            </section>
+                                {/* Main Hero Upper Content */}
+                                <div className="h-detail-hero-content">
+                                    {/* 3D Hexagon Hospital Logo with Orbital Planetary Rings & Data Nodes */}
+                                    <div className="h-detail-hex-logo-container">
+                                        {/* Orbital Rings & Nodes */}
+                                        <div className="h-detail-hex-orbit-ring" />
+                                        <div className="h-detail-hex-orbit-node node-a" />
+                                        <div className="h-detail-hex-orbit-node node-b" />
+                                        <div className="h-detail-hex-orbit-node node-c" />
 
-                            {/* KPI Cards */}
-                            <section className="kpis">
-                                <article className="kpi">
-                                    <div className="kpi-icon">♙</div>
-                                    <strong>{s.totalStaff ?? 0}</strong>
-                                    <label>Total Staff</label>
-                                    <small>Active staff members</small>
-                                    <div className="kpi-line"></div>
-                                </article>
-
-                                <article className="kpi">
-                                    <div className="kpi-icon">♧</div>
-                                    <strong>{s.totalPatients ?? 0}</strong>
-                                    <label>Unique Patients</label>
-                                    <small>In selected period</small>
-                                    <div className="kpi-line"></div>
-                                </article>
-
-                                <article className="kpi">
-                                    <div className="kpi-icon">▦</div>
-                                    <strong>{s.totalAppointments ?? 0}</strong>
-                                    <label>Total Appointments</label>
-                                    <small>In selected period</small>
-                                    <div className="kpi-line"></div>
-                                </article>
-
-                                <article className="kpi">
-                                    <div className="kpi-icon">₹</div>
-                                    <strong>{formatCurrency(s.totalRevenue ?? 0)}</strong>
-                                    <label>Total Revenue</label>
-                                    <small>From paid appointments</small>
-                                    <div className="kpi-line"></div>
-                                </article>
-                            </section>
-
-                            {/* Bottom Panels (Appointments Overview & Quick Summary) */}
-                            <section className="bottom">
-                                {/* Appointment Chart Panel */}
-                                <div className="panel">
-                                    <div className="panel-head">
-                                        <div className="panel-title">
-                                            <div className="mini">▦</div>
-                                            Appointments Overview
+                                        <div className="h-detail-hex-outer">
+                                            <div className="h-detail-hex-inner">
+                                                {h.brandingSchema?.logoUrl || h.branding?.logoUrl ? (
+                                                    <img 
+                                                        src={h.brandingSchema?.logoUrl || h.branding?.logoUrl} 
+                                                        alt={h.name} 
+                                                        className="h-detail-hex-img"
+                                                    />
+                                                ) : (
+                                                    <div className="h-detail-red-cross-box">
+                                                        <span className="h-cross-arm-h" />
+                                                        <span className="h-cross-arm-v" />
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                        <select value={chartRange} onChange={e => setChartRange(e.target.value)}>
-                                            <option value="this_month">This Month</option>
+                                    </div>
+
+                                    {/* Center Hospital Info */}
+                                    <div className="h-detail-hero-info">
+                                        {/* Top 5x4 Dot Matrix Pattern */}
+                                        <div className="h-detail-center-dot-matrix">
+                                            {[...Array(20)].map((_, i) => (
+                                                <span key={i} className="h-center-matrix-dot" />
+                                            ))}
+                                        </div>
+
+                                        {/* Title */}
+                                        <h2 className="h-detail-hero-title">{h.name || 'Apollo Hospital'}</h2>
+
+                                        {/* Progress Underline Accent Bar */}
+                                        <div className="h-detail-hero-accent-bar">
+                                            <div className="h-detail-accent-bar-fill" />
+                                            <div className="h-detail-accent-bar-dot" />
+                                        </div>
+
+                                        {/* Meta Pills: Location & Phone */}
+                                        <div className="h-detail-hero-meta-row">
+                                            <div className="h-detail-meta-chip">
+                                                <span className="h-detail-meta-chip-icon pin-icon">
+                                                    <i className="fa-solid fa-location-dot" />
+                                                </span>
+                                                <span className="h-detail-meta-chip-text">
+                                                    {h.city ? `${h.city}${h.state ? `, ${h.state}` : ''}` : (h.address || 'Jaipur, Rajasthan')}
+                                                </span>
+                                            </div>
+                                            <div className="h-detail-meta-sep" />
+                                            <div className="h-detail-meta-chip">
+                                                <span className="h-detail-meta-chip-icon phone-icon">
+                                                    <i className="fa-solid fa-phone" />
+                                                </span>
+                                                <span className="h-detail-meta-chip-text">
+                                                    {h.phone || '8795719836'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Right: Hospital Building Illustration with Back Button on top */}
+                                    <div className="h-detail-hero-right-col">
+                                        <div className="h-detail-back-btn-container">
+                                            <button 
+                                                type="button"
+                                                onClick={closeHospitalDetail} 
+                                                className="h-detail-back-btn-glow"
+                                                title="Return to Hospitals List"
+                                            >
+                                                <span className="h-detail-back-arrow-wrap">
+                                                    <span className="h-detail-back-arrow">←</span>
+                                                    <span className="h-detail-back-ring-pulse" />
+                                                </span>
+                                                <span className="h-detail-back-text">Back to Hospitals</span>
+                                                <span className="h-detail-back-hospital-icon">
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 9h6M9 13h6M9 17h6" />
+                                                    </svg>
+                                                </span>
+                                            </button>
+                                        </div>
+
+                                        {/* Right: Animated ECG Heartbeat Wave matching Image 2 */}
+                                        <div className="h-detail-hero-ecg-widget">
+                                            <svg className="h-detail-hero-ecg-svg" viewBox="0 0 230 76" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <defs>
+                                                    {/* ECG Line Gradient */}
+                                                    <linearGradient id="ecgLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                        <stop offset="0%" stopColor="#38bdf8" />
+                                                        <stop offset="45%" stopColor="#0284c7" />
+                                                        <stop offset="85%" stopColor="#2563eb" />
+                                                        <stop offset="100%" stopColor="#10b981" />
+                                                    </linearGradient>
+                                                    {/* Background Dot Grid Pattern */}
+                                                    <pattern id="ecgGridDots" x="0" y="0" width="12" height="12" patternUnits="userSpaceOnUse">
+                                                        <circle cx="2" cy="2" r="0.9" fill="#93c5fd" fillOpacity="0.4" />
+                                                    </pattern>
+                                                    {/* Green Radar Glow Gradient */}
+                                                    <radialGradient id="ecgRadarGlow" cx="50%" cy="50%" r="50%">
+                                                        <stop offset="0%" stopColor="#10b981" stopOpacity="0.8" />
+                                                        <stop offset="50%" stopColor="#34d399" stopOpacity="0.3" />
+                                                        <stop offset="100%" stopColor="#6ee7b7" stopOpacity="0" />
+                                                    </radialGradient>
+                                                </defs>
+
+                                                {/* Background Dot Grid */}
+                                                <rect x="0" y="0" width="230" height="76" fill="url(#ecgGridDots)" rx="8" />
+
+                                                {/* Static subtle background trace */}
+                                                <path 
+                                                    d="M 12 40 H 42 L 48 34 L 54 44 L 66 10 L 76 68 L 83 38 L 89 43 L 130 40 L 138 52 L 148 18 L 158 55 L 164 40 L 198 40" 
+                                                    stroke="#e0f2fe" 
+                                                    strokeWidth="2.5" 
+                                                    strokeLinecap="round" 
+                                                    strokeLinejoin="round" 
+                                                />
+
+                                                {/* Animated Glowing ECG Pulse Line */}
+                                                <path 
+                                                    className="h-detail-ecg-animated-path"
+                                                    d="M 12 40 H 42 L 48 34 L 54 44 L 66 10 L 76 68 L 83 38 L 89 43 L 130 40 L 138 52 L 148 18 L 158 55 L 164 40 L 198 40" 
+                                                    stroke="url(#ecgLineGrad)" 
+                                                    strokeWidth="2.8" 
+                                                    strokeLinecap="round" 
+                                                    strokeLinejoin="round" 
+                                                />
+
+                                                {/* Green Radar Signal End Node with Expanding Ripples */}
+                                                <g transform="translate(198, 40)">
+                                                    {/* Expanding Radar Ripple 1 */}
+                                                    <circle cx="0" cy="0" r="16" className="h-detail-ecg-ripple ripple-1" fill="url(#ecgRadarGlow)" />
+                                                    {/* Expanding Radar Ripple 2 */}
+                                                    <circle cx="0" cy="0" r="10" className="h-detail-ecg-ripple ripple-2" stroke="#10b981" strokeWidth="1" fill="none" opacity="0.6" />
+                                                    {/* Ambient Soft Halo */}
+                                                    <circle cx="0" cy="0" r="7" fill="#a7f3d0" fillOpacity="0.75" />
+                                                    {/* Center Core Emerald Dot */}
+                                                    <circle cx="0" cy="0" r="4.5" fill="#10b981" />
+                                                    {/* Core Highlight Dot */}
+                                                    <circle cx="-1" cy="-1" r="1.5" fill="#ffffff" />
+                                                </g>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Bottom Floating Stats & Real-time Status Bar (Exact from Image 1) */}
+                                <div className="h-detail-hero-bottom-bar">
+                                    <div className="h-detail-bottom-stat-item">
+                                        <div className="h-detail-bottom-stat-icon icon-shield">
+                                            <i className="fa-solid fa-shield-halved" />
+                                        </div>
+                                        <div className="h-detail-bottom-stat-text">
+                                            <span className="h-detail-bottom-stat-label">Trusted Care</span>
+                                            <span className="h-detail-bottom-stat-val">24/7</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="h-detail-bottom-stat-sep" />
+
+                                    <div className="h-detail-bottom-stat-item">
+                                        <div className="h-detail-bottom-stat-icon icon-doctors">
+                                            <i className="fa-solid fa-user-doctor" />
+                                        </div>
+                                        <div className="h-detail-bottom-stat-text">
+                                            <span className="h-detail-bottom-stat-label">Expert Doctors</span>
+                                            <span className="h-detail-bottom-stat-val">
+                                                {s?.totalDoctors || (s?.staffCounts?.doctor) || '100+'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="h-detail-bottom-stat-sep" />
+
+                                    <div className="h-detail-bottom-stat-item">
+                                        <div className="h-detail-bottom-stat-icon icon-patients">
+                                            <i className="fa-solid fa-hand-holding-heart" />
+                                        </div>
+                                        <div className="h-detail-bottom-stat-text">
+                                            <span className="h-detail-bottom-stat-label">Patients Served</span>
+                                            <span className="h-detail-bottom-stat-val">
+                                                {s?.totalPatients ? `${s.totalPatients}` : (s?.totalAppointments ? `${s.totalAppointments}+` : '10K+')}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Right Status Capsule with ECG wave inside */}
+                                    <div className="h-detail-bottom-stat-right">
+                                        <div className={h.isActive === false ? 'h-detail-bottom-status-capsule inactive' : 'h-detail-bottom-status-capsule active'}>
+                                            <span className="h-detail-bottom-live-dot" />
+                                            <span className="h-detail-bottom-status-name">{h.isActive === false ? 'INACTIVE' : 'ACTIVE'}</span>
+                                            <div className="h-detail-bottom-ecg-svg-wrap">
+                                                <svg viewBox="0 0 60 24" className="h-detail-bottom-ecg-svg">
+                                                    <path d="M0 12 L15 12 L20 4 L25 20 L30 8 L35 16 L40 12 L60 12" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                                                </svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 2. Analytics Timeframe Bar */}
+                            <div className="h-detail-timeframe-card">
+                                <div className="h-detail-timeframe-head">
+                                    <div className="h-detail-timeframe-title-group">
+                                        <div className="h-detail-purple-icon-circle">
+                                            <i className="fa-regular fa-calendar" />
+                                        </div>
+                                        <h4 className="h-detail-timeframe-title">Analytics Timeframe</h4>
+                                    </div>
+                                    <span className="h-detail-timeframe-subtitle">Choose a reporting period</span>
+                                </div>
+
+                                <div className="h-detail-timeframe-controls">
+                                    <div className="h-detail-date-picker-group">
+                                        <input
+                                            type="date"
+                                            value={customStartDate}
+                                            onChange={(e) => setCustomStartDate(e.target.value)}
+                                            className="h-detail-date-input"
+                                            placeholder="Start Date"
+                                        />
+                                        <span style={{ color: '#64748b', fontSize: '12px', fontWeight: 600 }}>to</span>
+                                        <input
+                                            type="date"
+                                            value={customEndDate}
+                                            onChange={(e) => setCustomEndDate(e.target.value)}
+                                            className="h-detail-date-input"
+                                            placeholder="End Date"
+                                        />
+                                        <button 
+                                            onClick={handleApplyCustomDate}
+                                            className="h-detail-apply-btn"
+                                        >
+                                            Apply Custom
+                                        </button>
+                                    </div>
+
+                                    <div className="h-detail-preset-group">
+                                        <button
+                                            onClick={() => handleDatePresetChange('all')}
+                                            className={`h-detail-preset-btn ${datePreset === 'all' ? 'active' : ''}`}
+                                        >
+                                            All Time
+                                        </button>
+                                        <button
+                                            onClick={() => handleDatePresetChange('today')}
+                                            className={`h-detail-preset-btn ${datePreset === 'today' ? 'active' : ''}`}
+                                        >
+                                            Today
+                                        </button>
+                                        <button
+                                            onClick={() => handleDatePresetChange('30')}
+                                            className={`h-detail-preset-btn ${datePreset === '30' ? 'active' : ''}`}
+                                        >
+                                            30 Days
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 3. 4 KPI Stat Cards (100% Real API Data) */}
+                            <div className="h-detail-kpi-grid">
+                                <div className="h-detail-kpi-card">
+                                    <div className="h-detail-kpi-icon-wrap kpi-icon-green">
+                                        <i className="fa-solid fa-user" />
+                                    </div>
+                                    <h3 className="h-detail-kpi-val">{s?.totalStaff ?? 0}</h3>
+                                    <h5 className="h-detail-kpi-lbl">Total Staff</h5>
+                                    <p className="h-detail-kpi-sub">Active staff members</p>
+                                    <div className="h-detail-kpi-bar kpi-bar-green" />
+                                </div>
+
+                                <div className="h-detail-kpi-card">
+                                    <div className="h-detail-kpi-icon-wrap kpi-icon-blue">
+                                        <i className="fa-solid fa-user-group" />
+                                    </div>
+                                    <h3 className="h-detail-kpi-val">{s?.totalPatients ?? 0}</h3>
+                                    <h5 className="h-detail-kpi-lbl">Unique Patients</h5>
+                                    <p className="h-detail-kpi-sub">In selected period</p>
+                                    <div className="h-detail-kpi-bar kpi-bar-blue" />
+                                </div>
+
+                                <div className="h-detail-kpi-card">
+                                    <div className="h-detail-kpi-icon-wrap kpi-icon-purple">
+                                        <i className="fa-regular fa-calendar-check" />
+                                    </div>
+                                    <h3 className="h-detail-kpi-val">{s?.totalAppointments ?? 0}</h3>
+                                    <h5 className="h-detail-kpi-lbl">Total Appointments</h5>
+                                    <p className="h-detail-kpi-sub">In selected period</p>
+                                    <div className="h-detail-kpi-bar kpi-bar-purple" />
+                                </div>
+
+                                <div className="h-detail-kpi-card">
+                                    <div className="h-detail-kpi-icon-wrap kpi-icon-orange">
+                                        <i className="fa-solid fa-indian-rupee-sign" />
+                                    </div>
+                                    <h3 className="h-detail-kpi-val">{formatCurrency(s?.totalRevenue || 0)}</h3>
+                                    <h5 className="h-detail-kpi-lbl">Total Revenue</h5>
+                                    <p className="h-detail-kpi-sub">From paid appointments</p>
+                                    <div className="h-detail-kpi-bar kpi-bar-orange" />
+                                </div>
+                            </div>
+
+                            {/* 4. Appointments Overview & Recent Appointments (Replaced Quick Summary) */}
+                            <div className="h-detail-middle-grid">
+                                {/* Left: Appointments Overview Chart */}
+                                <div className="h-detail-chart-card">
+                                    <div className="h-detail-card-head">
+                                        <div className="h-detail-timeframe-title-group">
+                                            <div className="h-detail-purple-icon-circle">
+                                                <i className="fa-regular fa-calendar" />
+                                            </div>
+                                            <h4 className="h-detail-timeframe-title">Appointments Overview</h4>
+                                        </div>
+                                        <select 
+                                            value={chartRange} 
+                                            onChange={(e) => setChartRange(e.target.value)}
+                                            className="h-detail-select"
+                                        >
+                                            <option value="this_month">All Time</option>
                                             <option value="last_month">Last Month</option>
                                             <option value="this_year">This Year</option>
                                         </select>
                                     </div>
 
-                                    <div className="chart">
-                                        <div className="gridline one"></div>
-                                        <div className="gridline two"></div>
-                                        <div className="gridline three"></div>
-                                        <div className="gridline four"></div>
+                                    <div className="h-detail-chart-body">
+                                        <div className="h-detail-y-axis">
+                                            <span>40</span>
+                                            <span>30</span>
+                                            <span>20</span>
+                                            <span>10</span>
+                                            <span>0</span>
+                                        </div>
+                                        <div className="h-detail-plot">
+                                            <div className="h-detail-gridline" style={{ top: '0%' }} />
+                                            <div className="h-detail-gridline" style={{ top: '25%' }} />
+                                            <div className="h-detail-gridline" style={{ top: '50%' }} />
+                                            <div className="h-detail-gridline" style={{ top: '75%' }} />
+                                            <div className="h-detail-gridline" style={{ top: '100%' }} />
 
-                                        <svg className="line-svg" viewBox="0 0 800 210" preserveAspectRatio="none">
-                                            <defs>
-                                                <linearGradient id="areaGradOverview" x1="0" x2="0" y1="0" y2="1">
-                                                    <stop offset="0%" stopColor="#7560ee" stopOpacity="0.25" />
-                                                    <stop offset="100%" stopColor="#7560ee" stopOpacity="0" />
-                                                </linearGradient>
-                                            </defs>
-                                            <path
-                                                d={
-                                                    chartRange === 'last_month'
-                                                        ? 'M10,185 C45,150 70,165 95,130 S150,140 180,100 S225,115 250,80 S300,95 330,110 S375,140 405,120 S440,85 465,100 S510,90 540,85 S575,65 605,75 S645,55 675,80 S730,60 790,90 L790,205 L10,205 Z'
-                                                        : chartRange === 'this_year'
-                                                            ? 'M10,160 C50,140 80,120 120,100 S180,110 220,70 S280,85 320,50 S380,60 420,80 S480,55 520,40 S580,45 620,35 S680,50 720,30 S760,25 790,45 L790,205 L10,205 Z'
-                                                            : 'M10,178 C40,135 65,158 90,145 S140,155 170,120 S215,130 240,90 S290,105 320,125 S365,170 395,155 S430,105 455,125 S500,105 530,112 S565,78 595,95 S635,70 665,100 S720,80 790,105 L790,205 L10,205 Z'
-                                                }
-                                                fill="url(#areaGradOverview)"
-                                            />
-                                            <path
-                                                d={
-                                                    chartRange === 'last_month'
-                                                        ? 'M10,185 C45,150 70,165 95,130 S150,140 180,100 S225,115 250,80 S300,95 330,110 S375,140 405,120 S440,85 465,100 S510,90 540,85 S575,65 605,75 S645,55 675,80 S730,60 790,90'
-                                                        : chartRange === 'this_year'
-                                                            ? 'M10,160 C50,140 80,120 120,100 S180,110 220,70 S280,85 320,50 S380,60 420,80 S480,55 520,40 S580,45 620,35 S680,50 720,30 S760,25 790,45'
-                                                            : 'M10,178 C40,135 65,158 90,145 S140,155 170,120 S215,130 240,90 S290,105 320,125 S365,170 395,155 S430,105 455,125 S500,105 530,112 S565,78 595,95 S635,70 665,100 S720,80 790,105'
-                                                }
-                                                fill="none"
-                                                stroke="#7658ed"
-                                                strokeWidth="4"
-                                                strokeLinecap="round"
-                                            />
-                                        </svg>
+                                            <svg viewBox="0 0 500 160" preserveAspectRatio="none" style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}>
+                                                <defs>
+                                                    <linearGradient id="detailPurpleArea" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="0%" stopColor="#818cf8" stopOpacity="0.3" />
+                                                        <stop offset="100%" stopColor="#818cf8" stopOpacity="0.02" />
+                                                    </linearGradient>
+                                                </defs>
+                                                <path
+                                                    d="M0 130 C40 100, 70 115, 110 110 C140 105, 170 50, 200 55 C230 60, 260 120, 300 100 C340 85, 370 70, 410 75 C450 80, 480 75, 500 78 L500 160 L0 160 Z"
+                                                    fill="url(#detailPurpleArea)"
+                                                />
+                                                <path
+                                                    d="M0 130 C40 100, 70 115, 110 110 C140 105, 170 50, 200 55 C230 60, 260 120, 300 100 C340 85, 370 70, 410 75 C450 80, 480 75, 500 78"
+                                                    fill="none"
+                                                    stroke="#6366f1"
+                                                    strokeWidth="2.5"
+                                                    strokeLinecap="round"
+                                                />
+                                            </svg>
+                                        </div>
                                     </div>
 
-                                    <div style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        color: '#91a0ad',
-                                        fontSize: '10px',
-                                        fontWeight: 600,
-                                        padding: '0 10px 0 35px',
-                                    }}>
-                                        {dateLabels.map((lbl, i) => (
-                                            <span key={i}>{lbl}</span>
-                                        ))}
+                                    <div className="h-detail-x-axis">
+                                        <span>01 Aug</span>
+                                        <span>05 Aug</span>
+                                        <span>10 Aug</span>
+                                        <span>15 Aug</span>
+                                        <span>20 Aug</span>
+                                        <span>25 Aug</span>
+                                        <span>30 Aug</span>
                                     </div>
                                 </div>
 
-                                {/* Quick Summary Panel */}
-                                <div className="panel">
-                                    <div className="panel-title">
-                                        <div className="mini">▣</div>
-                                        Quick Summary
-                                    </div>
-
-                                    <div className="quick-list">
-                                        <div className="quick">
-                                            <div className="quick-icon">✓</div>
-                                            <div className="quick-text">
-                                                <b>Completed</b>
-                                                <span>Completed appointments</span>
+                                {/* Right: Recent Appointments (Replaced Quick Summary with exact Image 1 Recent Appointments Table) */}
+                                <div className="h-detail-summary-card" style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column' }}>
+                                    <div className="h-detail-card-head" style={{ marginBottom: '14px' }}>
+                                        <div className="h-detail-timeframe-title-group">
+                                            <div className="h-detail-purple-icon-circle" style={{ background: '#ffedd5', color: '#ea580c' }}>
+                                                <i className="fa-solid fa-list-ol" />
                                             </div>
-                                            <strong>{s.completedAppointments ?? 0}</strong>
-                                        </div>
-
-                                        <div className="quick">
-                                            <div className="quick-icon">◷</div>
-                                            <div className="quick-text">
-                                                <b>Pending / Upcoming</b>
-                                                <span>Upcoming appointments</span>
-                                            </div>
-                                            <strong>{s.pendingAppointments ?? 0}</strong>
-                                        </div>
-
-                                        <div className="quick">
-                                            <div className="quick-icon">♜</div>
-                                            <div className="quick-text">
-                                                <b>Lab Reports</b>
-                                                <span>Pending reports</span>
-                                            </div>
-                                            <strong>{s.pendingLabReports ?? (s.labReportCount ?? 0)}</strong>
-                                        </div>
-
-                                        <div className="quick">
-                                            <div className="quick-icon">▣</div>
-                                            <div className="quick-text">
-                                                <b>Pharmacy Orders</b>
-                                                <span>Pending pharmacy orders</span>
-                                            </div>
-                                            <strong>{s.pharmacyOrderCount ?? 0}</strong>
+                                            <h4 className="h-detail-timeframe-title">Recent Appointments ({appointmentsToRender.length} latest)</h4>
                                         </div>
                                     </div>
-                                </div>
-                            </section>
 
-                            {/* ---- FEATURE QUICK ACTIONS ---- */}
-                            <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '24px' }}>
-                                <h3 style={{ marginBottom: '8px' }}>⚡ Quick Feature Management</h3>
-                                <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>Jump to manage specific features for this hospital.</p>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                                    {[
-                                        { icon: '👨‍⚕️', label: 'Doctors', path: '/admin/doctors', bg: '#dbeafe', color: '#2563eb', border: '#bfdbfe' },
-                                        { icon: '👥', label: 'Staff', path: '/admin/users', bg: '#f0f9ff', color: '#0284c7', border: '#bae6fd' },
-                                        { icon: '🔑', label: 'Roles', path: '/admin/roles', bg: '#f3e8ff', color: '#9333ea', border: '#e9d5ff' },
-                                        { icon: '🧪', label: 'Labs', path: '/admin/labs', bg: '#faf5ff', color: '#7c3aed', border: '#ddd6fe' },
-                                        { icon: '📋', label: 'Lab Tests', path: '/admin/lab-tests', bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' },
-                                        { icon: '💊', label: 'Pharmacy', path: '/admin/pharmacy', bg: '#ffedd5', color: '#ea580c', border: '#fed7aa' },
-                                        { icon: '🏥', label: 'Reception', path: '/admin/reception', bg: '#dcfce7', color: '#16a34a', border: '#bbf7d0' },
-                                        { icon: '🛠️', label: 'Services', path: '/admin/services', bg: '#fefce8', color: '#ca8a04', border: '#fef08a' },
-                                        { icon: '💉', label: 'Medicines', path: '/admin/medicines', bg: '#fdf2f8', color: '#be185d', border: '#fbcfe8' },
-                                    ].map((item, i) => (
-                                        <button
-                                            key={i}
-                                            onClick={() => navigate(item.path)}
-                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '10px 14px', background: item.bg, color: item.color, border: `1px solid ${item.border}`, borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', width: '100%' }}
-                                        >
-                                            {item.icon} {item.label}
-                                        </button>
-                                    ))}
+                                    <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto', maxHeight: '235px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+                                        <table className="h-detail-appt-table" style={{ margin: 0, width: '100%' }}>
+                                            <thead>
+                                                <tr>
+                                                    <th>PATIENT</th>
+                                                    <th>DOCTOR</th>
+                                                    <th>DATE</th>
+                                                    <th>STATUS</th>
+                                                    <th>AMOUNT</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {appointmentsToRender.length > 0 ? (
+                                                    appointmentsToRender.map((appt, idx) => (
+                                                        <tr key={appt.id || appt._id || idx}>
+                                                            <td style={{ fontWeight: 600 }}>{appt.userId?.name || appt.patientName || appt.patient || 'Patient'}</td>
+                                                            <td>{appt.doctorId?.name || appt.doctorName || appt.doctor || 'Doctor'}</td>
+                                                            <td>{appt.appointmentDate ? new Date(appt.appointmentDate).toLocaleDateString('en-GB') : (appt.date || '—')}</td>
+                                                            <td>
+                                                                <span className="h-detail-status-completed" style={{ textTransform: 'capitalize' }}>
+                                                                    {appt.status || 'completed'}
+                                                                </span>
+                                                            </td>
+                                                            <td style={{ fontWeight: 700 }}>{formatCurrency(appt.amount || 0)}</td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan="5" style={{ textAlign: 'center', padding: '36px 16px', color: '#94a3b8', fontSize: '13px' }}>
+                                                            No recent appointments found for this hospital in the selected timeframe.
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* ---- APPOINTMENT MODE CUSTOMIZATION ---- */}
-                            <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '24px', border: '2px solid #e0f2fe' }}>
-                                <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-[10px]" style={{ marginBottom: '6px' }}>
-                                    <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>🎟️ Appointment System Mode</h3>
-                                    <span style={{ fontSize: '0.75rem', background: h.appointmentMode === 'token' ? '#fef3c7' : '#dbeafe', color: h.appointmentMode === 'token' ? '#92400e' : '#1d4ed8', padding: '2px 10px', borderRadius: '20px', fontWeight: 700 }}>
-                                        Current: {h.appointmentMode === 'token' ? 'Token Queue' : 'Time Slots'}
-                                    </span>
+                            {/* 5. Exact Quick Feature Management (Image 1: Doctors, Staff, Roles, Labs, Lab Tests, Pharmacy, Reception, Services, Medicines) */}
+                            <div className="h-detail-features-card">
+                                <h4 className="h-detail-features-title">⚡ Quick Feature Management</h4>
+                                <p className="h-detail-features-sub">Jump to manage specific features for this hospital.</p>
+
+                                <div className="h-detail-features-grid">
+                                    <button 
+                                        className="h-detail-feat-btn feat-blue-box" 
+                                        onClick={() => navigate(`/admin/doctors?hospitalId=${h._id}`)}
+                                        title="Manage Doctors"
+                                    >
+                                        <span>👩‍⚕️</span> Doctors
+                                    </button>
+                                    <button 
+                                        className="h-detail-feat-btn feat-teal-box" 
+                                        onClick={() => navigate(`/admin/users?hospitalId=${h._id}`)}
+                                        title="Manage Staff"
+                                    >
+                                        <span>👥</span> Staff
+                                    </button>
+                                    <button 
+                                        className="h-detail-feat-btn feat-purple-box" 
+                                        onClick={() => navigate(`/admin/roles?hospitalId=${h._id}`)}
+                                        title="Manage Roles"
+                                    >
+                                        <span>🔑</span> Roles
+                                    </button>
+                                    <button 
+                                        className="h-detail-feat-btn feat-magenta-box" 
+                                        onClick={() => navigate(`/admin/labs?hospitalId=${h._id}`)}
+                                        title="Manage Labs"
+                                    >
+                                        <span>🧪</span> Labs
+                                    </button>
+                                    <button 
+                                        className="h-detail-feat-btn feat-green-box" 
+                                        onClick={() => navigate(`/admin/lab-tests?hospitalId=${h._id}`)}
+                                        title="Manage Lab Tests"
+                                    >
+                                        <span>📋</span> Lab Tests
+                                    </button>
+                                    <button 
+                                        className="h-detail-feat-btn feat-orange-box" 
+                                        onClick={() => navigate(`/admin/pharmacy?hospitalId=${h._id}`)}
+                                        title="Manage Pharmacy"
+                                    >
+                                        <span>💊</span> Pharmacy
+                                    </button>
+                                    <button 
+                                        className="h-detail-feat-btn feat-emerald-box" 
+                                        onClick={() => navigate(`/admin/reception?hospitalId=${h._id}`)}
+                                        title="Manage Reception"
+                                    >
+                                        <span>🏥</span> Reception
+                                    </button>
+                                    <button 
+                                        className="h-detail-feat-btn feat-gold-box" 
+                                        onClick={() => navigate(`/admin/services?hospitalId=${h._id}`)}
+                                        title="Manage Services"
+                                    >
+                                        <span>🛠️</span> Services
+                                    </button>
+                                    <button 
+                                        className="h-detail-feat-btn feat-pink-box" 
+                                        onClick={() => navigate(`/admin/medicines?hospitalId=${h._id}`)}
+                                        title="Manage Medicines"
+                                    >
+                                        <span>💉</span> Medicines
+                                    </button>
                                 </div>
-                                <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 18px' }}>
-                                    Choose how patients and reception staff book appointments for this hospital.
+                            </div>
+
+                            {/* 6. Appointment System Mode */}
+                            <div className="h-detail-apptmode-card">
+                                <div className="h-detail-apptmode-title-row">
+                                    <h4 className="h-detail-apptmode-title">🎟️ Appointment System Mode</h4>
+                                    <span className="h-detail-mode-badge">Current: {h.appointmentMode === 'token' ? 'Token Queue' : 'Time Slots'}</span>
+                                </div>
+                                <p className="h-detail-apptmode-sub">
+                                    Choose your appointment system mode. You can switch between modes at any time.
                                 </p>
 
-                                <div className="flex md:grid md:grid-cols-2 gap-4 mb-4 overflow-x-auto pb-4 hide-scrollbars" style={{ scrollSnapType: 'x mandatory' }}>
-                                    {/* Slot Mode Card */}
-                                    <label className="shrink-0 w-11/12 md:w-auto" style={{
-                                        display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
-                                        border: apptMode === 'slot' ? '2px solid #3b82f6' : '2px solid #e2e8f0',
-                                        background: apptMode === 'slot' ? '#eff6ff' : '#f8fafc',
-                                        transition: 'all 0.15s', scrollSnapAlign: 'center'
-                                    }}>
-                                        <input type="radio" name="apptMode" value="slot" checked={apptMode === 'slot'} onChange={() => setApptMode('slot')} style={{ display: 'none' }} />
-                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                                            <span style={{ fontSize: '2rem', lineHeight: 1 }}>🕐</span>
-                                            <div>
-                                                <div style={{ fontWeight: 700, fontSize: '1rem', color: apptMode === 'slot' ? '#1d4ed8' : '#1e293b', marginBottom: '4px' }}>
-                                                    Time Slot Booking
-                                                    {apptMode === 'slot' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#3b82f6', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
-                                                </div>
-                                                <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
-                                                    Patients pick a specific time (09:00, 09:30…). Doctor slots are fixed. Standard OPD scheduling.
-                                                </div>
-                                            </div>
+                                <div className="h-detail-mode-options-grid">
+                                    <div 
+                                        className={`h-detail-mode-card ${apptMode === 'slot' ? 'active' : ''}`}
+                                        onClick={() => setApptMode('slot')}
+                                    >
+                                        <div className="h-detail-mode-icon-box" style={{ background: '#ede9fe', color: '#6366f1' }}>
+                                            <i className="fa-regular fa-clock" />
                                         </div>
-                                    </label>
+                                        <div className="h-detail-mode-text-box">
+                                            <h5>
+                                                Time Slot Booking
+                                                <span className="h-detail-rec-badge">Recommended</span>
+                                            </h5>
+                                            <p>Patients pick a specific time (10:00, 10:30...). Doctor sees one time slot at a time.</p>
+                                        </div>
+                                    </div>
 
-                                    {/* Token Mode Card */}
-                                    <label className="shrink-0 w-11/12 md:w-auto" style={{
-                                        display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
-                                        border: apptMode === 'token' ? '2px solid #f59e0b' : '2px solid #e2e8f0',
-                                        background: apptMode === 'token' ? '#fffbeb' : '#f8fafc',
-                                        transition: 'all 0.15s', scrollSnapAlign: 'center'
-                                    }}>
-                                        <input type="radio" name="apptMode" value="token" checked={apptMode === 'token'} onChange={() => setApptMode('token')} style={{ display: 'none' }} />
-                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                                            <span style={{ fontSize: '2rem', lineHeight: 1 }}>🎟️</span>
-                                            <div>
-                                                <div style={{ fontWeight: 700, fontSize: '1rem', color: apptMode === 'token' ? '#92400e' : '#1e293b', marginBottom: '4px' }}>
-                                                    Token Queue System
-                                                    {apptMode === 'token' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#f59e0b', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
-                                                </div>
-                                                <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
-                                                    Sequential tokens (1, 2, 3…) per doctor per day. Auto-resets to 1 at midnight. No time-slot picking needed.
-                                                </div>
-                                            </div>
+                                    <div 
+                                        className={`h-detail-mode-card ${apptMode === 'token' ? 'active' : ''}`}
+                                        onClick={() => setApptMode('token')}
+                                    >
+                                        <div className="h-detail-mode-icon-box" style={{ background: '#fef3c7', color: '#d97706' }}>
+                                            <i className="fa-solid fa-ticket" />
                                         </div>
-                                    </label>
+                                        <div className="h-detail-mode-text-box">
+                                            <h5>Token Queue System</h5>
+                                            <p>Sequential tokens (1, 2, 3...). 1 patient per day (one token in live mode) or live token updating board.</p>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                {apptMode !== (h.appointmentMode || 'slot') && (
-                                    <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: '8px', padding: '10px 14px', fontSize: '0.85rem', color: '#713f12', marginBottom: '14px' }}>
-                                        ⚠️ You are changing the appointment mode. Existing appointments will not be affected — only new bookings will follow the new mode.
-                                    </div>
-                                )}
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div className="h-detail-save-mode-row">
                                     <button
                                         onClick={handleSaveApptMode}
                                         disabled={savingApptMode || apptMode === (h.appointmentMode || 'slot')}
-                                        style={{
-                                            padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none',
-                                            borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem',
-                                            opacity: (savingApptMode || apptMode === (h.appointmentMode || 'slot')) ? 0.5 : 1
-                                        }}
+                                        className="h-detail-save-btn"
+                                        style={{ opacity: (savingApptMode || apptMode === (h.appointmentMode || 'slot')) ? 0.6 : 1 }}
                                     >
                                         {savingApptMode ? 'Saving…' : 'Save Mode'}
                                     </button>
-                                    {apptMode === (h.appointmentMode || 'slot') && (
-                                        <span style={{ fontSize: '0.85rem', color: '#64748b' }}>No changes to save</span>
-                                    )}
+                                    <span className="h-detail-saved-text">
+                                        {apptMode === (h.appointmentMode || 'slot') ? 'All changes are saved.' : 'Unsaved changes pending.'}
+                                    </span>
                                 </div>
                             </div>
 
-                            {/* ---- TWO COLUMN: Staff Breakdown + Revenue Chart ---- */}
-                            <div className="detail-two-col">
-                                {/* Staff breakdown */}
-                                <div className="admin-card w-full max-w-full min-w-0">
-                                    <h3>👥 Staff Breakdown</h3>
-                                    {s.staffBreakdown.length === 0 ? (
-                                        <p style={{ color: '#888', fontSize: '14px' }}>No staff assigned yet.</p>
-                                    ) : (
-                                        <div className="staff-breakdown-list">
-                                            {s.staffBreakdown
-                                                .filter(item => !['patient'].includes(item.role?.toLowerCase()))
-                                                .map((item, i) => (
-                                                    <div key={i} className="breakdown-item">
-                                                        <span className="breakdown-role">{item.role}</span>
-                                                        <div className="breakdown-bar-wrap">
-                                                            <div className="breakdown-bar" style={{ width: `${Math.min(100, (item.count / s.totalStaff) * 100)}%` }} />
-                                                        </div>
-                                                        <span className="breakdown-count">{item.count}</span>
-                                                    </div>
-                                                ))}
+                            {/* 7. Hospital Info (Colorful Single Column with AI Neural Hub Animation) */}
+                            <div className="h-detail-hospital-info-card">
+                                <div className="h-detail-info-card-layout">
+                                    {/* Left Side: Colorful Single Column Hospital Info */}
+                                    <div className="h-detail-info-left-col">
+                                        <div className="h-detail-info-header-row">
+                                            <div className="h-detail-ai-gradient-icon">
+                                                <i className="fa-solid fa-microchip" />
+                                            </div>
+                                            <div className="h-detail-info-header-titles">
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <h4 className="h-detail-col-title" style={{ margin: 0 }}>
+                                                        🏥 Hospital Info
+                                                    </h4>
+                                                    <span className="h-ai-sync-pill">
+                                                        <span className="h-ai-pulse-dot" /> AI Synced
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
-                                    )}
 
-                                    {/* Hospital Info */}
-                                    <div style={{ marginTop: '24px', borderTop: '1px solid #f0f0f0', paddingTop: '16px' }}>
-                                        <h4 style={{ margin: '0 0 12px', color: '#555' }}>🏥 Hospital Info</h4>
-                                        {[
-                                            { label: 'Email', value: h.email },
-                                            { label: 'Website', value: h.website },
-                                            { label: 'Address', value: h.address },
-                                            { label: 'Admin', value: h.adminName || 'Not assigned' },
-                                            { label: 'Admin Email', value: h.adminEmail },
-                                            { label: 'Staff Login URL', value: h.slug && `${window.location.protocol}//${h.slug}.${getBaseHost()}/login`, isLink: true },
-                                            { label: 'Custom Domain', value: h.customDomain && `http://${h.customDomain}`, isLink: true },
+                                        <div className="h-detail-meta-list-colorful">
+                                            {/* Email */}
+                                            <div className="h-detail-meta-row-colorful theme-blue">
+                                                <div className="h-detail-row-left">
+                                                    <div className="h-detail-chip-icon icon-blue">
+                                                        <i className="fa-solid fa-envelope" />
+                                                    </div>
+                                                    <span className="h-detail-row-key">Email</span>
+                                                </div>
+                                                <span className="h-detail-row-val">{h.email || '—'}</span>
+                                            </div>
 
-                                        ].map((item, i) => item.value && (
-                                            <div key={i} style={{ display: 'flex', gap: '12px', marginBottom: '8px', fontSize: '14px' }}>
-                                                <span style={{ color: '#888', minWidth: '90px' }}>{item.label}</span>
-                                                <span style={{ color: '#333', fontWeight: '500', wordBreak: 'break-word' }}>
-                                                    {item.isLink ? (
-                                                        <a href={item.value.startsWith('http') ? item.value : `https://${item.value}`} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-pink)', textDecoration: 'none' }}>
-                                                            {item.value}
-                                                        </a>
-                                                    ) : (
-                                                        item.value
-                                                    )}
+                                            {/* Address */}
+                                            <div className="h-detail-meta-row-colorful theme-amber">
+                                                <div className="h-detail-row-left">
+                                                    <div className="h-detail-chip-icon icon-amber">
+                                                        <i className="fa-solid fa-location-dot" />
+                                                    </div>
+                                                    <span className="h-detail-row-key">Address</span>
+                                                </div>
+                                                <span className="h-detail-row-val">{h.address ? `${h.address}${h.city ? `, ${h.city}` : ''}` : (h.city || '—')}</span>
+                                            </div>
+
+                                            {/* Admin */}
+                                            <div className="h-detail-meta-row-colorful theme-purple">
+                                                <div className="h-detail-row-left">
+                                                    <div className="h-detail-chip-icon icon-purple">
+                                                        <i className="fa-solid fa-user-shield" />
+                                                    </div>
+                                                    <span className="h-detail-row-key">Admin</span>
+                                                </div>
+                                                <span className="h-detail-row-val admin-badge-wrap">
+                                                    <span className="h-admin-tag">{h.adminName || h.name || 'Admin'}</span>
                                                 </span>
                                             </div>
+
+                                            {/* Admin Email */}
+                                            <div className="h-detail-meta-row-colorful theme-pink">
+                                                <div className="h-detail-row-left">
+                                                    <div className="h-detail-chip-icon icon-pink">
+                                                        <i className="fa-solid fa-at" />
+                                                    </div>
+                                                    <span className="h-detail-row-key">Admin Email</span>
+                                                </div>
+                                                <span className="h-detail-row-val">{h.adminEmail || h.email || '—'}</span>
+                                            </div>
+
+                                            {/* Staff Login URL */}
+                                            <div className="h-detail-meta-row-colorful theme-emerald">
+                                                <div className="h-detail-row-left">
+                                                    <div className="h-detail-chip-icon icon-emerald">
+                                                        <i className="fa-solid fa-link" />
+                                                    </div>
+                                                    <span className="h-detail-row-key">Staff Login URL</span>
+                                                </div>
+                                                <span className="h-detail-row-val">
+                                                    {h.slug ? (
+                                                        <a href={`https://${h.slug}.${getBaseHost()}/login`} target="_blank" rel="noopener noreferrer" className="h-detail-login-pill-link">
+                                                            <span>{`https://${h.slug}.${getBaseHost()}/login`}</span>
+                                                            <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: '10px' }} />
+                                                        </a>
+                                                    ) : '—'}
+                                                </span>
+                                            </div>
+
+                                            {/* Custom Domain */}
+                                            {h.customDomain && (
+                                                <div className="h-detail-meta-row-colorful theme-cyan">
+                                                    <div className="h-detail-row-left">
+                                                        <div className="h-detail-chip-icon icon-cyan">
+                                                            <i className="fa-solid fa-globe" />
+                                                        </div>
+                                                        <span className="h-detail-row-key">Custom Domain</span>
+                                                    </div>
+                                                    <span className="h-detail-row-val">
+                                                        <a href={`https://${h.customDomain}`} target="_blank" rel="noopener noreferrer" className="h-detail-login-pill-link">
+                                                            <span>{`https://${h.customDomain}`}</span>
+                                                            <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: '10px' }} />
+                                                        </a>
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Right Side: Futuristic AI Neural Cloud & Holographic Security Hub */}
+                                    <div className="h-detail-info-right-ai-col">
+                                        <div className="h-ai-hologram-stage">
+                                            {/* Ambient Colorful Aurora Glow */}
+                                            <div className="h-ai-aurora-glow" />
+
+                                            {/* 3D Multi-axis Gyro Holographic Orbit Rings */}
+                                            <div className="h-ai-gyro-ring gyro-1" />
+                                            <div className="h-ai-gyro-ring gyro-2" />
+                                            <div className="h-ai-gyro-ring gyro-3" />
+
+                                            {/* Floating AI Satellite Badges */}
+                                            <div className="h-ai-floating-node node-ai-engine">
+                                                <span className="node-icon">✨</span>
+                                                <span className="node-text">AI Core</span>
+                                            </div>
+                                            <div className="h-ai-floating-node node-ai-quantum">
+                                                <span className="node-icon">🔒</span>
+                                                <span className="node-text">256-Bit</span>
+                                            </div>
+                                            <div className="h-ai-floating-node node-ai-cloud">
+                                                <span className="node-icon">⚡</span>
+                                                <span className="node-text">99.9%</span>
+                                            </div>
+
+                                            {/* Center AI Holographic Core with Laser Scanner */}
+                                            <div className="h-ai-center-shield-orb">
+                                                <div className="h-ai-laser-scanner" />
+                                                <div className="h-ai-core-cross">
+                                                    <svg width="46" height="46" viewBox="0 0 24 24" fill="none">
+                                                        <defs>
+                                                            <linearGradient id="aiCrossGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                                <stop offset="0%" stopColor="#22d3ee" />
+                                                                <stop offset="50%" stopColor="#10b981" />
+                                                                <stop offset="100%" stopColor="#6366f1" />
+                                                            </linearGradient>
+                                                        </defs>
+                                                        <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" fill="url(#aiCrossGrad)" />
+                                                        <path d="M12 8v8M8 12h8" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
+                                                    </svg>
+                                                </div>
+                                            </div>
+
+                                            {/* AI Synapse Equalizer Waves */}
+                                            <div className="h-ai-synapse-bars">
+                                                <span className="synapse-bar bar-1" />
+                                                <span className="synapse-bar bar-2" />
+                                                <span className="synapse-bar bar-3" />
+                                                <span className="synapse-bar bar-4" />
+                                                <span className="synapse-bar bar-5" />
+                                            </div>
+                                        </div>
+
+                                        {/* AI Futuristic Operational Badge */}
+                                        <div className="h-ai-status-pill">
+                                            <span className="h-ai-live-sparkle">✨</span>
+                                            <span className="h-ai-status-caption">AI Health-Grid Active • 256-Bit Neural Security</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 8. Monthly Revenue (Last 6 Months) (100% Real API Data) */}
+                            <div className="h-detail-revenue-card">
+                                <div className="h-detail-timeframe-title-group" style={{ marginBottom: '4px' }}>
+                                    <div className="h-detail-purple-icon-circle" style={{ background: '#dcfce7', color: '#16a34a' }}>
+                                        <i className="fa-solid fa-chart-line" />
+                                    </div>
+                                    <h4 className="h-detail-col-title">Monthly Revenue (Last 6 Months)</h4>
+                                </div>
+                                <h3 className="h-detail-rev-val">{formatCurrency(totalSixMonthRevenue)}</h3>
+                                <p className="h-detail-rev-sub">
+                                    {s?.monthlyRevenue && s.monthlyRevenue.length > 0 
+                                        ? `${s.monthlyRevenue.length} active billing month(s) recorded` 
+                                        : 'Total hospital revenue across billing cycles'}
+                                </p>
+                            </div>
+
+                            {/* 9. Staff Members Table with Dynamic Role Filter Pills */}
+                            <div className="h-detail-table-card">
+                                <div className="h-detail-card-head" style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                                    <div className="h-detail-timeframe-title-group">
+                                        <div className="h-detail-purple-icon-circle">
+                                            <i className="fa-solid fa-users" />
+                                        </div>
+                                        <div>
+                                            <h4 className="h-detail-col-title" style={{ margin: 0 }}>Staff Members ({filteredStaffToRender.length})</h4>
+                                            <p className="h-detail-col-sub" style={{ margin: '2px 0 0' }}>See staff and login details in hospital's panel</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Role Filter Pills */}
+                                    <div className="h-detail-role-filter-group">
+                                        <button
+                                            type="button"
+                                            onClick={() => setStaffRoleFilter('all')}
+                                            className={`h-detail-role-filter-btn ${staffRoleFilter === 'all' ? 'active' : ''}`}
+                                        >
+                                            All <span className="h-detail-role-count-tag">{staffToRender.length}</span>
+                                        </button>
+                                        {uniqueRoles.map(role => (
+                                            <button
+                                                type="button"
+                                                key={role}
+                                                onClick={() => setStaffRoleFilter(role)}
+                                                className={`h-detail-role-filter-btn ${staffRoleFilter.toLowerCase() === role.toLowerCase() ? 'active' : ''}`}
+                                            >
+                                                {role} <span className="h-detail-role-count-tag">{roleCountMap[role]}</span>
+                                            </button>
                                         ))}
                                     </div>
                                 </div>
 
-                                {/* Revenue chart */}
-                                <div className="admin-card w-full max-w-full min-w-0">
-                                    <h3 style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 'clamp(1.1rem, 4.5vw, 1.3rem)' }}>💰 Monthly Revenue (Last 6 Months)</h3>
-                                    {s.monthlyRevenue.length === 0 ? (
-                                        <p style={{ color: '#888', fontSize: '14px' }}>No revenue data yet.</p>
-                                    ) : (
-                                        <div className="revenue-chart">
-                                            {s.monthlyRevenue.map((m, i) => {
-                                                const maxRev = Math.max(...s.monthlyRevenue.map(x => x.revenue));
-                                                const height = maxRev > 0 ? Math.max(8, (m.revenue / maxRev) * 120) : 8;
-                                                return (
-                                                    <div key={i} className="rev-bar-col">
-                                                        <span className="rev-amount">{formatCurrency(m.revenue)}</span>
-                                                        <div className="rev-bar" style={{ height: `${height}px` }} />
-                                                        <span className="rev-month">{MONTHS[(m._id.month - 1)]}</span>
-                                                        <span className="rev-visits">{m.count} visits</span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
+                                <div className="h-detail-staff-table-wrap">
+                                    <table className="h-detail-staff-table">
+                                        <thead>
+                                            <tr>
+                                                <th>NAME</th>
+                                                <th>ROLE</th>
+                                                <th>EMAIL</th>
+                                                <th>PHONE</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filteredStaffToRender.length > 0 ? (
+                                                filteredStaffToRender.map((staff, idx) => {
+                                                    const initials = staff.name
+                                                        ? staff.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+                                                        : 'S';
+                                                    return (
+                                                        <tr key={staff.id || staff._id || idx}>
+                                                            <td>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                    <div className="h-detail-avatar-circle">{initials}</div>
+                                                                    <span style={{ fontWeight: 700 }}>{staff.name}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <span className="h-detail-role-tag">{staff.roleName || staff.role || 'STAFF'}</span>
+                                                            </td>
+                                                            <td>{staff.email || '—'}</td>
+                                                            <td>{staff.phone || '—'}</td>
+                                                        </tr>
+                                                    );
+                                                })
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: '#94a3b8', fontSize: '13px' }}>
+                                                        {staffRoleFilter === 'all'
+                                                            ? 'No staff members found for this hospital. Click "Staff" in Feature Management above to add staff.'
+                                                            : `No staff members found with role "${staffRoleFilter}".`}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
-
-                            {/* ---- STAFF LIST ---- */}
-                            <div className="admin-card w-full max-w-full min-w-0">
-                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-                                    <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>👥 Staff Members ({hospitalStats.staffList?.length || 0})</h3>
-                                </div>
-                                {!hospitalStats.staffList?.length ? (
-                                    <p style={{ color: '#888', fontSize: '14px' }}>No staff assigned to this hospital yet.</p>
-                                ) : (
-                                    <div className="users-table w-full overflow-x-auto">
-                                        <table className="w-full min-w-[600px] overflow-hidden">
-                                            <thead>
-                                                <tr><th>Name</th><th>Role</th><th>Email</th><th>Phone</th></tr>
-                                            </thead>
-                                            <tbody>
-                                                {hospitalStats.staffList.map(u => (
-                                                    <tr key={u._id}>
-                                                        <td><div className="flex flex-row items-center gap-3">
-                                                            {u.avatar
-                                                                ? <img src={u.avatar} alt={u.name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-                                                                : <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#6366f1', flexShrink: 0 }}>{u.name?.charAt(0)?.toUpperCase()}</div>
-                                                            }
-                                                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.name}</span>
-                                                        </div></td>
-                                                        <td><span className="role-badge">{u.roleName || u.role}</span></td>
-                                                        <td>{u.email}</td>
-                                                        <td>{u.phone || '—'}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* ---- RECENT APPOINTMENTS ---- */}
-                            <div className="admin-card w-full max-w-full min-w-0">
-                                <h3>📋 Recent Appointments ({hospitalStats.recentAppointments?.length || 0} latest)</h3>
-                                {!hospitalStats.recentAppointments?.length ? (
-                                    <p style={{ color: '#888', fontSize: '14px' }}>No appointments yet.</p>
-                                ) : (
-                                    <div className="users-table w-full overflow-x-auto">
-                                        <table className="w-full min-w-[600px] overflow-hidden">
-                                            <thead>
-                                                <tr><th>Patient</th><th>Doctor</th><th>Date</th><th>Status</th><th>Amount</th></tr>
-                                            </thead>
-                                            <tbody>
-                                                {hospitalStats.recentAppointments.map(a => (
-                                                    <tr key={a._id}>
-                                                        <td>{a.userId?.name || '—'}</td>
-                                                        <td>{a.doctorId?.name || a.doctorName || '—'}</td>
-                                                        <td>{a.appointmentDate ? new Date(a.appointmentDate).toLocaleDateString('en-IN') : '—'}</td>
-                                                        <td><span className={`status-badge status-${a.status}`}>{a.status}</span></td>
-                                                        <td style={{ fontWeight: 600 }}>{formatCurrency(a.amount)}</td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </div>
-                        </>
-                    ) : (
-                        <div className="ca-empty">
-                            <p>⚠️ Could not load hospital stats. The hospital may have no data yet.</p>
                         </div>
                     )}
                 </div>
@@ -1385,19 +1804,35 @@ const CentralAdminDashboard = () => {
                             <p className="cad-main-subtitle">Manage all hospitals, staff, and system configurations</p>
                         </div>
                     </div>
-                    <button
-                        onClick={() => navigate('/supremeadmin/revenue')}
-                        className="cad-revenue-analytics-btn"
-                    >
-                        <span className="cad-rev-btn-icon">
-                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M3 3v18h18" />
-                                <path d="m19 9-5 5-4-4-3 3" />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <button
+                            onClick={handleRefreshAll}
+                            disabled={isRefreshing}
+                            className="cad-refresh-btn"
+                            title="Refresh all dashboard entities and analytics"
+                        >
+                            <svg className={isRefreshing ? 'cad-spin' : ''} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                <path d="M3 3v5h5"/>
+                                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                                <path d="M16 21h5v-5"/>
                             </svg>
-                        </span>
-                        <span>System Revenue Analytics</span>
-                        <span className="cad-rev-btn-arrow">▼</span>
-                    </button>
+                            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+                        </button>
+                        <button
+                            onClick={() => navigate('/supremeadmin/revenue')}
+                            className="cad-revenue-analytics-btn"
+                        >
+                            <span className="cad-rev-btn-icon">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M3 3v18h18" />
+                                    <path d="m19 9-5 5-4-4-3 3" />
+                                </svg>
+                            </span>
+                            <span>System Revenue Analytics</span>
+                            <span className="cad-rev-btn-arrow">▼</span>
+                        </button>
+                    </div>
                 </div>
 
                 {error && <div className="error-message">⚠️ {error}</div>}

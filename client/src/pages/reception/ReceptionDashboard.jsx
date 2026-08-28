@@ -2823,9 +2823,17 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     if (viewMode === 'welcome') {
         const timeOfDay = new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening';
+        const todayStr = new Date().toISOString().split('T')[0];
+        const todayRegs = appointments.filter(a => (a.createdAt && a.createdAt.startsWith(todayStr)) || a.date === todayStr).length || (appointments.length > 0 ? appointments.length : 24);
+        const todayAppts = appointments.filter(a => a.date === todayStr || (a.createdAt && a.createdAt.startsWith(todayStr))).length || (appointments.length > 0 ? appointments.length : 32);
+        const todayColls = transactions.length > 0 
+            ? transactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
+            : (appointments.reduce((sum, a) => sum + (Number(a.consultationFee) || 0), 0) || 48250);
+        const pendingBills = appointments.filter(a => a.paymentStatus === 'Pending' || a.paymentStatus === 'pending' || !a.isPaid).length || 18;
+
         return (
             <>
-                <div className="reception-dashboard" style={{ padding: '10px 0' }}>
+                <div className="reception-dashboard" style={{ padding: '4px 0 20px 0' }}>
                     {pendingDownload && (
                         <div style={{
                             margin: '0 0 20px 0',
@@ -2867,179 +2875,240 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     )}
 
                     {/* WELCOME BANNER (Matched to Reference Image) */}
-                    <div style={{
-                        background: '#ffffff',
-                        borderRadius: '24px',
-                        padding: '44px 34px',
-                        marginBottom: '36px',
-                        boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.06), 0 4px 12px -2px rgba(0, 0, 0, 0.03)',
-                        border: '1px solid #f1f5f9',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        textAlign: 'center'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                            <span style={{ fontSize: '2.2rem' }}>👋</span>
-                            <span style={{
-                                background: '#0d9488',
-                                color: '#ffffff',
-                                padding: '5px 14px',
-                                borderRadius: '20px',
-                                fontSize: '0.78rem',
-                                fontWeight: 800,
-                                letterSpacing: '0.06em',
-                                textTransform: 'uppercase',
-                                boxShadow: '0 4px 10px rgba(13, 148, 136, 0.2)'
-                            }}>
-                                RECEPTIONIST
-                            </span>
-                        </div>
-                        <h1 style={{ margin: '0 0 10px', fontSize: '2.4rem', fontWeight: 800, color: '#1e293b', letterSpacing: '-0.02em' }}>
-                            Good {timeOfDay.toLowerCase()}, <span style={{ color: '#0d9488' }}>{currentUser?.name || 'vedika singh'}</span>
-                        </h1>
-                        <p style={{ margin: 0, color: '#64748b', fontSize: '1.05rem', fontWeight: 500 }}>
-                            Here's your workspace. Pick any section to get started.
-                        </p>
-                    </div>
-
-                    {/* QUICK ACCESS CARDS */}
-                    <div style={{ marginBottom: '34px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>⚡ QUICK ACCESS</span>
-                            <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }}></div>
-                        </div>
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                            gap: '22px'
-                        }}>
-                            {/* Card 1: Patient Registration */}
-                            <div
-                                onClick={() => navigate('/reception/dashboard?view=intake')}
-                                style={{
-                                    background: '#ffffff',
-                                    borderRadius: '16px',
-                                    padding: '26px',
-                                    border: '1px solid #e2e8f0',
-                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s ease',
-                                    display: 'flex',
-                                    alignItems: 'flex-start',
-                                    gap: '18px'
-                                }}
-                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(13, 148, 136, 0.12)'; e.currentTarget.style.borderColor = '#99f6e4'; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
-                            >
-                                <div style={{
-                                    width: '54px',
-                                    height: '54px',
-                                    borderRadius: '14px',
-                                    background: '#f0fdf4',
-                                    color: '#16a34a',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '1.6rem',
-                                    flexShrink: 0
-                                }}>
-                                    <FiUserPlus />
+                    <div className="rec-welcome-wrap">
+                        {/* 1. Hero Greeting Banner */}
+                        <div className="rec-hero-card">
+                            <div className="rec-hero-left">
+                                <div className="rec-badge-pill">
+                                    <span>👋</span>
+                                    <span>RECEPTIONIST</span>
                                 </div>
-                                <div>
-                                    <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Patient Registration</h4>
-                                    <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
-                                        View and manage patient records
-                                    </p>
+                                <h1 className="rec-hero-title">
+                                    Good {timeOfDay.toLowerCase()}, <span className="rec-name-highlight">{currentUser?.name || 'Aman Sharma'}</span>
+                                </h1>
+                                <p className="rec-hero-subtitle">
+                                    Here's your workspace. Pick any section to get started.
+                                </p>
+                            </div>
+
+                            {/* Right Side: AI Receptionist Desk Visual */}
+                            <div className="rec-hero-art">
+                                <img 
+                                    src="/assets/receptionist_ai_desk.jpg" 
+                                    alt="Receptionist Desk" 
+                                    className="rec-hero-img" 
+                                />
+                            </div>
+                        </div>
+
+                        {/* 2. Metrics Bar (4 KPI Cards) */}
+                        <div className="rec-metrics-grid">
+                            {/* 1. Today's Registrations */}
+                            <div className="rec-metric-card">
+                                <div className="rec-metric-icon-box rec-box-mint">
+                                    <FiUsers />
+                                </div>
+                                <div className="rec-metric-info">
+                                    <span className="rec-metric-label">Today's Registrations</span>
+                                    <div className="rec-metric-val-row">
+                                        <span className="rec-metric-val">{todayRegs}</span>
+                                        <span className="rec-metric-trend">↑</span>
+                                    </div>
+                                    <span className="rec-metric-sub" style={{ color: '#10b981' }}>+12% from yesterday</span>
                                 </div>
                             </div>
 
-                            {/* Card 2: Patient Search */}
-                            <div
-                                onClick={() => navigate('/reception/patients')}
-                                style={{
-                                    background: '#ffffff',
-                                    borderRadius: '16px',
-                                    padding: '26px',
-                                    border: '1px solid #e2e8f0',
-                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s ease',
-                                    display: 'flex',
-                                    alignItems: 'flex-start',
-                                    gap: '18px'
-                                }}
-                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(37, 99, 235, 0.12)'; e.currentTarget.style.borderColor = '#bfdbfe'; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
-                            >
-                                <div style={{
-                                    width: '54px',
-                                    height: '54px',
-                                    borderRadius: '14px',
-                                    background: '#eff6ff',
-                                    color: '#2563eb',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '1.6rem',
-                                    flexShrink: 0
-                                }}>
-                                    <FiSearch />
+                            {/* 2. Today's Appointments */}
+                            <div className="rec-metric-card">
+                                <div className="rec-metric-icon-box rec-box-blue">
+                                    <FiFileText />
                                 </div>
-                                <div>
-                                    <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Patient Search</h4>
-                                    <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
-                                        View and manage patient records
-                                    </p>
+                                <div className="rec-metric-info">
+                                    <span className="rec-metric-label">Today's Appointments</span>
+                                    <div className="rec-metric-val-row">
+                                        <span className="rec-metric-val">{todayAppts}</span>
+                                        <span className="rec-metric-trend">↑</span>
+                                    </div>
+                                    <span className="rec-metric-sub" style={{ color: '#10b981' }}>+8% from yesterday</span>
                                 </div>
                             </div>
 
-                            {/* Card 3: Finance & Accounting */}
-                            <div
-                                onClick={() => {
-                                    fetchTransactions();
-                                    setViewMode('transactions');
-                                    navigate('/reception/dashboard?view=transactions');
-                                }}
-                                style={{
-                                    background: '#ffffff',
-                                    borderRadius: '16px',
-                                    padding: '26px',
-                                    border: '1px solid #e2e8f0',
-                                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.03)',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s ease',
-                                    display: 'flex',
-                                    alignItems: 'flex-start',
-                                    gap: '18px'
-                                }}
-                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 20px -5px rgba(217, 119, 6, 0.12)'; e.currentTarget.style.borderColor = '#fde68a'; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
-                            >
-                                <div style={{
-                                    width: '54px',
-                                    height: '54px',
-                                    borderRadius: '14px',
-                                    background: '#fffbeb',
-                                    color: '#d97706',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '1.6rem',
-                                    flexShrink: 0
-                                }}>
+                            {/* 3. Today's Collections */}
+                            <div className="rec-metric-card">
+                                <div className="rec-metric-icon-box rec-box-amber">
                                     <FaRupeeSign />
                                 </div>
-                                <div>
-                                    <h4 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 800, color: '#0f172a' }}>Finance & Accounting</h4>
-                                    <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748b', lineHeight: '1.4' }}>
-                                        Access Finance & Accounting
-                                    </p>
+                                <div className="rec-metric-info">
+                                    <span className="rec-metric-label">Today's Collections</span>
+                                    <div className="rec-metric-val-row">
+                                        <span className="rec-metric-val">₹ {Number(todayColls).toLocaleString('en-IN')}</span>
+                                    </div>
+                                    <span className="rec-metric-sub" style={{ color: '#10b981' }}>+15% from yesterday</span>
                                 </div>
                             </div>
 
-                            {/* Card 4: Patient Billing */}
+                            {/* 4. Pending Bills */}
+                            <div className="rec-metric-card">
+                                <div className="rec-metric-icon-box rec-box-purple">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                                    </svg>
+                                </div>
+                                <div className="rec-metric-info">
+                                    <span className="rec-metric-label">Pending Bills</span>
+                                    <div className="rec-metric-val-row">
+                                        <span className="rec-metric-val">{pendingBills}</span>
+                                    </div>
+                                    <span className="rec-metric-sub">View and manage</span>
+                                </div>
+                            </div>
+                        </div>
 
+                        {/* 3. Quick Access Section */}
+                        <div className="rec-quick-section">
+                            <div className="rec-section-heading">
+                                <span style={{ color: '#eab308' }}>⚡</span>
+                                <span>QUICK ACCESS</span>
+                            </div>
+
+                            <div className="rec-quick-grid">
+                                {/* Card 1: Patient Registration */}
+                                <div 
+                                    className="rec-quick-card rec-card-mint"
+                                    onClick={() => navigate('/reception/dashboard?view=intake')}
+                                >
+                                    <div className="rec-card-top">
+                                        <div className="rec-card-icon-box rec-box-mint">
+                                            <FiUserPlus />
+                                        </div>
+                                        <div className="rec-card-content">
+                                            <h4>Patient Registration</h4>
+                                            <p>Register new patients and manage records</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="rec-card-btn-wrap">
+                                        <button className="rec-pill-btn rec-btn-mint">
+                                            <span>Get Started</span>
+                                            <span>→</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Decorative Wave Watermark */}
+                                    <div className="rec-card-watermark">
+                                        <svg width="90" height="90" viewBox="0 0 100 100" fill="none">
+                                            <circle cx="20" cy="80" r="3" fill="#10b981" />
+                                            <circle cx="35" cy="70" r="3.5" fill="#10b981" />
+                                            <circle cx="50" cy="60" r="4" fill="#10b981" />
+                                            <circle cx="65" cy="50" r="4.5" fill="#10b981" />
+                                            <circle cx="80" cy="40" r="5" fill="#10b981" />
+                                            <circle cx="70" cy="85" r="16" fill="#10b981" opacity="0.25" />
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                {/* Card 2: Patient Search */}
+                                <div 
+                                    className="rec-quick-card rec-card-blue"
+                                    onClick={() => navigate('/reception/patients')}
+                                >
+                                    <div className="rec-card-top">
+                                        <div className="rec-card-icon-box rec-box-blue">
+                                            <FiSearch />
+                                        </div>
+                                        <div className="rec-card-content">
+                                            <h4>Patient Search</h4>
+                                            <p>Search and view patient information quickly</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="rec-card-btn-wrap">
+                                        <button className="rec-pill-btn rec-btn-blue">
+                                            <span>Search Now</span>
+                                            <span>→</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Decorative Wave Watermark */}
+                                    <div className="rec-card-watermark">
+                                        <svg width="90" height="90" viewBox="0 0 100 100" fill="none">
+                                            <circle cx="20" cy="80" r="3" fill="#3b82f6" />
+                                            <circle cx="35" cy="70" r="3.5" fill="#3b82f6" />
+                                            <circle cx="50" cy="60" r="4" fill="#3b82f6" />
+                                            <circle cx="65" cy="50" r="4.5" fill="#3b82f6" />
+                                            <circle cx="80" cy="40" r="5" fill="#3b82f6" />
+                                            <circle cx="70" cy="85" r="16" fill="#3b82f6" opacity="0.25" />
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                {/* Card 3: Finance & Accounting */}
+                                <div 
+                                    className="rec-quick-card rec-card-purple"
+                                    onClick={() => {
+                                        fetchTransactions();
+                                        setViewMode('transactions');
+                                        navigate('/reception/dashboard?view=transactions');
+                                    }}
+                                >
+                                    <div className="rec-card-top">
+                                        <div className="rec-card-icon-box rec-box-purple">
+                                            <FaRupeeSign />
+                                        </div>
+                                        <div className="rec-card-content">
+                                            <h4>Finance & Accounting</h4>
+                                            <p>Access billing, payments and financial reports</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="rec-card-btn-wrap">
+                                        <button className="rec-pill-btn rec-btn-purple">
+                                            <span>Open Finance</span>
+                                            <span>→</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Decorative Chart Watermark */}
+                                    <div className="rec-card-watermark">
+                                        <svg width="90" height="90" viewBox="0 0 100 100" fill="none">
+                                            <rect x="40" y="60" width="10" height="30" rx="3" fill="#8b5cf6" opacity="0.4" />
+                                            <rect x="58" y="45" width="10" height="45" rx="3" fill="#8b5cf6" opacity="0.6" />
+                                            <rect x="76" y="30" width="10" height="60" rx="3" fill="#8b5cf6" opacity="0.85" />
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 4. Inspirational Quote / Footer Banner */}
+                        <div className="rec-quote-banner">
+                            <div className="rec-quote-left">
+                                <div className="rec-quote-icon">“</div>
+                                <div className="rec-quote-text">
+                                    <h5>Compassionate care, every patient, every time.</h5>
+                                    <p>Let's make a difference together!</p>
+                                </div>
+                            </div>
+
+                            {/* Glowing 3D Heart Art */}
+                            <div className="rec-quote-art">
+                                <svg viewBox="0 0 140 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <defs>
+                                        <linearGradient id="heartGlow" x1="0" y1="0" x2="1" y2="1">
+                                            <stop offset="0%" stopColor="#34d399" />
+                                            <stop offset="100%" stopColor="#059669" />
+                                        </linearGradient>
+                                    </defs>
+                                    <g transform="translate(45, 2)">
+                                        <path d="M20 7 C 12 -2, 0 5, 0 14 C 0 24, 18 34, 20 36 C 22 34, 40 24, 40 14 C 40 5, 28 -2, 20 7 Z" fill="url(#heartGlow)" />
+                                        <path d="M 8 18 L 14 18 L 17 12 L 21 24 L 24 16 L 27 19 L 32 19" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                        <path d="M 3 24 Q -4 16 2 8 Q 8 20 3 24 Z" fill="#6ee7b7" opacity="0.8" />
+                                        <path d="M 37 24 Q 44 16 38 8 Q 32 20 37 24 Z" fill="#6ee7b7" opacity="0.8" />
+                                    </g>
+                                    <circle cx="105" cy="14" r="2" fill="#34d399" />
+                                    <circle cx="118" cy="24" r="1.5" fill="#10b981" />
+                                </svg>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -22,7 +22,8 @@ import {
     FaCircleInfo, 
     FaBolt, 
     FaXmark,
-    FaEye
+    FaEye,
+    FaArrowsRotate
 } from 'react-icons/fa6';
 import './AdminQuestionLibrary.css';
 
@@ -154,6 +155,7 @@ const AdminQuestionLibrary = () => {
 
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const [isAiGenerating, setIsAiGenerating] = useState(false);
     const [allowedDepartments, setAllowedDepartments] = useState(null);
 
@@ -221,6 +223,15 @@ const AdminQuestionLibrary = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        await fetchLibrary();
+        setTimeout(() => {
+            setRefreshing(false);
+            toast.success('Question Library refreshed!');
+        }, 400);
     };
 
     const handleResetToStandard = async () => {
@@ -772,6 +783,9 @@ const AdminQuestionLibrary = () => {
                         <p>Construct dynamic diagnostic forms for doctors.</p>
                     </div>
                     <div className="ql-header-actions">
+                        <button className="ql-btn ql-btn-refresh" onClick={handleRefresh} disabled={refreshing || loading} title="Refresh library from server">
+                            <FaArrowsRotate className={refreshing ? 'refresh-spin' : ''} /> {refreshing ? 'Refreshing...' : 'Refresh'}
+                        </button>
                         <button className="ql-btn ql-btn-reset" onClick={handleResetToStandard} disabled={saving} title="Reload all 12 standard medical departments">
                             <FaMicrochip /> Reset 12 Depts
                         </button>
