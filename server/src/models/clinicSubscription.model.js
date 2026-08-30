@@ -31,5 +31,6 @@ const clinicSubscriptionSchema = new mongoose.Schema({
 
 // One record per clinic per month
 clinicSubscriptionSchema.index({ clinicId: 1, month: 1, year: 1 }, { unique: true });
+clinicSubscriptionSchema.index({ year: 1, month: 1 });
 
 module.exports = mongoose.model('ClinicSubscription', clinicSubscriptionSchema);

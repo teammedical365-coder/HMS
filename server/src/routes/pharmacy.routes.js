@@ -78,30 +78,17 @@ router.put('/hospital-billing', verifyToken, async (req, res) => {
     }
 });
 
-// GET all inventory
+// GET all inventory (Optimized Lean Query)
 router.get('/inventory', verifyToken, async (req, res) => {
     try {
-        let pharmacyIds = [req.user.id];
-        let query = { pharmacyId: req.user.id };
+        const query = req.user.hospitalId 
+            ? { hospitalId: req.user.hospitalId } 
+            : { pharmacyId: req.user.id };
 
-        if (req.user.hospitalId) {
-            const pharmacyRoles = await Role.find({ name: { $regex: /pharmac/i } });
-            if (pharmacyRoles.length > 0) {
-                const pharmacists = await User.find({ hospitalId: req.user.hospitalId, role: { $in: pharmacyRoles.map(r => r._id) } });
-                const ids = pharmacists.map(p => p._id);
-                if (ids.length > 0) pharmacyIds = ids;
-            }
-            query = {
-                $or: [
-                    { pharmacyId: { $in: pharmacyIds } },
-                    { hospitalId: req.user.hospitalId }
-                ]
-            };
-        } else {
-             query = { pharmacyId: req.user.id };
-        }
+        const items = await Inventory.find(query)
+            .sort({ createdAt: -1 })
+            .lean();
 
-        const items = await Inventory.find(query).sort({ createdAt: -1 });
         res.json({ success: true, data: items });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

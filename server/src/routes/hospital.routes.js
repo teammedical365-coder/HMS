@@ -88,11 +88,13 @@ router.get('/', verifyCentralAdmin, async (req, res) => {
             filter.subscriptionPlan = plan;
         }
 
-        const hospitals = await Hospital.find(filter).populate('adminUserId', 'name email');
+        const hospitals = await Hospital.find(filter)
+            .populate('adminUserId', 'name email')
+            .lean();
         
         // Map legacy data so frontend receives expected plan names
         const mappedHospitals = hospitals.map(h => {
-            const hospital = h.toObject();
+            const hospital = { ...h };
             if (!hospital.subscriptionPlan || hospital.subscriptionPlan === 'none') {
                 if (hospital.clinicType === 'clinic') {
                     hospital.subscriptionPlan = 'starter';

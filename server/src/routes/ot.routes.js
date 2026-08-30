@@ -19,21 +19,88 @@ const getSurgeryPlanModel = (req) => {
     return SurgeryPlanMaster;
 };
 
-// Helper: robustly populate surgery plan fields from Master User/Doctor and Tenant/Master OTRoom
+// Helper: High-Performance Batch populate surgery plan fields using in-memory Maps
 async function populateSurgeryPlans(plans, req) {
     if (!plans) return null;
     const isArray = Array.isArray(plans);
     const list = isArray ? plans : [plans];
+    if (list.length === 0) return isArray ? [] : null;
 
     const OTRoomModel = req?.tenantDb ? (getTenantModels(req.tenantDb).OTRoom || OTRoomMaster) : OTRoomMaster;
 
-    const populated = await Promise.all(list.map(async (doc) => {
+    // 1. Collect all unique IDs across all surgery plans
+    const patientIds = new Set();
+    const doctorAndUserIds = new Set();
+    const roomIds = new Set();
+
+    list.forEach(doc => {
+        const item = doc.toObject ? doc.toObject() : doc;
+        if (item.patientId) {
+            const raw = typeof item.patientId === 'object' && item.patientId._id ? item.patientId._id : item.patientId;
+            if (raw) patientIds.add(String(raw));
+        }
+        ['surgeonId', 'doctorId', 'referringDoctorId'].forEach(field => {
+            if (item[field]) {
+                const raw = typeof item[field] === 'object' && item[field]._id ? item[field]._id : item[field];
+                if (raw) doctorAndUserIds.add(String(raw));
+            }
+        });
+        if (Array.isArray(item.assistantSurgeonIds)) {
+            item.assistantSurgeonIds.forEach(asId => {
+                const raw = typeof asId === 'object' && asId._id ? asId._id : asId;
+                if (raw) doctorAndUserIds.add(String(raw));
+            });
+        }
+        if (item.otRoomId) {
+            const raw = typeof item.otRoomId === 'object' && item.otRoomId._id ? item.otRoomId._id : item.otRoomId;
+            if (raw) roomIds.add(String(raw));
+        }
+    });
+
+    const allUserIds = Array.from(new Set([...patientIds, ...doctorAndUserIds]));
+    const allDoctorIds = Array.from(doctorAndUserIds);
+    const allRoomIds = Array.from(roomIds);
+
+    // 2. Fetch all related documents in 3 parallel batch queries
+    const [users, doctors, rooms] = await Promise.all([
+        allUserIds.length > 0
+            ? UserMaster.find({ _id: { $in: allUserIds } }).select('name email phone patientId mrn age gender dob specialization firstName lastName').lean()
+            : [],
+        allDoctorIds.length > 0
+            ? DoctorMaster.find({ $or: [{ _id: { $in: allDoctorIds } }, { userId: { $in: allDoctorIds } }] }).select('name email phone specialization firstName lastName userId').lean()
+            : [],
+        allRoomIds.length > 0
+            ? OTRoomModel.find({ _id: { $in: allRoomIds } }).select('name status').lean()
+            : []
+    ]);
+
+    // 3. Build instant Map lookups
+    const userMap = new Map();
+    users.forEach(u => userMap.set(String(u._id), u));
+
+    const doctorMap = new Map();
+    doctors.forEach(d => {
+        doctorMap.set(String(d._id), d);
+        if (d.userId) doctorMap.set(String(d.userId), d);
+    });
+
+    const roomMap = new Map();
+    rooms.forEach(r => roomMap.set(String(r._id), r));
+
+    // 4. In-memory O(1) resolution
+    const resolveDoctor = (rawId) => {
+        if (!rawId) return null;
+        const idStr = String(rawId);
+        return userMap.get(idStr) || doctorMap.get(idStr) || { _id: rawId, name: 'Doctor' };
+    };
+
+    const populated = list.map(doc => {
         const item = doc.toObject ? doc.toObject() : { ...doc };
 
         // 1. Populate patientId
         if (item.patientId) {
             const rawP = typeof item.patientId === 'object' && item.patientId._id ? item.patientId._id : item.patientId;
-            const p = await UserMaster.findById(rawP).select('name email phone patientId mrn age gender dob').lean();
+            const p = userMap.get(String(rawP));
             if (p) {
                 item.patientId = p;
             } else if (typeof item.patientId === 'object' && !item.patientId.name) {
@@ -43,63 +110,42 @@ async function populateSurgeryPlans(plans, req) {
 
         // 2. Populate surgeonId
         if (item.surgeonId) {
-            const rawDoc = typeof item.surgeonId === 'object' && item.surgeonId._id ? item.surgeonId._id : item.surgeonId;
-            let d = await UserMaster.findById(rawDoc).select('name email phone specialization firstName lastName').lean();
-            if (!d) {
-                d = await DoctorMaster.findById(rawDoc).select('name email phone specialization firstName lastName').lean();
-            }
-            if (!d) {
-                d = await DoctorMaster.findOne({ userId: rawDoc }).select('name email phone specialization firstName lastName').lean();
-            }
+            const raw = typeof item.surgeonId === 'object' && item.surgeonId._id ? item.surgeonId._id : item.surgeonId;
+            const d = resolveDoctor(raw);
             if (d) item.surgeonId = d;
         }
 
-        // 3. Populate doctorId (consulting doctor)
+        // 3. Populate doctorId
         if (item.doctorId) {
-            const rawDoc = typeof item.doctorId === 'object' && item.doctorId._id ? item.doctorId._id : item.doctorId;
-            let d = await UserMaster.findById(rawDoc).select('name email phone specialization firstName lastName').lean();
-            if (!d) {
-                d = await DoctorMaster.findById(rawDoc).select('name email phone specialization firstName lastName').lean();
-            }
-            if (!d) {
-                d = await DoctorMaster.findOne({ userId: rawDoc }).select('name email phone specialization firstName lastName').lean();
-            }
+            const raw = typeof item.doctorId === 'object' && item.doctorId._id ? item.doctorId._id : item.doctorId;
+            const d = resolveDoctor(raw);
             if (d) item.doctorId = d;
         }
 
         // 4. Populate referringDoctorId
         if (item.referringDoctorId) {
-            const rawDoc = typeof item.referringDoctorId === 'object' && item.referringDoctorId._id ? item.referringDoctorId._id : item.referringDoctorId;
-            let d = await UserMaster.findById(rawDoc).select('name email phone specialization firstName lastName').lean();
-            if (!d) {
-                d = await DoctorMaster.findById(rawDoc).select('name email phone specialization firstName lastName').lean();
-            }
-            if (!d) {
-                d = await DoctorMaster.findOne({ userId: rawDoc }).select('name email phone specialization firstName lastName').lean();
-            }
+            const raw = typeof item.referringDoctorId === 'object' && item.referringDoctorId._id ? item.referringDoctorId._id : item.referringDoctorId;
+            const d = resolveDoctor(raw);
             if (d) item.referringDoctorId = d;
         }
 
         // 5. Populate assistantSurgeonIds
-        if (item.assistantSurgeonIds && Array.isArray(item.assistantSurgeonIds)) {
-            item.assistantSurgeonIds = await Promise.all(item.assistantSurgeonIds.map(async (asId) => {
-                const rawId = typeof asId === 'object' && asId._id ? asId._id : asId;
-                let d = await UserMaster.findById(rawId).select('name email phone specialization firstName lastName').lean();
-                if (!d) d = await DoctorMaster.findById(rawId).select('name email phone specialization firstName lastName').lean();
-                if (!d) d = await DoctorMaster.findOne({ userId: rawId }).select('name email phone specialization firstName lastName').lean();
-                return d || { _id: rawId, name: 'Doctor' };
-            }));
+        if (Array.isArray(item.assistantSurgeonIds)) {
+            item.assistantSurgeonIds = item.assistantSurgeonIds.map(asId => {
+                const raw = typeof asId === 'object' && asId._id ? asId._id : asId;
+                return resolveDoctor(raw) || { _id: raw, name: 'Doctor' };
+            });
         }
 
         // 6. Populate otRoomId
         if (item.otRoomId) {
-            const rawRoom = typeof item.otRoomId === 'object' && item.otRoomId._id ? item.otRoomId._id : item.otRoomId;
-            const r = await OTRoomModel.findById(rawRoom).select('name status').lean() || await OTRoomMaster.findById(rawRoom).select('name status').lean();
+            const raw = typeof item.otRoomId === 'object' && item.otRoomId._id ? item.otRoomId._id : item.otRoomId;
+            const r = roomMap.get(String(raw));
             if (r) item.otRoomId = r;
         }
 
         return item;
-    }));
+    });
 
     return isArray ? populated : populated[0];
 }

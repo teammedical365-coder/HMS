@@ -103,25 +103,27 @@ router.get('/', async (req, res) => {
     }
 });
 
-// 1. GET Unique Patients
+// 1. GET Unique Patients (Optimized Lean Projection)
 router.get('/patients', verifyToken, async (req, res) => {
     try {
         const doctorUserId = req.user.id || req.user.userId;
         const query = await getDoctorQuery(doctorUserId, req.user.hospitalId);
 
         const appointments = await Appointment.find(query)
+            .select('userId patientId appointmentDate')
             .populate('userId', 'name email phone patientId fertilityProfile')
             .sort({ appointmentDate: -1 })
             .lean();
 
         const uniquePatients = {};
-        appointments.forEach(app => {
+        for (let i = 0; i < appointments.length; i++) {
+            const app = appointments[i];
             if (app.userId && app.userId._id) {
-                const pid = app.userId._id.toString();
+                const pid = String(app.userId._id);
                 if (!uniquePatients[pid]) {
                     uniquePatients[pid] = {
                         _id: pid,
-                        patientId: app.userId.patientId,
+                        patientId: app.userId.patientId || app.patientId,
                         name: app.userId.name,
                         phone: app.userId.phone,
                         lastVisit: app.appointmentDate,
@@ -129,7 +131,7 @@ router.get('/patients', verifyToken, async (req, res) => {
                     };
                 }
             }
-        });
+        }
         res.json({ success: true, patients: Object.values(uniquePatients) });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error fetching patients' });

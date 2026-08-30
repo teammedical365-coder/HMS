@@ -17,34 +17,84 @@ const MasterPaymentTransaction = require('../models/paymentTransaction.model');
 const MasterSurgeryPlan = require('../models/surgeryPlan.model');
 const MasterOTRoom = require('../models/otRoom.model');
 
-// Helper: populate surgeon, assistants, and otRoom on surgery plans for billing
+// Helper: High-Performance Batch populate surgeon, assistants, and otRoom on surgery plans for billing
 const populateBillingSurgeryPlans = async (plans) => {
     if (!plans || !plans.length) return [];
-    return Promise.all(plans.map(async (doc) => {
-        const item = doc.toObject ? doc.toObject() : { ...doc };
+
+    const doctorAndUserIds = new Set();
+    const roomIds = new Set();
+
+    plans.forEach(doc => {
+        const item = doc.toObject ? doc.toObject() : doc;
         if (item.surgeonId) {
             const raw = typeof item.surgeonId === 'object' && item.surgeonId._id ? item.surgeonId._id : item.surgeonId;
-            let d = await MasterUser.findById(raw).select('name email phone specialization firstName lastName').lean();
-            if (!d) d = await MasterDoctor.findById(raw).select('name email phone specialization firstName lastName').lean();
-            if (!d) d = await MasterDoctor.findOne({ userId: raw }).select('name email phone specialization firstName lastName').lean();
-            if (d) item.surgeonId = d;
+            if (raw) doctorAndUserIds.add(String(raw));
         }
-        if (item.assistantSurgeonIds && Array.isArray(item.assistantSurgeonIds)) {
-            item.assistantSurgeonIds = await Promise.all(item.assistantSurgeonIds.map(async (asId) => {
+        if (Array.isArray(item.assistantSurgeonIds)) {
+            item.assistantSurgeonIds.forEach(asId => {
                 const raw = typeof asId === 'object' && asId._id ? asId._id : asId;
-                let d = await MasterUser.findById(raw).select('name email phone specialization firstName lastName').lean();
-                if (!d) d = await MasterDoctor.findById(raw).select('name email phone specialization firstName lastName').lean();
-                if (!d) d = await MasterDoctor.findOne({ userId: raw }).select('name email phone specialization firstName lastName').lean();
-                return d || { _id: raw, name: 'Doctor' };
-            }));
+                if (raw) doctorAndUserIds.add(String(raw));
+            });
         }
         if (item.otRoomId) {
             const raw = typeof item.otRoomId === 'object' && item.otRoomId._id ? item.otRoomId._id : item.otRoomId;
-            const r = await MasterOTRoom.findById(raw).select('name status').lean();
+            if (raw) roomIds.add(String(raw));
+        }
+    });
+
+    const allDoctorIds = Array.from(doctorAndUserIds);
+    const allRoomIds = Array.from(roomIds);
+
+    const [users, doctors, rooms] = await Promise.all([
+        allDoctorIds.length > 0
+            ? MasterUser.find({ _id: { $in: allDoctorIds } }).select('name email phone specialization firstName lastName').lean()
+            : [],
+        allDoctorIds.length > 0
+            ? MasterDoctor.find({ $or: [{ _id: { $in: allDoctorIds } }, { userId: { $in: allDoctorIds } }] }).select('name email phone specialization firstName lastName userId').lean()
+            : [],
+        allRoomIds.length > 0
+            ? MasterOTRoom.find({ _id: { $in: allRoomIds } }).select('name status').lean()
+            : []
+    ]);
+
+    const userMap = new Map();
+    users.forEach(u => userMap.set(String(u._id), u));
+
+    const doctorMap = new Map();
+    doctors.forEach(d => {
+        doctorMap.set(String(d._id), d);
+        if (d.userId) doctorMap.set(String(d.userId), d);
+    });
+
+    const roomMap = new Map();
+    rooms.forEach(r => roomMap.set(String(r._id), r));
+
+    const resolveDoctor = (rawId) => {
+        if (!rawId) return null;
+        const idStr = String(rawId);
+        return userMap.get(idStr) || doctorMap.get(idStr) || { _id: rawId, name: 'Doctor' };
+    };
+
+    return plans.map(doc => {
+        const item = doc.toObject ? doc.toObject() : { ...doc };
+        if (item.surgeonId) {
+            const raw = typeof item.surgeonId === 'object' && item.surgeonId._id ? item.surgeonId._id : item.surgeonId;
+            const d = resolveDoctor(raw);
+            if (d) item.surgeonId = d;
+        }
+        if (Array.isArray(item.assistantSurgeonIds)) {
+            item.assistantSurgeonIds = item.assistantSurgeonIds.map(asId => {
+                const raw = typeof asId === 'object' && asId._id ? asId._id : asId;
+                return resolveDoctor(raw) || { _id: raw, name: 'Doctor' };
+            });
+        }
+        if (item.otRoomId) {
+            const raw = typeof item.otRoomId === 'object' && item.otRoomId._id ? item.otRoomId._id : item.otRoomId;
+            const r = roomMap.get(String(raw));
             if (r) item.otRoomId = r;
         }
         return item;
-    }));
+    });
 };
 
 // Billing access middleware — receptionist also gets billing view

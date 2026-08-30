@@ -60,15 +60,29 @@ router.get('/system', verifyCentralAdmin, async (req, res) => {
 
         const totalCurrentMonth = perPatientRevenue + fixedMonthlyRevenue + perLoginRevenue;
 
-        // ── Last 12 months breakdown ─────────────────────────────────────────
+        // ── Single Aggregation for all monthly & quarterly subscriptions ────────
+        const startYear = currentYear - 2;
+        const allHistoricalSubs = await ClinicSubscription.aggregate([
+            { $match: { year: { $gte: startYear } } },
+            { $group: {
+                _id: { year: "$year", month: "$month" },
+                totalAmount: { $sum: "$totalAmount" }
+            }}
+        ]);
+
+        const subMap = new Map();
+        allHistoricalSubs.forEach(item => {
+            subMap.set(`${item._id.year}-${item._id.month}`, item.totalAmount);
+        });
+
+        // ── Last 12 months breakdown (O(1) memory lookup) ─────────────────────
         const monthlyBreakdown = [];
         for (let i = 11; i >= 0; i--) {
             const d = new Date(currentYear, currentMonth - 1 - i, 1);
             const m = d.getMonth() + 1;
             const y = d.getFullYear();
 
-            const subs = await ClinicSubscription.find({ month: m, year: y }).lean();
-            const ppAmt = subs.reduce((s, x) => s + (x.totalAmount || 0), 0);
+            const ppAmt = subMap.get(`${y}-${m}`) || 0;
             const fmAmt = fixedMonthlyRevenue; // same monthly fee each month
 
             monthlyBreakdown.push({
@@ -85,7 +99,6 @@ router.get('/system', verifyCentralAdmin, async (req, res) => {
         // ── Quarterly summary (last 4 quarters) ──────────────────────────────
         const quarterlyBreakdown = [];
         for (let q = 3; q >= 0; q--) {
-            // Each quarter = 3 consecutive months ending at (currentMonth - q*3)
             const endMonthOffset = -q * 3;
             const endDate = new Date(currentYear, currentMonth - 1 + endMonthOffset, 1);
             const quarterLabel = `Q${Math.ceil((endDate.getMonth() + 1) / 3)} ${endDate.getFullYear()}`;
@@ -95,9 +108,7 @@ router.get('/system', verifyCentralAdmin, async (req, res) => {
                 const md = new Date(endDate.getFullYear(), endDate.getMonth() - mOff, 1);
                 const mm = md.getMonth() + 1;
                 const yy = md.getFullYear();
-                const subs = await ClinicSubscription.find({ month: mm, year: yy }).lean();
-                qTotal += subs.reduce((s, x) => s + (x.totalAmount || 0), 0);
-                qTotal += fixedMonthlyRevenue;
+                qTotal += (subMap.get(`${yy}-${mm}`) || 0) + fixedMonthlyRevenue;
             }
             quarterlyBreakdown.push({ label: quarterLabel, total: qTotal });
         }

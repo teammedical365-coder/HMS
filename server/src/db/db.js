@@ -17,15 +17,16 @@ async function connectDB() {
             process.exit(1);
         }
 
-        // MongoDB Atlas connection options
+        // MongoDB connection options optimized for high-concurrency HMS workloads
         const options = {
-            serverSelectionTimeoutMS: 30000, // Increased timeout for Atlas
-            socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
-            connectTimeoutMS: 30000, // Give up initial connection after 30 seconds
+            serverSelectionTimeoutMS: 15000,
+            socketTimeoutMS: 45000,
+            connectTimeoutMS: 15000,
             retryWrites: true,
             w: 'majority',
-            maxPoolSize: 10, // Maintain up to 10 socket connections
-            minPoolSize: 2, // Maintain at least 2 socket connections
+            maxPoolSize: 50, // Maintain up to 50 concurrent socket connections
+            minPoolSize: 5,  // Maintain at least 5 warm socket connections
+            maxIdleTimeMS: 30000,
         };
 
         await mongoose.connect(mongoUrl, options);

@@ -48,4 +48,10 @@ const clinicalVisitSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+// Compound Indexes for fast patient history and queue lookups
+clinicalVisitSchema.index({ hospitalId: 1, patientId: 1, createdAt: -1 });
+clinicalVisitSchema.index({ patientId: 1, createdAt: -1 });
+clinicalVisitSchema.index({ appointmentId: 1 });
+clinicalVisitSchema.index({ hospitalId: 1, status: 1 });
+
 module.exports = mongoose.model('ClinicalVisit', clinicalVisitSchema);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { patientAPI, receptionAPI, reportAPI } from '../../utils/api';
+import { patientAPI, receptionAPI, reportAPI, consentAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { 
@@ -57,6 +57,9 @@ const HospitalPatientProfileContent = () => {
     const [consentList, setConsentList] = useState([]);
     const [consentFile, setConsentFile] = useState(null);
     const [uploadingConsent, setUploadingConsent] = useState(false);
+    const [consentTemplates, setConsentTemplates] = useState([]);
+    const [selectedConsentTemplate, setSelectedConsentTemplate] = useState('');
+    const [generatingConsentPdf, setGeneratingConsentPdf] = useState(false);
 
     const [documentList, setDocumentList] = useState([]);
     const [_activeFollowups, setActiveFollowups] = useState([]);
@@ -209,6 +212,45 @@ const HospitalPatientProfileContent = () => {
             alert('Failed to upload consent form. Please try again.');
         } finally {
             setUploadingConsent(false);
+        }
+    };
+
+    // Load active consent templates
+    useEffect(() => {
+        consentAPI.getTemplates({ status: 'active' }).then(res => {
+            if (res?.success && Array.isArray(res.data)) {
+                setConsentTemplates(res.data);
+                if (res.data.length > 0) setSelectedConsentTemplate(res.data[0]._id);
+            }
+        }).catch(err => console.error('Failed to load consent templates:', err));
+    }, []);
+
+    const handleGenerateConsentPDF = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (!selectedConsentTemplate || !patientData) return;
+        setGeneratingConsentPdf(true);
+        try {
+            const token = localStorage.getItem('token') || '';
+            const pid = patientData._id || patientId;
+            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/consent/templates/${selectedConsentTemplate}/generate-pdf?patientId=${pid}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error('PDF Generation failed');
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const template = consentTemplates.find(t => t._id === selectedConsentTemplate);
+            a.download = `${template?.name || 'Consent'}_${(patientData.name || 'Patient').replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (err) {
+            console.error('Consent PDF error:', err);
+            alert('Could not download consent PDF. Please check the template format.');
+        } finally {
+            setGeneratingConsentPdf(false);
         }
     };
 
@@ -807,6 +849,42 @@ const HospitalPatientProfileContent = () => {
                                 <FiUpload /> {uploadingConsent ? 'Uploading...' : 'Upload Consent Form'}
                             </button>
                         </form>
+
+                        {/* Generate Auto-Filled Consent Form from Templates */}
+                        <div className="upp-consent-template-section" style={{ marginTop: '16px', padding: '14px 16px', background: '#f8fafc', borderRadius: '12px', border: '1.5px dashed #cbd5e1' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                                <FiFileText style={{ color: '#6366f1', fontSize: '16px' }} />
+                                <span style={{ fontSize: '12.5px', fontWeight: '800', color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Generate Auto-Filled Consent Form
+                                </span>
+                            </div>
+                            <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 10px 0' }}>
+                                Select an active hospital consent template to generate an auto-filled PDF with <strong>{patientData?.name || 'Patient'}</strong>'s details.
+                            </p>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <select 
+                                    value={selectedConsentTemplate} 
+                                    onChange={(e) => setSelectedConsentTemplate(e.target.value)}
+                                    style={{ flex: 1, minWidth: '220px', padding: '9px 12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', background: '#fff', color: '#1e293b', fontWeight: 600 }}
+                                >
+                                    {consentTemplates.length === 0 ? (
+                                        <option value="">No templates available</option>
+                                    ) : (
+                                        consentTemplates.map(t => (
+                                            <option key={t._id} value={t._id}>{t.name} ({t.categoryId?.name || t.category || 'General'})</option>
+                                        ))
+                                    )}
+                                </select>
+                                <button 
+                                    type="button" 
+                                    onClick={handleGenerateConsentPDF}
+                                    disabled={!selectedConsentTemplate || generatingConsentPdf || consentTemplates.length === 0}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 18px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '700', fontSize: '13px', cursor: (!selectedConsentTemplate || generatingConsentPdf) ? 'not-allowed' : 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(99, 102, 241, 0.25)' }}
+                                >
+                                    <FiDownload /> {generatingConsentPdf ? 'Generating PDF...' : 'Download Auto-Filled PDF'}
+                                </button>
+                            </div>
+                        </div>
 
                         {consentList.length === 0 ? (
                             <div className="upp-empty-state">No consent forms uploaded yet.</div>

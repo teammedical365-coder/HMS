@@ -78,6 +78,13 @@ const labReportSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Compound Indexes for fast lab queries, reports and patient history
+labReportSchema.index({ hospitalId: 1, userId: 1, createdAt: -1 });
+labReportSchema.index({ hospitalId: 1, testStatus: 1, createdAt: -1 });
+labReportSchema.index({ hospitalId: 1, paymentStatus: 1 });
+labReportSchema.index({ userId: 1, createdAt: -1 });
+labReportSchema.index({ patientId: 1 });
+
 const LabReport = mongoose.model('LabReport', labReportSchema);
 
 module.exports = LabReport;

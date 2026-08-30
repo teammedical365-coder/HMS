@@ -100,6 +100,9 @@ appointmentSchema.index(
     { doctorId: 1, appointmentDate: 1, appointmentTime: 1 },
     { unique: true, partialFilterExpression: { status: { $ne: 'cancelled' } } }
 );
+appointmentSchema.index({ hospitalId: 1, appointmentDate: -1, status: 1 });
+appointmentSchema.index({ hospitalId: 1, createdAt: -1 });
+appointmentSchema.index({ userId: 1, createdAt: -1 });
 
 const Appointment = mongoose.model('Appointment', appointmentSchema);
 module.exports = Appointment;

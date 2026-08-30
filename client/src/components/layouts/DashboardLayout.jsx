@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, useAppDispatch } from '../../store/hooks';
 import { logout } from '../../store/slices/authSlice';
@@ -13,7 +13,7 @@ import {
 import GlobalSearch from '../GlobalSearch';
 import './DashboardLayout.css';
 
-const DashboardSidebar = ({ isOpen, setOpen }) => {
+const DashboardSidebar = memo(({ isOpen, setOpen }) => {
     const { user } = useAuth();
     const { branding, hospitalName } = useBranding();
     const role = (user?.role || '').toLowerCase();
@@ -21,8 +21,8 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
     const navigate = useNavigate();
     const isCentralAdmin = (role === 'centraladmin' || role === 'superadmin');
     
-    // Categorized Menus
-    const getMenu = () => {
+    // Memoized Categorized Menus
+    const menuItems = useMemo(() => {
         const isOTRoute = location.pathname.startsWith('/ot') || location.pathname === '/ot-dashboard';
         const roleClean = role.replace(/\s+/g, '');
 
@@ -128,9 +128,7 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
         return [
             { label: 'My Dashboard', path: '/my-dashboard', icon: <FiHome /> },
         ];
-    };
-
-    const menuItems = getMenu();
+    }, [role, location.pathname, user?.clinicType]);
 
     return (
         <aside className={`erp-sidebar ${isOpen ? 'open' : 'collapsed'} ${isCentralAdmin ? 'ca-erp-sidebar' : ''}`}>
@@ -246,7 +244,7 @@ const DashboardSidebar = ({ isOpen, setOpen }) => {
             )}
         </aside>
     );
-};
+});
 
 const TopBar = ({ toggleSidebar, sidebarOpen }) => {
     const { user } = useAuth();
@@ -468,4 +466,5 @@ const DashboardLayout = ({ children }) => {
     );
 };
 
+export { TopBar, DashboardSidebar };
 export default DashboardLayout;

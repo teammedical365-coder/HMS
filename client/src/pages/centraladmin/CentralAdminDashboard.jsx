@@ -263,11 +263,13 @@ const CentralAdminDashboard = () => {
 
     useEffect(() => {
         const plan = getActivePlanName();
-        fetchHospitals(plan);
-        fetchRoles(plan);
-        fetchDepartments();
-        fetchClinics(plan);
-        fetchSystemAnalytics();
+        Promise.all([
+            fetchHospitals(plan),
+            fetchRoles(plan),
+            fetchDepartments(),
+            fetchClinics(plan),
+            fetchSystemAnalytics()
+        ]).catch(err => console.error('Failed initial dashboard load:', err));
     }, []);
 
     // Handle navigation state from SystemRevenueDashboard "Manage Plan" button

@@ -98,4 +98,10 @@ inventorySchema.pre('save', async function () {
     // No next() call needed for async functions in Mongoose
 });
 
+// Compound Indexes for high-speed pharmacy inventory searches & filters
+inventorySchema.index({ hospitalId: 1, name: 1 });
+inventorySchema.index({ hospitalId: 1, status: 1 });
+inventorySchema.index({ hospitalId: 1, category: 1 });
+inventorySchema.index({ hospitalId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Inventory', inventorySchema);

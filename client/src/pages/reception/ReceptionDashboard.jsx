@@ -6,13 +6,18 @@ import { getSubdomain } from '../../utils/subdomain';
 import toast from 'react-hot-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { FiSearch, FiUserPlus, FiFileText, FiDollarSign, FiUsers, FiCalendar, FiHome, FiPlusSquare } from 'react-icons/fi';
-import { FaRupeeSign } from 'react-icons/fa';
+import { 
+    FiSearch, FiUserPlus, FiFileText, FiDollarSign, FiUsers, FiCalendar, FiHome, FiPlusSquare, 
+    FiActivity, FiSliders, FiPhone, FiEye, FiUpload, FiMoreVertical, FiCpu, FiCheckCircle, FiClock, 
+    FiPrinter, FiFilter 
+} from 'react-icons/fi';
+import { FaRupeeSign, FaHeartbeat } from 'react-icons/fa';
 import PaymentSection from '../../components/PaymentSection';
 import SlotPicker from '../../components/SlotPicker';
+import { useBranding } from '../../context/BrandingContext';
+import { TopBar } from '../../components/layouts/DashboardLayout';
 import './ReceptionDashboard.css';
-
-console.log("--- DASHBOARD FILE IS RUNNING ---");
+import './PatientRegistration.css';
 
 const timeSlots = [
     '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
@@ -44,6 +49,23 @@ const combineDateTime = (dateVal, timeStr) => {
         d.setHours(hours, minutes, 0, 0);
     }
     return d;
+};
+
+const getInitialBgColor = (name = '') => {
+    const colors = [
+        '#8b5cf6', // purple
+        '#0d9488', // teal
+        '#f59e0b', // amber
+        '#3b82f6', // blue
+        '#ec4899', // pink
+        '#10b981', // emerald
+        '#6366f1'  // indigo
+    ];
+    let sum = 0;
+    for (let i = 0; i < name.length; i++) {
+        sum += name.charCodeAt(i);
+    }
+    return colors[sum % colors.length];
 };
 
 const computeStayDurationAndCost = (startDateTime, endDateTime, dailyRate) => {
@@ -96,6 +118,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { user: currentUser } = useAuth();
+    const { branding, hospitalName } = useBranding();
     const [appointments, setAppointments] = useState([]);
     const [doctorsList, setDoctorsList] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -109,6 +132,16 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const [transactions, setTransactions] = useState([]);
     const [hospitalizedPatients, setHospitalizedPatients] = useState([]);
     const [loadingHospitalized, setLoadingHospitalized] = useState(false);
+    const [stats, setStats] = useState({
+        todayRegistrations: 0,
+        totalPatients: 0,
+        todayAppointments: 0,
+        todayCollections: 0,
+        pendingBills: 0,
+        regTrend: '',
+        apptTrend: '',
+        collTrend: ''
+    });
     
     // New states for Reception Dashboard Filtering
     const [listTab, setListTab] = useState('queue'); // 'queue', 'all', 'hospitalized'
@@ -229,22 +262,89 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const [showCameraModal, setShowCameraModal] = useState(false);
     const [cameraCapturedPreview, setCameraCapturedPreview] = useState(null); // blob URL for preview before saving
     const [cameraCapturedBlob, setCameraCapturedBlob] = useState(null);
+    const [activeStep, setActiveStep] = useState(1);
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
+    const filePhotoInputRef = useRef(null);
+    const activeStreamRef = useRef(null);
+
+    // High-performance IntersectionObserver Scroll-Spy (Zero scroll lag, butter smooth)
+    useEffect(() => {
+        if (viewMode !== 'intake' && !isPatientPortal) return;
+
+        const stepIds = [
+            'reg-step-card-1',
+            'reg-step-card-2',
+            'reg-step-card-3',
+            'reg-step-card-4',
+            'reg-step-card-5'
+        ];
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const idx = stepIds.indexOf(entry.target.id);
+                    if (idx !== -1) {
+                        setActiveStep(prev => prev === idx + 1 ? prev : idx + 1);
+                    }
+                }
+            });
+        }, {
+            root: null,
+            rootMargin: '-15% 0px -65% 0px',
+            threshold: 0.05
+        });
+
+        stepIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) observer.observe(el);
+        });
+
+        return () => {
+            observer.disconnect();
+        };
+    }, [viewMode, isPatientPortal]);
+
+    const scrollToStep = (stepNum) => {
+        setActiveStep(stepNum);
+        const el = document.getElementById(`reg-step-card-${stepNum}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
 
     const startCamera = async () => {
         setCameraCapturedPreview(null);
         setCameraCapturedBlob(null);
         setShowCameraModal(true);
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.play();
+            let stream = null;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: { ideal: 1280 }, height: { ideal: 720 } } 
+                });
+            } catch (e1) {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
             }
+            activeStreamRef.current = stream;
+            setTimeout(() => {
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    videoRef.current.play().catch(e => console.warn("Video play exception:", e));
+                }
+            }, 80);
         } catch (err) {
-            alert("Camera access denied or unavailable.");
-            setShowCameraModal(false);
+            console.error("Camera access error:", err);
+            toast.error("Camera access failed. Please allow camera permissions or click 'Upload Photo'.");
+        }
+    };
+
+    const handleFilePhotoSelect = (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setProfilePhoto(file);
+            setProfilePhotoPreview(URL.createObjectURL(file));
+            toast.success("Photo selected successfully!");
         }
     };
 
@@ -258,12 +358,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 if (blob) {
                     setCameraCapturedBlob(blob);
                     setCameraCapturedPreview(URL.createObjectURL(blob));
-                    // Pause camera stream (don't stop yet — retake needs it)
-                    if (videoRef.current && videoRef.current.srcObject) {
-                        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+                    if (activeStreamRef.current) {
+                        activeStreamRef.current.getTracks().forEach(track => track.stop());
                     }
                 }
-            }, 'image/jpeg');
+            }, 'image/jpeg', 0.92);
         }
     };
 
@@ -272,33 +371,120 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             const file = new File([cameraCapturedBlob], 'patient_photo.jpg', { type: 'image/jpeg' });
             setProfilePhoto(file);
             setProfilePhotoPreview(URL.createObjectURL(file));
+            toast.success("Photo captured and saved!");
         }
         setCameraCapturedPreview(null);
         setCameraCapturedBlob(null);
         setShowCameraModal(false);
+        if (activeStreamRef.current) {
+            activeStreamRef.current.getTracks().forEach(track => track.stop());
+            activeStreamRef.current = null;
+        }
     };
 
     const retakePhoto = async () => {
         setCameraCapturedPreview(null);
         setCameraCapturedBlob(null);
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.play();
+            let stream = null;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: { ideal: 1280 }, height: { ideal: 720 } } 
+                });
+            } catch (e1) {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
             }
+            activeStreamRef.current = stream;
+            setTimeout(() => {
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    videoRef.current.play().catch(e => console.warn("Video play exception:", e));
+                }
+            }, 80);
         } catch (err) {
-            alert("Camera access denied or unavailable.");
+            toast.error("Camera access denied or unavailable.");
         }
     };
 
     const stopCamera = () => {
+        if (activeStreamRef.current) {
+            activeStreamRef.current.getTracks().forEach(track => track.stop());
+            activeStreamRef.current = null;
+        }
         if (videoRef.current && videoRef.current.srcObject) {
             videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+            videoRef.current.srcObject = null;
         }
         setCameraCapturedPreview(null);
         setCameraCapturedBlob(null);
         setShowCameraModal(false);
+    };
+
+    const renderCameraModal = () => {
+        if (!showCameraModal) return null;
+        return (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ background: '#fff', padding: '24px', borderRadius: '20px', textAlign: 'center', width: '90%', maxWidth: '580px', boxShadow: '0 25px 70px rgba(0,0,0,0.4)', position: 'relative' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
+                            {cameraCapturedPreview ? '📷 Photo Preview' : '📷 Live Camera Capture'}
+                        </h3>
+                        <button 
+                            type="button"
+                            onClick={stopCamera}
+                            style={{ border: 'none', background: '#f1f5f9', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', display: 'grid', placeItems: 'center' }}
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3', background: '#000', borderRadius: '16px', overflow: 'hidden', marginBottom: '20px' }}>
+                        {cameraCapturedPreview ? (
+                            <img src={cameraCapturedPreview} alt="Captured" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                            <>
+                                <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay playsInline muted />
+                                <canvas ref={canvasRef} style={{ display: 'none' }} />
+                                <div style={{ position: 'absolute', bottom: '20px', left: '50%', transform: 'translateX(-50%)' }}>
+                                    <button
+                                        type="button"
+                                        onClick={capturePhotoFromCamera}
+                                        style={{
+                                            width: '64px', height: '64px', borderRadius: '50%',
+                                            background: 'rgba(255,255,255,0.95)', border: '4px solid #16c7c0',
+                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            boxShadow: '0 4px 18px rgba(0,0,0,0.3)', transition: 'transform 0.15s'
+                                        }}
+                                        onMouseOver={e => e.currentTarget.style.transform = 'scale(1.1)'}
+                                        onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                                        title="Snap Photo"
+                                    >
+                                        <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#16c7c0' }} />
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+                        {cameraCapturedPreview ? (
+                            <>
+                                <button type="button" onClick={retakePhoto} style={{ padding: '10px 24px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', color: '#475569' }}>
+                                    🔄 Retake
+                                </button>
+                                <button type="button" onClick={saveCapturedPhoto} style={{ padding: '10px 24px', background: 'linear-gradient(135deg, #16c7c0, #4f7cff)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', boxShadow: '0 4px 12px rgba(79,124,255,0.3)' }}>
+                                    ✓ Save Photo
+                                </button>
+                            </>
+                        ) : (
+                            <button type="button" onClick={stopCamera} style={{ padding: '10px 24px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', color: '#475569' }}>
+                                Cancel
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     const processFormChange = useCallback((e, formSetter) => {
@@ -527,12 +713,23 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         } catch (err) { console.error(err); } finally { setLoading(false); }
     };
 
+    const fetchStats = async () => {
+        try {
+            const res = await receptionAPI.getStats();
+            if (res.success && res.stats) {
+                setStats(res.stats);
+            }
+        } catch (err) {
+            console.error('Error fetching reception stats:', err);
+        }
+    };
+
     useEffect(() => {
         if (!isPatientPortal) {
+            fetchStats();
             fetchHospitalizedPatients();
-            if (listTab === 'queue' || listTab === 'all') {
-                fetchAppointments();
-            }
+            fetchTransactions();
+            fetchAppointments();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [listTab, departmentFilter, debouncedSearch, isPatientPortal]);
@@ -1675,390 +1872,725 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             );
         }
 
-        // ─── NEW REGISTRATION / PATIENT PORTAL MODE (unchanged) ────────────
+        // ─── NEW REGISTRATION / PATIENT PORTAL MODE (UPGRADED WITH MODERN AI DESIGN) ────────────
         return (
-            <div className="intake-full-page" data-lenis-prevent="true">
-                <div className="context-bar">
-                    <h3>{isPatientPortal ? (followupStatus?.active ? 'Re-Book Appointment' : 'Book Appointment') : 'New Registration'}</h3>
-                    <button type="button" className="btn-cancel" onClick={() => isPatientPortal ? navigate('/patient/dashboard') : setViewMode('list')}>Close ✖</button>
+            <div className="reg-page-root" data-lenis-prevent="true">
+                {/* Animated Background AI Particles */}
+                <div className="ai-particles">
+                    <div className="particle p1"></div>
+                    <div className="particle p2"></div>
+                    <div className="particle p3"></div>
+                    <div className="particle p4"></div>
+                    <div className="particle p5"></div>
+                    <div className="particle p6"></div>
                 </div>
-                <div className="intake-container">
-                    <form onSubmit={handleSave}>
-                        {/* Unifying Sections 1, 2, and 3 into a single card container */}
-                        <div className="form-section">
-                            <fieldset disabled={false} style={{ border: 'none', padding: 0, margin: 0 }}>
-                            <h4>1. Patient Identity & KYC</h4>
 
-                            {/* PATIENT PROFILE PHOTO */}
-                            <div style={{ marginBottom: '18px' }}>
-                                <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '6px' }}>Patient Photo</label>
-                                <div
-                                    onClick={startCamera}
-                                    style={{
-                                        cursor: 'pointer',
-                                        border: '1.5px dashed #cbd5e1',
-                                        borderRadius: '8px',
-                                        padding: '12px',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '10px',
-                                        backgroundColor: '#f8fafc',
-                                        transition: 'all 0.2s'
-                                    }}
-                                    onMouseOver={(e) => e.currentTarget.style.borderColor = '#14b8a6'}
-                                    onMouseOut={(e) => e.currentTarget.style.borderColor = '#cbd5e1'}
-                                >
-                                    {profilePhotoPreview || (profilePhoto && URL.createObjectURL(profilePhoto)) ? (
-                                        <img
-                                            src={profilePhoto ? URL.createObjectURL(profilePhoto) : profilePhotoPreview}
-                                            alt="Patient"
-                                            style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover' }}
-                                        />
-                                    ) : (
-                                        <span style={{ fontSize: '1.25rem' }}>📷</span>
-                                    )}
-                                    <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569' }}>
-                                        {profilePhoto || profilePhotoPreview ? 'Change Photo' : 'Capture Photo'}
-                                    </span>
-                                </div>
-                            </div>
+                {/* Real Dashboard TopBar with search, notifications, profile dropdown & branding */}
+                <TopBar toggleSidebar={() => {}} sidebarOpen={false} />
 
-                            {/* AADHAAR VERIFICATION ROW */}
-                            <div className="form-row" style={{ alignItems: 'flex-end', backgroundColor: '#f0fdf4', padding: '15px', borderRadius: '8px', border: '1px dashed #22c55e', gap: '15px' }}>
-                                {/* AADHAAR INPUT */}
-                                <div className="field" style={{ flex: 1 }}>
-                                    <label>Aadhaar Number</label>
-                                    <input
-                                        name="aadhaar"
-                                        maxLength={12}
-                                        placeholder="Enter 12-digit Aadhaar"
-                                        value={intakeForm.aadhaar || ''}
-                                        onChange={handleInputChange}
-                                        required
-                                        pattern="^\d{12}$"
-                                        title="Aadhaar number must be exactly 12 digits"
-                                        style={{
-                                            borderColor: '#ccc',
-                                            fontWeight: 'bold'
-                                        }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="form-row" style={{ marginTop: '14px' }}>
-                                <div className="field"><label>First Name <span style={{ color: '#ef4444', fontSize: '12px' }}>*</span></label><input name="firstName" value={intakeForm.firstName} onChange={handleInputChange} required minLength={2} /></div>
-                                <div className="field"><label>Last Name</label><input name="lastName" value={intakeForm.lastName} onChange={handleInputChange} /></div>
-                                <div className="field"><label>Mobile <span style={{ color: '#ef4444', fontSize: '12px' }}>*</span></label><input name="mobile" value={intakeForm.mobile} onChange={handleInputChange} required pattern="^\d{10}$" title="Phone number must be exactly 10 digits" /></div>
-                                <div className="field"><label>Age <span style={{ color: '#ef4444', fontSize: '12px' }}>*</span></label><input type="number" name="age" value={intakeForm.age} onChange={handleInputChange} required min="1" /></div>
-                            </div>
-                            <div className="form-row" style={{ marginTop: '0px' }}>
-                                <div className="field" style={{ flex: '7' }}>
-                                    <label>Email Address <span style={{ color: '#ef4444', fontSize: '12px' }}>*</span></label>
-                                    <input name="email" type="email" placeholder="patient@gmail.com" value={intakeForm.email} onChange={handleInputChange} required />
-                                </div>
-                                <div className="field" style={{ flex: '3' }}>
-                                    <label>Gender <span style={{ color: '#ef4444', fontSize: '12px' }}>*</span></label>
-                                    <select name="gender" value={intakeForm.gender} onChange={handleInputChange} required>
-                                        <option value="">Select Gender</option>
-                                        <option value="Male">Male</option>
-                                        <option value="Female">Female</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="form-row">
-                                <div className="field"><label>Relative Name</label><input name="partnerFirstName" placeholder="Relative Name" value={intakeForm.partnerFirstName} onChange={handleInputChange} /></div>
-                                <div className="field">
-                                    <label>Relation To Patient</label>
-                                    <select name="relationToPatient" value={intakeForm.relationToPatient || ''} onChange={handleInputChange}>
-                                        <option value="">-- Select Relation --</option>
-                                        <option value="Husband">Husband</option>
-                                        <option value="Wife">Wife</option>
-                                        <option value="Father">Father</option>
-                                        <option value="Mother">Mother</option>
-                                        <option value="Son">Son</option>
-                                        <option value="Others">Others</option>
-                                    </select>
-                                </div>
-                                <div className="field"><label>Relative Mobile</label><input name="partnerMobile" placeholder="Relative Mobile" value={intakeForm.partnerMobile} onChange={handleInputChange} /></div>
-                            </div>
-
-                            <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
-
-                            <h4>2. Address Information</h4>
-                            <div className="form-row">
-                                <div className="field">
-                                    <label>House No / Flat No / Building Name</label>
-                                    <input
-                                        name="houseNo"
-                                        placeholder="House No / Flat No / Building Name"
-                                        value={intakeForm.houseNo || ''}
-                                        onChange={handleInputChange}
-                                    />
-                                </div>
-                                <div className="field">
-                                    <label>Street / Area / Locality</label>
-                                    <input
-                                        name="street"
-                                        placeholder="Street / Area / Locality"
-                                        value={intakeForm.street || ''}
-                                        onChange={handleInputChange}
-                                    />
-                                </div>
-                            </div>
-                            <div className="form-row">
-                                <div className="field">
-                                    <label>City</label>
-                                    <input
-                                        name="city"
-                                        placeholder="City"
-                                        value={intakeForm.city || ''}
-                                        onChange={handleInputChange}
-                                    />
-                                </div>
-                                <div className="field">
-                                    <label>State</label>
-                                    <input
-                                        name="state"
-                                        placeholder="State"
-                                        value={intakeForm.state || ''}
-                                        onChange={handleInputChange}
-                                    />
-                                </div>
-                                <div className="field">
-                                    <label>Pincode</label>
-                                    <input
-                                        name="zipCode"
-                                        placeholder="Pincode"
-                                        value={intakeForm.zipCode || ''}
-                                        onChange={handleInputChange}
-                                    />
-                                </div>
-                            </div>
-
-                            <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
-
-                            <h4>3. Patient Source Information</h4>
-                            <div className="form-row">
-                                <div className="field">
-                                    <label>Referral Type</label>
-                                    <select name="referralType" value={intakeForm.referralType || ''} onChange={handleInputChange}>
-                                        <option value="">-- Select Source / Referral --</option>
-                                        <option value="Self">Self / Direct</option>
-                                        <option value="Doctor Referral">Doctor Referral</option>
-                                        <option value="Social Media">Social Media (FB/Insta)</option>
-                                        <option value="Google/Website">Google Search / Website</option>
-                                        <option value="Newspaper/Banner">Newspaper / Banner</option>
-                                        <option value="Friend/Relative">Friend / Relative</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-                            </div>
-                            </fieldset>
-
-                            <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
-
-                            <h4>4. Vitals</h4>
-                            <div className="form-row">
-                                <div className="field"><label>Height (cm)</label><input name="height" value={intakeForm.height} onChange={handleInputChange} /></div>
-                                <div className="field"><label>Weight (kg)</label><input name="weight" value={intakeForm.weight} onChange={handleInputChange} /></div>
-                                <div className="field"><label>BMI</label><input name="bmi" value={intakeForm.bmi} readOnly /></div>
-                                {!isEditingProfileOnly && (
-                                    <div className="field">
-                                        <label>Consultation Fee</label>
-                                        <input name="consultationFee" value={intakeForm.consultationFee} readOnly style={{ backgroundColor: '#f1f5f9', color: '#475569', cursor: 'not-allowed' }} />
-                                    </div>
-                                )}
-                            </div>
-                            {!isEditingProfileOnly && (
-                                <div className="form-row" style={followupStatus?.active ? { display: 'flex', flexDirection: 'column', gap: '10px' } : {}}>
-                                    {!followupStatus?.active && (
-                                        <div className="field" style={{ flexBasis: '100%' }}>
-                                            <PaymentSection
-                                                splitPayments={intakeForm.splitPayments}
-                                                onSplitChange={handleIntakeSplitPaymentChange}
-                                                onAddSplit={addIntakeSplitPayment}
-                                                onRemoveSplit={removeIntakeSplitPayment}
-                                                totalAmount={Number(intakeForm.consultationFee) || 0}
-                                                upiOptions={upiOptions}
-                                                paymentData={intakePaymentData}
-                                                onPaymentDataChange={setIntakePaymentData}
-                                                proofFile={paymentScreenshot}
-                                                onProofFileChange={setPaymentScreenshot}
-                                                allowCash={!isPatientPortal}
-                                            />
-                                        </div>
-                                    )}
-                                    <div className="field" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', height: 'fit-content', width: '100%', justifyContent: 'center' }}>
-                                        <span style={{ fontSize: '18px' }}>✅</span>
-                                        <span style={{ fontWeight: 600, color: '#15803d', fontSize: '16px' }}>Payment Confirmed — Paid</span>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* FOLLOW UP STATUS CARD RELOCATED HERE */}
-                            {(!isEditingProfileOnly && followupStatus && followupStatus.lastConsultation) && (
-                                <div className="form-row" style={{ marginTop: '0px' }}>
-                                    <div className="field" style={{ flex: 1 }}>
-                                        <div style={{
-                                            padding: '12px 16px', borderRadius: '8px', border: '1px solid',
-                                            backgroundColor: followupStatus.active ? '#f0fdf4' : '#fef2f2',
-                                            borderColor: followupStatus.active ? '#bbf7d0' : '#fecaca',
-                                            color: followupStatus.active ? '#15803d' : '#b91c1c',
-                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', fontSize: '14px' }}>
-                                                <span>{followupStatus.active ? '✅ Follow-up Visit - Payment Not Required' : '🔴 Follow-up Expired'}</span>
-                                            </div>
-                                            <div style={{ fontSize: '13px', display: 'flex', gap: '24px', alignItems: 'center' }}>
-                                                {followupStatus.active ? (
-                                                    <>
-                                                        <div>Last Paid Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
-                                                        <div>Valid Till: <strong>{new Date(followupStatus.validUntil).toLocaleDateString('en-IN')}</strong></div>
-                                                        {(() => {
-                                                            const [vY, vM, vD] = String(followupStatus.validUntil).split('T')[0].split('-');
-                                                            const validTillDate = new Date(Number(vY), Number(vM) - 1, Number(vD)).getTime();
-                                                            
-                                                            let todayDate = new Date();
-                                                            todayDate.setHours(0,0,0,0);
-                                                            todayDate = todayDate.getTime();
-                                                            if (intakeForm.visitDate) {
-                                                                const [y, m, d] = String(intakeForm.visitDate).split('-');
-                                                                todayDate = new Date(Number(y), Number(m) - 1, Number(d)).getTime();
-                                                            }
-                                                            
-                                                            const remaining = Math.max(0, Math.ceil((validTillDate - todayDate) / (1000 * 3600 * 24)));
-                                                            return <div>Remaining Days: <strong>{remaining === 0 ? 'Expires Today' : `${remaining} Day${remaining > 1 ? 's' : ''}`}</strong></div>;
-                                                        })()}
-                                                        <div>Fee: <strong>₹0</strong></div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <div>Last Paid Visit: <strong>{new Date(followupStatus.lastConsultation).toLocaleDateString('en-IN')}</strong></div>
-                                                        <div>Expired On: <strong>{new Date(followupStatus.validUntil).toLocaleDateString('en-IN')}</strong></div>
-                                                        <div>Fee Applicable: <strong>₹{followupStatus.fee || intakeForm.consultationFee}</strong></div>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {(!isEditingProfileOnly && !followupStatus?.active && intakeForm.splitPayments.some(p => p.method !== 'Cash')) && (
-                                <div className="form-row" style={{ marginTop: '6px' }}>
-                                    <div className="field" style={{ flex: 1 }}>
-                                        <label>Payment Screenshot / Proof <span style={{ color: '#ef4444', fontSize: '12px' }}>*Required for non-cash payment</span></label>
-                                        <input
-                                            type="file"
-                                            accept="image/*,application/pdf"
-                                            onChange={e => setPaymentScreenshot(e.target.files[0])}
-                                            style={{ padding: '8px', border: '2px dashed #6366f1', borderRadius: '8px', background: '#f5f3ff', width: '100%' }}
-                                        />
-                                        {paymentScreenshot && (
-                                            <span style={{ fontSize: '12px', color: '#059669', marginTop: '4px', display: 'block' }}>
-                                                ✅ {paymentScreenshot.name}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            <hr style={{ border: '0', borderTop: '1px solid #e2e8f0', margin: '24px 0' }} />
-
-                            {!isEditingProfileOnly && (
-                                <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
-                                    <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px', borderBottom: '2px solid #bfdbfe', paddingBottom: '10px' }}>5. Assign to Doctor/Counselor</h4>
-                                    <div className="form-row">
-                                        <div className="field">
-                                            <label>Department {followupStatus?.active && '(Read Only)'}</label>
-                                            <select 
-                                                name="department" 
-                                                value={intakeForm.department} 
-                                                onChange={handleInputChange}
-                                                disabled={followupStatus?.active}
-                                                style={followupStatus?.active ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
-                                            >
-                                                <option value="">-- Choose Department --</option>
-                                                {[...new Set([...(hospitalContext?.departments || []), ...doctorsList.flatMap(d => d.departments || [])])].filter(Boolean).map(dept => (
-                                                    <option key={dept} value={dept}>{dept}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="field">
-                                            <label>Select Specialist {followupStatus?.active && '(Read Only)'}</label>
-                                            <select
-                                                name="doctor"
-                                                value={intakeForm.doctor}
-                                                onChange={handleInputChange}
-                                                disabled={!intakeForm.department || followupStatus?.active}
-                                                style={(!intakeForm.department || followupStatus?.active) ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
-                                            >
-                                                {!intakeForm.department ? (
-                                                    <option value="">-- Select Department First --</option>
-                                                ) : (
-                                                    <>
-                                                        <option value="">-- Choose Specialist --</option>
-                                                        {doctorsList.filter(doc => (doc.departments || []).includes(intakeForm.department)).map(doc => (
-                                                            <option key={doc._id} value={doc._id}>{doc.name} {doc.departments?.length > 0 ? `(${doc.departments.join(', ')})` : ''}</option>
-                                                        ))}
-                                                    </>
-                                                )}
-                                            </select>
-                                        </div>
-                                        <div className="field">
-                                            <label>Date</label>
-                                            <input type="date" name="visitDate" value={intakeForm.visitDate} min={todayStr} onChange={handleInputChange} disabled={!intakeForm.doctor} style={!intakeForm.doctor ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}} />
-                                        </div>
-                                    </div>
-                                    {intakeForm.doctor && (
-                                        hospitalContext?.appointmentMode === 'token' ? (
-                                            /* Token mode: show next token number */
-                                            <div style={{ margin: '14px 0', padding: '18px 24px', background: 'linear-gradient(135deg, #fef3c7, #fde68a)', borderRadius: '12px', border: '2px solid #f59e0b', display: 'flex', alignItems: 'center', gap: '18px' }}>
-                                                <span style={{ fontSize: '2.5rem' }}>🎟️</span>
-                                                <div>
-                                                    <div style={{ fontWeight: 700, fontSize: '1rem', color: '#78350f', marginBottom: '2px' }}>Token Queue Mode Active</div>
-                                                    {nextToken !== null ? (
-                                                        <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#92400e' }}>
-                                                            Next Token: <span style={{ fontSize: '2rem', color: '#d97706' }}>#{nextToken}</span>
-                                                        </div>
-                                                    ) : (
-                                                        <div style={{ color: '#92400e', fontSize: '0.9rem' }}>Select doctor and date to see next token</div>
-                                                    )}
-                                                    <div style={{ fontSize: '0.8rem', color: '#92400e', marginTop: '4px', opacity: 0.8 }}>Tokens reset daily at midnight</div>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            /* Slot mode: using unified SlotPicker component */
-                                            <SlotPicker
-                                                doctorId={intakeForm.doctor}
-                                                date={intakeForm.visitDate}
-                                                selectedTime={intakeForm.visitTime}
-                                                onSelectTime={(time) => setIntakeForm({ ...intakeForm, visitTime: time })}
-                                            />
-                                        )
-                                    )}
-                                </div>
-                            )}
+                <main className="reg-main">
+                    {/* Centered Colorful Page Heading with Right Close Button */}
+                    <div className="reg-page-heading-row">
+                        <div className="reg-heading-placeholder"></div>
+                        <div className="reg-heading-center">
+                            <h1 className="reg-title-gradient">
+                                {isPatientPortal ? (followupStatus?.active ? 'Re-Book Appointment' : 'Book Appointment') : 'New Patient Registration'}
+                            </h1>
+                            <div className="reg-title-glow-accent"></div>
                         </div>
-
-                        <div className="form-footer">
-                            <button type="submit" className="btn-save" disabled={saving}>
-                                {saving
-                                    ? 'Saving...'
-                                    : (() => {
-                                        if (isEditingProfileOnly) return 'Save Patient Details';
-                                        const isTokenMode = hospitalContext?.appointmentMode === 'token';
-                                        const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
-                                        const actionText = followupStatus?.active ? 'Re-Book Appointment' : (isTokenMode && !isPatientPortal ? 'Issue Token' : 'Book Appointment');
-                                        if (isPatientPortal) return canBook ? actionText : 'Complete Profile & Continue';
-                                        return canBook ? `Register, ${actionText} & Receipt` : 'Save Patient Details';
-                                    })()
-                                }
+                        <div className="reg-heading-right-action">
+                            <button 
+                                type="button" 
+                                className="reg-btn-close-prominent" 
+                                onClick={() => isPatientPortal ? navigate('/patient/dashboard') : setViewMode('list')}
+                            >
+                                ✕ Close
                             </button>
                         </div>
-                    </form>
-                </div>
+                    </div>
+
+                    <div className="reg-workspace">
+                        {/* LEFT STEP SIDEBAR */}
+                        <aside className="reg-steps">
+                            <div className="reg-steps-title">Registration Flow</div>
+
+                            <div className={`reg-step ${activeStep === 1 ? 'active' : ''}`} onClick={() => scrollToStep(1)}>
+                                <div className="reg-step-num">01</div>
+                                <div className="reg-step-text">
+                                    <strong>Patient Identity</strong>
+                                    <span>KYC & basic details</span>
+                                </div>
+                            </div>
+
+                            <div className={`reg-step ${activeStep === 2 ? 'active' : ''}`} onClick={() => scrollToStep(2)}>
+                                <div className="reg-step-num">02</div>
+                                <div className="reg-step-text">
+                                    <strong>Address</strong>
+                                    <span>Contact information</span>
+                                </div>
+                            </div>
+
+                            <div className={`reg-step ${activeStep === 3 ? 'active' : ''}`} onClick={() => scrollToStep(3)}>
+                                <div className="reg-step-num">03</div>
+                                <div className="reg-step-text">
+                                    <strong>Source</strong>
+                                    <span>Referral details</span>
+                                </div>
+                            </div>
+
+                            <div className={`reg-step ${activeStep === 4 ? 'active' : ''}`} onClick={() => scrollToStep(4)}>
+                                <div className="reg-step-num">04</div>
+                                <div className="reg-step-text">
+                                    <strong>Vitals</strong>
+                                    <span>Health measurements</span>
+                                </div>
+                            </div>
+
+                            <div className={`reg-step ${activeStep === 5 ? 'active' : ''}`} onClick={() => scrollToStep(5)}>
+                                <div className="reg-step-num">05</div>
+                                <div className="reg-step-text">
+                                    <strong>Assignment</strong>
+                                    <span>Doctor & consultant</span>
+                                </div>
+                            </div>
+
+                            <div className="reg-steps-ai">
+                                <div className="reg-scan">
+                                    <div className="reg-scan-icon">✦</div>
+                                    AI Verification
+                                </div>
+                                <div className="reg-scan-line"></div>
+                            </div>
+                        </aside>
+
+                        {/* MAIN FORM AREA */}
+                        <section className="reg-form-area">
+                            <form onSubmit={handleSave}>
+                                {/* CARD 1: PATIENT IDENTITY & KYC */}
+                                <div className="reg-form-card" id="reg-step-card-1">
+                                    <div className="reg-card-head">
+                                        <div className="reg-card-title">
+                                            <div className="reg-card-icon">◉</div>
+                                            <div>
+                                                <h2>Patient Identity & KYC</h2>
+                                                <p>Secure identification details</p>
+                                            </div>
+                                        </div>
+                                        <div className="reg-ai-tag">AI VERIFIED</div>
+                                    </div>
+
+                                    <div className="reg-card-body">
+                                        <div className="reg-identity-grid">
+                                            {/* Photo Box */}
+                                            <div className="reg-photo-box">
+                                                <input 
+                                                    type="file" 
+                                                    ref={filePhotoInputRef} 
+                                                    accept="image/*" 
+                                                    style={{ display: 'none' }} 
+                                                    onChange={handleFilePhotoSelect} 
+                                                />
+                                                <div className="reg-photo-frame">
+                                                    {profilePhotoPreview || (profilePhoto && URL.createObjectURL(profilePhoto)) ? (
+                                                        <img 
+                                                            src={profilePhoto ? URL.createObjectURL(profilePhoto) : profilePhotoPreview} 
+                                                            alt="Patient" 
+                                                            className="reg-photo-preview-img"
+                                                        />
+                                                    ) : (
+                                                        <div className="reg-photo-placeholder">
+                                                            <span className="reg-photo-avatar-icon">👤</span>
+                                                            <span className="reg-photo-prompt">Patient Photo</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="reg-photo-actions-row">
+                                                    <button 
+                                                        type="button" 
+                                                        className="reg-capture-btn-main" 
+                                                        onClick={startCamera}
+                                                    >
+                                                        📷 {profilePhoto || profilePhotoPreview ? 'Retake' : 'Capture'}
+                                                    </button>
+                                                    <button 
+                                                        type="button" 
+                                                        className="reg-upload-icon-btn" 
+                                                        onClick={() => filePhotoInputRef.current?.click()}
+                                                        title="Upload photo from device"
+                                                    >
+                                                        📁
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* KYC Fields */}
+                                            <div className="reg-fields">
+                                                <div className="reg-field full">
+                                                    <label>Aadhaar Number <em>*</em></label>
+                                                    <input 
+                                                        className="reg-input"
+                                                        name="aadhaar"
+                                                        maxLength={12}
+                                                        placeholder="Enter 12-digit Aadhaar"
+                                                        value={intakeForm.aadhaar || ''}
+                                                        onChange={handleInputChange}
+                                                        required
+                                                        pattern="^\d{12}$"
+                                                        title="Aadhaar number must be exactly 12 digits"
+                                                    />
+                                                </div>
+
+                                                <div className="reg-field">
+                                                    <label>First Name <em>*</em></label>
+                                                    <input 
+                                                        className="reg-input"
+                                                        name="firstName" 
+                                                        placeholder="First Name"
+                                                        value={intakeForm.firstName} 
+                                                        onChange={handleInputChange} 
+                                                        required 
+                                                        minLength={2} 
+                                                    />
+                                                </div>
+
+                                                <div className="reg-field">
+                                                    <label>Last Name</label>
+                                                    <input 
+                                                        className="reg-input"
+                                                        name="lastName" 
+                                                        placeholder="Last Name"
+                                                        value={intakeForm.lastName} 
+                                                        onChange={handleInputChange} 
+                                                    />
+                                                </div>
+
+                                                <div className="reg-field">
+                                                    <label>Age <em>*</em></label>
+                                                    <input 
+                                                        className="reg-input"
+                                                        type="number" 
+                                                        name="age" 
+                                                        placeholder="Age"
+                                                        value={intakeForm.age} 
+                                                        onChange={handleInputChange} 
+                                                        required 
+                                                        min="1" 
+                                                    />
+                                                </div>
+
+                                                <div className="reg-field">
+                                                    <label>Mobile <em>*</em></label>
+                                                    <input 
+                                                        className="reg-input"
+                                                        name="mobile" 
+                                                        placeholder="10-digit mobile"
+                                                        value={intakeForm.mobile} 
+                                                        onChange={handleInputChange} 
+                                                        required 
+                                                        pattern="^\d{10}$" 
+                                                        title="Phone number must be exactly 10 digits" 
+                                                    />
+                                                </div>
+
+                                                <div className="reg-field">
+                                                    <label>Email Address <em>*</em></label>
+                                                    <input 
+                                                        className="reg-input"
+                                                        name="email" 
+                                                        type="email" 
+                                                        placeholder="patient@gmail.com" 
+                                                        value={intakeForm.email} 
+                                                        onChange={handleInputChange} 
+                                                        required 
+                                                    />
+                                                </div>
+
+                                                <div className="reg-field">
+                                                    <label>Gender <em>*</em></label>
+                                                    <select 
+                                                        className="reg-select"
+                                                        name="gender" 
+                                                        value={intakeForm.gender} 
+                                                        onChange={handleInputChange} 
+                                                        required
+                                                    >
+                                                        <option value="">Select Gender</option>
+                                                        <option value="Male">Male</option>
+                                                        <option value="Female">Female</option>
+                                                        <option value="Other">Other</option>
+                                                    </select>
+                                                </div>
+
+                                                <div className="reg-field">
+                                                    <label>Relative Name</label>
+                                                    <input 
+                                                        className="reg-input"
+                                                        name="partnerFirstName" 
+                                                        placeholder="Relative Name" 
+                                                        value={intakeForm.partnerFirstName} 
+                                                        onChange={handleInputChange} 
+                                                    />
+                                                </div>
+
+                                                <div className="reg-field">
+                                                    <label>Relation To Patient</label>
+                                                    <select 
+                                                        className="reg-select"
+                                                        name="relationToPatient" 
+                                                        value={intakeForm.relationToPatient || ''} 
+                                                        onChange={handleInputChange}
+                                                    >
+                                                        <option value="">-- Select Relation --</option>
+                                                        <option value="Father">Father</option>
+                                                        <option value="Mother">Mother</option>
+                                                        <option value="Spouse">Spouse</option>
+                                                        <option value="Husband">Husband</option>
+                                                        <option value="Wife">Wife</option>
+                                                        <option value="Brother">Brother</option>
+                                                        <option value="Sister">Sister</option>
+                                                        <option value="Son">Son</option>
+                                                        <option value="Others">Others</option>
+                                                    </select>
+                                                </div>
+
+                                                <div className="reg-field">
+                                                    <label>Relative Mobile</label>
+                                                    <input 
+                                                        className="reg-input"
+                                                        name="partnerMobile" 
+                                                        placeholder="Relative Mobile" 
+                                                        value={intakeForm.partnerMobile} 
+                                                        onChange={handleInputChange} 
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* CARD 2: ADDRESS INFORMATION */}
+                                <div className="reg-form-card" id="reg-step-card-2">
+                                    <div className="reg-card-head">
+                                        <div className="reg-card-title">
+                                            <div className="reg-card-icon">⌖</div>
+                                            <div>
+                                                <h2>Address Information</h2>
+                                                <p>Patient residential information</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="reg-card-body">
+                                        <div className="reg-fields">
+                                            <div className="reg-field">
+                                                <label>House No / Flat / Building Name</label>
+                                                <input 
+                                                    className="reg-input"
+                                                    name="houseNo"
+                                                    placeholder="House No / Flat / Building Name"
+                                                    value={intakeForm.houseNo || ''}
+                                                    onChange={handleInputChange}
+                                                />
+                                            </div>
+
+                                            <div className="reg-field">
+                                                <label>Street / Area / Locality</label>
+                                                <input 
+                                                    className="reg-input"
+                                                    name="street"
+                                                    placeholder="Street / Area / Locality"
+                                                    value={intakeForm.street || ''}
+                                                    onChange={handleInputChange}
+                                                />
+                                            </div>
+
+                                            <div className="reg-field">
+                                                <label>City</label>
+                                                <input 
+                                                    className="reg-input"
+                                                    name="city"
+                                                    placeholder="City"
+                                                    value={intakeForm.city || ''}
+                                                    onChange={handleInputChange}
+                                                />
+                                            </div>
+
+                                            <div className="reg-field">
+                                                <label>State</label>
+                                                <input 
+                                                    className="reg-input"
+                                                    name="state"
+                                                    placeholder="State"
+                                                    value={intakeForm.state || ''}
+                                                    onChange={handleInputChange}
+                                                />
+                                            </div>
+
+                                            <div className="reg-field">
+                                                <label>Pincode</label>
+                                                <input 
+                                                    className="reg-input"
+                                                    name="zipCode"
+                                                    placeholder="Pincode"
+                                                    value={intakeForm.zipCode || ''}
+                                                    onChange={handleInputChange}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* CARD 3: PATIENT SOURCE INFORMATION */}
+                                <div className="reg-form-card" id="reg-step-card-3">
+                                    <div className="reg-card-head">
+                                        <div className="reg-card-title">
+                                            <div className="reg-card-icon">⌁</div>
+                                            <div>
+                                                <h2>Patient Source Information</h2>
+                                                <p>Referral and acquisition details</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="reg-card-body">
+                                        <div className="reg-field">
+                                            <label>Referral Type</label>
+                                            <select 
+                                                className="reg-select"
+                                                name="referralType" 
+                                                value={intakeForm.referralType || ''} 
+                                                onChange={handleInputChange}
+                                            >
+                                                <option value="">-- Select Source / Referral --</option>
+                                                <option value="Walk In">Walk In</option>
+                                                <option value="Doctor Referral">Doctor Referral</option>
+                                                <option value="Hospital Referral">Hospital Referral</option>
+                                                <option value="Online">Online</option>
+                                                <option value="Social Media">Social Media (FB/Insta)</option>
+                                                <option value="Google/Website">Google Search / Website</option>
+                                                <option value="Friend/Relative">Friend / Relative</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* CARD 4: VITALS */}
+                                <div className="reg-form-card" id="reg-step-card-4">
+                                    <div className="reg-card-head">
+                                        <div className="reg-card-title">
+                                            <div className="reg-card-icon">♥</div>
+                                            <div>
+                                                <h2>Vitals</h2>
+                                                <p>Initial patient measurements</p>
+                                            </div>
+                                        </div>
+                                        <div className="reg-ai-tag">SMART MONITOR</div>
+                                    </div>
+
+                                    <div className="reg-card-body">
+                                        <div className="reg-vitals-grid">
+                                            <div className="reg-vital-box">
+                                                <label>Height (cm)</label>
+                                                <input 
+                                                    className="reg-input"
+                                                    name="height" 
+                                                    placeholder="Height"
+                                                    value={intakeForm.height} 
+                                                    onChange={handleInputChange} 
+                                                />
+                                            </div>
+
+                                            <div className="reg-vital-box">
+                                                <label>Weight (kg)</label>
+                                                <input 
+                                                    className="reg-input"
+                                                    name="weight" 
+                                                    placeholder="Weight"
+                                                    value={intakeForm.weight} 
+                                                    onChange={handleInputChange} 
+                                                />
+                                            </div>
+
+                                            <div className="reg-vital-box">
+                                                <label>BMI</label>
+                                                <input 
+                                                    className="reg-input"
+                                                    name="bmi" 
+                                                    placeholder="BMI"
+                                                    value={intakeForm.bmi} 
+                                                    readOnly 
+                                                    style={{ backgroundColor: '#f8fafc', fontWeight: 'bold' }}
+                                                />
+                                            </div>
+
+                                            <div className="reg-vital-box">
+                                                <label>Consultation Fee</label>
+                                                <input 
+                                                    className="reg-input"
+                                                    name="consultationFee" 
+                                                    value={intakeForm.consultationFee || '500'} 
+                                                    onChange={handleInputChange}
+                                                    style={{ fontWeight: 'bold', color: '#15803d' }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* CARD 5: PAYMENT */}
+                                {!isEditingProfileOnly && (
+                                    <div className="reg-form-card" id="reg-step-card-5-payment">
+                                        <div className="reg-card-head">
+                                            <div className="reg-card-title">
+                                                <div className="reg-card-icon">₹</div>
+                                                <div>
+                                                    <h2>Payment</h2>
+                                                    <p>Registration payment details</p>
+                                                </div>
+                                            </div>
+                                            <div className="reg-ai-tag">SECURE</div>
+                                        </div>
+
+                                        <div className="reg-card-body">
+                                            {followupStatus && followupStatus.lastConsultation && (
+                                                <div style={{
+                                                    padding: '12px 16px', borderRadius: '12px', border: '1px solid',
+                                                    backgroundColor: followupStatus.active ? '#f0fdf4' : '#fef2f2',
+                                                    borderColor: followupStatus.active ? '#bbf7d0' : '#fecaca',
+                                                    color: followupStatus.active ? '#15803d' : '#b91c1c',
+                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px'
+                                                }}>
+                                                    <div style={{ fontWeight: 'bold', fontSize: '13px' }}>
+                                                        {followupStatus.active ? '✅ Follow-up Visit - Payment Not Required' : '🔴 Follow-up Expired'}
+                                                    </div>
+                                                    <div style={{ fontSize: '12px' }}>
+                                                        Fee: <strong>₹{followupStatus.active ? '0' : (followupStatus.fee || intakeForm.consultationFee)}</strong>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="reg-payment-box">
+                                                <div className="reg-payment-row">
+                                                    <div className="reg-field">
+                                                        <label>Payment Mode</label>
+                                                        <select 
+                                                            className="reg-select"
+                                                            value={intakeForm.splitPayments?.[0]?.method || 'Cash'}
+                                                            onChange={(e) => handleIntakeSplitPaymentChange(0, 'method', e.target.value)}
+                                                        >
+                                                            <option value="Cash">Cash</option>
+                                                            <option value="UPI">UPI</option>
+                                                            <option value="Card">Card</option>
+                                                            <option value="Online">Online</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div className="reg-field">
+                                                        <label>Amount</label>
+                                                        <input 
+                                                            className="reg-input"
+                                                            placeholder="Amount"
+                                                            value={intakeForm.splitPayments?.[0]?.amount || intakeForm.consultationFee || '500'}
+                                                            onChange={(e) => handleIntakeSplitPaymentChange(0, 'amount', e.target.value)}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {intakeForm.splitPayments?.some(p => p.method !== 'Cash') && (
+                                                    <div style={{ marginTop: '12px' }}>
+                                                        <label style={{ fontSize: '10px', fontWeight: 800, color: '#60738d', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+                                                            Payment Screenshot / Proof <span style={{ color: '#ef4444' }}>*Required for non-cash</span>
+                                                        </label>
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*,application/pdf"
+                                                            onChange={e => setPaymentScreenshot(e.target.files[0])}
+                                                            style={{ padding: '8px', border: '1.5px dashed #6366f1', borderRadius: '8px', background: '#ffffff', width: '100%', fontSize: '12px' }}
+                                                        />
+                                                        {paymentScreenshot && (
+                                                            <span style={{ fontSize: '12px', color: '#059669', marginTop: '4px', display: 'block' }}>
+                                                                ✅ {paymentScreenshot.name}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                <div className="reg-payment-status">
+                                                    <div className="reg-check-badge">✓</div>
+                                                    Payment Confirmed — Paid
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* CARD 6: ASSIGN TO DOCTOR / COUNSELLOR */}
+                                {!isEditingProfileOnly && (
+                                    <div className="reg-form-card" id="reg-step-card-5">
+                                        <div className="reg-card-head">
+                                            <div className="reg-card-title">
+                                                <div className="reg-card-icon">⚕</div>
+                                                <div>
+                                                    <h2>Assign To Doctor / Counsellor</h2>
+                                                    <p>Choose the appropriate medical professional</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="reg-card-body">
+                                            <div className="reg-assign-grid">
+                                                <div className="reg-field">
+                                                    <label>Department {followupStatus?.active && '(Read Only)'}</label>
+                                                    <select 
+                                                        className="reg-select"
+                                                        name="department" 
+                                                        value={intakeForm.department} 
+                                                        onChange={handleInputChange}
+                                                        disabled={followupStatus?.active}
+                                                        style={followupStatus?.active ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
+                                                    >
+                                                        <option value="">-- Choose Department --</option>
+                                                        {[...new Set([...(hospitalContext?.departments || []), ...doctorsList.flatMap(d => d.departments || [])])].filter(Boolean).map(dept => (
+                                                            <option key={dept} value={dept}>{dept}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+
+                                                <div className="reg-field">
+                                                    <label>Select Specialist {followupStatus?.active && '(Read Only)'}</label>
+                                                    <select
+                                                        className="reg-select"
+                                                        name="doctor"
+                                                        value={intakeForm.doctor}
+                                                        onChange={handleInputChange}
+                                                        disabled={!intakeForm.department || followupStatus?.active}
+                                                        style={(!intakeForm.department || followupStatus?.active) ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
+                                                    >
+                                                        {!intakeForm.department ? (
+                                                            <option value="">-- Select Department First --</option>
+                                                        ) : (
+                                                            <>
+                                                                <option value="">-- Select Specialist --</option>
+                                                                {doctorsList.filter(doc => (doc.departments || []).includes(intakeForm.department)).map(doc => (
+                                                                    <option key={doc._id} value={doc._id}>{doc.name} {doc.departments?.length > 0 ? `(${doc.departments.join(', ')})` : ''}</option>
+                                                                ))}
+                                                            </>
+                                                        )}
+                                                    </select>
+                                                </div>
+
+                                                <div className="reg-field">
+                                                    <label>Date</label>
+                                                    <input 
+                                                        className="reg-input"
+                                                        type="date" 
+                                                        name="visitDate" 
+                                                        value={intakeForm.visitDate} 
+                                                        min={todayStr} 
+                                                        onChange={handleInputChange} 
+                                                        disabled={!intakeForm.doctor} 
+                                                        style={!intakeForm.doctor ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}} 
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {intakeForm.doctor && (
+                                                hospitalContext?.appointmentMode === 'token' ? (
+                                                    <div style={{ marginTop: '14px', padding: '16px 20px', background: 'linear-gradient(135deg, #fef3c7, #fde68a)', borderRadius: '14px', border: '2px solid #f59e0b', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                                        <span style={{ fontSize: '2.2rem' }}>🎟️</span>
+                                                        <div>
+                                                            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#78350f' }}>Token Queue Mode Active</div>
+                                                            {nextToken !== null ? (
+                                                                <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#92400e' }}>
+                                                                    Next Token: <span style={{ fontSize: '1.8rem', color: '#d97706' }}>#{nextToken}</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div style={{ color: '#92400e', fontSize: '0.85rem' }}>Select doctor and date to see next token</div>
+                                                            )}
+                                                            <div style={{ fontSize: '0.75rem', color: '#92400e', marginTop: '2px', opacity: 0.8 }}>Tokens reset daily at midnight</div>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ marginTop: '14px' }}>
+                                                        <SlotPicker
+                                                            doctorId={intakeForm.doctor}
+                                                            date={intakeForm.visitDate}
+                                                            selectedTime={intakeForm.visitTime}
+                                                            onSelectTime={(time) => setIntakeForm({ ...intakeForm, visitTime: time })}
+                                                        />
+                                                    </div>
+                                                )
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* CARD 7: PATIENT NOTES & FOOTER */}
+                                <div className="reg-form-card" id="reg-step-card-notes">
+                                    <div className="reg-card-head">
+                                        <div className="reg-card-title">
+                                            <div className="reg-card-icon">✎</div>
+                                            <div>
+                                                <h2>Patient Notes</h2>
+                                                <p>Additional clinical information</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="reg-card-body">
+                                        <div className="reg-field">
+                                            <label>Bio</label>
+                                            <textarea 
+                                                className="reg-textarea"
+                                                name="bio"
+                                                placeholder="Patient's profile bio or initial clinical observations..."
+                                                value={intakeForm.bio || ''}
+                                                onChange={handleInputChange}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="reg-form-footer">
+                                        <div className="reg-footer-info">
+                                            🔒 Patient information is encrypted & securely stored
+                                        </div>
+
+                                        <div className="reg-actions">
+                                            <button 
+                                                type="button" 
+                                                className="reg-btn reg-btn-cancel" 
+                                                onClick={() => isPatientPortal ? navigate('/patient/dashboard') : setViewMode('list')}
+                                                disabled={saving}
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button 
+                                                type="submit" 
+                                                className="reg-btn reg-btn-save" 
+                                                disabled={saving}
+                                            >
+                                                {saving
+                                                    ? 'Saving...'
+                                                    : (() => {
+                                                        if (isEditingProfileOnly) return '✓ Save Patient Details';
+                                                        const isTokenMode = hospitalContext?.appointmentMode === 'token';
+                                                        const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
+                                                        const actionText = followupStatus?.active ? 'Re-Book Appointment' : (isTokenMode && !isPatientPortal ? 'Issue Token' : 'Book Appointment');
+                                                        if (isPatientPortal) return canBook ? actionText : '✓ Complete Profile & Continue';
+                                                        return canBook ? `✓ Register, ${actionText} & Receipt` : '✓ Save Patient Details';
+                                                    })()
+                                                }
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </section>
+                    </div>
+                </main>
+                {renderCameraModal()}
             </div>
         );
     }
@@ -2821,19 +3353,12 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         </>
     );
 
-    if (viewMode === 'welcome') {
+    if (viewMode === 'welcome' || !viewMode || viewMode === 'dashboard') {
         const timeOfDay = new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening';
-        const todayStr = new Date().toISOString().split('T')[0];
-        const todayRegs = appointments.filter(a => (a.createdAt && a.createdAt.startsWith(todayStr)) || a.date === todayStr).length || (appointments.length > 0 ? appointments.length : 24);
-        const todayAppts = appointments.filter(a => a.date === todayStr || (a.createdAt && a.createdAt.startsWith(todayStr))).length || (appointments.length > 0 ? appointments.length : 32);
-        const todayColls = transactions.length > 0 
-            ? transactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
-            : (appointments.reduce((sum, a) => sum + (Number(a.consultationFee) || 0), 0) || 48250);
-        const pendingBills = appointments.filter(a => a.paymentStatus === 'Pending' || a.paymentStatus === 'pending' || !a.isPaid).length || 18;
 
         return (
             <>
-                <div className="reception-dashboard" style={{ padding: '4px 0 20px 0' }}>
+                <div className="reception-dashboard" style={{ padding: '0 0 24px 0', margin: 0 }}>
                     {pendingDownload && (
                         <div style={{
                             margin: '0 0 20px 0',
@@ -2874,7 +3399,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                         </div>
                     )}
 
-                    {/* WELCOME BANNER (Matched to Reference Image) */}
+                    {/* WELCOME BANNER */}
                     <div className="rec-welcome-wrap">
                         {/* 1. Hero Greeting Banner */}
                         <div className="rec-hero-card">
@@ -2901,83 +3426,21 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             </div>
                         </div>
 
-                        {/* 2. Metrics Bar (4 KPI Cards) */}
-                        <div className="rec-metrics-grid">
-                            {/* 1. Today's Registrations */}
-                            <div className="rec-metric-card">
-                                <div className="rec-metric-icon-box rec-box-mint">
-                                    <FiUsers />
-                                </div>
-                                <div className="rec-metric-info">
-                                    <span className="rec-metric-label">Today's Registrations</span>
-                                    <div className="rec-metric-val-row">
-                                        <span className="rec-metric-val">{todayRegs}</span>
-                                        <span className="rec-metric-trend">↑</span>
-                                    </div>
-                                    <span className="rec-metric-sub" style={{ color: '#10b981' }}>+12% from yesterday</span>
-                                </div>
-                            </div>
-
-                            {/* 2. Today's Appointments */}
-                            <div className="rec-metric-card">
-                                <div className="rec-metric-icon-box rec-box-blue">
-                                    <FiFileText />
-                                </div>
-                                <div className="rec-metric-info">
-                                    <span className="rec-metric-label">Today's Appointments</span>
-                                    <div className="rec-metric-val-row">
-                                        <span className="rec-metric-val">{todayAppts}</span>
-                                        <span className="rec-metric-trend">↑</span>
-                                    </div>
-                                    <span className="rec-metric-sub" style={{ color: '#10b981' }}>+8% from yesterday</span>
-                                </div>
-                            </div>
-
-                            {/* 3. Today's Collections */}
-                            <div className="rec-metric-card">
-                                <div className="rec-metric-icon-box rec-box-amber">
-                                    <FaRupeeSign />
-                                </div>
-                                <div className="rec-metric-info">
-                                    <span className="rec-metric-label">Today's Collections</span>
-                                    <div className="rec-metric-val-row">
-                                        <span className="rec-metric-val">₹ {Number(todayColls).toLocaleString('en-IN')}</span>
-                                    </div>
-                                    <span className="rec-metric-sub" style={{ color: '#10b981' }}>+15% from yesterday</span>
-                                </div>
-                            </div>
-
-                            {/* 4. Pending Bills */}
-                            <div className="rec-metric-card">
-                                <div className="rec-metric-icon-box rec-box-purple">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                                    </svg>
-                                </div>
-                                <div className="rec-metric-info">
-                                    <span className="rec-metric-label">Pending Bills</span>
-                                    <div className="rec-metric-val-row">
-                                        <span className="rec-metric-val">{pendingBills}</span>
-                                    </div>
-                                    <span className="rec-metric-sub">View and manage</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 3. Quick Access Section */}
+                        {/* 2. Quick Access Section - Half-Color Top / Half-White Bottom with Proper Buttons */}
                         <div className="rec-quick-section">
                             <div className="rec-section-heading">
-                                <span style={{ color: '#eab308' }}>⚡</span>
-                                <span>QUICK ACCESS</span>
+                                <span className="rec-heading-badge">⚡ QUICK ACCESS</span>
+                                <span className="rec-heading-sub">Frequently used workflows & portals</span>
                             </div>
 
                             <div className="rec-quick-grid">
-                                {/* Card 1: Patient Registration */}
+                                {/* Card 1: Patient Registration (Half Mint / Half White) */}
                                 <div 
-                                    className="rec-quick-card rec-card-mint"
+                                    className="rec-quick-card rec-split-card rec-split-mint"
                                     onClick={() => navigate('/reception/dashboard?view=intake')}
                                 >
-                                    <div className="rec-card-top">
+                                    {/* Top Half: Soft Pastel Mint Gradient */}
+                                    <div className="rec-card-top-half">
                                         <div className="rec-card-icon-box rec-box-mint">
                                             <FiUserPlus />
                                         </div>
@@ -2987,32 +3450,22 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         </div>
                                     </div>
 
-                                    <div className="rec-card-btn-wrap">
-                                        <button className="rec-pill-btn rec-btn-mint">
+                                    {/* Bottom Half: Crisp Pure White with Proper Action Button */}
+                                    <div className="rec-card-bottom-half">
+                                        <button className="rec-action-btn rec-btn-mint">
                                             <span>Get Started</span>
-                                            <span>→</span>
+                                            <span className="rec-btn-arrow">→</span>
                                         </button>
-                                    </div>
-
-                                    {/* Decorative Wave Watermark */}
-                                    <div className="rec-card-watermark">
-                                        <svg width="90" height="90" viewBox="0 0 100 100" fill="none">
-                                            <circle cx="20" cy="80" r="3" fill="#10b981" />
-                                            <circle cx="35" cy="70" r="3.5" fill="#10b981" />
-                                            <circle cx="50" cy="60" r="4" fill="#10b981" />
-                                            <circle cx="65" cy="50" r="4.5" fill="#10b981" />
-                                            <circle cx="80" cy="40" r="5" fill="#10b981" />
-                                            <circle cx="70" cy="85" r="16" fill="#10b981" opacity="0.25" />
-                                        </svg>
                                     </div>
                                 </div>
 
-                                {/* Card 2: Patient Search */}
+                                {/* Card 2: Patient Search (Half Blue / Half White) */}
                                 <div 
-                                    className="rec-quick-card rec-card-blue"
+                                    className="rec-quick-card rec-split-card rec-split-blue"
                                     onClick={() => navigate('/reception/patients')}
                                 >
-                                    <div className="rec-card-top">
+                                    {/* Top Half: Soft Pastel Blue Gradient */}
+                                    <div className="rec-card-top-half">
                                         <div className="rec-card-icon-box rec-box-blue">
                                             <FiSearch />
                                         </div>
@@ -3022,36 +3475,26 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         </div>
                                     </div>
 
-                                    <div className="rec-card-btn-wrap">
-                                        <button className="rec-pill-btn rec-btn-blue">
+                                    {/* Bottom Half: Crisp Pure White with Proper Action Button */}
+                                    <div className="rec-card-bottom-half">
+                                        <button className="rec-action-btn rec-btn-blue">
                                             <span>Search Now</span>
-                                            <span>→</span>
+                                            <span className="rec-btn-arrow">→</span>
                                         </button>
-                                    </div>
-
-                                    {/* Decorative Wave Watermark */}
-                                    <div className="rec-card-watermark">
-                                        <svg width="90" height="90" viewBox="0 0 100 100" fill="none">
-                                            <circle cx="20" cy="80" r="3" fill="#3b82f6" />
-                                            <circle cx="35" cy="70" r="3.5" fill="#3b82f6" />
-                                            <circle cx="50" cy="60" r="4" fill="#3b82f6" />
-                                            <circle cx="65" cy="50" r="4.5" fill="#3b82f6" />
-                                            <circle cx="80" cy="40" r="5" fill="#3b82f6" />
-                                            <circle cx="70" cy="85" r="16" fill="#3b82f6" opacity="0.25" />
-                                        </svg>
                                     </div>
                                 </div>
 
-                                {/* Card 3: Finance & Accounting */}
+                                {/* Card 3: Finance & Accounting (Half Purple / Half White) */}
                                 <div 
-                                    className="rec-quick-card rec-card-purple"
+                                    className="rec-quick-card rec-split-card rec-split-purple"
                                     onClick={() => {
                                         fetchTransactions();
                                         setViewMode('transactions');
                                         navigate('/reception/dashboard?view=transactions');
                                     }}
                                 >
-                                    <div className="rec-card-top">
+                                    {/* Top Half: Soft Pastel Purple Gradient */}
+                                    <div className="rec-card-top-half">
                                         <div className="rec-card-icon-box rec-box-purple">
                                             <FaRupeeSign />
                                         </div>
@@ -3061,26 +3504,18 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         </div>
                                     </div>
 
-                                    <div className="rec-card-btn-wrap">
-                                        <button className="rec-pill-btn rec-btn-purple">
+                                    {/* Bottom Half: Crisp Pure White with Proper Action Button */}
+                                    <div className="rec-card-bottom-half">
+                                        <button className="rec-action-btn rec-btn-purple">
                                             <span>Open Finance</span>
-                                            <span>→</span>
+                                            <span className="rec-btn-arrow">→</span>
                                         </button>
-                                    </div>
-
-                                    {/* Decorative Chart Watermark */}
-                                    <div className="rec-card-watermark">
-                                        <svg width="90" height="90" viewBox="0 0 100 100" fill="none">
-                                            <rect x="40" y="60" width="10" height="30" rx="3" fill="#8b5cf6" opacity="0.4" />
-                                            <rect x="58" y="45" width="10" height="45" rx="3" fill="#8b5cf6" opacity="0.6" />
-                                            <rect x="76" y="30" width="10" height="60" rx="3" fill="#8b5cf6" opacity="0.85" />
-                                        </svg>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* 4. Inspirational Quote / Footer Banner */}
+                        {/* 3. Inspirational Quote / Footer Banner */}
                         <div className="rec-quote-banner">
                             <div className="rec-quote-left">
                                 <div className="rec-quote-icon">“</div>
@@ -3249,7 +3684,6 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                 <>
                                     <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay playsInline muted />
                                     <canvas ref={canvasRef} style={{ display: 'none' }} />
-                                    {/* Capture button overlay */}
                                     <div style={{ position: 'absolute', bottom: '20px', left: '50%', transform: 'translateX(-50%)' }}>
                                         <button
                                             onClick={capturePhotoFromCamera}

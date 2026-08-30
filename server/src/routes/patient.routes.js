@@ -214,23 +214,14 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
                 }
             };
         } else {
-            // Hospital queries
+            // Hospital queries — Execute all 4 queries in parallel
             let visitQuery = { $or: [{ patientId: { $in: idList } }], ...hFilter };
             let labQuery = { $or: [{ userId: { $in: objectIdList } }, { patientId: { $in: idList } }], ...hFilter };
             let pharmaQuery = { $or: [{ userId: { $in: objectIdList } }, { patientId: { $in: idList } }], ...hFilter };
             let apptQuery = { $or: [{ userId: { $in: objectIdList } }, { patientId: { $in: idList } }], ...hFilter };
 
-            // Removed department filtering to fetch all appointments across the hospital
-
-            appointments = await Appointment.find(apptQuery).lean();
-
-            // Removed appointmentId filtering from visitQuery, labQuery, pharmaQuery to fetch all records
-            // const deptApptIds = appointments.map(a => a._id);
-            // visitQuery.appointmentId = { $in: deptApptIds };
-            // labQuery.appointmentId = { $in: deptApptIds };
-            // pharmaQuery.appointmentId = { $in: deptApptIds };
-
-            [visits, labs, pharmacies] = await Promise.all([
+            [appointments, visits, labs, pharmacies] = await Promise.all([
+                Appointment.find(apptQuery).lean(),
                 ClinicalVisit.find(visitQuery).lean(),
                 LabReport.find(labQuery).lean(),
                 PharmacyOrder.find(pharmaQuery).lean()

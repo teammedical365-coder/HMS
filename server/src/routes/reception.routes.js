@@ -990,7 +990,7 @@ router.post('/check-in', verifyToken, verifyReception, async (req, res) => {
 // 8. TRANSACTIONS
 router.get('/transactions', verifyToken, verifyReception, async (req, res) => {
     try {
-        let queryFilter = { amount: { $gt: 0 }, bookedBy: req.user._id };
+        let queryFilter = { amount: { $gt: 0 } };
         if (req.user.hospitalId) {
             queryFilter.hospitalId = req.user.hospitalId;
         }
@@ -1002,6 +1002,106 @@ router.get('/transactions', verifyToken, verifyReception, async (req, res) => {
             .lean();
         res.json({ success: true, transactions });
     } catch (e) { res.status(500).json({ success: false, message: 'An internal error occurred' }); }
+});
+
+// 9. RECEPTION DASHBOARD STATS (REAL TIME)
+router.get('/stats', verifyToken, verifyReception, resolveTenant, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+        const startOfYesterday = new Date(startOfToday);
+        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+        const endOfYesterday = new Date(endOfToday);
+        endOfYesterday.setDate(endOfYesterday.getDate() - 1);
+
+        const patientBaseQuery = { role: { $in: ['user', 'patient'] } };
+        if (hospitalId) patientBaseQuery.hospitalId = hospitalId;
+
+        // 1. Registrations
+        const todayRegistrations = await User.countDocuments({
+            ...patientBaseQuery,
+            createdAt: { $gte: startOfToday, $lte: endOfToday }
+        });
+        const yesterdayRegistrations = await User.countDocuments({
+            ...patientBaseQuery,
+            createdAt: { $gte: startOfYesterday, $lte: endOfYesterday }
+        });
+        const totalPatients = await User.countDocuments(patientBaseQuery);
+
+        // 2. Appointments
+        const apptBaseQuery = { status: { $ne: 'cancelled' } };
+        if (hospitalId) apptBaseQuery.hospitalId = hospitalId;
+
+        const todayAppointments = await Appointment.countDocuments({
+            ...apptBaseQuery,
+            appointmentDate: { $gte: startOfToday, $lte: endOfToday }
+        });
+        const yesterdayAppointments = await Appointment.countDocuments({
+            ...apptBaseQuery,
+            appointmentDate: { $gte: startOfYesterday, $lte: endOfYesterday }
+        });
+
+        // 3. Collections (Consultation Fees & Paid Appointments)
+        const paidApptsToday = await Appointment.find({
+            ...apptBaseQuery,
+            paymentStatus: 'Paid',
+            $or: [
+                { updatedAt: { $gte: startOfToday, $lte: endOfToday } },
+                { createdAt: { $gte: startOfToday, $lte: endOfToday } },
+                { appointmentDate: { $gte: startOfToday, $lte: endOfToday } }
+            ]
+        }).select('amount');
+
+        const todayCollections = paidApptsToday.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+
+        const paidApptsYesterday = await Appointment.find({
+            ...apptBaseQuery,
+            paymentStatus: 'Paid',
+            $or: [
+                { updatedAt: { $gte: startOfYesterday, $lte: endOfYesterday } },
+                { createdAt: { $gte: startOfYesterday, $lte: endOfYesterday } },
+                { appointmentDate: { $gte: startOfYesterday, $lte: endOfYesterday } }
+            ]
+        }).select('amount');
+
+        const yesterdayCollections = paidApptsYesterday.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+
+        // 4. Pending Bills (Unpaid / Pending Appointments)
+        const pendingBills = await Appointment.countDocuments({
+            ...apptBaseQuery,
+            $or: [{ paymentStatus: { $in: ['Pending', 'pending', 'Unpaid', 'unpaid'] } }, { isPaid: false }],
+            amount: { $gt: 0 }
+        });
+
+        // Calculate trends
+        const calcTrend = (today, yesterday) => {
+            if (yesterday === 0) {
+                return today > 0 ? `+${today} today` : 'Live';
+            }
+            const diff = Math.round(((today - yesterday) / yesterday) * 100);
+            return diff >= 0 ? `+${diff}% from yesterday` : `${diff}% from yesterday`;
+        };
+
+        res.json({
+            success: true,
+            stats: {
+                todayRegistrations,
+                totalPatients,
+                todayAppointments,
+                todayCollections,
+                pendingBills,
+                regTrend: calcTrend(todayRegistrations, yesterdayRegistrations),
+                apptTrend: calcTrend(todayAppointments, yesterdayAppointments),
+                collTrend: calcTrend(todayCollections, yesterdayCollections)
+            }
+        });
+    } catch (e) {
+        console.error('[GET /stats Error]:', e);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
 });
 
 module.exports = router;

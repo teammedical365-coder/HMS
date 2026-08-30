@@ -47,11 +47,21 @@ const searchRoutes = require('./routes/search.routes');
 const consentRoutes = require('./routes/consent.routes');
 const bedRoutes = require('./routes/bed.routes');
 const otRoutes = require('./routes/ot.routes');
+const compression = require('compression');
 const referralRoutes = require('./routes/referral.routes');
 
 const app = express();
 
-// ── 1. CORS Configuration (Must be first) ──────────────────────────────────────
+// ── 0. High-Performance Gzip/Deflate Response Compression ─────────────────────
+app.use(compression({
+    filter: (req, res) => {
+        if (req.headers['x-no-compression']) return false;
+        return compression.filter(req, res);
+    },
+    threshold: 1024 // Only compress responses > 1KB
+}));
+
+// ── 1. CORS Configuration (With in-memory Domain Cache) ───────────────────────
 const isAllowedOrigin = (origin) => {
     if (!origin) return true; // Direct REST calls / Android Native requests
     if (origin.includes('localhost')) return true; // Handles capacitor://localhost & http://localhost
@@ -68,44 +78,43 @@ const isAllowedOrigin = (origin) => {
 };
 
 const HospitalModelForCors = require('./models/hospital.model');
+const verifiedDomainCache = new Map(); // domain -> { allowed: boolean, expireAt: number }
 
 app.use(cors({
     origin: async (origin, callback) => {
-        // 1. Sabse pehle console log karein taaki Render logs mein pata chale ki Capacitor bhej kya raha hai
-        console.log('[CORS Check] Incoming Origin:', origin); 
-
-        // 2. Static Origins Check (Aapka function)
+        // 1. Static Origins Check
         if (isAllowedOrigin(origin)) {
-            console.log('[CORS Check] Allowed by isAllowedOrigin');
             return callback(null, true);
         }
 
-        // 3. SAFEGUARD: Agar origin valid string nahi hai, toh aage .replace() mat lagao (crash se bachne ke liye)
+        // 2. Safeguard for invalid origin format
         if (!origin || typeof origin !== 'string') {
-            console.log('[CORS Check] Blocked: Invalid origin format');
             return callback(new Error('CORS blocked: Invalid origin format'), false);
         }
 
-        // 4. Database Check for Custom Domains
-        try {
-            const domainOnly = origin.replace(/^https?:\/\//, '');
-            console.log('[CORS Check] Searching DB for domain:', domainOnly);
+        const domainOnly = origin.replace(/^https?:\/\//, '');
 
+        // 3. Fast In-Memory Cache Check
+        const cached = verifiedDomainCache.get(domainOnly);
+        const now = Date.now();
+        if (cached && cached.expireAt > now) {
+            if (cached.allowed) return callback(null, true);
+            return callback(new Error('CORS blocked: ' + origin), false);
+        }
+
+        // 4. Database Check for Custom Domains (Cached for 10 minutes)
+        try {
             const hospital = await HospitalModelForCors.findOne({ customDomain: domainOnly }).select('_id').lean();
-            
             if (hospital) {
-                console.log('[CORS Check] Domain verified in Database!');
+                verifiedDomainCache.set(domainOnly, { allowed: true, expireAt: now + 10 * 60 * 1000 });
                 return callback(null, true);
             } else {
-                console.log('[CORS Check] Domain not found in Database.');
+                verifiedDomainCache.set(domainOnly, { allowed: false, expireAt: now + 2 * 60 * 1000 });
             }
         } catch (err) {
-            // Agar Database error deta hai (jaise timeout), toh yahan aayega
             console.error('[CORS ERROR] Database check failed:', err.message);
         }
 
-        // 5. Agar upar sab fail ho gaya, tabhi block karo
-        console.log('[CORS Check] Request blocked finally for:', origin);
         callback(new Error('CORS blocked: ' + origin), false);
     },
     credentials: true,

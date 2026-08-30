@@ -15,8 +15,10 @@ const GlobalSearch = () => {
     const desktopInputRef = useRef(null);
     const navigate = useNavigate();
 
-    // Debounce effect
+    // Debounce effect with AbortController for instant cancellation
     useEffect(() => {
+        const controller = new AbortController();
+
         const fetchResults = async () => {
             if (query.trim().length < 2) {
                 setResults([]);
@@ -27,7 +29,8 @@ const GlobalSearch = () => {
             setIsLoading(true);
             try {
                 const response = await api.get(`/api/search`, {
-                    params: { q: query }
+                    params: { q: query },
+                    signal: controller.signal
                 });
                 
                 if (response.data.success) {
@@ -36,17 +39,24 @@ const GlobalSearch = () => {
                     setHighlightedIndex(-1);
                 }
             } catch (error) {
-                console.error("Search error:", error);
+                if (error.name !== 'CanceledError' && error.name !== 'AbortError' && !api.isCancel?.(error)) {
+                    console.error("Search error:", error);
+                }
             } finally {
-                setIsLoading(false);
+                if (!controller.signal.aborted) {
+                    setIsLoading(false);
+                }
             }
         };
 
         const timeoutId = setTimeout(() => {
             fetchResults();
-        }, 300);
+        }, 200);
 
-        return () => clearTimeout(timeoutId);
+        return () => {
+            clearTimeout(timeoutId);
+            controller.abort();
+        };
     }, [query]);
 
     // Click outside to close

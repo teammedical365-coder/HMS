@@ -105,4 +105,13 @@ const pharmacyOrderSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+// Compound Indexes for fast pharmacy order lookups, patient orders and billing
+pharmacyOrderSchema.index({ hospitalId: 1, createdAt: -1 });
+pharmacyOrderSchema.index({ hospitalId: 1, userId: 1, createdAt: -1 });
+pharmacyOrderSchema.index({ hospitalId: 1, orderStatus: 1, createdAt: -1 });
+pharmacyOrderSchema.index({ hospitalId: 1, paymentStatus: 1 });
+pharmacyOrderSchema.index({ appointmentId: 1 });
+pharmacyOrderSchema.index({ userId: 1, createdAt: -1 });
+pharmacyOrderSchema.index({ patientId: 1 });
+
 module.exports = mongoose.model('PharmacyOrder', pharmacyOrderSchema);

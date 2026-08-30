@@ -373,7 +373,9 @@
 }
 
 .erp-page-content:has(.role-dashboard),
-.erp-page-content:has(.hospitaladmin-page) {
+.erp-page-content:has(.hospitaladmin-page),
+.erp-page-content:has(.reception-dashboard),
+.erp-page-content:has(.rec-welcome-wrap) {
   padding: 0 0 24px 0 !important;
 }
 

@@ -172,6 +172,10 @@ export const doctorAPI = {
 };
 
 export const receptionAPI = {
+    getStats: async () => {
+        const response = await apiClient.get('/api/reception/stats');
+        return response.data;
+    },
     getAllAppointments: async (params = {}) => {
         const response = await apiClient.get('/api/reception/appointments', { params });
         return response.data;

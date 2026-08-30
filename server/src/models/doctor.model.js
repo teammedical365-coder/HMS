@@ -99,8 +99,12 @@ const doctorSchema = new mongoose.Schema({
 // Add indexes for better query performance
 doctorSchema.index({ services: 1 }); // Index for filtering by services
 doctorSchema.index({ email: 1 }); // Index for email lookups
+doctorSchema.index({ hospitalId: 1, status: 1, isAvailable: 1 });
+doctorSchema.index({ hospitalId: 1, departments: 1 });
+doctorSchema.index({ hospitalId: 1, name: 1 });
+doctorSchema.index({ userId: 1, hospitalId: 1 });
 
 const Doctor = mongoose.model('Doctor', doctorSchema);
-//doctor dda
+
 module.exports = Doctor;
 
