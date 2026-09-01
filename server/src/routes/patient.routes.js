@@ -106,9 +106,22 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
             return res.status(400).json({ success: false, message: 'Invalid patient identifier' });
         }
 
-        const userQuery = isObjectId ? { _id: userId } : { patientId: userId };
-        // Always scope to hospital for data isolation
-        if (req.user.hospitalId) userQuery.hospitalId = req.user.hospitalId;
+        const idQuery = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
+        let userQuery = idQuery;
+        if (req.user.hospitalId) {
+            userQuery = {
+                $and: [
+                    idQuery,
+                    {
+                        $or: [
+                            { hospitalId: req.user.hospitalId },
+                            { hospitalId: { $exists: false } },
+                            { hospitalId: null }
+                        ]
+                    }
+                ]
+            };
+        }
         
         let user = await MasterUser.findOne(userQuery).lean();
         let isClinicPatient = false;
@@ -116,8 +129,22 @@ router.get('/:id/full-history', verifyToken, resolveTenant, auditLog('VIEW_PATIE
         if (!user) {
             // Check if it's a ClinicPatient
             const ClinicPatient = require('../models/clinicPatient.model');
-            const clinicQuery = isObjectId ? { _id: userId } : { patientUid: userId };
-            if (req.user.hospitalId) clinicQuery.clinicId = req.user.hospitalId;
+            const clinicIdQuery = isObjectId ? { _id: userId } : { $or: [{ patientUid: userId }, { patientId: userId }] };
+            let clinicQuery = clinicIdQuery;
+            if (req.user.hospitalId) {
+                clinicQuery = {
+                    $and: [
+                        clinicIdQuery,
+                        {
+                            $or: [
+                                { clinicId: req.user.hospitalId },
+                                { clinicId: { $exists: false } },
+                                { clinicId: null }
+                            ]
+                        }
+                    ]
+                };
+            }
             
             const cp = await ClinicPatient.findOne(clinicQuery).lean();
             if (cp) {
@@ -294,8 +321,22 @@ router.post('/:id/consent', verifyToken, resolveTenant, consentUpload.single('co
 
         const mongoose = require('mongoose');
         const isObjectId = mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24;
-        const userQuery = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
-        if (hid) userQuery.hospitalId = hid;
+        const idFilter = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
+        let userQuery = idFilter;
+        if (hid) {
+            userQuery = {
+                $and: [
+                    idFilter,
+                    {
+                        $or: [
+                            { hospitalId: hid },
+                            { hospitalId: { $exists: false } },
+                            { hospitalId: null }
+                        ]
+                    }
+                ]
+            };
+        }
 
         const user = await MasterUser.findOne(userQuery);
         if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });
@@ -342,8 +383,22 @@ router.get('/:id/consent', verifyToken, resolveTenant, async (req, res) => {
 
         const mongoose = require('mongoose');
         const isObjectId = mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24;
-        const userQuery = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
-        if (hid) userQuery.hospitalId = hid;
+        const idFilter = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
+        let userQuery = idFilter;
+        if (hid) {
+            userQuery = {
+                $and: [
+                    idFilter,
+                    {
+                        $or: [
+                            { hospitalId: hid },
+                            { hospitalId: { $exists: false } },
+                            { hospitalId: null }
+                        ]
+                    }
+                ]
+            };
+        }
 
         const user = await MasterUser.findOne(userQuery).lean();
         if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });
@@ -461,8 +516,22 @@ router.get('/:id/documents', verifyToken, resolveTenant, async (req, res) => {
 
         const mongoose = require('mongoose');
         const isObjectId = mongoose.Types.ObjectId.isValid(userId) && String(userId).length === 24;
-        const userQuery = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
-        if (hid) userQuery.hospitalId = hid;
+        const idFilter = isObjectId ? { _id: userId } : { $or: [{ patientId: userId }, { mrn: userId }] };
+        let userQuery = idFilter;
+        if (hid) {
+            userQuery = {
+                $and: [
+                    idFilter,
+                    {
+                        $or: [
+                            { hospitalId: hid },
+                            { hospitalId: { $exists: false } },
+                            { hospitalId: null }
+                        ]
+                    }
+                ]
+            };
+        }
 
         const user = await MasterUser.findOne(userQuery).lean();
         if (!user) return res.status(404).json({ success: false, message: 'Patient not found' });

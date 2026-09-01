@@ -20,11 +20,12 @@ const server = http.createServer(app);
 // Socket.io CORS logic
 const isAllowedOriginSocket = (origin) => {
     if (!origin) return true; 
-    if (origin.includes('localhost')) return true; 
-    if (origin === 'https://medical365.in') return true;
-    if (origin === 'https://www.medical365.in') return true;
-    if (origin.endsWith('.medical365.in')) return true;
-    return false;
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) return true; 
+    if (origin === 'https://medical365.in' || origin.endsWith('.medical365.in')) return true;
+    if (origin.endsWith('.vercel.app') || origin.endsWith('.onrender.com')) return true;
+    if (origin.match(/^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/)) return true;
+    if (origin.startsWith('capacitor://') || origin.startsWith('http://capacitor')) return true;
+    return true; // Allow client requests
 };
 
 const io = new Server(server, {
@@ -33,8 +34,13 @@ const io = new Server(server, {
             if (isAllowedOriginSocket(origin)) return callback(null, true);
             callback(new Error('CORS blocked: ' + origin), false);
         },
-        methods: ["GET", "POST"]
-    }
+        methods: ["GET", "POST"],
+        credentials: true
+    },
+    transports: ['websocket', 'polling'],
+    allowEIO3: true,
+    pingTimeout: 30000,
+    pingInterval: 25000
 });
 
 app.set('io', io);

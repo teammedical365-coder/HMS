@@ -40,8 +40,22 @@ const verifyClinicApiKey = async (clinicId, apiKey) => {
 const attach = (httpServer) => {
     if (process.env.DEPLOYMENT_MODE === 'local') return; // don't run on local servers
 
-    const wss = new WsServer({ server: httpServer, path: '/tunnel' });
+    const wss = new WsServer({ noServer: true });
     console.log('[TunnelServer] WebSocket relay listening on /tunnel');
+
+    httpServer.on('upgrade', (request, socket, head) => {
+        try {
+            const host = request.headers.host || 'localhost';
+            const pathname = request.url ? new URL(request.url, `http://${host}`).pathname : '';
+            if (pathname === '/tunnel' || pathname.startsWith('/tunnel/')) {
+                wss.handleUpgrade(request, socket, head, (ws) => {
+                    wss.emit('connection', ws, request);
+                });
+            }
+        } catch (err) {
+            // Let other handlers like socket.io continue
+        }
+    });
 
     wss.on('connection', (socket) => {
         let clinicId = null;

@@ -768,7 +768,19 @@ const ReceptionPatients = () => {
                                             <tr key={appt._id || idx} className="rec-table-row-hover">
                                                 <td className="rec-cell-idx">{idx + 1}</td>
                                                 <td>
-                                                    <div className="rec-patient-cell">
+                                                    <div 
+                                                        className="rec-patient-cell"
+                                                        onClick={() => {
+                                                            const pid = (typeof appt.userId === 'object' ? (appt.userId?._id || appt.userId?.patientId) : appt.userId) || appt.patientId || appt._id;
+                                                            if (pid) {
+                                                                navigate(`/patient/${pid}/department/${encodeURIComponent(appt.department || appt.serviceName || 'Unassigned')}`);
+                                                            } else {
+                                                                setProfileModal({ open: true, patient: appt.userId || appt });
+                                                            }
+                                                        }}
+                                                        style={{ cursor: 'pointer' }}
+                                                        title="Click to view Patient Profile"
+                                                    >
                                                         <div 
                                                             className="rec-patient-avatar"
                                                             style={{ background: getInitialBgColor(patientName) }}
@@ -776,7 +788,7 @@ const ReceptionPatients = () => {
                                                             {patientName.charAt(0).toUpperCase()}
                                                         </div>
                                                         <div className="rec-patient-info-col">
-                                                            <span className="rec-patient-name">{patientName}</span>
+                                                            <span className="rec-patient-name" style={{ textDecoration: 'underline', textDecorationColor: 'transparent', transition: 'text-decoration-color 0.2s' }} onMouseOver={e => e.currentTarget.style.textDecorationColor = '#2563eb'} onMouseOut={e => e.currentTarget.style.textDecorationColor = 'transparent'}>{patientName}</span>
                                                             <span className="rec-patient-mrn-badge">MRN: {patientMRN}</span>
                                                         </div>
                                                     </div>
@@ -817,8 +829,9 @@ const ReceptionPatients = () => {
                                                             className="rec-action-square-btn rec-btn-view"
                                                             title="View Full Patient Profile & Consent"
                                                             onClick={() => {
-                                                                if (appt.userId?._id || appt.userId?.patientId) {
-                                                                    navigate(`/patient/${appt.userId?._id || appt.userId?.patientId || appt.patientId || appt._id}/department/${encodeURIComponent(appt.department || appt.serviceName || 'Unassigned')}`);
+                                                                const pid = (typeof appt.userId === 'object' ? (appt.userId?._id || appt.userId?.patientId) : appt.userId) || appt.patientId || appt._id;
+                                                                if (pid) {
+                                                                    navigate(`/patient/${pid}/department/${encodeURIComponent(appt.department || appt.serviceName || 'Unassigned')}`);
                                                                 } else {
                                                                     setProfileModal({ open: true, patient: appt.userId || appt });
                                                                 }
