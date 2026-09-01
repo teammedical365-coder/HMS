@@ -21,6 +21,7 @@ const DepartmentUpi = require('../models/departmentUpi.model');
 const jwt = require('jsonwebtoken');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { getTenantConnection, getTenantDbName, getActiveConnections, removeTenantConnection } = require('../db/tenantDb');
+const aiWalletService = require('../services/ai/aiWallet.service');
 
 const { JWT_SECRET } = require('../config/jwt');
 const validatePassword = require('../utils/validatePassword');
@@ -67,7 +68,7 @@ const verifyHospitalAdmin = async (req, res, next) => {
 router.get('/', verifyCentralAdmin, async (req, res) => {
     try {
         const plan = req.query.plan || 'enterprise';
-        
+
         let filter = {};
         if (plan === 'enterprise') {
             filter.clinicType = { $ne: 'clinic' };
@@ -91,7 +92,7 @@ router.get('/', verifyCentralAdmin, async (req, res) => {
         const hospitals = await Hospital.find(filter)
             .populate('adminUserId', 'name email')
             .lean();
-        
+
         // Map legacy data so frontend receives expected plan names
         const mappedHospitals = hospitals.map(h => {
             const hospital = { ...h };
@@ -171,7 +172,7 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
         } else {
             hospitalData.subscriptionPlan = 'enterprise';
         }
-        
+
         const hospital = new Hospital(hospitalData);
         await hospital.save();
 
@@ -189,7 +190,6 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
                 hospitalName: hospital.name,
                 city: hospital.city || '',
                 state: hospital.state || '',
-                departments: hospital.departments || [],
                 createdAt: new Date(),
                 _type: 'tenant_init',
             });
@@ -200,16 +200,24 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             console.warn(`⚠️  Could not pre-provision tenant DB for ${hospital.name}:`, dbErr.message);
         }
 
-        res.status(201).json({
-            success: true,
-            message: 'Hospital created successfully',
-            hospital,
-            tenantDb: getTenantDbName(String(hospital._id))
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'An internal error occurred' });
-    }
-});
+            // 🤖 Auto-provision initial ₹2,000 AI Wallet
+            try {
+                await aiWalletService.getOrCreateWallet(hospital._id);
+                console.log(`✅ [AI Wallet] Initialized ₹2,000 AI budget for hospital: ${hospital.name}`);
+            } catch (walletErr) {
+                console.warn(`⚠️  [AI Wallet] Could not pre-provision AI Wallet for ${hospital.name}:`, walletErr.message);
+            }
+
+            res.status(201).json({
+                success: true,
+                message: 'Hospital created successfully',
+                hospital,
+                tenantDb: getTenantDbName(String(hospital._id))
+            });
+        } catch (err) {
+            res.status(500).json({ success: false, message: 'An internal error occurred' });
+        }
+    });
 
 // ==========================================
 // SUPREME ADMIN: Tenant DB Monitoring
@@ -428,7 +436,7 @@ router.post('/admin/signup', verifyCentralAdmin, async (req, res) => {
         if (!name || !email || !password || !hospitalId) {
             return res.status(400).json({ success: false, message: 'Name, email, password, and hospitalId are required' });
         }
-        
+
         if (aadhaarNumber && !/^\d{12}$/.test(aadhaarNumber)) {
             return res.status(400).json({ success: false, message: 'Aadhaar number must be exactly 12 digits.' });
         }

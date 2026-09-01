@@ -71,6 +71,14 @@ server.listen(PORT, '0.0.0.0', () => {
 
     // 5. Post-startup services (after DB is ready — give it 3s)
     setTimeout(() => {
+        // Ensure all hospitals have an initialized AI Wallet
+        try {
+            const aiWalletService = require('./src/services/ai/aiWallet.service');
+            aiWalletService.ensureAllHospitalsHaveWallets();
+        } catch (walletInitErr) {
+            console.warn('⚠️ [AI Wallet Init Warning]:', walletInitErr.message);
+        }
+
         if (DEPLOYMENT_MODE === 'local') {
             // Start sync service — pushes stats to cloud every 15 min
             const syncService = require('./src/utils/syncService');

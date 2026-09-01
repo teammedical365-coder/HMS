@@ -6,6 +6,7 @@ const imagekit = require('../utils/imagekit');
 const Report = require('../models/report.model');
 const AIUsageLog = require('../models/aiUsageLog.model');
 const aiService = require('../services/ai/ai.service');
+const aiWalletService = require('../services/ai/aiWallet.service');
 const { validateMedia } = require('../services/ai/mediaValidator');
 const axios = require('axios');
 
@@ -61,6 +62,7 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
     const userContext = {
       userId: req.user?._id,
       userName: req.user?.name || req.user?.username || 'Doctor/Staff',
+      userRole: uploaderRole.toLowerCase(),
       hospitalId: (appt && appt.hospitalId) ? appt.hospitalId : (req.user ? req.user.hospitalId : undefined),
       patientId: appt ? appt.userId : null
     };
@@ -72,12 +74,19 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
       tags: ['appointment_report', file.mimetype]
     });
 
-    // Extract text using Gemini OCR
+    // Extract text using Gemini OCR only if hospital has active budget
     let extractedText = "";
-    try {
-      extractedText = await aiService.extractReportText(file.buffer.toString('base64'), file.mimetype || 'application/pdf', userContext);
-    } catch (ocrErr) {
-      console.error('[OCR Extraction Error]:', ocrErr.message);
+    if (userContext.hospitalId) {
+      const balanceCheck = await aiWalletService.checkBalance(userContext.hospitalId);
+      if (balanceCheck.allowed) {
+        try {
+          extractedText = await aiService.extractReportText(file.buffer.toString('base64'), file.mimetype || 'application/pdf', userContext);
+        } catch (ocrErr) {
+          console.error('[OCR Extraction Error]:', ocrErr.message);
+        }
+      } else {
+        console.warn(`[Report Upload OCR] AI Credits exhausted for hospital ${userContext.hospitalId}. Skipping auto-OCR.`);
+      }
     }
 
     const newReport = new Report({
@@ -157,8 +166,8 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
   }
 });
 
-// Route: GET /api/reports/appointment/:appointmentId
-router.get('/appointment/:appointmentId', verifyToken, async (req, res) => {
+// Route: GET /api/reports/appointment/:appointmentId & /api/reports/:appointmentId
+const getReportsByAppointmentHandler = async (req, res) => {
   try {
     const { appointmentId } = req.params;
     const reports = await Report.find({ appointmentId }).sort({ uploadedAt: -1 });
@@ -174,7 +183,10 @@ router.get('/appointment/:appointmentId', verifyToken, async (req, res) => {
       message: "Failed to fetch reports."
     });
   }
-});
+};
+
+router.get('/appointment/:appointmentId', verifyToken, getReportsByAppointmentHandler);
+router.get('/:appointmentId', verifyToken, getReportsByAppointmentHandler);
 
 // Route: POST /api/reports/summary
 router.post('/summary', verifyToken, async (req, res) => {
@@ -198,17 +210,34 @@ router.post('/summary', verifyToken, async (req, res) => {
       return res.status(403).json({ success: false, message: "Only doctors can generate AI summaries." });
     }
 
+    const hospitalId = req.user?.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "No hospital associated with this user session." });
+    }
+
+    // 1. PRE-CHECK AI WALLET BUDGET BEFORE CALLING GEMINI
+    const balanceCheck = await aiWalletService.checkBalance(hospitalId);
+    if (!balanceCheck.allowed) {
+      return res.status(402).json({
+        success: false,
+        code: 'INSUFFICIENT_AI_CREDITS',
+        message: balanceCheck.message || "AI Credits Exhausted. Your hospital has used its available AI budget. Please contact your administrator to continue using the AI Assistant.",
+        wallet: balanceCheck.wallet
+      });
+    }
+
     const userContext = {
       userId: req.user?._id,
       userName: req.user?.name || req.user?.username || 'Doctor',
-      hospitalId: req.user?.hospitalId
+      userRole: 'doctor',
+      hospitalId: hospitalId
     };
 
-    // 1. Download file
+    // 2. Download file
     const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
     const buffer = Buffer.from(response.data, 'binary');
 
-    // 2. Validate media
+    // 3. Validate media
     const validation = validateMedia(buffer, mimeType, fileName);
     if (!validation.valid) {
       return res.status(400).json({ success: false, message: validation.error, code: validation.code });
@@ -216,24 +245,18 @@ router.post('/summary', verifyToken, async (req, res) => {
 
     const base64Data = buffer.toString('base64');
     
-    // 3. Generate AI Summary with content-aware prompt routing
+    // 4. Generate AI Summary with content-aware prompt routing and atomic wallet deduction
     const { summary, usage } = await aiService.generateReportSummary(base64Data, validation.mimeType, userContext, fileName || '');
 
     res.status(200).json({
       success: true,
       summary,
-      usage
+      usage,
+      wallet: usage.wallet || null
     });
 
   } catch (error) {
     console.error('[Generate Summary Route] Error:', error);
-    // Classify error for frontend
-    if (error.status === 401 || error.statusText === 'Unauthorized') {
-      return res.status(503).json({ success: false, message: 'AI analysis is temporarily unavailable. Please try again later.' });
-    }
-    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-      return res.status(503).json({ success: false, message: 'Unable to reach the AI service. Please check your connection.' });
-    }
     res.status(500).json({
       success: false,
       message: error.message || "Failed to generate AI summary."
@@ -260,17 +283,34 @@ router.post('/analyze', verifyToken, async (req, res) => {
       return res.status(403).json({ success: false, message: "Only doctors can use AI analysis." });
     }
 
+    const hospitalId = req.user?.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "No hospital associated with this user session." });
+    }
+
+    // 1. PRE-CHECK AI WALLET BUDGET
+    const balanceCheck = await aiWalletService.checkBalance(hospitalId);
+    if (!balanceCheck.allowed) {
+      return res.status(402).json({
+        success: false,
+        code: 'INSUFFICIENT_AI_CREDITS',
+        message: balanceCheck.message || "AI Credits Exhausted. Your hospital has used its available AI budget. Please contact your administrator to continue using the AI Assistant.",
+        wallet: balanceCheck.wallet
+      });
+    }
+
     const userContext = {
       userId: req.user?._id,
       userName: req.user?.name || req.user?.username || 'Doctor',
-      hospitalId: req.user?.hospitalId
+      userRole: 'doctor',
+      hospitalId: hospitalId
     };
 
-    // 1. Download file
+    // 2. Download file
     const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
     const buffer = Buffer.from(response.data, 'binary');
 
-    // 2. Validate
+    // 3. Validate
     const validation = validateMedia(buffer, mimeType, fileName);
     if (!validation.valid) {
       return res.status(400).json({ success: false, message: validation.error, code: validation.code });
@@ -278,20 +318,18 @@ router.post('/analyze', verifyToken, async (req, res) => {
 
     const base64Data = buffer.toString('base64');
 
-    // 3. Analyze with optional question
+    // 4. Analyze with optional question
     const { analysis, usage } = await aiService.analyzeMedia(base64Data, validation.mimeType, userContext, question || '', fileName || '');
 
     res.status(200).json({
       success: true,
       analysis,
-      usage
+      usage,
+      wallet: usage.wallet || null
     });
 
   } catch (error) {
     console.error('[Analyze Media Route] Error:', error);
-    if (error.status === 401 || error.statusText === 'Unauthorized') {
-      return res.status(503).json({ success: false, message: 'AI analysis is temporarily unavailable. Please try again later.' });
-    }
     res.status(500).json({
       success: false,
       message: error.message || "Failed to analyze media."
@@ -318,10 +356,27 @@ router.post('/compare', verifyToken, async (req, res) => {
       return res.status(403).json({ success: false, message: "Only doctors can compare reports." });
     }
 
+    const hospitalId = req.user?.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "No hospital associated with this user session." });
+    }
+
+    // 1. PRE-CHECK AI WALLET BUDGET
+    const balanceCheck = await aiWalletService.checkBalance(hospitalId);
+    if (!balanceCheck.allowed) {
+      return res.status(402).json({
+        success: false,
+        code: 'INSUFFICIENT_AI_CREDITS',
+        message: balanceCheck.message || "AI Credits Exhausted. Your hospital has used its available AI budget. Please contact your administrator to continue using the AI Assistant.",
+        wallet: balanceCheck.wallet
+      });
+    }
+
     const userContext = {
       userId: req.user?._id,
       userName: req.user?.name || req.user?.username || 'Doctor',
-      hospitalId: req.user?.hospitalId
+      userRole: 'doctor',
+      hospitalId: hospitalId
     };
 
     const latestResponse = await axios.get(latestFileUrl, { responseType: 'arraybuffer' });
@@ -335,7 +390,8 @@ router.post('/compare', verifyToken, async (req, res) => {
     res.status(200).json({
       success: true,
       comparison,
-      usage
+      usage,
+      wallet: usage.wallet || null
     });
 
   } catch (error) {
@@ -385,7 +441,6 @@ router.post('/search', verifyToken, async (req, res) => {
 
     for (const report of allReports) {
       const reportName = report.fileName || report.name || 'Medical Report';
-      // Search running against extractedText field in the database
       const extractedText = report.extractedText || report.textContent || "";
 
       if (!extractedText || extractedText.trim() === '') {
@@ -442,10 +497,27 @@ router.post('/chat', verifyToken, async (req, res) => {
       return res.status(400).json({ success: false, message: "messages array is required." });
     }
     
+    const hospitalId = req.user?.hospitalId;
+    if (!hospitalId) {
+      return res.status(400).json({ success: false, message: "No hospital associated with this user session." });
+    }
+
+    // 1. PRE-CHECK AI WALLET BUDGET BEFORE CALLING GEMINI
+    const balanceCheck = await aiWalletService.checkBalance(hospitalId);
+    if (!balanceCheck.allowed) {
+      return res.status(402).json({
+        success: false,
+        code: 'INSUFFICIENT_AI_CREDITS',
+        message: balanceCheck.message || "AI Credits Exhausted. Your hospital has used its available AI budget. Please contact your administrator to continue using the AI Assistant.",
+        wallet: balanceCheck.wallet
+      });
+    }
+
     const userContext = {
       userId: req.user?._id,
       userName: req.user?.name || req.user?.username || 'Doctor',
-      hospitalId: req.user?.hospitalId
+      userRole: 'doctor',
+      hospitalId: hospitalId
     };
 
     // If media attachments are provided, download them and use chatWithMedia
@@ -469,7 +541,7 @@ router.post('/chat', verifyToken, async (req, res) => {
 
       if (mediaInputs.length > 0) {
         const { reply, usage } = await aiService.chatWithMedia(messages, mediaInputs, userContext);
-        return res.status(200).json({ success: true, reply, usage });
+        return res.status(200).json({ success: true, reply, usage, wallet: usage.wallet || null });
       }
     }
 
@@ -479,13 +551,11 @@ router.post('/chat', verifyToken, async (req, res) => {
     res.status(200).json({
       success: true,
       reply,
-      usage
+      usage,
+      wallet: usage.wallet || null
     });
   } catch (error) {
     console.error('[AI Chat Route] Error:', error);
-    if (error.status === 401 || error.statusText === 'Unauthorized') {
-      return res.status(503).json({ success: false, message: 'AI assistant is temporarily unavailable. Please try again later.' });
-    }
     res.status(500).json({
       success: false,
       message: error.message || "Failed to get AI response."
@@ -493,79 +563,38 @@ router.post('/chat', verifyToken, async (req, res) => {
   }
 });
 
-// Route: GET /api/reports/ai-usage/stats
+// Route: GET /api/reports/ai-usage/stats (Backward Compatibility bridge -> AIWalletService)
 router.get('/ai-usage/stats', verifyToken, async (req, res) => {
   try {
     const hospitalId = req.user?.hospitalId;
-    const filter = hospitalId ? { hospitalId } : {};
+    if (!hospitalId) {
+      return res.status(200).json({ success: true, stats: { totalRequests: 0, totalTokens: 0, totalCostInr: 0, totalCostUsd: 0, budgetAmount: 2000, remainingAmount: 2000 } });
+    }
 
-    // Aggregate totals
-    const totalsArr = await AIUsageLog.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: null,
-          totalRequests: { $sum: 1 },
-          totalPromptTokens: { $sum: '$promptTokens' },
-          totalCandidateTokens: { $sum: '$candidateTokens' },
-          totalTokens: { $sum: '$totalTokens' },
-          totalCostUsd: { $sum: '$estimatedCostUsd' },
-          totalCostInr: { $sum: '$estimatedCostInr' }
-        }
-      }
-    ]);
-    const totals = totalsArr[0] || {};
-
-    // Today's usage
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    const todayTotalsArr = await AIUsageLog.aggregate([
-      { $match: { ...filter, createdAt: { $gte: startOfToday } } },
-      {
-        $group: {
-          _id: null,
-          todayRequests: { $sum: 1 },
-          todayTokens: { $sum: '$totalTokens' },
-          todayCostUsd: { $sum: '$estimatedCostUsd' },
-          todayCostInr: { $sum: '$estimatedCostInr' }
-        }
-      }
-    ]);
-    const todayTotals = todayTotalsArr[0] || {};
-
-    // Breakdown by action
-    const actionBreakdown = await AIUsageLog.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: '$actionType',
-          count: { $sum: 1 },
-          tokens: { $sum: '$totalTokens' },
-          costUsd: { $sum: '$estimatedCostUsd' }
-        }
-      }
-    ]);
+    const walletStats = await aiWalletService.getWalletStats(hospitalId);
 
     res.status(200).json({
       success: true,
       stats: {
-        totalRequests: totals.totalRequests || 0,
-        totalPromptTokens: totals.totalPromptTokens || 0,
-        totalCandidateTokens: totals.totalCandidateTokens || 0,
-        totalTokens: totals.totalTokens || 0,
-        totalCostUsd: totals.totalCostUsd ? Number(totals.totalCostUsd.toFixed(6)) : 0,
-        totalCostInr: totals.totalCostInr ? Number(totals.totalCostInr.toFixed(4)) : 0,
-        todayRequests: todayTotals.todayRequests || 0,
-        todayTokens: todayTotals.todayTokens || 0,
-        todayCostUsd: todayTotals.todayCostUsd ? Number(todayTotals.todayCostUsd.toFixed(6)) : 0,
-        todayCostInr: todayTotals.todayCostInr ? Number(todayTotals.todayCostInr.toFixed(4)) : 0,
-        actionBreakdown: actionBreakdown.map(a => ({
-          actionType: a._id,
+        totalRequests: walletStats.totalRequests || 0,
+        totalCostInr: walletStats.usedAmount || 0,
+        totalCostUsd: walletStats.today.costUsd || 0,
+        totalTokens: walletStats.today.tokens || 0,
+        budgetAmount: walletStats.budgetAmount || 2000,
+        remainingAmount: walletStats.remainingAmount || 0,
+        warningLevel: walletStats.warningLevel || 'normal',
+        todayRequests: walletStats.today.requests || 0,
+        todayTokens: walletStats.today.tokens || 0,
+        todayCostInr: walletStats.today.costInr || 0,
+        todayCostUsd: walletStats.today.costUsd || 0,
+        actionBreakdown: walletStats.breakdown.map(a => ({
+          actionType: a.operation,
           count: a.count,
           tokens: a.tokens,
-          costUsd: Number((a.costUsd || 0).toFixed(6))
+          costUsd: Number(((a.costInr || 0) / 86.5).toFixed(5))
         }))
-      }
+      },
+      wallet: walletStats
     });
   } catch (error) {
     console.error('[AI Usage Stats Route] Error:', error);
@@ -576,17 +605,16 @@ router.get('/ai-usage/stats', verifyToken, async (req, res) => {
   }
 });
 
-// Route: GET /api/reports/ai-usage/history
+// Route: GET /api/reports/ai-usage/history (Backward Compatibility bridge -> AIWalletService)
 router.get('/ai-usage/history', verifyToken, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 30;
     const hospitalId = req.user?.hospitalId;
-    const filter = hospitalId ? { hospitalId } : {};
+    if (!hospitalId) {
+      return res.status(200).json({ success: true, logs: [] });
+    }
 
-    const logs = await AIUsageLog.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean();
+    const logs = await aiWalletService.getUsageHistory(hospitalId, limit);
 
     res.status(200).json({
       success: true,

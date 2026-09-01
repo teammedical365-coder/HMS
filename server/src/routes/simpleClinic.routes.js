@@ -11,6 +11,7 @@ const ClinicSubscription = require('../models/clinicSubscription.model');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { getTenantConnection, removeTenantConnection } = require('../db/tenantDb');
 const { getTenantModels } = require('../db/tenantModels');
+const aiWalletService = require('../services/ai/aiWallet.service');
 
 const { JWT_SECRET } = require('../config/jwt');
 const validatePassword = require('../utils/validatePassword');
@@ -129,6 +130,13 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             await getTenantConnection(clinic._id.toString());
         } catch (tenantErr) {
             console.error('Tenant DB provisioning error (non-fatal):', tenantErr.message);
+        }
+
+        // Auto-provision initial ₹2,000 AI Wallet
+        try {
+            await aiWalletService.getOrCreateWallet(clinic._id);
+        } catch (walletErr) {
+            console.warn('AI Wallet provisioning error (non-fatal):', walletErr.message);
         }
 
         res.status(201).json({ success: true, clinic, message: 'Simple clinic created successfully' });

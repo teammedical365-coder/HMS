@@ -14,7 +14,7 @@ const apiClient = axios.create({
 // Request Interceptor
 apiClient.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('token') || localStorage.getItem('superadmin_token');
         const patientToken = localStorage.getItem('patientToken');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
@@ -388,12 +388,32 @@ export const reportAPI = {
         const response = await apiClient.post('/api/reports/chat', { messages, mediaUrls });
         return response.data;
     },
+    // AI Wallet & Usage Stats
     getAIUsageStats: async () => {
-        const response = await apiClient.get('/api/reports/ai-usage/stats');
+        const response = await apiClient.get('/api/ai-wallet');
         return response.data;
     },
     getAIUsageHistory: async (limit = 30) => {
-        const response = await apiClient.get(`/api/reports/ai-usage/history?limit=${limit}`);
+        const response = await apiClient.get(`/api/ai-wallet/usage?limit=${limit}`);
+        return response.data;
+    }
+};
+
+export const aiWalletAPI = {
+    getWallet: async () => {
+        const response = await apiClient.get('/api/ai-wallet');
+        return response.data;
+    },
+    getUsageHistory: async (limit = 30) => {
+        const response = await apiClient.get(`/api/ai-wallet/usage?limit=${limit}`);
+        return response.data;
+    },
+    getAllHospitalWallets: async () => {
+        const response = await apiClient.get('/api/ai-wallet/admin/hospitals');
+        return response.data;
+    },
+    rechargeWallet: async (hospitalId, amount) => {
+        const response = await apiClient.post('/api/ai-wallet/admin/recharge', { hospitalId, amount });
         return response.data;
     }
 };
