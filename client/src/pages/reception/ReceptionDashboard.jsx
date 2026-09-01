@@ -4,6 +4,7 @@ import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientA
 import { useAuth } from '../../store/hooks';
 import { getSubdomain } from '../../utils/subdomain';
 import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { 
@@ -885,10 +886,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const handleHospitalize = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
         const { appointment } = hospitalizeModal;
-        if (!hospitalizeForm.ward) return alert('Please select a Ward');
-        if (!hospitalizeForm.bedId) return alert('Please select an available Bed');
-        if (!hospitalizeForm.admissionDate) return alert('Please specify Admission Date');
-        if (!hospitalizeForm.admissionTime) return alert('Please specify Admission Time');
+        if (!hospitalizeForm.ward) return toast.error('Please select a Ward');
+        if (!hospitalizeForm.bedId) return toast.error('Please select an available Bed');
+        if (!hospitalizeForm.admissionDate) return toast.error('Please specify Admission Date');
+        if (!hospitalizeForm.admissionTime) return toast.error('Please specify Admission Time');
 
         setHospitalizingSaving(true);
         try {
@@ -901,13 +902,13 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 admissionTime: hospitalizeForm.admissionTime,
                 notes: hospitalizeForm.notes,
             });
-            alert('Patient admitted successfully!');
+            toast.success('Patient admitted successfully!');
             setHospitalizeModal({ open: false, appointment: null });
             fetchAppointments();
             fetchHospitalizedPatients();
             fetchAvailableBeds();
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to admit patient');
+            toast.error(err.response?.data?.message || 'Failed to admit patient');
         } finally {
             setHospitalizingSaving(false);
         }
@@ -941,10 +942,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const handleTransferSubmit = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
         const { admission, newWard, newBedId, transferDate, transferTime, notes } = transferModal;
-        if (!newWard) return alert('Please select New Ward');
-        if (!newBedId) return alert('Please select New Bed');
-        if (!transferDate) return alert('Please select Transfer Date');
-        if (!transferTime) return alert('Please select Transfer Time');
+        if (!newWard) return toast.error('Please select New Ward');
+        if (!newBedId) return toast.error('Please select New Bed');
+        if (!transferDate) return toast.error('Please select Transfer Date');
+        if (!transferTime) return toast.error('Please select Transfer Time');
 
         setTransferModal(prev => ({ ...prev, saving: true }));
         try {
@@ -956,13 +957,13 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 notes
             });
             if (res.success) {
-                alert('Patient transferred successfully!');
+                toast.success('Patient transferred successfully!');
                 setTransferModal({ open: false, admission: null, newWard: '', newBedId: '', transferDate: '', transferTime: '', notes: '', saving: false });
                 fetchHospitalizedPatients();
                 fetchAvailableBeds();
             }
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to transfer patient');
+            toast.error(err.response?.data?.message || 'Failed to transfer patient');
         } finally {
             setTransferModal(prev => ({ ...prev, saving: false }));
         }
@@ -1096,8 +1097,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const handleDischargeSubmit = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
         const { admission, dischargeDate, dischargeTime, notes } = dischargeModal;
-        if (!dischargeDate) return alert('Please select Discharge Date');
-        if (!dischargeTime) return alert('Please select Discharge Time');
+        if (!dischargeDate) return toast.error('Please select Discharge Date');
+        if (!dischargeTime) return toast.error('Please select Discharge Time');
 
         setDischargeModal(prev => ({ ...prev, saving: true }));
         try {
@@ -1109,25 +1110,34 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             if (res.success) {
                 const pdf = generateDischargeReceiptPDF(res.admission || admission, false);
                 setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Discharge Bill & Receipt' });
-                alert('Patient discharged successfully!');
+                toast.success('Patient discharged successfully!');
                 setDischargeModal({ open: false, admission: null, dischargeDate: '', dischargeTime: '', notes: '', saving: false });
                 fetchHospitalizedPatients();
                 fetchAvailableBeds();
             }
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to discharge patient.');
+            toast.error(err.response?.data?.message || 'Failed to discharge patient.');
         } finally {
             setDischargeModal(prev => ({ ...prev, saving: false }));
         }
     };
 
     const handleCancelAppointment = async (appointmentId) => {
-        if (!window.confirm('Cancel this appointment?')) return;
+        const confirmed = await confirmToast('Are you sure you want to cancel this appointment?', {
+            title: 'Cancel Appointment',
+            confirmText: 'Yes, Cancel',
+            danger: true
+        });
+        if (!confirmed) return;
+
         try {
             const res = await receptionAPI.cancelAppointment(appointmentId);
-            if (res.success) fetchAppointments();
+            if (res.success) {
+                toast.success('Appointment cancelled successfully.');
+                fetchAppointments();
+            }
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to cancel appointment.');
+            toast.error(err.response?.data?.message || 'Failed to cancel appointment.');
         }
     };
 
@@ -1202,7 +1212,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         const totalSplit = splitPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
         
         if (totalSplit !== Number(appointment.amount || 0)) {
-            alert(`Total split amount (₹${totalSplit}) must match the appointment fee (₹${appointment.amount}).`);
+            toast.error(`Total split amount (₹${totalSplit}) must match the appointment fee (₹${appointment.amount}).`);
             return;
         }
 
@@ -1213,10 +1223,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             const paymentMethodStr = splitPayments.map(p => `${p.method} (${p.amount})`).join(' + ');
             const pdf = generateReceiptPDF({ ...appointment, paymentMethod: paymentMethodStr, paymentStatus: 'Paid' }, paymentMethodStr, false);
             setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Payment Receipt' });
+            toast.success('Payment confirmed successfully!');
             setPaymentModal({ open: false, appointment: null, splitPayments: [{ method: 'Cash', amount: '' }] });
             fetchAppointments();
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to confirm payment.');
+            toast.error(err.response?.data?.message || 'Failed to confirm payment.');
         } finally {
             setConfirmingPayment(false);
         }
@@ -1271,7 +1282,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     const isAvailable = selectedDoc.availability[dayName] && selectedDoc.availability[dayName].available === true;
                     if (!isAvailable) {
                         const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-                        alert(`Doctor ${selectedDoc.name} is not available on ${capitalizedDay}s. Please select another date.`);
+                        toast.error(`Doctor ${selectedDoc.name} is not available on ${capitalizedDay}s. Please select another date.`);
                         return; // Prevent updating state
                     }
                 }
@@ -1313,7 +1324,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 const isAvailable = selectedDoc.availability[dayName] && selectedDoc.availability[dayName].available === true;
                 if (!isAvailable) {
                     const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-                    alert(`Doctor ${selectedDoc.name} is not available on ${capitalizedDay}s. Please select another date before assigning this doctor.`);
+                    toast.error(`Doctor ${selectedDoc.name} is not available on ${capitalizedDay}s. Please select another date before assigning this doctor.`);
                     return; // Prevent updating state
                 }
             }
@@ -1327,7 +1338,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     const handleSendOTP = async () => {
         if (!intakeForm.aadhaar || intakeForm.aadhaar.length !== 12) {
-            alert("Please enter a valid 12-digit Aadhaar number.");
+            toast.error("Please enter a valid 12-digit Aadhaar number.");
             return;
         }
         setVerifyingAadhaar(true);
@@ -1335,10 +1346,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             const res = await receptionAPI.sendAadhaarOTP(intakeForm.aadhaar);
             if (res.success) {
                 setOtpSent(true);
-                alert(res.message); // "OTP Sent (Use 123456)"
+                toast.success(res.message || "OTP Sent");
             }
         } catch (err) {
-            alert(err.response?.data?.message || "Failed to send OTP");
+            toast.error(err.response?.data?.message || "Failed to send OTP");
             setOtpSent(false);
         } finally {
             setVerifyingAadhaar(false);
@@ -1346,14 +1357,14 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     };
 
     const handleVerifyOTP = async () => {
-        if (!aadhaarOtp) return alert("Please enter the OTP sent to mobile.");
+        if (!aadhaarOtp) return toast.error("Please enter the OTP sent to mobile.");
 
         setVerifyingAadhaar(true);
         try {
             const res = await receptionAPI.verifyAadhaarOTP(intakeForm.aadhaar, aadhaarOtp);
             if (res.success && res.data) {
                 const kyc = res.data;
-                alert(`✅ Verification Successful: ${kyc.fullName}`);
+                toast.success(`Verification Successful: ${kyc.fullName}`);
 
                 // Auto-populate
                 setIntakeForm(prev => ({
@@ -1370,7 +1381,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 setAadhaarOtp('');
             }
         } catch (err) {
-            alert(err.response?.data?.message || "Invalid OTP");
+            toast.error(err.response?.data?.message || "Invalid OTP");
         } finally {
             setVerifyingAadhaar(false);
         }
@@ -1381,22 +1392,22 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         setSaving(true);
 
         if (!intakeForm.firstName || !intakeForm.mobile) {
-            alert("Name and Mobile are required.");
+            toast.error("Name and Mobile are required.");
             setSaving(false); return;
         }
 
         if (intakeForm.firstName.trim().length < 2) {
-            alert("Name must be at least 2 characters.");
+            toast.error("Name must be at least 2 characters.");
             setSaving(false); return;
         }
 
         if (!intakeForm.age || intakeForm.age < 1) {
-            alert("Age is required and must be a positive number greater than 0.");
+            toast.error("Age is required and must be a positive number greater than 0.");
             setSaving(false); return;
         }
 
         if (!intakeForm.aadhaar || !/^\d{12}$/.test(intakeForm.aadhaar)) {
-            alert("Aadhaar Number is required and must be exactly 12 digits.");
+            toast.error("Aadhaar Number is required and must be exactly 12 digits.");
             setSaving(false); return;
         }
 
@@ -2914,7 +2925,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                                 generateDischargeReceiptPDF(adm, true);
                                                             } catch (e) {
                                                                 console.error("Error generating discharge bill:", e);
-                                                                alert("Error generating receipt: " + e.message);
+                                                                toast.error("Error generating receipt: " + e.message);
                                                             }
                                                         }} 
                                                     >

@@ -19,6 +19,8 @@ import {
     FiMapPin 
 } from 'react-icons/fi';
 import './ClinicPatientProfile.css';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 
 import AppointmentReports from '../../components/AppointmentReports';
 
@@ -147,23 +149,23 @@ const ClinicPatientProfile = () => {
     const handleUploadReport = async (e) => {
         e.preventDefault();
         if (!file || !reportName.trim()) {
-            alert('Please select a file and enter a report name.');
+            toast.error('Please select a file and enter a report name.');
             return;
         }
         setUploading(true);
         try {
             const res = await clinicAPI.uploadPatientReport(patientData._id, file, reportName.trim());
             if (res.success) {
-                alert('Report uploaded successfully!');
+                toast.success('Report uploaded successfully!');
                 setFile(null);
                 setReportName('');
                 fetchProfile();
             } else {
-                alert(res.message || 'Failed to upload report.');
+                toast.error(res.message || 'Failed to upload report.');
             }
         } catch (err) {
             console.error(err);
-            alert('Error uploading report.');
+            toast.error('Error uploading report.');
         } finally {
             setUploading(false);
         }
@@ -186,35 +188,38 @@ const ClinicPatientProfile = () => {
                     lastRecorded: new Date().toISOString()
                 }
             };
-            // Since this is a clinic patient, we'll try to update through the appropriate API
-            // Using doctorAPI.updatePatientProfile works for users, but for clinic patients it might need a different path if they aren't users. 
-            // The doctorAPI handles both if the patientId resolves. Let's see if it updates:
             await doctorAPI.updatePatientProfile(patientData._id, profileData);
             
-            alert('Vitals saved successfully!');
+            toast.success('Vitals saved successfully!');
             setVitalsForm({ weight: '', height: '', bmi: '', bloodPressure: '', pulse: '', temperature: '', spo2: '', respiratoryRate: '' });
             fetchProfile(); // refresh to show updated vitals
         } catch (err) {
             console.error(err);
-            alert('Error saving vitals.');
+            toast.error('Error saving vitals.');
         } finally {
             setSavingVitals(false);
         }
     };
 
     const handleDeleteReport = async (reportId) => {
-        if (!window.confirm('Are you sure you want to delete this report?')) return;
+        const confirmed = await confirmToast('Are you sure you want to delete this report?', {
+            title: 'Delete Report',
+            confirmText: 'Delete',
+            danger: true
+        });
+        if (!confirmed) return;
+
         try {
             const res = await clinicAPI.deletePatientReport(patientData._id, reportId);
             if (res.success) {
-                alert('Report deleted successfully!');
+                toast.success('Report deleted successfully!');
                 fetchProfile();
             } else {
-                alert(res.message || 'Failed to delete report.');
+                toast.error(res.message || 'Failed to delete report.');
             }
         } catch (err) {
             console.error(err);
-            alert('Error deleting report.');
+            toast.error('Error deleting report.');
         }
     };
 

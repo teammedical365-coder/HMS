@@ -489,7 +489,12 @@ export const patientAPI = {
         return (await apiClient.get(url)).data;
     },
     deleteDocument: async (id, index, fileId, url, fileName) => (await apiClient.delete(`/api/patients/${id}/documents/${index}`, { data: { fileId, url, fileName } })).data,
-    updateProfile: async (id, data) => (await apiClient.put(`/api/reception/intake/${id}`, data)).data
+    updateProfile: async (id, data) => (await apiClient.put(`/api/reception/intake/${id}`, data)).data,
+    // Family Health Tree
+    getFamilyMembers: async (id) => (await apiClient.get(`/api/patients/${id}/family`)).data,
+    addFamilyMember: async (id, data) => (await apiClient.post(`/api/patients/${id}/family`, data)).data,
+    updateFamilyMember: async (id, memberId, data) => (await apiClient.put(`/api/patients/${id}/family/${memberId}`, data)).data,
+    deleteFamilyMember: async (id, memberId) => (await apiClient.delete(`/api/patients/${id}/family/${memberId}`)).data,
 };
 
 export const notificationAPI = {

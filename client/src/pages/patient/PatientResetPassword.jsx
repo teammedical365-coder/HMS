@@ -4,6 +4,7 @@ import { useBranding } from '../../context/BrandingContext';
 import { publicAPI, patientAuthAPI } from '../../utils/api';
 import './PatientPortalLogin.css';
 import PasswordInput from '../../components/PasswordInput';
+import toast from 'react-hot-toast';
 
 const PatientResetPassword = () => {
     const navigate = useNavigate();
@@ -77,7 +78,7 @@ const PatientResetPassword = () => {
             const res = await patientAuthAPI.resetPassword(token, password);
             if (res.success) {
                 setSuccessMsg('Your password has been successfully reset.');
-                alert('Your password has been reset successfully. Please login to continue.');
+                toast.success('Your password has been reset successfully. Please login to continue.');
                 navigate('/patient');
             }
         } catch (err) {

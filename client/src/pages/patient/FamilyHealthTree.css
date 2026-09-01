@@ -1,0 +1,1826 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   FAMILY HEALTH TREE — Premium Medical/Nature Theme
+   Design Reference: Green medical tree with floating leaves, member cards,
+   detail panel, and insight cards.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── CSS Variables ─────────────────────────────────────────────────────────── */
+:root {
+    --fht-primary: #16a34a;
+    --fht-primary-dark: #15803d;
+    --fht-primary-light: #22c55e;
+    --fht-primary-bg: #f0fdf4;
+    --fht-primary-bg-hover: #dcfce7;
+    --fht-trunk-brown: #92400e;
+    --fht-trunk-gradient: linear-gradient(180deg, #78350f 0%, #92400e 40%, #a16207 100%);
+    --fht-branch-color: #78350f;
+    --fht-leaf-green-1: #16a34a;
+    --fht-leaf-green-2: #22c55e;
+    --fht-leaf-green-3: #4ade80;
+    --fht-leaf-green-4: #86efac;
+    --fht-card-bg: #ffffff;
+    --fht-card-border: #e5e7eb;
+    --fht-card-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --fht-card-shadow-hover: 0 8px 25px rgba(22, 163, 74, 0.15);
+    --fht-text-primary: #111827;
+    --fht-text-secondary: #6b7280;
+    --fht-text-muted: #9ca3af;
+    --fht-danger: #ef4444;
+    --fht-warning: #f59e0b;
+    --fht-info: #3b82f6;
+    --fht-radius: 14px;
+    --fht-radius-sm: 8px;
+    --fht-radius-xs: 6px;
+    --fht-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Container ─────────────────────────────────────────────────────────────── */
+.fht-container {
+    width: 100%;
+    max-width: 100%;
+    padding: 0;
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--fht-text-primary);
+}
+
+/* ── Stats Bar ─────────────────────────────────────────────────────────────── */
+.fht-stats-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
+    background: var(--fht-card-bg);
+    border-radius: var(--fht-radius);
+    border: 1px solid var(--fht-card-border);
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.fht-stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 24px;
+    background: var(--fht-primary-bg);
+    border-radius: 12px;
+    min-width: 120px;
+    transition: var(--fht-transition);
+}
+
+.fht-stat-item:hover {
+    background: var(--fht-primary-bg-hover);
+    transform: translateY(-2px);
+}
+
+.fht-stat-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--fht-primary);
+    line-height: 1;
+}
+
+.fht-stat-label {
+    font-size: 12px;
+    color: var(--fht-text-secondary);
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+.fht-stats-spacer {
+    flex: 1;
+}
+
+.fht-add-member-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: var(--fht-primary);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--fht-transition);
+    white-space: nowrap;
+}
+
+.fht-add-member-btn:hover {
+    background: var(--fht-primary-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+}
+
+.fht-add-member-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* ── Main Layout (Tree + Detail Panel) ────────────────────────────────────── */
+.fht-main-layout {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 20px;
+    margin-bottom: 20px;
+    min-height: 500px;
+}
+
+/* ── Tree Visualization Area ──────────────────────────────────────────────── */
+.fht-tree-area {
+    position: relative;
+    background: linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 30%, #fefce8 60%, #f0fdf4 100%);
+    border-radius: var(--fht-radius);
+    border: 1px solid var(--fht-card-border);
+    overflow: hidden;
+    min-height: 520px;
+}
+
+.fht-tree-viewport {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 520px;
+    padding: 30px 20px 20px;
+    overflow: auto;
+    transition: transform 0.3s ease;
+}
+
+.fht-tree-viewport.zoomed-in {
+    transform: scale(1.2);
+    transform-origin: center center;
+}
+
+.fht-tree-viewport.zoomed-out {
+    transform: scale(0.8);
+    transform-origin: center center;
+}
+
+/* ── Tree Structure ───────────────────────────────────────────────────────── */
+.fht-tree-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    min-width: 100%;
+}
+
+/* ── Generation Row ───────────────────────────────────────────────────────── */
+.fht-generation-row {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 20px;
+    position: relative;
+    padding: 10px 0;
+    flex-wrap: wrap;
+}
+
+/* ── Connecting Lines Between Generations ─────────────────────────────────── */
+.fht-connector-vertical {
+    width: 3px;
+    height: 30px;
+    background: var(--fht-branch-color);
+    margin: 0 auto;
+    border-radius: 2px;
+    position: relative;
+}
+
+.fht-connector-vertical::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 8px;
+    height: 8px;
+    background: var(--fht-leaf-green-1);
+    border-radius: 50%;
+}
+
+/* ── Horizontal Branch Connector ──────────────────────────────────────────── */
+.fht-branch-connector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    width: 100%;
+    height: 25px;
+}
+
+.fht-branch-connector::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 3px;
+    height: 12px;
+    background: var(--fht-branch-color);
+}
+
+.fht-branch-connector-line {
+    position: absolute;
+    top: 12px;
+    height: 3px;
+    background: var(--fht-branch-color);
+    border-radius: 2px;
+}
+
+.fht-branch-connector-drops {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    width: 100%;
+    position: relative;
+}
+
+.fht-branch-drop {
+    width: 3px;
+    height: 13px;
+    background: var(--fht-branch-color);
+    position: relative;
+}
+
+.fht-branch-drop::after {
+    content: '';
+    position: absolute;
+    bottom: -3px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    background: var(--fht-leaf-green-2);
+    border-radius: 50%;
+}
+
+/* ── Tree Trunk ───────────────────────────────────────────────────────────── */
+.fht-trunk {
+    width: 4px;
+    height: 28px;
+    background: var(--fht-trunk-gradient);
+    margin: 0 auto;
+    border-radius: 2px;
+    position: relative;
+}
+
+.fht-trunk-thick {
+    width: 6px;
+    height: 35px;
+    background: var(--fht-trunk-gradient);
+    margin: 0 auto;
+    border-radius: 3px;
+}
+
+/* ── Member Card ──────────────────────────────────────────────────────────── */
+.fht-member-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    transition: var(--fht-transition);
+    position: relative;
+    min-width: 130px;
+    max-width: 160px;
+}
+
+.fht-member-card:hover {
+    transform: translateY(-4px);
+}
+
+.fht-member-card.selected .fht-member-avatar {
+    box-shadow: 0 0 0 4px var(--fht-primary), 0 0 20px rgba(22, 163, 74, 0.3);
+}
+
+.fht-member-avatar {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    position: relative;
+    transition: var(--fht-transition);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    border: 3px solid #fff;
+    flex-shrink: 0;
+}
+
+.fht-member-avatar.male {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+}
+
+.fht-member-avatar.female {
+    background: linear-gradient(135deg, #ec4899, #db2777);
+}
+
+.fht-member-avatar.other {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}
+
+.fht-member-avatar.patient-self {
+    width: 90px;
+    height: 90px;
+    font-size: 28px;
+    background: linear-gradient(135deg, var(--fht-primary), #059669);
+    box-shadow: 0 0 0 4px #dcfce7, 0 8px 24px rgba(22, 163, 74, 0.25);
+}
+
+.fht-member-status-dot {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fht-member-status-dot.alive {
+    background: #22c55e;
+}
+
+.fht-member-status-dot.deceased {
+    background: #ef4444;
+}
+
+.fht-member-status-dot svg {
+    width: 9px;
+    height: 9px;
+    color: #fff;
+}
+
+.fht-member-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fht-text-primary);
+    margin-top: 8px;
+    text-align: center;
+    line-height: 1.2;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fht-member-relation {
+    font-size: 11px;
+    color: var(--fht-primary);
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.fht-member-conditions {
+    font-size: 10px;
+    color: var(--fht-text-secondary);
+    margin-top: 2px;
+    text-align: center;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fht-member-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 10px;
+    color: var(--fht-text-muted);
+}
+
+.fht-member-meta .fht-heart-icon {
+    width: 10px;
+    height: 10px;
+}
+
+.fht-member-meta .fht-heart-icon.alive {
+    color: #ef4444;
+}
+
+.fht-member-meta .fht-heart-icon.deceased {
+    color: #9ca3af;
+}
+
+/* ── Patient (You) Special Card ───────────────────────────────────────────── */
+.fht-patient-self-card {
+    min-width: 150px;
+    max-width: 180px;
+}
+
+.fht-patient-self-card .fht-member-name {
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.fht-patient-self-label {
+    display: inline-block;
+    background: var(--fht-primary);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+}
+
+/* ── Floating Leaves Animation ────────────────────────────────────────────── */
+.fht-leaf {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 1;
+    animation: fht-leaf-fall linear infinite;
+}
+
+.fht-leaf svg {
+    width: 16px;
+    height: 16px;
+}
+
+.fht-leaf:nth-child(1) { left: 10%; animation-delay: 0s; animation-duration: 12s; }
+.fht-leaf:nth-child(2) { left: 25%; animation-delay: 2s; animation-duration: 14s; }
+.fht-leaf:nth-child(3) { left: 45%; animation-delay: 4s; animation-duration: 11s; }
+.fht-leaf:nth-child(4) { left: 65%; animation-delay: 1s; animation-duration: 13s; }
+.fht-leaf:nth-child(5) { left: 80%; animation-delay: 3s; animation-duration: 15s; }
+.fht-leaf:nth-child(6) { left: 35%; animation-delay: 5s; animation-duration: 10s; }
+.fht-leaf:nth-child(7) { left: 55%; animation-delay: 7s; animation-duration: 12s; }
+.fht-leaf:nth-child(8) { left: 90%; animation-delay: 6s; animation-duration: 14s; }
+
+@keyframes fht-leaf-fall {
+    0% {
+        opacity: 0;
+        transform: translate(0, -20px) rotate(0deg) scale(0.8);
+    }
+    5% {
+        opacity: 0.7;
+    }
+    50% {
+        opacity: 0.5;
+        transform: translate(30px, 250px) rotate(180deg) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-20px, 520px) rotate(360deg) scale(0.6);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fht-leaf {
+        animation: none !important;
+        display: none;
+    }
+}
+
+/* ── Tree Controls (Zoom / Fit) ───────────────────────────────────────────── */
+.fht-tree-controls {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 10;
+}
+
+.fht-tree-ctrl-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--fht-card-border);
+    background: var(--fht-card-bg);
+    color: var(--fht-text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--fht-transition);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.fht-tree-ctrl-btn:hover {
+    background: var(--fht-primary-bg);
+    border-color: var(--fht-primary);
+    color: var(--fht-primary);
+}
+
+.fht-fit-view-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--fht-card-border);
+    background: var(--fht-card-bg);
+    color: var(--fht-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--fht-transition);
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    z-index: 10;
+}
+
+.fht-fit-view-btn:hover {
+    background: var(--fht-primary-bg);
+    border-color: var(--fht-primary);
+    color: var(--fht-primary);
+}
+
+.fht-fit-view-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* ── Detail Panel (Right Side) ────────────────────────────────────────────── */
+.fht-detail-panel {
+    background: var(--fht-card-bg);
+    border-radius: var(--fht-radius);
+    border: 1px solid var(--fht-card-border);
+    position: sticky;
+    top: 80px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    transition: var(--fht-transition);
+}
+
+.fht-detail-panel::-webkit-scrollbar {
+    width: 4px;
+}
+
+.fht-detail-panel::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 4px;
+}
+
+.fht-detail-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 30px;
+    text-align: center;
+    min-height: 400px;
+}
+
+.fht-detail-empty-icon {
+    width: 80px;
+    height: 80px;
+    background: var(--fht-primary-bg);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.fht-detail-empty-icon svg {
+    width: 36px;
+    height: 36px;
+    color: var(--fht-primary);
+}
+
+.fht-detail-empty h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--fht-text-primary);
+    margin-bottom: 6px;
+}
+
+.fht-detail-empty p {
+    font-size: 13px;
+    color: var(--fht-text-secondary);
+    max-width: 220px;
+}
+
+/* ── Detail Panel Header ──────────────────────────────────────────────────── */
+.fht-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 20px;
+    border-bottom: 1px solid var(--fht-card-border);
+    position: relative;
+}
+
+.fht-detail-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: #f3f4f6;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--fht-transition);
+    color: var(--fht-text-secondary);
+}
+
+.fht-detail-close:hover {
+    background: #fee2e2;
+    color: var(--fht-danger);
+}
+
+.fht-detail-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.fht-detail-identity h2 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--fht-text-primary);
+    margin: 0;
+}
+
+.fht-detail-identity .fht-detail-relation {
+    font-size: 13px;
+    color: var(--fht-text-secondary);
+    margin-top: 2px;
+}
+
+.fht-detail-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+
+.fht-detail-meta-chip {
+    font-size: 11px;
+    padding: 3px 10px;
+    background: #f3f4f6;
+    border-radius: 20px;
+    color: var(--fht-text-secondary);
+    font-weight: 500;
+}
+
+.fht-detail-alive-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+}
+
+.fht-detail-alive-badge.alive {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.fht-detail-alive-badge.deceased {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+/* ── Detail Sub-Tabs ──────────────────────────────────────────────────────── */
+.fht-detail-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--fht-card-border);
+    padding: 0 20px;
+    overflow-x: auto;
+}
+
+.fht-detail-tab {
+    padding: 12px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fht-text-secondary);
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: var(--fht-transition);
+    white-space: nowrap;
+}
+
+.fht-detail-tab:hover {
+    color: var(--fht-primary);
+}
+
+.fht-detail-tab.active {
+    color: var(--fht-primary);
+    border-bottom-color: var(--fht-primary);
+}
+
+.fht-detail-content {
+    padding: 20px;
+}
+
+/* ── Detail: Overview Section ─────────────────────────────────────────────── */
+.fht-detail-section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fht-text-primary);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.fht-detail-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.fht-detail-info-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.fht-detail-info-item .fht-info-label {
+    font-size: 11px;
+    color: var(--fht-text-muted);
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.fht-detail-info-item .fht-info-value {
+    font-size: 13px;
+    color: var(--fht-text-primary);
+    font-weight: 600;
+}
+
+/* ── Detail: Medical Conditions ───────────────────────────────────────────── */
+.fht-condition-card {
+    background: #f9fafb;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+    border: 1px solid #f3f4f6;
+    transition: var(--fht-transition);
+}
+
+.fht-condition-card:hover {
+    border-color: var(--fht-primary-bg-hover);
+    background: var(--fht-primary-bg);
+}
+
+.fht-condition-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.fht-condition-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fht-text-primary);
+}
+
+.fht-condition-status {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.fht-condition-status.active {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.fht-condition-status.controlled {
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+.fht-condition-status.resolved {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.fht-condition-status.unknown {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.fht-condition-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.fht-condition-detail-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.fht-condition-detail-item .fht-cd-label {
+    font-size: 10px;
+    color: var(--fht-text-muted);
+}
+
+.fht-condition-detail-item .fht-cd-value {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fht-text-primary);
+}
+
+/* ── Detail: Family History Checklist ─────────────────────────────────────── */
+.fht-family-checklist {
+    margin-top: 16px;
+}
+
+.fht-checklist-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #f9fafb;
+}
+
+.fht-checklist-item:last-child {
+    border-bottom: none;
+}
+
+.fht-checklist-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fht-checklist-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fht-checklist-dot.yes {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.fht-checklist-dot.no {
+    background: #f3f4f6;
+    color: #9ca3af;
+}
+
+.fht-checklist-dot svg {
+    width: 12px;
+    height: 12px;
+}
+
+.fht-checklist-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fht-text-primary);
+}
+
+.fht-checklist-value {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.fht-checklist-value.yes {
+    color: var(--fht-primary);
+}
+
+.fht-checklist-value.no {
+    color: var(--fht-text-muted);
+}
+
+/* ── Detail: Edit Button ──────────────────────────────────────────────────── */
+.fht-edit-member-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px;
+    margin-top: 16px;
+    background: var(--fht-card-bg);
+    border: 2px solid var(--fht-text-primary);
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--fht-text-primary);
+    cursor: pointer;
+    transition: var(--fht-transition);
+}
+
+.fht-edit-member-btn:hover {
+    background: var(--fht-text-primary);
+    color: #fff;
+}
+
+.fht-delete-member-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    background: transparent;
+    border: 1px solid #fee2e2;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fht-danger);
+    cursor: pointer;
+    transition: var(--fht-transition);
+}
+
+.fht-delete-member-btn:hover {
+    background: #fee2e2;
+}
+
+/* ── Bottom Insight Cards ─────────────────────────────────────────────────── */
+.fht-insights-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+    margin-top: 4px;
+}
+
+.fht-insight-card {
+    background: var(--fht-card-bg);
+    border-radius: var(--fht-radius);
+    border: 1px solid var(--fht-card-border);
+    padding: 24px;
+    transition: var(--fht-transition);
+}
+
+.fht-insight-card:hover {
+    box-shadow: var(--fht-card-shadow-hover);
+    transform: translateY(-2px);
+}
+
+.fht-insight-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--fht-text-primary);
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+/* ── Insight: Medical Pattern ─────────────────────────────────────────────── */
+.fht-pattern-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #f9fafb;
+}
+
+.fht-pattern-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.fht-pattern-rank {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--fht-primary-bg);
+    color: var(--fht-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.fht-pattern-info {
+    flex: 1;
+}
+
+.fht-pattern-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fht-text-primary);
+    margin-bottom: 2px;
+}
+
+.fht-pattern-desc {
+    font-size: 11px;
+    color: var(--fht-text-secondary);
+    line-height: 1.4;
+}
+
+.fht-pattern-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.fht-pattern-badge.high {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.fht-pattern-badge.moderate {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.fht-pattern-badge.low {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+/* ── Insight: Health Summary Donut ─────────────────────────────────────────── */
+.fht-donut-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    margin-bottom: 20px;
+}
+
+.fht-donut {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.fht-donut-inner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    background: var(--fht-card-bg);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fht-donut-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.fht-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.fht-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.fht-legend-dot.total {
+    background: var(--fht-primary);
+}
+
+.fht-legend-dot.affected {
+    background: var(--fht-warning);
+}
+
+.fht-legend-dot.healthy {
+    background: #22c55e;
+}
+
+.fht-legend-label {
+    font-size: 13px;
+    color: var(--fht-text-secondary);
+    flex: 1;
+}
+
+.fht-legend-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fht-text-primary);
+}
+
+.fht-generations-note {
+    text-align: center;
+    font-size: 13px;
+    color: var(--fht-text-secondary);
+    font-weight: 600;
+    padding-top: 12px;
+    border-top: 1px solid #f3f4f6;
+}
+
+/* ── Insight: Family Timeline ─────────────────────────────────────────────── */
+.fht-timeline-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.fht-timeline-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 10px 0;
+    position: relative;
+}
+
+.fht-timeline-item::before {
+    content: '';
+    position: absolute;
+    left: 18px;
+    top: 26px;
+    bottom: -10px;
+    width: 2px;
+    background: #e5e7eb;
+}
+
+.fht-timeline-item:last-child::before {
+    display: none;
+}
+
+.fht-timeline-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--fht-primary);
+    margin-top: 5px;
+    flex-shrink: 0;
+    border: 3px solid var(--fht-primary-bg);
+    position: relative;
+    z-index: 2;
+}
+
+.fht-timeline-year {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--fht-text-muted);
+    min-width: 40px;
+    flex-shrink: 0;
+}
+
+.fht-timeline-info {
+    flex: 1;
+}
+
+.fht-timeline-person {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--fht-text-primary);
+}
+
+.fht-timeline-event {
+    font-size: 11px;
+    color: var(--fht-text-secondary);
+    margin-top: 1px;
+}
+
+.fht-view-timeline-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 10px;
+    margin-top: 12px;
+    background: var(--fht-primary-bg);
+    border: 1px solid var(--fht-primary-bg-hover);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fht-primary);
+    cursor: pointer;
+    transition: var(--fht-transition);
+}
+
+.fht-view-timeline-btn:hover {
+    background: var(--fht-primary-bg-hover);
+}
+
+/* ── Empty Tree State ─────────────────────────────────────────────────────── */
+.fht-empty-tree {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+    min-height: 400px;
+}
+
+.fht-empty-tree-icon {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: var(--fht-primary-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    animation: fht-pulse 2s ease-in-out infinite;
+}
+
+@keyframes fht-pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.2); }
+    50% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(22, 163, 74, 0); }
+}
+
+.fht-empty-tree-icon svg {
+    width: 48px;
+    height: 48px;
+    color: var(--fht-primary);
+}
+
+.fht-empty-tree h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--fht-text-primary);
+    margin-bottom: 8px;
+}
+
+.fht-empty-tree p {
+    font-size: 14px;
+    color: var(--fht-text-secondary);
+    max-width: 360px;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.fht-empty-tree-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    background: var(--fht-primary);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--fht-transition);
+}
+
+.fht-empty-tree-btn:hover {
+    background: var(--fht-primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(22, 163, 74, 0.3);
+}
+
+/* ── Add/Edit Modal ───────────────────────────────────────────────────────── */
+.fht-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    animation: fht-fade-in 0.2s ease;
+}
+
+@keyframes fht-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.fht-modal {
+    background: var(--fht-card-bg);
+    border-radius: 16px;
+    width: 90%;
+    max-width: 650px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+    animation: fht-slide-up 0.3s ease;
+}
+
+@keyframes fht-slide-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fht-modal::-webkit-scrollbar {
+    width: 5px;
+}
+
+.fht-modal::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 4px;
+}
+
+.fht-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--fht-card-border);
+    position: sticky;
+    top: 0;
+    background: var(--fht-card-bg);
+    z-index: 10;
+    border-radius: 16px 16px 0 0;
+}
+
+.fht-modal-header h2 {
+    font-size: 18px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--fht-primary);
+}
+
+.fht-modal-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: #f3f4f6;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--fht-transition);
+    color: var(--fht-text-secondary);
+}
+
+.fht-modal-close:hover {
+    background: #fee2e2;
+    color: var(--fht-danger);
+}
+
+.fht-modal-body {
+    padding: 24px;
+}
+
+.fht-form-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--fht-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 14px;
+    margin-top: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fht-form-section-title:first-child {
+    margin-top: 0;
+}
+
+.fht-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.fht-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fht-form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.fht-form-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fht-text-secondary);
+}
+
+.fht-form-group label .required {
+    color: var(--fht-danger);
+}
+
+.fht-form-group input,
+.fht-form-group select,
+.fht-form-group textarea {
+    padding: 10px 12px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: var(--fht-radius-sm);
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--fht-text-primary);
+    transition: var(--fht-transition);
+    background: #fff;
+}
+
+.fht-form-group input:focus,
+.fht-form-group select:focus,
+.fht-form-group textarea:focus {
+    outline: none;
+    border-color: var(--fht-primary);
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+.fht-form-group textarea {
+    resize: vertical;
+    min-height: 70px;
+}
+
+.fht-form-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+}
+
+.fht-form-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--fht-primary);
+}
+
+.fht-form-checkbox label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fht-text-primary);
+    cursor: pointer;
+}
+
+/* ── Medical Conditions in Modal ──────────────────────────────────────────── */
+.fht-conditions-list {
+    margin-top: 10px;
+}
+
+.fht-condition-form-card {
+    background: #f9fafb;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+    border: 1px solid #e5e7eb;
+    position: relative;
+}
+
+.fht-condition-remove-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: none;
+    background: #fee2e2;
+    color: var(--fht-danger);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--fht-transition);
+}
+
+.fht-condition-remove-btn:hover {
+    background: #fecaca;
+}
+
+.fht-add-condition-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--fht-primary-bg);
+    color: var(--fht-primary);
+    border: 1px dashed var(--fht-primary);
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--fht-transition);
+    margin-top: 8px;
+}
+
+.fht-add-condition-btn:hover {
+    background: var(--fht-primary-bg-hover);
+}
+
+/* ── Modal Footer ─────────────────────────────────────────────────────────── */
+.fht-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--fht-card-border);
+    position: sticky;
+    bottom: 0;
+    background: var(--fht-card-bg);
+    border-radius: 0 0 16px 16px;
+}
+
+.fht-modal-btn {
+    padding: 10px 24px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--fht-transition);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.fht-modal-btn.cancel {
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    color: var(--fht-text-secondary);
+}
+
+.fht-modal-btn.cancel:hover {
+    background: #e5e7eb;
+}
+
+.fht-modal-btn.save {
+    background: var(--fht-primary);
+    border: none;
+    color: #fff;
+}
+
+.fht-modal-btn.save:hover {
+    background: var(--fht-primary-dark);
+    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+}
+
+.fht-modal-btn.save:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ── Loading State ────────────────────────────────────────────────────────── */
+.fht-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    gap: 16px;
+}
+
+.fht-loading-spinner {
+    width: 44px;
+    height: 44px;
+    border: 4px solid #e5e7eb;
+    border-top-color: var(--fht-primary);
+    border-radius: 50%;
+    animation: fht-spin 0.8s linear infinite;
+}
+
+@keyframes fht-spin {
+    to { transform: rotate(360deg); }
+}
+
+.fht-loading-text {
+    font-size: 14px;
+    color: var(--fht-text-secondary);
+    font-weight: 500;
+}
+
+/* ── Lifestyle Section ────────────────────────────────────────────────────── */
+.fht-lifestyle-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.fht-lifestyle-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.fht-lifestyle-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.fht-lifestyle-icon.smoking { background: #fef3c7; color: #d97706; }
+.fht-lifestyle-icon.alcohol { background: #ede9fe; color: #7c3aed; }
+.fht-lifestyle-icon.exercise { background: #dcfce7; color: #16a34a; }
+.fht-lifestyle-icon.diet { background: #fce7f3; color: #db2777; }
+
+.fht-lifestyle-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.fht-lifestyle-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.fht-lifestyle-label {
+    font-size: 11px;
+    color: var(--fht-text-muted);
+}
+
+.fht-lifestyle-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fht-text-primary);
+}
+
+/* ── Notes Section in Detail ──────────────────────────────────────────────── */
+.fht-notes-content {
+    background: #f9fafb;
+    border-radius: 10px;
+    padding: 16px;
+    font-size: 13px;
+    color: var(--fht-text-primary);
+    line-height: 1.6;
+    min-height: 100px;
+    border: 1px solid #f3f4f6;
+}
+
+.fht-notes-empty {
+    color: var(--fht-text-muted);
+    font-style: italic;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1100px) {
+    .fht-main-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .fht-detail-panel {
+        position: static;
+        max-height: none;
+    }
+
+    .fht-insights-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .fht-stats-bar {
+        padding: 14px 16px;
+        gap: 10px;
+    }
+
+    .fht-stat-item {
+        padding: 10px 16px;
+        min-width: 90px;
+    }
+
+    .fht-stat-value {
+        font-size: 22px;
+    }
+
+    .fht-tree-viewport {
+        padding: 20px 10px;
+        min-height: 400px;
+    }
+
+    .fht-member-avatar {
+        width: 56px;
+        height: 56px;
+        font-size: 18px;
+    }
+
+    .fht-member-avatar.patient-self {
+        width: 72px;
+        height: 72px;
+        font-size: 22px;
+    }
+
+    .fht-member-card {
+        min-width: 100px;
+        max-width: 130px;
+    }
+
+    .fht-member-name {
+        font-size: 11px;
+    }
+
+    .fht-generation-row {
+        gap: 12px;
+    }
+
+    .fht-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .fht-modal {
+        width: 95%;
+        max-height: 90vh;
+    }
+
+    .fht-detail-info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .fht-donut-wrapper {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .fht-lifestyle-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .fht-condition-details {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .fht-stats-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .fht-stat-item {
+        flex-direction: row;
+        justify-content: space-between;
+        padding: 10px 14px;
+    }
+
+    .fht-stats-spacer {
+        display: none;
+    }
+
+    .fht-add-member-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .fht-tree-viewport {
+        padding: 16px 8px;
+    }
+
+    .fht-member-avatar {
+        width: 48px;
+        height: 48px;
+        font-size: 16px;
+    }
+
+    .fht-member-avatar.patient-self {
+        width: 60px;
+        height: 60px;
+        font-size: 18px;
+    }
+
+    .fht-member-card {
+        min-width: 80px;
+        max-width: 110px;
+    }
+
+    .fht-generation-row {
+        gap: 8px;
+    }
+
+    .fht-insight-card {
+        padding: 16px;
+    }
+}

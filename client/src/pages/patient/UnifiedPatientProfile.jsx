@@ -34,8 +34,11 @@ import {
 } from 'react-icons/fi';
 import { FaHeartbeat, FaRupeeSign } from 'react-icons/fa';
 import './UnifiedPatientProfile.css';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 
 import ClinicPatientProfile from './ClinicPatientProfile';
+import FamilyHealthTree from './FamilyHealthTree';
 
 const HospitalPatientProfileContent = () => {
     const { id: patientId, department: deptParam } = useParams();
@@ -212,13 +215,13 @@ const HospitalPatientProfileContent = () => {
                 // Reset file input
                 const fileInput = document.getElementById('consent-file-input');
                 if (fileInput) fileInput.value = '';
-                alert('Consent form uploaded successfully!');
+                toast.success('Consent form uploaded successfully!');
             } else {
-                alert(res.message || 'Upload failed.');
+                toast.error(res.message || 'Upload failed.');
             }
         } catch (err) {
             console.error("Consent upload error:", err);
-            alert('Failed to upload consent form. Please try again.');
+            toast.error('Failed to upload consent form. Please try again.');
         } finally {
             setUploadingConsent(false);
         }
@@ -255,31 +258,45 @@ const HospitalPatientProfileContent = () => {
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
+            toast.success('Consent PDF downloaded successfully!');
         } catch (err) {
             console.error('Consent PDF error:', err);
-            alert('Could not download consent PDF. Please check the template format.');
+            toast.error('Could not download consent PDF. Please check the template format.');
         } finally {
             setGeneratingConsentPdf(false);
         }
     };
 
     const handleDeleteConsent = async (index, fileId) => {
-        if (!window.confirm('Are you sure you want to delete this consent form?')) return;
+        const confirmed = await confirmToast('Are you sure you want to delete this consent form?', {
+            title: 'Delete Consent Form',
+            confirmText: 'Delete',
+            danger: true
+        });
+        if (!confirmed) return;
+
         try {
             const res = await patientAPI.deleteConsent(patientData._id, index, fileId);
             if (res.success) {
                 setConsentList(prev => prev.filter((_, i) => i !== index));
+                toast.success('Consent form deleted successfully!');
             } else {
-                alert(res.message || 'Failed to delete consent form.');
+                toast.error(res.message || 'Failed to delete consent form.');
             }
         } catch (err) {
             console.error('Delete consent error:', err);
-            alert('Failed to delete consent form.');
+            toast.error('Failed to delete consent form.');
         }
     };
 
     const handleDeleteDocument = async (index, doc) => {
-        if (!window.confirm('Are you sure you want to delete this report/document?')) return;
+        const confirmed = await confirmToast('Are you sure you want to delete this report/document?', {
+            title: 'Delete Document',
+            confirmText: 'Delete',
+            danger: true
+        });
+        if (!confirmed) return;
+
         const fileId = typeof doc === 'object' ? doc.fileId : doc;
         const url = typeof doc === 'object' ? doc.url : null;
         const fileName = typeof doc === 'object' ? doc.fileName : null;
@@ -291,12 +308,13 @@ const HospitalPatientProfileContent = () => {
                 } else {
                     setDocumentList(prev => prev.filter((_, i) => i !== index));
                 }
+                toast.success('Document deleted successfully!');
             } else {
-                alert(res.message || 'Failed to delete document.');
+                toast.error(res.message || 'Failed to delete document.');
             }
         } catch (err) {
             console.error('Delete document error:', err);
-            alert('Failed to delete report/document.');
+            toast.error('Failed to delete report/document.');
         }
     };
 
@@ -550,6 +568,7 @@ const HospitalPatientProfileContent = () => {
     // Tab definitions
     const tabs = [
         { key: 'timeline', label: 'Timeline' },
+        { key: 'familyHistory', label: 'Family History' },
         { key: 'clinical', label: 'Clinical History' },
         { key: 'vitals', label: 'Vitals' },
         { key: 'prescriptions', label: 'Prescriptions' },
@@ -721,13 +740,18 @@ const HospitalPatientProfileContent = () => {
                 ))}
             </div>
 
-            {/* ====== MAIN TWO-COLUMN LAYOUT ====== */}
-            <div className="upp-main-layout">
-                {/* ---- LEFT PANEL ---- */}
-                <div className="upp-col-left">
+            {/* ====== MAIN CONTENT ====== */}
+            {activeTab === 'familyHistory' ? (
+                <div style={{ marginTop: '20px' }}>
+                    <FamilyHealthTree patientId={patientData?._id || patientId} patientData={patientData} />
+                </div>
+            ) : (
+                <div className="upp-main-layout">
+                    {/* ---- LEFT PANEL ---- */}
+                    <div className="upp-col-left">
 
-                    {/* Timeline Tab Content */}
-                    {activeTab === 'timeline' && (
+                        {/* Timeline Tab Content */}
+                        {activeTab === 'timeline' && (
                         <>
                             {/* Recent Visit Section */}
                             <div className="upp-section-card">
@@ -1390,6 +1414,7 @@ const HospitalPatientProfileContent = () => {
                     </div>
                 </div>
             </div>
+            )}
 
         </div>
     );

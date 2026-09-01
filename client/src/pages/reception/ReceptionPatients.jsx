@@ -8,6 +8,7 @@ import {
     FiClock, FiCheckCircle, FiX, FiRefreshCw, FiZap, FiRadio
 } from 'react-icons/fi';
 import './ReceptionDashboard.css';
+import toast from 'react-hot-toast';
 
 // Client-side cache keys
 const CACHE_KEY_APPTS = 'hms_rec_cached_appts';
@@ -174,11 +175,13 @@ const ReceptionPatients = () => {
             formData.append('appointmentId', uploadModal.apptId);
             const res = await reportAPI.uploadReport(formData);
             if (res?.success) {
-                alert('Report uploaded successfully!');
+                toast.success('Report uploaded successfully!');
                 setUploadModal({ open: false, apptId: null, patientName: '', patientId: null });
+            } else {
+                toast.error(res?.message || 'Failed to upload report.');
             }
         } catch (err) {
-            alert('Error uploading report.');
+            toast.error('Error uploading report.');
         } finally {
             setUploadingReport(false);
         }

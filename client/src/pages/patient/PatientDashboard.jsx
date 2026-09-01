@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
 import { patientAuthAPI, uploadAPI } from '../../utils/api';
 import SlotPicker from '../../components/SlotPicker';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import './PatientDashboard.css';
 
 const PatientDashboard = () => {
@@ -127,13 +129,13 @@ const PatientDashboard = () => {
             if (res.success && res.files?.length > 0) {
                 const url = res.files[0].url;
                 setEditForm(prev => ({ ...prev, avatar: url }));
-                alert('Profile picture uploaded successfully!');
+                toast.success('Profile picture uploaded successfully!');
             } else {
-                alert('Upload failed. Please try again.');
+                toast.error('Upload failed. Please try again.');
             }
         } catch (err) {
             console.error('Avatar upload error:', err);
-            alert('Failed to upload avatar.');
+            toast.error('Failed to upload avatar.');
         } finally {
             setUploadingAvatar(false);
         }
@@ -190,17 +192,17 @@ const PatientDashboard = () => {
         e.preventDefault();
         
         if (!editForm.name?.trim()) {
-            alert('Name is required.');
+            toast.error('Name is required.');
             return;
         }
 
         if (!/^\d{10}$/.test(editForm.mobile)) {
-            alert('Mobile number must be exactly 10 digits.');
+            toast.error('Mobile number must be exactly 10 digits.');
             return;
         }
 
         if (editForm.aadhaarNumber && !/^\d{12}$/.test(editForm.aadhaarNumber)) {
-            alert('Aadhaar number must be exactly 12 digits.');
+            toast.error('Aadhaar number must be exactly 12 digits.');
             return;
         }
 
@@ -208,7 +210,7 @@ const PatientDashboard = () => {
         try {
             const res = await patientAuthAPI.updatePatientProfile(editForm);
             if (res.success) {
-                alert('Profile updated successfully!');
+                toast.success('Profile updated successfully!');
                 setProfileData(res.profile);
                 
                 const pUserStr = localStorage.getItem('patientUser');
@@ -221,11 +223,11 @@ const PatientDashboard = () => {
                 
                 setIsEditing(false);
             } else {
-                alert(res.message || 'Failed to update profile.');
+                toast.error(res.message || 'Failed to update profile.');
             }
         } catch (err) {
             console.error('Profile update error:', err);
-            alert(err.response?.data?.message || 'Failed to save changes.');
+            toast.error(err.response?.data?.message || 'Failed to save changes.');
         } finally {
             setUpdatingProfile(false);
         }
@@ -305,23 +307,29 @@ const PatientDashboard = () => {
     };
 
     const handleCancelAppointment = async (id) => {
-        if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
+        const confirmed = await confirmToast('Are you sure you want to cancel this appointment?', {
+            title: 'Cancel Appointment',
+            confirmText: 'Yes, Cancel',
+            danger: true
+        });
+        if (!confirmed) return;
+
         try {
             const res = await patientAuthAPI.cancelAppointment(id);
             if (res.success) {
-                alert('Appointment cancelled successfully.');
+                toast.success('Appointment cancelled successfully.');
                 setAppointments(appointments.map(a => a._id === id ? { ...a, status: 'cancelled' } : a));
                 setSelectedAppt(null);
             }
         } catch (error) {
             console.error('Cancel error:', error);
-            alert(error.response?.data?.message || 'Failed to cancel appointment.');
+            toast.error(error.response?.data?.message || 'Failed to cancel appointment.');
         }
     };
 
     const handleRebookSubmit = async () => {
         if (!rebookForm.visitDate || !rebookForm.visitTime) {
-            alert('Please select both date and time.');
+            toast.error('Please select both date and time.');
             return;
         }
         setBookingAppt(true);
@@ -334,14 +342,14 @@ const PatientDashboard = () => {
                 notes: 'Rebooked appointment via Patient Portal'
             });
             if (res.success) {
-                alert('Appointment rebooked successfully!');
+                toast.success('Appointment rebooked successfully!');
                 setRebookingAppt(null);
                 setRebookForm({ visitDate: '', visitTime: '' });
                 loadDashboardData(); // refresh appointments
             }
         } catch (err) {
             console.error('Rebook error:', err);
-            alert(err.response?.data?.message || 'Failed to rebook appointment.');
+            toast.error(err.response?.data?.message || 'Failed to rebook appointment.');
         } finally {
             setBookingAppt(false);
         }
@@ -1532,7 +1540,7 @@ const PatientDashboard = () => {
             };
             const res = await patientAuthAPI.payPatientBills(payload);
             if (res.success) {
-                alert(res.message || 'Payment processed successfully!');
+                toast.success(res.message || 'Payment processed successfully!');
                 setPayingBill(null);
                 setPayTxnId('');
                 setPayUpiId('');
@@ -1541,7 +1549,7 @@ const PatientDashboard = () => {
             }
         } catch (error) {
             console.error('Payment error:', error);
-            alert(error.response?.data?.message || 'Failed to process payment.');
+            toast.error(error.response?.data?.message || 'Failed to process payment.');
         } finally {
             setPayLoading(false);
         }

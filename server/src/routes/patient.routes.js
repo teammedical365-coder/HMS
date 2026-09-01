@@ -764,4 +764,164 @@ router.delete('/:id/documents/:index', verifyToken, resolveTenant, async (req, r
     }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FAMILY HEALTH TREE — CRUD ENDPOINTS
+// ═══════════════════════════════════════════════════════════════════════════════
+const FamilyMember = require('../models/familyMember.model');
+
+// GET /:id/family — Get all family members for a patient
+router.get('/:id/family', verifyToken, resolveTenant, async (req, res) => {
+    try {
+        const patientId = req.params.id;
+        const hospitalId = req.user.hospitalId || req.user.clinicId;
+
+        const idList = [patientId];
+        const user = await MasterUser.findOne({ $or: [{ _id: patientId }, { patientId }, { mrn: patientId }] }).select('_id patientId').lean().catch(() => null);
+        if (user) {
+            idList.push(String(user._id));
+            if (user.patientId) idList.push(user.patientId);
+        }
+
+        const members = await FamilyMember.find({
+            patientId: { $in: idList },
+            ...(hospitalId ? { $or: [{ hospitalId }, { hospitalId: null }, { hospitalId: { $exists: false } }] } : {})
+        }).sort({ generation: 1, name: 1 }).lean();
+
+        res.json({ success: true, data: members });
+    } catch (error) {
+        console.error('[family-get]', error.message);
+        res.status(500).json({ success: false, message: 'Failed to fetch family members' });
+    }
+});
+
+// POST /:id/family — Add a new family member
+router.post('/:id/family', verifyToken, resolveTenant, async (req, res) => {
+    try {
+        const patientId = req.params.id;
+        let hospitalId = req.user.hospitalId || req.user.clinicId;
+
+        if (!hospitalId) {
+            const user = await MasterUser.findOne({ $or: [{ _id: patientId }, { patientId }, { mrn: patientId }] }).select('hospitalId clinicId').lean().catch(() => null);
+            if (user) {
+                hospitalId = user.hospitalId || user.clinicId;
+            }
+        }
+
+        const {
+            name, relationship, generation, gender, dob, age, bloodGroup,
+            isAlive, medicalConditions, lifestyle, phone, address, occupation,
+            notes, linkedPatientId
+        } = req.body;
+
+        if (!name || !relationship) {
+            return res.status(400).json({ success: false, message: 'Name and relationship are required' });
+        }
+
+        // Auto-compute isAffected from medical conditions
+        const isAffected = Array.isArray(medicalConditions) && medicalConditions.length > 0;
+
+        const member = await FamilyMember.create({
+            patientId,
+            hospitalId: hospitalId || null,
+            linkedPatientId: linkedPatientId || null,
+            name,
+            relationship,
+            generation: generation ?? 0,
+            gender: gender || 'Male',
+            dob: dob || null,
+            age: age || null,
+            bloodGroup: bloodGroup || '',
+            isAlive: isAlive !== false,
+            isAffected,
+            medicalConditions: medicalConditions || [],
+            lifestyle: lifestyle || {},
+            phone: phone || '',
+            address: address || '',
+            occupation: occupation || '',
+            notes: notes || ''
+        });
+
+        res.status(201).json({ success: true, data: member });
+    } catch (error) {
+        console.error('[family-add]', error.message);
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ success: false, message: error.message });
+        }
+        res.status(500).json({ success: false, message: 'Failed to add family member' });
+    }
+});
+
+// PUT /:id/family/:memberId — Update a family member
+router.put('/:id/family/:memberId', verifyToken, resolveTenant, async (req, res) => {
+    try {
+        const { id: patientId, memberId } = req.params;
+        const hospitalId = req.user.hospitalId || req.user.clinicId;
+
+        const updateData = { ...req.body };
+        // Auto-compute isAffected
+        if (Array.isArray(updateData.medicalConditions)) {
+            updateData.isAffected = updateData.medicalConditions.length > 0;
+        }
+
+        const idList = [patientId];
+        const user = await MasterUser.findOne({ $or: [{ _id: patientId }, { patientId }, { mrn: patientId }] }).select('_id patientId').lean().catch(() => null);
+        if (user) {
+            idList.push(String(user._id));
+            if (user.patientId) idList.push(user.patientId);
+        }
+
+        const member = await FamilyMember.findOneAndUpdate(
+            {
+                _id: memberId,
+                patientId: { $in: idList },
+                ...(hospitalId ? { $or: [{ hospitalId }, { hospitalId: null }, { hospitalId: { $exists: false } }] } : {})
+            },
+            { $set: updateData },
+            { new: true, runValidators: true }
+        );
+
+        if (!member) {
+            return res.status(404).json({ success: false, message: 'Family member not found' });
+        }
+
+        res.json({ success: true, data: member });
+    } catch (error) {
+        console.error('[family-update]', error.message);
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ success: false, message: error.message });
+        }
+        res.status(500).json({ success: false, message: 'Failed to update family member' });
+    }
+});
+
+// DELETE /:id/family/:memberId — Delete a family member
+router.delete('/:id/family/:memberId', verifyToken, resolveTenant, async (req, res) => {
+    try {
+        const { id: patientId, memberId } = req.params;
+        const hospitalId = req.user.hospitalId || req.user.clinicId;
+
+        const idList = [patientId];
+        const user = await MasterUser.findOne({ $or: [{ _id: patientId }, { patientId }, { mrn: patientId }] }).select('_id patientId').lean().catch(() => null);
+        if (user) {
+            idList.push(String(user._id));
+            if (user.patientId) idList.push(user.patientId);
+        }
+
+        const result = await FamilyMember.findOneAndDelete({
+            _id: memberId,
+            patientId: { $in: idList },
+            ...(hospitalId ? { $or: [{ hospitalId }, { hospitalId: null }, { hospitalId: { $exists: false } }] } : {})
+        });
+
+        if (!result) {
+            return res.status(404).json({ success: false, message: 'Family member not found' });
+        }
+
+        res.json({ success: true, message: 'Family member deleted successfully' });
+    } catch (error) {
+        console.error('[family-delete]', error.message);
+        res.status(500).json({ success: false, message: 'Failed to delete family member' });
+    }
+});
+
 module.exports = router;
