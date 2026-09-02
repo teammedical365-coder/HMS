@@ -1,8 +1,8 @@
 /* DashboardLayout.css — Professional ERP Design System */
 :root {
-  --sidebar-width: 270px;
-  --sidebar-collapsed: 85px;
-  --topbar-height: 70px;
+  --sidebar-width: 216px;
+  --sidebar-collapsed: 72px;
+  --topbar-height: 64px;
   --bg-erp: #f8fafc;
   --surface-erp: #ffffff;
   --brand-erp: #1e847f;
@@ -48,18 +48,24 @@
   height: var(--topbar-height);
   display: flex;
   align-items: center;
-  padding: 0 24px;
-  gap: 12px;
+  padding: 0 16px;
+  gap: 10px;
   font-weight: 800;
-  font-size: 1.1rem;
+  font-size: 1rem;
   color: var(--text-dark);
   border-bottom: 1px solid #e2e8f0;
   box-sizing: border-box;
 }
 
+.ca-brand-container img {
+  height: 26px !important;
+  max-width: 145px !important;
+  object-fit: contain;
+}
+
 .brand-dot {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   background: linear-gradient(135deg, #1e847f, #3b82f6);
   border-radius: 4px;
   transform: rotate(45deg);
@@ -67,7 +73,7 @@
 }
 
 .sidebar-nav {
-  padding: 24px 12px;
+  padding: 16px 8px;
   flex: 1;
   overflow-y: auto;
   scrollbar-width: none;
@@ -83,16 +89,17 @@
 .sidebar-link {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 9px 12px;
   text-decoration: none;
   color: #1e293b;
   font-weight: 600;
-  font-size: 0.925rem;
-  border-radius: 14px;
-  margin-bottom: 6px;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  border-left: 4px solid transparent;
+  font-size: 0.86rem;
+  border-radius: 10px;
+  margin-bottom: 4px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border-left: 3.5px solid transparent;
+  text-align: left;
 }
 
 .sidebar-link:hover {
@@ -358,7 +365,7 @@
 
 /* Content Area */
 .erp-page-content {
-  padding: 24px 28px;
+  padding: 16px 20px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -366,10 +373,12 @@
 }
 
 /* Remove/reduce outer padding when inside full-bleed views */
+.erp-page-content:has(.cca-exact-page-container),
+.erp-page-content:has(.cca-page-container),
 .erp-page-content:has(.ql-admin-body),
 .erp-page-content:has(.staff-management-page),
 .erp-page-content:has(.superadmin-page) {
-  padding: 0 !important;
+  padding: 8px 12px !important;
 }
 
 .erp-page-content:has(.role-dashboard),

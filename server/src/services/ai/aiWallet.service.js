@@ -3,16 +3,28 @@ const AIWallet = require('../../models/aiWallet.model');
 const AIUsageLog = require('../../models/aiUsageLog.model');
 const Hospital = require('../../models/hospital.model');
 const { calculateCost } = require('../../config/aiPricing.config');
+const {
+    calculateWalletStatus,
+    getWarningMessage,
+    paisaToRupees,
+    rupeesToPaisa,
+    formatINR
+} = require('../../utils/walletStatus');
 
-const INITIAL_BUDGET_INR = 2000;
+const INITIAL_BUDGET_PAISE = 200000; // ₹2,000.00
 
 class AIWalletService {
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // GET OR CREATE
+    // ──────────────────────────────────────────────────────────────────────────
+
     /**
-     * Get or automatically create the hospital's isolated AI wallet.
-     * Guaranteed to return an active AIWallet document with ₹2,000 budget for new hospitals.
+     * Get or atomically create the hospital's AI wallet.
+     * Guaranteed to return exactly ONE wallet per hospital with ₹2,000 budget.
      * 
      * @param {string|mongoose.Types.ObjectId} hospitalId 
-     * @returns {Promise<AIWallet>}
+     * @returns {Promise<Object>} AIWallet document
      */
     async getOrCreateWallet(hospitalId) {
         if (!hospitalId) {
@@ -21,24 +33,26 @@ class AIWalletService {
 
         const cleanHospitalId = new mongoose.Types.ObjectId(hospitalId);
 
-        // Find existing wallet
+        // Fast path: find existing
         let wallet = await AIWallet.findOne({ hospitalId: cleanHospitalId });
-        if (wallet) {
-            return wallet;
-        }
+        if (wallet) return wallet;
 
-        // Atomically upsert wallet with initial ₹2,000 INR budget
+        // Atomic upsert — safe under concurrency
         try {
             wallet = await AIWallet.findOneAndUpdate(
                 { hospitalId: cleanHospitalId },
                 {
                     $setOnInsert: {
                         hospitalId: cleanHospitalId,
-                        budgetAmount: INITIAL_BUDGET_INR,
+                        initialAmount: INITIAL_BUDGET_PAISE,
+                        budgetAmount: INITIAL_BUDGET_PAISE,
                         usedAmount: 0,
-                        remainingAmount: INITIAL_BUDGET_INR,
+                        remainingAmount: INITIAL_BUDGET_PAISE,
                         currency: 'INR',
-                        status: 'active',
+                        status: 'ACTIVE',
+                        lowBalanceThreshold: 50000,
+                        criticalBalanceThreshold: 25000,
+                        veryCriticalBalanceThreshold: 10000,
                         totalRequests: 0,
                         lastUsageAt: null
                     }
@@ -47,101 +61,102 @@ class AIWalletService {
             );
             return wallet;
         } catch (err) {
-            // In case of duplicate key race condition, retrieve the created doc
+            // Duplicate key race — another process created it first
             wallet = await AIWallet.findOne({ hospitalId: cleanHospitalId });
             if (wallet) return wallet;
             throw err;
         }
     }
 
-    /**
-     * Determine low balance warning level based on remaining percentage.
-     * 
-     * @param {number} remaining 
-     * @param {number} budget 
-     * @returns {'normal'|'warning'|'critical'|'very_critical'|'exhausted'}
-     */
-    getWarningLevel(remaining, budget) {
-        if (remaining <= 0) return 'exhausted';
-        if (!budget || budget <= 0) return 'exhausted';
-
-        const ratio = remaining / budget;
-        if (ratio <= 0.05) return 'very_critical'; // <= 5%
-        if (ratio <= 0.10) return 'critical';      // <= 10%
-        if (ratio <= 0.20) return 'warning';       // <= 20%
-        return 'normal';
-    }
+    // ──────────────────────────────────────────────────────────────────────────
+    // BALANCE PRE-CHECK
+    // ──────────────────────────────────────────────────────────────────────────
 
     /**
-     * PRE-CHECK: Check whether hospital has sufficient AI Credits BEFORE calling Gemini.
+     * Check whether hospital has sufficient AI Credits BEFORE calling Gemini.
+     * Returns status, warning message, and whether the operation is allowed.
      * 
      * @param {string|mongoose.Types.ObjectId} hospitalId 
-     * @param {number} [estimatedMinCost=0.0001]
-     * @returns {Promise<{ allowed: boolean, reason?: string, message?: string, wallet: any, warningLevel: string }>}
+     * @returns {Promise<Object>}
      */
-    async checkBalance(hospitalId, estimatedMinCost = 0.0001) {
+    async checkBalance(hospitalId) {
         if (!hospitalId) {
             return {
                 allowed: false,
                 reason: 'NO_HOSPITAL_CONTEXT',
                 message: 'No hospital identifier found for this session.',
                 wallet: null,
-                warningLevel: 'exhausted'
+                warningLevel: 'EXHAUSTED'
             };
         }
 
         const wallet = await this.getOrCreateWallet(hospitalId);
-        const warningLevel = this.getWarningLevel(wallet.remainingAmount, wallet.budgetAmount);
 
-        if (wallet.status === 'suspended') {
+        // Auto-migrate old float-based wallets to paise
+        if (wallet.remainingAmount > 0 && wallet.remainingAmount < 5000 && wallet.budgetAmount < 5000) {
+            // Likely stored as INR float, not paise — migrate
+            await this._migrateWalletToPaise(wallet);
+        }
+
+        const status = calculateWalletStatus(wallet.remainingAmount, {
+            low: wallet.lowBalanceThreshold,
+            critical: wallet.criticalBalanceThreshold,
+            veryCritical: wallet.veryCriticalBalanceThreshold
+        });
+
+        // Update status in DB if it drifted
+        if (wallet.status !== status && wallet.status !== 'SUSPENDED') {
+            wallet.status = status;
+            await wallet.save().catch(() => {});
+        }
+
+        if (wallet.status === 'SUSPENDED') {
             return {
                 allowed: false,
                 reason: 'WALLET_SUSPENDED',
                 message: 'Your hospital AI wallet has been suspended. Please contact administrator.',
-                wallet,
-                warningLevel: 'exhausted'
+                wallet: this._formatWalletResponse(wallet),
+                warningLevel: 'EXHAUSTED'
             };
         }
 
         if (wallet.remainingAmount <= 0) {
-            // Update status if not already set to exhausted
-            if (wallet.status !== 'exhausted') {
-                wallet.status = 'exhausted';
+            if (wallet.status !== 'EXHAUSTED') {
+                wallet.status = 'EXHAUSTED';
                 await wallet.save().catch(() => {});
             }
-
             return {
                 allowed: false,
                 reason: 'INSUFFICIENT_CREDITS',
-                message: 'AI Credits Exhausted. Your hospital has used its available AI budget. Please contact your administrator to continue using the AI Assistant.',
-                wallet,
-                warningLevel: 'exhausted'
+                message: 'AI Credits Exhausted. Your hospital has used its available AI budget. Please contact your administrator to recharge.',
+                wallet: this._formatWalletResponse(wallet),
+                warningLevel: 'EXHAUSTED'
             };
         }
 
+        const warningMsg = getWarningMessage(status, wallet.remainingAmount);
+
         return {
             allowed: true,
-            wallet,
-            remainingAmount: wallet.remainingAmount,
-            warningLevel
+            wallet: this._formatWalletResponse(wallet),
+            remainingAmount: paisaToRupees(wallet.remainingAmount),
+            warningLevel: status,
+            warningMessage: warningMsg
         };
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // DEDUCT USAGE (Atomic, Concurrency-Safe)
+    // ──────────────────────────────────────────────────────────────────────────
+
     /**
-     * DEDUCT USAGE: Calculate actual Gemini API cost and atomically deduct from hospital wallet.
-     * Handles race conditions and guarantees remainingAmount never drops below ₹0.
+     * Calculate actual Gemini API cost and atomically deduct from hospital wallet.
+     * 
+     * Uses MongoDB conditional update: only deducts if remainingAmount >= costPaise.
+     * This prevents negative balance under concurrent requests from multiple doctors.
      * 
      * @param {Object} params
-     * @param {string|mongoose.Types.ObjectId} params.hospitalId
-     * @param {string|mongoose.Types.ObjectId} [params.userId]
-     * @param {string} [params.userRole]
-     * @param {string} [params.userName]
-     * @param {any} [params.patientId]
-     * @param {string} params.operation
-     * @param {string} [params.model]
-     * @param {Object} params.rawUsage - { promptTokens, candidateTokens, totalTokens, modelName }
-     * @param {Object} [params.metadata]
-     * @param {string} [params.requestId]
+     * @returns {Promise<Object>}
      */
     async deductUsage({
         hospitalId,
@@ -150,7 +165,7 @@ class AIWalletService {
         userName = 'Doctor/Staff',
         patientId = null,
         operation = 'AI_REQUEST',
-        model = 'gemini-1.5-flash',
+        model = 'gemini-2.0-flash',
         rawUsage = {},
         metadata = {},
         requestId = ''
@@ -165,98 +180,114 @@ class AIWalletService {
             const promptTokens = rawUsage.promptTokens || rawUsage.inputTokens || 0;
             const candidateTokens = rawUsage.candidateTokens || rawUsage.outputTokens || 0;
             const totalTokens = rawUsage.totalTokens || (promptTokens + candidateTokens);
-            const activeModel = rawUsage.modelName || model || 'gemini-1.5-flash';
+            const activeModel = rawUsage.modelName || model || 'gemini-2.0-flash';
 
-            // 1. Calculate actual API cost based on configured Gemini model pricing
+            // 1. Calculate actual API cost (returns INR float)
             const costData = calculateCost(activeModel, promptTokens, candidateTokens);
-            const actualCostInr = costData.costInr;
-            const costUsd = costData.costUsd;
+            const costPaise = rupeesToPaisa(costData.costInr); // Convert to integer paise
 
-            // 2. Perform concurrency-safe atomic deduction
-            // MongoDB aggregation pipeline in findOneAndUpdate prevents race conditions and clamps remaining to >= 0
+            // 2. ATOMIC conditional deduction — prevents negative balance
+            // The filter condition `remainingAmount >= costPaise` ensures this update
+            // only succeeds if there is sufficient balance. Under concurrent requests,
+            // only one will win the race; the other will get null (insufficient funds).
             const updatedWallet = await AIWallet.findOneAndUpdate(
-                { hospitalId: cleanHospitalId },
+                {
+                    hospitalId: cleanHospitalId,
+                    remainingAmount: { $gte: costPaise } // ATOMIC GUARD
+                },
                 [
                     {
                         $set: {
-                            usedAmount: { 
-                                $round: [{ $add: ['$usedAmount', actualCostInr] }, 4] 
-                            },
+                            usedAmount: { $add: ['$usedAmount', costPaise] },
                             remainingAmount: {
-                                $max: [
-                                    0,
-                                    { $round: [{ $subtract: ['$remainingAmount', actualCostInr] }, 4] }
-                                ]
+                                $max: [0, { $subtract: ['$remainingAmount', costPaise] }]
                             },
                             totalRequests: { $add: ['$totalRequests', 1] },
-                            lastUsageAt: new Date(),
-                            status: {
-                                $cond: {
-                                    if: { $lte: [{ $subtract: ['$remainingAmount', actualCostInr] }, 0] },
-                                    then: 'exhausted',
-                                    else: '$status'
-                                }
-                            }
+                            lastUsageAt: new Date()
                         }
                     }
                 ],
-                { new: true, upsert: true }
+                { new: true }
             );
 
-            const warningLevel = this.getWarningLevel(updatedWallet.remainingAmount, updatedWallet.budgetAmount);
+            // If null, insufficient balance (lost the race or truly exhausted)
+            if (!updatedWallet) {
+                const currentWallet = await this.getOrCreateWallet(cleanHospitalId);
+                console.warn(
+                    `[AI Wallet] INSUFFICIENT BALANCE for hospital ${cleanHospitalId}. ` +
+                    `Required: ${formatINR(costPaise)}, Available: ${formatINR(currentWallet.remainingAmount)}`
+                );
+                return {
+                    success: false,
+                    error: 'INSUFFICIENT_CREDITS',
+                    message: `Insufficient AI Credits. Required: ${formatINR(costPaise)}, Available: ${formatINR(currentWallet.remainingAmount)}`,
+                    wallet: this._formatWalletResponse(currentWallet)
+                };
+            }
 
-            // Log formatted console message for inspection
+            // 3. Compute and persist new status
+            const newStatus = calculateWalletStatus(updatedWallet.remainingAmount, {
+                low: updatedWallet.lowBalanceThreshold,
+                critical: updatedWallet.criticalBalanceThreshold,
+                veryCritical: updatedWallet.veryCriticalBalanceThreshold
+            });
+            if (updatedWallet.status !== newStatus && updatedWallet.status !== 'SUSPENDED') {
+                updatedWallet.status = newStatus;
+                await updatedWallet.save().catch(() => {});
+            }
+
+            const warningMsg = getWarningMessage(newStatus, updatedWallet.remainingAmount);
+
+            // 4. Console log
             console.log(
                 `\x1b[35m[AI Wallet]\x1b[0m Hospital: \x1b[33m${cleanHospitalId}\x1b[0m | ` +
                 `Op: \x1b[32m${operation}\x1b[0m | Model: \x1b[36m${activeModel}\x1b[0m | ` +
                 `Tokens: \x1b[1m${totalTokens}\x1b[0m (In: ${promptTokens}, Out: ${candidateTokens}) | ` +
-                `Cost: \x1b[32m₹${actualCostInr.toFixed(4)}\x1b[0m ($${costUsd.toFixed(6)}) | ` +
-                `Remaining: \x1b[35m₹${updatedWallet.remainingAmount.toFixed(2)}\x1b[0m`
+                `Cost: \x1b[32m${formatINR(costPaise)}\x1b[0m ($${costData.costUsd.toFixed(6)}) | ` +
+                `Remaining: \x1b[35m${formatINR(updatedWallet.remainingAmount)}\x1b[0m [${newStatus}]`
             );
 
-            // 3. Save internal billing/audit usage log
-            try {
-                await AIUsageLog.create({
-                    hospitalId: cleanHospitalId,
-                    userId: userId ? new mongoose.Types.ObjectId(userId) : null,
-                    userName: userName || 'Doctor/Staff',
-                    userRole: userRole || 'doctor',
-                    patientId: patientId || null,
-                    operation: operation,
-                    actionType: operation,
-                    model: activeModel,
-                    modelName: activeModel,
-                    inputTokens: promptTokens,
-                    outputTokens: candidateTokens,
-                    totalTokens: totalTokens,
-                    promptTokens: promptTokens,
-                    candidateTokens: candidateTokens,
-                    actualApiCost: actualCostInr,
-                    estimatedCostInr: actualCostInr,
-                    estimatedCostUsd: costUsd,
-                    currency: 'INR',
-                    requestId: requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-                    status: 'SUCCESS',
-                    metadata
-                });
-            } catch (logErr) {
+            // 5. Save usage log (async, non-blocking for response)
+            const logRequestId = requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+            AIUsageLog.create({
+                hospitalId: cleanHospitalId,
+                userId: userId ? new mongoose.Types.ObjectId(userId) : null,
+                userName: userName || 'Doctor/Staff',
+                userRole: userRole || 'doctor',
+                patientId: patientId || null,
+                operation,
+                actionType: operation,
+                model: activeModel,
+                modelName: activeModel,
+                inputTokens: promptTokens,
+                outputTokens: candidateTokens,
+                totalTokens,
+                promptTokens,
+                candidateTokens,
+                actualApiCost: costData.costInr, // Store as INR float for backward compat in logs
+                estimatedCostInr: costData.costInr,
+                estimatedCostUsd: costData.costUsd,
+                currency: 'INR',
+                requestId: logRequestId,
+                status: 'SUCCESS',
+                metadata
+            }).catch(logErr => {
                 console.error('[AIUsageLog DB Save Error]:', logErr.message);
-            }
+            });
+
+            // 6. Emit real-time wallet update via Socket.IO
+            this._emitWalletUpdate(cleanHospitalId, updatedWallet, newStatus);
+
+            const walletResponse = this._formatWalletResponse(updatedWallet, newStatus);
 
             return {
                 success: true,
-                actualCostInr,
-                costUsd,
-                wallet: {
-                    budgetAmount: updatedWallet.budgetAmount,
-                    usedAmount: updatedWallet.usedAmount,
-                    remainingAmount: updatedWallet.remainingAmount,
-                    currency: updatedWallet.currency,
-                    status: updatedWallet.status,
-                    totalRequests: updatedWallet.totalRequests,
-                    lastUsageAt: updatedWallet.lastUsageAt,
-                    warningLevel
-                }
+                actualCostInr: costData.costInr,
+                costPaise,
+                costUsd: costData.costUsd,
+                wallet: walletResponse,
+                warningLevel: newStatus,
+                warningMessage: warningMsg
             };
         } catch (error) {
             console.error('[AIWalletService deductUsage Error]:', error);
@@ -266,6 +297,10 @@ class AIWalletService {
             };
         }
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // RECORD FAILURE (No charge)
+    // ──────────────────────────────────────────────────────────────────────────
 
     /**
      * Record a failed AI request without consuming budget.
@@ -277,7 +312,7 @@ class AIWalletService {
         userName = 'Doctor/Staff',
         patientId = null,
         operation = 'AI_REQUEST',
-        model = 'gemini-1.5-flash',
+        model = 'gemini-2.0-flash',
         error = '',
         metadata = {},
         requestId = ''
@@ -292,10 +327,10 @@ class AIWalletService {
                 userName: userName || 'Doctor/Staff',
                 userRole: userRole || 'doctor',
                 patientId: patientId || null,
-                operation: operation,
+                operation,
                 actionType: operation,
-                model: model || 'gemini-1.5-flash',
-                modelName: model || 'gemini-1.5-flash',
+                model: model || 'gemini-2.0-flash',
+                modelName: model || 'gemini-2.0-flash',
                 inputTokens: 0,
                 outputTokens: 0,
                 totalTokens: 0,
@@ -315,11 +350,15 @@ class AIWalletService {
         }
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // ADD BUDGET / RECHARGE
+    // ──────────────────────────────────────────────────────────────────────────
+
     /**
-     * Add budget / recharge hospital AI wallet (Admin function).
+     * Add budget to hospital AI wallet (Admin/SuperAdmin function).
      * 
      * @param {string|mongoose.Types.ObjectId} hospitalId 
-     * @param {number} rechargeAmountInr 
+     * @param {number} rechargeAmountInr - Amount in RUPEES (converted to paise internally)
      */
     async addBudget(hospitalId, rechargeAmountInr) {
         const amount = Number(rechargeAmountInr);
@@ -327,44 +366,57 @@ class AIWalletService {
             throw new Error('Recharge amount must be a positive number.');
         }
 
+        const rechargePaise = rupeesToPaisa(amount);
         const cleanHospitalId = new mongoose.Types.ObjectId(hospitalId);
-        
-        // Ensure wallet exists first
+
+        // Ensure wallet exists
         await this.getOrCreateWallet(cleanHospitalId);
 
         const updatedWallet = await AIWallet.findOneAndUpdate(
             { hospitalId: cleanHospitalId },
-            [
-                {
-                    $set: {
-                        budgetAmount: { $round: [{ $add: ['$budgetAmount', amount] }, 4] },
-                        remainingAmount: { $round: [{ $add: ['$remainingAmount', amount] }, 4] },
-                        status: {
-                            $cond: {
-                                if: { $gt: [{ $add: ['$remainingAmount', amount] }, 0] },
-                                then: 'active',
-                                else: '$status'
-                            }
-                        }
-                    }
+            {
+                $inc: {
+                    budgetAmount: rechargePaise,
+                    remainingAmount: rechargePaise
                 }
-            ],
+            },
             { new: true }
         );
 
-        return updatedWallet;
+        // Recalculate status after recharge
+        if (updatedWallet) {
+            const newStatus = calculateWalletStatus(updatedWallet.remainingAmount, {
+                low: updatedWallet.lowBalanceThreshold,
+                critical: updatedWallet.criticalBalanceThreshold,
+                veryCritical: updatedWallet.veryCriticalBalanceThreshold
+            });
+            if (updatedWallet.status !== newStatus) {
+                updatedWallet.status = newStatus;
+                await updatedWallet.save();
+            }
+            this._emitWalletUpdate(cleanHospitalId, updatedWallet, newStatus);
+        }
+
+        return this._formatWalletResponse(updatedWallet);
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // WALLET STATS & HISTORY
+    // ──────────────────────────────────────────────────────────────────────────
+
     /**
-     * Get wallet summary, usage stats, and warning level for a hospital.
-     * 
-     * @param {string|mongoose.Types.ObjectId} hospitalId 
+     * Get comprehensive wallet stats for a hospital.
      */
     async getWalletStats(hospitalId) {
         const wallet = await this.getOrCreateWallet(hospitalId);
-        const warningLevel = this.getWarningLevel(wallet.remainingAmount, wallet.budgetAmount);
+        const status = calculateWalletStatus(wallet.remainingAmount, {
+            low: wallet.lowBalanceThreshold,
+            critical: wallet.criticalBalanceThreshold,
+            veryCritical: wallet.veryCriticalBalanceThreshold
+        });
+        const warningMsg = getWarningMessage(status, wallet.remainingAmount);
 
-        // Calculate today's usage
+        // Today's usage
         const startOfToday = new Date();
         startOfToday.setHours(0, 0, 0, 0);
 
@@ -413,14 +465,16 @@ class AIWalletService {
         ]);
 
         return {
-            budgetAmount: wallet.budgetAmount,
-            usedAmount: Number(wallet.usedAmount.toFixed(4)),
-            remainingAmount: Number(wallet.remainingAmount.toFixed(4)),
+            initialAmount: paisaToRupees(wallet.initialAmount),
+            budgetAmount: paisaToRupees(wallet.budgetAmount),
+            usedAmount: paisaToRupees(wallet.usedAmount),
+            remainingAmount: paisaToRupees(wallet.remainingAmount),
             currency: wallet.currency,
-            status: wallet.status,
+            status,
+            warningLevel: status,
+            warningMessage: warningMsg,
             totalRequests: wallet.totalRequests,
             lastUsageAt: wallet.lastUsageAt,
-            warningLevel,
             today: {
                 requests: today.todayRequests,
                 costInr: Number((today.todayCostInr || 0).toFixed(4)),
@@ -437,10 +491,7 @@ class AIWalletService {
     }
 
     /**
-     * Get usage history logs for a hospital.
-     * 
-     * @param {string|mongoose.Types.ObjectId} hospitalId 
-     * @param {number} [limit=30] 
+     * Get paginated usage history for a hospital.
      */
     async getUsageHistory(hospitalId, limit = 30) {
         const cleanLimit = Math.min(100, Math.max(1, parseInt(limit) || 30));
@@ -451,8 +502,57 @@ class AIWalletService {
     }
 
     /**
-     * Get AI Wallet overview across all hospitals (Super Admin only).
+     * Get transaction/usage history with doctor-level breakdown (Admin view).
      */
+    async getTransactions(hospitalId, { page = 1, limit = 30 } = {}) {
+        const cleanLimit = Math.min(100, Math.max(1, parseInt(limit) || 30));
+        const skip = (Math.max(1, parseInt(page) || 1) - 1) * cleanLimit;
+        const hId = new mongoose.Types.ObjectId(hospitalId);
+
+        const [logs, totalCount, doctorBreakdown] = await Promise.all([
+            AIUsageLog.find({ hospitalId: hId, status: 'SUCCESS' })
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(cleanLimit)
+                .lean(),
+            AIUsageLog.countDocuments({ hospitalId: hId, status: 'SUCCESS' }),
+            AIUsageLog.aggregate([
+                { $match: { hospitalId: hId, status: 'SUCCESS' } },
+                {
+                    $group: {
+                        _id: { userId: '$userId', userName: '$userName' },
+                        totalCost: { $sum: '$actualApiCost' },
+                        requestCount: { $sum: 1 },
+                        lastUsed: { $max: '$createdAt' }
+                    }
+                },
+                { $sort: { totalCost: -1 } }
+            ])
+        ]);
+
+        return {
+            transactions: logs.map(l => ({
+                ...l,
+                costFormatted: '₹' + (l.actualApiCost || 0).toFixed(2)
+            })),
+            total: totalCount,
+            page: Math.max(1, parseInt(page) || 1),
+            limit: cleanLimit,
+            totalPages: Math.ceil(totalCount / cleanLimit),
+            doctorBreakdown: doctorBreakdown.map(d => ({
+                userId: d._id.userId,
+                userName: d._id.userName || 'Doctor/Staff',
+                totalCostInr: Number((d.totalCost || 0).toFixed(2)),
+                requestCount: d.requestCount,
+                lastUsed: d.lastUsed
+            }))
+        };
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // SUPER ADMIN — ALL HOSPITALS
+    // ──────────────────────────────────────────────────────────────────────────
+
     async getAllHospitalWallets() {
         const hospitals = await Hospital.find({ isActive: true })
             .select('name slug city hospitalCode clinicType subscriptionPlan')
@@ -465,14 +565,11 @@ class AIWalletService {
         });
 
         return hospitals.map(h => {
-            const w = walletMap.get(String(h._id)) || {
-                budgetAmount: INITIAL_BUDGET_INR,
-                usedAmount: 0,
-                remainingAmount: INITIAL_BUDGET_INR,
-                currency: 'INR',
-                status: 'active',
-                totalRequests: 0
-            };
+            const w = walletMap.get(String(h._id));
+            const remaining = w ? w.remainingAmount : INITIAL_BUDGET_PAISE;
+            const budget = w ? w.budgetAmount : INITIAL_BUDGET_PAISE;
+            const used = w ? w.usedAmount : 0;
+            const status = w ? calculateWalletStatus(remaining) : 'ACTIVE';
 
             return {
                 hospitalId: h._id,
@@ -481,19 +578,25 @@ class AIWalletService {
                 city: h.city || '',
                 clinicType: h.clinicType || 'hospital',
                 plan: h.subscriptionPlan || 'enterprise',
-                budgetAmount: w.budgetAmount,
-                usedAmount: Number((w.usedAmount || 0).toFixed(2)),
-                remainingAmount: Number((w.remainingAmount || 0).toFixed(2)),
-                currency: w.currency || 'INR',
-                status: w.status || 'active',
-                totalRequests: w.totalRequests || 0,
-                warningLevel: this.getWarningLevel(w.remainingAmount, w.budgetAmount)
+                initialAmount: paisaToRupees(w ? w.initialAmount : INITIAL_BUDGET_PAISE),
+                budgetAmount: paisaToRupees(budget),
+                usedAmount: paisaToRupees(used),
+                remainingAmount: paisaToRupees(remaining),
+                currency: 'INR',
+                status,
+                warningLevel: status,
+                totalRequests: w ? w.totalRequests : 0
             };
         });
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // INITIALIZATION
+    // ──────────────────────────────────────────────────────────────────────────
+
     /**
-     * Initialization hook: Guarantee every existing hospital in the database has an AI Wallet.
+     * Ensure every existing hospital has an AI Wallet.
+     * Called once on server startup.
      */
     async ensureAllHospitalsHaveWallets() {
         try {
@@ -508,11 +611,123 @@ class AIWalletService {
                 }
             }
 
+            // Migrate old float-based wallets to paise
+            await this._migrateAllWalletsToPaise();
+
             if (createdCount > 0) {
                 console.log(`✅ [AI Wallet] Initialized ₹2,000 AI Wallet for ${createdCount} hospital(s).`);
             }
         } catch (err) {
             console.error('⚠️ [AI Wallet] Error in ensureAllHospitalsHaveWallets:', err.message);
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // PRIVATE HELPERS
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Format wallet document to API response (paise → rupees).
+     */
+    _formatWalletResponse(wallet, overrideStatus) {
+        if (!wallet) return null;
+        const status = overrideStatus || calculateWalletStatus(wallet.remainingAmount, {
+            low: wallet.lowBalanceThreshold,
+            critical: wallet.criticalBalanceThreshold,
+            veryCritical: wallet.veryCriticalBalanceThreshold
+        });
+        return {
+            initialAmount: paisaToRupees(wallet.initialAmount || INITIAL_BUDGET_PAISE),
+            budgetAmount: paisaToRupees(wallet.budgetAmount),
+            usedAmount: paisaToRupees(wallet.usedAmount),
+            remainingAmount: paisaToRupees(wallet.remainingAmount),
+            currency: wallet.currency || 'INR',
+            status,
+            warningLevel: status,
+            warningMessage: getWarningMessage(status, wallet.remainingAmount),
+            totalRequests: wallet.totalRequests || 0,
+            lastUsageAt: wallet.lastUsageAt
+        };
+    }
+
+    /**
+     * Emit real-time wallet update via Socket.IO to all users in the hospital room.
+     */
+    _emitWalletUpdate(hospitalId, wallet, status) {
+        try {
+            // Access the Express app's io instance
+            const app = require('../../app');
+            const io = app.get('io');
+            if (!io) return;
+
+            const room = `hospital_${String(hospitalId)}`;
+            io.to(room).emit('AI_WALLET_UPDATED', {
+                hospitalId: String(hospitalId),
+                remainingAmount: paisaToRupees(wallet.remainingAmount),
+                usedAmount: paisaToRupees(wallet.usedAmount),
+                budgetAmount: paisaToRupees(wallet.budgetAmount),
+                status,
+                warningLevel: status,
+                warningMessage: getWarningMessage(status, wallet.remainingAmount),
+                totalRequests: wallet.totalRequests,
+                timestamp: new Date().toISOString()
+            });
+        } catch (emitErr) {
+            // Socket.IO might not be initialized yet during startup
+            // This is non-critical — frontend also refreshes wallet after each AI call
+        }
+    }
+
+    /**
+     * Auto-migrate a single wallet from old float INR to integer paise.
+     * Detects old format by checking if budget < 5000 (likely ₹ not paise).
+     */
+    async _migrateWalletToPaise(wallet) {
+        try {
+            if (wallet.budgetAmount < 5000) {
+                const newBudget = rupeesToPaisa(wallet.budgetAmount);
+                const newUsed = rupeesToPaisa(wallet.usedAmount);
+                const newRemaining = rupeesToPaisa(wallet.remainingAmount);
+                const newInitial = rupeesToPaisa(wallet.initialAmount || wallet.budgetAmount);
+
+                await AIWallet.updateOne(
+                    { _id: wallet._id },
+                    {
+                        $set: {
+                            initialAmount: newInitial,
+                            budgetAmount: newBudget,
+                            usedAmount: newUsed,
+                            remainingAmount: newRemaining,
+                            lowBalanceThreshold: 50000,
+                            criticalBalanceThreshold: 25000,
+                            veryCriticalBalanceThreshold: 10000,
+                            status: calculateWalletStatus(newRemaining)
+                        }
+                    }
+                );
+
+                console.log(`  ✅ [AI Wallet Migration] Migrated hospital ${wallet.hospitalId}: ₹${wallet.budgetAmount} → ${newBudget} paise`);
+            }
+        } catch (err) {
+            console.error(`  ⚠️ [AI Wallet Migration] Error for hospital ${wallet.hospitalId}:`, err.message);
+        }
+    }
+
+    /**
+     * Batch migrate all old float-based wallets to paise.
+     */
+    async _migrateAllWalletsToPaise() {
+        try {
+            // Find wallets that look like they're stored in INR (budget < 5000)
+            const oldWallets = await AIWallet.find({ budgetAmount: { $lt: 5000 } });
+            if (oldWallets.length === 0) return;
+
+            console.log(`🔄 [AI Wallet] Migrating ${oldWallets.length} wallet(s) from INR to paise...`);
+            for (const w of oldWallets) {
+                await this._migrateWalletToPaise(w);
+            }
+        } catch (err) {
+            console.error('⚠️ [AI Wallet Migration] Error:', err.message);
         }
     }
 }

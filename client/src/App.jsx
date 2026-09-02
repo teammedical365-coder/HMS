@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'
 import { Toaster } from 'react-hot-toast'
 import MainRoutes from './routes/Mainroutes'
 import Lenis from 'lenis'
+import 'lenis/dist/lenis.css'
 import './App.css'
 import socket from './utils/socket'
 import { useAuth, useAppDispatch } from './store/hooks'
@@ -55,22 +56,30 @@ const App = () => {
     return () => { socket.disconnect(); };
   }, [isAuthenticated, user, dispatch]);
 
-  // Smooth scrolling
+  // Smooth scrolling with official Lenis setup
   useEffect(() => {
     const lenis = new Lenis({
-      duration: 1.2,
+      duration: 1.0,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      direction: 'vertical',
-      smooth: true,
+      orientation: 'vertical',
+      gestureOrientation: 'vertical',
+      smoothWheel: true,
+      wheelMultiplier: 1.0,
+      touchMultiplier: 1.5,
     });
 
+    let animId;
     function raf(time) {
       lenis.raf(time);
-      requestAnimationFrame(raf);
+      animId = requestAnimationFrame(raf);
     }
 
-    requestAnimationFrame(raf);
-    return () => { lenis.destroy(); };
+    animId = requestAnimationFrame(raf);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      lenis.destroy();
+    };
   }, []);
 
   return (

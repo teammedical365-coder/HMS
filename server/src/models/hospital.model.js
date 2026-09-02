@@ -242,4 +242,42 @@ hospitalSchema.statics.ensureHospitalCode = async function (hospital) {
     return 'HSP';
 };
 
+// ── Post-save Hook: Auto-create AI Wallet for new hospitals ──
+hospitalSchema.post('save', async function (doc) {
+    try {
+        // Only trigger for newly created hospitals (check if createdAt ≈ updatedAt)
+        const isNew = doc.createdAt && doc.updatedAt &&
+            Math.abs(doc.createdAt.getTime() - doc.updatedAt.getTime()) < 5000;
+        if (!isNew) return;
+
+        const AIWallet = mongoose.model('AIWallet');
+        await AIWallet.findOneAndUpdate(
+            { hospitalId: doc._id },
+            {
+                $setOnInsert: {
+                    hospitalId: doc._id,
+                    initialAmount: 200000,  // ₹2,000.00 in paise
+                    budgetAmount: 200000,
+                    usedAmount: 0,
+                    remainingAmount: 200000,
+                    currency: 'INR',
+                    status: 'ACTIVE',
+                    lowBalanceThreshold: 50000,
+                    criticalBalanceThreshold: 25000,
+                    veryCriticalBalanceThreshold: 10000,
+                    totalRequests: 0,
+                    lastUsageAt: null
+                }
+            },
+            { upsert: true, new: true }
+        );
+        console.log(`✅ [AI Wallet] Auto-created ₹2,000 wallet for new hospital: ${doc.name}`);
+    } catch (err) {
+        // Non-fatal: wallet will be created on first access via getOrCreateWallet()
+        if (err.code !== 11000) { // Ignore duplicate key (already exists)
+            console.warn(`⚠️ [AI Wallet] Auto-create warning for hospital ${doc.name}:`, err.message);
+        }
+    }
+});
+
 module.exports = mongoose.model('Hospital', hospitalSchema);

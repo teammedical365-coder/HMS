@@ -339,21 +339,37 @@ router.post('/analyze', verifyToken, async (req, res) => {
 
 // Route: POST /api/reports/compare
 router.post('/compare', verifyToken, async (req, res) => {
+  const requestId = `cmp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
   try {
-    const { latestFileUrl, latestMimeType, previousFileUrl, previousMimeType } = req.body;
+    const { 
+      latestFileUrl, 
+      latestMimeType = 'application/pdf', 
+      previousFileUrl, 
+      previousMimeType = 'application/pdf',
+      url1,
+      url2,
+      mime1,
+      mime2,
+      patientId 
+    } = req.body;
     
-    if (!latestFileUrl || !previousFileUrl) {
-      return res.status(400).json({ success: false, message: "Both latest and previous report files are required." });
+    const targetLatestUrl = latestFileUrl || url1;
+    const targetPrevUrl = previousFileUrl || url2;
+    const targetLatestMime = latestMimeType || mime1 || 'application/pdf';
+    const targetPrevMime = previousMimeType || mime2 || 'application/pdf';
+
+    if (!targetLatestUrl || !targetPrevUrl) {
+      return res.status(400).json({ success: false, message: "Both latest and previous report file URLs are required." });
     }
     
     let isDoctor = false;
     if (req.user && req.user.role) {
       const roleStr = (req.user._roleData?.name || req.user.role).toString().toLowerCase();
-      if (roleStr.includes('doctor')) isDoctor = true;
+      if (roleStr.includes('doctor') || roleStr.includes('admin')) isDoctor = true;
     }
     
     if (!isDoctor) {
-      return res.status(403).json({ success: false, message: "Only doctors can compare reports." });
+      return res.status(403).json({ success: false, message: "Only medical staff / doctors can compare reports." });
     }
 
     const hospitalId = req.user?.hospitalId;
@@ -361,7 +377,20 @@ router.post('/compare', verifyToken, async (req, res) => {
       return res.status(400).json({ success: false, message: "No hospital associated with this user session." });
     }
 
-    // 1. PRE-CHECK AI WALLET BUDGET
+    // 1. Security check: If patientId provided, verify patient belongs to hospital
+    if (patientId) {
+      const User = require('../models/user.model');
+      const mongoose = require('mongoose');
+      const isObjectId = mongoose.Types.ObjectId.isValid(patientId) && String(patientId).length === 24;
+      const userQuery = isObjectId ? { _id: patientId } : { $or: [{ patientId }, { mrn: patientId }] };
+      const patient = await User.findOne(userQuery).select('hospitalId').lean();
+      
+      if (patient && patient.hospitalId && String(patient.hospitalId) !== String(hospitalId)) {
+        return res.status(403).json({ success: false, message: "Access denied. Patient belongs to another hospital." });
+      }
+    }
+
+    // 2. PRE-CHECK AI WALLET BUDGET
     const balanceCheck = await aiWalletService.checkBalance(hospitalId);
     if (!balanceCheck.allowed) {
       return res.status(402).json({
@@ -376,29 +405,41 @@ router.post('/compare', verifyToken, async (req, res) => {
       userId: req.user?._id,
       userName: req.user?.name || req.user?.username || 'Doctor',
       userRole: 'doctor',
-      hospitalId: hospitalId
+      hospitalId: hospitalId,
+      patientId: patientId || null
     };
 
-    const latestResponse = await axios.get(latestFileUrl, { responseType: 'arraybuffer' });
-    const prevResponse = await axios.get(previousFileUrl, { responseType: 'arraybuffer' });
+    // 3. Fetch report data
+    const [latestResponse, prevResponse] = await Promise.all([
+      axios.get(targetLatestUrl, { responseType: 'arraybuffer', timeout: 20000 }),
+      axios.get(targetPrevUrl, { responseType: 'arraybuffer', timeout: 20000 })
+    ]);
 
     const latestBase64 = Buffer.from(latestResponse.data, 'binary').toString('base64');
     const prevBase64 = Buffer.from(prevResponse.data, 'binary').toString('base64');
 
-    const { comparison, usage } = await aiService.compareReports(latestBase64, latestMimeType, prevBase64, previousMimeType, userContext);
+    // 4. Execute comparison using centralized Gemini model
+    const { comparison, usage } = await aiService.compareReports(
+      latestBase64, 
+      targetLatestMime, 
+      prevBase64, 
+      targetPrevMime, 
+      userContext
+    );
 
     res.status(200).json({
       success: true,
       comparison,
       usage,
-      wallet: usage.wallet || null
+      wallet: usage?.wallet || null
     });
 
   } catch (error) {
-    console.error('[Compare Reports Route] Error:', error);
+    console.error(`[Compare Reports Error] reqId: ${requestId} | hosp: ${req.user?.hospitalId} | user: ${req.user?._id} |`, error.message);
     res.status(500).json({
       success: false,
-      message: error.message || "Failed to compare reports."
+      message: "Unable to compare these reports right now. Please try again.",
+      requestId
     });
   }
 });

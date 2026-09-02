@@ -1,0 +1,211 @@
+/* Language Selector Styles - Compact World Edition */
+.ql-lang-selector-wrapper {
+    position: relative;
+    display: inline-block;
+    z-index: 100;
+}
+
+.ql-lang-trigger-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 9px;
+    padding: 6px 10px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #0f4c47;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(15, 23, 42, 0.05);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+    height: 34px;
+    box-sizing: border-box;
+}
+
+.ql-lang-trigger-btn:hover {
+    background: #f0fdfa;
+    border-color: #0d9488;
+    color: #0d9488;
+    box-shadow: 0 4px 10px rgba(13, 148, 136, 0.15);
+    transform: translateY(-1px);
+}
+
+.ql-lang-trigger-btn.active {
+    background: #f0fdfa;
+    border-color: #0d9488;
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.18);
+}
+
+.ql-lang-icon-wrap {
+    color: #0d9488;
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+}
+
+.ql-lang-flag {
+    font-size: 14px;
+    line-height: 1;
+}
+
+.ql-lang-short-code {
+    font-weight: 800;
+    color: #0f172a;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+}
+
+.ql-lang-chevron {
+    font-size: 10px;
+    color: #64748b;
+    transition: transform 0.2s ease;
+    margin-left: 2px;
+}
+
+.ql-lang-chevron.open {
+    transform: rotate(180deg);
+}
+
+/* Dropdown Menu */
+.ql-lang-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: 250px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    animation: langDropdownIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 999;
+}
+
+@keyframes langDropdownIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.ql-lang-search-box {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid #f1f5f9;
+    background: #f8fafc;
+    gap: 8px;
+}
+
+.ql-lang-search-icon {
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+.ql-lang-search-box input {
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 12px;
+    width: 100%;
+    color: #1e293b;
+    font-family: inherit;
+}
+
+.ql-lang-search-box input::placeholder {
+    color: #94a3b8;
+}
+
+/* Exactly 3 items visible at a time (~42px per item * 3 = 126px + padding) */
+.ql-lang-list {
+    max-height: 132px;
+    overflow-y: auto;
+    padding: 4px;
+    scroll-behavior: smooth;
+}
+
+.ql-lang-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.ql-lang-list::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+.ql-lang-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 6px 8px;
+    height: 40px;
+    box-sizing: border-box;
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+    gap: 8px;
+}
+
+.ql-lang-item:hover {
+    background: #f1f5f9;
+}
+
+.ql-lang-item.selected {
+    background: #f0fdfa;
+}
+
+.ql-lang-item.selected .ql-lang-item-native {
+    color: #0d9488;
+    font-weight: 700;
+}
+
+.ql-lang-item-flag {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.ql-lang-item-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.ql-lang-item-native {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ql-lang-item-english {
+    font-size: 10px;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ql-lang-check-icon {
+    color: #0d9488;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.ql-lang-no-results {
+    padding: 14px;
+    text-align: center;
+    font-size: 12px;
+    color: #94a3b8;
+}

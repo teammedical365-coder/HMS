@@ -4,55 +4,86 @@ const mongoose = require('mongoose');
  * AIWallet Model
  * Represents the hospital-level AI Credit / monetary API budget.
  * Each hospital has exactly ONE active wallet.
- * Initial Budget: ₹2,000 INR.
+ * 
+ * IMPORTANT: All monetary values are stored as INTEGER PAISE (1/100 of ₹1).
+ *   ₹2,000.00 = 200000 paise
+ *   ₹500.00   = 50000 paise
+ *   ₹0.01     = 1 paisa
+ * This eliminates JavaScript floating-point precision errors for financial calculations.
  */
 const aiWalletSchema = new mongoose.Schema({
     hospitalId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Hospital',
-        required: true,
-        unique: true
+        required: true
     },
-    // Total budget in INR (default ₹2,000)
-    budgetAmount: {
+
+    // ── Monetary Fields (stored as INTEGER PAISE) ──
+
+    // Original initial budget when wallet was created (in paise)
+    initialAmount: {
         type: Number,
-        default: 2000,
+        default: 200000, // ₹2,000.00
         required: true,
         min: 0
     },
-    // Total amount used in INR (accurate to 4 decimal places)
+    // Total budget including recharges (in paise)
+    budgetAmount: {
+        type: Number,
+        default: 200000, // ₹2,000.00
+        required: true,
+        min: 0
+    },
+    // Total amount consumed by AI operations (in paise)
     usedAmount: {
         type: Number,
         default: 0,
         required: true,
         min: 0
     },
-    // Remaining available budget in INR (budgetAmount - usedAmount)
+    // Available balance = budgetAmount - usedAmount (in paise)
     remainingAmount: {
         type: Number,
-        default: 2000,
+        default: 200000, // ₹2,000.00
         required: true,
         min: 0
     },
-    // Currency of budget (default INR)
+
+    // Currency code (always INR for Indian hospitals)
     currency: {
         type: String,
         default: 'INR',
         trim: true
     },
-    // Status of the AI wallet: active, suspended, exhausted
+
+    // ── Wallet Status ──
+    // Computed from remainingAmount using calculateWalletStatus()
     status: {
         type: String,
-        enum: ['active', 'suspended', 'exhausted'],
-        default: 'active'
+        enum: ['ACTIVE', 'LOW', 'CRITICAL', 'VERY_CRITICAL', 'EXHAUSTED', 'SUSPENDED'],
+        default: 'ACTIVE'
     },
-    // Total AI request count for quick summary metrics
+
+    // ── Warning Thresholds (stored as INTEGER PAISE) ──
+    lowBalanceThreshold: {
+        type: Number,
+        default: 50000   // ₹500.00
+    },
+    criticalBalanceThreshold: {
+        type: Number,
+        default: 25000   // ₹250.00
+    },
+    veryCriticalBalanceThreshold: {
+        type: Number,
+        default: 10000   // ₹100.00
+    },
+
+    // ── Usage Metrics ──
     totalRequests: {
         type: Number,
         default: 0,
         min: 0
     },
-    // Timestamp of the latest AI usage
     lastUsageAt: {
         type: Date,
         default: null
@@ -61,7 +92,8 @@ const aiWalletSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Indexes for high performance
+// ── Indexes ──
+// Enforce one wallet per hospital (prevents duplicates under concurrency)
 aiWalletSchema.index({ hospitalId: 1 }, { unique: true });
 aiWalletSchema.index({ status: 1 });
 

@@ -1,0 +1,289 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   AI RESPONSE RENDERER — COLORFUL & RICH MEDICAL DESIGN SYSTEM
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.ai-response-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e0e7ff;
+}
+
+.ai-brand-tag {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.ai-brand-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+    animation: aiPulse 2s infinite;
+}
+
+@keyframes aiPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+.ai-brand-name {
+    font-size: 12px;
+    font-weight: 800;
+    color: #4338ca;
+    letter-spacing: 0.2px;
+}
+
+.ai-brand-sub {
+    font-size: 10px;
+    font-weight: 700;
+    color: #059669;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    padding: 1px 7px;
+    border-radius: 6px;
+}
+
+.ai-btn-copy {
+    background: #ffffff;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    padding: 3px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #4f46e5;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+
+.ai-btn-copy:hover {
+    background: #ede9fe;
+    color: #4338ca;
+    border-color: #a5b4fc;
+}
+
+.ai-btn-copy.copied {
+    background: #dcfce7;
+    color: #16a34a;
+    border-color: #86efac;
+}
+
+/* ── Colorful Markdown Body ── */
+.ai-markdown-body {
+    font-size: 13.5px;
+    line-height: 1.68;
+    color: #0f172a;
+    word-break: break-word;
+    overflow-x: hidden;
+}
+
+.ai-markdown-body p {
+    margin: 0 0 8px 0;
+}
+
+.ai-markdown-body p:last-child {
+    margin-bottom: 0;
+}
+
+/* Headings with Rich Gradient / Colors */
+.ai-md-h1, .ai-md-h2, .ai-md-h3 {
+    font-weight: 700;
+    margin: 12px 0 6px 0;
+    line-height: 1.35;
+}
+
+.ai-md-h1 {
+    font-size: 15px;
+    color: #312e81;
+    border-bottom: 1.5px solid #e0e7ff;
+    padding-bottom: 4px;
+}
+
+.ai-md-h2 {
+    font-size: 14px;
+    color: #4338ca;
+}
+
+.ai-md-h3 {
+    font-size: 13px;
+    color: #0369a1;
+}
+
+/* Lists with Colorful Bullets */
+.ai-md-ul, .ai-md-ol {
+    margin: 6px 0 10px 0;
+    padding-left: 20px;
+}
+
+.ai-md-li {
+    margin-bottom: 5px;
+    line-height: 1.55;
+    color: #1e293b;
+}
+
+.ai-md-li::marker {
+    color: #6366f1;
+    font-weight: bold;
+}
+
+/* Bold / High-Contrast Clinical Metrics */
+.ai-markdown-body strong {
+    color: #1e1b4b;
+    font-weight: 700;
+}
+
+/* Medical Highlights & Blockquotes */
+.ai-md-blockquote {
+    margin: 8px 0;
+    padding: 8px 12px;
+    background: #f0fdf4;
+    border-left: 3.5px solid #10b981;
+    border-radius: 6px;
+    font-size: 12.5px;
+    color: #065f46;
+}
+
+/* Code & Medical Badges */
+.ai-md-inline-code {
+    background: #ede9fe;
+    color: #5b21b6;
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', Consolas, Monaco, monospace;
+    border: 1px solid #ddd6fe;
+}
+
+.ai-md-block-code {
+    display: block;
+    background: #1e1b4b;
+    color: #e0e7ff;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', Consolas, Monaco, monospace;
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+/* Horizontal Rule */
+.ai-md-hr {
+    border: none;
+    border-top: 1px solid #e0e7ff;
+    margin: 12px 0;
+}
+
+/* ── Responsive Markdown Tables ── */
+.ai-markdown-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    margin: 10px 0;
+    border: 1px solid #c7d2fe;
+    border-radius: 10px;
+    background: #ffffff;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    box-shadow: 0 1px 3px rgba(99, 102, 241, 0.05);
+}
+
+.ai-markdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    text-align: left;
+    min-width: 280px;
+}
+
+.ai-table-th {
+    background: #ede9fe;
+    color: #4338ca;
+    font-weight: 700;
+    padding: 8px 12px;
+    border-bottom: 1.5px solid #c7d2fe;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.ai-table-td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #1e293b;
+}
+
+.ai-markdown-table tr:last-child .ai-table-td {
+    border-bottom: none;
+}
+
+.ai-markdown-table tr:hover .ai-table-td {
+    background: #f8faff;
+}
+
+/* ── Typing Indicator ── */
+.ai-typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+}
+
+.ai-typing-label {
+    font-size: 12.5px;
+    color: #6366f1;
+    font-weight: 600;
+}
+
+/* ── Footer Reactions & Timestamp ── */
+.cca-msg-footer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.ai-reactions-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ai-btn-reaction {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    width: 26px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.ai-btn-reaction:hover {
+    background: #ede9fe;
+    color: #6366f1;
+    border-color: #c7d2fe;
+}
+
+.ai-btn-reaction.active {
+    background: #ede9fe;
+    color: #4f46e5;
+    border-color: #6366f1;
+}
+
+.ai-time-label {
+    font-size: 10px;
+    color: #94a3b8;
+}

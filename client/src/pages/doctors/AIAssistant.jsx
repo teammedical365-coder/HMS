@@ -1,67 +1,153 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiSearch, FiUser, FiFileText, FiImage, FiPaperclip, FiX, FiAlertTriangle, FiInfo, FiMail } from 'react-icons/fi';
+import { 
+    FiSearch, FiUser, FiFileText, FiImage, FiPaperclip, FiMic, 
+    FiSend, FiRefreshCw, FiTrendingUp, FiTrendingDown, FiAlertCircle, 
+    FiDownload, FiPrinter, FiMaximize2, FiZoomIn, FiZoomOut, 
+    FiRotateCw, FiMoreVertical, FiFilter, FiBell, FiChevronDown, 
+    FiPlus, FiInfo, FiTrash2, FiActivity, FiUsers, FiCalendar, 
+    FiDollarSign, FiClock, FiCheck, FiHeadphones, FiX, FiAlertTriangle,
+    FiCheckCircle, FiThumbsUp, FiThumbsDown, FiChevronUp, FiEye, FiExternalLink
+} from 'react-icons/fi';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { reportAPI, patientAPI, doctorAPI, aiWalletAPI } from '../../utils/api';
+import socket from '../../utils/socket';
+import AIResponseRenderer from '../../components/AIResponseRenderer';
 import './AIAssistant.css';
 
-// Helper: detect if a MIME type is an image
-const isImageMime = (mime) => mime && mime.startsWith('image/');
-const isPdfMime = (mime) => mime === 'application/pdf';
+// ── Currency & Status Helpers ──
+const formatINR = (amount) => {
+    const num = Number(amount) || 0;
+    return '₹' + num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
-const highlightKeyword = (text, keyword) => {
-    if (!keyword || !text) return text;
-    const parts = text.split(new RegExp(`(${keyword})`, 'gi'));
-    return (
-        <span>
-            {parts.map((part, i) => 
-                part.toLowerCase() === keyword.toLowerCase() ? (
-                    <strong key={i} style={{ backgroundColor: '#fef08a', color: '#166534', padding: '0 4px', borderRadius: '4px' }}>
-                        {part}
-                    </strong>
-                ) : (
-                    <span key={i}>{part}</span>
-                )
-            )}
-        </span>
-    );
+const getWalletStatusInfo = (status) => {
+    switch (status) {
+        case 'LOW':           return { label: 'Low Balance', color: '#f59e0b', bgColor: '#fef3c7', icon: '⚠️' };
+        case 'CRITICAL':      return { label: 'Critical', color: '#f97316', bgColor: '#ffedd5', icon: '🔶' };
+        case 'VERY_CRITICAL': return { label: 'Very Low', color: '#ef4444', bgColor: '#fee2e2', icon: '🔴' };
+        case 'EXHAUSTED':     return { label: 'Exhausted', color: '#dc2626', bgColor: '#fecaca', icon: '🚫' };
+        default:              return { label: 'Active', color: '#16a34a', bgColor: '#dcfce7', icon: '✅' };
+    }
+};
+
+// Helper: detect MIME types
+const isImageMime = (mime, url = '') => {
+    if (mime && mime.startsWith('image/')) return true;
+    if (url && (url.endsWith('.jpg') || url.endsWith('.jpeg') || url.endsWith('.png') || url.endsWith('.webp'))) return true;
+    return false;
+};
+
+const isPdfMime = (mime, url = '') => {
+    if (mime === 'application/pdf') return true;
+    if (url && url.endsWith('.pdf')) return true;
+    return false;
 };
 
 const AIAssistant = () => {
+    // ── Patient State ──
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
-
     const [allPatients, setAllPatients] = useState([]);
     const [isFetchingPatients, setIsFetchingPatients] = useState(true);
-
     const [selectedPatient, setSelectedPatient] = useState(null);
+    const [showPatientDetails, setShowPatientDetails] = useState(false);
+
+    // ── Reports State ──
     const [reports, setReports] = useState([]);
-    const [isReportsLoading, setIsReportsLoading] = useState(false);
-
+    const [reportFilterQuery, setReportFilterQuery] = useState('');
     const [selectedReport, setSelectedReport] = useState(null);
+    const [isReportsLoading, setIsReportsLoading] = useState(false);
+    const [isReportSearchOpen, setIsReportSearchOpen] = useState(false);
+
+    // ── Document Preview Modal State ──
+    const [previewDoc, setPreviewDoc] = useState(null);
+
+    // ── AI Summary State ──
     const [summary, setSummary] = useState(null);
-    const [summaryCost, setSummaryCost] = useState(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState(null);
+    const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+    const [summaryError, setSummaryError] = useState(null);
 
-    const [reportSearchQuery, setReportSearchQuery] = useState('');
-    const [reportSearchResults, setReportSearchResults] = useState(null);
-    const [reportSearchError, setReportSearchError] = useState(null);
+    // ── Inside Report Search State ──
+    const [insideSearchQuery, setInsideSearchQuery] = useState('');
+    const [insideSearchResults, setInsideSearchResults] = useState([]);
+    const [isSearchingInside, setIsSearchingInside] = useState(false);
+    const [insideSearchMessage, setInsideSearchMessage] = useState(null);
 
-    const [comparison, setComparison] = useState(null);
+    // ── Compare Reports State ──
+    const [compareReport1, setCompareReport1] = useState('');
+    const [compareReport2, setCompareReport2] = useState('');
+    const [comparisonResult, setComparisonResult] = useState(null);
     const [isComparing, setIsComparing] = useState(false);
     const [compareError, setCompareError] = useState(null);
-
-    const [historySummary, setHistorySummary] = useState(null);
-    const [isHistoryLoading, setIsHistoryLoading] = useState(false);
-    const [historyError, setHistoryError] = useState(null);
 
     // ── AI Wallet & Credit State ──
     const [wallet, setWallet] = useState(null);
     const [isWalletOpen, setIsWalletOpen] = useState(false);
     const [walletLogs, setWalletLogs] = useState([]);
     const [isWalletLoading, setIsWalletLoading] = useState(false);
-    const [isContactModalOpen, setIsContactModalOpen] = useState(false);
 
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    // ── Chat State ──
+    const [chatMessages, setChatMessages] = useState([
+        {
+            role: 'ai',
+            text: "Hello! I'm your AI Assistant.\nYou can ask me anything about this patient's reports, labs, medications or health trends.\nHow can I help you today?",
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+    ]);
+    const [chatInput, setChatInput] = useState('');
+    const [isChatLoading, setIsChatLoading] = useState(false);
+    const chatEndRef = useRef(null);
+
+    // Fetch initial data
+    useEffect(() => {
+        fetchWalletData();
+        fetchDoctorPatients();
+    }, []);
+
+    // Scroll chat to bottom
+    useEffect(() => {
+        if (chatEndRef.current) {
+            chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [chatMessages, isChatLoading]);
+
+    // ── Socket.IO: Real-time AI Wallet sync across all hospital doctors ──
+    useEffect(() => {
+        let hospitalId = null;
+        try {
+            const authStr = localStorage.getItem('user') || localStorage.getItem('authUser');
+            if (authStr) {
+                const authData = JSON.parse(authStr);
+                hospitalId = authData.hospitalId || authData.user?.hospitalId;
+            }
+        } catch (e) { /* ignore */ }
+
+        if (!hospitalId) return;
+
+        if (!socket.connected) socket.connect();
+        socket.emit('joinHospitalRoom', hospitalId);
+
+        const handleWalletUpdate = (data) => {
+            if (data && data.hospitalId === hospitalId) {
+                setWallet(prev => ({
+                    ...prev,
+                    remainingAmount: data.remainingAmount,
+                    usedAmount: data.usedAmount,
+                    budgetAmount: data.budgetAmount,
+                    status: data.status || data.warningLevel,
+                    warningLevel: data.warningLevel,
+                    warningMessage: data.warningMessage
+                }));
+            }
+        };
+
+        socket.on('AI_WALLET_UPDATED', handleWalletUpdate);
+
+        return () => {
+            socket.off('AI_WALLET_UPDATED', handleWalletUpdate);
+        };
+    }, []);
 
     const fetchWalletData = async () => {
         try {
@@ -90,1340 +176,1050 @@ const AIAssistant = () => {
         }
     };
 
-    const handleOpenWalletModal = () => {
-        setIsWalletOpen(true);
-        fetchWalletModalData();
-    };
-
-    // ── AI Clinical Chat state (session-only) ──
-    const [chatMessages, setChatMessages] = useState([]);
-    const [chatInput, setChatInput] = useState('');
-    const [isChatLoading, setIsChatLoading] = useState(false);
-    const chatEndRef = useRef(null);
-    const chatTextareaRef = useRef(null);
-
-    // Chat media attachment state
-    const [chatAttachments, setChatAttachments] = useState([]); // [{url, mimeType, name, previewUrl}]
-
-    const CHAT_SUGGESTIONS = [
-        'Explain this report',
-        'Summarize abnormalities',
-        'Show important findings',
-        'Explain medical terms',
-        'Compare latest report',
-    ];
-
-    // Auto-scroll to latest message
-    useEffect(() => {
-        if (chatEndRef.current) {
-            chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
-    }, [chatMessages, isChatLoading]);
-
-    // Initial wallet fetch on component mount
-    useEffect(() => {
-        fetchWalletData();
-    }, []);
-
-    const isExhausted = wallet && (wallet.remainingAmount <= 0 || wallet.status === 'exhausted');
-
-    const handleChatSend = async (overrideText) => {
-        const text = (overrideText || chatInput).trim();
-        if (!text || !selectedPatient) return;
-
-        if (isExhausted) {
-            setIsContactModalOpen(true);
-            return;
-        }
-
-        const currentAttachments = [...chatAttachments];
-        const doctorMsg = { role: 'doctor', text, timestamp: new Date(), attachments: currentAttachments.length > 0 ? currentAttachments : undefined };
-        setChatMessages(prev => [...prev, doctorMsg]);
-        setChatInput('');
-        setChatAttachments([]);
-        if (chatTextareaRef.current) chatTextareaRef.current.style.height = 'auto';
-        setIsChatLoading(true);
-
+    const fetchDoctorPatients = async () => {
+        setIsFetchingPatients(true);
         try {
-            const patientContext = selectedPatient ? `Context: Patient name is ${selectedPatient.name}, age ${selectedPatient.profile?.age || 'unknown'}, gender ${selectedPatient.profile?.gender || 'unknown'}. ` : '';
-            
-            const apiMessages = chatMessages.map(m => ({
-                role: m.role === 'ai' ? 'assistant' : 'user',
-                content: m.text
-            }));
-            
-            apiMessages.push({ role: 'user', content: patientContext + text });
-            const mediaUrls = currentAttachments.map(a => ({ url: a.url, mimeType: a.mimeType }));
-
-            const res = await reportAPI.chatWithAssistant(apiMessages, mediaUrls.length > 0 ? mediaUrls : undefined);
-            if (res.success && res.reply) {
-                const aiMsg = { 
-                    role: 'ai', 
-                    text: res.reply, 
-                    cost: res.usage?.actualApiCost || 0,
-                    timestamp: new Date() 
+            const res = await doctorAPI.getPatients();
+            if (res && res.success && Array.isArray(res.patients) && res.patients.length > 0) {
+                setAllPatients(res.patients);
+                const p = res.patients[0];
+                const patientObj = {
+                    _id: p._id,
+                    name: p.name || 'Patient',
+                    status: 'Active',
+                    profile: {
+                        mrn: p.profile?.mrn || p.patientId || p.mrn || 'CIT-' + String(p._id).slice(-4),
+                        gender: p.profile?.gender || p.gender || 'Not specified',
+                        age: p.profile?.age || p.age || '--',
+                        phone: p.phone || p.mobile || 'Not available'
+                    }
                 };
-                setChatMessages(prev => [...prev, aiMsg]);
-                if (res.wallet) {
-                    setWallet(prev => ({ ...prev, ...res.wallet }));
-                } else {
-                    fetchWalletData();
-                }
+                setSelectedPatient(patientObj);
+                loadPatientDocuments(p._id);
             } else {
-                throw new Error(res.message || "Failed to get AI response.");
+                setAllPatients([]);
+                setSelectedPatient(null);
+                setReports([]);
             }
         } catch (err) {
-            console.error("AI Chat Error:", err);
-            const isInsufficient = err?.response?.status === 402 || err?.response?.data?.code === 'INSUFFICIENT_AI_CREDITS';
-            if (isInsufficient) {
-                fetchWalletData();
-                const errorMsg = { 
-                    role: 'ai', 
-                    text: `⚠️ AI Credits Exhausted. Your hospital has used its available AI budget. Please contact your administrator to continue using the AI Assistant.`, 
-                    timestamp: new Date() 
-                };
-                setChatMessages(prev => [...prev, errorMsg]);
-            } else {
-                const errorMsg = { role: 'ai', text: `Sorry, I encountered an error: ${err.response?.data?.message || err.message || "Failed to get response."}`, timestamp: new Date() };
-                setChatMessages(prev => [...prev, errorMsg]);
-            }
+            console.error("Error fetching patients:", err);
+            setAllPatients([]);
         } finally {
-            setIsChatLoading(false);
+            setIsFetchingPatients(false);
         }
     };
 
-    const handleChatKeyDown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleChatSend();
-        }
+    const isReportSelected = (r) => {
+        if (!selectedReport || !r) return false;
+        if (selectedReport._id && r._id) return String(selectedReport._id) === String(r._id);
+        if (selectedReport.url && r.url) return selectedReport.url === r.url;
+        if (selectedReport.fileUrl && r.fileUrl) return selectedReport.fileUrl === r.fileUrl;
+        if (selectedReport.fileName && r.fileName) return selectedReport.fileName === r.fileName;
+        if (selectedReport.name && r.name) return selectedReport.name === r.name;
+        return false;
     };
 
-    const handleTextareaInput = (e) => {
-        setChatInput(e.target.value);
-        e.target.style.height = 'auto';
-        e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-    };
+    const loadPatientDocuments = async (patientId) => {
+        setIsReportsLoading(true);
+        setSummary(null);
+        setSelectedReport(null); // Do not auto-select any report
+        setInsideSearchResults([]);
+        setInsideSearchMessage(null);
+        setComparisonResult(null);
 
-    // Fetch only the doctor's department patients on mount
-    useEffect(() => {
-        const fetchDoctorPatients = async () => {
-            try {
-                const res = await doctorAPI.getPatients();
-                if (res && res.success && res.patients) {
-                    setAllPatients(res.patients);
+        try {
+            const res = await patientAPI.getDocuments(patientId);
+            if (res && res.success && Array.isArray(res.documents) && res.documents.length > 0) {
+                setReports(res.documents);
+                setSelectedReport(null); // Wait for explicit doctor selection
+                if (res.documents.length >= 2) {
+                    setCompareReport1(res.documents[0].url || res.documents[0]._id || '');
+                    setCompareReport2(res.documents[1].url || res.documents[1]._id || '');
+                } else if (res.documents.length === 1) {
+                    setCompareReport1(res.documents[0].url || res.documents[0]._id || '');
+                    setCompareReport2(res.documents[0].url || res.documents[0]._id || '');
                 }
-            } catch (err) {
-                console.error("Error fetching doctor's patients:", err);
-            } finally {
-                setIsFetchingPatients(false);
+            } else {
+                setReports([]);
+                setSelectedReport(null);
+                setCompareReport1('');
+                setCompareReport2('');
             }
-        };
-        fetchDoctorPatients();
-    }, []);
+        } catch (err) {
+            console.warn("Error loading patient documents:", err?.message);
+            setReports([]);
+            setSelectedReport(null);
+        } finally {
+            setIsReportsLoading(false);
+        }
+    };
 
-    // Local filter based on name, MRN or patientId
+    // Patient autocomplete search
     useEffect(() => {
-        if (!searchQuery || searchQuery.trim().length < 2) {
+        if (!searchQuery || searchQuery.trim().length < 1) {
             setSearchResults([]);
             return;
         }
         const q = searchQuery.toLowerCase().trim();
         const filtered = allPatients.filter(p => {
             const nameMatch = p.name && p.name.toLowerCase().includes(q);
-            const idMatch = p.patientId && p.patientId.toLowerCase().includes(q);
-            const mrnMatch = p.profile?.mrn && p.profile.mrn.toLowerCase().includes(q);
-            return nameMatch || idMatch || mrnMatch;
+            const mrnMatch = (p.profile?.mrn || p.patientId || '').toLowerCase().includes(q);
+            const phoneMatch = p.phone && String(p.phone).includes(q);
+            return nameMatch || mrnMatch || phoneMatch;
         });
         setSearchResults(filtered);
     }, [searchQuery, allPatients]);
 
-    const handleSelectPatient = async (patient) => {
-        setSelectedPatient(patient);
-        setSearchResults([]);
+    const handleSelectPatient = (p) => {
+        const patientObj = {
+            _id: p._id,
+            name: p.name || 'Patient',
+            status: 'Active',
+            profile: {
+                mrn: p.profile?.mrn || p.patientId || p.mrn || 'CIT-' + String(p._id).slice(-4),
+                gender: p.profile?.gender || p.gender || 'Not specified',
+                age: p.profile?.age || p.age || '--',
+                phone: p.phone || p.mobile || 'Not available'
+            }
+        };
+        setSelectedPatient(patientObj);
         setSearchQuery('');
-        setSelectedReport(null);
+        setSearchResults([]);
         setSummary(null);
-        setSummaryCost(null);
-        setError(null);
-        setComparison(null);
-        setCompareError(null);
-        setHistorySummary(null);
-        setHistoryError(null);
-
-        setIsReportsLoading(true);
-        setReports([]);
-        try {
-            const res = await patientAPI.getDocuments(patient._id);
-            if (res && res.success && res.documents) {
-                setReports(res.documents);
-            } else if (res && res.success && res.data) {
-                setReports(res.data);
-            }
-        } catch (err) {
-            console.error("Error fetching patient documents:", err);
-        } finally {
-            setIsReportsLoading(false);
-        }
+        loadPatientDocuments(p._id);
     };
 
+    // Generate Summary handler
     const handleGenerateSummary = async () => {
-        if (!selectedReport) {
-            setError("Please select a report first.");
-            return;
-        }
-
-        if (isExhausted) {
-            setIsContactModalOpen(true);
-            return;
-        }
-
-        setIsLoading(true);
-        setError(null);
-        setSummary(null);
-        setSummaryCost(null);
+        if (!selectedReport || isExhausted) return;
+        setIsSummaryLoading(true);
+        setSummaryError(null);
 
         try {
-            const mime = selectedReport.mimeType || selectedReport.mimetype || 'application/pdf';
-            const fname = selectedReport.fileName || selectedReport.name || '';
-            const res = await reportAPI.generateAISummary(selectedReport.url, mime, fname);
-            if (res.success) {
-                setSummary(res.summary);
-                if (res.usage) {
-                    setSummaryCost(res.usage.actualApiCost || res.usage.estimatedCostInr || 0);
-                }
-                if (res.wallet) {
-                    setWallet(prev => ({ ...prev, ...res.wallet }));
+            const fileUrl = selectedReport.url || selectedReport.fileUrl;
+            const mimeType = selectedReport.mimeType || 'application/pdf';
+            const fileName = selectedReport.fileName || selectedReport.name || 'Medical Report';
+
+            if (!fileUrl) {
+                throw new Error("Selected report does not have a valid file URL.");
+            }
+
+            const res = await reportAPI.generateAISummary(fileUrl, mimeType, fileName);
+            if (res && res.success && res.summary) {
+                const s = res.summary;
+                if (typeof s === 'string') {
+                    setSummary(s);
                 } else {
-                    fetchWalletData();
+                    let formatted = `### 📋 ${s.ReportType || s.ContentType || 'Clinical Report Summary'}\n\n`;
+                    if (s.OverallSummary) formatted += `**Summary:** ${s.OverallSummary}\n\n`;
+                    if (Array.isArray(s.ImportantFindings) && s.ImportantFindings.length > 0) {
+                        formatted += `#### 🔎 Key Findings\n${s.ImportantFindings.map(f => `- ${f}`).join('\n')}\n\n`;
+                    }
+                    if (Array.isArray(s.AbnormalValues) && s.AbnormalValues.length > 0) {
+                        formatted += `#### ⚠️ Abnormal Values\n${s.AbnormalValues.map(a => `- **${a.parameter || a}**: \`${a.value || ''}\` (${a.interpretation || 'Review clinically'})`).join('\n')}\n\n`;
+                    }
+                    if (Array.isArray(s.VisibleObservations) && s.VisibleObservations.length > 0) {
+                        formatted += `#### 👁️ Observations\n${s.VisibleObservations.map(o => `- ${o}`).join('\n')}\n`;
+                    }
+                    setSummary(formatted.trim());
                 }
+
+                if (res.wallet) setWallet(prev => ({ ...prev, ...res.wallet }));
+                else if (res.usage?.wallet) setWallet(prev => ({ ...prev, ...res.usage.wallet }));
             } else {
-                setError(res.message || "Unable to generate summary. Please try again.");
+                throw new Error(res?.message || "Failed to generate summary");
             }
         } catch (err) {
-            console.error("AI Summary error:", err);
-            const isInsufficient = err?.response?.status === 402 || err?.response?.data?.code === 'INSUFFICIENT_AI_CREDITS';
-            if (isInsufficient) {
-                fetchWalletData();
-                setError("AI Credits Exhausted. Your hospital has used its available AI budget. Please contact your administrator.");
-            } else {
-                const errMsg = err?.response?.data?.message || err.message || "Unable to generate summary. Please try again.";
-                setError(errMsg);
+            console.error("Summary error:", err);
+            const errMsg = err.response?.data?.message || err.message || "Failed to generate summary";
+            if (err.response?.status === 402) {
+                if (err.response?.data?.wallet) setWallet(prev => ({ ...prev, ...err.response.data.wallet }));
             }
+            setSummaryError(errMsg);
         } finally {
-            setIsLoading(false);
+            setIsSummaryLoading(false);
         }
     };
 
-    // Attach a report to the chat context
-    const handleAttachToChat = (report) => {
-        if (!report || !report.url) return;
-        const already = chatAttachments.find(a => a.url === report.url);
-        if (already) return;
-        setChatAttachments(prev => [...prev, {
-            url: report.url,
-            mimeType: report.mimeType || report.mimetype || 'application/pdf',
-            name: report.fileName || report.name || 'File',
-            previewUrl: isImageMime(report.mimeType || report.mimetype) ? report.url : null
-        }]);
+    // Inside Report Search handler
+    const handleInsideSearch = async () => {
+        const query = insideSearchQuery.trim();
+        if (!query || !selectedPatient) return;
+
+        setIsSearchingInside(true);
+        setInsideSearchMessage(null);
+        setInsideSearchResults([]);
+
+        try {
+            const res = await reportAPI.searchReports(selectedPatient._id, query);
+            if (res && res.success && Array.isArray(res.results)) {
+                setInsideSearchResults(res.results);
+                if (res.results.length === 0) {
+                    setInsideSearchMessage(`No matches found for "${query}" in this patient's reports.`);
+                }
+            } else {
+                setInsideSearchMessage(res?.message || `No matches found for "${query}".`);
+            }
+        } catch (err) {
+            console.error("Search inside error:", err);
+            setInsideSearchMessage(err.response?.data?.message || "Error searching inside reports.");
+        } finally {
+            setIsSearchingInside(false);
+        }
     };
 
-    const handleRemoveAttachment = (index) => {
-        setChatAttachments(prev => prev.filter((_, i) => i !== index));
-    };
-
-    const handleCompareReports = async () => {
-        const sortedReports = reports ? [...reports].sort((a, b) => new Date(b.uploadedAt || b.date) - new Date(a.uploadedAt || a.date)) : [];
-        if (sortedReports.length < 2) {
-            setCompareError("At least two reports are required for comparison.");
-            return;
-        }
-
-        if (isExhausted) {
-            setIsContactModalOpen(true);
-            return;
-        }
-
-        const latestReport = sortedReports[0];
-        const previousReport = sortedReports[1];
-
+    // Handle Compare Reports
+    const handleCompare = async () => {
+        if (!compareReport1 || !compareReport2 || isExhausted) return;
         setIsComparing(true);
         setCompareError(null);
-        setComparison(null);
+        setComparisonResult(null);
 
         try {
+            const r1 = reports.find(r => (r.url || r._id) === compareReport1);
+            const r2 = reports.find(r => (r.url || r._id) === compareReport2);
+
+            if (!r1 || !r2 || !r1.url || !r2.url) {
+                throw new Error("Please select two valid reports to compare.");
+            }
+
             const res = await reportAPI.compareReports(
-                latestReport.url, latestReport.mimeType || 'application/pdf',
-                previousReport.url, previousReport.mimeType || 'application/pdf'
+                r1.url,
+                r1.mimeType || 'application/pdf',
+                r2.url,
+                r2.mimeType || 'application/pdf',
+                selectedPatient?._id
             );
-            if (res.success) {
-                setComparison({
-                    latestDate: latestReport.uploadedAt || latestReport.date,
-                    previousDate: previousReport.uploadedAt || previousReport.date,
-                    data: res.comparison,
-                    cost: res.usage?.actualApiCost || 0
-                });
-                if (res.wallet) {
-                    setWallet(prev => ({ ...prev, ...res.wallet }));
-                } else {
-                    fetchWalletData();
-                }
+
+            if (res && res.success && res.comparison) {
+                setComparisonResult(res.comparison);
+                if (res.wallet) setWallet(prev => ({ ...prev, ...res.wallet }));
+                else if (res.usage?.wallet) setWallet(prev => ({ ...prev, ...res.usage.wallet }));
             } else {
-                setCompareError(res.message || "Unable to compare reports.");
+                throw new Error(res?.message || "Unable to compare these reports right now. Please try again.");
             }
         } catch (err) {
-            console.error("Compare Reports error:", err);
-            const isInsufficient = err?.response?.status === 402 || err?.response?.data?.code === 'INSUFFICIENT_AI_CREDITS';
-            if (isInsufficient) {
-                fetchWalletData();
-                setCompareError("AI Credits Exhausted. Your hospital has used its available AI budget. Please contact administrator.");
-            } else {
-                setCompareError("Unable to compare reports. Please try again.");
-            }
+            console.error("Compare error:", err);
+            setCompareError(err.response?.data?.message || err.message || "Unable to compare these reports right now. Please try again.");
         } finally {
             setIsComparing(false);
         }
     };
 
-    const generateHistorySummary = async () => {
-        if (!selectedPatient) return;
-        setIsHistoryLoading(true);
-        setHistoryError(null);
-        setHistorySummary(null);
+    // Handle Context-Aware Chat Send
+    const handleChatSend = async (overridePrompt = null) => {
+        const text = (overridePrompt || chatInput).trim();
+        if (!text || isExhausted) return;
+
+        const doctorMsg = {
+            role: 'doctor',
+            text,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setChatMessages(prev => [...prev, doctorMsg]);
+        if (!overridePrompt) setChatInput('');
+        setIsChatLoading(true);
 
         try {
-            const patientId = selectedPatient._id || selectedPatient.patientUid || selectedPatient.patientId;
-            const res = await patientAPI.getFullHistory(patientId);
-            
-            if (res.success) {
-                const timeline = res.timeline || [];
-                const patient = res.patient || selectedPatient;
-                
-                const appointments = timeline.filter(item => item.type === 'appointment').map(i => i.data);
-                const totalVisits = appointments.length;
-                
-                let lastVisitDate = 'Not Available';
-                if (appointments.length > 0) {
-                    const dates = appointments.map(a => new Date(a.appointmentDate || a.createdAt).getTime()).filter(d => !isNaN(d));
-                    if (dates.length > 0) {
-                        lastVisitDate = new Date(Math.max(...dates)).toLocaleDateString();
-                    }
-                }
-                
-                const departments = [...new Set(appointments.map(a => a.department || a.serviceName).filter(Boolean))];
-                const reportsCount = reports ? reports.length : 0;
-                
-                let diagnoses = [...new Set(timeline.filter(item => item.type === 'appointment' || item.type === 'clinicalVisit').map(i => i.summary?.outcome || i.data?.diagnosis).filter(d => d && d !== 'Pending' && d !== 'Processing' && d !== '—'))];
-                
-                let allergies = patient.fertilityProfile?.allergies || patient.allergies || patient.profile?.allergies;
-                if (!allergies || allergies.trim() === '') allergies = 'Not Available';
-                
-                const currentMedicines = [];
-                appointments.forEach(a => {
-                    if (a.prescriptions && Array.isArray(a.prescriptions)) {
-                        a.prescriptions.forEach(p => {
-                            if (p.name && !currentMedicines.includes(p.name) && p.type !== 'lab_report') {
-                                currentMedicines.push(p.name);
-                            }
-                        });
-                    }
-                });
+            const apiMessages = chatMessages.map(m => ({
+                role: m.role === 'ai' ? 'assistant' : 'user',
+                content: m.text
+            }));
 
-                const recentLabReports = reports ? reports.slice(0, 3).map(r => r.fileName || r.name || 'Medical Report') : [];
-
-                if (totalVisits === 0 && reportsCount === 0) {
-                    setHistorySummary("No previous medical history available.");
-                } else {
-                    setHistorySummary({
-                        totalVisits,
-                        lastVisitDate,
-                        departmentsVisited: departments.length > 0 ? departments : ['Not Available'],
-                        reportsAvailable: reportsCount,
-                        previousDiagnoses: diagnoses.length > 0 ? diagnoses : ['Not Available'],
-                        knownAllergies: allergies,
-                        currentMedicines: currentMedicines.length > 0 ? currentMedicines : ['Not Available'],
-                        recentLabReports: recentLabReports.length > 0 ? recentLabReports : ['Not Available']
-                    });
+            let reportContext = '';
+            if (selectedReport) {
+                reportContext = `Current Selected Report: "${selectedReport.fileName || selectedReport.name || 'Medical Report'}". `;
+                if (summary) {
+                    reportContext += `Generated Summary Context: ${typeof summary === 'string' ? summary.substring(0, 500) : ''}. `;
                 }
+            }
+
+            const patientContext = selectedPatient 
+                ? `Patient: ${selectedPatient.name}, MRN: ${selectedPatient.profile.mrn}, Age: ${selectedPatient.profile.age}, Gender: ${selectedPatient.profile.gender}. ${reportContext}`
+                : reportContext;
+
+            apiMessages.push({ 
+                role: 'user', 
+                content: (patientContext ? `[Clinical Context: ${patientContext}]\n\n` : '') + text 
+            });
+
+            // Pass selected report as media attachment if available
+            const mediaUrls = (selectedReport && selectedReport.url) ? [{
+                url: selectedReport.url,
+                mimeType: selectedReport.mimeType || 'application/pdf'
+            }] : [];
+
+            const res = await reportAPI.chatWithAssistant(apiMessages, mediaUrls);
+            if (res && res.success && res.reply) {
+                const aiMsg = {
+                    role: 'ai',
+                    text: res.reply,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                };
+                setChatMessages(prev => [...prev, aiMsg]);
+                if (res.wallet) setWallet(prev => ({ ...prev, ...res.wallet }));
+                else if (res.usage?.wallet) setWallet(prev => ({ ...prev, ...res.usage.wallet }));
             } else {
-                setHistoryError(res.message || "Failed to fetch patient history.");
+                throw new Error(res?.message || "No reply received");
             }
         } catch (err) {
-            console.error("Generate History error:", err);
-            setHistoryError("Failed to fetch patient history.");
+            console.error("Chat error:", err);
+            if (err.response?.status === 402) {
+                if (err.response?.data?.wallet) setWallet(prev => ({ ...prev, ...err.response.data.wallet }));
+                const aiMsg = {
+                    role: 'ai',
+                    text: '⚠️ **AI Credits Exhausted**\n\nYour hospital\'s AI Credits have been fully used. Please contact your Hospital Administrator to recharge.',
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                };
+                setChatMessages(prev => [...prev, aiMsg]);
+            } else {
+                const aiMsg = {
+                    role: 'ai',
+                    text: `⚠️ **Clinical Analysis Notice**\n\nUnable to process this query right now. Please retry shortly.\n\n*Error details:* ${err.message}`,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                };
+                setChatMessages(prev => [...prev, aiMsg]);
+            }
         } finally {
-            setIsHistoryLoading(false);
+            setIsChatLoading(false);
         }
     };
 
-    const handleReportSearch = async () => {
-        if (!selectedPatient) {
-            setReportSearchError("Please select a patient first.");
-            return;
-        }
-        if (!reportSearchQuery.trim()) {
-            setReportSearchResults(null);
-            setReportSearchError(null);
-            return;
-        }
-
-        const keyword = reportSearchQuery.trim();
-        setReportSearchError(null);
-        setReportSearchResults(null);
-
-        try {
-            const res = await reportAPI.searchReports(selectedPatient._id || selectedPatient.patientId, keyword);
-            
-            if (res.success && res.results && res.results.length > 0) {
-                setReportSearchResults(res.results);
-            } else {
-                setReportSearchError(res.message || "No matching keyword found.");
-                setReportSearchResults(null);
-            }
-        } catch (err) {
-            console.error("Search inside reports error:", err);
-            setReportSearchError("Failed to search reports. No matching keyword found.");
-            setReportSearchResults(null);
-        }
+    const handleClearChat = () => {
+        setChatMessages([]);
     };
 
-    const remainingCreditsDisplay = wallet 
-        ? Number(wallet.remainingAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-        : '2,000.00';
+    // Filter reports
+    const filteredReports = reports.filter(r => 
+        (r.fileName || r.name || '').toLowerCase().includes(reportFilterQuery.toLowerCase())
+    );
 
-    const usedCreditsDisplay = wallet 
-        ? Number(wallet.usedAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-        : '0.00';
+    // AI Credit Calculations
+    const remainingRupees = wallet ? Number(wallet.remainingAmount) || 0 : 2000;
+    const budgetRupees = wallet ? Number(wallet.budgetAmount) || 2000 : 2000;
+    const usedRupees = wallet ? Number(wallet.usedAmount) || 0 : 0;
+    const usedPercent = budgetRupees > 0 ? Math.min(100, Math.round((usedRupees / budgetRupees) * 100)) : 0;
+    const walletStatus = wallet?.status || wallet?.warningLevel || 'ACTIVE';
+    const isExhausted = walletStatus === 'EXHAUSTED';
+    const statusInfo = getWalletStatusInfo(walletStatus);
+
+    // Patient initials
+    const patientInitials = selectedPatient?.name
+        ? selectedPatient.name.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase()
+        : 'PT';
 
     return (
-        <div className="ai-assistant-container">
-            {/* ── Modern Healthcare AI Assistant Header with AI Credits Card ── */}
-            <div className="ai-header-card">
-                <div className="ai-header-left">
-                    <div className="ai-avatar-badge">
-                        <span className="ai-avatar-robot">🤖</span>
+        <div className="cca-exact-page-container">
+            
+            {/* ── Proper Top Header Card with Title & AI Credits ── */}
+            <div className="cca-exact-top-header-card">
+                <div className="cca-exact-header-left">
+                    <div className="cca-exact-title-wrap">
+                        <h1 className="cca-exact-title">AI Assistant</h1>
+                        <span className="cca-exact-ai-pill">AI Powered</span>
                     </div>
-                    <div className="ai-header-titles">
-                        <div className="ai-title-row">
-                            <h1>AI Assistant</h1>
-                            <span className="ai-sparkle-pill">✨</span>
-                        </div>
-                        <p className="ai-subtitle">Get intelligent insights, summaries and answers from patient data.</p>
-                    </div>
+                    <p className="cca-exact-header-subtitle">
+                        Intelligent clinical companion to analyze patient reports, abnormal values & medical trends.
+                    </p>
                 </div>
 
-                {/* AI Credits Card (Right side of header) */}
-                <div className="ai-credits-header-card" onClick={handleOpenWalletModal} title="Click to view hospital AI Wallet & usage analytics">
-                    <div className="ai-credits-card-left">
-                        <div className="ai-credits-icon-bubble">
-                            <span className="ai-coin-icon">💰</span>
+                {/* AI Credits Widget in Header */}
+                <div className="cca-exact-credits-header-box" onClick={() => { setIsWalletOpen(true); fetchWalletModalData(); }}>
+                    <div className="cca-exact-cw-top">
+                        <div className="cca-exact-cw-left">
+                            <span className="cca-exact-cw-label">AI Credits <FiInfo size={13} /></span>
+                            <div className="cca-exact-cw-amount">{formatINR(remainingRupees)}</div>
+                            <span className="cca-exact-cw-sub">of {formatINR(budgetRupees)} total budget</span>
                         </div>
-                        <div className="ai-credits-details">
-                            <div className="ai-credits-label-row">
-                                <span className="ai-credits-label">AI Credits</span>
-                                <span className="ai-credits-info-icon" title="Hospital AI budget in INR (₹2,000 Initial Budget)"><FiInfo size={13} /></span>
-                            </div>
-                            <div className="ai-credits-value">
-                                {remainingCreditsDisplay}
-                            </div>
-                            <div className="ai-credits-subtext">
-                                Credits available (Used: ₹{usedCreditsDisplay})
-                            </div>
-                        </div>
+                        <button className="cca-exact-btn-buy" onClick={(e) => { e.stopPropagation(); setIsWalletOpen(true); fetchWalletModalData(); }}>
+                            Buy More Credits
+                        </button>
                     </div>
-                    <button className="ai-add-credits-btn" onClick={(e) => { e.stopPropagation(); handleOpenWalletModal(); }}>
-                        <span>⚡ AI Wallet</span>
-                    </button>
+                    <div className="cca-exact-cw-progress-track">
+                        <div className="cca-exact-cw-progress-fill" style={{ 
+                            width: `${usedPercent}%`,
+                            background: isExhausted ? '#dc2626' : walletStatus === 'VERY_CRITICAL' ? '#ef4444' : walletStatus === 'CRITICAL' ? '#f97316' : walletStatus === 'LOW' ? '#f59e0b' : '#4f46e5'
+                        }}></div>
+                        <span className="cca-exact-cw-progress-text">{usedPercent}%</span>
+                    </div>
                 </div>
             </div>
 
-            {/* ── Low Balance & Exhausted Banners ── */}
-            {wallet && wallet.warningLevel === 'warning' && (
-                <div className="ai-wallet-banner warning">
-                    <span className="ai-banner-icon"><FiAlertTriangle /></span>
-                    <span><strong>Low AI Credits Warning:</strong> Your hospital's AI credits are running low. Remaining budget: <strong>₹{remainingCreditsDisplay}</strong>.</span>
-                </div>
-            )}
+            {/* ── 2-COLUMN MAIN WORKSPACE (LEFT: CLINICAL WORKSPACE | RIGHT: AI ASSISTANT CHAT) ── */}
+            <div className="cca-exact-main-grid">
+                
+                {/* ════════ LEFT COLUMN: Patient Row, Uploaded Reports, Summary, Inside Search & Compare ════════ */}
+                <div className="cca-exact-left-col">
+                    
+                    {/* 1. Patient Search Bar & Selected Patient Card (IN ONE UNIFIED ROW) */}
+                    <div className="cca-patient-search-row-unified">
+                        {/* Search Input Box */}
+                        <div className="cca-compact-search-col">
+                            <div className="cca-exact-search-input-box">
+                                <button className="cca-exact-search-ico-btn" title="Search"><FiSearch /></button>
+                                <input 
+                                    type="text"
+                                    className="cca-exact-search-input"
+                                    placeholder="Search patient by name, MRN, phone..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                                {searchQuery && (
+                                    <button className="cca-compact-clear-btn" onClick={() => { setSearchQuery(''); setSearchResults([]); }}>
+                                        <FiX size={13} />
+                                    </button>
+                                )}
+                            </div>
 
-            {wallet && (wallet.warningLevel === 'critical' || wallet.warningLevel === 'very_critical') && (
-                <div className="ai-wallet-banner critical">
-                    <span className="ai-banner-icon"><FiAlertTriangle /></span>
-                    <span><strong>Critical AI Budget Alert:</strong> Only <strong>₹{remainingCreditsDisplay}</strong> AI budget remains for your hospital. Please notify your administrator.</span>
-                </div>
-            )}
-
-            {isExhausted && (
-                <div className="ai-wallet-banner exhausted">
-                    <div className="ai-exhausted-content">
-                        <div className="ai-exhausted-icon">🚫</div>
-                        <div>
-                            <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', color: '#991b1b' }}>AI Credits Exhausted</h4>
-                            <p style={{ margin: 0, fontSize: '13px', color: '#7f1d1d' }}>
-                                Your hospital has used its available ₹2,000 AI budget. Please contact your administrator to continue using the AI Assistant.
-                            </p>
-                        </div>
-                    </div>
-                    <button className="ai-btn-contact-admin" onClick={() => setIsContactModalOpen(true)}>
-                        <FiMail size={14} /> Contact Admin
-                    </button>
-                </div>
-            )}
-
-            <div className="ai-grid">
-                {/* Left Column */}
-                <div className="ai-col-left">
-                    {/* Patient Selection Card */}
-                    <div className="ai-card" style={{ position: 'relative' }}>
-                        <h3 className="ai-card-title"><FiUser /> Select Patient</h3>
-                        
-                        <div style={{ position: 'relative', width: '100%', boxSizing: 'border-box' }}>
-                            <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', fontSize: '1rem' }}>
-                                <FiSearch />
-                            </span>
-                            <input 
-                                type="text" 
-                                placeholder={isFetchingPatients ? "Loading your patients..." : "Search patient name, ID, or MRN..."} 
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                disabled={isFetchingPatients}
-                                style={{
-                                    width: '100%', padding: '11px 16px 11px 42px', background: '#ffffff', 
-                                    border: '1px solid #cbd5e1', borderRadius: '12px', color: '#0f172a', 
-                                    fontSize: '0.88rem', outline: 'none', transition: 'border 0.2s', 
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {searchQuery && (
-                                <button onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '1rem' }}>
-                                    ✕
-                                </button>
+                            {/* Patient Autocomplete Dropdown */}
+                            {searchResults.length > 0 && (
+                                <div className="cca-patient-dropdown" data-lenis-prevent>
+                                    {searchResults.map(p => (
+                                        <div key={p._id} className="cca-dropdown-item" onClick={() => handleSelectPatient(p)}>
+                                            <div className="cca-dd-avatar">{(p.name || 'P').charAt(0)}</div>
+                                            <div>
+                                                <div className="cca-dd-name">{p.name}</div>
+                                                <div className="cca-dd-sub">{p.profile?.mrn || p.patientId || 'CIT-001'} • {p.profile?.gender || p.gender || 'Patient'} • {p.profile?.age || p.age || '--'} Y</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             )}
                         </div>
 
-                        {searchQuery.trim().length >= 2 && searchResults.length === 0 && !isFetchingPatients && (
-                            <div style={{ color: 'red', marginTop: '8px', fontSize: '14px' }}>
-                                No patient found in your department.
+                        {/* Selected Patient Card (Right Side of Search in Same Row) */}
+                        <div className="cca-compact-patient-col">
+                            {selectedPatient ? (
+                                <div className="cca-exact-patient-card compact">
+                                    <div className="cca-exact-patient-left">
+                                        <div className="cca-exact-avatar-circle">
+                                            {patientInitials}
+                                        </div>
+                                        <div className="cca-exact-p-info">
+                                            <div className="cca-exact-p-name-row">
+                                                <span className="cca-exact-p-name">{selectedPatient.name}</span>
+                                                <span className="cca-exact-active-tag">Active</span>
+                                            </div>
+                                            <div className="cca-exact-p-meta">
+                                                MRN: {selectedPatient.profile?.mrn}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="cca-exact-patient-right">
+                                        <button 
+                                            className="cca-exact-btn-view-details"
+                                            onClick={() => setShowPatientDetails(!showPatientDetails)}
+                                        >
+                                            View Profile <FiChevronDown size={13} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="cca-exact-patient-card empty compact">
+                                    <span style={{ fontSize: '12px', color: '#64748b' }}>🔍 Search patient to load medical records</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* 2. Uploaded Reports Card (SHOWN FIRST BEFORE SUMMARY, 4 REPORTS VISIBLE) */}
+                    <div className="cca-exact-card cca-exact-reports-card">
+                        <div className="cca-exact-card-header">
+                            <div className="cca-exact-card-title">
+                                <span className="cca-exact-card-icon blue">📑</span>
+                                <div>
+                                    <h3>Uploaded Reports ({filteredReports.length})</h3>
+                                    <span className="cca-sec-pill blue">Patient Documents</span>
+                                </div>
+                            </div>
+                            <div className="cca-exact-card-actions">
+                                {isReportSearchOpen ? (
+                                    <div className="cca-header-inline-search-box">
+                                        <span className="cca-rep-search-inline-ico"><FiSearch size={13} /></span>
+                                        <input 
+                                            type="text" 
+                                            className="cca-rep-search-inline-input"
+                                            placeholder="Filter reports..."
+                                            autoFocus
+                                            value={reportFilterQuery}
+                                            onChange={(e) => setReportFilterQuery(e.target.value)}
+                                        />
+                                        <button 
+                                            className="cca-rep-search-close-btn"
+                                            onClick={() => { setIsReportSearchOpen(false); setReportFilterQuery(''); }}
+                                            title="Close search"
+                                        >
+                                            <FiX size={13} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button 
+                                        className="cca-header-search-icon-btn"
+                                        title="Search reports"
+                                        onClick={() => setIsReportSearchOpen(true)}
+                                    >
+                                        <FiSearch size={15} />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Reports Scroll Container (natural scroll bubbling) */}
+                        <div className="cca-exact-reports-scroll-fixed">
+                            {isReportsLoading ? (
+                                <div className="cca-reports-loading">Loading reports...</div>
+                            ) : filteredReports.length === 0 ? (
+                                <div className="cca-exact-empty-reports">
+                                    <FiFileText size={24} style={{ color: '#94a3b8', marginBottom: '6px' }} />
+                                    <span>No uploaded reports for this patient.</span>
+                                </div>
+                            ) : (
+                                filteredReports.map((r, i) => {
+                                    const isSelected = isReportSelected(r);
+                                    return (
+                                        <div 
+                                            key={r._id || i}
+                                            className={`cca-report-item ${isSelected ? 'active' : ''}`}
+                                            onClick={() => setSelectedReport(r)}
+                                        >
+                                            <div className="cca-report-icon-box">
+                                                {isImageMime(r.mimeType, r.url || r.fileUrl) ? (
+                                                    <FiImage className="cca-ico-image" />
+                                                ) : (
+                                                    <FiFileText className="cca-ico-pdf" />
+                                                )}
+                                            </div>
+                                            <div className="cca-report-info">
+                                                <div className="cca-report-name">{r.fileName || r.name || 'Medical Document'}</div>
+                                                <div className="cca-report-meta">
+                                                    {r.docType || (isPdfMime(r.mimeType, r.url) ? 'PDF' : 'Image')} • {r.date || (r.uploadedAt ? new Date(r.uploadedAt).toLocaleDateString('en-IN') : 'Uploaded')}
+                                                </div>
+                                            </div>
+
+                                            {/* Action Buttons: Select / Selected & View */}
+                                            <div className="cca-report-item-actions" onClick={e => e.stopPropagation()}>
+                                                {isSelected ? (
+                                                    <span className="cca-report-selected-tag">
+                                                        <FiCheck size={11} /> Selected
+                                                    </span>
+                                                ) : (
+                                                    <button 
+                                                        className="cca-btn-select-report"
+                                                        onClick={() => setSelectedReport(r)}
+                                                    >
+                                                        Select
+                                                    </button>
+                                                )}
+
+                                                <button 
+                                                    className="cca-btn-view-doc"
+                                                    title="View document preview"
+                                                    onClick={() => setPreviewDoc(r)}
+                                                >
+                                                    <FiEye size={13} /> View
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+
+                    {/* 3. AI Report Summary Card */}
+                    <div className="cca-exact-card cca-exact-summary-card">
+                        <div className="cca-exact-card-header">
+                            <div className="cca-exact-card-title">
+                                <span className="cca-exact-card-icon purple">🤖</span>
+                                <div>
+                                    <h3>AI Report Summary</h3>
+                                    <span className="cca-selected-rep-hint">
+                                        {selectedReport ? `Target: ${selectedReport.fileName || selectedReport.name}` : 'Select a report above'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="cca-exact-card-actions">
+                                <button 
+                                    className="cca-exact-btn-generate"
+                                    onClick={handleGenerateSummary}
+                                    disabled={isSummaryLoading || isExhausted || !selectedReport}
+                                    title={!selectedReport ? 'Select a report above first' : isExhausted ? 'AI Credits Exhausted' : 'Generate AI Summary'}
+                                >
+                                    ✨ {isSummaryLoading ? 'Generating...' : 'Generate Summary'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Summary Body with smooth auto-scroll */}
+                        <div className="cca-exact-summary-body-fixed">
+                            {summaryError && (
+                                <div className="cca-summary-error-banner">
+                                    <FiAlertCircle /> {summaryError}
+                                </div>
+                            )}
+
+                            {isSummaryLoading && (
+                                <div className="cca-summary-loading-state">
+                                    <div className="cca-spinner"></div>
+                                    <span>AI is analyzing report parameters and medical values...</span>
+                                </div>
+                            )}
+
+                            {!isSummaryLoading && summary && (
+                                <div className="cca-exact-summary-markdown-box ai-markdown-body">
+                                    <ReactMarkdown 
+                                        remarkPlugins={[remarkGfm]}
+                                        components={{
+                                            table: ({ node, ...props }) => (
+                                                <div className="ai-markdown-table-wrapper">
+                                                    <table className="ai-markdown-table" {...props} />
+                                                </div>
+                                            ),
+                                            th: ({ node, ...props }) => <th className="ai-table-th" {...props} />,
+                                            td: ({ node, ...props }) => <td className="ai-table-td" {...props} />,
+                                            h1: ({ node, ...props }) => <h3 className="ai-md-h1" {...props} />,
+                                            h2: ({ node, ...props }) => <h4 className="ai-md-h2" {...props} />,
+                                            h3: ({ node, ...props }) => <h5 className="ai-md-h3" {...props} />,
+                                            ul: ({ node, ...props }) => <ul className="ai-md-ul" {...props} />,
+                                            ol: ({ node, ...props }) => <ol className="ai-md-ol" {...props} />,
+                                            li: ({ node, ...props }) => <li className="ai-md-li" {...props} />
+                                        }}
+                                    >
+                                        {summary}
+                                    </ReactMarkdown>
+                                </div>
+                            )}
+
+                            {!isSummaryLoading && !summary && (
+                                <div className="cca-exact-empty-summary">
+                                    <div className="cca-exact-empty-icon">📑</div>
+                                    <div className="cca-exact-empty-text">
+                                        <h4>{selectedReport ? `Ready to summarize "${selectedReport.fileName || selectedReport.name}"` : 'No report selected'}</h4>
+                                        <p>{selectedReport ? "Click 'Generate Summary' to analyze parameters and clinical observations." : "Select an uploaded report above to view AI generated summary"}</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* 4. Search Inside Reports Card */}
+                    <div className="cca-exact-card cca-exact-inside-card">
+                        <div className="cca-exact-card-header no-border">
+                            <div className="cca-exact-card-title">
+                                <span className="cca-exact-card-icon green">🔍</span>
+                                <div>
+                                    <h3>Search Inside Reports</h3>
+                                    <span className="cca-sec-pill green">Keyword Search</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="cca-exact-inside-input-row">
+                            <div className="cca-exact-inside-input-box">
+                                <span className="cca-exact-inside-search-ico"><FiSearch /></span>
+                                <input 
+                                    type="text"
+                                    className="cca-exact-inside-input"
+                                    placeholder="Search keywords (e.g. Hemoglobin, TLC, Kidney Profile, Sugar)..."
+                                    value={insideSearchQuery}
+                                    onChange={(e) => setInsideSearchQuery(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleInsideSearch()}
+                                />
+                                {insideSearchQuery && (
+                                    <button className="cca-inside-clear-btn" onClick={() => { setInsideSearchQuery(''); setInsideSearchResults([]); setInsideSearchMessage(null); }}>
+                                        <FiX size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            <button 
+                                className="cca-exact-btn-inside-search"
+                                onClick={handleInsideSearch}
+                                disabled={isSearchingInside || !insideSearchQuery.trim() || !selectedPatient}
+                            >
+                                {isSearchingInside ? 'Searching...' : 'Search Inside'}
+                            </button>
+                        </div>
+
+                        {/* Search Results Display */}
+                        {insideSearchMessage && (
+                            <div className="cca-inside-search-msg">
+                                {insideSearchMessage}
                             </div>
                         )}
 
-                        {searchResults.length > 0 && (
-                            <div style={{ 
-                                position: 'absolute', top: '110px', left: '24px', right: '24px', 
-                                background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', 
-                                zIndex: 10, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                                maxHeight: '200px', overflowY: 'auto'
-                            }}>
-                                {searchResults.map(p => (
-                                    <div 
-                                        key={p._id}
-                                        style={{ padding: '12px', borderBottom: '1px solid #e2e8f0', cursor: 'pointer' }}
-                                        onClick={() => handleSelectPatient(p)}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    >
-                                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{p.name}</div>
-                                        <div style={{ fontSize: '12px', color: '#64748b' }}>{p.patientId} {p.profile?.mrn ? `| ${p.profile.mrn}` : ''}</div>
+                        {insideSearchResults.length > 0 && (
+                            <div className="cca-exact-inside-results-fixed">
+                                {insideSearchResults.map((res, idx) => (
+                                    <div key={idx} className="cca-inside-result-card">
+                                        <div className="cca-inside-result-header">
+                                            <span className="cca-inside-res-docname">📄 {res.reportName}</span>
+                                            <span className="cca-inside-res-page">Page {res.pageNumber || 1}</span>
+                                        </div>
+                                        <div className="cca-inside-res-match">
+                                            "...{res.match}..."
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         )}
+                    </div>
 
-                        <div className="ai-patient-info" style={{ marginTop: '20px' }}>
-                            <div className="ai-info-row">
-                                <span className="ai-info-label">Name</span>
-                                <span className="ai-info-value">{selectedPatient ? selectedPatient.name : '-'}</span>
+                    {/* 5. Compare Reports Card */}
+                    <div className="cca-exact-card cca-exact-compare-card">
+                        <div className="cca-exact-card-header no-border">
+                            <div className="cca-exact-card-title">
+                                <span className="cca-exact-card-icon orange">📊</span>
+                                <div>
+                                    <h3>Compare Reports</h3>
+                                    <span className="cca-sec-pill orange">Biomarker Trends</span>
+                                </div>
                             </div>
-                            <div className="ai-info-row">
-                                <span className="ai-info-label">MRN / ID</span>
-                                <span className="ai-info-value">{selectedPatient ? (selectedPatient.profile?.mrn || selectedPatient.patientId || '-') : '-'}</span>
-                            </div>
-                            <div className="ai-info-row">
-                                <span className="ai-info-label">Age</span>
-                                <span className="ai-info-value">{selectedPatient && selectedPatient.profile?.age ? `${selectedPatient.profile.age} Yrs` : '-'}</span>
-                            </div>
-                            <div className="ai-info-row">
-                                <span className="ai-info-label">Gender</span>
-                                <span className="ai-info-value">{selectedPatient && selectedPatient.profile?.gender ? selectedPatient.profile.gender : '-'}</span>
+
+                            <div className="cca-exact-compare-controls-row">
+                                <select 
+                                    className="cca-exact-compare-select"
+                                    value={compareReport1}
+                                    onChange={(e) => setCompareReport1(e.target.value)}
+                                    disabled={reports.length === 0}
+                                >
+                                    {reports.length === 0 ? (
+                                        <option value="">No reports</option>
+                                    ) : (
+                                        reports.map((r, i) => (
+                                            <option key={r._id || i} value={r.url || r._id}>
+                                                {r.fileName || r.name || `Report ${i + 1}`}
+                                            </option>
+                                        ))
+                                    )}
+                                </select>
+
+                                <span className="cca-vs-text">vs</span>
+
+                                <select 
+                                    className="cca-exact-compare-select"
+                                    value={compareReport2}
+                                    onChange={(e) => setCompareReport2(e.target.value)}
+                                    disabled={reports.length === 0}
+                                >
+                                    {reports.length === 0 ? (
+                                        <option value="">No reports</option>
+                                    ) : (
+                                        reports.map((r, i) => (
+                                            <option key={r._id || i} value={r.url || r._id}>
+                                                {r.fileName || r.name || `Report ${i + 1}`}
+                                            </option>
+                                        ))
+                                    )}
+                                </select>
+
+                                <button 
+                                    className="cca-exact-btn-compare"
+                                    onClick={handleCompare} 
+                                    disabled={isComparing || isExhausted || reports.length < 2}
+                                    title={reports.length < 2 ? 'Need at least 2 reports to compare' : isExhausted ? 'AI Credits Exhausted' : 'Compare Reports'}
+                                >
+                                    <span>⚡</span> {isComparing ? 'Comparing...' : 'Compare'}
+                                </button>
                             </div>
                         </div>
-                    </div>
-
-                    {/* Patient Reports Card */}
-                    <div className="ai-card">
-                        <h3 className="ai-card-title"><FiFileText /> Patient Reports</h3>
-                        
-                        {!selectedPatient && (
-                            <div style={{ color: '#64748b', fontSize: '14px', textAlign: 'center', padding: '20px 0' }}>
-                                Please select a patient to view reports.
-                            </div>
-                        )}
-
-                        {selectedPatient && isReportsLoading && (
-                            <div style={{ color: '#64748b', fontSize: '14px', textAlign: 'center', padding: '20px 0' }}>
-                                Loading reports...
-                            </div>
-                        )}
-
-                        {selectedPatient && !isReportsLoading && reports.length === 0 && (
-                            <div style={{ color: '#64748b', fontSize: '14px', textAlign: 'center', padding: '20px 0' }}>
-                                No reports found for this patient.
-                            </div>
-                        )}
-
-                        {selectedPatient && !isReportsLoading && reports.length > 0 && (
-                            <div className="ai-report-list">
-                                {reports.map((report) => {
-                                    const isSelected = selectedReport && (
-                                        (selectedReport._id && report._id && selectedReport._id === report._id) || 
-                                        (selectedReport.url && report.url && selectedReport.url === report.url)
-                                    );
-                                    
-                                    return (
-                                        <div 
-                                            key={report._id || report.url} 
-                                            className={`ai-report-item ${isSelected ? 'selected' : ''}`}
-                                            style={{
-                                                borderColor: isSelected ? '#8b5cf6' : '#e2e8f0',
-                                                backgroundColor: isSelected ? '#f3e8ff' : '#f8fafc'
-                                            }}
-                                        >
-                                            <div className="ai-report-info">
-                                                <span 
-                                                    className="ai-report-name" 
-                                                    title={report.fileName || report.name || 'Document'}
-                                                >
-                                                    {report.fileName || report.name || 'Document'}
-                                                </span>
-                                                <span className="ai-report-date">{report.uploadedAt ? new Date(report.uploadedAt).toLocaleDateString() : (report.date || '')}</span>
-                                            </div>
-                                            <button 
-                                                className="ai-btn-view"
-                                                onClick={() => isSelected ? setSelectedReport(null) : setSelectedReport(report)}
-                                            >
-                                                {isSelected ? 'Selected' : 'Select'}
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Compare Reports Section */}
-                    <div className="ai-card">
-                        <h3 className="ai-card-title">📊 Compare Reports</h3>
-                        <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '16px' }}>Compare the latest report with the previous one.</p>
-                        
-                        <button 
-                            className="ai-btn-primary" 
-                            onClick={handleCompareReports} 
-                            disabled={isComparing || isExhausted || !reports || reports.length < 2}
-                            style={{ 
-                                width: '100%', 
-                                opacity: (!reports || reports.length < 2 || isExhausted) ? 0.5 : (isComparing ? 0.7 : 1),
-                                cursor: (!reports || reports.length < 2 || isExhausted) ? 'not-allowed' : 'pointer'
-                            }}
-                        >
-                            {isComparing ? 'Comparing...' : isExhausted ? 'AI Credits Exhausted' : 'Compare Latest with Previous'}
-                        </button>
-
-                        {(!reports || reports.length < 2) && (
-                            <div style={{ marginTop: '12px', fontSize: '14px', color: '#64748b', textAlign: 'center' }}>
-                                "At least two reports are required for comparison."
-                            </div>
-                        )}
 
                         {compareError && (
-                            <div className="ai-error" style={{ marginTop: '16px' }}>
-                                {compareError}
+                            <div className="cca-summary-error-banner" style={{ margin: '10px 0 0 0' }}>
+                                <FiAlertCircle /> {compareError}
                             </div>
                         )}
 
-                        {comparison && (
-                            <div className="ai-summary-content" style={{ marginTop: '20px' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                    <div>
-                                        <div style={{ fontSize: '12px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Latest Report</div>
-                                        <div style={{ fontWeight: '500', color: '#0f172a' }}>{comparison.latestDate ? new Date(comparison.latestDate).toLocaleDateString() : 'Unknown Date'}</div>
+                        {/* Comparison Results */}
+                        {comparisonResult && (
+                            <div className="cca-exact-comparison-results-fixed">
+                                {comparisonResult.OverallChange && (
+                                    <div className="cca-comp-overall">
+                                        <strong>Overall Assessment:</strong> {comparisonResult.OverallChange}
                                     </div>
-                                    <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
-                                        <div style={{ fontSize: '12px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Previous Report</div>
-                                        <div style={{ fontWeight: '500', color: '#0f172a' }}>{comparison.previousDate ? new Date(comparison.previousDate).toLocaleDateString() : 'Unknown Date'}</div>
-                                    </div>
+                                )}
+
+                                <div className="cca-comp-grid">
+                                    {Array.isArray(comparisonResult.ChangedFindings) && comparisonResult.ChangedFindings.length > 0 && (
+                                        <div className="cca-comp-card changed">
+                                            <h4>⚡ Changed Values & Trends</h4>
+                                            <ul>
+                                                {comparisonResult.ChangedFindings.map((cf, i) => (
+                                                    <li key={i}>{typeof cf === 'string' ? cf : `${cf.parameter || cf.name}: ${cf.previousValue || ''} ➔ ${cf.currentValue || ''} (${cf.significance || ''})`}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {Array.isArray(comparisonResult.NewFindings) && comparisonResult.NewFindings.length > 0 && (
+                                        <div className="cca-comp-card new">
+                                            <h4>🔎 New Findings</h4>
+                                            <ul>
+                                                {comparisonResult.NewFindings.map((nf, i) => (
+                                                    <li key={i}>{nf}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {Array.isArray(comparisonResult.StableFindings) && comparisonResult.StableFindings.length > 0 && (
+                                        <div className="cca-comp-card stable">
+                                            <h4>✅ Stable Findings</h4>
+                                            <ul>
+                                                {comparisonResult.StableFindings.map((sf, i) => (
+                                                    <li key={i}>{sf}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {Array.isArray(comparisonResult.ImportantObservations) && comparisonResult.ImportantObservations.length > 0 && (
+                                        <div className="cca-comp-card observations">
+                                            <h4>💡 Important Observations</h4>
+                                            <ul>
+                                                {comparisonResult.ImportantObservations.map((io, i) => (
+                                                    <li key={i}>{io}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
                                 </div>
-
-                                {comparison.data.NewFindings && comparison.data.NewFindings.length > 0 && (
-                                    <div style={{ marginBottom: '16px' }}>
-                                        <h4 style={{ color: '#0f172a', margin: '0 0 8px 0', fontSize: '14px' }}>New Findings</h4>
-                                        <ul style={{ color: '#334155', margin: '0', fontSize: '13px', paddingLeft: '20px' }}>
-                                            {comparison.data.NewFindings.map((finding, idx) => (
-                                                <li key={idx} style={{ marginBottom: '4px' }}>{finding}</li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-
-                                {comparison.data.ChangedFindings && comparison.data.ChangedFindings.length > 0 && (
-                                    <div style={{ marginBottom: '16px' }}>
-                                        <h4 style={{ color: '#0f172a', margin: '0 0 8px 0', fontSize: '14px' }}>Changed Findings</h4>
-                                        <ul style={{ color: '#334155', margin: '0', fontSize: '13px', paddingLeft: '20px' }}>
-                                            {comparison.data.ChangedFindings.map((finding, idx) => (
-                                                <li key={idx} style={{ marginBottom: '4px' }}>{finding}</li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-
-                                {comparison.data.RemovedFindings && comparison.data.RemovedFindings.length > 0 && (
-                                    <div style={{ marginBottom: '16px' }}>
-                                        <h4 style={{ color: '#0f172a', margin: '0 0 8px 0', fontSize: '14px' }}>Removed Findings</h4>
-                                        <ul style={{ color: '#334155', margin: '0', fontSize: '13px', paddingLeft: '20px' }}>
-                                            {comparison.data.RemovedFindings.map((finding, idx) => (
-                                                <li key={idx} style={{ marginBottom: '4px' }}>{finding}</li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-
-                                {comparison.data.OverallChange && (
-                                    <div style={{ background: '#f0f9ff', padding: '16px', borderRadius: '8px', border: '1px solid #bae6fd' }}>
-                                        <h4 style={{ color: '#0369a1', margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Overall Change</h4>
-                                        <p style={{ color: '#0c4a6e', margin: '0', fontSize: '13px', lineHeight: '1.5' }}>
-                                            {comparison.data.OverallChange}
-                                        </p>
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>
 
-                    {/* Patient History Summary Section */}
-                    <div className="ai-card">
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
-                            <h3 className="ai-card-title" style={{ margin: 0 }}>📋 Patient History Summary</h3>
-                            <button 
-                                className="ai-btn-primary" 
-                                onClick={generateHistorySummary} 
-                                disabled={isHistoryLoading || !selectedPatient}
-                                style={{ padding: '8px 16px', fontSize: '13px', width: '100%' }}
-                            >
-                                {isHistoryLoading ? 'Loading...' : '🔄 Refresh Summary'}
+                </div>
+
+                {/* ════════ RIGHT COLUMN: AI ASSISTANT CHAT PANEL (MATCHING EXACT SCREENSHOT) ════════ */}
+                <div className="cca-exact-right-chat-col">
+                    <div className="cca-exact-chat-card">
+                        
+                        {/* Chat Header */}
+                        <div className="cca-exact-chat-header">
+                            <div className="cca-exact-chat-title-group">
+                                <div className="cca-exact-chat-bot-icon">🤖</div>
+                                <div>
+                                    <div className="cca-exact-chat-head-row">
+                                        <h4>AI Assistant Chat</h4>
+                                        <span className="cca-exact-chat-live-badge">Live Clinical Intelligence</span>
+                                    </div>
+                                    <p className="cca-exact-chat-subtitle">Get AI-driven insights and answers about this patient.</p>
+                                </div>
+                            </div>
+
+                            <button className="cca-exact-btn-clear-chat" onClick={handleClearChat}>
+                                <FiTrash2 size={13} /> Clear Chat
                             </button>
                         </div>
 
-                        {historyError && (
-                            <div className="ai-error" style={{ marginTop: '16px' }}>
-                                {historyError}
-                            </div>
-                        )}
+                        {/* Chat Messages Stream */}
+                        <div className="cca-exact-chat-stream" data-lenis-prevent>
+                            {chatMessages.map((msg, i) => (
+                                <AIResponseRenderer
+                                    key={i}
+                                    content={msg.text}
+                                    role={msg.role}
+                                    timestamp={msg.timestamp}
+                                />
+                            ))}
 
-                        {!historySummary && !isHistoryLoading && !historyError && (
-                            <div style={{ textAlign: 'center', padding: '20px', color: '#64748b', fontSize: '13px' }}>
-                                Click refresh to load patient history summary.
-                            </div>
-                        )}
-
-                        {typeof historySummary === 'string' && (
-                            <div style={{ marginTop: '12px', fontSize: '13px', color: '#64748b', textAlign: 'center' }}>
-                                {historySummary}
-                            </div>
-                        )}
-
-                        {typeof historySummary === 'object' && historySummary !== null && (
-                            <div className="ai-summary-content" style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                    <h4 style={{ color: '#0f172a', margin: '0 0 10px 0', fontSize: '13px' }}>Overview</h4>
-                                    <ul style={{ color: '#334155', margin: '0', fontSize: '13px', paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                        <li><strong>Total Visits:</strong> {historySummary.totalVisits}</li>
-                                        <li><strong>Last Visit:</strong> {historySummary.lastVisitDate}</li>
-                                        <li><strong>Reports:</strong> {historySummary.reportsAvailable}</li>
-                                    </ul>
-                                </div>
-
-                                <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                    <h4 style={{ color: '#0f172a', margin: '0 0 10px 0', fontSize: '13px' }}>Clinical Details</h4>
-                                    <ul style={{ color: '#334155', margin: '0', fontSize: '13px', paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                        <li><strong>Allergies:</strong> {historySummary.knownAllergies}</li>
-                                        <li><strong>Departments:</strong> {historySummary.departmentsVisited.join(', ')}</li>
-                                    </ul>
-                                </div>
-
-                                <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                    <h4 style={{ color: '#0f172a', margin: '0 0 10px 0', fontSize: '13px' }}>Medical History</h4>
-                                    <ul style={{ color: '#334155', margin: '0', fontSize: '13px', paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                        <li>
-                                            <strong>Diagnoses:</strong>
-                                            <ul style={{ marginTop: '4px', paddingLeft: '16px' }}>
-                                                {historySummary.previousDiagnoses.map((d, i) => <li key={i}>{d}</li>)}
-                                            </ul>
-                                        </li>
-                                        <li>
-                                            <strong>Medicines:</strong>
-                                            <ul style={{ marginTop: '4px', paddingLeft: '16px' }}>
-                                                {historySummary.currentMedicines.map((m, i) => <li key={i}>{m}</li>)}
-                                            </ul>
-                                        </li>
-                                        <li>
-                                            <strong>Lab Reports:</strong>
-                                            <ul style={{ marginTop: '4px', paddingLeft: '16px' }}>
-                                                {historySummary.recentLabReports.map((r, i) => <li key={i}>{r}</li>)}
-                                            </ul>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Right Column */}
-                <div className="ai-col-right">
-                    {/* AI Summary Section */}
-                    <div className="ai-card">
-                        <h3 className="ai-card-title">🤖 AI Report Summary</h3>
-                        
-                        {/* Show selected file preview */}
-                        {selectedReport && (
-                            <div className="ai-selected-file-preview">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                    <span style={{ fontSize: '1.4rem' }}>
-                                        {isImageMime(selectedReport.mimeType || selectedReport.mimetype) ? '🖼️' : '📄'}
-                                    </span>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {selectedReport.fileName || selectedReport.name || 'Document'}
-                                        </div>
-                                        <div style={{ fontSize: '11px', color: '#64748b' }}>
-                                            {(selectedReport.mimeType || selectedReport.mimetype || 'unknown').toUpperCase().replace('APPLICATION/', '').replace('IMAGE/', '')}
-                                        </div>
-                                    </div>
-                                    {isImageMime(selectedReport.mimeType || selectedReport.mimetype) && selectedReport.url && (
-                                        <img src={selectedReport.url} alt="Preview" style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e2e8f0' }} />
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        <button 
-                            className="ai-btn-primary"
-                            onClick={handleGenerateSummary}
-                            disabled={isLoading || isExhausted || !selectedReport}
-                            style={{ opacity: isLoading || isExhausted || !selectedReport ? 0.7 : 1 }}
-                        >
-                            {isLoading 
-                                ? (isImageMime(selectedReport?.mimeType || selectedReport?.mimetype) ? '🔍 Analyzing Image...' : '⏳ Generating Summary...') 
-                                : isExhausted ? '🚫 AI Credits Exhausted' : 'Generate Summary'
-                            }
-                        </button>
-                        
-                        {error && (
-                            <div className="ai-error-msg" style={{ marginTop: '10px' }}>
-                                ⚠️ {error}
-                            </div>
-                        )}
-
-                        <div className="ai-summary-box" style={{ 
-                            textAlign: summary ? 'left' : 'center', 
-                            background: summary ? '#ffffff' : '#fbfbfe',
-                            border: summary ? 'none' : '1px dashed #b0b9fd',
-                            marginTop: '16px'
-                        }}>
-                            {!summary && !isLoading && !error && "(No summary generated)"}
-                            
-                            {summary && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                    
-                                    {/* Content Type / Report Type Badge */}
-                                    <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                        <h4 style={{ color: '#334155', margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                            {summary.ContentType ? 'Content Type' : 'Report Type'}
-                                        </h4>
-                                        <p style={{ color: '#0f172a', margin: '0', fontSize: '15px', fontWeight: '500' }}>
-                                            {summary.ContentType || summary.ReportType || 'Unknown'}
-                                        </p>
-                                        {summary.ImageType && (
-                                            <p style={{ color: '#475569', margin: '4px 0 0 0', fontSize: '13px' }}>Type: {summary.ImageType}</p>
-                                        )}
-                                        {summary.BodyRegion && summary.BodyRegion !== 'Not Identifiable' && (
-                                            <p style={{ color: '#475569', margin: '2px 0 0 0', fontSize: '13px' }}>Region: {summary.BodyRegion}</p>
-                                        )}
-                                        {summary.ImageQuality && (
-                                            <p style={{ color: summary.ImageQuality === 'Insufficient' ? '#dc2626' : '#475569', margin: '2px 0 0 0', fontSize: '13px', fontWeight: summary.ImageQuality === 'Insufficient' ? 600 : 400 }}>
-                                                Quality: {summary.ImageQuality}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    {/* Overall Summary */}
-                                    <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                        <h4 style={{ color: '#334155', margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Overall Summary</h4>
-                                        <p style={{ color: '#0f172a', margin: '0', fontSize: '14px', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{summary.OverallSummary}</p>
-                                    </div>
-
-                                    {/* Visible Observations (for image analysis) */}
-                                    {summary.VisibleObservations && summary.VisibleObservations.length > 0 && (
-                                        <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                                            <h4 style={{ color: '#166534', margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Visible Observations</h4>
-                                            <ul style={{ color: '#14532d', margin: '0', fontSize: '14px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                {summary.VisibleObservations.map((obs, idx) => (
-                                                    <li key={idx}>{obs}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-
-                                    {/* Important Findings (for text reports) */}
-                                    {summary.ImportantFindings && summary.ImportantFindings.length > 0 && (
-                                        <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                            <h4 style={{ color: '#334155', margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Important Findings</h4>
-                                            <ul style={{ color: '#0f172a', margin: '0', fontSize: '14px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                {summary.ImportantFindings.map((finding, idx) => (
-                                                    <li key={idx}>{finding}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-
-                                    {/* Notable Findings (for image analysis) */}
-                                    {summary.NotableFindings && summary.NotableFindings.length > 0 && (
-                                        <div style={{ background: '#fffbeb', padding: '16px', borderRadius: '8px', border: '1px solid #fde68a' }}>
-                                            <h4 style={{ color: '#92400e', margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Notable Findings</h4>
-                                            <ul style={{ color: '#78350f', margin: '0', fontSize: '14px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                {summary.NotableFindings.map((finding, idx) => (
-                                                    <li key={idx}>{finding}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-
-                                    {/* Abnormal Values (for text reports) */}
-                                    {summary.AbnormalValues && summary.AbnormalValues.length > 0 && (
-                                        <div style={{ background: '#fef2f2', padding: '16px', borderRadius: '8px', border: '1px solid #fecaca' }}>
-                                            <h4 style={{ color: '#dc2626', margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Abnormal Values</h4>
-                                            <ul style={{ color: '#991b1b', margin: '0', fontSize: '14px', paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                {summary.AbnormalValues.map((val, idx) => (
-                                                    <li key={idx}>{val}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-
-                                    {/* Extracted Text (for scanned images) */}
-                                    {summary.ExtractedText && summary.ExtractedText.trim() && (
-                                        <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                            <h4 style={{ color: '#334155', margin: '0 0 8px 0', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Extracted Text</h4>
-                                            <pre style={{ color: '#0f172a', margin: '0', fontSize: '13px', lineHeight: '1.5', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{summary.ExtractedText}</pre>
-                                        </div>
-                                    )}
-
-                                    {/* Medical Disclaimer */}
-                                    {summary.Disclaimer && (
-                                        <div className="ai-medical-disclaimer">
-                                            <span style={{ fontSize: '14px' }}>⚕️</span>
-                                            <span>{summary.Disclaimer}</span>
-                                        </div>
-                                    )}
-                                </div>
+                            {isChatLoading && (
+                                <AIResponseRenderer
+                                    role="ai"
+                                    isTyping={true}
+                                    timestamp={new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                />
                             )}
+                            <div ref={chatEndRef} />
                         </div>
-                    </div>
 
-                    {/* Search Inside Reports Section */}
-                    <div className="ai-card">
-                        <h3 className="ai-card-title"><FiSearch /> Search Inside Reports</h3>
-                        
-                        <div style={{ position: 'relative', width: '100%', boxSizing: 'border-box', marginTop: '12px' }}>
-                            <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', fontSize: '1.2rem' }}>
-                                <FiSearch />
-                            </span>
-                            <input 
-                                type="text" 
-                                placeholder="Search inside patient's reports..." 
-                                value={reportSearchQuery}
-                                onChange={(e) => setReportSearchQuery(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleReportSearch()}
-                                disabled={!selectedPatient}
-                                style={{
-                                    width: '100%', padding: '14px 16px 14px 44px', background: '#f8fafc', 
-                                    border: '1px solid #cbd5e1', borderRadius: '12px', color: '#0f172a', 
-                                    fontSize: '1rem', outline: 'none', transition: 'border 0.2s', 
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {reportSearchQuery && (
-                                <button onClick={() => setReportSearchQuery('')} style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '1.2rem' }}>
-                                    ✕
+                        {/* Quick Clinical Prompts Bar */}
+                        <div className="cca-chat-quick-chips" data-lenis-prevent>
+                            <button 
+                                className="cca-quick-chip"
+                                onClick={() => handleChatSend('Iska ilaj kaise hoga? Give 2 to 3 standard evidence-based clinical treatment pathways and management options.')}
+                                disabled={isChatLoading || isExhausted}
+                            >
+                                🩺 Iska ilaj kaise hoga?
+                            </button>
+                            <button 
+                                className="cca-quick-chip"
+                                onClick={() => handleChatSend('Analyze all abnormal values in this report and highlight critical parameters.')}
+                                disabled={isChatLoading || isExhausted}
+                            >
+                                ⚠️ Abnormal Values
+                            </button>
+                            <button 
+                                className="cca-quick-chip"
+                                onClick={() => handleChatSend('Provide recommended follow-up diagnostic tests and diet/lifestyle guidelines.')}
+                                disabled={isChatLoading || isExhausted}
+                            >
+                                🥗 Follow-up & Diet
+                            </button>
+                        </div>
+
+                        {/* Chat Input Container */}
+                        <div className="cca-exact-chat-input-box">
+                            <div className="cca-exact-chat-input-row">
+                                <div className="cca-chat-input-actions-left">
+                                    <button className="cca-chat-ico-btn" title="Attach report / media"><FiPaperclip size={17} /></button>
+                                    <button className="cca-chat-ico-btn" title="Voice dictation"><FiMic size={17} /></button>
+                                </div>
+
+                                <input 
+                                    type="text"
+                                    className="cca-exact-chat-input"
+                                    placeholder={isExhausted ? 'AI Credits Exhausted — Contact Admin to recharge' : 'Ask anything about the patient, reports, or "Iska ilaj kaise hoga?"...'}
+                                    value={chatInput}
+                                    onChange={(e) => setChatInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && !isExhausted && handleChatSend()}
+                                    disabled={isExhausted}
+                                />
+
+                                <button 
+                                    className="cca-exact-btn-send"
+                                    onClick={() => handleChatSend()}
+                                    disabled={!chatInput.trim() || isChatLoading || isExhausted}
+                                    title={isExhausted ? 'AI Credits Exhausted' : 'Send message'}
+                                >
+                                    <FiSend size={15} />
                                 </button>
-                            )}
-                        </div>
-                        
-                        <div className="ai-search-results" style={{ marginTop: '24px' }}>
-                            {reportSearchError && (
-                                <div style={{ color: '#64748b', fontSize: '15px', textAlign: 'center', padding: '24px 0', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
-                                    {reportSearchError}
-                                </div>
-                            )}
-
-                            {!reportSearchResults && !reportSearchError && (
-                                <div style={{ color: '#94a3b8', fontSize: '14px', textAlign: 'center', padding: '24px 0' }}>
-                                    (No results)
-                                </div>
-                            )}
-
-                            {reportSearchResults && reportSearchResults.length > 0 && (
-                                <div>
-                                    <h4 style={{ color: '#0f172a', margin: '0 0 16px 0', fontSize: '15px' }}>
-                                        Found matches for "{reportSearchQuery}"
-                                    </h4>
-                                    
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                        {reportSearchResults.map((result, idx) => (
-                                            <div key={idx} style={{ 
-                                                background: '#ffffff', 
-                                                border: '1px solid #e2e8f0', 
-                                                borderRadius: '12px', 
-                                                padding: '16px', 
-                                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                                            }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
-                                                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#0f172a' }}>
-                                                        {result.reportName}
-                                                    </span>
-                                                    <span style={{ fontSize: '13px', color: '#475569', background: '#f1f5f9', padding: '4px 10px', borderRadius: '12px', fontWeight: '500' }}>
-                                                        Page: {result.pageNumber}
-                                                    </span>
-                                                </div>
-                                                <div style={{ fontSize: '15px', color: '#334155', lineHeight: '1.6', background: '#f8fafc', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #8b5cf6' }}>
-                                                    {highlightKeyword(result.match, result.keyword)}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* ── AI Clinical Assistant Chat ── */}
-                    <div className="ai-card ai-chat-card">
-                        <h3 className="ai-card-title">💬 AI Clinical Assistant</h3>
-
-                        {!selectedPatient ? (
-                            <div className="ai-chat-disabled">
-                                <span className="ai-chat-disabled-icon">🔒</span>
-                                Please select a patient first.
                             </div>
-                        ) : (
-                            <>
-                                {/* Conversation Area */}
-                                <div className="ai-chat-messages">
-                                    {chatMessages.length === 0 && !isChatLoading && (
-                                        <div className="ai-chat-empty">
-                                            <span style={{ fontSize: '36px' }}>🤖</span>
-                                            <p>Start a clinical conversation about your patient.</p>
-                                            <span style={{ fontSize: '12px', color: '#94a3b8' }}>AI answers based on selected patient data, reports & medical history only.</span>
-                                        </div>
-                                    )}
 
-                                    {chatMessages.map((msg, idx) => (
-                                        <div key={idx} className={`ai-chat-bubble ${msg.role}`}>
-                                            <div className="ai-chat-bubble-header">
-                                                <span className="ai-chat-role-tag">{msg.role === 'doctor' ? '🩺 You' : '🤖 AI'}</span>
-                                                <span className="ai-chat-time">{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                            </div>
-                                            {/* Show attached media thumbnails in chat */}
-                                            {msg.attachments && msg.attachments.length > 0 && (
-                                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}>
-                                                    {msg.attachments.map((att, ai) => (
-                                                        <div key={ai} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', color: '#475569' }}>
-                                                            {att.previewUrl ? (
-                                                                <img src={att.previewUrl} alt="" style={{ width: '20px', height: '20px', objectFit: 'cover', borderRadius: '3px' }} />
-                                                            ) : <span>📄</span>}
-                                                            <span>{att.name}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                            <div className="ai-chat-bubble-text" style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div>
-                                        </div>
-                                    ))}
+                            <div className="cca-exact-chat-footer-disclaimer">
+                                <span>✨ Medical365 AI</span> • Verified clinical algorithms. Please verify clinically.
+                            </div>
+                        </div>
 
-                                    {isChatLoading && (
-                                        <div className="ai-chat-bubble ai">
-                                            <div className="ai-chat-bubble-header">
-                                                <span className="ai-chat-role-tag">🤖 AI</span>
-                                            </div>
-                                            <div className="ai-chat-typing">
-                                                <span></span><span></span><span></span>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <div ref={chatEndRef} />
-                                </div>
-
-                                {/* Quick Suggestion Chips */}
-                                <div className="ai-chat-chips">
-                                    {CHAT_SUGGESTIONS.map((chip, i) => (
-                                        <button key={i} className="ai-chat-chip" onClick={() => handleChatSend(chip)} disabled={isExhausted}>
-                                            {chip}
-                                        </button>
-                                    ))}
-                                </div>
-
-                                {/* Chat Attachments Preview */}
-                                {chatAttachments.length > 0 && (
-                                    <div className="ai-chat-attachments-bar">
-                                        {chatAttachments.map((att, idx) => (
-                                            <div key={idx} className="ai-chat-attachment-chip">
-                                                {att.previewUrl ? (
-                                                    <img src={att.previewUrl} alt="" style={{ width: '24px', height: '24px', objectFit: 'cover', borderRadius: '4px' }} />
-                                                ) : (
-                                                    <span style={{ fontSize: '14px' }}>📄</span>
-                                                )}
-                                                <span className="ai-chat-attachment-name">{att.name}</span>
-                                                <button onClick={() => handleRemoveAttachment(idx)} className="ai-chat-attachment-remove" title="Remove"><FiX size={12} /></button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Input Area */}
-                                <div className="ai-chat-input-area">
-                                    {/* Attach file button */}
-                                    <button
-                                        className="ai-chat-attach-btn"
-                                        disabled={isExhausted}
-                                        onClick={() => {
-                                            if (selectedReport && selectedReport.url) {
-                                                handleAttachToChat(selectedReport);
-                                            } else {
-                                                alert('Select a report from the left panel to attach it to the chat.');
-                                            }
-                                        }}
-                                        title="Attach selected report to chat"
-                                    >
-                                        <FiPaperclip size={16} />
-                                    </button>
-                                    <textarea
-                                        ref={chatTextareaRef}
-                                        className="ai-chat-input"
-                                        placeholder={isExhausted ? "AI Credits Exhausted — Contact Administrator to continue" : (chatAttachments.length > 0 ? "Ask about the attached file(s)..." : "Type your clinical question...")}
-                                        value={chatInput}
-                                        onChange={handleTextareaInput}
-                                        onKeyDown={handleChatKeyDown}
-                                        disabled={isExhausted}
-                                        rows={1}
-                                    />
-                                    <button
-                                        className="ai-chat-send-btn"
-                                        onClick={() => handleChatSend()}
-                                        disabled={!chatInput.trim() || isChatLoading || isExhausted}
-                                    >
-                                        Send
-                                    </button>
-                                </div>
-                            </>
-                        )}
                     </div>
                 </div>
+
             </div>
 
-            {/* ── Hospital AI Wallet & AI Credits Modal ── */}
+            {/* ── Document Preview Modal (When 👁️ View is clicked on any report) ── */}
+            {previewDoc && (
+                <div className="cca-doc-preview-modal-overlay" onClick={() => setPreviewDoc(null)}>
+                    <div className="cca-doc-preview-modal" onClick={e => e.stopPropagation()}>
+                        <div className="cca-doc-preview-header">
+                            <div className="cca-doc-preview-title">
+                                <span className="cca-doc-preview-icon">
+                                    {isImageMime(previewDoc.mimeType, previewDoc.url) ? '🖼️' : '📄'}
+                                </span>
+                                <div>
+                                    <h4>{previewDoc.fileName || previewDoc.name || 'Medical Document Preview'}</h4>
+                                    <span>{previewDoc.docType || (isPdfMime(previewDoc.mimeType, previewDoc.url) ? 'PDF Document' : 'Medical Image')}</span>
+                                </div>
+                            </div>
+                            <div className="cca-doc-preview-actions">
+                                <a 
+                                    href={previewDoc.url} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="cca-btn-preview-ext"
+                                    title="Open original file in new tab"
+                                >
+                                    <FiExternalLink size={14} /> Open
+                                </a>
+                                <button className="cca-btn-preview-close" onClick={() => setPreviewDoc(null)}>
+                                    <FiX size={18} />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="cca-doc-preview-canvas" data-lenis-prevent>
+                            {isImageMime(previewDoc.mimeType, previewDoc.url) ? (
+                                <img 
+                                    src={previewDoc.url} 
+                                    alt="Medical Report" 
+                                    className="cca-doc-preview-img" 
+                                />
+                            ) : (
+                                <iframe 
+                                    src={previewDoc.url} 
+                                    title="PDF Document Preview" 
+                                    className="cca-doc-preview-iframe" 
+                                />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── AI Wallet Modal ── */}
             {isWalletOpen && (
                 <div className="ai-modal-overlay" onClick={() => setIsWalletOpen(false)}>
-                    <div className="ai-tracker-modal ai-wallet-modal" onClick={e => e.stopPropagation()}>
+                    <div className="ai-tracker-modal" onClick={e => e.stopPropagation()}>
                         <div className="ai-tracker-header">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 <span style={{ fontSize: '24px' }}>🏥</span>
                                 <div>
                                     <h2 style={{ margin: 0, fontSize: '18px', color: '#0f172a' }}>Hospital AI Wallet & AI Credits</h2>
-                                    <span style={{ fontSize: '12px', color: '#64748b' }}>Every hospital receives ₹2,000 AI Budget. Costs are calculated from actual Gemini API usage.</span>
+                                    <span style={{ fontSize: '12px', color: '#64748b' }}>Live budget and credit usage logs.</span>
                                 </div>
                             </div>
                             <button className="ai-tracker-close-btn" onClick={() => setIsWalletOpen(false)}>✕</button>
                         </div>
 
-                        <div className="ai-tracker-body">
-                            {isWalletLoading && !wallet && (
-                                <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
-                                    Loading live hospital AI Wallet analytics...
-                                </div>
-                            )}
-
+                        <div className="ai-tracker-body" data-lenis-prevent>
                             {wallet && (
                                 <>
-                                    {/* KPI Summary Cards */}
                                     <div className="ai-tracker-kpi-grid">
                                         <div className="ai-tracker-card highlight">
-                                            <span className="ai-tracker-card-title">Remaining AI Credits</span>
-                                            <span className="ai-tracker-card-value" style={{ color: wallet.remainingAmount <= 100 ? '#ef4444' : '#6366f1' }}>
-                                                ₹{Number(wallet.remainingAmount).toFixed(2)}
+                                            <span className="ai-tracker-card-title">Available AI Credits</span>
+                                            <span className="ai-tracker-card-value" style={{ color: statusInfo.color }}>
+                                                {formatINR(wallet.remainingAmount)}
                                             </span>
                                             <span className="ai-tracker-card-sub">
-                                                Status: <strong style={{ textTransform: 'capitalize', color: wallet.status === 'active' ? '#16a34a' : '#dc2626' }}>{wallet.status || 'Active'}</strong> ({wallet.warningLevel || 'normal'})
+                                                Status: <strong style={{ color: statusInfo.color }}>{statusInfo.icon} {statusInfo.label}</strong>
                                             </span>
                                         </div>
 
                                         <div className="ai-tracker-card">
                                             <span className="ai-tracker-card-title">Used Budget</span>
-                                            <span className="ai-tracker-card-value" style={{ color: '#0f172a' }}>
-                                                ₹{Number(wallet.usedAmount).toFixed(2)}
-                                            </span>
-                                            <span className="ai-tracker-card-sub">
-                                                Total Initial Budget: ₹{Number(wallet.budgetAmount || 2000).toFixed(2)} INR
-                                            </span>
-                                        </div>
-
-                                        <div className="ai-tracker-card">
-                                            <span className="ai-tracker-card-title">Today's Usage</span>
-                                            <span className="ai-tracker-card-value" style={{ color: '#16a34a' }}>
-                                                ₹{wallet.today ? Number(wallet.today.costInr).toFixed(2) : '0.00'}
-                                            </span>
-                                            <span className="ai-tracker-card-sub">
-                                                {wallet.today?.requests || 0} requests today
-                                            </span>
-                                        </div>
-
-                                        <div className="ai-tracker-card">
-                                            <span className="ai-tracker-card-title">Total AI Invocations</span>
                                             <span className="ai-tracker-card-value">
-                                                {wallet.totalRequests || 0}
+                                                {formatINR(wallet.usedAmount)}
                                             </span>
                                             <span className="ai-tracker-card-sub">
-                                                Active Model: Gemini 1.5 Flash
+                                                Total Budget: {formatINR(wallet.budgetAmount || 2000)}
                                             </span>
                                         </div>
                                     </div>
 
-                                    {/* Action Type Breakdown */}
-                                    {wallet.breakdown && wallet.breakdown.length > 0 && (
-                                        <div className="ai-tracker-breakdown">
-                                            <h4>Activity Breakdown</h4>
-                                            <div className="ai-breakdown-tags">
-                                                {wallet.breakdown.map((item, i) => (
-                                                    <div key={i} className="ai-breakdown-tag">
-                                                        <strong>{(item.operation || item.actionType || '').replace('_', ' ')}:</strong>
-                                                        <span>{item.count} calls</span>
-                                                        <span>• ₹{Number(item.costInr).toFixed(4)}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Recent Activity Log Table */}
-                                    <div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                            <h4 style={{ margin: 0, fontSize: '15px', color: '#1e293b' }}>Recent AI Billing Invocations</h4>
-                                            <button 
-                                                onClick={fetchWalletModalData} 
-                                                style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', cursor: 'pointer' }}
-                                            >
-                                                🔄 Refresh
-                                            </button>
-                                        </div>
-
-                                        <div className="ai-tracker-table-container">
-                                            <table className="ai-tracker-table">
-                                                <thead>
+                                    <div className="ai-tracker-table-container">
+                                        <table className="ai-tracker-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Time</th>
+                                                    <th>Operation</th>
+                                                    <th>Tokens</th>
+                                                    <th>Cost (₹)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {walletLogs.length === 0 ? (
                                                     <tr>
-                                                        <th>Time</th>
-                                                        <th>Operation</th>
-                                                        <th>Model</th>
-                                                        <th>Tokens</th>
-                                                        <th>Actual Cost</th>
-                                                        <th>Status</th>
+                                                        <td colSpan="4" style={{ textAlign: 'center', color: '#64748b', padding: '20px' }}>
+                                                            No AI requests recorded yet.
+                                                        </td>
                                                     </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {walletLogs.length === 0 ? (
-                                                        <tr>
-                                                            <td colSpan="6" style={{ textAlign: 'center', color: '#64748b', padding: '20px' }}>
-                                                                No AI requests recorded yet. Generate a summary or ask a chat question to see live wallet deductions!
+                                                ) : (
+                                                    walletLogs.map((log) => (
+                                                        <tr key={log._id}>
+                                                            <td style={{ color: '#64748b' }}>
+                                                                {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                            </td>
+                                                            <td>{log.operation || 'CLINICAL_CHAT'}</td>
+                                                            <td>{log.totalTokens || 0}</td>
+                                                            <td style={{ color: '#16a34a', fontWeight: 600 }}>
+                                                                ₹{(log.actualApiCost || log.estimatedCostInr || 0).toFixed(4)}
                                                             </td>
                                                         </tr>
-                                                    ) : (
-                                                        walletLogs.map((log) => {
-                                                            let badgeClass = 'ai-action-summary';
-                                                            const op = log.operation || log.actionType || 'AI_CALL';
-                                                            if (op === 'CLINICAL_CHAT' || op === 'CLINICAL_CHAT_MEDIA') badgeClass = 'ai-action-chat';
-                                                            if (op === 'REPORT_COMPARISON') badgeClass = 'ai-action-compare';
-                                                            if (op === 'OCR_EXTRACTION') badgeClass = 'ai-action-ocr';
-
-                                                            return (
-                                                                <tr key={log._id}>
-                                                                    <td style={{ whiteSpace: 'nowrap', color: '#64748b' }}>
-                                                                        {new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                                                    </td>
-                                                                    <td>
-                                                                        <span className={`ai-tracker-action-badge ${badgeClass}`}>
-                                                                            {op.replace('_', ' ')}
-                                                                        </span>
-                                                                    </td>
-                                                                    <td style={{ fontFamily: 'monospace', fontSize: '11px', color: '#475569' }}>
-                                                                        {log.model || log.modelName || 'gemini-1.5-flash'}
-                                                                    </td>
-                                                                    <td>{log.totalTokens || 0}</td>
-                                                                    <td style={{ color: '#16a34a', fontWeight: 600 }}>
-                                                                        ₹{(log.actualApiCost !== undefined ? log.actualApiCost : (log.estimatedCostInr || 0)).toFixed(4)}
-                                                                    </td>
-                                                                    <td>
-                                                                        <span style={{ fontSize: '11px', color: log.status === 'SUCCESS' ? '#16a34a' : '#ef4444', fontWeight: 600 }}>
-                                                                            {log.status}
-                                                                        </span>
-                                                                    </td>
-                                                                </tr>
-                                                            );
-                                                        })
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </>
                             )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ── Contact Admin Modal ── */}
-            {isContactModalOpen && (
-                <div className="ai-modal-overlay" onClick={() => setIsContactModalOpen(false)}>
-                    <div className="ai-contact-modal" onClick={e => e.stopPropagation()}>
-                        <div className="ai-modal-header">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '20px' }}>🏥</span>
-                                <h3>Contact Hospital Administrator</h3>
-                            </div>
-                            <button className="ai-modal-close" onClick={() => setIsContactModalOpen(false)}>✕</button>
-                        </div>
-                        <div className="ai-contact-body">
-                            <p style={{ color: '#475569', fontSize: '14px', lineHeight: '1.5', margin: '0 0 16px 0' }}>
-                                Your hospital's initial <strong>₹2,000 AI Credit budget</strong> has been fully utilized.
-                            </p>
-                            <div className="ai-admin-contact-info">
-                                <div className="ai-contact-row">
-                                    <span className="ai-contact-label">Status:</span>
-                                    <span className="ai-contact-badge exhausted">Exhausted (₹0.00 Remaining)</span>
-                                </div>
-                                <div className="ai-contact-row">
-                                    <span className="ai-contact-label">Hospital ID:</span>
-                                    <span className="ai-contact-text">{currentUser?.hospitalId || 'Active Hospital'}</span>
-                                </div>
-                                <div className="ai-contact-row">
-                                    <span className="ai-contact-label">Resolution:</span>
-                                    <span className="ai-contact-text">Please request your Hospital Administrator or Super Admin to top up credits for this hospital.</span>
-                                </div>
-                            </div>
-                            <button 
-                                className="ai-btn-primary" 
-                                style={{ marginTop: '20px', width: '100%', padding: '10px' }} 
-                                onClick={() => setIsContactModalOpen(false)}
-                            >
-                                Close
-                            </button>
                         </div>
                     </div>
                 </div>

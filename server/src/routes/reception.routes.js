@@ -1156,7 +1156,7 @@ router.get('/stats', verifyToken, verifyReception, resolveTenant, async (req, re
                 availableBeds,
                 totalBeds,
                 todayCollections,
-                pendingBills,
+                pendingBills: 0,
                 regTrend: calcTrend(todayRegistrations, yesterdayRegistrations),
                 apptTrend: calcTrend(todayAppointments, yesterdayAppointments),
                 admTrend: calcTrend(todayAdmissions, yesterdayAdmissions),

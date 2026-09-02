@@ -2,11 +2,14 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
 const path = require('path');
 
-// Supported valid Google Gemini models in cascade order
+// Supported valid Google Gemini models in smart cascade order (all validated for generateContent)
 const DEFAULT_MODELS = [
-    'gemini-1.5-flash',
+    'gemini-3.1-flash',
+    'gemini-3.5-flash',
+    'gemini-3.7-flash',
+    'gemini-2.5-flash',
     'gemini-2.0-flash',
-    'gemini-1.5-pro'
+    'gemini-1.5-flash'
 ];
 
 class GeminiProvider {
@@ -21,6 +24,29 @@ class GeminiProvider {
     setRuntimeConfig({ apiKey, model }) {
         if (apiKey) this._runtimeApiKey = apiKey.trim();
         if (model) this._runtimeModel = model.trim();
+    }
+
+    /**
+     * Normalize any user model string to standard Gemini format.
+     * Handles: '3.1-flash', '3.5-flash', '3.1', '3.5', 'gemini-3.1-flash', etc.
+     */
+    _normalizeModelName(rawModel) {
+        if (!rawModel) return 'gemini-3.1-flash';
+        let clean = rawModel.toLowerCase().trim().replace(/^["']|["']$/g, '');
+        clean = clean.replace(/\s+/g, '-'); // replace spaces with hyphens
+
+        if (clean === '3.1' || clean === '3.1-flash' || clean === 'flash-3.1') return 'gemini-3.1-flash';
+        if (clean === '3.5' || clean === '3.5-flash' || clean === 'flash-3.5') return 'gemini-3.5-flash';
+        if (clean === '3.7' || clean === '3.7-flash' || clean === 'flash-3.7') return 'gemini-3.7-flash';
+        if (clean === '2.5' || clean === '2.5-flash' || clean === 'flash-2.5') return 'gemini-2.5-flash';
+        if (clean === '2.0' || clean === '2.0-flash' || clean === 'flash-2.0' || clean === '2') return 'gemini-2.0-flash';
+        if (clean === '1.5' || clean === '1.5-flash' || clean === 'flash-1.5' || clean === 'flash') return 'gemini-1.5-flash';
+        if (clean === '1.5-pro' || clean === 'pro') return 'gemini-1.5-pro';
+
+        if (!clean.startsWith('gemini-')) {
+            clean = `gemini-${clean}`;
+        }
+        return clean;
     }
 
     /**
@@ -73,9 +99,13 @@ class GeminiProvider {
      */
     _getModelCandidates(requestedModel) {
         const envModel = (this._runtimeModel || process.env.GEMINI_MODEL || '').trim().replace(/^["']|["']$/g, '');
-        const target = requestedModel || envModel || 'gemini-1.5-flash';
+        const target = requestedModel || envModel || 'gemini-3.1-flash';
+        const normalizedTarget = this._normalizeModelName(target);
 
-        const candidates = [target];
+        const candidates = [];
+        if (target && !candidates.includes(target)) candidates.push(target);
+        if (normalizedTarget && !candidates.includes(normalizedTarget)) candidates.push(normalizedTarget);
+
         for (const def of DEFAULT_MODELS) {
             if (!candidates.includes(def)) {
                 candidates.push(def);
@@ -243,18 +273,43 @@ class GeminiProvider {
         };
     }
 
+    _formatHistory(messages) {
+        if (!Array.isArray(messages) || messages.length <= 1) return [];
+        
+        const history = messages.slice(0, -1).map(msg => ({
+            role: (msg.role === 'assistant' || msg.role === 'model') ? 'model' : 'user',
+            parts: [{ text: typeof msg.content === 'string' ? msg.content : (msg.text || '') }]
+        }));
+
+        // Google Generative AI strictly requires history to start with role 'user'.
+        // If history starts with initial assistant greeting, strip it.
+        while (history.length > 0 && history[0].role === 'model') {
+            history.shift();
+        }
+
+        // Ensure alternating roles (merge consecutive identical roles)
+        const cleanHistory = [];
+        for (const item of history) {
+            if (cleanHistory.length === 0 || cleanHistory[cleanHistory.length - 1].role !== item.role) {
+                cleanHistory.push(item);
+            } else {
+                cleanHistory[cleanHistory.length - 1].parts[0].text += '\n\n' + item.parts[0].text;
+            }
+        }
+
+        return cleanHistory;
+    }
+
     /**
      * Text-only chat completion.
      */
     async chatCompletion(systemPrompt, messages, modelName) {
         const { result, modelName: resolvedModel } = await this._executeWithRetry('chatCompletion', async (genAI, model) => {
             const generativeModel = genAI.getGenerativeModel({ model, systemInstruction: systemPrompt });
-            const formattedHistory = messages.slice(0, -1).map(msg => ({
-                role: msg.role === 'assistant' ? 'model' : 'user',
-                parts: [{ text: msg.content }]
-            }));
+            const formattedHistory = this._formatHistory(messages);
             const chat = generativeModel.startChat({ history: formattedHistory });
-            const latestMessage = messages[messages.length - 1].content;
+            const latestMsgObj = messages[messages.length - 1];
+            const latestMessage = typeof latestMsgObj === 'string' ? latestMsgObj : (latestMsgObj.content || latestMsgObj.text || '');
             return await chat.sendMessage(latestMessage);
         }, modelName);
 
@@ -270,12 +325,10 @@ class GeminiProvider {
     async chatWithMedia(systemPrompt, messages, mediaInputs, modelName) {
         const { result, modelName: resolvedModel } = await this._executeWithRetry('chatWithMedia', async (genAI, model) => {
             const generativeModel = genAI.getGenerativeModel({ model, systemInstruction: systemPrompt });
-            const formattedHistory = messages.slice(0, -1).map(msg => ({
-                role: msg.role === 'assistant' ? 'model' : 'user',
-                parts: [{ text: msg.content }]
-            }));
+            const formattedHistory = this._formatHistory(messages);
             const chat = generativeModel.startChat({ history: formattedHistory });
-            const latestText = messages[messages.length - 1].content;
+            const latestMsgObj = messages[messages.length - 1];
+            const latestText = typeof latestMsgObj === 'string' ? latestMsgObj : (latestMsgObj.content || latestMsgObj.text || '');
             const messageParts = [latestText];
 
             if (mediaInputs && mediaInputs.length > 0) {
