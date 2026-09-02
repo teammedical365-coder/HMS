@@ -4,8 +4,7 @@ import { receptionAPI, patientAPI, reportAPI } from '../../utils/api';
 import { useAuth } from '../../store/hooks';
 import { 
     FiSearch, FiUsers, FiCalendar, FiActivity, FiFileText, FiSliders, 
-    FiPhone, FiEye, FiUpload, FiCpu, FiUserPlus, FiChevronDown, 
-    FiClock, FiCheckCircle, FiX, FiRefreshCw, FiZap, FiRadio
+    FiPhone, FiEye, FiCheckCircle, FiX, FiRefreshCw
 } from 'react-icons/fi';
 import './ReceptionDashboard.css';
 import toast from 'react-hot-toast';
@@ -42,6 +41,7 @@ const ReceptionPatients = () => {
     // Loading states
     const [loadingAppts, setLoadingAppts] = useState(() => appointments.length === 0);
     const [loadingPatients, setLoadingPatients] = useState(() => patients.length === 0);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     // Search and tab states
     const [searchText, setSearchText] = useState('');
@@ -124,6 +124,18 @@ const ReceptionPatients = () => {
         fetchAppointments();
         fetchRecentPatients();
     }, [fetchAppointments, fetchRecentPatients]);
+
+    const handleManualRefresh = async () => {
+        setIsRefreshing(true);
+        try {
+            await Promise.all([fetchAppointments(), fetchRecentPatients()]);
+            toast.success('Queue refreshed with latest records!', { id: 'rec-refresh-toast', duration: 2500 });
+        } catch (e) {
+            toast.error('Failed to refresh records');
+        } finally {
+            setTimeout(() => setIsRefreshing(false), 500);
+        }
+    };
 
     // Reset pagination on search, tab switch, or filter changes
     useEffect(() => {
@@ -237,17 +249,22 @@ const ReceptionPatients = () => {
         return { totalPatientsCount: totalPatients, upcomingApptsCount: upcoming, completedTodayCount: completedToday, pendingBillsCount: pendingBills };
     }, [patients, appointments, todayStr]);
 
-    const { completedCount, upcomingCount, cancelledCount, noShowCount, totalActivityCount, completedPct, upcomingPct, cancelledPct, noShowPct } = useMemo(() => {
+    const { completedCount, upcomingCount, cancelledCount, totalActivityCount, completedPct, upcomingPct, cancelledPct } = useMemo(() => {
         const completed = appointments.filter(a => a.status === 'completed').length;
-        const upcoming = appointments.filter(a => ['pending', 'confirmed', 'scheduled', 'in_progress'].includes(a.status)).length;
+        const upcoming = appointments.filter(a => ['pending', 'confirmed', 'scheduled', 'in_progress', 'with_doctor'].includes(a.status)).length;
         const cancelled = appointments.filter(a => a.status === 'cancelled').length;
-        const noShow = appointments.filter(a => ['no_show', 'missed'].includes(a.status)).length;
-        const total = (completed + upcoming + cancelled + noShow) || 1;
+        const total = (completed + upcoming + cancelled) || 1;
+        const cPct = Math.round((completed / total) * 100);
+        const uPct = Math.round((upcoming / total) * 100);
+        const canPct = Math.max(0, 100 - (cPct + uPct));
         return {
-            completedCount: completed, upcomingCount: upcoming, cancelledCount: cancelled, noShowCount: noShow,
-            totalActivityCount: total, completedPct: Math.round((completed / total) * 100),
-            upcomingPct: Math.round((upcoming / total) * 100), cancelledPct: Math.round((cancelled / total) * 100),
-            noShowPct: Math.max(0, 100 - (Math.round((completed / total) * 100) + Math.round((upcoming / total) * 100) + Math.round((cancelled / total) * 100)))
+            completedCount: completed,
+            upcomingCount: upcoming,
+            cancelledCount: cancelled,
+            totalActivityCount: completed + upcoming + cancelled,
+            completedPct: cPct,
+            upcomingPct: uPct,
+            cancelledPct: canPct
         };
     }, [appointments]);
 
@@ -287,11 +304,11 @@ const ReceptionPatients = () => {
     const visibleAppointments = useMemo(() => filteredAppointments.slice(0, visibleCount), [filteredAppointments, visibleCount]);
 
     return (
-        <div className="reception-dashboard rec-exact-main-wrap" style={{ padding: '0 0 28px 0', margin: 0 }}>
-            {/* 1. TOP 3 ANALYTICS & ACTIVITY CARDS GRID */}
-            <div className="rec-exact-bottom-grid rec-exact-top-analytics-grid" style={{ marginBottom: '20px' }}>
-                {/* 1. Today's Activity (Donut Chart & Legend) */}
-                <div className="rec-bottom-card rec-activity-card">
+        <div className="reception-dashboard rec-exact-main-wrap">
+            {/* 1. UNIFIED HERO: TODAY'S ACTIVITY (LEFT) + 4 STAT CARDS 2x2 (RIGHT) */}
+            <div className="rec-unified-hero-section">
+                {/* 1. Today's Activity (Donut Chart & Legend) - No Show Removed */}
+                <div className="rec-bottom-card rec-activity-card rec-activity-unified">
                     <h3 className="rec-bottom-card-title">Today's Activity</h3>
                     <div className="rec-activity-body">
                         <div className="rec-donut-wrapper">
@@ -314,12 +331,6 @@ const ReceptionPatients = () => {
                                     className="rec-donut-seg rec-seg-cancelled"
                                     strokeDasharray={`${cancelledPct * 2.38} 238.76`}
                                     strokeDashoffset={`-${(completedPct + upcomingPct) * 2.38}`}
-                                />
-                                <circle
-                                    cx="50" cy="50" r="38"
-                                    className="rec-donut-seg rec-seg-noshow"
-                                    strokeDasharray={`${noShowPct * 2.38} 238.76`}
-                                    strokeDashoffset={`-${(completedPct + upcomingPct + cancelledPct) * 2.38}`}
                                 />
                             </svg>
                             <div className="rec-donut-center-text">
@@ -344,209 +355,126 @@ const ReceptionPatients = () => {
                                 <span className="rec-legend-label">Cancelled</span>
                                 <span className="rec-legend-val">{cancelledCount} ({cancelledPct}%)</span>
                             </div>
-                            <div className="rec-legend-item">
-                                <span className="rec-legend-dot rec-dot-noshow" />
-                                <span className="rec-legend-label">No Show</span>
-                                <span className="rec-legend-val">{noShowCount} ({noShowPct}%)</span>
-                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* 2. AI Insights Card */}
-                <div className="rec-bottom-card rec-insights-card">
-                    <div className="rec-insights-header">
-                        <FiCpu className="rec-insights-icon" />
-                        <span className="rec-insights-title">AI Insights</span>
-                    </div>
-                    <div className="rec-insights-content-row">
-                        <div className="rec-insights-text-col">
-                            <p className="rec-insights-desc">
-                                You have <strong>{upcomingApptsCount || 18}</strong> appointments today. Peak time is between <strong>10:00 AM to 01:00 PM</strong>.
-                            </p>
-                            <button 
-                                className="rec-insights-action-btn"
-                                onClick={() => navigate('/reception/dashboard?view=availability')}
-                            >
-                                View Full Insights
-                            </button>
-                        </div>
-                        <div className="rec-insights-art-col">
-                            <div className="rec-brain-hologram-wrap">
-                                <div className="rec-brain-glow" />
-                                <svg viewBox="0 0 100 100" className="rec-brain-svg">
-                                    <circle cx="50" cy="50" r="34" fill="url(#aiBrainGrad)" opacity="0.85" />
-                                    <circle cx="50" cy="50" r="44" stroke="#6366f1" strokeWidth="1.5" strokeDasharray="4 4" className="rec-orbit-ring" />
-                                    <circle cx="20" cy="30" r="3" fill="#ec4899" />
-                                    <circle cx="80" cy="40" r="3.5" fill="#38bdf8" />
-                                    <circle cx="65" cy="80" r="2.5" fill="#10b981" />
-                                    <defs>
-                                        <radialGradient id="aiBrainGrad" cx="50%" cy="50%" r="50%">
-                                            <stop offset="0%" stopColor="#818cf8" />
-                                            <stop offset="100%" stopColor="#4338ca" />
-                                        </radialGradient>
-                                    </defs>
-                                </svg>
+                {/* 2. 4 Stat Cards in 2x2 Grid next to Today's Activity */}
+                <div className="rec-kpi-grid-2x2">
+                    {/* Top Row - Card 1: Total Patients */}
+                    <div className="rec-exact-kpi-card rec-kpi-theme-purple" onClick={() => { setActiveTab('all'); setSearchText(''); }}>
+                        <div className="rec-kpi-top-glow" />
+                        <div className="rec-kpi-card-inner">
+                            <div className="rec-kpi-icon-box rec-kpi-icon-purple">
+                                <FiUsers />
+                            </div>
+                            <div className="rec-kpi-text-info">
+                                <div className="rec-kpi-val-row">
+                                    <span className="rec-kpi-val">{totalPatientsCount}</span>
+                                    <span className="rec-kpi-mini-tag rec-tag-purple">● Registered</span>
+                                </div>
+                                <span className="rec-kpi-name">Total Patients</span>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                {/* 3. Quick Stats & System Status Card */}
-                <div className="rec-bottom-card rec-quick-actions-card">
-                    <h3 className="rec-bottom-card-title">Live Terminal Status</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Connected Hospital</span>
-                            <strong style={{ fontSize: '13px', color: '#0f172a' }}>{currentUser?.hospitalName || 'City Central Hospital'}</strong>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#166534' }}>API Sync Latency</span>
-                            <span style={{ fontSize: '12px', fontWeight: 800, color: '#15803d', background: '#dcfce7', padding: '3px 8px', borderRadius: '6px' }}>⚡ 12ms (Optimal)</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#f5f3ff', borderRadius: '10px', border: '1px solid #ddd6fe' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#5b21b6' }}>Logged-in Operator</span>
-                            <strong style={{ fontSize: '13px', color: '#6d28d9' }}>{currentUser?.name || 'Aman Sharma'}</strong>
+                        <div className="rec-kpi-wave-box">
+                            <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+                                <path d="M0,18 Q25,2 50,14 T100,6" fill="none" stroke="#8b5cf6" strokeWidth="2.5" className="rec-sparkline-path" />
+                                <path d="M0,18 Q25,2 50,14 T100,6 L100,24 L0,24 Z" fill="url(#purpleGradWave)" opacity="0.18" />
+                                <defs>
+                                    <linearGradient id="purpleGradWave" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#8b5cf6" />
+                                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            {/* 2. COMPACT FUTURISTIC AI KPI CARDS GRID (5 CARDS) */}
-            <div className="rec-exact-kpi-grid rec-kpi-grid-5">
-                {/* Card 1: Total Patients */}
-                <div className="rec-exact-kpi-card rec-kpi-theme-purple" onClick={() => { setActiveTab('all'); setSearchText(''); }}>
-                    <div className="rec-kpi-top-glow" />
-                    <div className="rec-kpi-card-inner">
-                        <div className="rec-kpi-icon-box rec-kpi-purple">
-                            <FiUsers />
-                        </div>
-                        <div className="rec-kpi-text-info">
-                            <div className="rec-kpi-val-row">
-                                <span className="rec-kpi-val">{totalPatientsCount}</span>
-                                <span className="rec-kpi-mini-tag rec-tag-purple">● AI Sync</span>
+                    {/* Top Row - Card 2: Upcoming Appointments */}
+                    <div className="rec-exact-kpi-card rec-kpi-theme-amber" onClick={() => setActiveTab('today')}>
+                        <div className="rec-kpi-top-glow" />
+                        <div className="rec-kpi-card-inner">
+                            <div className="rec-kpi-icon-box rec-kpi-icon-amber">
+                                <FiCalendar />
                             </div>
-                            <span className="rec-kpi-name">Total Patients</span>
-                        </div>
-                    </div>
-                    <div className="rec-kpi-wave-box">
-                        <svg viewBox="0 0 100 24" preserveAspectRatio="none">
-                            <path d="M0,18 Q25,2 50,14 T100,6" fill="none" stroke="#8b5cf6" strokeWidth="2.5" className="rec-sparkline-path" />
-                            <path d="M0,18 Q25,2 50,14 T100,6 L100,24 L0,24 Z" fill="url(#purpleGradWave)" opacity="0.18" />
-                            <defs>
-                                <linearGradient id="purpleGradWave" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#8b5cf6" />
-                                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
-                                </linearGradient>
-                            </defs>
-                        </svg>
-                    </div>
-                </div>
-
-                {/* Card 2: Upcoming Appointments */}
-                <div className="rec-exact-kpi-card rec-kpi-theme-amber" onClick={() => setActiveTab('today')}>
-                    <div className="rec-kpi-top-glow" />
-                    <div className="rec-kpi-card-inner">
-                        <div className="rec-kpi-icon-box rec-kpi-amber">
-                            <FiCalendar />
-                        </div>
-                        <div className="rec-kpi-text-info">
-                            <div className="rec-kpi-val-row">
-                                <span className="rec-kpi-val">{upcomingApptsCount}</span>
-                                <span className="rec-kpi-mini-tag rec-tag-amber">● Active Queue</span>
+                            <div className="rec-kpi-text-info">
+                                <div className="rec-kpi-val-row">
+                                    <span className="rec-kpi-val">{upcomingApptsCount}</span>
+                                    <span className="rec-kpi-mini-tag rec-tag-amber">● In Queue</span>
+                                </div>
+                                <span className="rec-kpi-name">Upcoming Appts</span>
                             </div>
-                            <span className="rec-kpi-name">Upcoming Appts</span>
+                        </div>
+                        <div className="rec-kpi-wave-box">
+                            <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+                                <path d="M0,16 Q25,22 50,8 T100,12" fill="none" stroke="#f59e0b" strokeWidth="2.5" className="rec-sparkline-path" />
+                                <path d="M0,16 Q25,22 50,8 T100,12 L100,24 L0,24 Z" fill="url(#amberGradWave)" opacity="0.18" />
+                                <defs>
+                                    <linearGradient id="amberGradWave" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#f59e0b" />
+                                        <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
                         </div>
                     </div>
-                    <div className="rec-kpi-wave-box">
-                        <svg viewBox="0 0 100 24" preserveAspectRatio="none">
-                            <path d="M0,16 Q25,22 50,8 T100,12" fill="none" stroke="#f59e0b" strokeWidth="2.5" className="rec-sparkline-path" />
-                            <path d="M0,16 Q25,22 50,8 T100,12 L100,24 L0,24 Z" fill="url(#amberGradWave)" opacity="0.18" />
-                            <defs>
-                                <linearGradient id="amberGradWave" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#f59e0b" />
-                                    <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
-                                </linearGradient>
-                            </defs>
-                        </svg>
-                    </div>
-                </div>
 
-                {/* Card 3: Completed Today */}
-                <div className="rec-exact-kpi-card rec-kpi-theme-mint" onClick={() => { setActiveTab('today'); setFilterStatus('completed'); }}>
-                    <div className="rec-kpi-top-glow" />
-                    <div className="rec-kpi-card-inner">
-                        <div className="rec-kpi-icon-box rec-kpi-mint">
-                            <FiActivity />
-                        </div>
-                        <div className="rec-kpi-text-info">
-                            <div className="rec-kpi-val-row">
-                                <span className="rec-kpi-val">{completedTodayCount}</span>
-                                <span className="rec-kpi-mini-tag rec-tag-mint">● {completedPct}% Done</span>
+                    {/* Bottom Row - Card 3: Completed Today */}
+                    <div className="rec-exact-kpi-card rec-kpi-theme-mint" onClick={() => { setActiveTab('today'); setFilterStatus('completed'); }}>
+                        <div className="rec-kpi-top-glow" />
+                        <div className="rec-kpi-card-inner">
+                            <div className="rec-kpi-icon-box rec-kpi-icon-mint">
+                                <FiActivity />
                             </div>
-                            <span className="rec-kpi-name">Completed Today</span>
+                            <div className="rec-kpi-text-info">
+                                <div className="rec-kpi-val-row">
+                                    <span className="rec-kpi-val">{completedTodayCount}</span>
+                                    <span className="rec-kpi-mini-tag rec-tag-mint">● {completedPct}% Done</span>
+                                </div>
+                                <span className="rec-kpi-name">Completed Today</span>
+                            </div>
+                        </div>
+                        <div className="rec-kpi-wave-box">
+                            <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+                                <path d="M0,14 Q25,4 50,18 T100,4" fill="none" stroke="#10b981" strokeWidth="2.5" className="rec-sparkline-path" />
+                                <path d="M0,14 Q25,4 50,18 T100,4 L100,24 L0,24 Z" fill="url(#mintGradWave)" opacity="0.18" />
+                                <defs>
+                                    <linearGradient id="mintGradWave" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#10b981" />
+                                        <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
                         </div>
                     </div>
-                    <div className="rec-kpi-wave-box">
-                        <svg viewBox="0 0 100 24" preserveAspectRatio="none">
-                            <path d="M0,14 Q25,4 50,18 T100,4" fill="none" stroke="#10b981" strokeWidth="2.5" className="rec-sparkline-path" />
-                            <path d="M0,14 Q25,4 50,18 T100,4 L100,24 L0,24 Z" fill="url(#mintGradWave)" opacity="0.18" />
-                            <defs>
-                                <linearGradient id="mintGradWave" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#10b981" />
-                                    <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-                                </linearGradient>
-                            </defs>
-                        </svg>
-                    </div>
-                </div>
 
-                {/* Card 4: Pending Bills */}
-                <div className="rec-exact-kpi-card rec-kpi-theme-blue" onClick={() => navigate('/billing/patient')}>
-                    <div className="rec-kpi-top-glow" />
-                    <div className="rec-kpi-card-inner">
-                        <div className="rec-kpi-icon-box rec-kpi-blue">
-                            <FiFileText />
-                        </div>
-                        <div className="rec-kpi-text-info">
-                            <div className="rec-kpi-val-row">
-                                <span className="rec-kpi-val">{pendingBillsCount}</span>
-                                <span className="rec-kpi-mini-tag rec-tag-blue">● Real-Time</span>
+                    {/* Bottom Row - Card 4: Pending Bills */}
+                    <div className="rec-exact-kpi-card rec-kpi-theme-blue" onClick={() => navigate('/billing/patient')}>
+                        <div className="rec-kpi-top-glow" />
+                        <div className="rec-kpi-card-inner">
+                            <div className="rec-kpi-icon-box rec-kpi-icon-blue">
+                                <FiFileText />
                             </div>
-                            <span className="rec-kpi-name">Pending Bills</span>
-                        </div>
-                    </div>
-                    <div className="rec-kpi-wave-box">
-                        <svg viewBox="0 0 100 24" preserveAspectRatio="none">
-                            <path d="M0,10 Q25,18 50,6 T100,16" fill="none" stroke="#3b82f6" strokeWidth="2.5" className="rec-sparkline-path" />
-                            <path d="M0,10 Q25,18 50,6 T100,16 L100,24 L0,24 Z" fill="url(#blueGradWave)" opacity="0.18" />
-                            <defs>
-                                <linearGradient id="blueGradWave" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#3b82f6" />
-                                    <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
-                                </linearGradient>
-                            </defs>
-                        </svg>
-                    </div>
-                </div>
-
-                {/* Card 5: Quick Intake CTA Card */}
-                <div className="rec-exact-kpi-card rec-kpi-theme-intake" onClick={() => navigate('/reception/dashboard?view=intake')}>
-                    <div className="rec-kpi-top-glow rec-intake-glow" />
-                    <div className="rec-kpi-card-inner">
-                        <div className="rec-kpi-icon-box rec-kpi-intake-icon">
-                            <FiUserPlus />
-                        </div>
-                        <div className="rec-kpi-text-info">
-                            <div className="rec-kpi-val-row">
-                                <span className="rec-kpi-val rec-intake-val">+ Intake</span>
-                                <span className="rec-kpi-mini-tag rec-tag-intake">⚡ Instant</span>
+                            <div className="rec-kpi-text-info">
+                                <div className="rec-kpi-val-row">
+                                    <span className="rec-kpi-val">{pendingBillsCount}</span>
+                                    <span className="rec-kpi-mini-tag rec-tag-blue">● Unpaid</span>
+                                </div>
+                                <span className="rec-kpi-name">Pending Bills</span>
                             </div>
-                            <span className="rec-kpi-name">Register Patient</span>
                         </div>
-                    </div>
-                    <div className="rec-kpi-intake-footer">
-                        <span>Launch Registration Wizard →</span>
+                        <div className="rec-kpi-wave-box">
+                            <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+                                <path d="M0,10 Q25,18 50,6 T100,16" fill="none" stroke="#3b82f6" strokeWidth="2.5" className="rec-sparkline-path" />
+                                <path d="M0,10 Q25,18 50,6 T100,16 L100,24 L0,24 Z" fill="url(#blueGradWave)" opacity="0.18" />
+                                <defs>
+                                    <linearGradient id="blueGradWave" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#3b82f6" />
+                                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -585,7 +513,7 @@ const ReceptionPatients = () => {
                         <span className="rec-tab-count-pill">{appointments.length}</span>
                     </button>
 
-                    {/* ULTRA-MODERN FILTER BUTTON & GLASS POPOVER */}
+                    {/* ULTRA-MODERN FILTER BUTTON & CENTERED MODAL */}
                     <div className="rec-filter-btn-container" ref={filterPopoverRef}>
                         <button 
                             className={`rec-filter-icon-btn ${activeFilterCount > 0 ? 'filter-active' : ''}`} 
@@ -691,88 +619,149 @@ const ReceptionPatients = () => {
             <div className="rec-exact-table-card">
                 <div className="rec-table-card-header">
                     <div className="rec-table-header-title">
-                        <FiCalendar className="rec-table-title-icon" />
-                        <span>{activeTab === 'today' ? "Today's Queue" : "All Appointments"}</span>
+                        <FiCalendar className="rec-table-icon" />
+                        <h3>{activeTab === 'today' ? "Today's Patient Queue" : "All Appointments"}</h3>
+                        <span className="rec-table-count-badge">{filteredAppointments.length} Total</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        {activeFilterCount > 0 && (
-                            <span className="rec-active-filter-tag">
-                                Filtered ({activeFilterCount})
-                                <FiX style={{ cursor: 'pointer', marginLeft: '4px' }} onClick={handleResetFilters} />
-                            </span>
-                        )}
-                        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 700 }}>
-                            {filteredAppointments.length} Record{filteredAppointments.length !== 1 ? 's' : ''}
-                        </span>
+
+                    <div className="rec-table-header-actions">
+                        <button 
+                            className="rec-btn-refresh-table" 
+                            onClick={handleManualRefresh} 
+                            disabled={isRefreshing}
+                            title="Refresh Table Records"
+                        >
+                            <FiRefreshCw className={isRefreshing ? 'rec-spin' : ''} />
+                            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+                        </button>
                     </div>
                 </div>
 
-                {loadingAppts && appointments.length === 0 ? (
-                    <div style={{ padding: '24px' }}>
-                        {[1, 2, 3, 4, 5, 6].map(k => (
-                            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                <div className="rec-skeleton-line" style={{ width: '24px', height: '16px' }} />
-                                <div className="rec-skeleton-circle" />
-                                <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    <div className="rec-skeleton-line" style={{ width: '60%', height: '14px' }} />
-                                    <div className="rec-skeleton-line" style={{ width: '35%', height: '10px' }} />
-                                </div>
-                                <div className="rec-skeleton-line" style={{ flex: 1, height: '14px' }} />
-                                <div className="rec-skeleton-line" style={{ flex: 1, height: '14px' }} />
-                                <div className="rec-skeleton-line" style={{ width: '70px', height: '22px', borderRadius: '12px' }} />
-                                <div className="rec-skeleton-line" style={{ width: '80px', height: '28px', borderRadius: '6px' }} />
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="rec-table-responsive-wrap">
-                        <table className="rec-exact-table">
-                            <thead>
-                                <tr>
-                                    <th style={{ width: '45px' }}>#</th>
-                                    <th>Patient</th>
-                                    <th>Contact</th>
-                                    <th>Doctor</th>
-                                    <th>Time</th>
-                                    <th>Date</th>
-                                    <th>Status</th>
-                                    <th style={{ textAlign: 'center' }}>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {visibleAppointments.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="8" style={{ textAlign: 'center', padding: '50px 20px', color: '#64748b' }}>
-                                            <div style={{ fontSize: '28px', marginBottom: '8px' }}>🔍</div>
-                                            <strong style={{ display: 'block', color: '#1e293b', fontSize: '15px' }}>No appointments found</strong>
-                                            <p style={{ margin: '4px 0 12px 0', fontSize: '13px' }}>Try adjusting your search or active filters.</p>
-                                            {activeFilterCount > 0 && (
-                                                <button 
-                                                    onClick={handleResetFilters}
-                                                    style={{ padding: '6px 14px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-                                                >
-                                                    Reset Filters
-                                                </button>
-                                            )}
-                                        </td>
+                <div className="rec-table-responsive">
+                    <table className="rec-exact-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>PATIENT</th>
+                                <th>CONTACT</th>
+                                <th>DOCTOR</th>
+                                <th>TIME</th>
+                                <th>DATE</th>
+                                <th>STATUS</th>
+                                <th style={{ textAlign: 'center' }}>ACTION</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loadingAppts && appointments.length === 0 ? (
+                                Array.from({ length: 5 }).map((_, idx) => (
+                                    <tr key={idx} className="rec-skeleton-row">
+                                        <td><div className="rec-skeleton-line" style={{ width: '20px' }} /></td>
+                                        <td><div className="rec-skeleton-line" style={{ width: '130px' }} /></td>
+                                        <td><div className="rec-skeleton-line" style={{ width: '90px' }} /></td>
+                                        <td><div className="rec-skeleton-line" style={{ width: '110px' }} /></td>
+                                        <td><div className="rec-skeleton-line" style={{ width: '60px' }} /></td>
+                                        <td><div className="rec-skeleton-line" style={{ width: '80px' }} /></td>
+                                        <td><div className="rec-skeleton-line" style={{ width: '75px' }} /></td>
+                                        <td><div className="rec-skeleton-line" style={{ width: '60px', margin: '0 auto' }} /></td>
                                     </tr>
-                                ) : (
-                                    visibleAppointments.map((appt, idx) => {
-                                        const patientName = appt.userId?.name || appt.patientName || 'Walk-in Patient';
-                                        const patientPhone = appt.userId?.phone || appt.patientPhone || '-';
-                                        const patientMRN = appt.userId?.patientId || appt.patientId || `CIT-M365-${String(idx + 1).padStart(3, '0')}`;
-                                        const doctorName = appt.doctorId?.name || appt.doctorName || 'Dr. Ragini';
-                                        const doctorDept = appt.department || appt.serviceName || 'General';
-                                        const apptTime = appt.appointmentTime || '09:30 AM';
-                                        const apptDateFormatted = formatDate(appt.appointmentDate || appt.date);
-                                        const statusStr = (appt.status || 'completed').toLowerCase();
+                                ))
+                            ) : visibleAppointments.length === 0 ? (
+                                <tr>
+                                    <td colSpan="8" style={{ padding: 0, border: 'none' }}>
+                                        <div className="rec-empty-filter-state">
+                                            <div className="rec-empty-filter-icon-circle">
+                                                <FiSliders />
+                                            </div>
+                                            <h4>No Appointments Matching Filter</h4>
+                                            <p>We couldn't find any appointment records matching your selected status, doctor, or department.</p>
+                                            <button 
+                                                type="button" 
+                                                className="rec-empty-filter-reset-btn" 
+                                                onClick={() => { setSearchText(''); handleResetFilters(); }}
+                                            >
+                                                <FiRefreshCw style={{ fontSize: '13px' }} />
+                                                <span>Reset Filters & Show All Records</span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : (
+                                visibleAppointments.map((appt, idx) => {
+                                    const rawPt = appt.userId || {};
+                                    const clinicPt = appt.clinicPatientId || {};
+                                    const patientName = appt.patientName || clinicPt.name || rawPt.name || 'Unknown Patient';
+                                    const patientPhone = appt.patientPhone || clinicPt.phone || rawPt.phone || '-';
+                                    const patientMRN = appt.patientId || clinicPt.patientUid || rawPt.patientId || 'CIT-M365-NEW';
+                                    const doctorName = appt.doctorName || appt.doctorId?.name || 'Dr. Assigned';
+                                    const doctorDept = appt.department || appt.serviceName || appt.doctorId?.department || 'General';
+                                    const apptTime = appt.appointmentTime || '09:00';
+                                    const apptDateFormatted = appt.appointmentDate ? new Date(appt.appointmentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Today';
+                                    const statusStr = (appt.status || 'pending').toLowerCase();
 
-                                        return (
-                                            <tr key={appt._id || idx} className="rec-table-row-hover">
-                                                <td className="rec-cell-idx">{idx + 1}</td>
-                                                <td>
+                                    return (
+                                        <tr key={appt._id || idx} className="rec-table-row">
+                                            <td className="rec-td-index">{idx + 1}</td>
+                                            <td>
+                                                <div 
+                                                    className="rec-patient-cell" 
+                                                    onClick={() => {
+                                                        const pid = (typeof appt.userId === 'object' ? (appt.userId?._id || appt.userId?.patientId) : appt.userId) || appt.patientId || appt._id;
+                                                        if (pid) {
+                                                            navigate(`/patient/${pid}/department/${encodeURIComponent(appt.department || appt.serviceName || 'Unassigned')}`);
+                                                        } else {
+                                                            setProfileModal({ open: true, patient: appt.userId || appt });
+                                                        }
+                                                    }}
+                                                    style={{ cursor: 'pointer' }}
+                                                    title="Click to view Patient Profile"
+                                                >
                                                     <div 
-                                                        className="rec-patient-cell"
+                                                        className="rec-patient-avatar"
+                                                        style={{ background: getInitialBgColor(patientName) }}
+                                                    >
+                                                        {patientName.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div className="rec-patient-info-col">
+                                                        <span className="rec-patient-name" style={{ textDecoration: 'underline', textDecorationColor: 'transparent', transition: 'text-decoration-color 0.2s' }} onMouseOver={e => e.currentTarget.style.textDecorationColor = '#2563eb'} onMouseOut={e => e.currentTarget.style.textDecorationColor = 'transparent'}>{patientName}</span>
+                                                        <span className="rec-patient-mrn-badge">MRN: {patientMRN}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div className="rec-contact-cell">
+                                                    <FiPhone className="rec-contact-icon" />
+                                                    <a href={`tel:${patientPhone}`} className="rec-phone-link">{patientPhone}</a>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div className="rec-doctor-cell">
+                                                    <div className="rec-doctor-avatar">
+                                                        {doctorName.replace(/^Dr\.\s*/i, '').charAt(0).toUpperCase() || 'D'}
+                                                    </div>
+                                                    <div className="rec-doctor-info-col">
+                                                        <span className="rec-doctor-name">{doctorName}</span>
+                                                        <span className="rec-doctor-dept-badge">{doctorDept}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className="rec-time-pill">{apptTime}</span>
+                                            </td>
+                                            <td>
+                                                <span className="rec-date-cell">{apptDateFormatted}</span>
+                                            </td>
+                                            <td>
+                                                <span className={`rec-status-badge rec-status-${statusStr}`}>
+                                                    <span className="rec-status-dot" />
+                                                    {statusStr.charAt(0).toUpperCase() + statusStr.slice(1)}
+                                                </span>
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                {/* Dedicated Profile Button */}
+                                                <div className="rec-table-actions-cell">
+                                                    <button 
+                                                        className="rec-btn-profile-pill"
+                                                        title="View Full Patient Profile & Consent"
                                                         onClick={() => {
                                                             const pid = (typeof appt.userId === 'object' ? (appt.userId?._id || appt.userId?.patientId) : appt.userId) || appt.patientId || appt._id;
                                                             if (pid) {
@@ -781,114 +770,40 @@ const ReceptionPatients = () => {
                                                                 setProfileModal({ open: true, patient: appt.userId || appt });
                                                             }
                                                         }}
-                                                        style={{ cursor: 'pointer' }}
-                                                        title="Click to view Patient Profile"
                                                     >
-                                                        <div 
-                                                            className="rec-patient-avatar"
-                                                            style={{ background: getInitialBgColor(patientName) }}
-                                                        >
-                                                            {patientName.charAt(0).toUpperCase()}
-                                                        </div>
-                                                        <div className="rec-patient-info-col">
-                                                            <span className="rec-patient-name" style={{ textDecoration: 'underline', textDecorationColor: 'transparent', transition: 'text-decoration-color 0.2s' }} onMouseOver={e => e.currentTarget.style.textDecorationColor = '#2563eb'} onMouseOut={e => e.currentTarget.style.textDecorationColor = 'transparent'}>{patientName}</span>
-                                                            <span className="rec-patient-mrn-badge">MRN: {patientMRN}</span>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div className="rec-contact-cell">
-                                                        <FiPhone className="rec-contact-icon" />
-                                                        <a href={`tel:${patientPhone}`} className="rec-phone-link">{patientPhone}</a>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div className="rec-doctor-cell">
-                                                        <div className="rec-doctor-avatar">
-                                                            {doctorName.replace(/^Dr\.\s*/i, '').charAt(0).toUpperCase() || 'D'}
-                                                        </div>
-                                                        <div className="rec-doctor-info-col">
-                                                            <span className="rec-doctor-name">{doctorName}</span>
-                                                            <span className="rec-doctor-dept-badge">{doctorDept}</span>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span className="rec-time-pill">{apptTime}</span>
-                                                </td>
-                                                <td>
-                                                    <span className="rec-date-cell">{apptDateFormatted}</span>
-                                                </td>
-                                                <td>
-                                                    <span className={`rec-status-badge rec-status-${statusStr}`}>
-                                                        <span className="rec-status-dot" />
-                                                        {statusStr.charAt(0).toUpperCase() + statusStr.slice(1)}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    {/* Clean Direct Action Buttons (3-dots removed) */}
-                                                    <div className="rec-table-actions-cell">
-                                                        <button 
-                                                            className="rec-action-square-btn rec-btn-view"
-                                                            title="View Full Patient Profile & Consent"
-                                                            onClick={() => {
-                                                                const pid = (typeof appt.userId === 'object' ? (appt.userId?._id || appt.userId?.patientId) : appt.userId) || appt.patientId || appt._id;
-                                                                if (pid) {
-                                                                    navigate(`/patient/${pid}/department/${encodeURIComponent(appt.department || appt.serviceName || 'Unassigned')}`);
-                                                                } else {
-                                                                    setProfileModal({ open: true, patient: appt.userId || appt });
-                                                                }
-                                                            }}
-                                                        >
-                                                            <FiEye />
-                                                        </button>
-                                                        <button 
-                                                            className="rec-action-square-btn rec-btn-receipt"
-                                                            title="Upload Clinical Report"
-                                                            onClick={() => setUploadModal({ open: true, apptId: appt._id, patientName: patientName, patientId: appt.userId?._id || appt.userId?.patientId || appt.patientId || appt._id })}
-                                                        >
-                                                            <FiUpload />
-                                                        </button>
-                                                        {patientPhone && patientPhone !== '-' && (
-                                                            <a 
-                                                                href={`tel:${patientPhone}`}
-                                                                className="rec-action-square-btn rec-btn-phone"
-                                                                title="Call Patient"
-                                                            >
-                                                                <FiPhone />
-                                                            </a>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                        </table>
+                                                        <FiEye style={{ fontSize: '13px' }} />
+                                                        <span>Profile</span>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
+                        </tbody>
+                    </table>
 
-                        {/* Infinite Scroll Trigger & Lazy Load footer */}
-                        {filteredAppointments.length > visibleCount && (
-                            <div ref={loadMoreRef} className="rec-lazy-load-footer">
-                                <div className="rec-infinite-loading-pulse">
-                                    <span className="rec-spinner-dot" />
-                                    <span className="rec-spinner-dot" />
-                                    <span className="rec-spinner-dot" />
-                                </div>
-                                <span className="rec-lazy-counter-text">
-                                    Showing {visibleAppointments.length} of {filteredAppointments.length} appointments
-                                </span>
-                                <button 
-                                    className="rec-load-more-btn"
-                                    onClick={() => setVisibleCount(prev => prev + PAGE_CHUNK_SIZE)}
-                                >
-                                    <span>Load More</span>
-                                    <FiChevronDown />
-                                </button>
+                    {/* Infinite Scroll Trigger & Lazy Load footer */}
+                    {filteredAppointments.length > visibleCount && (
+                        <div ref={loadMoreRef} className="rec-lazy-load-footer">
+                            <div className="rec-infinite-loading-pulse">
+                                <span className="rec-spinner-dot" />
+                                <span className="rec-spinner-dot" />
+                                <span className="rec-spinner-dot" />
                             </div>
-                        )}
-                    </div>
-                )}
+                            <span className="rec-lazy-counter-text">
+                                Showing {visibleAppointments.length} of {filteredAppointments.length} appointments
+                            </span>
+                            <button 
+                                className="rec-load-more-btn"
+                                onClick={() => setVisibleCount(prev => prev + PAGE_CHUNK_SIZE)}
+                            >
+                                <span>Load More</span>
+                                <FiChevronDown />
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* UPLOAD REPORT MODAL */}

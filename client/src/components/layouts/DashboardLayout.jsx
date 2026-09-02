@@ -67,16 +67,11 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             ];
         }
         if (role === 'doctor' || role === 'clinic doctor') {
-            const localUser = JSON.parse(localStorage.getItem('user') || '{}');
-            if (user?.clinicType === 'clinic' || localUser?.clinicType === 'clinic') {
-                return [
-                    { label: 'Doctor Dashboard', path: '/doctor/dashboard', icon: <FiHome /> },
-                ];
-            }
             return [
-                { label: 'Dashboard', path: '/doctor/cases', icon: <FiClipboard /> },
-                { label: 'My Patients', path: '/doctor/dashboard', icon: <FiUsers /> },
-                { label: '🤖 AI Assistant', path: '/doctor/ai-assistant', icon: <FiFileText /> },
+                { label: 'Dashboard', path: '/my-dashboard', icon: <FiHome /> },
+                { label: 'My Patients', path: '/doctor/patients', icon: <FiUsers /> },
+                { label: 'AI Assistant', path: '/doctor/ai-assistant', icon: <FiFileText /> },
+                { label: 'Reports', path: '/lab-reports', icon: <FiFileText /> },
             ];
         }
         if (role === 'reception' || role === 'receptionist') {

@@ -31,6 +31,7 @@ const Login = lazy(() => import('../pages/user/Login'));
 const Signup = lazy(() => import('../pages/user/Signup'));
 
 // Doctor Pages
+const DoctorDashboard = lazy(() => import('../pages/doctors/DoctorDashboard'));
 const Patient = lazy(() => import('../pages/doctors/Patient'));
 const AdminLabTests = lazy(() => import('../pages/admin/AdminLabTests'));
 const DoctorPatientDetails = lazy(() => import('../pages/doctors/DoctorPatientDetails'));
@@ -231,7 +232,8 @@ const MainRoutes = () => {
                                 <Route path="pharmacy" element={<Pharmacy />} />
 
                                 {/* Transitions between roles/admin */}
-                                <Route path="doctor/dashboard" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><Patient /></ProtectedRoute>} />
+                                <Route path="doctor/dashboard" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><DoctorDashboard /></ProtectedRoute>} />
+                                <Route path="doctor/cases" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor']}><DoctorDashboard /></ProtectedRoute>} />
                                 <Route path="doctor/patients" element={<Patient />} />
                                 <Route path="doctor/patient/:id" element={<ProtectedRoute requiredPermissions={['visit_diagnose']}><DoctorPatientDetails /></ProtectedRoute>} />
                                 <Route path="doctor/ai-assistant" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><AIAssistant /></ProtectedRoute>} />
