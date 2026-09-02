@@ -380,15 +380,15 @@ router.post('/:id/build-rn-app', verifyCentralAdmin, async (req, res) => {
         if (!safeCode) {
             safeCode = id.substring(0, 8);
         }
-        const safeApplicationId = "com.medical365.${safeCode.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}";
+        const safeApplicationId = `com.medical365.${safeCode.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
         
         const logoUrl = hospital.branding?.logoUrl || 'default';
         const themeColor = hospital.branding?.primaryColor || '#14b8a6';
 
-        const owner = process.env.GITHUB_OWNER || 'teammedical365-coder';
-        const repo = process.env.GITHUB_REPO_RN || 'HMS-APP';
+        const owner = process.env.GITHUB_OWNER;
+        const repo = process.env.GITHUB_REPO;
         const workflowId = 'react-native-build.yml'; 
-        const githubToken = process.env.GITHUB_PAT;
+        const githubToken = process.env.GIT_PAT || process.env.GITHUB_PAT;
         const refBranch = 'main';
 
         if (!githubToken) {
@@ -400,7 +400,7 @@ router.post('/:id/build-rn-app', verifyCentralAdmin, async (req, res) => {
              return res.json({ success: true, message: 'Mock RN build completed', buildStatus: 'COMPLETED' });
         }
 
-        const githubUrl = "https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches";
+        const githubUrl = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`;
         
         try {
             await axios.post(githubUrl, {
@@ -415,12 +415,13 @@ router.post('/:id/build-rn-app', verifyCentralAdmin, async (req, res) => {
             }, {
                 headers: {
                     'Accept': 'application/vnd.github+json',
-                    'Authorization': "Bearer ${githubToken}",
+                    'Authorization': `Bearer ${githubToken}`,
                     'X-GitHub-Api-Version': '2022-11-28'
                 }
             });
         } catch (githubErr) {
-            throw new Error("RN Build dispatch failed: ${githubErr.response?.data?.message || 'Internal pipeline error'}");
+            console.error('[GitHub API Error]', githubErr.response?.data || githubErr.message);
+            return res.status(500).json({ success: false, message: githubErr.message });
         }
 
         hospital.isWhitelabeled = true;
@@ -538,3 +539,4 @@ router.post('/webhook/github-rn/upload', uploadApk.single('apk'), async (req, re
         res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 });
+
