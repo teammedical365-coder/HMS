@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI, simpleClinicAPI, revenueAPI, baseURL } from '../../utils/api';
+import { adminAPI, uploadAPI, hospitalAPI, hospitalAdminAPI, questionLibraryAPI, simpleClinicAPI, revenueAPI, aiWalletAPI, baseURL } from '../../utils/api';
 import AdminLabs from '../admin/AdminLabs';
 import AdminPharmacy from '../admin/AdminPharmacy';
 import HospitalBrandingEditor from '../../components/HospitalBrandingEditor';

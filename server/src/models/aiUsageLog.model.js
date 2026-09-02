@@ -1,42 +1,123 @@
 const mongoose = require('mongoose');
 
 /**
- * AIUsageLog — Records token consumption, model metrics, and estimated costs
- * for all AI features (Summaries, Comparisons, OCR, Clinical Chat).
+ * AIUsageLog — Internal billing & technical usage log for AI Assistant operations.
+ * Records Gemini API token counts, calculated actual monetary costs (in INR),
+ * and links each call to the originating hospital, doctor, and patient context.
  */
 const aiUsageLogSchema = new mongoose.Schema({
-    hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', default: null, index: true },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
-    userName: { type: String, default: 'Doctor/Staff' },
-    patientId: { type: mongoose.Schema.Types.Mixed, default: null, index: true },
+    hospitalId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Hospital',
+        required: true
+    },
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
+    userName: {
+        type: String,
+        default: 'Doctor/Staff'
+    },
+    userRole: {
+        type: String,
+        default: 'doctor'
+    },
+    patientId: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null
+    },
     
+    // Feature / Operation type
+    operation: {
+        type: String,
+        required: true
+    },
+    // Alias for backward compatibility
     actionType: {
         type: String,
-        required: true,
-        enum: ['REPORT_SUMMARY', 'REPORT_COMPARISON', 'CLINICAL_CHAT', 'OCR_EXTRACTION', 'HISTORY_SUMMARY', 'OTHER'],
-        index: true
+        default: ''
     },
     
-    modelName: { type: String, default: 'gemini-1.5-flash' },
+    model: {
+        type: String,
+        default: 'gemini-1.5-flash'
+    },
+    // Alias for backward compatibility
+    modelName: {
+        type: String,
+        default: 'gemini-1.5-flash'
+    },
     
-    promptTokens: { type: Number, default: 0 },
-    candidateTokens: { type: Number, default: 0 },
-    totalTokens: { type: Number, default: 0 },
+    // Technical Token Usage
+    inputTokens: {
+        type: Number,
+        default: 0
+    },
+    outputTokens: {
+        type: Number,
+        default: 0
+    },
+    totalTokens: {
+        type: Number,
+        default: 0
+    },
+    // Aliases for backward compatibility
+    promptTokens: {
+        type: Number,
+        default: 0
+    },
+    candidateTokens: {
+        type: Number,
+        default: 0
+    },
     
-    estimatedCostUsd: { type: Number, default: 0 },
-    estimatedCostInr: { type: Number, default: 0 },
+    // Financial Cost Breakdown (Real Gemini API spending)
+    actualApiCost: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    estimatedCostInr: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    estimatedCostUsd: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    currency: {
+        type: String,
+        default: 'INR'
+    },
     
+    requestId: {
+        type: String,
+        default: ''
+    },
     status: {
         type: String,
-        enum: ['SUCCESS', 'FAILED'],
+        enum: ['SUCCESS', 'FAILED', 'INSUFFICIENT_FUNDS'],
         default: 'SUCCESS'
     },
-    
-    error: { type: String, default: '' },
-    metadata: { type: mongoose.Schema.Types.Mixed, default: {} }
-}, { timestamps: true });
+    error: {
+        type: String,
+        default: ''
+    },
+    metadata: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
+    }
+}, {
+    timestamps: true
+});
 
 aiUsageLogSchema.index({ createdAt: -1 });
 aiUsageLogSchema.index({ hospitalId: 1, createdAt: -1 });
+aiUsageLogSchema.index({ hospitalId: 1, userId: 1, createdAt: -1 });
+aiUsageLogSchema.index({ hospitalId: 1, operation: 1 });
 
 module.exports = mongoose.model('AIUsageLog', aiUsageLogSchema);

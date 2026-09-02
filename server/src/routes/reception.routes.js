@@ -91,10 +91,32 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
     try {
         let { name, email, phone, age, aadhaarNumber } = req.body;
 
-        // Sanitize — trim whitespace and convert empty strings to undefined
+        // Sanitize — trim whitespace and format fields
         name = name ? String(name).trim() : undefined;
-        phone = phone ? String(phone).trim() : undefined;
-        email = email ? String(email).trim() : undefined; // crucial: empty string -> undefined
+        let cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
+        if (cleanPhone.startsWith('91') && cleanPhone.length === 12) cleanPhone = cleanPhone.substring(2);
+        if (cleanPhone.startsWith('0') && cleanPhone.length === 11) cleanPhone = cleanPhone.substring(1);
+        phone = cleanPhone.slice(-10);
+
+        email = (email && String(email).trim()) ? String(email).trim().toLowerCase() : undefined;
+
+        let parsedAge = undefined;
+        if (age !== undefined && age !== null && String(age).trim() !== '') {
+            const num = parseInt(String(age).trim(), 10);
+            if (!isNaN(num) && num > 0 && num <= 150) {
+                parsedAge = num;
+            }
+        }
+
+        let cleanAadhaar = undefined;
+        if (aadhaarNumber && String(aadhaarNumber).trim() !== '') {
+            const rawAadhaar = String(aadhaarNumber).trim().replace(/\D/g, '');
+            if (rawAadhaar.length === 12) {
+                cleanAadhaar = rawAadhaar;
+            } else {
+                return res.status(400).json({ success: false, message: 'Aadhaar number must be exactly 12 digits (or leave it blank).' });
+            }
+        }
 
         // Phone is required for identification, Email is optional
         if (!name || !phone) {
@@ -108,7 +130,7 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
 
         const currentHospitalId = req.user.hospitalId || req.body.hospitalId;
 
-        // Check if patient exists by Phone AND Name (case-insensitive) to prevent overwriting family members sharing a phone.
+        // Check if patient exists by Phone AND Name (case-insensitive)
         let userQuery = { 
             phone,
             name: new RegExp('^' + String(name).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i')
@@ -127,10 +149,10 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         }
 
         // Check if Aadhaar is already registered for a different patient within THIS hospital
-        if (aadhaarNumber && currentHospitalId) {
+        if (cleanAadhaar && currentHospitalId) {
             const existingAadhaar = await User.findOne({
                 hospitalId: currentHospitalId,
-                aadhaarNumber: String(aadhaarNumber).trim()
+                aadhaarNumber: cleanAadhaar
             });
             if (existingAadhaar && (existingAadhaar.phone !== phone || existingAadhaar.name.toLowerCase() !== name.toLowerCase())) {
                 return res.status(400).json({
@@ -144,7 +166,7 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         if (email && currentHospitalId) {
             const existingEmail = await User.findOne({
                 hospitalId: currentHospitalId,
-                email: String(email).trim().toLowerCase()
+                email: email
             });
             if (existingEmail && (existingEmail.phone !== phone || existingEmail.name.toLowerCase() !== name.toLowerCase())) {
                 return res.status(400).json({
@@ -155,14 +177,19 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         }
 
         let user = await User.findOne(userQuery);
+        // Fallback: If not found by name+phone, check if a user with this phone exists in the same hospital
+        if (!user && currentHospitalId) {
+            user = await User.findOne({ hospitalId: currentHospitalId, phone });
+        }
 
         if (user) {
-            // Only update fields if provided and different
+            // Update name and fields if provided
+            if (name && name !== user.name) user.name = name;
             if (email && email !== user.email) user.email = email;
-            if (age && age !== user.age) user.age = age;
-            if (aadhaarNumber && aadhaarNumber !== user.aadhaarNumber) user.aadhaarNumber = aadhaarNumber;
+            if (parsedAge !== undefined && parsedAge !== user.age) user.age = parsedAge;
+            if (cleanAadhaar && cleanAadhaar !== user.aadhaarNumber) user.aadhaarNumber = cleanAadhaar;
 
-            const hospitalId = req.user.hospitalId || user.hospitalId;
+            const hospitalId = req.user.hospitalId || req.body.hospitalId || user.hospitalId;
             const Hospital = require('../models/hospital.model');
             const hospital = hospitalId ? await Hospital.findById(hospitalId) : null;
 
@@ -197,7 +224,7 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
         }
 
         // Create New Walk-in Patient — use smart hospital/clinic MRN sequence
-        const hospitalId = req.user.hospitalId;
+        const hospitalId = req.user.hospitalId || req.body.hospitalId;
         const Hospital = require('../models/hospital.model');
         const hospital = hospitalId ? await Hospital.findById(hospitalId) : null;
         const patientId = await generateSmartMRN(hospitalId, hospital, User);
@@ -209,12 +236,11 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
             patientId,
             mrn: patientId,
             fertilityProfile: {},
-            hospitalId: hospitalId || undefined,
-            age,
-            aadhaarNumber
+            hospitalId: hospitalId || undefined
         };
 
-        // Only attach email if it actually exists, to prevent duplicate sparse index errors
+        if (parsedAge !== undefined) userData.age = parsedAge;
+        if (cleanAadhaar) userData.aadhaarNumber = cleanAadhaar;
         if (email) userData.email = email;
 
         const newUser = new User(userData);
@@ -245,7 +271,11 @@ router.post('/register', verifyToken, verifyReception, async (req, res) => {
                 message: `A patient with this ${friendlyField} already exists. Please search for the existing patient instead.`
             });
         }
-        res.status(500).json({ success: false, message: 'An internal error occurred' });
+        if (error.name === 'ValidationError') {
+            const firstErr = Object.values(error.errors || {})[0]?.message || 'Validation error';
+            return res.status(400).json({ success: false, message: firstErr });
+        }
+        res.status(500).json({ success: false, message: error.message || 'An internal error occurred' });
     }
 });
 
@@ -387,13 +417,20 @@ router.put('/intake/:userId', verifyToken, verifyReception, async (req, res) => 
 
         // Map Root fields
         if (updates.firstName || updates.lastName) updateQuery.name = `${String(updates.firstName || '')} ${String(updates.lastName || '')}`.trim();
-        if (updates.email) updateQuery.email = String(updates.email);
+        if (updates.email && String(updates.email).trim()) updateQuery.email = String(updates.email).trim().toLowerCase();
         if (updates.phone || updates.mobile) {
-            const ph = String(updates.phone || updates.mobile);
+            let ph = String(updates.phone || updates.mobile).replace(/\D/g, '');
+            if (ph.startsWith('91') && ph.length === 12) ph = ph.substring(2);
+            if (ph.startsWith('0') && ph.length === 11) ph = ph.substring(1);
+            ph = ph.slice(-10);
             if (!/^\d{10}$/.test(ph)) {
                 return res.status(400).json({ success: false, message: 'Mobile number must be exactly 10 digits.' });
             }
             updateQuery.phone = ph;
+        }
+        if (updates.age !== undefined && updates.age !== null && String(updates.age).trim() !== '') {
+            const parsedAge = parseInt(String(updates.age).trim(), 10);
+            if (!isNaN(parsedAge) && parsedAge > 0 && parsedAge <= 150) updateQuery.age = parsedAge;
         }
         if (updates.address) updateQuery.address = String(updates.address);
         if (updates.houseNo) updateQuery.houseNo = String(updates.houseNo);
@@ -408,7 +445,12 @@ router.put('/intake/:userId', verifyToken, verifyReception, async (req, res) => 
         if (updates.bloodGroup !== undefined) updateQuery.bloodGroup = String(updates.bloodGroup);
 
         // Update Root Aadhaar Fields
-        if (updates.aadhaar) updateQuery.aadhaarNumber = String(updates.aadhaar);
+        if (updates.aadhaar && String(updates.aadhaar).trim() !== '') {
+            const rawAadhaar = String(updates.aadhaar).trim().replace(/\D/g, '');
+            if (rawAadhaar.length === 12) {
+                updateQuery.aadhaarNumber = rawAadhaar;
+            }
+        }
         if (updates.isAadhaarVerified !== undefined) updateQuery.isAadhaarVerified = Boolean(updates.isAadhaarVerified);
 
         // Map Fertility Profile fields
@@ -1067,14 +1109,32 @@ router.get('/stats', verifyToken, verifyReception, resolveTenant, async (req, re
             ]
         }).select('amount');
 
-        const yesterdayCollections = paidApptsYesterday.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+        // 4. Hospitalization & Inpatient Bed Stats
+        const Bed = require('../models/bed.model');
+        const hospBaseQuery = {};
+        if (hospitalId) hospBaseQuery.hospitalId = hospitalId;
 
-        // 4. Pending Bills (Unpaid / Pending Appointments)
-        const pendingBills = await Appointment.countDocuments({
-            ...apptBaseQuery,
-            $or: [{ paymentStatus: { $in: ['Pending', 'pending', 'Unpaid', 'unpaid'] } }, { isPaid: false }],
-            amount: { $gt: 0 }
+        const currentlyHospitalized = await MasterAdmission.countDocuments({
+            ...hospBaseQuery,
+            status: 'Admitted'
         });
+
+        const todayAdmissions = await MasterAdmission.countDocuments({
+            ...hospBaseQuery,
+            admissionDate: { $gte: startOfToday, $lte: endOfToday }
+        });
+
+        const yesterdayAdmissions = await MasterAdmission.countDocuments({
+            ...hospBaseQuery,
+            admissionDate: { $gte: startOfYesterday, $lte: endOfYesterday }
+        });
+
+        const availableBeds = await Bed.countDocuments({
+            ...hospBaseQuery,
+            status: 'AVAILABLE'
+        });
+
+        const totalBeds = await Bed.countDocuments(hospBaseQuery);
 
         // Calculate trends
         const calcTrend = (today, yesterday) => {
@@ -1091,10 +1151,15 @@ router.get('/stats', verifyToken, verifyReception, resolveTenant, async (req, re
                 todayRegistrations,
                 totalPatients,
                 todayAppointments,
+                currentlyHospitalized,
+                todayAdmissions,
+                availableBeds,
+                totalBeds,
                 todayCollections,
                 pendingBills,
                 regTrend: calcTrend(todayRegistrations, yesterdayRegistrations),
                 apptTrend: calcTrend(todayAppointments, yesterdayAppointments),
+                admTrend: calcTrend(todayAdmissions, yesterdayAdmissions),
                 collTrend: calcTrend(todayCollections, yesterdayCollections)
             }
         });

@@ -4,6 +4,7 @@ import { useBranding } from '../../context/BrandingContext';
 import { publicAPI, patientAuthAPI } from '../../utils/api';
 import './PatientPortalLogin.css'; // Reuse the premium styles from login
 import PasswordInput from '../../components/PasswordInput';
+import toast from 'react-hot-toast';
 
 const PatientSignup = () => {
     const navigate = useNavigate();
@@ -104,7 +105,7 @@ const PatientSignup = () => {
             );
 
             if (response.success) {
-                alert("Your account has been created successfully. Please login to continue.");
+                toast.success("Your account has been created successfully. Please login to continue.");
                 navigate('/patient');
             }
         } catch (err) {

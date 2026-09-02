@@ -200,4 +200,42 @@ router.post('/upload-report/:reportId', verifyToken, verifyLab, upload.single('r
     }
 });
 
+// 4. GET PATIENT'S LAB REPORTS (for User/Patient Dashboard)
+router.get('/my-reports', verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.id || req.user._id || req.user.userId;
+        const reports = await LabReport.find({
+            $or: [{ userId: userId }, { patientId: userId }]
+        })
+        .populate('doctorId', 'name')
+        .sort({ createdAt: -1 });
+
+        res.json({ success: true, reports });
+    } catch (error) {
+        console.error("[lab] my-reports error", error);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// 5. UPDATE LAB REPORT PAYMENT STATUS
+router.patch('/update-payment/:id', verifyToken, verifyLab, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { paymentStatus, paymentMethod, amount } = req.body;
+
+        const report = await LabReport.findById(id);
+        if (!report) return res.status(404).json({ success: false, message: 'Lab report not found' });
+
+        if (paymentStatus) report.paymentStatus = paymentStatus;
+        if (paymentMethod) report.paymentMethod = paymentMethod;
+        if (amount !== undefined) report.amount = amount;
+
+        await report.save();
+        res.json({ success: true, message: 'Payment updated successfully', report });
+    } catch (error) {
+        console.error("[lab] update-payment error", error);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
 module.exports = router;

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '../../store/hooks';
 import { updateUser as updateUserAction } from '../../store/slices/authSlice';
-import { adminAPI, uploadAPI, hospitalAPI } from '../../utils/api';
+import { adminAPI, uploadAPI, hospitalAPI, aiWalletAPI } from '../../utils/api';
 import BedManagement from './BedManagement';
 import OTDashboard from './OTDashboard';
 import '../administration/SuperAdmin.css';
@@ -83,6 +83,20 @@ const HospitalAdminDashboard = () => {
     const [savingLabTest, setSavingLabTest] = useState(false);
     const [labTestForm, setLabTestForm] = useState({ name: '', code: '', description: '', price: '', category: 'General' });
 
+    // --- AI Wallet State ---
+    const [aiWallet, setAiWallet] = useState(null);
+
+    const fetchAIWallet = async () => {
+        try {
+            const res = await aiWalletAPI.getWallet();
+            if (res && res.success && res.wallet) {
+                setAiWallet(res.wallet);
+            }
+        } catch (err) {
+            console.error('Failed to fetch hospital AI wallet:', err);
+        }
+    };
+
     // Auth check
     useEffect(() => {
         const role = currentUser?.role;
@@ -97,7 +111,8 @@ const HospitalAdminDashboard = () => {
                 await Promise.all([
                     fetchMyHospital(),
                     fetchUsers(),
-                    fetchRoles()
+                    fetchRoles(),
+                    fetchAIWallet()
                 ]);
             } catch (err) {
                 console.error('Failed to initialize dashboard:', err);
@@ -872,6 +887,26 @@ const HospitalAdminDashboard = () => {
                                         <svg className="ha-ai-kpi-sparkline" viewBox="0 0 80 25" fill="none">
                                             <path d="M 2 18 Q 25 22 50 10 T 78 6" stroke="#0d9488" strokeWidth="2" strokeLinecap="round" />
                                         </svg>
+                                    </div>
+                                </div>
+
+                                {/* 6. AI Wallet / AI Credits */}
+                                <div className="ha-ai-kpi-card card-ai-wallet" style={{ borderLeft: '4px solid #6366f1' }}>
+                                    <div className="ha-ai-kpi-header">
+                                        <div className="ha-ai-kpi-icon-box" style={{ background: '#ede9fe', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '10px', width: '42px', height: '42px' }}>
+                                            <span style={{ fontSize: '18px' }}>🤖</span>
+                                        </div>
+                                        <div className="ha-ai-kpi-meta">
+                                            <span className="ha-ai-kpi-label">Hospital AI Credits</span>
+                                            <h3 className="ha-ai-kpi-val" style={{ color: (aiWallet?.remainingAmount !== undefined && aiWallet.remainingAmount <= 100) ? '#dc2626' : '#4338ca' }}>
+                                                ₹{aiWallet ? Number(aiWallet.remainingAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '2,000.00'}
+                                            </h3>
+                                        </div>
+                                    </div>
+                                    <div className="ha-ai-kpi-footer">
+                                        <span className="ha-ai-kpi-trend" style={{ color: aiWallet?.status === 'active' ? '#16a34a' : '#dc2626' }}>
+                                            ● Used: ₹{aiWallet ? Number(aiWallet.usedAmount).toFixed(2) : '0.00'} / Budget: ₹{aiWallet ? Number(aiWallet.budgetAmount || 2000).toFixed(2) : '2,000.00'}
+                                        </span>
                                     </div>
                                 </div>
                             </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiSearch, FiUser, FiFileText, FiImage, FiPaperclip, FiX } from 'react-icons/fi';
-import { reportAPI, patientAPI, doctorAPI } from '../../utils/api';
+import { FiSearch, FiUser, FiFileText, FiImage, FiPaperclip, FiX, FiAlertTriangle, FiInfo, FiMail } from 'react-icons/fi';
+import { reportAPI, patientAPI, doctorAPI, aiWalletAPI } from '../../utils/api';
 import './AIAssistant.css';
 
 // Helper: detect if a MIME type is an image
@@ -38,7 +38,7 @@ const AIAssistant = () => {
 
     const [selectedReport, setSelectedReport] = useState(null);
     const [summary, setSummary] = useState(null);
-    const [summaryUsage, setSummaryUsage] = useState(null);
+    const [summaryCost, setSummaryCost] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -54,31 +54,45 @@ const AIAssistant = () => {
     const [isHistoryLoading, setIsHistoryLoading] = useState(false);
     const [historyError, setHistoryError] = useState(null);
 
-    // ── AI Token Tracker Modal State ──
-    const [isTrackerOpen, setIsTrackerOpen] = useState(false);
-    const [trackerStats, setTrackerStats] = useState(null);
-    const [trackerLogs, setTrackerLogs] = useState([]);
-    const [isTrackerLoading, setIsTrackerLoading] = useState(false);
+    // ── AI Wallet & Credit State ──
+    const [wallet, setWallet] = useState(null);
+    const [isWalletOpen, setIsWalletOpen] = useState(false);
+    const [walletLogs, setWalletLogs] = useState([]);
+    const [isWalletLoading, setIsWalletLoading] = useState(false);
+    const [isContactModalOpen, setIsContactModalOpen] = useState(false);
 
-    const fetchTrackerData = async () => {
-        setIsTrackerLoading(true);
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+
+    const fetchWalletData = async () => {
         try {
-            const [statsRes, historyRes] = await Promise.all([
-                reportAPI.getAIUsageStats(),
-                reportAPI.getAIUsageHistory(30)
-            ]);
-            if (statsRes && statsRes.success) setTrackerStats(statsRes.stats);
-            if (historyRes && historyRes.success) setTrackerLogs(historyRes.logs || []);
+            const res = await aiWalletAPI.getWallet();
+            if (res && res.success && res.wallet) {
+                setWallet(res.wallet);
+            }
         } catch (err) {
-            console.error("Error fetching AI usage tracker data:", err);
-        } finally {
-            setIsTrackerLoading(false);
+            console.error("Error fetching AI wallet:", err);
         }
     };
 
-    const handleOpenTracker = () => {
-        setIsTrackerOpen(true);
-        fetchTrackerData();
+    const fetchWalletModalData = async () => {
+        setIsWalletLoading(true);
+        try {
+            const [walletRes, historyRes] = await Promise.all([
+                aiWalletAPI.getWallet(),
+                aiWalletAPI.getUsageHistory(30)
+            ]);
+            if (walletRes && walletRes.success && walletRes.wallet) setWallet(walletRes.wallet);
+            if (historyRes && historyRes.success) setWalletLogs(historyRes.logs || []);
+        } catch (err) {
+            console.error("Error fetching AI wallet analytics:", err);
+        } finally {
+            setIsWalletLoading(false);
+        }
+    };
+
+    const handleOpenWalletModal = () => {
+        setIsWalletOpen(true);
+        fetchWalletModalData();
     };
 
     // ── AI Clinical Chat state (session-only) ──
@@ -87,7 +101,6 @@ const AIAssistant = () => {
     const [isChatLoading, setIsChatLoading] = useState(false);
     const chatEndRef = useRef(null);
     const chatTextareaRef = useRef(null);
-    const chatFileInputRef = useRef(null);
 
     // Chat media attachment state
     const [chatAttachments, setChatAttachments] = useState([]); // [{url, mimeType, name, previewUrl}]
@@ -107,9 +120,21 @@ const AIAssistant = () => {
         }
     }, [chatMessages, isChatLoading]);
 
+    // Initial wallet fetch on component mount
+    useEffect(() => {
+        fetchWalletData();
+    }, []);
+
+    const isExhausted = wallet && (wallet.remainingAmount <= 0 || wallet.status === 'exhausted');
+
     const handleChatSend = async (overrideText) => {
         const text = (overrideText || chatInput).trim();
         if (!text || !selectedPatient) return;
+
+        if (isExhausted) {
+            setIsContactModalOpen(true);
+            return;
+        }
 
         const currentAttachments = [...chatAttachments];
         const doctorMsg = { role: 'doctor', text, timestamp: new Date(), attachments: currentAttachments.length > 0 ? currentAttachments : undefined };
@@ -122,16 +147,12 @@ const AIAssistant = () => {
         try {
             const patientContext = selectedPatient ? `Context: Patient name is ${selectedPatient.name}, age ${selectedPatient.profile?.age || 'unknown'}, gender ${selectedPatient.profile?.gender || 'unknown'}. ` : '';
             
-            // Build message history for the AI
             const apiMessages = chatMessages.map(m => ({
                 role: m.role === 'ai' ? 'assistant' : 'user',
                 content: m.text
             }));
             
-            // Append the new message with patient context
             apiMessages.push({ role: 'user', content: patientContext + text });
-
-            // Build media URLs for attachments (from selected report + any chat attachments)
             const mediaUrls = currentAttachments.map(a => ({ url: a.url, mimeType: a.mimeType }));
 
             const res = await reportAPI.chatWithAssistant(apiMessages, mediaUrls.length > 0 ? mediaUrls : undefined);
@@ -139,17 +160,33 @@ const AIAssistant = () => {
                 const aiMsg = { 
                     role: 'ai', 
                     text: res.reply, 
-                    usage: res.usage || null,
+                    cost: res.usage?.actualApiCost || 0,
                     timestamp: new Date() 
                 };
                 setChatMessages(prev => [...prev, aiMsg]);
+                if (res.wallet) {
+                    setWallet(prev => ({ ...prev, ...res.wallet }));
+                } else {
+                    fetchWalletData();
+                }
             } else {
                 throw new Error(res.message || "Failed to get AI response.");
             }
         } catch (err) {
             console.error("AI Chat Error:", err);
-            const errorMsg = { role: 'ai', text: `Sorry, I encountered an error: ${err.message || "Failed to get response."}`, timestamp: new Date() };
-            setChatMessages(prev => [...prev, errorMsg]);
+            const isInsufficient = err?.response?.status === 402 || err?.response?.data?.code === 'INSUFFICIENT_AI_CREDITS';
+            if (isInsufficient) {
+                fetchWalletData();
+                const errorMsg = { 
+                    role: 'ai', 
+                    text: `⚠️ AI Credits Exhausted. Your hospital has used its available AI budget. Please contact your administrator to continue using the AI Assistant.`, 
+                    timestamp: new Date() 
+                };
+                setChatMessages(prev => [...prev, errorMsg]);
+            } else {
+                const errorMsg = { role: 'ai', text: `Sorry, I encountered an error: ${err.response?.data?.message || err.message || "Failed to get response."}`, timestamp: new Date() };
+                setChatMessages(prev => [...prev, errorMsg]);
+            }
         } finally {
             setIsChatLoading(false);
         }
@@ -207,17 +244,16 @@ const AIAssistant = () => {
         setSearchQuery('');
         setSelectedReport(null);
         setSummary(null);
+        setSummaryCost(null);
         setError(null);
         setComparison(null);
         setCompareError(null);
         setHistorySummary(null);
         setHistoryError(null);
 
-        // Fetch reports for the selected patient
         setIsReportsLoading(true);
         setReports([]);
         try {
-            // Reusing existing patient documents fetch API
             const res = await patientAPI.getDocuments(patient._id);
             if (res && res.success && res.documents) {
                 setReports(res.documents);
@@ -237,10 +273,15 @@ const AIAssistant = () => {
             return;
         }
 
+        if (isExhausted) {
+            setIsContactModalOpen(true);
+            return;
+        }
+
         setIsLoading(true);
         setError(null);
         setSummary(null);
-        setSummaryUsage(null);
+        setSummaryCost(null);
 
         try {
             const mime = selectedReport.mimeType || selectedReport.mimetype || 'application/pdf';
@@ -248,14 +289,27 @@ const AIAssistant = () => {
             const res = await reportAPI.generateAISummary(selectedReport.url, mime, fname);
             if (res.success) {
                 setSummary(res.summary);
-                if (res.usage) setSummaryUsage(res.usage);
+                if (res.usage) {
+                    setSummaryCost(res.usage.actualApiCost || res.usage.estimatedCostInr || 0);
+                }
+                if (res.wallet) {
+                    setWallet(prev => ({ ...prev, ...res.wallet }));
+                } else {
+                    fetchWalletData();
+                }
             } else {
                 setError(res.message || "Unable to generate summary. Please try again.");
             }
         } catch (err) {
             console.error("AI Summary error:", err);
-            const errMsg = err?.response?.data?.message || err.message || "Unable to generate summary. Please try again.";
-            setError(errMsg);
+            const isInsufficient = err?.response?.status === 402 || err?.response?.data?.code === 'INSUFFICIENT_AI_CREDITS';
+            if (isInsufficient) {
+                fetchWalletData();
+                setError("AI Credits Exhausted. Your hospital has used its available AI budget. Please contact your administrator.");
+            } else {
+                const errMsg = err?.response?.data?.message || err.message || "Unable to generate summary. Please try again.";
+                setError(errMsg);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -285,6 +339,11 @@ const AIAssistant = () => {
             return;
         }
 
+        if (isExhausted) {
+            setIsContactModalOpen(true);
+            return;
+        }
+
         const latestReport = sortedReports[0];
         const previousReport = sortedReports[1];
 
@@ -302,14 +361,25 @@ const AIAssistant = () => {
                     latestDate: latestReport.uploadedAt || latestReport.date,
                     previousDate: previousReport.uploadedAt || previousReport.date,
                     data: res.comparison,
-                    usage: res.usage || null
+                    cost: res.usage?.actualApiCost || 0
                 });
+                if (res.wallet) {
+                    setWallet(prev => ({ ...prev, ...res.wallet }));
+                } else {
+                    fetchWalletData();
+                }
             } else {
                 setCompareError(res.message || "Unable to compare reports.");
             }
         } catch (err) {
             console.error("Compare Reports error:", err);
-            setCompareError("Unable to compare reports. Please try again.");
+            const isInsufficient = err?.response?.status === 402 || err?.response?.data?.code === 'INSUFFICIENT_AI_CREDITS';
+            if (isInsufficient) {
+                fetchWalletData();
+                setCompareError("AI Credits Exhausted. Your hospital has used its available AI budget. Please contact administrator.");
+            } else {
+                setCompareError("Unable to compare reports. Please try again.");
+            }
         } finally {
             setIsComparing(false);
         }
@@ -417,23 +487,87 @@ const AIAssistant = () => {
         }
     };
 
+    const remainingCreditsDisplay = wallet 
+        ? Number(wallet.remainingAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : '2,000.00';
+
+    const usedCreditsDisplay = wallet 
+        ? Number(wallet.usedAmount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : '0.00';
+
     return (
         <div className="ai-assistant-container">
-            <div className="ai-header">
-                <div className="ai-header-top">
-                    <div>
-                        <h1>🤖 AI Assistant</h1>
-                        <p>Advanced patient insights, automated summaries & real-time analytics</p>
+            {/* ── Modern Healthcare AI Assistant Header with AI Credits Card ── */}
+            <div className="ai-header-card">
+                <div className="ai-header-left">
+                    <div className="ai-avatar-badge">
+                        <span className="ai-avatar-robot">🤖</span>
                     </div>
-                    <button 
-                        className="ai-token-tracker-btn" 
-                        onClick={handleOpenTracker}
-                        title="View Real-Time AI Token Usage & Cost Analytics"
-                    >
-                        ⚡ AI Token Tracker
+                    <div className="ai-header-titles">
+                        <div className="ai-title-row">
+                            <h1>AI Assistant</h1>
+                            <span className="ai-sparkle-pill">✨</span>
+                        </div>
+                        <p className="ai-subtitle">Get intelligent insights, summaries and answers from patient data.</p>
+                    </div>
+                </div>
+
+                {/* AI Credits Card (Right side of header) */}
+                <div className="ai-credits-header-card" onClick={handleOpenWalletModal} title="Click to view hospital AI Wallet & usage analytics">
+                    <div className="ai-credits-card-left">
+                        <div className="ai-credits-icon-bubble">
+                            <span className="ai-coin-icon">💰</span>
+                        </div>
+                        <div className="ai-credits-details">
+                            <div className="ai-credits-label-row">
+                                <span className="ai-credits-label">AI Credits</span>
+                                <span className="ai-credits-info-icon" title="Hospital AI budget in INR (₹2,000 Initial Budget)"><FiInfo size={13} /></span>
+                            </div>
+                            <div className="ai-credits-value">
+                                {remainingCreditsDisplay}
+                            </div>
+                            <div className="ai-credits-subtext">
+                                Credits available (Used: ₹{usedCreditsDisplay})
+                            </div>
+                        </div>
+                    </div>
+                    <button className="ai-add-credits-btn" onClick={(e) => { e.stopPropagation(); handleOpenWalletModal(); }}>
+                        <span>⚡ AI Wallet</span>
                     </button>
                 </div>
             </div>
+
+            {/* ── Low Balance & Exhausted Banners ── */}
+            {wallet && wallet.warningLevel === 'warning' && (
+                <div className="ai-wallet-banner warning">
+                    <span className="ai-banner-icon"><FiAlertTriangle /></span>
+                    <span><strong>Low AI Credits Warning:</strong> Your hospital's AI credits are running low. Remaining budget: <strong>₹{remainingCreditsDisplay}</strong>.</span>
+                </div>
+            )}
+
+            {wallet && (wallet.warningLevel === 'critical' || wallet.warningLevel === 'very_critical') && (
+                <div className="ai-wallet-banner critical">
+                    <span className="ai-banner-icon"><FiAlertTriangle /></span>
+                    <span><strong>Critical AI Budget Alert:</strong> Only <strong>₹{remainingCreditsDisplay}</strong> AI budget remains for your hospital. Please notify your administrator.</span>
+                </div>
+            )}
+
+            {isExhausted && (
+                <div className="ai-wallet-banner exhausted">
+                    <div className="ai-exhausted-content">
+                        <div className="ai-exhausted-icon">🚫</div>
+                        <div>
+                            <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', color: '#991b1b' }}>AI Credits Exhausted</h4>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#7f1d1d' }}>
+                                Your hospital has used its available ₹2,000 AI budget. Please contact your administrator to continue using the AI Assistant.
+                            </p>
+                        </div>
+                    </div>
+                    <button className="ai-btn-contact-admin" onClick={() => setIsContactModalOpen(true)}>
+                        <FiMail size={14} /> Contact Admin
+                    </button>
+                </div>
+            )}
 
             <div className="ai-grid">
                 {/* Left Column */}
@@ -583,14 +717,14 @@ const AIAssistant = () => {
                         <button 
                             className="ai-btn-primary" 
                             onClick={handleCompareReports} 
-                            disabled={isComparing || !reports || reports.length < 2}
+                            disabled={isComparing || isExhausted || !reports || reports.length < 2}
                             style={{ 
                                 width: '100%', 
-                                opacity: (!reports || reports.length < 2) ? 0.5 : (isComparing ? 0.7 : 1),
-                                cursor: (!reports || reports.length < 2) ? 'not-allowed' : 'pointer'
+                                opacity: (!reports || reports.length < 2 || isExhausted) ? 0.5 : (isComparing ? 0.7 : 1),
+                                cursor: (!reports || reports.length < 2 || isExhausted) ? 'not-allowed' : 'pointer'
                             }}
                         >
-                            {isComparing ? 'Comparing...' : 'Compare Latest with Previous'}
+                            {isComparing ? 'Comparing...' : isExhausted ? 'AI Credits Exhausted' : 'Compare Latest with Previous'}
                         </button>
 
                         {(!reports || reports.length < 2) && (
@@ -657,13 +791,6 @@ const AIAssistant = () => {
                                         <p style={{ color: '#0c4a6e', margin: '0', fontSize: '13px', lineHeight: '1.5' }}>
                                             {comparison.data.OverallChange}
                                         </p>
-                                    </div>
-                                )}
-
-                                {comparison.usage && (
-                                    <div className="ai-token-badge" style={{ marginTop: '14px' }}>
-                                        <span>⚡ Tokens: <strong>{comparison.usage.totalTokens}</strong> (In: {comparison.usage.promptTokens} | Out: {comparison.usage.candidateTokens})</span>
-                                        <span>• Est. Cost: <strong>${comparison.usage.estimatedCostUsd?.toFixed(5) || '0.0001'}</strong></span>
                                     </div>
                                 )}
                             </div>
@@ -780,12 +907,12 @@ const AIAssistant = () => {
                         <button 
                             className="ai-btn-primary"
                             onClick={handleGenerateSummary}
-                            disabled={isLoading || !selectedReport}
-                            style={{ opacity: isLoading || !selectedReport ? 0.7 : 1 }}
+                            disabled={isLoading || isExhausted || !selectedReport}
+                            style={{ opacity: isLoading || isExhausted || !selectedReport ? 0.7 : 1 }}
                         >
                             {isLoading 
                                 ? (isImageMime(selectedReport?.mimeType || selectedReport?.mimetype) ? '🔍 Analyzing Image...' : '⏳ Generating Summary...') 
-                                : 'Generate Summary'
+                                : isExhausted ? '🚫 AI Credits Exhausted' : 'Generate Summary'
                             }
                         </button>
                         
@@ -896,20 +1023,10 @@ const AIAssistant = () => {
                                             <span>{summary.Disclaimer}</span>
                                         </div>
                                     )}
-
-                                    {/* Real-time Token Consumption Badge */}
-                                    {summaryUsage && (
-                                        <div className="ai-token-badge">
-                                            <span>⚡ Tokens: <strong>{summaryUsage.totalTokens}</strong> (In: {summaryUsage.promptTokens} | Out: {summaryUsage.candidateTokens})</span>
-                                            <span>• Model: <code>{summaryUsage.modelName || 'gemini-3.6-flash'}</code></span>
-                                            <span>• Est. Cost: <strong>${summaryUsage.estimatedCostUsd?.toFixed(5) || '0.00008'}</strong> (~₹{summaryUsage.estimatedCostInr?.toFixed(3) || '0.007'})</span>
-                                        </div>
-                                    )}
                                 </div>
                             )}
                         </div>
                     </div>
-
 
                     {/* Search Inside Reports Section */}
                     <div className="ai-card">
@@ -1028,11 +1145,6 @@ const AIAssistant = () => {
                                                 </div>
                                             )}
                                             <div className="ai-chat-bubble-text" style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div>
-                                            {msg.usage && (
-                                                <div className="ai-chat-token-tag">
-                                                    ⚡ {msg.usage.totalTokens} tokens (${msg.usage.estimatedCostUsd?.toFixed(5) || '0.00005'})
-                                                </div>
-                                            )}
                                         </div>
                                     ))}
 
@@ -1053,7 +1165,7 @@ const AIAssistant = () => {
                                 {/* Quick Suggestion Chips */}
                                 <div className="ai-chat-chips">
                                     {CHAT_SUGGESTIONS.map((chip, i) => (
-                                        <button key={i} className="ai-chat-chip" onClick={() => handleChatSend(chip)}>
+                                        <button key={i} className="ai-chat-chip" onClick={() => handleChatSend(chip)} disabled={isExhausted}>
                                             {chip}
                                         </button>
                                     ))}
@@ -1081,6 +1193,7 @@ const AIAssistant = () => {
                                     {/* Attach file button */}
                                     <button
                                         className="ai-chat-attach-btn"
+                                        disabled={isExhausted}
                                         onClick={() => {
                                             if (selectedReport && selectedReport.url) {
                                                 handleAttachToChat(selectedReport);
@@ -1095,16 +1208,17 @@ const AIAssistant = () => {
                                     <textarea
                                         ref={chatTextareaRef}
                                         className="ai-chat-input"
-                                        placeholder={chatAttachments.length > 0 ? "Ask about the attached file(s)..." : "Type your clinical question..."}
+                                        placeholder={isExhausted ? "AI Credits Exhausted — Contact Administrator to continue" : (chatAttachments.length > 0 ? "Ask about the attached file(s)..." : "Type your clinical question...")}
                                         value={chatInput}
                                         onChange={handleTextareaInput}
                                         onKeyDown={handleChatKeyDown}
+                                        disabled={isExhausted}
                                         rows={1}
                                     />
                                     <button
                                         className="ai-chat-send-btn"
                                         onClick={() => handleChatSend()}
-                                        disabled={!chatInput.trim() || isChatLoading}
+                                        disabled={!chatInput.trim() || isChatLoading || isExhausted}
                                     >
                                         Send
                                     </button>
@@ -1115,78 +1229,83 @@ const AIAssistant = () => {
                 </div>
             </div>
 
-            {/* ── AI Token Tracker & Analytics Modal ── */}
-            {isTrackerOpen && (
-                <div className="ai-modal-overlay" onClick={() => setIsTrackerOpen(false)}>
-                    <div className="ai-tracker-modal" onClick={e => e.stopPropagation()}>
+            {/* ── Hospital AI Wallet & AI Credits Modal ── */}
+            {isWalletOpen && (
+                <div className="ai-modal-overlay" onClick={() => setIsWalletOpen(false)}>
+                    <div className="ai-tracker-modal ai-wallet-modal" onClick={e => e.stopPropagation()}>
                         <div className="ai-tracker-header">
-                            <h2>⚡ AI Token Usage & Cost Analytics</h2>
-                            <button className="ai-tracker-close-btn" onClick={() => setIsTrackerOpen(false)}>✕</button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontSize: '24px' }}>🏥</span>
+                                <div>
+                                    <h2 style={{ margin: 0, fontSize: '18px', color: '#0f172a' }}>Hospital AI Wallet & AI Credits</h2>
+                                    <span style={{ fontSize: '12px', color: '#64748b' }}>Every hospital receives ₹2,000 AI Budget. Costs are calculated from actual Gemini API usage.</span>
+                                </div>
+                            </div>
+                            <button className="ai-tracker-close-btn" onClick={() => setIsWalletOpen(false)}>✕</button>
                         </div>
 
                         <div className="ai-tracker-body">
-                            {isTrackerLoading && !trackerStats && (
+                            {isWalletLoading && !wallet && (
                                 <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
-                                    Loading live token analytics...
+                                    Loading live hospital AI Wallet analytics...
                                 </div>
                             )}
 
-                            {trackerStats && (
+                            {wallet && (
                                 <>
                                     {/* KPI Summary Cards */}
                                     <div className="ai-tracker-kpi-grid">
                                         <div className="ai-tracker-card highlight">
-                                            <span className="ai-tracker-card-title">Total Tokens Used</span>
-                                            <span className="ai-tracker-card-value">
-                                                {trackerStats.totalTokens ? Number(trackerStats.totalTokens).toLocaleString() : '0'}
+                                            <span className="ai-tracker-card-title">Remaining AI Credits</span>
+                                            <span className="ai-tracker-card-value" style={{ color: wallet.remainingAmount <= 100 ? '#ef4444' : '#6366f1' }}>
+                                                ₹{Number(wallet.remainingAmount).toFixed(2)}
                                             </span>
                                             <span className="ai-tracker-card-sub">
-                                                Prompt: {Number(trackerStats.totalPromptTokens || 0).toLocaleString()} | Candidate: {Number(trackerStats.totalCandidateTokens || 0).toLocaleString()}
+                                                Status: <strong style={{ textTransform: 'capitalize', color: wallet.status === 'active' ? '#16a34a' : '#dc2626' }}>{wallet.status || 'Active'}</strong> ({wallet.warningLevel || 'normal'})
                                             </span>
                                         </div>
 
                                         <div className="ai-tracker-card">
-                                            <span className="ai-tracker-card-title">Total Estimated Cost</span>
-                                            <span className="ai-tracker-card-value" style={{ color: '#16a34a' }}>
-                                                ${trackerStats.totalCostUsd ? trackerStats.totalCostUsd.toFixed(4) : '0.0000'}
+                                            <span className="ai-tracker-card-title">Used Budget</span>
+                                            <span className="ai-tracker-card-value" style={{ color: '#0f172a' }}>
+                                                ₹{Number(wallet.usedAmount).toFixed(2)}
                                             </span>
                                             <span className="ai-tracker-card-sub">
-                                                ≈ ₹{trackerStats.totalCostInr ? trackerStats.totalCostInr.toFixed(2) : '0.00'} INR
+                                                Total Initial Budget: ₹{Number(wallet.budgetAmount || 2000).toFixed(2)} INR
                                             </span>
                                         </div>
 
                                         <div className="ai-tracker-card">
                                             <span className="ai-tracker-card-title">Today's Usage</span>
-                                            <span className="ai-tracker-card-value">
-                                                {trackerStats.todayTokens ? Number(trackerStats.todayTokens).toLocaleString() : '0'}
+                                            <span className="ai-tracker-card-value" style={{ color: '#16a34a' }}>
+                                                ₹{wallet.today ? Number(wallet.today.costInr).toFixed(2) : '0.00'}
                                             </span>
                                             <span className="ai-tracker-card-sub">
-                                                {trackerStats.todayRequests || 0} requests today (${(trackerStats.todayCostUsd || 0).toFixed(4)})
+                                                {wallet.today?.requests || 0} requests today
                                             </span>
                                         </div>
 
                                         <div className="ai-tracker-card">
-                                            <span className="ai-tracker-card-title">Total AI Calls</span>
+                                            <span className="ai-tracker-card-title">Total AI Invocations</span>
                                             <span className="ai-tracker-card-value">
-                                                {trackerStats.totalRequests || 0}
+                                                {wallet.totalRequests || 0}
                                             </span>
                                             <span className="ai-tracker-card-sub">
-                                                Active model: gemini-3.6-flash
+                                                Active Model: Gemini 1.5 Flash
                                             </span>
                                         </div>
                                     </div>
 
                                     {/* Action Type Breakdown */}
-                                    {trackerStats.actionBreakdown && trackerStats.actionBreakdown.length > 0 && (
+                                    {wallet.breakdown && wallet.breakdown.length > 0 && (
                                         <div className="ai-tracker-breakdown">
                                             <h4>Activity Breakdown</h4>
                                             <div className="ai-breakdown-tags">
-                                                {trackerStats.actionBreakdown.map((item, i) => (
+                                                {wallet.breakdown.map((item, i) => (
                                                     <div key={i} className="ai-breakdown-tag">
-                                                        <strong>{item.actionType.replace('_', ' ')}:</strong>
+                                                        <strong>{(item.operation || item.actionType || '').replace('_', ' ')}:</strong>
                                                         <span>{item.count} calls</span>
-                                                        <span>• {Number(item.tokens).toLocaleString()} tokens</span>
-                                                        <span>(${item.costUsd.toFixed(4)})</span>
+                                                        <span>• ₹{Number(item.costInr).toFixed(4)}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -1196,9 +1315,9 @@ const AIAssistant = () => {
                                     {/* Recent Activity Log Table */}
                                     <div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                            <h4 style={{ margin: 0, fontSize: '15px', color: '#1e293b' }}>Recent AI Invocations</h4>
+                                            <h4 style={{ margin: 0, fontSize: '15px', color: '#1e293b' }}>Recent AI Billing Invocations</h4>
                                             <button 
-                                                onClick={fetchTrackerData} 
+                                                onClick={fetchWalletModalData} 
                                                 style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', cursor: 'pointer' }}
                                             >
                                                 🔄 Refresh
@@ -1210,27 +1329,27 @@ const AIAssistant = () => {
                                                 <thead>
                                                     <tr>
                                                         <th>Time</th>
-                                                        <th>Action</th>
+                                                        <th>Operation</th>
                                                         <th>Model</th>
-                                                        <th>Input Tokens</th>
-                                                        <th>Output Tokens</th>
-                                                        <th>Total Tokens</th>
-                                                        <th>Est. Cost</th>
+                                                        <th>Tokens</th>
+                                                        <th>Actual Cost</th>
+                                                        <th>Status</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {trackerLogs.length === 0 ? (
+                                                    {walletLogs.length === 0 ? (
                                                         <tr>
-                                                            <td colSpan="7" style={{ textAlign: 'center', color: '#64748b', padding: '20px' }}>
-                                                                No AI requests recorded yet. Generate a summary or ask a chat question to see live tokens!
+                                                            <td colSpan="6" style={{ textAlign: 'center', color: '#64748b', padding: '20px' }}>
+                                                                No AI requests recorded yet. Generate a summary or ask a chat question to see live wallet deductions!
                                                             </td>
                                                         </tr>
                                                     ) : (
-                                                        trackerLogs.map((log) => {
+                                                        walletLogs.map((log) => {
                                                             let badgeClass = 'ai-action-summary';
-                                                            if (log.actionType === 'CLINICAL_CHAT') badgeClass = 'ai-action-chat';
-                                                            if (log.actionType === 'REPORT_COMPARISON') badgeClass = 'ai-action-compare';
-                                                            if (log.actionType === 'OCR_EXTRACTION') badgeClass = 'ai-action-ocr';
+                                                            const op = log.operation || log.actionType || 'AI_CALL';
+                                                            if (op === 'CLINICAL_CHAT' || op === 'CLINICAL_CHAT_MEDIA') badgeClass = 'ai-action-chat';
+                                                            if (op === 'REPORT_COMPARISON') badgeClass = 'ai-action-compare';
+                                                            if (op === 'OCR_EXTRACTION') badgeClass = 'ai-action-ocr';
 
                                                             return (
                                                                 <tr key={log._id}>
@@ -1239,16 +1358,21 @@ const AIAssistant = () => {
                                                                     </td>
                                                                     <td>
                                                                         <span className={`ai-tracker-action-badge ${badgeClass}`}>
-                                                                            {log.actionType.replace('_', ' ')}
+                                                                            {op.replace('_', ' ')}
                                                                         </span>
                                                                     </td>
                                                                     <td style={{ fontFamily: 'monospace', fontSize: '11px', color: '#475569' }}>
-                                                                        {log.modelName || 'gemini-1.5-flash'}
+                                                                        {log.model || log.modelName || 'gemini-1.5-flash'}
                                                                     </td>
-                                                                    <td>{log.promptTokens || 0}</td>
-                                                                    <td>{log.candidateTokens || 0}</td>
-                                                                    <td><strong>{log.totalTokens || 0}</strong></td>
-                                                                    <td style={{ color: '#16a34a' }}>${(log.estimatedCostUsd || 0).toFixed(5)}</td>
+                                                                    <td>{log.totalTokens || 0}</td>
+                                                                    <td style={{ color: '#16a34a', fontWeight: 600 }}>
+                                                                        ₹{(log.actualApiCost !== undefined ? log.actualApiCost : (log.estimatedCostInr || 0)).toFixed(4)}
+                                                                    </td>
+                                                                    <td>
+                                                                        <span style={{ fontSize: '11px', color: log.status === 'SUCCESS' ? '#16a34a' : '#ef4444', fontWeight: 600 }}>
+                                                                            {log.status}
+                                                                        </span>
+                                                                    </td>
                                                                 </tr>
                                                             );
                                                         })
@@ -1259,6 +1383,47 @@ const AIAssistant = () => {
                                     </div>
                                 </>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Contact Admin Modal ── */}
+            {isContactModalOpen && (
+                <div className="ai-modal-overlay" onClick={() => setIsContactModalOpen(false)}>
+                    <div className="ai-contact-modal" onClick={e => e.stopPropagation()}>
+                        <div className="ai-modal-header">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '20px' }}>🏥</span>
+                                <h3>Contact Hospital Administrator</h3>
+                            </div>
+                            <button className="ai-modal-close" onClick={() => setIsContactModalOpen(false)}>✕</button>
+                        </div>
+                        <div className="ai-contact-body">
+                            <p style={{ color: '#475569', fontSize: '14px', lineHeight: '1.5', margin: '0 0 16px 0' }}>
+                                Your hospital's initial <strong>₹2,000 AI Credit budget</strong> has been fully utilized.
+                            </p>
+                            <div className="ai-admin-contact-info">
+                                <div className="ai-contact-row">
+                                    <span className="ai-contact-label">Status:</span>
+                                    <span className="ai-contact-badge exhausted">Exhausted (₹0.00 Remaining)</span>
+                                </div>
+                                <div className="ai-contact-row">
+                                    <span className="ai-contact-label">Hospital ID:</span>
+                                    <span className="ai-contact-text">{currentUser?.hospitalId || 'Active Hospital'}</span>
+                                </div>
+                                <div className="ai-contact-row">
+                                    <span className="ai-contact-label">Resolution:</span>
+                                    <span className="ai-contact-text">Please request your Hospital Administrator or Super Admin to top up credits for this hospital.</span>
+                                </div>
+                            </div>
+                            <button 
+                                className="ai-btn-primary" 
+                                style={{ marginTop: '20px', width: '100%', padding: '10px' }} 
+                                onClick={() => setIsContactModalOpen(false)}
+                            >
+                                Close
+                            </button>
                         </div>
                     </div>
                 </div>

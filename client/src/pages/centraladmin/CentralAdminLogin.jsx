@@ -48,7 +48,9 @@ const CentralAdminLogin = () => {
             })).unwrap();
 
             if (result.otpBypassed && !result.activeSessionExists && result.token) {
+                localStorage.setItem('token', result.token);
                 localStorage.setItem('superadmin_token', result.token);
+                if (result.user) localStorage.setItem('user', JSON.stringify(result.user));
                 window.location.href = '/supremeadmin';
             }
         } catch (err) {

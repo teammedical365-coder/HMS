@@ -4,12 +4,13 @@ import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientA
 import { useAuth } from '../../store/hooks';
 import { getSubdomain } from '../../utils/subdomain';
 import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { 
     FiSearch, FiUserPlus, FiFileText, FiDollarSign, FiUsers, FiCalendar, FiHome, FiPlusSquare, 
     FiActivity, FiSliders, FiPhone, FiEye, FiUpload, FiMoreVertical, FiCpu, FiCheckCircle, FiClock, 
-    FiPrinter, FiFilter 
+    FiPrinter, FiFilter, FiX 
 } from 'react-icons/fi';
 import { FaRupeeSign, FaHeartbeat } from 'react-icons/fa';
 import PaymentSection from '../../components/PaymentSection';
@@ -149,13 +150,18 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [isEditingProfileOnly, setIsEditingProfileOnly] = useState(false);
 
-    useEffect(() => {
-        const handler = setTimeout(() => {
-            setDebouncedSearch(searchQuery);
-        }, 500);
-        return () => clearTimeout(handler);
-    }, [searchQuery]);
+    const timeOfDay = new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening';
 
+    const handleCloseRegistration = useCallback(() => {
+        if (isPatientPortal) {
+            navigate('/patient/dashboard');
+        } else {
+            setSelectedPatientId(null);
+            setIsEditingProfileOnly(false);
+            setViewMode('list');
+            navigate('/reception/dashboard?view=desk', { replace: true });
+        }
+    }, [isPatientPortal, navigate]);
 
     // Token mode — next token preview
     const [nextToken, setNextToken] = useState(null);
@@ -226,6 +232,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const [availabilityCheck, setAvailabilityCheck] = useState({
         doctorId: '', date: new Date().toISOString().split('T')[0], bookedSlots: []
     });
+    const [selectedTimeSlot, setSelectedTimeSlot] = useState('09:00');
 
     // SIMPLIFIED INTAKE STATE (Removed medical history)
     const [intakeForm, setIntakeForm] = useState({
@@ -856,8 +863,12 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     };
 
     const handleViewProfile = (patient) => {
-        const dept = patient.department || patient.serviceName || 'Unassigned';
-        navigate(`/patient/${patient._id || patient.patientId || patient.id}/department/${encodeURIComponent(dept)}`);
+        if (!patient) return;
+        const pid = patient._id || patient.patientId || patient.id || (typeof patient.userId === 'object' ? (patient.userId?._id || patient.userId?.patientId) : patient.userId);
+        const dept = patient.department || patient.serviceName || (patient.userId && (patient.userId.department || patient.userId.serviceName)) || 'Unassigned';
+        if (pid) {
+            navigate(`/patient/${pid}/department/${encodeURIComponent(dept)}`);
+        }
     };
 
     const openHospitalizeModal = (apt) => {
@@ -875,10 +886,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const handleHospitalize = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
         const { appointment } = hospitalizeModal;
-        if (!hospitalizeForm.ward) return alert('Please select a Ward');
-        if (!hospitalizeForm.bedId) return alert('Please select an available Bed');
-        if (!hospitalizeForm.admissionDate) return alert('Please specify Admission Date');
-        if (!hospitalizeForm.admissionTime) return alert('Please specify Admission Time');
+        if (!hospitalizeForm.ward) return toast.error('Please select a Ward');
+        if (!hospitalizeForm.bedId) return toast.error('Please select an available Bed');
+        if (!hospitalizeForm.admissionDate) return toast.error('Please specify Admission Date');
+        if (!hospitalizeForm.admissionTime) return toast.error('Please specify Admission Time');
 
         setHospitalizingSaving(true);
         try {
@@ -891,13 +902,13 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 admissionTime: hospitalizeForm.admissionTime,
                 notes: hospitalizeForm.notes,
             });
-            alert('Patient admitted successfully!');
+            toast.success('Patient admitted successfully!');
             setHospitalizeModal({ open: false, appointment: null });
             fetchAppointments();
             fetchHospitalizedPatients();
             fetchAvailableBeds();
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to admit patient');
+            toast.error(err.response?.data?.message || 'Failed to admit patient');
         } finally {
             setHospitalizingSaving(false);
         }
@@ -931,10 +942,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const handleTransferSubmit = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
         const { admission, newWard, newBedId, transferDate, transferTime, notes } = transferModal;
-        if (!newWard) return alert('Please select New Ward');
-        if (!newBedId) return alert('Please select New Bed');
-        if (!transferDate) return alert('Please select Transfer Date');
-        if (!transferTime) return alert('Please select Transfer Time');
+        if (!newWard) return toast.error('Please select New Ward');
+        if (!newBedId) return toast.error('Please select New Bed');
+        if (!transferDate) return toast.error('Please select Transfer Date');
+        if (!transferTime) return toast.error('Please select Transfer Time');
 
         setTransferModal(prev => ({ ...prev, saving: true }));
         try {
@@ -946,13 +957,13 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 notes
             });
             if (res.success) {
-                alert('Patient transferred successfully!');
+                toast.success('Patient transferred successfully!');
                 setTransferModal({ open: false, admission: null, newWard: '', newBedId: '', transferDate: '', transferTime: '', notes: '', saving: false });
                 fetchHospitalizedPatients();
                 fetchAvailableBeds();
             }
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to transfer patient');
+            toast.error(err.response?.data?.message || 'Failed to transfer patient');
         } finally {
             setTransferModal(prev => ({ ...prev, saving: false }));
         }
@@ -1086,8 +1097,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const handleDischargeSubmit = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
         const { admission, dischargeDate, dischargeTime, notes } = dischargeModal;
-        if (!dischargeDate) return alert('Please select Discharge Date');
-        if (!dischargeTime) return alert('Please select Discharge Time');
+        if (!dischargeDate) return toast.error('Please select Discharge Date');
+        if (!dischargeTime) return toast.error('Please select Discharge Time');
 
         setDischargeModal(prev => ({ ...prev, saving: true }));
         try {
@@ -1099,25 +1110,34 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             if (res.success) {
                 const pdf = generateDischargeReceiptPDF(res.admission || admission, false);
                 setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Discharge Bill & Receipt' });
-                alert('Patient discharged successfully!');
+                toast.success('Patient discharged successfully!');
                 setDischargeModal({ open: false, admission: null, dischargeDate: '', dischargeTime: '', notes: '', saving: false });
                 fetchHospitalizedPatients();
                 fetchAvailableBeds();
             }
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to discharge patient.');
+            toast.error(err.response?.data?.message || 'Failed to discharge patient.');
         } finally {
             setDischargeModal(prev => ({ ...prev, saving: false }));
         }
     };
 
     const handleCancelAppointment = async (appointmentId) => {
-        if (!window.confirm('Cancel this appointment?')) return;
+        const confirmed = await confirmToast('Are you sure you want to cancel this appointment?', {
+            title: 'Cancel Appointment',
+            confirmText: 'Yes, Cancel',
+            danger: true
+        });
+        if (!confirmed) return;
+
         try {
             const res = await receptionAPI.cancelAppointment(appointmentId);
-            if (res.success) fetchAppointments();
+            if (res.success) {
+                toast.success('Appointment cancelled successfully.');
+                fetchAppointments();
+            }
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to cancel appointment.');
+            toast.error(err.response?.data?.message || 'Failed to cancel appointment.');
         }
     };
 
@@ -1192,7 +1212,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         const totalSplit = splitPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
         
         if (totalSplit !== Number(appointment.amount || 0)) {
-            alert(`Total split amount (₹${totalSplit}) must match the appointment fee (₹${appointment.amount}).`);
+            toast.error(`Total split amount (₹${totalSplit}) must match the appointment fee (₹${appointment.amount}).`);
             return;
         }
 
@@ -1203,10 +1223,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             const paymentMethodStr = splitPayments.map(p => `${p.method} (${p.amount})`).join(' + ');
             const pdf = generateReceiptPDF({ ...appointment, paymentMethod: paymentMethodStr, paymentStatus: 'Paid' }, paymentMethodStr, false);
             setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Payment Receipt' });
+            toast.success('Payment confirmed successfully!');
             setPaymentModal({ open: false, appointment: null, splitPayments: [{ method: 'Cash', amount: '' }] });
             fetchAppointments();
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to confirm payment.');
+            toast.error(err.response?.data?.message || 'Failed to confirm payment.');
         } finally {
             setConfirmingPayment(false);
         }
@@ -1261,7 +1282,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     const isAvailable = selectedDoc.availability[dayName] && selectedDoc.availability[dayName].available === true;
                     if (!isAvailable) {
                         const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-                        alert(`Doctor ${selectedDoc.name} is not available on ${capitalizedDay}s. Please select another date.`);
+                        toast.error(`Doctor ${selectedDoc.name} is not available on ${capitalizedDay}s. Please select another date.`);
                         return; // Prevent updating state
                     }
                 }
@@ -1303,7 +1324,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 const isAvailable = selectedDoc.availability[dayName] && selectedDoc.availability[dayName].available === true;
                 if (!isAvailable) {
                     const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-                    alert(`Doctor ${selectedDoc.name} is not available on ${capitalizedDay}s. Please select another date before assigning this doctor.`);
+                    toast.error(`Doctor ${selectedDoc.name} is not available on ${capitalizedDay}s. Please select another date before assigning this doctor.`);
                     return; // Prevent updating state
                 }
             }
@@ -1317,7 +1338,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     const handleSendOTP = async () => {
         if (!intakeForm.aadhaar || intakeForm.aadhaar.length !== 12) {
-            alert("Please enter a valid 12-digit Aadhaar number.");
+            toast.error("Please enter a valid 12-digit Aadhaar number.");
             return;
         }
         setVerifyingAadhaar(true);
@@ -1325,10 +1346,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             const res = await receptionAPI.sendAadhaarOTP(intakeForm.aadhaar);
             if (res.success) {
                 setOtpSent(true);
-                alert(res.message); // "OTP Sent (Use 123456)"
+                toast.success(res.message || "OTP Sent");
             }
         } catch (err) {
-            alert(err.response?.data?.message || "Failed to send OTP");
+            toast.error(err.response?.data?.message || "Failed to send OTP");
             setOtpSent(false);
         } finally {
             setVerifyingAadhaar(false);
@@ -1336,14 +1357,14 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     };
 
     const handleVerifyOTP = async () => {
-        if (!aadhaarOtp) return alert("Please enter the OTP sent to mobile.");
+        if (!aadhaarOtp) return toast.error("Please enter the OTP sent to mobile.");
 
         setVerifyingAadhaar(true);
         try {
             const res = await receptionAPI.verifyAadhaarOTP(intakeForm.aadhaar, aadhaarOtp);
             if (res.success && res.data) {
                 const kyc = res.data;
-                alert(`✅ Verification Successful: ${kyc.fullName}`);
+                toast.success(`Verification Successful: ${kyc.fullName}`);
 
                 // Auto-populate
                 setIntakeForm(prev => ({
@@ -1360,7 +1381,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 setAadhaarOtp('');
             }
         } catch (err) {
-            alert(err.response?.data?.message || "Invalid OTP");
+            toast.error(err.response?.data?.message || "Invalid OTP");
         } finally {
             setVerifyingAadhaar(false);
         }
@@ -1371,22 +1392,22 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         setSaving(true);
 
         if (!intakeForm.firstName || !intakeForm.mobile) {
-            alert("Name and Mobile are required.");
+            toast.error("Name and Mobile are required.");
             setSaving(false); return;
         }
 
         if (intakeForm.firstName.trim().length < 2) {
-            alert("Name must be at least 2 characters.");
+            toast.error("Name must be at least 2 characters.");
             setSaving(false); return;
         }
 
         if (!intakeForm.age || intakeForm.age < 1) {
-            alert("Age is required and must be a positive number greater than 0.");
+            toast.error("Age is required and must be a positive number greater than 0.");
             setSaving(false); return;
         }
 
         if (!intakeForm.aadhaar || !/^\d{12}$/.test(intakeForm.aadhaar)) {
-            alert("Aadhaar Number is required and must be exactly 12 digits.");
+            toast.error("Aadhaar Number is required and must be exactly 12 digits.");
             setSaving(false); return;
         }
 
@@ -1654,7 +1675,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 <div className="intake-full-page" data-lenis-prevent="true">
                     <div className="context-bar">
                         <h3>{followupStatus?.active ? 'Re-Book Appointment' : 'Book Appointment'}</h3>
-                        <button type="button" className="btn-cancel" onClick={() => setViewMode('list')}>Close ✖</button>
+                        <button type="button" className="btn-cancel" onClick={handleCloseRegistration}>Close ✖</button>
                     </div>
                     <div className="intake-container" style={{ maxWidth: '650px', margin: '0 auto' }}>
                         <form onSubmit={handleSave}>
@@ -1862,7 +1883,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         })()
                                     }
                                 </button>
-                                <button type="button" className="btn-cancel" onClick={() => setViewMode('list')} disabled={saving} style={{ marginLeft: '10px' }}>
+                                <button type="button" className="btn-cancel" onClick={handleCloseRegistration} disabled={saving} style={{ marginLeft: '10px' }}>
                                     Cancel
                                 </button>
                             </div>
@@ -1902,7 +1923,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             <button 
                                 type="button" 
                                 className="reg-btn-close-prominent" 
-                                onClick={() => isPatientPortal ? navigate('/patient/dashboard') : setViewMode('list')}
+                                onClick={handleCloseRegistration}
                             >
                                 ✕ Close
                             </button>
@@ -2561,7 +2582,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             <button 
                                                 type="button" 
                                                 className="reg-btn reg-btn-cancel" 
-                                                onClick={() => isPatientPortal ? navigate('/patient/dashboard') : setViewMode('list')}
+                                                onClick={handleCloseRegistration}
                                                 disabled={saving}
                                             >
                                                 Cancel
@@ -2755,109 +2776,168 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     );
 
     const renderHospitalized = () => (
-        <div className="appointments-list">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                <button 
-                    onClick={() => setListTab('queue')} 
-                    style={{ background: 'none', border: 'none', fontSize: '1.2rem', cursor: 'pointer', color: '#64748b', padding: '0 8px 0 0' }}
-                    title="Back to Today's Queue"
+        <div className="rec-queue-box" style={{ marginTop: '16px' }}>
+            <div className="rec-queue-head">
+                <div className="rec-queue-title">
+                    <div className="rec-queue-icon hosp">
+                        <FiHome />
+                    </div>
+                    <div>
+                        <h3>Hospitalized In-Patients</h3>
+                        <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
+                            Active IPD admissions and ward allocations
+                        </p>
+                    </div>
+                </div>
+                <button
+                    className="rec-tab-pill-btn active-queue"
+                    onClick={() => setListTab('queue')}
                 >
-                    ←
+                    <FiUsers size={13} />
+                    <span>Back to Today's Queue</span>
                 </button>
-                <h3 style={{ margin: 0 }}>Hospitalized Patients</h3>
             </div>
-            <div className="table-responsive">
-                <table className="reception-table">
+            
+            <div className="rec-table-wrap">
+                <table className="rec-table rec-table-colorful">
                     <thead>
                         <tr>
-                            <th>Patient Name</th>
+                            <th style={{ width: '45px' }}>#</th>
+                            <th>PATIENT</th>
                             <th>MRN</th>
-                            <th>Department</th>
-                            <th>Doctor</th>
-                            <th>Admission Date</th>
-                            <th>Ward / Bed</th>
-                            <th>Status</th>
-                            <th>Action</th>
+                            <th>WARD & BED</th>
+                            <th>DOCTOR & DEPT</th>
+                            <th>ADMISSION DATE</th>
+                            <th>STATUS</th>
+                            <th style={{ textAlign: 'right' }}>ACTIONS</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loadingHospitalized ? (
-                            <tr><td colSpan="8" style={{ textAlign: 'center', padding: '20px' }}>Loading...</td></tr>
+                            <tr><td colSpan="8" style={{ textAlign: 'center', padding: '30px' }}>Loading hospitalized patients...</td></tr>
                         ) : hospitalizedPatients.length === 0 ? (
-                            <tr><td colSpan="8" style={{ textAlign: 'center', padding: '20px' }}>No hospitalized patients found.</td></tr>
+                            <tr><td colSpan="8" style={{ textAlign: 'center', padding: '30px' }}>No hospitalized patients found.</td></tr>
                         ) : (
-                            hospitalizedPatients.map(adm => (
-                                <tr key={adm._id}>
-                                    <td style={{ fontWeight: 600 }}>{adm.patientId?.name || 'Unknown'}<br /><small>{adm.patientId?.phone}</small></td>
-                                    <td>{adm.patientId?.patientId || '-'}</td>
-                                    <td>{adm.appointmentId?.department || adm.appointmentId?.serviceName || '-'}</td>
-                                    <td>{adm.appointmentId?.doctorName || '-'}</td>
-                                    <td>
-                                        <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>
-                                            {new Date(adm.admissionDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                            {adm.admissionTime && <span style={{ color: '#475569', fontSize: '0.78rem', marginLeft: '4px' }}>({adm.admissionTime})</span>}
-                                        </div>
-                                        {adm.transferHistory && adm.transferHistory.length > 0 && (
-                                            <div style={{ fontSize: '0.75rem', color: '#7c3aed', marginTop: '2px', fontWeight: 600 }}>
-                                                🔄 Transferred ({adm.transferHistory.length}x)
-                                            </div>
-                                        )}
-                                        {adm.status === 'Discharged' && adm.dischargeDate && (
-                                            <div style={{ fontSize: '0.8rem', color: '#059669', marginTop: '2px' }}>
-                                                🚪 Discharged: {new Date(adm.dischargeDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                                {adm.dischargeTime && <span style={{ fontSize: '0.75rem', marginLeft: '4px' }}>({adm.dischargeTime})</span>}
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td>
-                                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{adm.ward || '-'}</div>
-                                        <div style={{ fontSize: '0.8rem', color: '#2563eb', fontWeight: 700 }}>Bed: {adm.bedNumber || '-'}</div>
-                                    </td>
-                                    <td>
-                                        <span style={{
-                                            display: 'inline-block', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600,
-                                            background: adm.status === 'Admitted' ? '#dcfce7' : '#f1f5f9',
-                                            color: adm.status === 'Admitted' ? '#166534' : '#475569'
-                                        }}>
-                                            {String(adm.status).toUpperCase()}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                            {adm.status === 'Admitted' ? (
-                                                <>
-                                                    <button 
-                                                        onClick={() => openTransferModal(adm)} 
-                                                        style={{ padding: '6px 10px', background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
-                                                    >
-                                                        🔄 Transfer
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => openDischargeModal(adm)} 
-                                                        style={{ padding: '6px 10px', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
-                                                    >
-                                                        🚪 Discharge
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <button 
-                                                    onClick={() => {
-                                                        try {
-                                                            generateDischargeReceiptPDF(adm, true);
-                                                        } catch (e) {
-                                                            console.error("Error generating discharge bill:", e);
-                                                            alert("Error generating receipt: " + e.message);
-                                                        }
-                                                    }} 
-                                                    style={{ padding: '6px 12px', background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
+                            hospitalizedPatients.map((adm, idx) => {
+                                const pName = adm.patientId?.name || 'In-Patient';
+                                const pPhone = adm.patientId?.phone || '-';
+                                const pMrn = adm.patientId?.patientId || adm.patientId?.mrn || '-';
+                                const dName = adm.appointmentId?.doctorName || adm.appointmentId?.doctorId?.name || 'Attending Physician';
+                                const dept = adm.appointmentId?.department || adm.appointmentId?.serviceName || 'General';
+
+                                return (
+                                    <tr key={adm._id || idx} className="rec-row-hosp">
+                                        <td className="rec-td-num">{String(idx + 1).padStart(2, '0')}</td>
+                                        <td>
+                                            <div 
+                                                className="rec-patient-cell"
+                                                onClick={() => handleViewProfile(adm.patientId || adm)}
+                                                style={{ cursor: 'pointer' }}
+                                                title="Click to view Patient Profile"
+                                            >
+                                                <div
+                                                    className="rec-avatar-circle"
+                                                    style={{ background: getInitialBgColor(pName) }}
                                                 >
-                                                    📄 Receipt
+                                                    {pName.substring(0, 2).toUpperCase()}
+                                                </div>
+                                                <div className="rec-patient-names">
+                                                    <span className="rec-p-name">{pName}</span>
+                                                    <span className="rec-p-phone"><FiPhone size={10} style={{ display: 'inline', marginRight: '3px' }} />{pPhone}</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span 
+                                                className="rec-mrn-pill" 
+                                                onClick={() => handleViewProfile(adm.patientId || adm)}
+                                                style={{ cursor: 'pointer' }}
+                                                title="Click to view Patient Profile"
+                                            >
+                                                {pMrn}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div className="rec-hosp-bed-cell">
+                                                <span className="rec-ward-pill">{adm.ward || 'Ward'}</span>
+                                                <span className="rec-bed-pill">Bed #{adm.bedNumber || '-'}</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div className="rec-doc-cell">
+                                                <div className="rec-doc-avatar hosp-doc">
+                                                    {dName.replace('Dr. ', '').substring(0, 2).toUpperCase()}
+                                                </div>
+                                                <div>
+                                                    <span style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.84rem' }}>{dName}</span>
+                                                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{dept}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div className="rec-time-cell">
+                                                <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.82rem' }}>
+                                                    {new Date(adm.admissionDate || adm.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                </span>
+                                                <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{adm.admissionTime || '10:00 AM'}</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span className={`rec-status-pill status-${(adm.status || 'admitted').toLowerCase()}`}>
+                                                {String(adm.status || 'ADMITTED').toUpperCase()}
+                                            </span>
+                                        </td>
+                                        <td style={{ textAlign: 'right' }}>
+                                            <div className="rec-actions-group">
+                                                <button
+                                                    className="rec-tbl-btn rec-btn-profile"
+                                                    title="View Patient Profile"
+                                                    onClick={() => handleViewProfile(adm.patientId || adm)}
+                                                    style={{ background: '#f0f9ff', color: '#0284c7', border: '1px solid #bae6fd' }}
+                                                >
+                                                    <FiEye size={13} />
+                                                    <span>Profile</span>
                                                 </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
+                                                {adm.status === 'Admitted' ? (
+                                                    <>
+                                                        <button 
+                                                            className="rec-tbl-btn rec-btn-transfer"
+                                                            onClick={() => openTransferModal(adm)} 
+                                                            style={{ background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe' }}
+                                                        >
+                                                            <FiSliders size={13} />
+                                                            <span>Transfer</span>
+                                                        </button>
+                                                        <button 
+                                                            className="rec-tbl-btn rec-btn-discharge"
+                                                            onClick={() => openDischargeModal(adm)} 
+                                                            style={{ background: '#fff1f2', color: '#e11d48', border: '1px solid #fecdd3' }}
+                                                        >
+                                                            <FiHome size={13} />
+                                                            <span>Discharge</span>
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <button 
+                                                        className="rec-tbl-btn rec-btn-print"
+                                                        onClick={() => {
+                                                            try {
+                                                                generateDischargeReceiptPDF(adm, true);
+                                                            } catch (e) {
+                                                                console.error("Error generating discharge bill:", e);
+                                                                toast.error("Error generating receipt: " + e.message);
+                                                            }
+                                                        }} 
+                                                    >
+                                                        <FiPrinter size={13} />
+                                                        <span>Receipt</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })
                         )}
                     </tbody>
                 </table>
@@ -3354,8 +3434,6 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     );
 
     if (viewMode === 'welcome' || !viewMode || viewMode === 'dashboard') {
-        const timeOfDay = new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : 'Evening';
-
         return (
             <>
                 <div className="reception-dashboard" style={{ padding: '0 0 24px 0', margin: 0 }}>
@@ -3553,120 +3631,693 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     }
 
     return (
-        <>
-            <div className="reception-dashboard">
-                {pendingDownload && (
+        <div className="reception-dashboard rec-modern-dashboard">
+            {pendingDownload && (
+                <div style={{
+                    margin: '0 0 20px 0',
+                    padding: '12px 20px',
+                    background: '#ecfdf5',
+                    border: '1.5px solid #a7f3d0',
+                    borderRadius: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.08)',
+                    fontFamily: 'var(--font-primary)'
+                }}>
+                    <span style={{ color: '#065f46', fontWeight: 600, fontSize: '0.95rem' }}>
+                        ✅ {pendingDownload.title || 'Document Generated'} — {pendingDownload.filename} is ready
+                    </span>
+                    <button
+                        onClick={() => {
+                            pendingDownload.doc.save(pendingDownload.filename);
+                            setPendingDownload(null);
+                        }}
+                        style={{
+                            padding: '8px 16px',
+                            background: '#059669',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontWeight: 700,
+                            fontSize: '0.85rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}
+                    >
+                        📥 Download
+                    </button>
+                </div>
+            )}
+
+            {/* TOP SEARCH BAR WITH AUTOCOMPLETE */}
+            <div className="rec-search-container" style={{ position: 'relative', marginBottom: '18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '16px', padding: '10px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                    <FiSearch style={{ color: '#94a3b8', fontSize: '1.1rem', marginRight: '12px', flexShrink: 0 }} />
+                    <input
+                        type="text"
+                        placeholder="Search Patient by Name, Mobile or MRN..."
+                        value={searchQuery}
+                        onChange={handleSearch}
+                        style={{ width: '100%', border: 'none', outline: 'none', fontSize: '0.92rem', color: '#1e293b', fontWeight: 500 }}
+                    />
+                </div>
+                {searchQuery.trim().length > 0 && searchResults.length > 0 && (
                     <div style={{
-                        margin: '0 0 20px 0',
-                        padding: '12px 20px',
-                        background: '#ecfdf5',
-                        border: '1.5px solid #a7f3d0',
-                        borderRadius: '12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.05)',
-                        fontFamily: 'var(--font-primary)'
+                        position: 'absolute', top: '56px', left: 0, right: 0,
+                        background: '#ffffff', border: '1.5px solid #e2e8f0', boxShadow: '0 12px 32px rgba(0,0,0,0.12)',
+                        zIndex: 1000, maxHeight: '320px', overflowY: 'auto', borderRadius: '14px', padding: '6px'
                     }}>
-                        <span style={{ color: '#065f46', fontWeight: 600, fontSize: '0.95rem' }}>
-                            ✅ {pendingDownload.title || 'Document Generated'} — {pendingDownload.filename} is ready
-                        </span>
-                        <button
-                            onClick={() => {
-                                pendingDownload.doc.save(pendingDownload.filename);
-                                setPendingDownload(null);
-                            }}
-                            style={{
-                                padding: '8px 16px',
-                                background: '#059669',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '8px',
-                                fontWeight: 700,
-                                fontSize: '0.85rem',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                            }}
-                        >
-                            📥 Download
-                        </button>
+                        {searchResults.map(p => (
+                            <div key={p._id} style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '8px', transition: 'background 0.15s' }}>
+                                <div>
+                                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{p.name} <span style={{ color: '#64748b', fontSize: '0.82rem', fontWeight: 600 }}>({p.patientId || 'N/A'})</span></div>
+                                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>📱 {p.phone}</div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                        onClick={() => handleSelectSearchResult(p)}
+                                        style={{ padding: '6px 14px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}
+                                    >
+                                        📋 Book Appointment
+                                    </button>
+                                    <button
+                                        onClick={() => handleViewProfile(p)}
+                                        style={{ padding: '6px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}
+                                    >
+                                        👤 View Profile
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 )}
+            </div>
 
-                <div className="dashboard-header">
-                    <h1>Reception Desk</h1>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <button className="btn-cancel" onClick={() => { fetchTransactions(); setViewMode('transactions'); }} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1' }}>💰 Transactions</button>
-                        <button className="btn-cancel" onClick={() => navigate('/billing/patient')} style={{ padding: '10px 20px', fontSize: '1rem', background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac' }}>🧾 Patient Billing</button>
-                        <button className="btn-save" onClick={handleNewWalkIn} style={{ padding: '10px 20px', fontSize: '1rem' }}>+ New Registration</button>
+            <div className="rec-modern-layout-full">
+                {/* 1. HERO BANNER WITH RECEPTIONIST ILLUSTRATION & QUICK ACTIONS */}
+                <div className="rec-hero-banner">
+                    <div className="rec-hero-text">
+                        <span className="rec-hero-greet">Good {timeOfDay}, Receptionist 👋</span>
+                        <h1 className="rec-hero-title">Welcome Back!</h1>
+                        <p className="rec-hero-subtitle">Here's what's happening today</p>
+                    </div>
+
+                    {/* Central Vector Illustration */}
+                    <div className="rec-hero-illustration">
+                        <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%', maxWidth: '240px' }}>
+                            <ellipse cx="130" cy="90" rx="95" ry="55" fill="#ede9fe" opacity="0.6" />
+                            <circle cx="110" cy="50" r="18" fill="#fbcfe8" opacity="0.5" />
+                            <circle cx="180" cy="70" r="10" fill="#bae6fd" opacity="0.7" />
+                            <rect x="50" y="115" width="160" height="12" rx="4" fill="#6366f1" opacity="0.85" />
+                            <rect x="65" y="127" width="8" height="25" rx="2" fill="#4f46e5" />
+                            <rect x="187" y="127" width="8" height="25" rx="2" fill="#4f46e5" />
+                            <rect x="75" y="90" width="38" height="25" rx="3" fill="#1e293b" />
+                            <rect x="78" y="93" width="32" height="19" rx="1.5" fill="#38bdf8" />
+                            <path d="M 70 115 L 118 115 L 114 118 L 74 118 Z" fill="#94a3b8" />
+                            <rect x="180" y="100" width="14" height="15" rx="2" fill="#f59e0b" />
+                            <path d="M 187 100 Q 180 85 175 88 Q 185 92 187 100 Z" fill="#10b981" />
+                            <path d="M 187 100 Q 194 82 200 87 Q 192 92 187 100 Z" fill="#34d399" />
+                            <path d="M 187 100 Q 187 78 184 75 Q 189 85 187 100 Z" fill="#059669" />
+                            <circle cx="140" cy="62" r="22" fill="#1e293b" />
+                            <path d="M 118 115 C 118 92 162 92 162 115 Z" fill="#7c3aed" />
+                            <path d="M 132 92 L 140 106 L 148 92 Z" fill="#ffffff" />
+                            <rect x="135" y="68" width="10" height="12" rx="3" fill="#fed7aa" />
+                            <circle cx="140" cy="60" r="14" fill="#fde68a" />
+                            <path d="M 126 56 C 126 44 154 44 154 56 C 154 50 148 46 140 46 C 132 46 126 50 126 56 Z" fill="#0f172a" />
+                            <circle cx="136" cy="60" r="1.5" fill="#0f172a" />
+                            <circle cx="144" cy="60" r="1.5" fill="#0f172a" />
+                            <path d="M 138 65 Q 140 68 142 65" stroke="#0f172a" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                            <path d="M 122 102 Q 106 108 98 115" stroke="#7c3aed" strokeWidth="6" strokeLinecap="round" />
+                            <path d="M 158 102 Q 170 108 174 115" stroke="#7c3aed" strokeWidth="6" strokeLinecap="round" />
+                            <path d="M 110 35 Q 110 20 122 24" stroke="#94a3b8" strokeWidth="2" fill="none" />
+                            <path d="M 118 20 L 126 28 L 115 28 Z" fill="#facc15" />
+                            <circle cx="120" cy="27" r="4" fill="#fef08a" opacity="0.8" />
+                        </svg>
+                    </div>
+
+                    {/* 3 Right Action Mini-Cards */}
+                    <div className="rec-hero-actions">
+                        <div className="rec-action-chip rec-chip-purple" onClick={() => { fetchTransactions(); setViewMode('transactions'); }}>
+                            <div className="rec-chip-icon rec-icon-purple"><FaRupeeSign /></div>
+                            <div className="rec-chip-info">
+                                <h4>Transactions</h4>
+                                <span>View all</span>
+                            </div>
+                        </div>
+
+                        <div className="rec-action-chip rec-chip-teal" onClick={() => navigate('/billing/patient')}>
+                            <div className="rec-chip-icon rec-icon-teal"><FiFileText /></div>
+                            <div className="rec-chip-info">
+                                <h4>Patient Billing</h4>
+                                <span>Manage</span>
+                            </div>
+                        </div>
+
+                        <div className="rec-action-chip rec-chip-blue" onClick={handleNewWalkIn}>
+                            <div className="rec-chip-icon rec-icon-blue"><FiUserPlus /></div>
+                            <div className="rec-chip-info">
+                                <h4>New Registration</h4>
+                                <span>Add Patient</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* SEARCH SECTION */}
-                <div className="search-section card" style={{ padding: '20px', marginBottom: '20px', position: 'relative' }}>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <input
-                            type="text"
-                            placeholder="🔍 Search Patient by Name, Mobile or MRN..."
-                            value={searchQuery}
-                            onChange={handleSearch}
-                            style={{ flex: 1, padding: '12px', fontSize: '1rem', borderRadius: '6px', border: '1px solid #ddd' }}
-                        />
-                    </div>
-                    {searchQuery.trim().length > 0 && searchResults.length > 0 && (
-                        <div className="search-results-dropdown" style={{
-                            position: 'absolute', top: '70px', left: '20px', right: '20px',
-                            background: 'white', border: '1px solid #eee', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                            zIndex: 1000, maxHeight: '300px', overflowY: 'auto', borderRadius: '8px'
-                        }}>
-                            {searchResults.map(p => (
-                                <div key={p._id} style={{ padding: '12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div>
-                                        <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>{p.name} <span style={{ color: '#666', fontSize: '0.9rem' }}>({p.patientId || 'N/A'})</span></div>
-                                        <div style={{ fontSize: '0.9rem', color: '#888' }}>📱 {p.phone}</div>
+                {/* 2. 4 HOSPITALIZATION & PATIENT KPI METRICS */}
+                {(() => {
+                    const totalTodayPatients = appointments?.length || stats.todayAppointments || 0;
+                    const totalHospitalized = hospitalizedPatients?.filter(adm => adm.status === 'Admitted').length || stats.currentlyHospitalized || 0;
+                    const todayAdmissionsCount = hospitalizedPatients?.filter(adm => {
+                        const d = adm.admissionDate ? new Date(adm.admissionDate).toISOString().split('T')[0] : (adm.createdAt ? new Date(adm.createdAt).toISOString().split('T')[0] : '');
+                        return d === todayStr;
+                    }).length || stats.todayAdmissions || 0;
+                    const totalVacantBeds = availableBeds?.length || stats.availableBeds || 0;
+
+                    return (
+                        <div className="rec-kpi-grid">
+                            <div className="rec-kpi-card rec-kpi-teal" onClick={() => setListTab('queue')}>
+                                <div className="rec-kpi-icon-wrap rec-bg-teal"><FiUsers /></div>
+                                <div className="rec-kpi-content">
+                                    <div className="rec-kpi-val">{String(totalTodayPatients).padStart(2, '0')}</div>
+                                    <div className="rec-kpi-label">Today's Patients</div>
+                                    <div className="rec-kpi-subtext">Live OPD Queue</div>
+                                </div>
+                                <svg className="rec-kpi-sparkline" viewBox="0 0 60 20" fill="none">
+                                    <path d="M2 14 C 15 18, 30 6, 45 10 C 52 12, 58 4, 58 4" stroke="#0d9488" strokeWidth="2.5" strokeLinecap="round" />
+                                </svg>
+                            </div>
+
+                            <div className="rec-kpi-card rec-kpi-purple" onClick={() => setListTab('hospitalized')}>
+                                <div className="rec-kpi-icon-wrap rec-bg-purple"><FiHome /></div>
+                                <div className="rec-kpi-content">
+                                    <div className="rec-kpi-val">{String(totalHospitalized).padStart(2, '0')}</div>
+                                    <div className="rec-kpi-label">Hospitalized</div>
+                                    <div className="rec-kpi-subtext">Active In-Patients</div>
+                                </div>
+                                <svg className="rec-kpi-sparkline" viewBox="0 0 60 20" fill="none">
+                                    <path d="M2 12 C 14 4, 28 16, 42 6 C 50 2, 58 8, 58 8" stroke="#8b5cf6" strokeWidth="2.5" strokeLinecap="round" />
+                                </svg>
+                            </div>
+
+                            <div className="rec-kpi-card rec-kpi-orange" onClick={() => setListTab('hospitalized')}>
+                                <div className="rec-kpi-icon-wrap rec-bg-orange"><FiActivity /></div>
+                                <div className="rec-kpi-content">
+                                    <div className="rec-kpi-val">{String(todayAdmissionsCount).padStart(2, '0')}</div>
+                                    <div className="rec-kpi-label">Today's Admissions</div>
+                                    <div className="rec-kpi-subtext">New IPD Admitted</div>
+                                </div>
+                                <svg className="rec-kpi-sparkline" viewBox="0 0 60 20" fill="none">
+                                    <path d="M2 12 C 12 6, 25 16, 38 8 C 48 2, 58 10, 58 10" stroke="#ea580c" strokeWidth="2.5" strokeLinecap="round" />
+                                </svg>
+                            </div>
+
+                            <div className="rec-kpi-card rec-kpi-blue" onClick={() => fetchAvailableBeds()}>
+                                <div className="rec-kpi-icon-wrap rec-bg-blue"><FiCheckCircle /></div>
+                                <div className="rec-kpi-content">
+                                    <div className="rec-kpi-val">{String(totalVacantBeds).padStart(2, '0')}</div>
+                                    <div className="rec-kpi-label">Available Beds</div>
+                                    <div className="rec-kpi-subtext">Vacant for Admission</div>
+                                </div>
+                                <svg className="rec-kpi-sparkline" viewBox="0 0 60 20" fill="none">
+                                    <path d="M2 16 C 18 10, 32 14, 44 4 C 52 -2, 58 2, 58 2" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" />
+                                </svg>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* 3. DYNAMIC CHECK DOCTOR AVAILABILITY CARD WITH 3D CLOCK */}
+                {(() => {
+                    const selectedDoctorObj = doctorsList.find(d => String(d._id) === String(availabilityCheck.doctorId));
+                    const availableSlots = timeSlots.filter(time => {
+                        const isBooked = availabilityCheck.bookedSlots.includes(time);
+                        const isPast = isSlotInPast(time);
+                        return !isBooked && !isPast;
+                    });
+
+                    return (
+                        <div className="rec-avail-box">
+                            <div className="rec-avail-left">
+                                <div className="rec-avail-head">
+                                    <div className="rec-avail-title-row">
+                                        <div className="rec-avail-icon-calendar"><FiCalendar /></div>
+                                        <h3>Check Doctor Availability</h3>
+                                        <span className="rec-sparkle-star">✦</span>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                        <button
-                                            onClick={() => handleSelectSearchResult(p)}
-                                            style={{ padding: '6px 14px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
-                                        >
-                                            📋 Book Appointment
-                                        </button>
-                                        <button
-                                            onClick={() => handleViewProfile(p)}
-                                            style={{ padding: '6px 14px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
-                                        >
-                                            👤 View Profile
-                                        </button>
+                                    <div className="rec-avail-controls">
+                                        <div className="rec-select-wrapper">
+                                            <select
+                                                className="rec-doctor-select"
+                                                value={availabilityCheck.doctorId}
+                                                onChange={(e) => setAvailabilityCheck({ ...availabilityCheck, doctorId: e.target.value })}
+                                            >
+                                                <option value="">Select Doctor</option>
+                                                {doctorsList.map(d => (
+                                                    <option key={d._id} value={d._id}>
+                                                        {d.name} {d.departments?.length > 0 ? `(${d.departments[0]})` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="rec-date-wrapper">
+                                            <input
+                                                type="date"
+                                                className="rec-date-input"
+                                                value={availabilityCheck.date}
+                                                onChange={(e) => setAvailabilityCheck({ ...availabilityCheck, date: e.target.value })}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
 
-                {/* Widget Area */}
-                <div className="availability-widget card">
-                    <h3>📅 Quick Check Availability</h3>
-                    <div className="widget-controls">
-                        <select className="avail-select" onChange={(e) => setAvailabilityCheck({ ...availabilityCheck, doctorId: e.target.value })}>
-                            <option value="">Select Doctor</option>
-                            {doctorsList.map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
-                        </select>
-                        <input type="date" value={availabilityCheck.date} onChange={(e) => setAvailabilityCheck({ ...availabilityCheck, date: e.target.value })} />
+                                {/* Dynamic Slot Container — Only Show Available Slots When Doctor Selected */}
+                                <div className="rec-slots-container">
+                                    {!availabilityCheck.doctorId ? (
+                                        <div className="rec-avail-prompt-box">
+                                            <div className="rec-avail-prompt-icon-badge">
+                                                <FiClock size={24} />
+                                            </div>
+                                            <div className="rec-avail-prompt-content">
+                                                <h4>Select a Doctor Above</h4>
+                                                <p>Choose any doctor and date from the dropdown to check real-time slot availability.</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="rec-avail-active-view">
+                                            <div className="rec-avail-active-header">
+                                                <span className="rec-avail-badge-count">
+                                                    <FiCheckCircle size={13} /> {availableSlots.length} Slots Available
+                                                </span>
+                                                <span className="rec-avail-doc-tag">
+                                                    Dr. {selectedDoctorObj?.name || 'Doctor'} • {new Date(availabilityCheck.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                </span>
+                                            </div>
+
+                                            {availableSlots.length > 0 ? (
+                                                <div className="rec-slots-grid">
+                                                    {availableSlots.map(time => {
+                                                        const isSelected = selectedTimeSlot === time;
+                                                        return (
+                                                            <button
+                                                                key={time}
+                                                                type="button"
+                                                                className={`rec-slot-chip available ${isSelected ? 'selected' : ''}`}
+                                                                onClick={() => {
+                                                                    setSelectedTimeSlot(time);
+                                                                    handleSlotClick(time);
+                                                                }}
+                                                                title={`Click to book appointment at ${time}`}
+                                                            >
+                                                                <FiClock size={12} />
+                                                                <span>{time}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="rec-avail-no-slots">
+                                                    <span className="rec-no-slots-icon">⚠️</span>
+                                                    <div>
+                                                        <strong>No Available Slots</strong>
+                                                        <p>All slots for Dr. {selectedDoctorObj?.name} on this date are fully booked or past. Please choose another date or doctor.</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* 3D Clock Art on Pedestal */}
+                            <div className="rec-avail-clock-art">
+                                <svg viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '135px', height: '135px' }}>
+                                    <ellipse cx="80" cy="140" rx="55" ry="12" fill="#c4b5fd" opacity="0.4" />
+                                    <path d="M 45 115 L 115 115 L 135 130 L 25 130 Z" fill="#8b5cf6" />
+                                    <path d="M 25 130 L 135 130 L 135 138 L 25 138 Z" fill="#6d28d9" />
+                                    <ellipse cx="80" cy="75" rx="42" ry="42" fill="#f8fafc" stroke="#8b5cf6" strokeWidth="4" />
+                                    <ellipse cx="80" cy="75" rx="35" ry="35" fill="linear-gradient(135deg, #ede9fe 0%, #ffffff 100%)" />
+                                    <circle cx="80" cy="75" r="32" stroke="#ddd6fe" strokeWidth="1.5" />
+                                    <rect x="79" y="47" width="2" height="5" rx="1" fill="#7c3aed" />
+                                    <rect x="79" y="98" width="2" height="5" rx="1" fill="#7c3aed" />
+                                    <rect x="52" y="74" width="5" height="2" rx="1" fill="#7c3aed" />
+                                    <rect x="103" y="74" width="5" height="2" rx="1" fill="#7c3aed" />
+                                    <line x1="80" y1="75" x2="80" y2="55" stroke="#6d28d9" strokeWidth="3" strokeLinecap="round" />
+                                    <line x1="80" y1="75" x2="98" y2="70" stroke="#8b5cf6" strokeWidth="2.2" strokeLinecap="round" />
+                                    <circle cx="80" cy="75" r="4" fill="#7c3aed" />
+                                </svg>
+                            </div>
+                        </div>
+                    );
+                })()}
+
+                {/* 4. COLORFUL TODAY'S QUEUE & HOSPITALIZED INPATIENTS TABLES */}
+                <div className="rec-queue-box">
+                    <div className="rec-queue-head">
+                        <div className="rec-queue-title">
+                            <div className={`rec-queue-icon ${listTab === 'hospitalized' ? 'hosp' : 'queue'}`}>
+                                {listTab === 'hospitalized' ? <FiHome /> : <FiUsers />}
+                            </div>
+                            <div>
+                                <h3>{listTab === 'hospitalized' ? 'Hospitalized In-Patients' : "Today's Appointment Queue"}</h3>
+                                <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
+                                    {listTab === 'hospitalized' 
+                                        ? 'Active IPD admissions and bed allocations across all wards' 
+                                        : 'Live walk-in registrations and scheduled OPD consultations'}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Modern Toggle Tab Pills */}
+                        <div className="rec-queue-tabs">
+                            <button
+                                className={`rec-tab-pill-btn ${listTab === 'queue' ? 'active-queue' : ''}`}
+                                onClick={() => setListTab('queue')}
+                            >
+                                <FiUsers size={13} />
+                                <span>Today's Queue</span>
+                                <span className="rec-tab-count">{appointments?.length || 0}</span>
+                            </button>
+                            <button
+                                className={`rec-tab-pill-btn ${listTab === 'hospitalized' ? 'active-hosp' : ''}`}
+                                onClick={() => setListTab('hospitalized')}
+                            >
+                                <FiHome size={13} />
+                                <span>Hospitalized</span>
+                                <span className="rec-tab-count">{hospitalizedPatients?.filter(adm => adm.status === 'Admitted').length || 0}</span>
+                            </button>
+                        </div>
                     </div>
-                    {availabilityCheck.doctorId && (
-                        <div className="slot-grid">
-                            {timeSlots.map(t => (
-                                <button key={t} className={`slot-btn ${availabilityCheck.bookedSlots.includes(t) ? 'booked' : ''}`} onClick={() => handleSlotClick(t)}>{t}</button>
-                            ))}
+
+                    {listTab === 'hospitalized' ? (
+                        /* Colorful Hospitalized In-Patients Table */
+                        <div className="rec-table-wrap">
+                            <table className="rec-table rec-table-colorful rec-table-hosp">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '45px' }}>#</th>
+                                        <th>PATIENT</th>
+                                        <th>MRN</th>
+                                        <th>WARD & BED</th>
+                                        <th>DOCTOR & DEPT</th>
+                                        <th>ADMISSION DATE</th>
+                                        <th>STAY DURATION</th>
+                                        <th>STATUS</th>
+                                        <th style={{ textAlign: 'right' }}>ACTIONS</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {hospitalizedPatients && hospitalizedPatients.filter(adm => adm.status === 'Admitted').length > 0 ? (
+                                        hospitalizedPatients.filter(adm => adm.status === 'Admitted').map((adm, idx) => {
+                                            const pName = adm.patientId?.name || 'In-Patient';
+                                            const pPhone = adm.patientId?.phone || '-';
+                                            const pMrn = adm.patientId?.patientId || adm.patientId?.mrn || '-';
+                                            const dName = adm.appointmentId?.doctorName || adm.appointmentId?.doctorId?.name || 'Attending Physician';
+                                            const dept = adm.appointmentId?.department || adm.appointmentId?.serviceName || 'General';
+
+                                            const admDate = adm.admissionDate ? new Date(adm.admissionDate) : new Date(adm.createdAt || Date.now());
+                                            const now = new Date();
+                                            const diffMs = Math.max(0, now - admDate);
+                                            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                                            const stayDays = Math.floor(diffHours / 24);
+                                            const stayHours = diffHours % 24;
+                                            const stayText = stayDays > 0 ? `${stayDays}d ${stayHours}h` : `${Math.max(1, diffHours)}h`;
+
+                                            return (
+                                                <tr key={adm._id || idx} className="rec-row-hosp">
+                                                    <td className="rec-td-num">{String(idx + 1).padStart(2, '0')}</td>
+                                                    <td>
+                                                        <div 
+                                                            className="rec-patient-cell"
+                                                            onClick={() => handleViewProfile(adm.patientId || adm)}
+                                                            style={{ cursor: 'pointer' }}
+                                                            title="Click to view Full Patient Profile"
+                                                        >
+                                                            <div
+                                                                className="rec-avatar-circle"
+                                                                style={{ background: getInitialBgColor(pName) }}
+                                                            >
+                                                                {pName.substring(0, 2).toUpperCase()}
+                                                            </div>
+                                                            <div className="rec-patient-names">
+                                                                <span className="rec-p-name" style={{ textDecoration: 'underline', textDecorationColor: 'transparent', transition: 'text-decoration-color 0.2s' }} onMouseOver={e => e.currentTarget.style.textDecorationColor = '#7c3aed'} onMouseOut={e => e.currentTarget.style.textDecorationColor = 'transparent'}>{pName}</span>
+                                                                <span className="rec-p-phone"><FiPhone size={10} style={{ display: 'inline', marginRight: '3px' }} />{pPhone}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span 
+                                                            className="rec-mrn-pill" 
+                                                            onClick={() => handleViewProfile(adm.patientId || adm)}
+                                                            style={{ cursor: 'pointer' }}
+                                                            title="View Patient"
+                                                        >
+                                                            {pMrn}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <div className="rec-hosp-bed-cell">
+                                                            <span className="rec-ward-pill">{adm.ward || 'Ward'}</span>
+                                                            <span className="rec-bed-pill">Bed #{adm.bedNumber || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className="rec-doc-cell">
+                                                            <div className="rec-doc-avatar hosp-doc">
+                                                                {dName.replace('Dr. ', '').substring(0, 2).toUpperCase()}
+                                                            </div>
+                                                            <div className="rec-doc-names">
+                                                                <span className="rec-doc-name">{dName}</span>
+                                                                <span className="rec-doc-dept">{dept}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className="rec-time-cell">
+                                                            <span className="rec-date-val">
+                                                                {admDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                            </span>
+                                                            <span className="rec-time-val">{adm.admissionTime || '10:00 AM'}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span className="rec-stay-badge">
+                                                            ⏱️ {stayText}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span className="rec-status-pill status-admitted">
+                                                            ADMITTED
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ textAlign: 'right' }}>
+                                                        <div className="rec-actions-group">
+                                                            <button
+                                                                className="rec-tbl-btn rec-btn-profile"
+                                                                title="View Patient Profile"
+                                                                onClick={() => handleViewProfile(adm.patientId || adm)}
+                                                                style={{ background: '#f0f9ff', color: '#0284c7', border: '1px solid #bae6fd' }}
+                                                            >
+                                                                <FiEye size={13} />
+                                                                <span>Profile</span>
+                                                            </button>
+                                                            <button
+                                                                className="rec-tbl-btn rec-btn-transfer"
+                                                                title="Transfer Ward or Bed"
+                                                                onClick={() => openTransferModal(adm)}
+                                                                style={{ background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe' }}
+                                                            >
+                                                                <FiSliders size={13} />
+                                                                <span>Transfer</span>
+                                                            </button>
+                                                            <button
+                                                                className="rec-tbl-btn rec-btn-discharge"
+                                                                title="Discharge & Settle Account"
+                                                                onClick={() => openDischargeModal(adm)}
+                                                                style={{ background: '#fff1f2', color: '#e11d48', border: '1px solid #fecdd3' }}
+                                                            >
+                                                                <FiHome size={13} />
+                                                                <span>Discharge</span>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={9} style={{ textAlign: 'center', padding: '40px 20px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                                    <span style={{ fontSize: '2rem' }}>🛏️</span>
+                                                    <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.95rem' }}>No In-Patients Currently Hospitalized</div>
+                                                    <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.82rem' }}>You can hospitalize a patient directly from Today's Queue using the "Hospitalize" button.</p>
+                                                    <button
+                                                        onClick={() => setListTab('queue')}
+                                                        style={{
+                                                            marginTop: '8px', padding: '8px 18px', background: '#8b5cf6',
+                                                            color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 700,
+                                                            fontSize: '0.82rem', cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        ← View Today's Queue
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        /* Colorful Today's Appointment Queue Table */
+                        <div className="rec-table-wrap">
+                            <table className="rec-table rec-table-colorful rec-table-queue">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '45px' }}>#</th>
+                                        <th>PATIENT</th>
+                                        <th>MRN</th>
+                                        <th>DOCTOR</th>
+                                        <th>TIME</th>
+                                        <th>STATUS</th>
+                                        <th style={{ textAlign: 'right' }}>ACTIONS</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {appointments && appointments.length > 0 ? (
+                                        appointments.map((apt, idx) => {
+                                            const isHospitalized = hospitalizedPatients.some(adm => 
+                                                (adm.appointmentId?._id === apt._id || adm.appointmentId === apt._id) && adm.status === 'Admitted'
+                                            );
+                                            const pName = apt.userId?.name || apt.patientName || 'Patient';
+                                            const pPhone = apt.userId?.phone || apt.patientPhone || '-';
+                                            const pMrn = apt.patientId || apt.userId?.patientId || '-';
+                                            const dName = apt.doctorName || apt.doctorId?.name || 'Doctor';
+                                            const aTime = apt.appointmentTime || '10:00 AM';
+                                            const st = (apt.status || 'CONFIRMED').toUpperCase();
+
+                                            return (
+                                                <tr key={apt._id || idx} className="rec-row-queue">
+                                                    <td className="rec-td-num">{String(idx + 1).padStart(2, '0')}</td>
+                                                    <td>
+                                                        <div 
+                                                            className="rec-patient-cell"
+                                                            onClick={() => handleViewProfile(apt.userId || apt)}
+                                                            style={{ cursor: 'pointer' }}
+                                                            title="Click to view Patient Profile"
+                                                        >
+                                                            <div
+                                                                className="rec-avatar-circle"
+                                                                style={{ background: getInitialBgColor(pName) }}
+                                                            >
+                                                                {pName.substring(0, 2).toUpperCase()}
+                                                            </div>
+                                                            <div className="rec-patient-names">
+                                                                <span className="rec-p-name" style={{ textDecoration: 'underline', textDecorationColor: 'transparent', transition: 'text-decoration-color 0.2s' }} onMouseOver={e => e.currentTarget.style.textDecorationColor = '#0d9488'} onMouseOut={e => e.currentTarget.style.textDecorationColor = 'transparent'}>{pName}</span>
+                                                                <span className="rec-p-phone"><FiPhone size={10} style={{ display: 'inline', marginRight: '3px' }} />{pPhone}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span 
+                                                            className="rec-mrn-pill" 
+                                                            onClick={() => handleViewProfile(apt.userId || apt)}
+                                                            style={{ cursor: 'pointer' }}
+                                                            title="Click to view Patient Profile"
+                                                        >
+                                                            {pMrn}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <div className="rec-doc-cell">
+                                                            <div className="rec-doc-avatar">
+                                                                {dName.replace('Dr. ', '').substring(0, 2).toUpperCase()}
+                                                            </div>
+                                                            <span className="rec-doc-name">{dName}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className="rec-time-badge">
+                                                            <FiClock size={13} />
+                                                            <span>{aTime}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span className={`rec-status-pill status-${st.toLowerCase().replace(/\s+/g, '')}`}>
+                                                            {st}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ textAlign: 'right' }}>
+                                                        <div className="rec-actions-group">
+                                                            <button
+                                                                className="rec-tbl-btn rec-btn-profile"
+                                                                title="View Patient Profile"
+                                                                onClick={() => handleViewProfile(apt.userId || apt)}
+                                                                style={{ background: '#f0f9ff', color: '#0284c7', border: '1px solid #bae6fd' }}
+                                                            >
+                                                                <FiEye size={13} />
+                                                                <span>Profile</span>
+                                                            </button>
+                                                            <button
+                                                                className="rec-tbl-btn rec-btn-print"
+                                                                title="Print Receipt"
+                                                                onClick={() => {
+                                                                    const pdf = generateReceiptPDF(apt, apt.paymentMethod || 'Cash', false);
+                                                                    setPendingDownload({ doc: pdf.doc, filename: pdf.filename, title: 'Payment Receipt' });
+                                                                }}
+                                                            >
+                                                                <FiPrinter size={13} />
+                                                                <span>Print</span>
+                                                            </button>
+                                                            <button
+                                                                className={`rec-tbl-btn rec-btn-hosp ${isHospitalized ? 'admitted' : ''}`}
+                                                                title="Hospitalize Patient"
+                                                                onClick={() => openHospitalizeModal(apt)}
+                                                            >
+                                                                <FiHome size={13} />
+                                                                <span>{isHospitalized ? 'Hospitalized' : 'Hospitalize'}</span>
+                                                            </button>
+                                                            <button
+                                                                className="rec-tbl-btn rec-btn-cancel-appt"
+                                                                title="Cancel Appointment"
+                                                                onClick={() => handleCancelAppointment(apt._id)}
+                                                            >
+                                                                <FiX size={13} />
+                                                                <span>Cancel</span>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={7} style={{ textAlign: 'center', padding: '40px 20px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                                    <span style={{ fontSize: '2rem' }}>🏥</span>
+                                                    <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.95rem' }}>No Appointments in Today's Queue</div>
+                                                    <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.82rem' }}>Register walk-in patients or check doctor availability above to add appointments.</p>
+                                                    <button
+                                                        onClick={handleNewWalkIn}
+                                                        style={{
+                                                            marginTop: '8px', padding: '8px 18px', background: '#0d9488',
+                                                            color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 700,
+                                                            fontSize: '0.82rem', cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        + New Walk-In Registration
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     )}
                 </div>
-
-                {listTab === 'hospitalized' ? renderHospitalized() : renderTodaysQueue()}
             </div>
 
             {/* Camera Modal */}
@@ -3725,7 +4376,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             )}
 
             {renderModals()}
-        </>
+        </div>
     );
 };
 

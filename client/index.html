@@ -29,14 +29,14 @@
           const currentDomain = window.location.hostname; // e.g., city-hospital.localhost
           const exactOrigin = window.location.origin; // e.g., http://city-hospital.localhost:5173
           
-          // API se data mangwao
+         
           const apiUrl = `https://hms-n6nk.onrender.com/api/public/manifest.json?domain=${currentDomain}`;
           const response = await fetch(apiUrl);
           
           if (response.ok) {
             const manifest = await response.json();
             
-            // Chrome ke nakhre theek karne ke liye values overwrite karein
+            
             manifest.start_url = exactOrigin + '/';
             if (manifest.icons) {
               manifest.icons.forEach(icon => {
@@ -45,7 +45,7 @@
               });
             }
 
-            // Virtual file bana kar browser ko do
+        
             const manifestString = JSON.stringify(manifest);
             const manifestUrl = 'data:application/json;charset=utf-8,' + encodeURIComponent(manifestString);
 
@@ -56,7 +56,7 @@
           }
         } catch (error) {
           console.error('Dynamic PWA Error:', error);
-          // Agar API fail ho jaye, toh local manifest dikha do
+          
           let fallbackLink = document.createElement('link');
           fallbackLink.rel = 'manifest';
           fallbackLink.href = '/manifest.json';

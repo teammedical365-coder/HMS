@@ -137,6 +137,8 @@ exports.verifyToken = async (req, res, next) => {
         }
 
         req.user = user;
+        req.user.id = user._id || user.id || user.userId;
+        req.user.userId = user._id || user.id || user.userId;
         req.user._roleData = roleData;
         next();
     } catch (error) {
