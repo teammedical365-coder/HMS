@@ -510,6 +510,49 @@ router.get('/:id/build-rn-status', verifyCentralAdmin, async (req, res) => {
     }
 });
 /**
+ * POST /api/superadmin/hospitals/webhook/github-rn
+ * Webhook called by GitHub Actions when a React Native build finishes or fails.
+ */
+router.post('/webhook/github-rn', async (req, res) => {
+    try {
+        const { secret } = req.query;
+        const expectedSecret = process.env.GITHUB_WEBHOOK_SECRET || 'dev-secret-123';
+        if (secret !== expectedSecret) {
+            return res.status(403).json({ success: false, message: 'Unauthorized webhook request' });
+        }
+
+        const { tenantId, status, apkUrl, aabUrl, error } = req.body;
+
+        if (!tenantId || !status) {
+            return res.status(400).json({ success: false, message: 'Missing required payload fields' });
+        }
+
+        const hospital = await Hospital.findById(tenantId);
+        if (!hospital) {
+            return res.status(404).json({ success: false, message: 'Tenant not found' });
+        }
+
+        if (status === 'COMPLETED') {
+            hospital.appConfig.rnBuildStatus = 'COMPLETED';
+            hospital.appConfig.rnLastBuiltAt = new Date();
+            hospital.appConfig.rnApkUrl = apkUrl || hospital.appConfig.rnApkUrl;
+            hospital.appConfig.rnAabUrl = aabUrl || hospital.appConfig.rnAabUrl;
+            hospital.appConfig.rnBuildError = '';
+        } else if (status === 'FAILED') {
+            hospital.appConfig.rnBuildStatus = 'FAILED';
+            hospital.appConfig.rnBuildError = error || 'GitHub Action pipeline failed';
+        }
+
+        await hospital.save();
+        return res.json({ success: true, message: 'RN Build status updated successfully' });
+
+    } catch (err) {
+        console.error('RN Webhook processing error:', err);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+/**
  * POST /api/superadmin/hospitals/webhook/github-rn/upload
  * Webhook for direct RN APK file upload from GitHub Actions
  */
