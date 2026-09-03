@@ -7,6 +7,7 @@ const multer = require('multer');
 
 const Hospital = require('../models/hospital.model');
 const { verifyToken } = require('../middleware/auth.middleware');
+const { triggerMobileBuild } = require('../controllers/mobileBuild.controller');
 
 // Configure multer for APK uploads
 const apkStorage = multer.diskStorage({
@@ -44,6 +45,12 @@ const verifyCentralAdmin = async (req, res, next) => {
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 };
+
+/**
+ * POST /api/superadmin/hospitals/:id/trigger-mobile-build
+ * Triggers the React Native Mobile Build in an isolated controller
+ */
+router.post('/:id/trigger-mobile-build', verifyCentralAdmin, triggerMobileBuild);
 
 /**
  * POST /api/superadmin/hospitals/:id/build-app
