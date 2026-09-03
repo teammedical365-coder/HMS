@@ -18,7 +18,7 @@ const triggerMobileBuild = async (req, res) => {
         const themeColor = hospital.branding?.primaryColor || '#14b8a6';
 
         const owner = process.env.GITHUB_OWNER || 'teammedical365-coder';
-        const repo = process.env.GITHUB_REPO || 'HMS';
+        const repo = process.env.GITHUB_MOBILE_REPO || 'HMS-REACT-NATIVE-APP';
         const workflowId = 'react-native-build.yml';
         const githubToken = process.env.GITHUB_PAT;
 
