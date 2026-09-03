@@ -25,6 +25,13 @@ import {
     FaEye,
     FaArrowsRotate
 } from 'react-icons/fa6';
+import LanguageSelector from '../../components/common/LanguageSelector';
+import { 
+    getUIText, 
+    getTranslatedDepartment, 
+    getTranslatedCategory, 
+    getTranslatedClinicalText 
+} from '../../utils/questionLibraryI18n';
 import './AdminQuestionLibrary.css';
 
 const defaultQuestionLibraryData = {
@@ -152,6 +159,15 @@ const defaultQuestionLibraryData = {
 
 const AdminQuestionLibrary = () => {
     const [libraryData, setLibraryData] = useState(defaultQuestionLibraryData);
+
+    const [currentLang, setCurrentLang] = useState(() => {
+        return localStorage.getItem('hms_question_lib_lang') || 'en';
+    });
+
+    const handleLanguageChange = (newLang) => {
+        setCurrentLang(newLang);
+        localStorage.setItem('hms_question_lib_lang', newLang);
+    };
 
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -648,6 +664,9 @@ const AdminQuestionLibrary = () => {
     };
 
     const getTypeLabel = (type) => {
+        const badgeKey = 'badge_' + (type || '').replace(/-/g, '_');
+        const localizedBadge = getUIText(badgeKey, currentLang);
+        if (localizedBadge && localizedBadge !== badgeKey) return localizedBadge;
         const map = {
             'text': 'TEXT',
             'number': 'NUMERIC',
@@ -670,16 +689,16 @@ const AdminQuestionLibrary = () => {
         if (item.type === "select") {
             inputHtml = (
                 <select disabled style={{ width: '170px' }}>
-                    <option>Select option...</option>
-                    {(item.options || []).map(o => <option key={o}>{o}</option>)}
+                    <option>{getUIText('selectOption', currentLang)}</option>
+                    {(item.options || []).map(o => <option key={o}>{getTranslatedClinicalText(o, currentLang)}</option>)}
                 </select>
             );
         } else if (item.type === "yes-no") {
             inputHtml = (
                 <select disabled style={{ width: '160px' }}>
-                    <option>Select...</option>
-                    <option>Yes</option>
-                    <option>No</option>
+                    <option>{getUIText('selectShort', currentLang)}</option>
+                    <option>{getUIText('yes', currentLang)}</option>
+                    <option>{getUIText('no', currentLang)}</option>
                 </select>
             );
         } else if (item.type === "date") {
@@ -688,29 +707,29 @@ const AdminQuestionLibrary = () => {
             inputHtml = (
                 <div className='ql-checkbox-grid'>
                     {(item.options || []).map(opt => (
-                        <label key={opt}><input type='checkbox' disabled /> {opt}</label>
+                        <label key={opt}><input type='checkbox' disabled /> {getTranslatedClinicalText(opt, currentLang)}</label>
                     ))}
                 </div>
             );
         } else if (item.type === "textarea") {
-            inputHtml = <textarea disabled rows="2" placeholder="Clinical observations..." style={{ width: '100%', resize: 'vertical' }} />;
+            inputHtml = <textarea disabled rows="2" placeholder={getUIText('doctorNotes', currentLang)} style={{ width: '100%', resize: 'vertical' }} />;
         } else if (item.type === "checkbox-date-group" || item.type === "checkbox-text-group") {
             inputHtml = (
                 <div className='ql-complex-group'>
                     {(item.options || []).map(opt => (
                         <div className="ql-complex-row" key={opt}>
-                            <label><input type='checkbox' disabled /> {opt}</label>
-                            {opt !== 'None' && <input type={item.type === 'checkbox-date-group' ? 'date' : 'text'} disabled placeholder="Input..." style={{ width: '120px', padding: '4px 8px', marginLeft: '10px', fontSize: '0.78rem' }} />}
+                            <label><input type='checkbox' disabled /> {getTranslatedClinicalText(opt, currentLang)}</label>
+                            {opt !== 'None' && <input type={item.type === 'checkbox-date-group' ? 'date' : 'text'} disabled placeholder={getUIText('inputPlaceholder', currentLang)} style={{ width: '120px', padding: '4px 8px', marginLeft: '10px', fontSize: '0.78rem' }} />}
                         </div>
                     ))}
                     <div className="ql-extra-field">
-                        <span>{item.extra || 'Remarks'}:</span>
-                        <input type="text" disabled placeholder="Details..." style={{ width: '100%', padding: '6px 8px', boxSizing: 'border-box', fontSize: '0.78rem' }} />
+                        <span>{getTranslatedClinicalText(item.extra, currentLang) || getUIText('detailsPlaceholder', currentLang)}:</span>
+                        <input type="text" disabled placeholder={getUIText('detailsPlaceholder', currentLang)} style={{ width: '100%', padding: '6px 8px', boxSizing: 'border-box', fontSize: '0.78rem' }} />
                     </div>
                 </div>
             );
         } else {
-            inputHtml = <input type={item.type || 'text'} disabled placeholder="Enter response / notes..." style={{ width: '100%', padding: '8px 12px', boxSizing: 'border-box' }} />;
+            inputHtml = <input type={item.type || 'text'} disabled placeholder={getUIText('enterResponse', currentLang)} style={{ width: '100%', padding: '8px 12px', boxSizing: 'border-box' }} />;
         }
 
         return (
@@ -718,21 +737,21 @@ const AdminQuestionLibrary = () => {
                 <div className="ql-question-top">
                     <div className="ql-question-info">
                         <span className="q-icon">❓</span>
-                        <strong>{item.q}</strong>
+                        <strong>{getTranslatedClinicalText(item.q, currentLang)}</strong>
                         <span className="ql-question-type-badge">{getTypeLabel(item.type)}</span>
                     </div>
                     <div className="ql-question-actions">
                         <button className="ql-btn-edit-q" onClick={() => handleEditQuestion(index)}>
-                            <FaPenToSquare /> Edit
+                            <FaPenToSquare /> {getUIText('edit', currentLang)}
                         </button>
                         <button className="ql-btn-del-q" onClick={() => handleDeleteQuestion(cat, index)}>
-                            <FaTrash /> Del
+                            <FaTrash /> {getUIText('delete', currentLang)}
                         </button>
                     </div>
                 </div>
                 {item.parentQ && (
                     <div className="ql-condition-badge">
-                        <span><FaBolt /> Only shown if <b>"{item.parentQ}"</b> equals <b>"{item.condition}"</b></span>
+                        <span><FaBolt /> {getUIText('onlyShownIf', currentLang).replace('{parentQ}', getTranslatedClinicalText(item.parentQ, currentLang)).replace('{condition}', item.condition)}</span>
                     </div>
                 )}
                 <div className="ql-input-preview">
@@ -747,7 +766,7 @@ const AdminQuestionLibrary = () => {
             <div className="ql-admin-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div style={{ textAlign: 'center', color: '#0d9488' }}>
                     <FaMicrochip className="holo-icon" style={{ fontSize: '40px', marginBottom: '16px' }} />
-                    <p style={{ fontWeight: 800, letterSpacing: '0.5px' }}>INITIALIZING CLINICAL QUESTION LIBRARY...</p>
+                    <p style={{ fontWeight: 800, letterSpacing: '0.5px' }}>{getUIText('initializing', currentLang)}</p>
                 </div>
             </div>
         );
@@ -779,22 +798,28 @@ const AdminQuestionLibrary = () => {
                 {/* ─── 1. HEADER ─── */}
                 <header className="ql-app-header">
                     <div className="ql-header-titles">
-                        <h1>Question Library Builder</h1>
-                        <p>Construct dynamic diagnostic forms for doctors.</p>
+                        <h1>{getUIText('pageTitle', currentLang)}</h1>
+                        <p>{getUIText('pageSubtitle', currentLang)}</p>
                     </div>
-                    <div className="ql-header-actions">
-                        <button className="ql-btn ql-btn-refresh" onClick={handleRefresh} disabled={refreshing || loading} title="Refresh library from server">
-                            <FaArrowsRotate className={refreshing ? 'refresh-spin' : ''} /> {refreshing ? 'Refreshing...' : 'Refresh'}
-                        </button>
-                        <button className="ql-btn ql-btn-reset" onClick={handleResetToStandard} disabled={saving} title="Reload all 12 standard medical departments">
-                            <FaMicrochip /> Reset 12 Depts
-                        </button>
-                        <button className="ql-btn ql-btn-preview" onClick={() => { setPreviewIntake({}); setShowPreview(true); }}>
-                            <FaEye /> Preview
-                        </button>
-                        <button className="ql-btn ql-btn-save" onClick={handleSave} disabled={saving}>
-                            <FaCloudArrowUp /> {saving ? 'Syncing...' : 'Save & Deploy'}
-                        </button>
+                    <div className="ql-header-right-column">
+                        <div className="ql-header-top-row">
+                            {/* Multi-Language Selector placed on top above Save & Deploy */}
+                            <LanguageSelector currentLang={currentLang} onLanguageChange={handleLanguageChange} />
+                        </div>
+                        <div className="ql-header-actions">
+                            <button className="ql-btn ql-btn-refresh" onClick={handleRefresh} disabled={refreshing || loading} title="Refresh library from server">
+                                <FaArrowsRotate className={refreshing ? 'refresh-spin' : ''} /> {refreshing ? getUIText('refreshing', currentLang) : getUIText('refresh', currentLang)}
+                            </button>
+                            <button className="ql-btn ql-btn-reset" onClick={handleResetToStandard} disabled={saving} title="Reload all 12 standard medical departments">
+                                <FaMicrochip /> {getUIText('resetDepts', currentLang)}
+                            </button>
+                            <button className="ql-btn ql-btn-preview" onClick={() => { setPreviewIntake({}); setShowPreview(true); }}>
+                                <FaEye /> {getUIText('preview', currentLang)}
+                            </button>
+                            <button className="ql-btn ql-btn-save" onClick={handleSave} disabled={saving}>
+                                <FaCloudArrowUp /> {saving ? getUIText('syncing', currentLang) : getUIText('saveDeploy', currentLang)}
+                            </button>
+                        </div>
                     </div>
                 </header>
 
@@ -811,19 +836,19 @@ const AdminQuestionLibrary = () => {
                             }}
                         >
                             <span className="tab-icon">{getDeptIcon(dept)}</span>
-                            <span>{dept}</span>
+                            <span>{getTranslatedDepartment(dept, currentLang)}</span>
                             {departmentTab === dept && allowedDepartments === null && (
                                 <span className="tab-actions-quick">
                                     <span 
                                         onClick={(e) => { e.stopPropagation(); handleEditDepartment(dept); }} 
-                                        title="Rename Department"
+                                        title={getUIText('rename', currentLang)}
                                         className="tab-action-icon edit"
                                     >
                                         ✏️
                                     </span>
                                     <span 
                                         onClick={(e) => { e.stopPropagation(); handleDeleteDepartment(dept); }} 
-                                        title="Delete Department"
+                                        title={getUIText('delete', currentLang)}
                                         className="tab-action-icon del"
                                     >
                                         🗑️
@@ -835,7 +860,7 @@ const AdminQuestionLibrary = () => {
 
                     {allowedDepartments === null && (
                         <div className="ql-tab ql-tab-dashed" onClick={handleAddDepartmentClick}>
-                            <FaPlus /> Add Department
+                            <FaPlus /> {getUIText('addDept', currentLang)}
                         </div>
                     )}
                 </nav>
@@ -847,13 +872,13 @@ const AdminQuestionLibrary = () => {
                         <div className="ql-add-category-box">
                             <input 
                                 type="text" 
-                                placeholder="Enter category name..." 
+                                placeholder={getUIText('enterCatPlaceholder', currentLang)} 
                                 value={newCatName} 
                                 onChange={(e) => setNewCatName(e.target.value)} 
                                 onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory(); }} 
                             />
                             <button className="ql-btn-add-cat" onClick={() => handleAddCategory()}>
-                                <FaPlus /> Add Category
+                                <FaPlus /> {getUIText('addCategory', currentLang)}
                             </button>
                         </div>
 
@@ -866,13 +891,13 @@ const AdminQuestionLibrary = () => {
                                 >
                                     <div className="cat-item-left">
                                         <span className="cat-folder-icon">{cat === activeCategory ? '📂' : '📁'}</span>
-                                        <span className="cat-text">{cat}</span>
+                                        <span className="cat-text">{getTranslatedCategory(cat, currentLang)}</span>
                                     </div>
                                     <div className="cat-item-right">
-                                        <span className="ql-cat-action-btn" onClick={(e) => { e.stopPropagation(); handleEditCategory(cat); }} title="Rename">
+                                        <span className="ql-cat-action-btn" onClick={(e) => { e.stopPropagation(); handleEditCategory(cat); }} title={getUIText('rename', currentLang)}>
                                             ✏️
                                         </span>
-                                        <span className="ql-cat-action-btn" onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }} title="Delete">
+                                        <span className="ql-cat-action-btn" onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }} title={getUIText('delete', currentLang)}>
                                             🗑️
                                         </span>
                                         <FaAngleRight className="cat-arrow" />
@@ -880,7 +905,7 @@ const AdminQuestionLibrary = () => {
                                 </div>
                             ))}
                             {Object.keys(currentCategories).length === 0 && (
-                                <div className="ql-no-cats">No categories added yet.</div>
+                                <div className="ql-no-cats">{getUIText('noCats', currentLang)}</div>
                             )}
                         </div>
                     </aside>
@@ -891,15 +916,15 @@ const AdminQuestionLibrary = () => {
                             {!activeCategory ? (
                                 <div className="ql-canvas-empty">
                                     <FaCubes className="holo-icon" />
-                                    <p>Select a category or add a new category to view questions.</p>
+                                    <p>{getUIText('selectCatPrompt', currentLang)}</p>
                                 </div>
                             ) : (
                                 <div className="ql-canvas-active">
                                     <div className="ql-canvas-header">
                                         <div className="ql-canvas-header-left">
-                                            <h2>{activeCategory}</h2>
+                                            <h2>{getTranslatedCategory(activeCategory, currentLang)}</h2>
                                             <span className="ql-item-count-badge">
-                                                {questionsInActiveCategory.length} Questions
+                                                {questionsInActiveCategory.length} {getUIText('questionsCount', currentLang)}
                                             </span>
                                         </div>
                                         <button 
@@ -910,7 +935,7 @@ const AdminQuestionLibrary = () => {
                                                 setShowAddModal(true); 
                                             }}
                                         >
-                                            <FaPlus /> Add Question
+                                            <FaPlus /> {getUIText('addQuestion', currentLang)}
                                         </button>
                                     </div>
 
@@ -918,8 +943,8 @@ const AdminQuestionLibrary = () => {
                                         {questionsInActiveCategory.map((q, idx) => renderQuestionCard(q, idx, activeCategory))}
                                         {questionsInActiveCategory.length === 0 && (
                                             <div className="ql-data-stream-empty">
-                                                <p>No questions added yet in this category.</p>
-                                                <p style={{ marginTop: '6px', color: '#64748b' }}>Click <b>+ Add Question</b> above to add a new question.</p>
+                                                <p>{getUIText('noQuestions', currentLang)}</p>
+                                                <p style={{ marginTop: '6px', color: '#64748b' }}>{getUIText('clickAddQuestion', currentLang)}</p>
                                             </div>
                                         )}
                                     </div>
@@ -935,12 +960,12 @@ const AdminQuestionLibrary = () => {
                 <div className="ql-modal-overlay">
                     <div className="ql-modal-content" style={{ maxWidth: '440px' }}>
                         <div className="ql-modal-header-top">
-                            <h3>Add New Department</h3>
+                            <h3>{getUIText('addDept', currentLang)}</h3>
                             <span className="modal-close" onClick={() => setShowDeptModal(false)}><FaXmark /></span>
                         </div>
                         
                         <div style={{ marginTop: '16px' }}>
-                            <label className="ql-modal-label">Select from Predefined List</label>
+                            <label className="ql-modal-label">{getUIText('selectPredefined', currentLang)}</label>
                             <select 
                                 className="ql-modal-input"
                                 value={selectedDept} 
@@ -949,21 +974,21 @@ const AdminQuestionLibrary = () => {
                                     setCustomDept('');
                                 }}
                             >
-                                <option value="">-- Choose Department --</option>
+                                <option value="">{getUIText('selectDept', currentLang)}</option>
                                 {predefinedDepartments.map(d => (
-                                    <option key={d} value={d}>{d}</option>
+                                    <option key={d} value={d}>{getTranslatedDepartment(d, currentLang)} ({d})</option>
                                 ))}
                             </select>
                         </div>
 
-                        <div className="ql-modal-divider">OR</div>
+                        <div className="ql-modal-divider">{getUIText('or', currentLang)}</div>
                         
                         <div>
-                            <label className="ql-modal-label">Custom Department Name</label>
+                            <label className="ql-modal-label">{getUIText('customDeptName', currentLang)}</label>
                             <input 
                                 type="text" 
                                 className="ql-modal-input" 
-                                placeholder="e.g., Cardiology, Oncology..." 
+                                placeholder={getUIText('customDeptPlaceholder', currentLang)} 
                                 value={customDept} 
                                 onChange={(e) => {
                                     setCustomDept(e.target.value);
@@ -974,8 +999,8 @@ const AdminQuestionLibrary = () => {
                         </div>
 
                         <div className="ql-modal-actions">
-                            <button className="ql-modal-btn ql-modal-btn-cancel" onClick={() => setShowDeptModal(false)}>Cancel</button>
-                            <button className="ql-modal-btn ql-modal-btn-submit" onClick={confirmAddDepartment}>Add Department</button>
+                            <button className="ql-modal-btn ql-modal-btn-cancel" onClick={() => setShowDeptModal(false)}>{getUIText('cancel', currentLang)}</button>
+                            <button className="ql-modal-btn ql-modal-btn-submit" onClick={confirmAddDepartment}>{getUIText('addDept', currentLang)}</button>
                         </div>
                     </div>
                 </div>
@@ -986,16 +1011,16 @@ const AdminQuestionLibrary = () => {
                 <div className="ql-modal-overlay">
                     <div className="ql-modal-content" style={{ maxWidth: '520px' }}>
                         <div className="ql-modal-header-top">
-                            <h3>{editIndex !== null ? 'Edit Question' : 'Add New Question'}</h3>
+                            <h3>{editIndex !== null ? getUIText('editQuestion', currentLang) : getUIText('addQuestion', currentLang)}</h3>
                             <span className="modal-close" onClick={resetModalState}><FaXmark /></span>
                         </div>
                         
                         <div style={{ marginTop: '16px' }}>
-                            <label className="ql-modal-label">Question Label / Title *</label>
+                            <label className="ql-modal-label">{getUIText('questionLabel', currentLang)}</label>
                             <input 
                                 type="text" 
                                 className="ql-modal-input" 
-                                placeholder="e.g. Previous Medical History..." 
+                                placeholder={getUIText('questionLabelPlaceholder', currentLang)} 
                                 value={newQ.q} 
                                 onChange={(e) => setNewQ({ ...newQ, q: e.target.value })} 
                                 autoFocus
@@ -1003,31 +1028,31 @@ const AdminQuestionLibrary = () => {
                         </div>
 
                         <div style={{ marginTop: '12px' }}>
-                            <label className="ql-modal-label">Question Answer Type</label>
+                            <label className="ql-modal-label">{getUIText('questionType', currentLang)}</label>
                             <select 
                                 className="ql-modal-input" 
                                 value={newQ.type} 
                                 onChange={(e) => setNewQ({ ...newQ, type: e.target.value })}
                             >
-                                <option value="text">Single Line Text</option>
-                                <option value="textarea">Multi-line Paragraph (Textarea)</option>
-                                <option value="number">Numeric Input</option>
-                                <option value="yes-no">Yes / No Switch</option>
-                                <option value="date">Date Selector</option>
-                                <option value="select">Dropdown Menu (Single Select)</option>
-                                <option value="checkbox-group">Multi-Checkbox Group</option>
-                                <option value="checkbox-text-group">Checkboxes with Custom Text Input</option>
-                                <option value="checkbox-date-group">Checkboxes with Date Inputs</option>
+                                <option value="text">{getUIText('type_text', currentLang)}</option>
+                                <option value="textarea">{getUIText('type_textarea', currentLang)}</option>
+                                <option value="number">{getUIText('type_number', currentLang)}</option>
+                                <option value="yes-no">{getUIText('type_yes_no', currentLang)}</option>
+                                <option value="date">{getUIText('type_date', currentLang)}</option>
+                                <option value="select">{getUIText('type_select', currentLang)}</option>
+                                <option value="checkbox-group">{getUIText('type_checkbox_group', currentLang)}</option>
+                                <option value="checkbox-text-group">{getUIText('type_checkbox_text_group', currentLang)}</option>
+                                <option value="checkbox-date-group">{getUIText('type_checkbox_date_group', currentLang)}</option>
                             </select>
                         </div>
 
                         {['select', 'checkbox-group', 'checkbox-date-group', 'checkbox-text-group'].includes(newQ.type) && (
                             <div style={{ marginTop: '12px' }}>
-                                <label className="ql-modal-label">Options (Comma separated)</label>
+                                <label className="ql-modal-label">{getUIText('optionsLabel', currentLang)}</label>
                                 <input 
                                     type="text" 
                                     className="ql-modal-input" 
-                                    placeholder="Option A, Option B, Option C" 
+                                    placeholder={getUIText('optionsPlaceholder', currentLang)} 
                                     value={newQ.options} 
                                     onChange={(e) => setNewQ({ ...newQ, options: e.target.value })} 
                                 />
@@ -1036,11 +1061,11 @@ const AdminQuestionLibrary = () => {
 
                         {['checkbox-date-group', 'checkbox-text-group'].includes(newQ.type) && (
                             <div style={{ marginTop: '12px' }}>
-                                <label className="ql-modal-label">Extra Notes Field Title</label>
+                                <label className="ql-modal-label">{getUIText('extraFieldTitle', currentLang)}</label>
                                 <input 
                                     type="text" 
                                     className="ql-modal-input" 
-                                    placeholder="e.g. Remarks, Details..." 
+                                    placeholder={getUIText('extraFieldPlaceholder', currentLang)} 
                                     value={newQ.extra} 
                                     onChange={(e) => setNewQ({ ...newQ, extra: e.target.value })} 
                                 />
@@ -1049,20 +1074,20 @@ const AdminQuestionLibrary = () => {
 
                         <div style={{ marginTop: '14px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
                             <label className="ql-modal-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <FaBolt style={{ color: '#eab308' }} /> Conditional Display (Optional)
+                                <FaBolt style={{ color: '#eab308' }} /> {getUIText('conditionalDisplay', currentLang)}
                             </label>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '6px' }}>
                                 <input 
                                     type="text" 
                                     className="ql-modal-input" 
-                                    placeholder="Parent Question Label" 
+                                    placeholder={getUIText('parentQuestionLabel', currentLang)} 
                                     value={newQ.parentQ} 
                                     onChange={(e) => setNewQ({ ...newQ, parentQ: e.target.value })} 
                                 />
                                 <input 
                                     type="text" 
                                     className="ql-modal-input" 
-                                    placeholder="When Parent = (e.g. Yes)" 
+                                    placeholder={getUIText('whenParentEquals', currentLang)} 
                                     value={newQ.condition} 
                                     onChange={(e) => setNewQ({ ...newQ, condition: e.target.value })} 
                                 />
@@ -1070,9 +1095,9 @@ const AdminQuestionLibrary = () => {
                         </div>
 
                         <div className="ql-modal-actions">
-                            <button className="ql-modal-btn ql-modal-btn-cancel" onClick={resetModalState}>Cancel</button>
+                            <button className="ql-modal-btn ql-modal-btn-cancel" onClick={resetModalState}>{getUIText('cancel', currentLang)}</button>
                             <button className="ql-modal-btn ql-modal-btn-submit" onClick={handleAddQuestion}>
-                                {editIndex !== null ? 'Update Question' : '+ Add Question'}
+                                {editIndex !== null ? getUIText('updateQuestion', currentLang) : getUIText('addQuestion', currentLang)}
                             </button>
                         </div>
                     </div>
@@ -1086,42 +1111,50 @@ const AdminQuestionLibrary = () => {
                         <div className="ql-modal-header-top">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <FaEye style={{ color: '#1E60A4' }} />
-                                <h3>Doctor Live Form Preview</h3>
+                                <h3>{getUIText('doctorPreviewTitle', currentLang)}</h3>
                             </div>
                             <span className="modal-close" onClick={() => setShowPreview(false)}><FaXmark /></span>
                         </div>
 
                         <div style={{ marginTop: '16px' }}>
                             <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
-                                Interactive rendering of all categories for department: <strong style={{ color: '#1E60A4' }}>{departmentTab}</strong>
+                                {getUIText('previewSubtitle', currentLang)} <strong style={{ color: '#1E60A4' }}>{getTranslatedDepartment(departmentTab, currentLang)}</strong>
                             </p>
 
                             {Object.keys(currentCategories).map(cat => (
                                 <div key={cat} style={{ marginBottom: '20px', background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                     <h4 style={{ margin: '0 0 12px', color: '#0f172a', fontSize: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px' }}>
-                                        📂 {cat}
+                                        📂 {getTranslatedCategory(cat, currentLang)}
                                     </h4>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                         {(currentCategories[cat] || []).map((q, qIdx) => (
                                             <div key={qIdx}>
                                                 <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                                    {q.q}
+                                                    {getTranslatedClinicalText(q.q, currentLang)}
                                                 </label>
                                                 {q.type === 'textarea' ? (
-                                                    <textarea rows="2" placeholder="Doctor notes..." style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
+                                                    <textarea rows="2" placeholder={getUIText('doctorNotes', currentLang)} style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
                                                 ) : q.type === 'yes-no' ? (
                                                     <select style={{ width: '140px', padding: '6px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}>
-                                                        <option>Select...</option>
-                                                        <option>Yes</option>
-                                                        <option>No</option>
+                                                        <option>{getUIText('selectShort', currentLang)}</option>
+                                                        <option>{getUIText('yes', currentLang)}</option>
+                                                        <option>{getUIText('no', currentLang)}</option>
                                                     </select>
                                                 ) : q.type === 'select' ? (
                                                     <select style={{ width: '160px', padding: '6px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}>
-                                                        <option>Select...</option>
-                                                        {(q.options || []).map(o => <option key={o}>{o}</option>)}
+                                                        <option>{getUIText('selectOption', currentLang)}</option>
+                                                        {(q.options || []).map(o => <option key={o}>{getTranslatedClinicalText(o, currentLang)}</option>)}
                                                     </select>
+                                                ) : q.type === 'checkbox-group' ? (
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '4px' }}>
+                                                        {(q.options || []).map(opt => (
+                                                            <label key={opt} style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                                <input type="checkbox" /> {getTranslatedClinicalText(opt, currentLang)}
+                                                            </label>
+                                                        ))}
+                                                    </div>
                                                 ) : (
-                                                    <input type={q.type || 'text'} placeholder="Value..." style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
+                                                    <input type={q.type || 'text'} placeholder={getUIText('valuePlaceholder', currentLang)} style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
                                                 )}
                                             </div>
                                         ))}
@@ -1131,7 +1164,7 @@ const AdminQuestionLibrary = () => {
                         </div>
 
                         <div className="ql-modal-actions">
-                            <button className="ql-modal-btn ql-modal-btn-cancel" onClick={() => setShowPreview(false)}>Close Preview</button>
+                            <button className="ql-modal-btn ql-modal-btn-cancel" onClick={() => setShowPreview(false)}>{getUIText('closePreview', currentLang)}</button>
                         </div>
                     </div>
                 </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { receptionAPI, publicAPI } from '../utils/api';
 import ReceptionPatients from './reception/ReceptionPatients';
+import DoctorDashboard from './doctors/DoctorDashboard';
 import './RoleDashboard.css';
 import './hospitaladmin/HospitalAdminDashboard.css';
 import { FiSearch, FiCalendar, FiUsers, FiActivity, FiTrash2, FiEdit2, FiLayers } from 'react-icons/fi';
@@ -251,6 +252,10 @@ const RoleDashboard = () => {
 
     if (isReception) {
         return <ReceptionPatients />;
+    }
+
+    if (isDoctor) {
+        return <DoctorDashboard />;
     }
 
     return (

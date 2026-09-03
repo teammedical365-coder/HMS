@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { verifyToken, verifySuperAdmin } = require('../middleware/auth.middleware');
+const { verifyToken, verifySuperAdmin, verifyAdminOrSuperAdmin } = require('../middleware/auth.middleware');
 const aiWalletService = require('../services/ai/aiWallet.service');
 
 /**
  * GET /api/ai-wallet
  * Returns the AI Wallet balance, usage stats, and warning level for the authenticated user's hospital.
+ * Accessible by: Doctor, Hospital Admin, SuperAdmin
  */
 router.get('/', verifyToken, async (req, res) => {
     try {
@@ -29,6 +30,40 @@ router.get('/', verifyToken, async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to retrieve AI wallet details.'
+        });
+    }
+});
+
+/**
+ * GET /api/ai-wallet/status
+ * Lightweight status-only check for the authenticated user's hospital wallet.
+ * Returns: remainingAmount, status, warningLevel, warningMessage
+ */
+router.get('/status', verifyToken, async (req, res) => {
+    try {
+        const hospitalId = req.user?.hospitalId;
+
+        if (!hospitalId) {
+            return res.status(400).json({
+                success: false,
+                message: 'No hospital is associated with the authenticated user.'
+            });
+        }
+
+        const balanceCheck = await aiWalletService.checkBalance(hospitalId);
+
+        res.status(200).json({
+            success: true,
+            allowed: balanceCheck.allowed,
+            wallet: balanceCheck.wallet,
+            warningLevel: balanceCheck.warningLevel,
+            warningMessage: balanceCheck.warningMessage || null
+        });
+    } catch (error) {
+        console.error('[AI Wallet Route] Error checking status:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to check AI wallet status.'
         });
     }
 });
@@ -65,6 +100,39 @@ router.get('/usage', verifyToken, async (req, res) => {
 });
 
 /**
+ * GET /api/ai-wallet/transactions
+ * Paginated transaction history with doctor-level breakdown.
+ * Accessible by: Hospital Admin, SuperAdmin (and Doctors for their own hospital)
+ */
+router.get('/transactions', verifyToken, async (req, res) => {
+    try {
+        const hospitalId = req.user?.hospitalId;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 30;
+
+        if (!hospitalId) {
+            return res.status(400).json({
+                success: false,
+                message: 'No hospital is associated with the authenticated user.'
+            });
+        }
+
+        const result = await aiWalletService.getTransactions(hospitalId, { page, limit });
+
+        res.status(200).json({
+            success: true,
+            ...result
+        });
+    } catch (error) {
+        console.error('[AI Wallet Route] Error fetching transactions:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve AI wallet transactions.'
+        });
+    }
+});
+
+/**
  * GET /api/ai-wallet/admin/hospitals
  * Super Admin / Central Admin endpoint to view AI wallets across all hospitals.
  */
@@ -96,7 +164,7 @@ router.post('/admin/recharge', verifySuperAdmin, async (req, res) => {
         if (!hospitalId || !amount || Number(amount) <= 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Valid hospitalId and positive recharge amount are required.'
+                message: 'Valid hospitalId and positive recharge amount (in ₹) are required.'
             });
         }
 

@@ -1,6 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
+import LanguageSelector from './common/LanguageSelector';
+import { getUIText, getTranslatedCategory, getTranslatedClinicalText } from '../utils/questionLibraryI18n';
 
 const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeData, readOnly = false }) => {
+    const [currentLang, setCurrentLang] = useState(() => {
+        return localStorage.getItem('hms_question_lib_lang') || 'en';
+    });
+
+    const handleLanguageChange = (langCode) => {
+        setCurrentLang(langCode);
+        localStorage.setItem('hms_question_lib_lang', langCode);
+    };
+
     const handleAnswer = (q, val) => {
         if (readOnly) return;
         setIntakeData(prev => ({ ...prev, [q]: val }));
@@ -77,7 +88,12 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
 
     return (
         <div className="dpd-tab-panel">
-            <h3 className="dpd-panel-title">📋 {categoryName}</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                <h3 className="dpd-panel-title" style={{ margin: 0 }}>
+                    📋 {getTranslatedCategory(categoryName, currentLang)}
+                </h3>
+                <LanguageSelector currentLang={currentLang} onLanguageChange={handleLanguageChange} />
+            </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {questions.map((item, idx) => {
@@ -88,7 +104,9 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
 
                     return (
                         <div key={idx} style={fieldStyle}>
-                            <label style={labelStyle}>{item.q}</label>
+                            <label style={labelStyle}>
+                                {getTranslatedClinicalText(item.q, currentLang)}
+                            </label>
 
                             {/* Simple Input */}
                             {(item.type === 'text' || item.type === 'number' || item.type === 'date') && (
@@ -97,6 +115,7 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                     value={savedVal}
                                     onChange={(e) => handleAnswer(item.q, e.target.value)}
                                     disabled={readOnly}
+                                    placeholder={getUIText('enterResponse', currentLang)}
                                     style={inputStyle}
                                 />
                             )}
@@ -109,9 +128,11 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                     disabled={readOnly}
                                     style={inputStyle}
                                 >
-                                    <option value="">Select...</option>
+                                    <option value="">{getUIText('selectOption', currentLang)}</option>
                                     {(item.options || []).map(o => (
-                                        <option key={o} value={o}>{o}</option>
+                                        <option key={o} value={o}>
+                                            {getTranslatedClinicalText(o, currentLang)}
+                                        </option>
                                     ))}
                                 </select>
                             )}
@@ -124,9 +145,9 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                     disabled={readOnly}
                                     style={inputStyle}
                                 >
-                                    <option value="">Select...</option>
-                                    <option value="Yes">Yes</option>
-                                    <option value="No">No</option>
+                                    <option value="">{getUIText('selectShort', currentLang)}</option>
+                                    <option value="Yes">{getUIText('yes', currentLang)}</option>
+                                    <option value="No">{getUIText('no', currentLang)}</option>
                                 </select>
                             )}
 
@@ -137,6 +158,7 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                     rows={4}
                                     onChange={(e) => handleAnswer(item.q, e.target.value)}
                                     disabled={readOnly}
+                                    placeholder={getUIText('doctorNotes', currentLang)}
                                     style={{ ...inputStyle, resize: 'vertical', minHeight: '80px' }}
                                 />
                             )}
@@ -155,7 +177,7 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                                     onChange={(e) => handleCheckbox(item.q, opt, e.target.checked)}
                                                     style={checkboxInputStyle}
                                                 />
-                                                <span>{opt}</span>
+                                                <span>{getTranslatedClinicalText(opt, currentLang)}</span>
                                             </label>
                                         );
                                     })}
@@ -174,19 +196,19 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                                 <div key={opt} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                                     <label style={checkboxCardStyle(isChecked)}>
                                                         <input
-                                                            type="checkbox"
+                                                             type="checkbox"
                                                             checked={isChecked}
                                                             onChange={(e) => handleCheckbox(item.q, opt, e.target.checked)}
                                                             style={checkboxInputStyle}
                                                         />
-                                                        <span>{opt}</span>
+                                                        <span>{getTranslatedClinicalText(opt, currentLang)}</span>
                                                     </label>
                                                     {opt !== 'None' && isChecked && (
                                                         <input
                                                             type={item.type === 'checkbox-date-group' ? 'date' : 'text'}
                                                             value={dateVal}
                                                             onChange={(e) => handleAnswer(`${item.q}_date_${opt}`, e.target.value)}
-                                                            placeholder={item.type === 'checkbox-text-group' ? 'Details...' : ''}
+                                                            placeholder={item.type === 'checkbox-text-group' ? getUIText('detailsPlaceholder', currentLang) : ''}
                                                             style={{ ...inputStyle, padding: '6px 10px', fontSize: '0.85rem' }}
                                                         />
                                                     )}
@@ -196,13 +218,15 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                     </div>
                                     {item.extra && (
                                         <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap' }}>{item.extra}:</span>
+                                            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                                                {getTranslatedClinicalText(item.extra, currentLang)}:
+                                            </span>
                                             <input
                                                 type="text"
                                                 value={intakeData[`${item.q}_extra`] || ""}
                                                 onChange={(e) => handleAnswer(`${item.q}_extra`, e.target.value)}
                                                 disabled={readOnly}
-                                                placeholder="Enter details..."
+                                                placeholder={getUIText('detailsPlaceholder', currentLang)}
                                                 style={{ ...inputStyle, flex: 1 }}
                                             />
                                         </div>
@@ -217,12 +241,15 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                         const val = intakeData[field.q] || "";
                                         return (
                                             <div key={field.q} style={{ flex: 1, minWidth: '150px' }}>
-                                                <label style={{ fontSize: '0.78rem', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: '600' }}>{field.q}</label>
+                                                <label style={{ fontSize: '0.78rem', color: '#64748b', display: 'block', marginBottom: '6px', fontWeight: '600' }}>
+                                                    {getTranslatedClinicalText(field.q, currentLang)}
+                                                </label>
                                                 <input
                                                     type={field.type || 'text'}
                                                     value={val}
                                                     onChange={(e) => handleAnswer(field.q, e.target.value)}
                                                     disabled={readOnly}
+                                                    placeholder={getUIText('enterResponse', currentLang)}
                                                     style={inputStyle}
                                                 />
                                             </div>

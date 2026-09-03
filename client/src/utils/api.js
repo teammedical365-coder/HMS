@@ -380,8 +380,8 @@ export const reportAPI = {
         const response = await apiClient.post('/api/reports/search', { patientId, keyword });
         return response.data;
     },
-    compareReports: async (latestFileUrl, latestMimeType, previousFileUrl, previousMimeType) => {
-        const response = await apiClient.post('/api/reports/compare', { latestFileUrl, latestMimeType, previousFileUrl, previousMimeType });
+    compareReports: async (latestFileUrl, latestMimeType, previousFileUrl, previousMimeType, patientId) => {
+        const response = await apiClient.post('/api/reports/compare', { latestFileUrl, latestMimeType, previousFileUrl, previousMimeType, patientId });
         return response.data;
     },
     chatWithAssistant: async (messages, mediaUrls) => {
@@ -404,8 +404,16 @@ export const aiWalletAPI = {
         const response = await apiClient.get('/api/ai-wallet');
         return response.data;
     },
+    getWalletStatus: async () => {
+        const response = await apiClient.get('/api/ai-wallet/status');
+        return response.data;
+    },
     getUsageHistory: async (limit = 30) => {
         const response = await apiClient.get(`/api/ai-wallet/usage?limit=${limit}`);
+        return response.data;
+    },
+    getTransactions: async (page = 1, limit = 30) => {
+        const response = await apiClient.get(`/api/ai-wallet/transactions?page=${page}&limit=${limit}`);
         return response.data;
     },
     getAllHospitalWallets: async () => {

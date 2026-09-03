@@ -7,8 +7,20 @@
 const USD_TO_INR_RATE = 86.50; // Current market exchange rate
 
 const MODEL_PRICING_TABLE = {
-    // Gemini 1.5 Flash / 3.6 Flash
-    'gemini-1.5-flash': {
+    // Gemini 3.x Flash Family (Ultra Fast & Cost Efficient)
+    'gemini-3.1-flash': {
+        inputPriceUsdPerMillion: 0.075,
+        outputPriceUsdPerMillion: 0.30,
+        unit: '1M tokens',
+        currency: 'USD'
+    },
+    'gemini-3.5-flash': {
+        inputPriceUsdPerMillion: 0.075,
+        outputPriceUsdPerMillion: 0.30,
+        unit: '1M tokens',
+        currency: 'USD'
+    },
+    'gemini-3.7-flash': {
         inputPriceUsdPerMillion: 0.075,
         outputPriceUsdPerMillion: 0.30,
         unit: '1M tokens',
@@ -20,12 +32,27 @@ const MODEL_PRICING_TABLE = {
         unit: '1M tokens',
         currency: 'USD'
     },
+    'gemini-2.5-flash': {
+        inputPriceUsdPerMillion: 0.08,
+        outputPriceUsdPerMillion: 0.35,
+        unit: '1M tokens',
+        currency: 'USD'
+    },
+    // Gemini 2.0 Flash
     'gemini-2.0-flash': {
         inputPriceUsdPerMillion: 0.10,
         outputPriceUsdPerMillion: 0.40,
         unit: '1M tokens',
         currency: 'USD'
     },
+    // Gemini 1.5 Flash
+    'gemini-1.5-flash': {
+        inputPriceUsdPerMillion: 0.075,
+        outputPriceUsdPerMillion: 0.30,
+        unit: '1M tokens',
+        currency: 'USD'
+    },
+    // Gemini Pro Series
     'gemini-1.5-pro': {
         inputPriceUsdPerMillion: 1.25,
         outputPriceUsdPerMillion: 5.00,
@@ -40,21 +67,33 @@ const MODEL_PRICING_TABLE = {
     }
 };
 
-const DEFAULT_MODEL = 'gemini-1.5-flash';
+const DEFAULT_MODEL = 'gemini-3.1-flash';
 
 /**
  * Get pricing definition for a given model name.
+ * Handles variations like '3.1-flash', 'gemini-3.5-flash', '3.5', etc.
  * @param {string} modelName 
  */
 function getModelPricing(modelName) {
-    if (!modelName) return MODEL_PRICING_TABLE[DEFAULT_MODEL];
-    const clean = modelName.toLowerCase().trim();
+    if (!modelName) return MODEL_PRICING_TABLE['gemini-3.1-flash'];
+    const clean = modelName.toLowerCase().trim().replace(/^["']|["']$/g, '');
+    
+    // Direct match
     if (MODEL_PRICING_TABLE[clean]) return MODEL_PRICING_TABLE[clean];
     
-    // Fuzzy matching
+    // Normalization: e.g. "3.1-flash" -> "gemini-3.1-flash"
+    const withPrefix = clean.startsWith('gemini-') ? clean : `gemini-${clean}`;
+    if (MODEL_PRICING_TABLE[withPrefix]) return MODEL_PRICING_TABLE[withPrefix];
+    
+    // Smart Pattern Matching
     if (clean.includes('pro')) return MODEL_PRICING_TABLE['gemini-1.5-pro'];
-    if (clean.includes('2.0')) return MODEL_PRICING_TABLE['gemini-2.0-flash'];
-    return MODEL_PRICING_TABLE[DEFAULT_MODEL];
+    if (clean.includes('3.5')) return MODEL_PRICING_TABLE['gemini-3.5-flash'];
+    if (clean.includes('3.7')) return MODEL_PRICING_TABLE['gemini-3.7-flash'];
+    if (clean.includes('3.1') || clean.includes('3.')) return MODEL_PRICING_TABLE['gemini-3.1-flash'];
+    if (clean.includes('2.5')) return MODEL_PRICING_TABLE['gemini-2.5-flash'];
+    if (clean.includes('2.0') || clean.includes('2.')) return MODEL_PRICING_TABLE['gemini-2.0-flash'];
+    
+    return MODEL_PRICING_TABLE['gemini-3.1-flash'];
 }
 
 /**

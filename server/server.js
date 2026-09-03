@@ -1,3 +1,15 @@
+// 0. Install Windows File Lock & Read Error Guard (fixes errno -4094 UNKNOWN read errors)
+require('./src/utils/fsGuard');
+
+// Global Exception & Rejection Handlers to prevent server crash
+process.on('uncaughtException', (err) => {
+    console.error('💥 [Uncaught Exception]:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('💥 [Unhandled Rejection]:', reason);
+});
+
 // server/server.js
 require('dotenv').config();
 const app = require('./src/app');
@@ -52,6 +64,16 @@ io.on('connection', (socket) => {
     socket.on('join', (room) => {
         socket.join(room);
         console.log(`Socket ${socket.id} joined room ${room}`);
+    });
+
+    // Hospital-scoped room for real-time AI Wallet updates
+    // All doctors from the same hospital join `hospital_${hospitalId}`
+    socket.on('joinHospitalRoom', (hospitalId) => {
+        if (hospitalId) {
+            const room = `hospital_${hospitalId}`;
+            socket.join(room);
+            console.log(`Socket ${socket.id} joined hospital room ${room}`);
+        }
     });
 
     socket.on('disconnect', () => {
