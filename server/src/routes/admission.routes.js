@@ -147,12 +147,33 @@ const getWardRate = async (hospitalId, wardName, bedType) => {
 // POST /api/admissions — Admit a patient (single ward & bed assignment)
 router.post('/', verifyAdmissionAccess, async (req, res) => {
     try {
-        const { patientId, appointmentId, ward, bedNumber, bedId, admissionDate, admissionTime, notes } = req.body;
+        const { patientId, appointmentId, ward, bedNumber, bedId, admissionDate, admissionTime, notes, doctorId } = req.body;
         if (!patientId) return res.status(400).json({ success: false, message: 'patientId is required' });
         if (!bedId) return res.status(400).json({ success: false, message: 'bedId is required' });
 
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const Bed = req.tenantDb ? getTenantModels(req.tenantDb).Bed || BedMaster : BedMaster;
+
+        // Optional doctor validation (preserves backward compatibility)
+        let validatedDoctorId = undefined;
+        if (doctorId) {
+            const mongoose = require('mongoose');
+            if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+                return res.status(400).json({ success: false, message: 'Invalid doctorId format' });
+            }
+            const MasterUser = require('../models/user.model');
+            const doctorUser = await MasterUser.findOne({
+                _id: doctorId,
+                $or: [{ hospitalId }, { hospitalId: null }]
+            });
+            if (!doctorUser) {
+                return res.status(400).json({ success: false, message: 'Doctor not found in this hospital' });
+            }
+            if (doctorUser.hospitalId && String(doctorUser.hospitalId) !== String(hospitalId)) {
+                return res.status(400).json({ success: false, message: 'Doctor belongs to a different hospital' });
+            }
+            validatedDoctorId = doctorUser._id;
+        }
 
         // Check active admission for this patient
         const Admission = getAdmission(req);
@@ -188,6 +209,7 @@ router.post('/', verifyAdmissionAccess, async (req, res) => {
             hospitalId,
             patientId,
             appointmentId: appointmentId || undefined,
+            doctorId: validatedDoctorId,
             admittedBy: req.user._id || req.user.userId,
             admissionDate: admDate,
             admissionTime: admTime,
@@ -224,6 +246,27 @@ router.post('/', verifyAdmissionAccess, async (req, res) => {
         if (!lockedBed) {
             await Admission.findByIdAndDelete(admission._id);
             return res.status(409).json({ success: false, message: 'Bed was just occupied by another patient. Please choose another bed.' });
+        }
+
+        // Real-time notification via Socket.IO
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`hospital_${hospitalId}`).emit('admission_created', {
+                admissionId: admission._id,
+                patientId,
+                ward: bed.ward,
+                bedNumber: bed.bedNumber,
+                doctorId: validatedDoctorId,
+                timestamp: new Date()
+            });
+            io.to(`hospital_${hospitalId}`).emit('bed_status_changed', {
+                bedId: bed._id,
+                status: 'OCCUPIED',
+                ward: bed.ward,
+                bedNumber: bed.bedNumber,
+                patientId,
+                timestamp: new Date()
+            });
         }
 
         res.status(201).json({ success: true, message: 'Patient admitted successfully', admission });
@@ -306,6 +349,11 @@ router.get('/active', verifyAdmissionAccess, async (req, res) => {
                     adm.appointmentId = await Appointment.findById(adm.appointmentId).select('doctorName department serviceName').lean() || adm.appointmentId;
                 }
             } catch (err) {}
+            try {
+                if (adm.doctorId) {
+                    adm.doctorId = await User.findById(adm.doctorId).select('name phone email specialization department').lean() || adm.doctorId;
+                }
+            } catch (err) {}
             if (!adm.wardRatePerDay || adm.wardRatePerDay === 0) {
                 adm.wardRatePerDay = await getWardRate(adm.hospitalId, adm.ward);
                 adm.wardHourlyRate = Math.round((adm.wardRatePerDay / 24) * 100) / 100;
@@ -328,6 +376,12 @@ router.get('/patient/:patientId', verifyAdmissionAccess, async (req, res) => {
         }).sort({ admissionDate: -1, createdAt: -1 }).lean();
 
         for (let adm of admissions) {
+            try {
+                if (adm.doctorId) {
+                    const MasterUser = require('../models/user.model');
+                    adm.doctorId = await MasterUser.findById(adm.doctorId).select('name phone email specialization department').lean() || adm.doctorId;
+                }
+            } catch (err) {}
             if (!adm.wardRatePerDay || adm.wardRatePerDay === 0) {
                 adm.wardRatePerDay = await getWardRate(adm.hospitalId, adm.ward);
                 adm.wardHourlyRate = Math.round((adm.wardRatePerDay / 24) * 100) / 100;
@@ -479,6 +533,25 @@ router.put('/:id/transfer', verifyAdmissionAccess, async (req, res) => {
 
         await admission.save();
 
+        // Real-time transfer notification
+        const io = req.app.get('io');
+        if (io) {
+            const lastTh = admission.transferHistory[admission.transferHistory.length - 1];
+            io.to(`hospital_${hospitalId}`).emit('bed_transferred', {
+                admissionId: admission._id,
+                patientId: admission.patientId,
+                fromWard: lastTh?.fromWard,
+                toWard: targetBed.ward,
+                toBedNumber: targetBed.bedNumber,
+                timestamp: new Date()
+            });
+            io.to(`hospital_${hospitalId}`).emit('bed_status_changed', {
+                oldBedId: lastTh?.fromBedId,
+                newBedId: targetBed._id,
+                timestamp: new Date()
+            });
+        }
+
         res.json({ success: true, message: 'Patient transferred successfully', admission });
     } catch (err) {
         console.error('Transfer patient error:', err);
@@ -567,6 +640,22 @@ router.put('/:id/discharge', verifyAdmissionAccess, async (req, res) => {
                 status: 'AVAILABLE',
                 currentPatient: null,
                 currentAdmission: null
+            });
+        }
+
+        // Real-time discharge notification
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`hospital_${hospitalId}`).emit('patient_discharged', {
+                admissionId: admission._id,
+                patientId: admission.patientId,
+                bedId: admission.bedId,
+                timestamp: new Date()
+            });
+            io.to(`hospital_${hospitalId}`).emit('bed_status_changed', {
+                bedId: admission.bedId,
+                status: 'AVAILABLE',
+                timestamp: new Date()
             });
         }
 

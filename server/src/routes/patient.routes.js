@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { resolveTenant } = require('../middleware/tenantMiddleware');
 const auditLog = require('../middleware/audit.middleware');
@@ -28,38 +29,52 @@ router.get('/reports/:filename', (req, res) => {
 router.get('/search', verifyToken, resolveTenant, async (req, res) => {
     try {
         const { term } = req.query;
-        if (!term || typeof term !== 'string' || term.trim().length < 2) {
-            return res.status(400).json({ success: false, message: 'Search term must be at least 2 characters' });
-        }
+        const safeTerm = (typeof term === 'string' ? term.trim() : '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regexTerm = safeTerm ? { $regex: safeTerm, $options: 'i' } : null;
 
-        // Escape special regex characters to prevent regex injection
-        const safeTerm = term.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regexTerm = { $regex: safeTerm, $options: 'i' };
         let hFilter = {};
         if (req.user.hospitalId) {
+            const hIdStr = String(req.user.hospitalId);
+            const hIdObj = mongoose.Types.ObjectId.isValid(hIdStr) ? new mongoose.Types.ObjectId(hIdStr) : null;
             hFilter = {
                 $or: [
-                    { hospitalId: req.user.hospitalId },
+                    { hospitalId: hIdStr },
+                    ...(hIdObj ? [{ hospitalId: hIdObj }] : []),
                     { hospitalId: { $exists: false } },
                     { hospitalId: null }
                 ]
             };
         }
 
-        const patients = await MasterUser.find({
-            $and: [
-                hFilter,
-                { role: 'patient' },
-                {
-                    $or: [
-                        { phone: regexTerm },
-                        { patientId: regexTerm },
-                        { mrn: regexTerm },
-                        { name: regexTerm }
-                    ]
-                }
+        const Role = require('../models/role.model');
+        const patientRoles = await Role.find({ name: { $regex: /^patient$/i } }).select('_id').lean();
+        const patientRoleIds = ['patient', 'Patient', ...patientRoles.map(r => r._id), ...patientRoles.map(r => r._id.toString())];
+
+        const patientRoleFilter = {
+            $or: [
+                { role: { $in: patientRoleIds } },
+                { patientId: { $exists: true, $ne: null, $ne: '' } },
+                { mrn: { $exists: true, $ne: null, $ne: '' } }
             ]
-        }).select('name phone patientId mrn dob gender city avatar').limit(20).lean();
+        };
+
+        const queryAnd = [hFilter, patientRoleFilter];
+        if (regexTerm) {
+            queryAnd.push({
+                $or: [
+                    { phone: regexTerm },
+                    { patientId: regexTerm },
+                    { mrn: regexTerm },
+                    { name: regexTerm }
+                ]
+            });
+        }
+
+        const patients = await MasterUser.find({ $and: queryAnd })
+            .select('name phone patientId mrn dob gender city avatar')
+            .sort({ createdAt: -1 })
+            .limit(20)
+            .lean();
 
         res.json({ success: true, data: patients });
     } catch (error) {

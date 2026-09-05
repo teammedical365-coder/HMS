@@ -30,7 +30,8 @@ import {
     FiMessageSquare,
     FiUser,
     FiHeart,
-    FiDroplet
+    FiDroplet,
+    FiBox
 } from 'react-icons/fi';
 import { FaHeartbeat, FaRupeeSign } from 'react-icons/fa';
 import './UnifiedPatientProfile.css';
@@ -39,6 +40,7 @@ import { confirmToast } from '../../utils/confirmToast';
 
 import ClinicPatientProfile from './ClinicPatientProfile';
 import FamilyHealthTree from './FamilyHealthTree';
+import PatientVialsSection from '../../components/vials/PatientVialsSection';
 
 const HospitalPatientProfileContent = () => {
     const { id: patientId, department: deptParam } = useParams();
@@ -58,12 +60,14 @@ const HospitalPatientProfileContent = () => {
 
     const isDoctor = dynRole.includes('doctor') || userRole.includes('doctor');
 
+    const [searchParams] = useSearchParams();
+
     // State
     const [patientData, setPatientData] = useState(null);
     const [timeline, setTimeline] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [activeTab, setActiveTab] = useState('timeline');
+    const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'timeline');
 
     // Consent & Document States
     const [consentList, setConsentList] = useState([]);
@@ -100,7 +104,6 @@ const HospitalPatientProfileContent = () => {
         }
     };
     const [currentFollowupStatus, setCurrentFollowupStatus] = useState(null);
-    const [searchParams] = useSearchParams();
 
     useEffect(() => {
         if (patientId) {
@@ -565,6 +568,14 @@ const HospitalPatientProfileContent = () => {
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .slice(0, 5);
 
+    // Staff access check for Vial Management (Hospital Admin manages, Reception/Staff can view storage locations & time)
+    const canViewVials = ['hospitaladmin', 'centraladmin', 'superadmin', 'reception', 'receptionist', 'doctor', 'clinicdoctor', 'clinic doctor', 'staff', 'frontdesk'].includes(userRole) || 
+                         ['hospitaladmin', 'centraladmin', 'superadmin', 'reception', 'receptionist', 'doctor', 'clinicdoctor', 'clinic doctor', 'staff', 'frontdesk'].includes(dynRole) ||
+                         ['hospitaladmin', 'centraladmin', 'superadmin', 'reception', 'receptionist', 'doctor', 'clinicdoctor', 'clinic doctor', 'staff', 'frontdesk'].includes(String(currentUser?.role || '').toLowerCase()) ||
+                         ['hospitaladmin', 'centraladmin', 'superadmin', 'reception', 'receptionist', 'doctor', 'clinicdoctor', 'clinic doctor', 'staff', 'frontdesk'].includes(String(currentUser?._roleData?.name || '').toLowerCase()) ||
+                         permissions.includes('reception_access') ||
+                         permissions.includes('admin_manage_roles');
+
     // Tab definitions
     const tabs = [
         { key: 'timeline', label: 'Timeline' },
@@ -574,6 +585,7 @@ const HospitalPatientProfileContent = () => {
         { key: 'prescriptions', label: 'Prescriptions' },
         { key: 'reports', label: 'Reports' },
         { key: 'notes', label: 'Notes' },
+        ...(canViewVials ? [{ key: 'vialManagement', label: '🧪 Vial / Sample Location' }] : []),
         { key: 'documents', label: 'Documents' },
     ];
 
@@ -745,6 +757,8 @@ const HospitalPatientProfileContent = () => {
                 <div style={{ marginTop: '20px' }}>
                     <FamilyHealthTree patientId={patientData?._id || patientId} patientData={patientData} />
                 </div>
+            ) : activeTab === 'vialManagement' ? (
+                <PatientVialsSection patientId={patientData?._id || patientId} patientData={patientData} />
             ) : (
                 <div className="upp-main-layout">
                     {/* ---- LEFT PANEL ---- */}
@@ -1291,6 +1305,15 @@ const HospitalPatientProfileContent = () => {
                                 </div>
                                 <FiChevronRight className="upp-qa-arrow" />
                             </div>
+                            {canViewVials && (
+                                <div className="upp-quick-action-item" onClick={() => setActiveTab('vialManagement')}>
+                                    <div className="upp-qa-left">
+                                        <div className="upp-qa-icon" style={{ background: '#e0f2fe', color: '#0284c7' }}><FiBox /></div>
+                                        <span className="upp-qa-label">Sample / Vial Location</span>
+                                    </div>
+                                    <FiChevronRight className="upp-qa-arrow" />
+                                </div>
+                            )}
                             <div className="upp-quick-action-item" onClick={() => setActiveTab('documents')}>
                                 <div className="upp-qa-left">
                                     <div className="upp-qa-icon violet"><FiUpload /></div>

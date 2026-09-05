@@ -15,7 +15,7 @@ const verifyAdminAccess = async (req, res, next) => {
     try {
         await verifyToken(req, res, () => {
             const roleName = (req.user._roleData?.name || String(req.user.role || '')).toLowerCase().replace(/\s+/g, '');
-            const allowed = ['hospitaladmin', 'centraladmin', 'superadmin', 'admin', 'otmanager', 'otstaff', 'receptionist'];
+            const allowed = ['hospitaladmin', 'centraladmin', 'superadmin', 'admin', 'otmanager', 'otstaff', 'receptionist', 'reception'];
             if (allowed.includes(roleName)) {
                 next();
             } else {
@@ -71,6 +71,18 @@ router.post('/', verifyAdminAccess, resolveTenant, async (req, res) => {
         });
         
         await bed.save();
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`hospital_${hospitalId}`).emit('bed_status_changed', {
+                bedId: bed._id,
+                status: bed.status,
+                ward: bed.ward,
+                bedNumber: bed.bedNumber,
+                timestamp: new Date()
+            });
+        }
+
         res.status(201).json({ success: true, message: 'Bed created', bed });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Error creating bed' });
@@ -111,6 +123,18 @@ router.put('/:id', verifyAdminAccess, resolveTenant, async (req, res) => {
         }
         
         await bed.save();
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`hospital_${bed.hospitalId}`).emit('bed_status_changed', {
+                bedId: bed._id,
+                status: bed.status,
+                ward: bed.ward,
+                bedNumber: bed.bedNumber,
+                timestamp: new Date()
+            });
+        }
+
         res.json({ success: true, message: 'Bed updated', bed });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Error updating bed' });
@@ -129,6 +153,18 @@ router.delete('/:id', verifyAdminAccess, resolveTenant, async (req, res) => {
         }
         
         await Bed.findByIdAndDelete(req.params.id);
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`hospital_${bed.hospitalId}`).emit('bed_status_changed', {
+                bedId: bed._id,
+                status: 'DELETED',
+                ward: bed.ward,
+                bedNumber: bed.bedNumber,
+                timestamp: new Date()
+            });
+        }
+
         res.json({ success: true, message: 'Bed deleted' });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Error deleting bed' });

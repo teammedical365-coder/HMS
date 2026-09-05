@@ -497,7 +497,7 @@ export const clinicalAPI = {
 };
 
 export const patientAPI = {
-    search: async (term) => (await apiClient.get(`/api/patients/search?term=${term}`)).data,
+    search: async (term = '') => (await apiClient.get(`/api/patients/search${term ? `?term=${encodeURIComponent(term)}` : ''}`)).data,
     getFullHistory: async (id, department) => {
         let url = `/api/patients/${id}/full-history`;
         const params = new URLSearchParams();
@@ -991,4 +991,72 @@ export const consentAPI = {
         return response.data;
     }
 };
+
+export const vialAPI = {
+    getAll: async (params) => {
+        const response = await apiClient.get('/api/vials', { params });
+        return response.data;
+    },
+    getStats: async () => {
+        const response = await apiClient.get('/api/vials/stats');
+        return response.data;
+    },
+    getPatientVials: async (patientId) => {
+        const response = await apiClient.get(`/api/vials/patient/${patientId}`);
+        return response.data;
+    },
+    getById: async (id) => {
+        const response = await apiClient.get(`/api/vials/${id}`);
+        return response.data;
+    },
+    create: async (data) => {
+        const response = await apiClient.post('/api/vials', data);
+        return response.data;
+    },
+    update: async (id, data) => {
+        const response = await apiClient.put(`/api/vials/${id}`, data);
+        return response.data;
+    },
+    store: async (id, data) => {
+        const response = await apiClient.post(`/api/vials/${id}/store`, data);
+        return response.data;
+    },
+    move: async (id, data) => {
+        const response = await apiClient.post(`/api/vials/${id}/move`, data);
+        return response.data;
+    },
+    retrieve: async (id, data) => {
+        const response = await apiClient.post(`/api/vials/${id}/retrieve`, data);
+        return response.data;
+    },
+    returnToStorage: async (id, data) => {
+        const response = await apiClient.post(`/api/vials/${id}/return`, data);
+        return response.data;
+    },
+    discard: async (id, data) => {
+        const response = await apiClient.post(`/api/vials/${id}/discard`, data);
+        return response.data;
+    }
+};
+
+// Inpatient Clinical API (Orders, MAR, Time-Series Vitals)
+export const ipdClinicalAPI = {
+    // Inpatient Clinical Orders
+    createOrder: async (data) => (await apiClient.post('/api/ipd-clinical/orders', data)).data,
+    getOrders: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/orders`)).data,
+    getActiveOrders: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/orders/active`)).data,
+    updateOrder: async (orderId, data) => (await apiClient.patch(`/api/ipd-clinical/orders/${orderId}`, data)).data,
+
+    // Medication Administration Records (MAR)
+    scheduleMAR: async (data) => (await apiClient.post('/api/ipd-clinical/mar', data)).data,
+    getMARRecords: async (admissionId, params = {}) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/mar`, { params })).data,
+    getDueMARRecords: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/mar/due`)).data,
+    updateMARRecord: async (marId, data) => (await apiClient.patch(`/api/ipd-clinical/mar/${marId}`, data)).data,
+
+    // Inpatient Vitals
+    recordVitals: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/vitals`, data)).data,
+    getVitalsHistory: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/vitals`)).data,
+    getLatestVitals: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/vitals/latest`)).data,
+};
+
 

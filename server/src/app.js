@@ -50,6 +50,7 @@ const bedRoutes = require('./routes/bed.routes');
 const otRoutes = require('./routes/ot.routes');
 const compression = require('compression');
 const referralRoutes = require('./routes/referral.routes');
+const vialRoutes = require('./routes/vial.routes');
 
 const app = express();
 
@@ -214,6 +215,8 @@ app.use('/api/consent', consentRoutes);
 app.use('/api/beds', bedRoutes);
 app.use('/api/ot', otRoutes);
 app.use('/api/referrals', referralRoutes);
+app.use('/api/vials', vialRoutes);
+app.use('/api/ipd-clinical', require('./routes/ipdClinical.routes'));
 
 app.get('/', (req, res) => {
     res.send('API is running...');

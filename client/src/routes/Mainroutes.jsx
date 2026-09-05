@@ -68,6 +68,7 @@ const HospitalAdminDashboard = lazy(() => import('../pages/hospitaladmin/Hospita
 const ClinicDashboard = lazy(() => import('../pages/hospitaladmin/ClinicDashboard'));
 const HospitalLogin = lazy(() => import('../pages/hospitaladmin/HospitalLogin'));
 const HospitalAdminQuestionLibrary = lazy(() => import('../pages/hospitaladmin/HospitalAdminQuestionLibrary'));
+const VialManagement = lazy(() => import('../pages/hospitaladmin/VialManagement'));
 
 // Cashier Routing
 const CashierDashboard = lazy(() => import('../pages/cashier/CashierDashboard'));
@@ -186,6 +187,7 @@ const MainRoutes = () => {
                 { key: 'hosp_users', importFn: () => import('../pages/admin/Admin') },
                 { key: 'hosp_ot', importFn: () => import('../pages/ot/OTDashboard') },
                 { key: 'hosp_ql', importFn: () => import('../pages/hospitaladmin/HospitalAdminQuestionLibrary') },
+                { key: 'hosp_vials', importFn: () => import('../pages/hospitaladmin/VialManagement') },
             ]);
         } else if (role === 'doctor' || role === 'clinic doctor') {
             prefetchRoutes([
@@ -263,6 +265,7 @@ const MainRoutes = () => {
                                     </ProtectedRoute>
                                 } />
                                 <Route path="hospitaladmin/question-library" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><HospitalAdminQuestionLibrary /></ProtectedRoute>} />
+                                <Route path="hospitaladmin/vials" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><VialManagement /></ProtectedRoute>} />
 
                                 <Route path="lab/dashboard" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><LabDashboard /></ProtectedRoute>} />
                                 <Route path="lab/tests" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><AssignedTests /></ProtectedRoute>} />

@@ -56,10 +56,12 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 // Simple clinic or starter plan — single hub page with built-in role switcher
                 return [
                     { label: 'Clinic Hub', path: '/hospitaladmin', icon: <FiHome /> },
+                    { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox /> },
                 ];
             }
             return [
                 { label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiHome /> },
+                { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox /> },
                 { label: 'Clinical Questions', path: '/hospitaladmin/question-library', icon: <FiFileText /> },
                 { label: 'Staff Management', path: '/admin/users', icon: <FiUsers /> },
                 { label: 'Doctors Feed', path: '/admin/doctors', icon: <FiActivity /> },
