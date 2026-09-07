@@ -243,8 +243,8 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
     try {
         const { email, password, hospitalId, hospitalSlug, tenantId, loginType } = req.body;
 
-        if (!email || !password) {
-            return res.status(400).json({ success: false, message: 'Email and password are required' });
+        if (!email || typeof email !== 'string' || !password) {
+            return res.status(400).json({ success: false, message: 'Valid email and password are required' });
         }
 
         const normalizedEmail = email.toLowerCase().trim();
@@ -323,10 +323,10 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
                             user = fallbackUser;
                         } else {
                             console.log(`[Auth] User '${normalizedEmail}' belongs to hospital '${fallbackUser.hospitalId}', not requested tenant '${resolvedHospitalId}'.`);
-                            return res.status(401).json({ success: false, message: 'User not found in this hospital tenant.' });
+                            return res.status(404).json({ success: false, message: 'User not found in this hospital tenant.' });
                         }
                     } else {
-                        return res.status(401).json({ success: false, message: 'Invalid email or password' });
+                        return res.status(404).json({ success: false, message: 'User not found' });
                     }
                 }
             } else {
@@ -335,7 +335,7 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
         }
 
         if (!user) {
-            return res.status(401).json({ success: false, message: 'Invalid email or password' });
+            return res.status(404).json({ success: false, message: 'User not found' });
         }
 
         // ── Login-type–specific validation ────────────────────────────────────
@@ -520,11 +520,16 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
         });
 
         // ── Send OTP email ────────────────────────────────────────────────────
-        await sendLoginOtpEmail({
-            email: user.email,
-            otp,
-            userName: user.name,
-        });
+        try {
+            await sendLoginOtpEmail({
+                email: user.email,
+                otp,
+                userName: user.name,
+            });
+        } catch (emailError) {
+            console.error('[otp/send] Email sending failed:', emailError);
+            return res.status(502).json({ success: false, message: 'Failed to send OTP email due to an email gateway issue. Please try again later.' });
+        }
 
         // Mask email for frontend display
         const parts = user.email.split('@');
