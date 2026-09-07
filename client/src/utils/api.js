@@ -1044,6 +1044,7 @@ export const ipdClinicalAPI = {
     // Inpatient Clinical Orders
     createOrder: async (data) => (await apiClient.post('/api/ipd-clinical/orders', data)).data,
     getOrders: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/orders`)).data,
+    getPatientOrders: async (patientId) => (await apiClient.get(`/api/ipd-clinical/patients/${patientId}/orders`)).data,
     getActiveOrders: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/orders/active`)).data,
     updateOrder: async (orderId, data) => (await apiClient.patch(`/api/ipd-clinical/orders/${orderId}`, data)).data,
 

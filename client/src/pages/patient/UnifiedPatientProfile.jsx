@@ -41,6 +41,7 @@ import { confirmToast } from '../../utils/confirmToast';
 import ClinicPatientProfile from './ClinicPatientProfile';
 import FamilyHealthTree from './FamilyHealthTree';
 import PatientVialsSection from '../../components/vials/PatientVialsSection';
+import DoctorIPDOrdersPanel from '../../components/ipd/DoctorIPDOrdersPanel';
 
 const HospitalPatientProfileContent = () => {
     const { id: patientId, department: deptParam } = useParams();
@@ -579,6 +580,7 @@ const HospitalPatientProfileContent = () => {
     // Tab definitions
     const tabs = [
         { key: 'timeline', label: 'Timeline' },
+        { key: 'ipdOrders', label: '🏥 IPD Orders' },
         { key: 'familyHistory', label: 'Family History' },
         { key: 'clinical', label: 'Clinical History' },
         { key: 'vitals', label: 'Vitals' },
@@ -759,6 +761,10 @@ const HospitalPatientProfileContent = () => {
                 </div>
             ) : activeTab === 'vialManagement' ? (
                 <PatientVialsSection patientId={patientData?._id || patientId} patientData={patientData} />
+            ) : activeTab === 'ipdOrders' ? (
+                <div style={{ marginTop: '20px' }}>
+                    <DoctorIPDOrdersPanel patientId={patientData?._id || patientId} patient={patientData} />
+                </div>
             ) : (
                 <div className="upp-main-layout">
                     {/* ---- LEFT PANEL ---- */}
@@ -1302,6 +1308,13 @@ const HospitalPatientProfileContent = () => {
                                 <div className="upp-qa-left">
                                     <div className="upp-qa-icon amber"><FiMessageSquare /></div>
                                     <span className="upp-qa-label">Add Note</span>
+                                </div>
+                                <FiChevronRight className="upp-qa-arrow" />
+                            </div>
+                            <div className="upp-quick-action-item" onClick={() => setActiveTab('ipdOrders')}>
+                                <div className="upp-qa-left">
+                                    <div className="upp-qa-icon" style={{ background: '#eff6ff', color: '#2563eb' }}>🏥</div>
+                                    <span className="upp-qa-label">IPD / Admission Orders</span>
                                 </div>
                                 <FiChevronRight className="upp-qa-arrow" />
                             </div>

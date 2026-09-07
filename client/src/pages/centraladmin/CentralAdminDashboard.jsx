@@ -140,6 +140,7 @@ const CentralAdminDashboard = () => {
     const [datePreset, setDatePreset] = useState('all'); // all, today, 30, 60, 90, custom
     const [customStartDate, setCustomStartDate] = useState('');
     const [customEndDate, setCustomEndDate] = useState('');
+    const [showCustomPicker, setShowCustomPicker] = useState(false);
     const [chartRange, setChartRange] = useState('this_month');
     const [appliedCustomAnim, setAppliedCustomAnim] = useState(false);
 
@@ -618,14 +619,23 @@ const CentralAdminDashboard = () => {
 
     const handleDatePresetChange = (preset) => {
         setDatePreset(preset);
-        if (preset !== 'custom' && selectedHospital) {
-            fetchHospitalStats(selectedHospital._id, preset, customStartDate, customEndDate);
+        if (preset !== 'custom') {
+            setShowCustomPicker(false);
+            if (selectedHospital) {
+                fetchHospitalStats(selectedHospital._id, preset, '', '');
+            }
+        } else {
+            setShowCustomPicker(prev => !prev);
         }
     };
 
     const handleApplyCustomDate = () => {
-        if (selectedHospital) {
+        if (selectedHospital && customStartDate && customEndDate) {
+            setDatePreset('custom');
             fetchHospitalStats(selectedHospital._id, 'custom', customStartDate, customEndDate);
+            toast.success('Custom date filter applied');
+        } else if (!customStartDate || !customEndDate) {
+            toast.error('Please select both start date and end date');
         }
     };
 
@@ -633,6 +643,7 @@ const CentralAdminDashboard = () => {
         setSelectedHospital(h);
         setApptMode(h.appointmentMode || 'slot');
         setDatePreset('all');
+        setShowCustomPicker(false);
         setCustomStartDate('');
         setCustomEndDate('');
         fetchHospitalStats(h._id, 'all', '', '');
@@ -933,15 +944,27 @@ const CentralAdminDashboard = () => {
                                     </div>
                                 </div>
 
-                                {/* Top-Left: Hospital Profile Tag (Over Wave) */}
-                                <div className="h-detail-profile-pill-top-left">
-                                    <span className="h-detail-profile-shield-icon">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#38bdf8">
-                                            <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" />
-                                            <path d="M9 12l2 2 4-4" stroke="#ffffff" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                    </span>
-                                    <span>Hospital Profile</span>
+                                {/* Top Row: Left "Hospital Profile" Badge + Right Compact "← Back" Button */}
+                                <div className="h-detail-hero-top-row">
+                                    <div className="h-detail-profile-pill-top-left">
+                                        <span className="h-detail-profile-shield-icon">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="#38bdf8">
+                                                <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" />
+                                                <path d="M9 12l2 2 4-4" stroke="#ffffff" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                                            </svg>
+                                        </span>
+                                        <span>Hospital Profile</span>
+                                    </div>
+
+                                    <button 
+                                        type="button"
+                                        onClick={closeHospitalDetail} 
+                                        className="h-detail-top-back-btn"
+                                        title="Return to Hospitals List"
+                                    >
+                                        <span className="h-detail-top-back-arrow">←</span>
+                                        <span>Back</span>
+                                    </button>
                                 </div>
 
                                 {/* Main Hero Upper Content */}
@@ -1012,28 +1035,8 @@ const CentralAdminDashboard = () => {
                                         </div>
                                     </div>
 
-                                    {/* Right: Hospital Building Illustration with Back Button on top */}
+                                    {/* Right: Hospital Building Illustration / ECG widget */}
                                     <div className="h-detail-hero-right-col">
-                                        <div className="h-detail-back-btn-container">
-                                            <button 
-                                                type="button"
-                                                onClick={closeHospitalDetail} 
-                                                className="h-detail-back-btn-glow"
-                                                title="Return to Hospitals List"
-                                            >
-                                                <span className="h-detail-back-arrow-wrap">
-                                                    <span className="h-detail-back-arrow">←</span>
-                                                    <span className="h-detail-back-ring-pulse" />
-                                                </span>
-                                                <span className="h-detail-back-text">Back to Hospitals</span>
-                                                <span className="h-detail-back-hospital-icon">
-                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                        <path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 9h6M9 13h6M9 17h6" />
-                                                    </svg>
-                                                </span>
-                                            </button>
-                                        </div>
-
                                         {/* Right: Animated ECG Heartbeat Wave matching Image 2 */}
                                         <div className="h-detail-hero-ecg-widget">
                                             <svg className="h-detail-hero-ecg-svg" viewBox="0 0 230 76" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1097,7 +1100,7 @@ const CentralAdminDashboard = () => {
                                     </div>
                                 </div>
 
-                                {/* Bottom Floating Stats & Real-time Status Bar (Exact from Image 1) */}
+                                {/* Bottom Floating Stats & Real-time Status Bar */}
                                 <div className="h-detail-hero-bottom-bar">
                                     <div className="h-detail-bottom-stat-item">
                                         <div className="h-detail-bottom-stat-icon icon-shield">
@@ -1118,21 +1121,7 @@ const CentralAdminDashboard = () => {
                                         <div className="h-detail-bottom-stat-text">
                                             <span className="h-detail-bottom-stat-label">Expert Doctors</span>
                                             <span className="h-detail-bottom-stat-val">
-                                                {s?.totalDoctors || (s?.staffCounts?.doctor) || '100+'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="h-detail-bottom-stat-sep" />
-
-                                    <div className="h-detail-bottom-stat-item">
-                                        <div className="h-detail-bottom-stat-icon icon-patients">
-                                            <i className="fa-solid fa-hand-holding-heart" />
-                                        </div>
-                                        <div className="h-detail-bottom-stat-text">
-                                            <span className="h-detail-bottom-stat-label">Patients Served</span>
-                                            <span className="h-detail-bottom-stat-val">
-                                                {s?.totalPatients ? `${s.totalPatients}` : (s?.totalAppointments ? `${s.totalAppointments}+` : '10K+')}
+                                                {s?.totalDoctors ?? s?.staffCounts?.doctor ?? 0}
                                             </span>
                                         </div>
                                     </div>
@@ -1165,7 +1154,45 @@ const CentralAdminDashboard = () => {
                                 </div>
 
                                 <div className="h-detail-timeframe-controls">
-                                    <div className="h-detail-date-picker-group">
+                                    {/* Presets Group */}
+                                    <div className="h-detail-preset-group">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDatePresetChange('all')}
+                                            className={`h-detail-preset-btn ${datePreset === 'all' ? 'active' : ''}`}
+                                        >
+                                            All Time
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDatePresetChange('today')}
+                                            className={`h-detail-preset-btn ${datePreset === 'today' ? 'active' : ''}`}
+                                        >
+                                            Today
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDatePresetChange('30')}
+                                            className={`h-detail-preset-btn ${datePreset === '30' ? 'active' : ''}`}
+                                        >
+                                            30 Days
+                                        </button>
+                                        {/* Mobile-only Custom Toggle Button */}
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDatePresetChange('custom')}
+                                            className={`h-detail-preset-btn h-detail-mobile-custom-btn ${datePreset === 'custom' || showCustomPicker ? 'active' : ''}`}
+                                            title="Filter by custom date range"
+                                        >
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                                            </svg>
+                                            <span>Custom</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Date Picker Inputs (Always shown on desktop, toggle on mobile) */}
+                                    <div className={`h-detail-date-picker-group ${showCustomPicker ? 'mobile-visible' : ''}`}>
                                         <input
                                             type="date"
                                             value={customStartDate}
@@ -1173,7 +1200,7 @@ const CentralAdminDashboard = () => {
                                             className="h-detail-date-input"
                                             placeholder="Start Date"
                                         />
-                                        <span style={{ color: '#64748b', fontSize: '12px', fontWeight: 600 }}>to</span>
+                                        <span className="h-detail-date-sep">to</span>
                                         <input
                                             type="date"
                                             value={customEndDate}
@@ -1182,39 +1209,19 @@ const CentralAdminDashboard = () => {
                                             placeholder="End Date"
                                         />
                                         <button 
+                                            type="button"
                                             onClick={handleApplyCustomDate}
                                             className="h-detail-apply-btn"
                                         >
                                             Apply Custom
                                         </button>
                                     </div>
-
-                                    <div className="h-detail-preset-group">
-                                        <button
-                                            onClick={() => handleDatePresetChange('all')}
-                                            className={`h-detail-preset-btn ${datePreset === 'all' ? 'active' : ''}`}
-                                        >
-                                            All Time
-                                        </button>
-                                        <button
-                                            onClick={() => handleDatePresetChange('today')}
-                                            className={`h-detail-preset-btn ${datePreset === 'today' ? 'active' : ''}`}
-                                        >
-                                            Today
-                                        </button>
-                                        <button
-                                            onClick={() => handleDatePresetChange('30')}
-                                            className={`h-detail-preset-btn ${datePreset === '30' ? 'active' : ''}`}
-                                        >
-                                            30 Days
-                                        </button>
-                                    </div>
                                 </div>
                             </div>
 
-                            {/* 3. 4 KPI Stat Cards (100% Real API Data) */}
+                            {/* 3. 4 KPI Stat Cards (100% Real API Data with Light Colorful Aesthetics) */}
                             <div className="h-detail-kpi-grid">
-                                <div className="h-detail-kpi-card">
+                                <div className="h-detail-kpi-card kpi-card-green">
                                     <div className="h-detail-kpi-icon-wrap kpi-icon-green">
                                         <i className="fa-solid fa-user" />
                                     </div>
@@ -1224,7 +1231,7 @@ const CentralAdminDashboard = () => {
                                     <div className="h-detail-kpi-bar kpi-bar-green" />
                                 </div>
 
-                                <div className="h-detail-kpi-card">
+                                <div className="h-detail-kpi-card kpi-card-blue">
                                     <div className="h-detail-kpi-icon-wrap kpi-icon-blue">
                                         <i className="fa-solid fa-user-group" />
                                     </div>
@@ -1234,7 +1241,7 @@ const CentralAdminDashboard = () => {
                                     <div className="h-detail-kpi-bar kpi-bar-blue" />
                                 </div>
 
-                                <div className="h-detail-kpi-card">
+                                <div className="h-detail-kpi-card kpi-card-purple">
                                     <div className="h-detail-kpi-icon-wrap kpi-icon-purple">
                                         <i className="fa-regular fa-calendar-check" />
                                     </div>
@@ -1244,7 +1251,7 @@ const CentralAdminDashboard = () => {
                                     <div className="h-detail-kpi-bar kpi-bar-purple" />
                                 </div>
 
-                                <div className="h-detail-kpi-card">
+                                <div className="h-detail-kpi-card kpi-card-orange">
                                     <div className="h-detail-kpi-icon-wrap kpi-icon-orange">
                                         <i className="fa-solid fa-indian-rupee-sign" />
                                     </div>
@@ -1326,8 +1333,8 @@ const CentralAdminDashboard = () => {
                                 </div>
 
                                 {/* Right: Recent Appointments (Replaced Quick Summary with exact Image 1 Recent Appointments Table) */}
-                                <div className="h-detail-summary-card" style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column' }}>
-                                    <div className="h-detail-card-head" style={{ marginBottom: '14px' }}>
+                                <div className="h-detail-summary-card">
+                                    <div className="h-detail-card-head">
                                         <div className="h-detail-timeframe-title-group">
                                             <div className="h-detail-purple-icon-circle" style={{ background: '#ffedd5', color: '#ea580c' }}>
                                                 <i className="fa-solid fa-list-ol" />
@@ -1775,6 +1782,751 @@ const CentralAdminDashboard = () => {
     }
 
     // ==========================================
+    // CLINIC DETAIL PANEL (STARTER / BASIC CLINIC)
+    // ==========================================
+    if (selectedClinic) {
+        return (
+            <div className="centraladmin-page">
+                <div className="centraladmin-container" style={{ maxWidth: '1280px', margin: '0 auto', paddingBottom: '40px' }}>
+                    {error && <div className="error-message">⚠️ {error}</div>}
+                    {success && <div className="success-message">✅ {success}</div>}
+
+                    <div className="h-detail-container">
+                        {/* 1. Clinic Profile Hero Header Banner */}
+                        <div className="h-detail-hero-banner">
+                            {/* Left Organic Deep Blue / Indigo Wave Background */}
+                            <div className="h-detail-hero-waves">
+                                <svg className="h-detail-hero-wave-svg" viewBox="0 0 280 280" preserveAspectRatio="none">
+                                    <defs>
+                                        <linearGradient id="heroBlueDeepClinic" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stopColor="#0a184e" />
+                                            <stop offset="35%" stopColor="#1e2d7d" />
+                                            <stop offset="70%" stopColor="#312e81" />
+                                            <stop offset="100%" stopColor="#4338ca" />
+                                        </linearGradient>
+                                        <linearGradient id="heroBlueEdgeClinic" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stopColor="#38bdf8" />
+                                            <stop offset="60%" stopColor="#818cf8" />
+                                            <stop offset="100%" stopColor="#c084fc" />
+                                        </linearGradient>
+                                    </defs>
+                                    <path d="M0 0 L240 0 C190 55 200 120 160 180 C125 230 85 280 0 280 Z" fill="url(#heroBlueDeepClinic)" />
+                                    <path d="M240 0 C190 55 200 120 160 180 C125 230 85 280 0 280" fill="none" stroke="url(#heroBlueEdgeClinic)" strokeWidth="3.5" strokeOpacity="0.95" />
+                                </svg>
+                                {/* Bottom Left Dot Matrix */}
+                                <div className="h-detail-dark-dot-matrix">
+                                    {[...Array(16)].map((_, i) => (
+                                        <span key={i} className="h-matrix-dot blue-dot" />
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Top Row: Left "Clinic Profile" Badge + Right Compact "← Back" Button */}
+                            <div className="h-detail-hero-top-row">
+                                <div className="h-detail-profile-pill-top-left">
+                                    <span className="h-detail-profile-shield-icon">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#38bdf8">
+                                            <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" />
+                                            <path d="M9 12l2 2 4-4" stroke="#ffffff" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                                        </svg>
+                                    </span>
+                                    <span>Clinic Profile</span>
+                                </div>
+
+                                <button 
+                                    type="button"
+                                    onClick={closeClinicDetail} 
+                                    className="h-detail-top-back-btn"
+                                    title="Return to Clinics List"
+                                >
+                                    <span className="h-detail-top-back-arrow">←</span>
+                                    <span>Back</span>
+                                </button>
+                            </div>
+
+                            {/* Main Hero Upper Content */}
+                            <div className="h-detail-hero-content">
+                                {/* 3D Hexagon Clinic Logo with Orbital Rings */}
+                                <div className="h-detail-hex-logo-container">
+                                    <div className="h-detail-hex-orbit-ring" />
+                                    <div className="h-detail-hex-orbit-node node-a" />
+                                    <div className="h-detail-hex-orbit-node node-b" />
+                                    <div className="h-detail-hex-orbit-node node-c" />
+
+                                    <div className="h-detail-hex-outer">
+                                        <div className="h-detail-hex-inner">
+                                            <div className="h-detail-red-cross-box">
+                                                <span className="h-cross-arm-h" />
+                                                <span className="h-cross-arm-v" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Center Clinic Info */}
+                                <div className="h-detail-hero-info">
+                                    {/* Top 5x4 Dot Matrix Pattern */}
+                                    <div className="h-detail-center-dot-matrix">
+                                        {[...Array(20)].map((_, i) => (
+                                            <span key={i} className="h-center-matrix-dot" />
+                                        ))}
+                                    </div>
+
+                                    {/* Title */}
+                                    <h2 className="h-detail-hero-title">{selectedClinic.name}</h2>
+
+                                    {/* Progress Underline Accent Bar */}
+                                    <div className="h-detail-hero-accent-bar">
+                                        <div className="h-detail-accent-bar-fill" />
+                                        <div className="h-detail-accent-bar-dot" />
+                                    </div>
+
+                                    {/* Meta Pills: Location, Phone & Subdomain */}
+                                    <div className="h-detail-hero-meta-row">
+                                        <div className="h-detail-meta-chip">
+                                            <span className="h-detail-meta-chip-icon pin-icon">
+                                                <i className="fa-solid fa-location-dot" />
+                                            </span>
+                                            <span className="h-detail-meta-chip-text">
+                                                {selectedClinic.city ? `${selectedClinic.city}${selectedClinic.state ? `, ${selectedClinic.state}` : ''}` : (selectedClinic.address || 'Jaipur, Rajasthan')}
+                                            </span>
+                                        </div>
+                                        <div className="h-detail-meta-sep" />
+                                        <div className="h-detail-meta-chip">
+                                            <span className="h-detail-meta-chip-icon phone-icon">
+                                                <i className="fa-solid fa-phone" />
+                                            </span>
+                                            <span className="h-detail-meta-chip-text">
+                                                {selectedClinic.phone || '9571168462'}
+                                            </span>
+                                        </div>
+                                        {selectedClinic.slug && (
+                                            <>
+                                                <div className="h-detail-meta-sep" />
+                                                <div className="h-detail-meta-chip" style={{ background: '#f0fdfa', borderColor: '#ccfbf1' }}>
+                                                    <span className="h-detail-meta-chip-icon" style={{ background: '#ccfbf1', color: '#0d9488' }}>
+                                                        <i className="fa-solid fa-link" />
+                                                    </span>
+                                                    <a 
+                                                        href={`${window.location.protocol}//${selectedClinic.slug}.${getBaseHost()}`} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer" 
+                                                        style={{ color: '#0f766e', textDecoration: 'none', fontWeight: 700, fontSize: '0.74rem' }}
+                                                    >
+                                                        {selectedClinic.slug}.{getBaseHost()}
+                                                    </a>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Right: Animated ECG Heartbeat Wave Widget */}
+                                <div className="h-detail-hero-right-col">
+                                    <div className="h-detail-hero-ecg-widget">
+                                        <svg className="h-detail-hero-ecg-svg" viewBox="0 0 230 76" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <defs>
+                                                <linearGradient id="ecgClinicLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                    <stop offset="0%" stopColor="#38bdf8" />
+                                                    <stop offset="45%" stopColor="#0284c7" />
+                                                    <stop offset="85%" stopColor="#2563eb" />
+                                                    <stop offset="100%" stopColor="#10b981" />
+                                                </linearGradient>
+                                                <pattern id="ecgGridDotsClinic" x="0" y="0" width="12" height="12" patternUnits="userSpaceOnUse">
+                                                    <circle cx="2" cy="2" r="0.9" fill="#93c5fd" fillOpacity="0.4" />
+                                                </pattern>
+                                                <radialGradient id="ecgRadarGlowClinic" cx="50%" cy="50%" r="50%">
+                                                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.8" />
+                                                    <stop offset="50%" stopColor="#34d399" stopOpacity="0.3" />
+                                                    <stop offset="100%" stopColor="#6ee7b7" stopOpacity="0" />
+                                                </radialGradient>
+                                            </defs>
+                                            <rect x="0" y="0" width="230" height="76" fill="url(#ecgGridDotsClinic)" rx="8" />
+                                            <path d="M 12 40 H 42 L 48 34 L 54 44 L 66 10 L 76 68 L 83 38 L 89 43 L 130 40 L 138 52 L 148 18 L 158 55 L 164 40 L 198 40" stroke="#e0f2fe" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                            <path className="h-detail-ecg-animated-path" d="M 12 40 H 42 L 48 34 L 54 44 L 66 10 L 76 68 L 83 38 L 89 43 L 130 40 L 138 52 L 148 18 L 158 55 L 164 40 L 198 40" stroke="url(#ecgClinicLineGrad)" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+                                            <g transform="translate(198, 40)">
+                                                <circle cx="0" cy="0" r="16" className="h-detail-ecg-ripple ripple-1" fill="url(#ecgRadarGlowClinic)" />
+                                                <circle cx="0" cy="0" r="10" className="h-detail-ecg-ripple ripple-2" stroke="#10b981" strokeWidth="1" fill="none" opacity="0.6" />
+                                                <circle cx="0" cy="0" r="7" fill="#a7f3d0" fillOpacity="0.75" />
+                                                <circle cx="0" cy="0" r="4.5" fill="#10b981" />
+                                                <circle cx="-1" cy="-1" r="1.5" fill="#ffffff" />
+                                            </g>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Bottom Floating Stats & Real-time Status Bar */}
+                            <div className="h-detail-hero-bottom-bar">
+                                <div className="h-detail-bottom-stat-item">
+                                    <div className="h-detail-bottom-stat-icon icon-shield">
+                                        <i className="fa-solid fa-shield-halved" />
+                                    </div>
+                                    <div className="h-detail-bottom-stat-text">
+                                        <span className="h-detail-bottom-stat-label">Trusted Care</span>
+                                        <span className="h-detail-bottom-stat-val">24/7</span>
+                                    </div>
+                                </div>
+
+                                <div className="h-detail-bottom-stat-sep" />
+
+                                <div className="h-detail-bottom-stat-item">
+                                    <div className="h-detail-bottom-stat-icon icon-doctors">
+                                        <i className="fa-solid fa-user-doctor" />
+                                    </div>
+                                    <div className="h-detail-bottom-stat-text">
+                                        <span className="h-detail-bottom-stat-label">Staff Members</span>
+                                        <span className="h-detail-bottom-stat-val">
+                                            {clinicStats?.stats?.staff?.length ?? 0}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="h-detail-bottom-stat-right">
+                                    <div className={selectedClinic.isActive === false ? 'h-detail-bottom-status-capsule inactive' : 'h-detail-bottom-status-capsule active'}>
+                                        <span className="h-detail-bottom-live-dot" />
+                                        <span className="h-detail-bottom-status-name">{selectedClinic.isActive === false ? 'INACTIVE' : 'ACTIVE'}</span>
+                                        <div className="h-detail-bottom-ecg-svg-wrap">
+                                            <svg viewBox="0 0 60 24" className="h-detail-bottom-ecg-svg">
+                                                <path d="M0 12 L15 12 L20 4 L25 20 L30 8 L35 16 L40 12 L60 12" stroke="#16a34a" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 2. KPI Cards Grid (Light Colorful Themes) */}
+                        {loadingClinicStats ? (
+                            <div className="loading-message">⏳ Loading analytics...</div>
+                        ) : clinicStats ? (
+                            <>
+                                <div className="h-detail-kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+                                    <div className="h-detail-kpi-card kpi-card-blue">
+                                        <div className="h-detail-kpi-icon-wrap kpi-icon-blue">
+                                            <i className="fa-solid fa-user-group" />
+                                        </div>
+                                        <h3 className="h-detail-kpi-val">{clinicStats.stats.totalPatients ?? 0}</h3>
+                                        <h5 className="h-detail-kpi-lbl">Total Patients</h5>
+                                        <p className="h-detail-kpi-sub">Registered patients</p>
+                                        <div className="h-detail-kpi-bar kpi-bar-blue" />
+                                    </div>
+
+                                    <div className="h-detail-kpi-card kpi-card-purple">
+                                        <div className="h-detail-kpi-icon-wrap kpi-icon-purple">
+                                            <i className="fa-regular fa-calendar-check" />
+                                        </div>
+                                        <h3 className="h-detail-kpi-val">{clinicStats.stats.totalAppointments ?? 0}</h3>
+                                        <h5 className="h-detail-kpi-lbl">Total Appointments</h5>
+                                        <p className="h-detail-kpi-sub">Booked consultations</p>
+                                        <div className="h-detail-kpi-bar kpi-bar-purple" />
+                                    </div>
+
+                                    <div className="h-detail-kpi-card kpi-card-green">
+                                        <div className="h-detail-kpi-icon-wrap kpi-icon-green">
+                                            <i className="fa-solid fa-circle-check" />
+                                        </div>
+                                        <h3 className="h-detail-kpi-val">{clinicStats.stats.completedAppointments ?? 0}</h3>
+                                        <h5 className="h-detail-kpi-lbl">Completed</h5>
+                                        <p className="h-detail-kpi-sub">Finished visits</p>
+                                        <div className="h-detail-kpi-bar kpi-bar-green" />
+                                    </div>
+
+                                    <div className="h-detail-kpi-card kpi-card-orange">
+                                        <div className="h-detail-kpi-icon-wrap kpi-icon-orange">
+                                            <i className="fa-solid fa-indian-rupee-sign" />
+                                        </div>
+                                        <h3 className="h-detail-kpi-val">{formatCurrency(clinicStats.stats.revenue ?? 0)}</h3>
+                                        <h5 className="h-detail-kpi-lbl">Revenue</h5>
+                                        <p className="h-detail-kpi-sub">From paid visits</p>
+                                        <div className="h-detail-kpi-bar kpi-bar-orange" />
+                                    </div>
+
+                                    <div className="h-detail-kpi-card kpi-card-purple">
+                                        <div className="h-detail-kpi-icon-wrap kpi-icon-purple">
+                                            <i className="fa-solid fa-user-doctor" />
+                                        </div>
+                                        <h3 className="h-detail-kpi-val">{clinicStats.stats.staff?.length ?? 0}</h3>
+                                        <h5 className="h-detail-kpi-lbl">Staff Members</h5>
+                                        <p className="h-detail-kpi-sub">Doctors & Reception</p>
+                                        <div className="h-detail-kpi-bar kpi-bar-purple" />
+                                    </div>
+                                </div>
+
+                                {/* Clinic Admin Section */}
+                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '20px', border: '2px solid #e0e7ff' }}>
+                                    <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full" style={{ marginBottom: '16px' }}>
+                                        <div>
+                                            <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>👤 Clinic Admin Account</h3>
+                                            <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
+                                                The admin has full access to this clinic. Login at <strong>/login</strong>
+                                            </p>
+                                        </div>
+                                        {(() => {
+                                            const isStarter = clinicStats.clinic?.subscriptionPlan === 'starter' || clinicStats.clinic?.clinicPlan === 'starter' || activeTab === 'simple-clinics';
+                                            const hasAdmin = !!clinicStats.clinic?.adminUserId;
+                                            const disableAdminBtn = isStarter && hasAdmin && !showClinicManagerForm;
+                                            
+                                            return (
+                                                <button 
+                                                    className={showClinicManagerForm ? 'btn-cancel' : 'btn-save'} 
+                                                    style={{ 
+                                                        fontSize: '13px', 
+                                                        padding: '8px 16px',
+                                                        opacity: disableAdminBtn ? 0.5 : 1,
+                                                        cursor: disableAdminBtn ? 'not-allowed' : 'pointer'
+                                                    }}
+                                                    onClick={disableAdminBtn ? undefined : () => { setShowClinicManagerForm(!showClinicManagerForm); setShowClinicStaffForm(false); setClinicManagerForm({ name: '', email: '', password: '', phone: '' }); }}
+                                                    title={disableAdminBtn ? "Starter Plan allows only 1 Hospital Admin." : ""}
+                                                >
+                                                    {showClinicManagerForm ? 'Cancel' : hasAdmin ? '🔄 Add Another Admin' : '+ Add Clinic Admin'}
+                                                </button>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {/* Current admin info */}
+                                    {clinicStats.clinic?.adminUserId && !showClinicManagerForm && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px 18px' }}>
+                                            <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 700, color: '#16a34a' }}>
+                                                {clinicStats.clinic.adminUserId.name?.charAt(0)?.toUpperCase() || '?'}
+                                            </div>
+                                            <div>
+                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '15px' }}>{clinicStats.clinic.adminUserId.name}</div>
+                                                <div style={{ color: '#64748b', fontSize: '13px' }}>{clinicStats.clinic.adminUserId.email}</div>
+                                                {clinicStats.clinic.adminUserId.phone && <div style={{ color: '#64748b', fontSize: '13px' }}>📞 {clinicStats.clinic.adminUserId.phone}</div>}
+                                            </div>
+                                            <span style={{ marginLeft: 'auto', background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700 }}>CLINIC ADMIN</span>
+                                        </div>
+                                    )}
+
+                                    {!clinicStats.clinic?.adminUserId && !showClinicManagerForm && (
+                                        <div style={{ textAlign: 'center', padding: '24px', background: '#fff7ed', borderRadius: '10px', border: '1px dashed #fed7aa' }}>
+                                            <div style={{ fontSize: '32px', marginBottom: '8px' }}>⚠️</div>
+                                            <p style={{ color: '#92400e', fontWeight: 600, margin: '0 0 4px' }}>No admin assigned yet</p>
+                                            <p style={{ color: '#b45309', fontSize: '13px', margin: 0 }}>Click <strong>+ Add Clinic Admin</strong> to create login credentials for this clinic.</p>
+                                        </div>
+                                    )}
+
+                                    {/* Add Admin Form */}
+                                    {showClinicManagerForm && (
+                                        <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '20px', border: '1px solid #e2e8f0' }}>
+                                            <h4 style={{ margin: '0 0 4px', color: '#1e293b' }}>Create Clinic Admin Account</h4>
+                                            <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 16px' }}>This person will have full access — patients, appointments, billing, pharmacy, analytics.</p>
+                                            <form onSubmit={handleCreateClinicManager} className="user-form">
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Full Name *</label>
+                                                        <input type="text" className="staff-input w-full" placeholder="e.g. Dr. Ramesh Sharma" value={clinicManagerForm.name}
+                                                            onChange={e => setClinicManagerForm({ ...clinicManagerForm, name: e.target.value })} required minLength={2} />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Email Address *</label>
+                                                        <input type="email" className="staff-input" placeholder="admin@clinic.com" value={clinicManagerForm.email}
+                                                            onChange={e => setClinicManagerForm({ ...clinicManagerForm, email: e.target.value })} required />
+                                                    </div>
+                                                </div>
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Password *</label>
+                                                        <input type="text" className="staff-input w-full" placeholder="Set a temporary password" value={clinicManagerForm.password}
+                                                            onChange={e => setClinicManagerForm({ ...clinicManagerForm, password: e.target.value })} required />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Phone *</label>
+                                                        <input type="tel" className="staff-input" placeholder="Phone number" maxLength={10} value={clinicManagerForm.phone}
+                                                            onChange={e => {
+                                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                                setClinicManagerForm({ ...clinicManagerForm, phone: cleanVal });
+                                                            }} required pattern="\d{10}" title="Phone number must be exactly 10 digits" />
+                                                    </div>
+                                                </div>
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Age *</label>
+                                                        <input type="number" className="staff-input" placeholder="Age" value={clinicManagerForm.age} onChange={e => setClinicManagerForm({ ...clinicManagerForm, age: e.target.value })} required min="1" />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Aadhaar Number *</label>
+                                                        <input type="text" className="staff-input w-full" placeholder="12-digit Aadhaar" value={clinicManagerForm.aadhaarNumber} onChange={e => {
+                                                            const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 12);
+                                                            setClinicManagerForm({ ...clinicManagerForm, aadhaarNumber: cleanVal });
+                                                        }} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
+                                                    </div>
+                                                </div>
+                                                <button type="submit" disabled={savingClinicManager} className="submit-button" style={{ marginTop: '4px' }}>
+                                                    {savingClinicManager ? 'Creating...' : '✅ Create Clinic Admin'}
+                                                </button>
+                                            </form>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Staff Management */}
+                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '20px' }}>
+                                    <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full" style={{ marginBottom: '16px' }}>
+                                        <div>
+                                            <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>👥 Additional Staff</h3>
+                                            <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
+                                                Tier: {clinicStats.stats.staff?.filter(s => s.role?.toLowerCase() === 'doctor' || s.role?.toLowerCase() === 'clinic doctor').length || 0}/{clinicStats.clinic?.tier?.maxDoctors || 1} Doctors · {clinicStats.stats.staff?.filter(s => s.role?.toLowerCase() === 'hospitaladmin' || s.role?.toLowerCase() === 'clinic admin').length || 0}/1 Hospital Admin · All login at <strong>/login</strong>
+                                            </p>
+                                        </div>
+                                        {(() => {
+                                            const isStarter = clinicStats.clinic?.subscriptionPlan === 'starter' || clinicStats.clinic?.clinicPlan === 'starter' || activeTab === 'simple-clinics';
+                                            const totalUsers = clinicStats.stats?.staff?.length || 0;
+                                            const disableStaffBtn = isStarter && totalUsers >= 2 && !showClinicStaffForm;
+                                            
+                                            return (
+                                                <button 
+                                                    className="btn-edit" 
+                                                    style={{ 
+                                                        fontSize: '13px', 
+                                                        padding: '8px 14px',
+                                                        opacity: disableStaffBtn ? 0.5 : 1,
+                                                        cursor: disableStaffBtn ? 'not-allowed' : 'pointer'
+                                                    }}
+                                                    onClick={disableStaffBtn ? undefined : () => { setShowClinicStaffForm(!showClinicStaffForm); setShowClinicManagerForm(false); }}
+                                                    title={disableStaffBtn ? "Starter Plan user limit reached. Upgrade your plan to add more staff." : ""}
+                                                >
+                                                    {showClinicStaffForm ? 'Cancel' : '+ Add Staff'}
+                                                </button>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {/* Staff Form */}
+                                    {showClinicStaffForm && (
+                                        <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+                                            <h4 style={{ margin: '0 0 4px', color: '#1e293b' }}>Add Staff Login Account</h4>
+                                            <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 12px' }}>
+                                                Standard tier: 1 Doctor + 1 Receptionist. Upgrade tier first if slots are full.
+                                            </p>
+                                            <form onSubmit={handleCreateClinicStaff} className="user-form">
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Full Name *</label>
+                                                        <input type="text" className="staff-input w-full" placeholder="Staff name" value={clinicStaffForm.name}
+                                                            onChange={e => setClinicStaffForm({ ...clinicStaffForm, name: e.target.value })} required minLength={2} />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Email *</label>
+                                                        <input type="email" className="staff-input" placeholder="staff@clinic.com" value={clinicStaffForm.email}
+                                                            onChange={e => setClinicStaffForm({ ...clinicStaffForm, email: e.target.value })} required />
+                                                    </div>
+                                                </div>
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Password *</label>
+                                                        <input type="text" className="staff-input w-full" placeholder="Temporary password" value={clinicStaffForm.password}
+                                                            onChange={e => setClinicStaffForm({ ...clinicStaffForm, password: e.target.value })} required />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Phone *</label>
+                                                        <input type="tel" className="staff-input" placeholder="Phone number" maxLength={10} value={clinicStaffForm.phone}
+                                                            onChange={e => {
+                                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                                setClinicStaffForm({ ...clinicStaffForm, phone: cleanVal });
+                                                            }} required pattern="\d{10}" title="Phone number must be exactly 10 digits" />
+                                                    </div>
+                                                </div>
+                                                <div className="form-row">
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Age *</label>
+                                                        <input 
+                                                            type="text" 
+                                                            className="staff-input" 
+                                                            placeholder="Age" 
+                                                            value={clinicStaffForm.age || ''} 
+                                                            onChange={e => {
+                                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 3);
+                                                                setClinicStaffForm({ ...clinicStaffForm, age: cleanVal });
+                                                            }} 
+                                                            required 
+                                                        />
+                                                    </div>
+                                                    <div className="form-group">
+                                                        <label className="staff-label">Aadhaar Number *</label>
+                                                        <input type="text" className="staff-input w-full" placeholder="12-digit Aadhaar" value={clinicStaffForm.aadhaarNumber} onChange={e => {
+                                                            const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 12);
+                                                            setClinicStaffForm({ ...clinicStaffForm, aadhaarNumber: cleanVal });
+                                                        }} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
+                                                    </div>
+                                                </div>
+                                                <div className="form-group">
+                                                    <label className="staff-label">Role *</label>
+                                                    <select className="staff-input w-full" value={clinicStaffForm.staffRole}
+                                                        onChange={e => setClinicStaffForm({ ...clinicStaffForm, staffRole: e.target.value })}>
+                                                        <option value="doctor">🩺 Clinic Doctor</option>
+                                                    </select>
+                                                </div>
+                                                <button type="submit" disabled={savingClinicStaff} className="submit-button">
+                                                    {savingClinicStaff ? 'Adding...' : '✅ Add Staff'}
+                                                </button>
+                                            </form>
+                                        </div>
+                                    )}
+
+                                    {/* Staff Table */}
+                                    {clinicStats.stats.staff?.length > 0 ? (
+                                        <div className="users-table w-full overflow-x-auto">
+                                            <table className="w-full min-w-[600px] overflow-hidden">
+                                                <thead>
+                                                    <tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Added</th><th></th></tr>
+                                                </thead>
+                                                <tbody>
+                                                    {clinicStats.stats.staff.map(s => (
+                                                        <tr key={s._id}>
+                                                            <td style={{ fontWeight: 600 }}>
+                                                                <div className="flex flex-row items-center gap-3">
+                                                                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#6366f1', fontSize: '13px', flexShrink: 0 }}>
+                                                                        {s.name?.charAt(0)?.toUpperCase()}
+                                                                    </div>
+                                                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td>{s.email}</td>
+                                                            <td>{s.phone || '—'}</td>
+                                                            <td>
+                                                                <span className="role-badge">{String(s.role).toUpperCase()}</span>
+                                                            </td>
+                                                            <td style={{ color: '#94a3b8', fontSize: '12px' }}>{s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN') : '—'}</td>
+                                                            <td>
+                                                                <button className="btn-confirm-delete" style={{ fontSize: '11px', padding: '4px 8px' }}
+                                                                    onClick={() => handleDeleteClinicStaff(s._id)}>Remove</button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <p style={{ color: '#94a3b8', textAlign: 'center', padding: '20px 0' }}>No staff added yet. Add a manager or staff member above.</p>
+                                    )}
+                                </div>
+
+                                {/* Recent Appointments */}
+                                {clinicStats.stats.recentAppointments?.length > 0 && (
+                                    <div className="admin-card w-full max-w-full min-w-0">
+                                        <h3>📅 Recent Appointments</h3>
+                                        <div className="users-table w-full overflow-x-auto">
+                                            <table className="w-full min-w-[600px] overflow-hidden">
+                                                <thead>
+                                                    <tr><th>Patient ID</th><th>Doctor</th><th>Date</th><th>Status</th><th>Amount</th><th>Payment</th></tr>
+                                                </thead>
+                                                <tbody>
+                                                    {clinicStats.stats.recentAppointments.map((a, i) => (
+                                                        <tr key={i}>
+                                                            <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{a.clinicPatientId?.patientUid || a.patientId || '—'}</td>
+                                                            <td>{a.doctorName || '—'}</td>
+                                                            <td>{a.appointmentDate ? new Date(a.appointmentDate).toLocaleDateString('en-IN') : '—'}</td>
+                                                            <td><span className={`status-badge status-${a.status}`}>{a.status}</span></td>
+                                                            <td>{formatCurrency(a.amount)}</td>
+                                                            <td><span style={{ color: a.paymentStatus === 'paid' ? '#16a34a' : '#dc2626', fontWeight: 600, fontSize: '12px' }}>{a.paymentStatus}</span></td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* ── Subscription / Billing Management ── */}
+                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginTop: '20px', border: '2px solid #e0e7ff' }}>
+                                    <h3 style={{ marginBottom: '4px' }}>💳 Billing &amp; Subscription</h3>
+                                    <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>
+                                        Patient code: <strong style={{ color: '#6366f1' }}>{clinicStats.clinic?.clinicCode || '—'}</strong> · Rate per new patient this month
+                                    </p>
+
+                                    {/* Set rate form */}
+                                    <form onSubmit={handleSaveRate} className="grid md:flex md:flex-wrap md:items-end gap-[10px]" style={{ gridTemplateColumns: '1fr auto', marginBottom: '20px', padding: '14px', background: '#f8fafc', borderRadius: '8px' }}>
+                                        <div className="order-1 md:order-1">
+                                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '4px' }}>Rate per New Patient (₹)</label>
+                                            <input type="number" min="0" className="w-full sm:w-[160px]" style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '14px' }}
+                                                placeholder="e.g. 50" value={subscriptionRateForm.ratePerPatient}
+                                                onChange={e => setSubscriptionRateForm(f => ({ ...f, ratePerPatient: e.target.value }))} />
+                                        </div>
+                                        <div className="order-3 md:order-2" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '6px', paddingBottom: '4px' }}>
+                                            <input type="checkbox" id="billingEnabled" checked={subscriptionRateForm.billingEnabled}
+                                                onChange={e => setSubscriptionRateForm(f => ({ ...f, billingEnabled: e.target.checked }))} />
+                                            <label htmlFor="billingEnabled" style={{ fontSize: '13px', color: '#475569', cursor: 'pointer' }}>Enable billing</label>
+                                        </div>
+                                        <button type="submit" className="btn-save order-2 md:order-3" style={{ alignSelf: 'end', fontSize: '13px', padding: '8px 16px', height: '38px' }} disabled={savingRate}>
+                                            {savingRate ? 'Saving...' : '💾 Save Rate'}
+                                        </button>
+                                    </form>
+
+                                    {/* Subscription history table */}
+                                    {clinicSubscriptions.length > 0 ? (
+                                        <div className="users-table w-full overflow-x-auto">
+                                            <table className="w-full min-w-[600px] overflow-hidden">
+                                                <thead>
+                                                    <tr><th>Month / Year</th><th>New Patients</th><th>Total Patients</th><th>Rate</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+                                                </thead>
+                                                <tbody>
+                                                    {clinicSubscriptions.map(sub => (
+                                                        <tr key={sub._id}>
+                                                            <td style={{ fontWeight: 600 }}>{new Date(sub.year, sub.month - 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</td>
+                                                            <td style={{ color: '#6366f1', fontWeight: 600 }}>{sub.newPatientCount}</td>
+                                                            <td>{sub.totalPatientCount}</td>
+                                                            <td>₹{sub.ratePerPatient}</td>
+                                                            <td style={{ fontWeight: 700 }}>₹{sub.totalAmount.toLocaleString('en-IN')}</td>
+                                                            <td>
+                                                                <span style={{
+                                                                    padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700,
+                                                                    background: sub.status === 'paid' ? '#dcfce7' : sub.status === 'waived' ? '#f1f5f9' : '#fef3c7',
+                                                                    color: sub.status === 'paid' ? '#16a34a' : sub.status === 'waived' ? '#64748b' : '#92400e'
+                                                                }}>
+                                                                    {sub.status.toUpperCase()}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                {sub.status !== 'paid' && (
+                                                                    <button className="btn-save w-full md:w-auto" style={{ fontSize: '11px', padding: '4px 10px', marginRight: '4px' }}
+                                                                        onClick={() => handleMarkSubscription(sub._id, 'paid')}>Mark Paid</button>
+                                                                )}
+                                                                {sub.status === 'pending' && (
+                                                                    <button className="btn-edit" style={{ fontSize: '11px', padding: '4px 10px' }}
+                                                                        onClick={() => handleMarkSubscription(sub._id, 'waived')}>Waive</button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <p style={{ color: '#94a3b8', textAlign: 'center', padding: '16px 0', fontSize: '13px' }}>No billing records yet. Records appear once patients are registered.</p>
+                                    )}
+                                </div>
+
+                                {/* ── Appointment System Mode ── */}
+                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginTop: '20px', border: '2px solid #e0f2fe' }}>
+                                    <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-[10px]" style={{ marginBottom: '6px' }}>
+                                        <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>🎟️ Appointment System Mode</h3>
+                                        <span style={{ fontSize: '0.75rem', background: selectedClinic.appointmentMode === 'token' ? '#fef3c7' : '#dbeafe', color: selectedClinic.appointmentMode === 'token' ? '#92400e' : '#1d4ed8', padding: '2px 10px', borderRadius: '20px', fontWeight: 700 }}>
+                                            Current: {selectedClinic.appointmentMode === 'token' ? 'Token Queue' : 'Time Slots'}
+                                        </span>
+                                    </div>
+                                    <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 18px' }}>
+                                        Choose how patients are managed in this clinic's reception queue.
+                                    </p>
+                                    <div className="flex md:grid md:grid-cols-2 gap-4 mb-4 overflow-x-auto pb-4 hide-scrollbars" style={{ scrollSnapType: 'x mandatory' }}>
+                                        {/* Token Mode Card */}
+                                        <label className="shrink-0 w-11/12 md:w-auto" style={{
+                                            display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
+                                            border: clinicApptMode === 'token' ? '2px solid #f59e0b' : '2px solid #e2e8f0',
+                                            background: clinicApptMode === 'token' ? '#fffbeb' : '#f8fafc',
+                                            transition: 'all 0.15s', scrollSnapAlign: 'center'
+                                        }}>
+                                            <input type="radio" name="clinicApptMode" value="token" checked={clinicApptMode === 'token'} onChange={() => setClinicApptMode('token')} style={{ display: 'none' }} />
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                                <span style={{ fontSize: '2rem', lineHeight: 1 }}>🎟️</span>
+                                                <div>
+                                                    <div style={{ fontWeight: 700, fontSize: '1rem', color: clinicApptMode === 'token' ? '#92400e' : '#1e293b', marginBottom: '4px' }}>
+                                                        Token Queue System
+                                                        {clinicApptMode === 'token' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#f59e0b', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
+                                                        Sequential tokens (1, 2, 3…) per day. Auto-resets at midnight. No time-slot picking needed. Best for walk-in clinics.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </label>
+                                        {/* Slot Mode Card */}
+                                        <label className="shrink-0 w-11/12 md:w-auto" style={{
+                                            display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
+                                            border: clinicApptMode === 'slot' ? '2px solid #3b82f6' : '2px solid #e2e8f0',
+                                            background: clinicApptMode === 'slot' ? '#eff6ff' : '#f8fafc',
+                                            transition: 'all 0.15s', scrollSnapAlign: 'center'
+                                        }}>
+                                            <input type="radio" name="clinicApptMode" value="slot" checked={clinicApptMode === 'slot'} onChange={() => setClinicApptMode('slot')} style={{ display: 'none' }} />
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                                <span style={{ fontSize: '2rem', lineHeight: 1 }}>🕐</span>
+                                                <div>
+                                                    <div style={{ fontWeight: 700, fontSize: '1rem', color: clinicApptMode === 'slot' ? '#1d4ed8' : '#1e293b', marginBottom: '4px' }}>
+                                                        Time Slot Booking
+                                                        {clinicApptMode === 'slot' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#3b82f6', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
+                                                        Patients pick a specific time (09:00, 09:30…). Fixed scheduling with conflict prevention. Best for planned appointments.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    {clinicApptMode !== (selectedClinic.appointmentMode || 'token') && (
+                                        <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: '8px', padding: '10px 14px', fontSize: '0.85rem', color: '#713f12', marginBottom: '14px' }}>
+                                            ⚠️ You are changing the appointment mode. Existing appointments will not be affected — only new bookings will follow the new mode.
+                                        </div>
+                                    )}
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <button
+                                            onClick={handleSaveClinicApptMode}
+                                            disabled={savingClinicApptMode || clinicApptMode === (selectedClinic.appointmentMode || 'token')}
+                                            style={{
+                                                padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none',
+                                                borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem',
+                                                opacity: (savingClinicApptMode || clinicApptMode === (selectedClinic.appointmentMode || 'token')) ? 0.5 : 1
+                                            }}
+                                        >
+                                            {savingClinicApptMode ? 'Saving…' : 'Save Mode'}
+                                        </button>
+                                        {clinicApptMode === (selectedClinic.appointmentMode || 'token') && (
+                                            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>No changes to save</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Quick Access Links */}
+                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginTop: '20px' }}>
+                                    <h3>🚀 Clinic Features</h3>
+                                    <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>Staff can access these modules after logging in at <strong>/login</strong></p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {[
+                                            { icon: '👤', label: 'Patient Registration', desc: 'Register & search patients', bg: '#f0f9ff', color: '#0ea5e9' },
+                                            { icon: '🩺', label: 'Doctor Consultation', desc: 'Appointments & prescriptions', bg: '#f5f3ff', color: '#8b5cf6' },
+                                            { icon: '💊', label: 'Pharmacy', desc: 'Medicine orders & inventory', bg: '#fff7ed', color: '#f97316' },
+                                            { icon: '🧾', label: 'Billing & Payments', desc: 'Invoice & collect payments', bg: '#fefce8', color: '#eab308' },
+                                            { icon: '🧪', label: 'Lab Reports', desc: 'Upload & share lab results', bg: '#fdf4ff', color: '#d946ef' },
+                                            { icon: '📊', label: 'Analytics', desc: 'Revenue, patients & reports', bg: '#f0fdf4', color: '#22c55e' },
+                                        ].map((item, i) => (
+                                            <div key={i} className="config-card" style={{ background: item.bg, cursor: 'default' }}>
+                                                <div className="config-icon" style={{ color: item.color }}>{item.icon}</div>
+                                                <div>
+                                                    <h4 style={{ color: item.color, margin: '0 0 4px' }}>{item.label}</h4>
+                                                    <p style={{ color: '#888', margin: 0, fontSize: '13px' }}>{item.desc}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="ca-empty"><p>⚠️ Could not load clinic analytics. The clinic may have no data yet.</p></div>
+                        )}
+                    </div>
+
+                    {/* Delete Clinic Confirm Modal */}
+                    {deleteClinicConfirm && (
+                        <div className="modal-overlay">
+                            <div className="modal-content">
+                                <h3>Delete Simple Clinic?</h3>
+                                <p style={{ color: '#dc2626', fontWeight: '600' }}>This will permanently delete the clinic, all staff accounts, and all clinic data. This action CANNOT be undone.</p>
+                                <div className="modal-buttons">
+                                    <button onClick={() => handleDeleteClinic(deleteClinicConfirm)} className="btn-confirm-delete">Delete</button>
+                                    <button onClick={() => setDeleteClinicConfirm(null)} className="btn-cancel">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // ==========================================
     // MAIN DASHBOARD
     // ==========================================
     const totalHospitals = systemAnalytics?.summary?.totalEntities ?? (hospitals.length + clinics.length);
@@ -1806,21 +2558,7 @@ const CentralAdminDashboard = () => {
                             <p className="cad-main-subtitle">Manage all hospitals, staff, and system configurations</p>
                         </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                        <button
-                            onClick={handleRefreshAll}
-                            disabled={isRefreshing}
-                            className="cad-refresh-btn"
-                            title="Refresh all dashboard entities and analytics"
-                        >
-                            <svg className={isRefreshing ? 'cad-spin' : ''} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                                <path d="M3 3v5h5"/>
-                                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
-                                <path d="M16 21h5v-5"/>
-                            </svg>
-                            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
-                        </button>
+                    <div className="cad-header-actions-row">
                         <button
                             onClick={() => navigate('/supremeadmin/revenue')}
                             className="cad-revenue-analytics-btn"
@@ -1833,6 +2571,20 @@ const CentralAdminDashboard = () => {
                             </span>
                             <span>System Revenue Analytics</span>
                             <span className="cad-rev-btn-arrow">▼</span>
+                        </button>
+                        <button
+                            onClick={handleRefreshAll}
+                            disabled={isRefreshing}
+                            className="cad-refresh-btn"
+                            title="Refresh all dashboard entities and analytics"
+                        >
+                            <svg className={isRefreshing ? 'cad-spin' : ''} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                <path d="M3 3v5h5"/>
+                                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                                <path d="M16 21h5v-5"/>
+                            </svg>
+                            <span className="cad-refresh-btn-text">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
                         </button>
                     </div>
                 </div>
@@ -2791,522 +3543,7 @@ const CentralAdminDashboard = () => {
                     </div>
                 )}
 
-                {/* ========== SIMPLE CLINIC DETAIL VIEW ========== */}
-                {activeTab === 'simple-clinics' && selectedClinic && (
-                    <div>
-                        {/* Header */}
-                        <div className="bg-white rounded-2xl p-5 md:p-6 shadow-sm mb-6">
-                            {/* Top Row: Back Button */}
-                            <div className="flex justify-between items-center mb-4">
-                                <button onClick={closeClinicDetail} className="back-btn-light inline-flex items-center m-0">
-                                    ← Back to All Clinics
-                                </button>
-                                <span className={`status-badge ${selectedClinic.isActive ? 'status-active' : 'status-inactive'}`} style={{
-                                    padding: '6px 14px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', borderRadius: '20px',
-                                    border: selectedClinic.isActive ? '1px solid #15803d' : '1px solid #b91c1c',
-                                    background: selectedClinic.isActive ? '#dcfce7' : '#fee2e2',
-                                    color: selectedClinic.isActive ? '#15803d' : '#b91c1c', display: 'inline-flex', alignItems: 'center', height: 'fit-content'
-                                }}>
-                                    {selectedClinic.isActive ? 'ACTIVE' : 'INACTIVE'}
-                                </span>
-                            </div>
-
-                            {/* Bottom Row */}
-                            <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full">
-                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'nowrap' }}>
-                                    <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', border: '1px solid #cbd5e1', flexShrink: 0 }}>🏪</div>
-                                    <div style={{ minWidth: 0 }}>
-                                        <h1 style={{ fontSize: 'clamp(1.2rem, 4.5vw, 1.6rem)', fontWeight: 850, color: '#1e293b', margin: 0, lineHeight: '1.2', wordBreak: 'break-word' }}>
-                                            {selectedClinic.name}
-                                        </h1>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', color: '#64748b', fontSize: 'clamp(0.8rem, 3vw, 0.92rem)', marginTop: '4px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                                                {selectedClinic.city && <span>📍 {selectedClinic.city}{selectedClinic.state ? `, ${selectedClinic.state}` : ''}</span>}
-                                                {selectedClinic.phone && <span>📞 {selectedClinic.phone}</span>}
-                                            </div>
-                                            {selectedClinic.slug && <div><a href={`${window.location.protocol}//${selectedClinic.slug}.${getBaseHost()}`} target="_blank" rel="noopener noreferrer" style={{ color: '#14b8a6', textDecoration: 'none', fontFamily: 'monospace' }}>🔗 {selectedClinic.slug}.{getBaseHost()}</a></div>}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {loadingClinicStats ? (
-                            <div className="loading-message">Loading analytics...</div>
-                        ) : clinicStats ? (
-                            <>
-                                {/* KPI Stats */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>
-                                    {[
-                                        { label: 'Total Patients', value: clinicStats.stats.totalPatients, icon: '👤', color: '#0ea5e9', bg: '#f0f9ff' },
-                                        { label: 'Total Appointments', value: clinicStats.stats.totalAppointments, icon: '📅', color: '#8b5cf6', bg: '#f5f3ff' },
-                                        { label: 'Completed', value: clinicStats.stats.completedAppointments, icon: '✅', color: '#10b981', bg: '#f0fdf4' },
-                                        { label: 'Revenue', value: formatCurrency(clinicStats.stats.revenue), icon: '💰', color: '#f59e0b', bg: '#fffbeb' },
-                                        { label: 'Staff Members', value: clinicStats.stats.staff?.length || 0, icon: '👥', color: '#6366f1', bg: '#eef2ff' },
-                                    ].map((kpi, i) => (
-                                        <div key={i} className="admin-card w-full max-w-full min-w-0" style={{ background: kpi.bg, border: `1px solid ${kpi.color}22`, textAlign: 'center', padding: '18px' }}>
-                                            <div style={{ fontSize: '28px', marginBottom: '6px' }}>{kpi.icon}</div>
-                                            <div style={{ fontSize: '22px', fontWeight: 800, color: kpi.color }}>{kpi.value}</div>
-                                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{kpi.label}</div>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Clinic Admin Section */}
-                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '20px', border: '2px solid #e0e7ff' }}>
-                                    <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full" style={{ marginBottom: '16px' }}>
-                                        <div>
-                                            <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>👤 Clinic Admin Account</h3>
-                                            <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
-                                                The admin has full access to this clinic. Login at <strong>/login</strong>
-                                            </p>
-                                        </div>
-                                        {(() => {
-                                            const isStarter = clinicStats.clinic?.subscriptionPlan === 'starter' || clinicStats.clinic?.clinicPlan === 'starter' || activeTab === 'simple-clinics';
-                                            const hasAdmin = !!clinicStats.clinic?.adminUserId;
-                                            const disableAdminBtn = isStarter && hasAdmin && !showClinicManagerForm;
-                                            
-                                            return (
-                                                <button 
-                                                    className={showClinicManagerForm ? 'btn-cancel' : 'btn-save'} 
-                                                    style={{ 
-                                                        fontSize: '13px', 
-                                                        padding: '8px 16px',
-                                                        opacity: disableAdminBtn ? 0.5 : 1,
-                                                        cursor: disableAdminBtn ? 'not-allowed' : 'pointer'
-                                                    }}
-                                                    onClick={disableAdminBtn ? undefined : () => { setShowClinicManagerForm(!showClinicManagerForm); setShowClinicStaffForm(false); setClinicManagerForm({ name: '', email: '', password: '', phone: '' }); }}
-                                                    title={disableAdminBtn ? "Starter Plan allows only 1 Hospital Admin." : ""}
-                                                >
-                                                    {showClinicManagerForm ? 'Cancel' : hasAdmin ? '🔄 Add Another Admin' : '+ Add Clinic Admin'}
-                                                </button>
-                                            );
-                                        })()}
-                                    </div>
-
-                                    {/* Current admin info */}
-                                    {clinicStats.clinic?.adminUserId && !showClinicManagerForm && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px 18px' }}>
-                                            <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 700, color: '#16a34a' }}>
-                                                {clinicStats.clinic.adminUserId.name?.charAt(0)?.toUpperCase() || '?'}
-                                            </div>
-                                            <div>
-                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '15px' }}>{clinicStats.clinic.adminUserId.name}</div>
-                                                <div style={{ color: '#64748b', fontSize: '13px' }}>{clinicStats.clinic.adminUserId.email}</div>
-                                                {clinicStats.clinic.adminUserId.phone && <div style={{ color: '#64748b', fontSize: '13px' }}>📞 {clinicStats.clinic.adminUserId.phone}</div>}
-                                            </div>
-                                            <span style={{ marginLeft: 'auto', background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700 }}>CLINIC ADMIN</span>
-                                        </div>
-                                    )}
-
-                                    {!clinicStats.clinic?.adminUserId && !showClinicManagerForm && (
-                                        <div style={{ textAlign: 'center', padding: '24px', background: '#fff7ed', borderRadius: '10px', border: '1px dashed #fed7aa' }}>
-                                            <div style={{ fontSize: '32px', marginBottom: '8px' }}>⚠️</div>
-                                            <p style={{ color: '#92400e', fontWeight: 600, margin: '0 0 4px' }}>No admin assigned yet</p>
-                                            <p style={{ color: '#b45309', fontSize: '13px', margin: 0 }}>Click <strong>+ Add Clinic Admin</strong> to create login credentials for this clinic.</p>
-                                        </div>
-                                    )}
-
-                                    {/* Add Admin Form */}
-                                    {showClinicManagerForm && (
-                                        <div style={{ background: '#f8fafc', borderRadius: '10px', padding: '20px', border: '1px solid #e2e8f0' }}>
-                                            <h4 style={{ margin: '0 0 4px', color: '#1e293b' }}>Create Clinic Admin Account</h4>
-                                            <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 16px' }}>This person will have full access — patients, appointments, billing, pharmacy, analytics.</p>
-                                            <form onSubmit={handleCreateClinicManager} className="user-form">
-                                                <div className="form-row">
-                                                    <div className="form-group">
-                                                        <label className="staff-label">Full Name *</label>
-                                                        <input type="text" className="staff-input w-full" placeholder="e.g. Dr. Ramesh Sharma" value={clinicManagerForm.name}
-                                                            onChange={e => setClinicManagerForm({ ...clinicManagerForm, name: e.target.value })} required minLength={2} />
-                                                    </div>
-                                                    <div className="form-group">
-                                                        <label className="staff-label">Email Address *</label>
-                                                        <input type="email" className="staff-input" placeholder="admin@clinic.com" value={clinicManagerForm.email}
-                                                            onChange={e => setClinicManagerForm({ ...clinicManagerForm, email: e.target.value })} required />
-                                                    </div>
-                                                </div>
-                                                <div className="form-row">
-                                                    <div className="form-group">
-                                                        <label className="staff-label">Password *</label>
-                                                        <input type="text" className="staff-input w-full" placeholder="Set a temporary password" value={clinicManagerForm.password}
-                                                            onChange={e => setClinicManagerForm({ ...clinicManagerForm, password: e.target.value })} required />
-                                                    </div>
-                                                    <div className="form-group">
-                                                        <label className="staff-label">Phone *</label>
-                                                        <input type="tel" className="staff-input" placeholder="Phone number" maxLength={10} value={clinicManagerForm.phone}
-                                                            onChange={e => {
-                                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                                                setClinicManagerForm({ ...clinicManagerForm, phone: cleanVal });
-                                                            }} required pattern="\d{10}" title="Phone number must be exactly 10 digits" />
-                                                    </div>
-                                                </div>
-                                                <div className="form-row">
-                                                    <div className="form-group">
-                                                        <label className="staff-label">Age *</label>
-                                                        <input type="number" className="staff-input" placeholder="Age" value={clinicManagerForm.age} onChange={e => setClinicManagerForm({ ...clinicManagerForm, age: e.target.value })} required min="1" />
-                                                    </div>
-                                                    <div className="form-group">
-                                                        <label className="staff-label">Aadhaar Number *</label>
-                                                        <input type="text" className="staff-input w-full" placeholder="12-digit Aadhaar" value={clinicManagerForm.aadhaarNumber} onChange={e => {
-                                                            const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 12);
-                                                            setClinicManagerForm({ ...clinicManagerForm, aadhaarNumber: cleanVal });
-                                                        }} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
-                                                    </div>
-                                                </div>
-                                                <button type="submit" disabled={savingClinicManager} className="submit-button" style={{ marginTop: '4px' }}>
-                                                    {savingClinicManager ? 'Creating...' : '✅ Create Clinic Admin'}
-                                                </button>
-                                            </form>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Staff Management */}
-                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginBottom: '20px' }}>
-                                    <div className="flex flex-col md:flex-row flex-wrap md:justify-between items-start md:items-center gap-4 w-full" style={{ marginBottom: '16px' }}>
-                                        <div>
-                                            <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>👥 Additional Staff</h3>
-                                            <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 0' }}>
-                                                Tier: {clinicStats.stats.staff?.filter(s => s.role?.toLowerCase() === 'doctor' || s.role?.toLowerCase() === 'clinic doctor').length || 0}/{clinicStats.clinic?.tier?.maxDoctors || 1} Doctors · {clinicStats.stats.staff?.filter(s => s.role?.toLowerCase() === 'hospitaladmin' || s.role?.toLowerCase() === 'clinic admin').length || 0}/1 Hospital Admin · All login at <strong>/login</strong>
-                                            </p>
-                                        </div>
-                                        {(() => {
-                                            const isStarter = clinicStats.clinic?.subscriptionPlan === 'starter' || clinicStats.clinic?.clinicPlan === 'starter' || activeTab === 'simple-clinics';
-                                            const totalUsers = clinicStats.stats?.staff?.length || 0;
-                                            const disableStaffBtn = isStarter && totalUsers >= 2 && !showClinicStaffForm;
-                                            
-                                            return (
-                                                <button 
-                                                    className="btn-edit" 
-                                                    style={{ 
-                                                        fontSize: '13px', 
-                                                        padding: '8px 14px',
-                                                        opacity: disableStaffBtn ? 0.5 : 1,
-                                                        cursor: disableStaffBtn ? 'not-allowed' : 'pointer'
-                                                    }}
-                                                    onClick={disableStaffBtn ? undefined : () => { setShowClinicStaffForm(!showClinicStaffForm); setShowClinicManagerForm(false); }}
-                                                    title={disableStaffBtn ? "Starter Plan user limit reached. Upgrade your plan to add more staff." : ""}
-                                                >
-                                                    {showClinicStaffForm ? 'Cancel' : '+ Add Staff'}
-                                                </button>
-                                            );
-                                        })()}
-                                    </div>
-
-                                    {/* Staff Form */}
-                                    {showClinicStaffForm && (
-                                        <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
-                                            <h4 style={{ margin: '0 0 4px', color: '#1e293b' }}>Add Staff Login Account</h4>
-                                            <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 12px' }}>
-                                                Standard tier: 1 Doctor + 1 Receptionist. Upgrade tier first if slots are full.
-                                            </p>
-                                            <form onSubmit={handleCreateClinicStaff} className="user-form">
-                                                <div className="form-row">
-                                                    <div className="form-group">
-                                                        <label className="staff-label">Full Name *</label>
-                                                        <input type="text" className="staff-input w-full" placeholder="Staff name" value={clinicStaffForm.name}
-                                                            onChange={e => setClinicStaffForm({ ...clinicStaffForm, name: e.target.value })} required minLength={2} />
-                                                    </div>
-                                                    <div className="form-group">
-                                                        <label className="staff-label">Email *</label>
-                                                        <input type="email" className="staff-input" placeholder="staff@clinic.com" value={clinicStaffForm.email}
-                                                            onChange={e => setClinicStaffForm({ ...clinicStaffForm, email: e.target.value })} required />
-                                                    </div>
-                                                </div>
-                                                <div className="form-row">
-                                                    <div className="form-group">
-                                                        <label className="staff-label">Password *</label>
-                                                        <input type="text" className="staff-input w-full" placeholder="Temporary password" value={clinicStaffForm.password}
-                                                            onChange={e => setClinicStaffForm({ ...clinicStaffForm, password: e.target.value })} required />
-                                                    </div>
-                                                    <div className="form-group">
-                                                        <label className="staff-label">Phone *</label>
-                                                        <input type="tel" className="staff-input" placeholder="Phone number" maxLength={10} value={clinicStaffForm.phone}
-                                                            onChange={e => {
-                                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                                                setClinicStaffForm({ ...clinicStaffForm, phone: cleanVal });
-                                                            }} required pattern="\d{10}" title="Phone number must be exactly 10 digits" />
-                                                    </div>
-                                                </div>
-                                                <div className="form-row">
-                                                    <div className="form-group">
-                                                        <label className="staff-label">Age *</label>
-                                                        <input 
-                                                            type="text" 
-                                                            className="staff-input" 
-                                                            placeholder="Age" 
-                                                            value={clinicStaffForm.age || ''} 
-                                                            onChange={e => {
-                                                                const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 3);
-                                                                setClinicStaffForm({ ...clinicStaffForm, age: cleanVal });
-                                                            }} 
-                                                            required 
-                                                        />
-                                                    </div>
-                                                    <div className="form-group">
-                                                        <label className="staff-label">Aadhaar Number *</label>
-                                                        <input type="text" className="staff-input w-full" placeholder="12-digit Aadhaar" value={clinicStaffForm.aadhaarNumber} onChange={e => {
-                                                            const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 12);
-                                                            setClinicStaffForm({ ...clinicStaffForm, aadhaarNumber: cleanVal });
-                                                        }} required pattern="^\d{12}$" title="Aadhaar number must be exactly 12 digits" />
-                                                    </div>
-                                                </div>
-                                                <div className="form-group">
-                                                    <label className="staff-label">Role *</label>
-                                                    <select className="staff-input w-full" value={clinicStaffForm.staffRole}
-                                                        onChange={e => setClinicStaffForm({ ...clinicStaffForm, staffRole: e.target.value })}>
-                                                        <option value="doctor">🩺 Clinic Doctor</option>
-                                                    </select>
-                                                </div>
-                                                <button type="submit" disabled={savingClinicStaff} className="submit-button">
-                                                    {savingClinicStaff ? 'Adding...' : '✅ Add Staff'}
-                                                </button>
-                                            </form>
-                                        </div>
-                                    )}
-
-                                    {/* Staff Table */}
-                                    {clinicStats.stats.staff?.length > 0 ? (
-                                        <div className="users-table w-full overflow-x-auto">
-                                            <table className="w-full min-w-[600px] overflow-hidden">
-                                                <thead>
-                                                    <tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Added</th><th></th></tr>
-                                                </thead>
-                                                <tbody>
-                                                    {clinicStats.stats.staff.map(s => (
-                                                        <tr key={s._id}>
-                                                            <td style={{ fontWeight: 600 }}>
-                                                                <div className="flex flex-row items-center gap-3">
-                                                                    <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#e0e7ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#6366f1', fontSize: '13px', flexShrink: 0 }}>
-                                                                        {s.name?.charAt(0)?.toUpperCase()}
-                                                                    </div>
-                                                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td>{s.email}</td>
-                                                            <td>{s.phone || '—'}</td>
-                                                            <td>
-                                                                <span className="role-badge">{String(s.role).toUpperCase()}</span>
-                                                            </td>
-                                                            <td style={{ color: '#94a3b8', fontSize: '12px' }}>{s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN') : '—'}</td>
-                                                            <td>
-                                                                <button className="btn-confirm-delete" style={{ fontSize: '11px', padding: '4px 8px' }}
-                                                                    onClick={() => handleDeleteClinicStaff(s._id)}>Remove</button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    ) : (
-                                        <p style={{ color: '#94a3b8', textAlign: 'center', padding: '20px 0' }}>No staff added yet. Add a manager or staff member above.</p>
-                                    )}
-                                </div>
-
-                                {/* Recent Appointments */}
-                                {clinicStats.stats.recentAppointments?.length > 0 && (
-                                    <div className="admin-card w-full max-w-full min-w-0">
-                                        <h3>📅 Recent Appointments</h3>
-                                        <div className="users-table w-full overflow-x-auto">
-                                            <table className="w-full min-w-[600px] overflow-hidden">
-                                                <thead>
-                                                    <tr><th>Patient ID</th><th>Doctor</th><th>Date</th><th>Status</th><th>Amount</th><th>Payment</th></tr>
-                                                </thead>
-                                                <tbody>
-                                                    {clinicStats.stats.recentAppointments.map((a, i) => (
-                                                        <tr key={i}>
-                                                            <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{a.clinicPatientId?.patientUid || a.patientId || '—'}</td>
-                                                            <td>{a.doctorName || '—'}</td>
-                                                            <td>{a.appointmentDate ? new Date(a.appointmentDate).toLocaleDateString('en-IN') : '—'}</td>
-                                                            <td><span className={`status-badge status-${a.status}`}>{a.status}</span></td>
-                                                            <td>{formatCurrency(a.amount)}</td>
-                                                            <td><span style={{ color: a.paymentStatus === 'paid' ? '#16a34a' : '#dc2626', fontWeight: 600, fontSize: '12px' }}>{a.paymentStatus}</span></td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* ── Subscription / Billing Management ── */}
-                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginTop: '20px', border: '2px solid #e0e7ff' }}>
-                                    <h3 style={{ marginBottom: '4px' }}>💳 Billing &amp; Subscription</h3>
-                                    <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>
-                                        Patient code: <strong style={{ color: '#6366f1' }}>{clinicStats.clinic?.clinicCode || '—'}</strong> · Rate per new patient this month
-                                    </p>
-
-                                    {/* Set rate form */}
-                                    <form onSubmit={handleSaveRate} className="grid md:flex md:flex-wrap md:items-end gap-[10px]" style={{ gridTemplateColumns: '1fr auto', marginBottom: '20px', padding: '14px', background: '#f8fafc', borderRadius: '8px' }}>
-                                        <div className="order-1 md:order-1">
-                                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '4px' }}>Rate per New Patient (₹)</label>
-                                            <input type="number" min="0" className="w-full sm:w-[160px]" style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '14px' }}
-                                                placeholder="e.g. 50" value={subscriptionRateForm.ratePerPatient}
-                                                onChange={e => setSubscriptionRateForm(f => ({ ...f, ratePerPatient: e.target.value }))} />
-                                        </div>
-                                        <div className="order-3 md:order-2" style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '6px', paddingBottom: '4px' }}>
-                                            <input type="checkbox" id="billingEnabled" checked={subscriptionRateForm.billingEnabled}
-                                                onChange={e => setSubscriptionRateForm(f => ({ ...f, billingEnabled: e.target.checked }))} />
-                                            <label htmlFor="billingEnabled" style={{ fontSize: '13px', color: '#475569', cursor: 'pointer' }}>Enable billing</label>
-                                        </div>
-                                        <button type="submit" className="btn-save order-2 md:order-3" style={{ alignSelf: 'end', fontSize: '13px', padding: '8px 16px', height: '38px' }} disabled={savingRate}>
-                                            {savingRate ? 'Saving...' : '💾 Save Rate'}
-                                        </button>
-                                    </form>
-
-                                    {/* Subscription history table */}
-                                    {clinicSubscriptions.length > 0 ? (
-                                        <div className="users-table w-full overflow-x-auto">
-                                            <table className="w-full min-w-[600px] overflow-hidden">
-                                                <thead>
-                                                    <tr><th>Month / Year</th><th>New Patients</th><th>Total Patients</th><th>Rate</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
-                                                </thead>
-                                                <tbody>
-                                                    {clinicSubscriptions.map(sub => (
-                                                        <tr key={sub._id}>
-                                                            <td style={{ fontWeight: 600 }}>{new Date(sub.year, sub.month - 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</td>
-                                                            <td style={{ color: '#6366f1', fontWeight: 600 }}>{sub.newPatientCount}</td>
-                                                            <td>{sub.totalPatientCount}</td>
-                                                            <td>₹{sub.ratePerPatient}</td>
-                                                            <td style={{ fontWeight: 700 }}>₹{sub.totalAmount.toLocaleString('en-IN')}</td>
-                                                            <td>
-                                                                <span style={{
-                                                                    padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700,
-                                                                    background: sub.status === 'paid' ? '#dcfce7' : sub.status === 'waived' ? '#f1f5f9' : '#fef3c7',
-                                                                    color: sub.status === 'paid' ? '#16a34a' : sub.status === 'waived' ? '#64748b' : '#92400e'
-                                                                }}>
-                                                                    {sub.status.toUpperCase()}
-                                                                </span>
-                                                            </td>
-                                                            <td>
-                                                                {sub.status !== 'paid' && (
-                                                                    <button className="btn-save w-full md:w-auto" style={{ fontSize: '11px', padding: '4px 10px', marginRight: '4px' }}
-                                                                        onClick={() => handleMarkSubscription(sub._id, 'paid')}>Mark Paid</button>
-                                                                )}
-                                                                {sub.status === 'pending' && (
-                                                                    <button className="btn-edit" style={{ fontSize: '11px', padding: '4px 10px' }}
-                                                                        onClick={() => handleMarkSubscription(sub._id, 'waived')}>Waive</button>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    ) : (
-                                        <p style={{ color: '#94a3b8', textAlign: 'center', padding: '16px 0', fontSize: '13px' }}>No billing records yet. Records appear once patients are registered.</p>
-                                    )}
-                                </div>
-
-                                {/* ── Appointment System Mode ── */}
-                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginTop: '20px', border: '2px solid #e0f2fe' }}>
-                                    <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-[10px]" style={{ marginBottom: '6px' }}>
-                                        <h3 className="break-words whitespace-normal max-w-full" style={{ margin: 0 }}>🎟️ Appointment System Mode</h3>
-                                        <span style={{ fontSize: '0.75rem', background: selectedClinic.appointmentMode === 'token' ? '#fef3c7' : '#dbeafe', color: selectedClinic.appointmentMode === 'token' ? '#92400e' : '#1d4ed8', padding: '2px 10px', borderRadius: '20px', fontWeight: 700 }}>
-                                            Current: {selectedClinic.appointmentMode === 'token' ? 'Token Queue' : 'Time Slots'}
-                                        </span>
-                                    </div>
-                                    <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 18px' }}>
-                                        Choose how patients are managed in this clinic's reception queue.
-                                    </p>
-                                    <div className="flex md:grid md:grid-cols-2 gap-4 mb-4 overflow-x-auto pb-4 hide-scrollbars" style={{ scrollSnapType: 'x mandatory' }}>
-                                        {/* Token Mode Card */}
-                                        <label className="shrink-0 w-11/12 md:w-auto" style={{
-                                            display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
-                                            border: clinicApptMode === 'token' ? '2px solid #f59e0b' : '2px solid #e2e8f0',
-                                            background: clinicApptMode === 'token' ? '#fffbeb' : '#f8fafc',
-                                            transition: 'all 0.15s', scrollSnapAlign: 'center'
-                                        }}>
-                                            <input type="radio" name="clinicApptMode" value="token" checked={clinicApptMode === 'token'} onChange={() => setClinicApptMode('token')} style={{ display: 'none' }} />
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                                                <span style={{ fontSize: '2rem', lineHeight: 1 }}>🎟️</span>
-                                                <div>
-                                                    <div style={{ fontWeight: 700, fontSize: '1rem', color: clinicApptMode === 'token' ? '#92400e' : '#1e293b', marginBottom: '4px' }}>
-                                                        Token Queue System
-                                                        {clinicApptMode === 'token' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#f59e0b', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
-                                                        Sequential tokens (1, 2, 3…) per day. Auto-resets at midnight. No time-slot picking needed. Best for walk-in clinics.
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </label>
-                                        {/* Slot Mode Card */}
-                                        <label className="shrink-0 w-11/12 md:w-auto" style={{
-                                            display: 'block', padding: '18px', borderRadius: '12px', cursor: 'pointer',
-                                            border: clinicApptMode === 'slot' ? '2px solid #3b82f6' : '2px solid #e2e8f0',
-                                            background: clinicApptMode === 'slot' ? '#eff6ff' : '#f8fafc',
-                                            transition: 'all 0.15s', scrollSnapAlign: 'center'
-                                        }}>
-                                            <input type="radio" name="clinicApptMode" value="slot" checked={clinicApptMode === 'slot'} onChange={() => setClinicApptMode('slot')} style={{ display: 'none' }} />
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                                                <span style={{ fontSize: '2rem', lineHeight: 1 }}>🕐</span>
-                                                <div>
-                                                    <div style={{ fontWeight: 700, fontSize: '1rem', color: clinicApptMode === 'slot' ? '#1d4ed8' : '#1e293b', marginBottom: '4px' }}>
-                                                        Time Slot Booking
-                                                        {clinicApptMode === 'slot' && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#3b82f6', color: '#fff', padding: '2px 8px', borderRadius: '10px' }}>Selected</span>}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.83rem', color: '#64748b', lineHeight: 1.5 }}>
-                                                        Patients pick a specific time (09:00, 09:30…). Fixed scheduling with conflict prevention. Best for planned appointments.
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </label>
-                                    </div>
-
-                                    {clinicApptMode !== (selectedClinic.appointmentMode || 'token') && (
-                                        <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: '8px', padding: '10px 14px', fontSize: '0.85rem', color: '#713f12', marginBottom: '14px' }}>
-                                            ⚠️ You are changing the appointment mode. Existing appointments will not be affected — only new bookings will follow the new mode.
-                                        </div>
-                                    )}
-
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        <button
-                                            onClick={handleSaveClinicApptMode}
-                                            disabled={savingClinicApptMode || clinicApptMode === (selectedClinic.appointmentMode || 'token')}
-                                            style={{
-                                                padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none',
-                                                borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem',
-                                                opacity: (savingClinicApptMode || clinicApptMode === (selectedClinic.appointmentMode || 'token')) ? 0.5 : 1
-                                            }}
-                                        >
-                                            {savingClinicApptMode ? 'Saving…' : 'Save Mode'}
-                                        </button>
-                                        {clinicApptMode === (selectedClinic.appointmentMode || 'token') && (
-                                            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>No changes to save</span>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Quick Access Links */}
-                                <div className="admin-card w-full max-w-full min-w-0" style={{ marginTop: '20px' }}>
-                                    <h3>🚀 Clinic Features</h3>
-                                    <p style={{ color: '#888', fontSize: '13px', margin: '0 0 16px' }}>Staff can access these modules after logging in at <strong>/login</strong></p>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {[
-                                            { icon: '👤', label: 'Patient Registration', desc: 'Register & search patients', bg: '#f0f9ff', color: '#0ea5e9' },
-                                            { icon: '🩺', label: 'Doctor Consultation', desc: 'Appointments & prescriptions', bg: '#f5f3ff', color: '#8b5cf6' },
-                                            { icon: '💊', label: 'Pharmacy', desc: 'Medicine orders & inventory', bg: '#fff7ed', color: '#f97316' },
-                                            { icon: '🧾', label: 'Billing & Payments', desc: 'Invoice & collect payments', bg: '#fefce8', color: '#eab308' },
-                                            { icon: '🧪', label: 'Lab Reports', desc: 'Upload & share lab results', bg: '#fdf4ff', color: '#d946ef' },
-                                            { icon: '📊', label: 'Analytics', desc: 'Revenue, patients & reports', bg: '#f0fdf4', color: '#22c55e' },
-                                        ].map((item, i) => (
-                                            <div key={i} className="config-card" style={{ background: item.bg, cursor: 'default' }}>
-                                                <div className="config-icon" style={{ color: item.color }}>{item.icon}</div>
-                                                <div>
-                                                    <h4 style={{ color: item.color, margin: '0 0 4px' }}>{item.label}</h4>
-                                                    <p style={{ color: '#888', margin: 0, fontSize: '13px' }}>{item.desc}</p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </>
-                        ) : (
-                            <div className="ca-empty"><p>⚠️ Could not load clinic analytics. The clinic may have no data yet.</p></div>
-                        )}
-                    </div>
-                )}
+                {/* Delete Clinic Confirm Modal */}
 
                 {/* Delete Clinic Confirm Modal */}
                 {deleteClinicConfirm && (

@@ -1,6 +1,6 @@
 /* DashboardLayout.css — Professional ERP Design System */
 :root {
-  --sidebar-width: 216px;
+  --sidebar-width: 238px;
   --sidebar-collapsed: 72px;
   --topbar-height: 64px;
   --bg-erp: #f8fafc;
@@ -57,10 +57,17 @@
   box-sizing: border-box;
 }
 
+.ca-brand-container {
+  display: flex;
+  align-items: center;
+}
+
 .ca-brand-container img {
-  height: 26px !important;
-  max-width: 145px !important;
+  height: 38px !important;
+  max-width: 180px !important;
+  width: auto;
   object-fit: contain;
+  display: block;
 }
 
 .brand-dot {
@@ -73,7 +80,7 @@
 }
 
 .sidebar-nav {
-  padding: 16px 8px;
+  padding: 14px 8px;
   flex: 1;
   overflow-y: auto;
   scrollbar-width: none;
@@ -94,12 +101,21 @@
   text-decoration: none;
   color: #1e293b;
   font-weight: 600;
-  font-size: 0.86rem;
-  border-radius: 10px;
+  font-size: 0.855rem;
+  border-radius: 12px;
   margin-bottom: 4px;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   border-left: 3.5px solid transparent;
   text-align: left;
+  white-space: nowrap;
+}
+
+.sidebar-link-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  letter-spacing: -0.15px;
 }
 
 .sidebar-link:hover {
@@ -123,9 +139,10 @@
 }
 
 .sidebar-link-icon {
-  font-size: 1.25rem;
+  font-size: 1.18rem;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .collapsed .sidebar-link-text,
@@ -373,6 +390,13 @@
 }
 
 /* Remove/reduce outer padding when inside full-bleed views */
+.erp-page-content:has(.centraladmin-page),
+.erp-page-content:has(.rpm-main-wrapper),
+.erp-page-content:has(.consent-hub-wrapper) {
+  padding: 0 !important;
+  background: transparent !important;
+}
+
 .erp-page-content:has(.cca-exact-page-container),
 .erp-page-content:has(.cca-page-container),
 .erp-page-content:has(.ql-admin-body),
@@ -430,6 +454,13 @@
   .erp-topbar { padding: 0 16px !important; }
   .erp-page-content { padding: 16px !important; }
   
+  .erp-page-content:has(.centraladmin-page),
+  .erp-page-content:has(.rpm-main-wrapper),
+  .erp-page-content:has(.consent-hub-wrapper) {
+    padding: 0 !important;
+    background: transparent !important;
+  }
+  
   /* Hide the page name and slash on mobile/tablet, keeping only the user role badge */
   .curr-page-name, .path-slash {
     display: none !important;
@@ -471,6 +502,19 @@
     min-width: 0 !important;
     box-sizing: border-box !important;
   }
+
+  .erp-page-content:has(.centraladmin-page),
+  .erp-page-content:has(.rpm-main-wrapper),
+  .erp-page-content:has(.consent-hub-wrapper) {
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .ca-profile-dropdown-card {
+    width: calc(100vw - 24px) !important;
+    max-width: 310px !important;
+    right: -4px !important;
+  }
 }
 
 /* =========================================================
@@ -499,21 +543,41 @@
 }
 
 .ca-brand-container img {
-  height: 34px;
-  max-width: 170px;
+  height: 38px !important;
+  max-width: 180px !important;
   width: auto;
   object-fit: contain;
   display: block;
 }
 
 .ca-sidebar-link {
-  font-weight: 600;
+  font-weight: 650;
   color: #1e293b;
-  border-radius: 14px;
-  padding: 12px 16px;
-  font-size: 0.92rem;
+  border-radius: 12px;
+  padding: 9.5px 12px;
+  font-size: 0.855rem;
+  letter-spacing: -0.15px;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  margin-bottom: 6px;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.ca-sidebar-link .sidebar-link-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.ca-sidebar-link .sidebar-link-icon {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ca-sidebar-link:hover {
@@ -1253,11 +1317,11 @@
    HOSPITAL ADMIN AI ASSISTANT SIDEBAR WIDGET (Robot + Title)
    ========================================================= */
 .ha-sidebar-ai-card {
-  margin: 16px 14px 14px 14px;
-  padding: 12px 14px 14px 14px;
+  margin: 16px 8px 12px 8px;
+  padding: 12px 10px 14px 10px;
   background: linear-gradient(145deg, #f8fafc 0%, #f0fdfa 60%, #e0f2fe 100%);
   border: 1.5px solid #cffafe;
-  border-radius: 20px;
+  border-radius: 18px;
   box-shadow: 0 4px 16px rgba(6, 182, 212, 0.08);
   display: flex;
   flex-direction: column;

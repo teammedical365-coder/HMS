@@ -467,6 +467,7 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
                     activeSession: {
                         browser: activeSessions[0].browser,
                         os: activeSessions[0].os,
+                        ipAddress: activeSessions[0].ipAddress,
                         lastActive: activeSessions[0].lastActive,
                         loginTime: activeSessions[0].loginTime,
                     },
@@ -474,6 +475,7 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
                         sessionId: s.sessionId,
                         browser: s.browser,
                         os: s.os,
+                        ipAddress: s.ipAddress,
                         lastActive: s.lastActive,
                         loginTime: s.loginTime,
                     })),
@@ -519,12 +521,15 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
             hospitalId: hospitalId || user.hospitalId || null,
         });
 
-        // ── Send OTP email ────────────────────────────────────────────────────
-        await sendLoginOtpEmail({
+        // ── Send OTP email (Non-blocking background delivery for instant UI transition) ─
+        sendLoginOtpEmail({
             email: user.email,
             otp,
             userName: user.name,
-        });
+        }).catch(err => console.error('[otp/send] Background email error:', err));
+
+        // Output to console for superfast local testing
+        console.log(`\x1b[36m[STAFF OTP]\x1b[0m Login OTP for ${user.name} (${user.email}): \x1b[32m\x1b[1m${otp}\x1b[0m`);
 
         // Mask email for frontend display
         const parts = user.email.split('@');
@@ -603,7 +608,6 @@ router.post('/verify', emailOtpVerifyLimiter, async (req, res) => {
 
         if (!isValid) {
             otpRecord.attempts += 1;
-            await otpRecord.save();
             const remaining = OTP_MAX_ATTEMPTS - otpRecord.attempts;
             return res.status(401).json({
                 success: false,
@@ -640,6 +644,7 @@ router.post('/verify', emailOtpVerifyLimiter, async (req, res) => {
                 activeSession: {
                     browser: activeSessions[0].browser,
                     os: activeSessions[0].os,
+                    ipAddress: activeSessions[0].ipAddress,
                     lastActive: activeSessions[0].lastActive,
                     loginTime: activeSessions[0].loginTime,
                 },
@@ -647,6 +652,7 @@ router.post('/verify', emailOtpVerifyLimiter, async (req, res) => {
                     sessionId: s.sessionId,
                     browser: s.browser,
                     os: s.os,
+                    ipAddress: s.ipAddress,
                     lastActive: s.lastActive,
                     loginTime: s.loginTime,
                 })),
@@ -732,12 +738,14 @@ router.post('/resend', emailOtpSendLimiter, async (req, res) => {
         otpRecord.expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
         await otpRecord.save();
 
-        // Send OTP email
-        await sendLoginOtpEmail({
+        // Send OTP email in background
+        sendLoginOtpEmail({
             email: user.email,
             otp,
             userName: user.name,
-        });
+        }).catch(err => console.error('[otp/resend] Background email error:', err));
+
+        console.log(`\x1b[36m[STAFF RESEND OTP]\x1b[0m Resent OTP for ${user.name} (${user.email}): \x1b[32m\x1b[1m${otp}\x1b[0m`);
 
         res.json({
             success: true,

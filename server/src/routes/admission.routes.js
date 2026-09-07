@@ -248,6 +248,19 @@ router.post('/', verifyAdmissionAccess, async (req, res) => {
             return res.status(409).json({ success: false, message: 'Bed was just occupied by another patient. Please choose another bed.' });
         }
 
+        // Link any pending pre-admission orders to this newly created admission
+        try {
+            const InpatientOrder = req.tenantDb ? getTenantModels(req.tenantDb).InpatientOrder : require('../models/inpatientOrder.model');
+            if (InpatientOrder) {
+                await InpatientOrder.updateMany(
+                    { hospitalId, patientId, admissionId: { $in: [null, undefined] }, status: 'ACTIVE' },
+                    { $set: { admissionId: admission._id } }
+                );
+            }
+        } catch (linkErr) {
+            console.warn('Warning linking pending inpatient orders to admission:', linkErr.message);
+        }
+
         // Real-time notification via Socket.IO
         const io = req.app.get('io');
         if (io) {

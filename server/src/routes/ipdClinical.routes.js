@@ -15,7 +15,11 @@ const MasterUser = require('../models/user.model');
 // Helper: retrieve models bound to tenant connection
 const getModels = (req) => {
     if (req.tenantDb) {
-        return getTenantModels(req.tenantDb);
+        const tenantModels = getTenantModels(req.tenantDb);
+        return {
+            ...tenantModels,
+            User: MasterUser,
+        };
     }
     return {
         Admission: MasterAdmission,
@@ -66,6 +70,7 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
 
         const {
             admissionId,
+            appointmentId,
             patientId,
             medicineName,
             dosageValue,
@@ -79,26 +84,50 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
             doctorId: overrideDoctorId
         } = req.body;
 
-        if (!admissionId || !patientId || !medicineName) {
-            return res.status(400).json({ success: false, message: 'admissionId, patientId, and medicineName are required' });
+        if (!patientId || !medicineName) {
+            return res.status(400).json({ success: false, message: 'patientId and medicineName are required' });
         }
 
-        if (!mongoose.Types.ObjectId.isValid(admissionId) || !mongoose.Types.ObjectId.isValid(patientId)) {
-            return res.status(400).json({ success: false, message: 'Invalid admissionId or patientId format' });
+        if (!mongoose.Types.ObjectId.isValid(patientId)) {
+            return res.status(400).json({ success: false, message: 'Invalid patientId format' });
         }
 
         const { Admission, InpatientOrder, User } = getModels(req);
 
-        // Validate Admission belongs to this hospital and matches patient
-        const admission = await Admission.findOne({ _id: admissionId, hospitalId });
-        if (!admission) {
-            return res.status(404).json({ success: false, message: 'Admission not found in this hospital' });
+        // Verify patient belongs to this hospital (either MasterUser or tenant clinic patient)
+        let patientUser = await MasterUser.findOne({ _id: patientId, $or: [{ hospitalId }, { hospitalId: null }] });
+        if (!patientUser && req.tenantDb) {
+            try {
+                patientUser = await req.tenantDb.collection('patients').findOne({ _id: new mongoose.Types.ObjectId(patientId) });
+            } catch {}
         }
-        if (String(admission.patientId) !== String(patientId)) {
-            return res.status(400).json({ success: false, message: 'Patient does not match this admission record' });
+        if (!patientUser) {
+            return res.status(404).json({ success: false, message: 'Patient not found in this hospital' });
         }
-        if (admission.status === 'Discharged') {
-            return res.status(400).json({ success: false, message: 'Cannot add clinical orders to a discharged patient' });
+
+        let resolvedAdmissionId = null;
+
+        if (admissionId) {
+            if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+                return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
+            }
+            const admission = await Admission.findOne({ _id: admissionId, hospitalId });
+            if (!admission) {
+                return res.status(404).json({ success: false, message: 'Admission not found in this hospital' });
+            }
+            if (String(admission.patientId) !== String(patientId)) {
+                return res.status(400).json({ success: false, message: 'Patient does not match this admission record' });
+            }
+            if (admission.status === 'Discharged') {
+                return res.status(400).json({ success: false, message: 'Cannot add clinical orders to a discharged patient' });
+            }
+            resolvedAdmissionId = admission._id;
+        } else {
+            // Check if patient currently has an active admission to auto-link
+            const activeAdmission = await Admission.findOne({ hospitalId, patientId, status: 'Admitted' });
+            if (activeAdmission) {
+                resolvedAdmissionId = activeAdmission._id;
+            }
         }
 
         // Determine ordering doctor (use authenticated user if doctor, or override if admin)
@@ -108,20 +137,30 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
             if (docUser) orderingDoctorId = docUser._id;
         }
 
+        const dosageVal = req.body.dosageValue ?? req.body.dosage?.value ?? 0;
+        const dosageUn = req.body.dosageUnit ?? req.body.dosage?.unit ?? '';
+        const startDt = req.body.startDate ?? req.body.schedule?.startDate ?? new Date();
+        const endDt = req.body.endDate ?? req.body.schedule?.endDate;
+        const dur = req.body.duration ?? req.body.schedule?.duration ?? '';
+
         const order = new InpatientOrder({
             hospitalId,
-            admissionId,
+            admissionId: resolvedAdmissionId,
+            appointmentId: appointmentId && mongoose.Types.ObjectId.isValid(appointmentId) ? appointmentId : undefined,
             patientId,
             doctorId: orderingDoctorId,
             medicineName: medicineName.trim(),
-            dosageValue: Number(dosageValue) || 0,
-            dosageUnit: dosageUnit ? String(dosageUnit).trim() : '',
+            dosageValue: Number(dosageVal) || 0,
+            dosageUnit: dosageUn ? String(dosageUn).trim() : '',
             route: route || 'Oral',
             frequency: frequency ? String(frequency).trim() : 'OD',
-            startDate: startDate ? new Date(startDate) : new Date(),
-            endDate: endDate ? new Date(endDate) : undefined,
-            duration: duration ? String(duration).trim() : '',
+            startDate: startDt ? new Date(startDt) : new Date(),
+            endDate: endDt ? new Date(endDt) : undefined,
+            duration: dur ? String(dur).trim() : '',
             instructions: instructions ? String(instructions).trim() : '',
+            diagnosis: req.body.diagnosis ? String(req.body.diagnosis).trim() : '',
+            admissionReason: req.body.admissionReason ? String(req.body.admissionReason).trim() : '',
+            clinicalNotes: req.body.clinicalNotes ? String(req.body.clinicalNotes).trim() : '',
             status: 'ACTIVE',
             createdBy: req.user._id || req.user.userId,
             updatedBy: req.user._id || req.user.userId
@@ -141,7 +180,7 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
             });
         }
 
-        res.status(201).json({ success: true, message: 'Inpatient order created successfully', order });
+        res.status(201).json({ success: true, message: 'Inpatient order created successfully', order, data: order });
     } catch (err) {
         console.error('Create Inpatient Order error:', err);
         res.status(500).json({ success: false, message: err.message || 'Internal server error' });
@@ -172,9 +211,39 @@ router.get('/admissions/:admissionId/orders', verifyToken, resolveTenant, requir
             }
         }
 
-        res.json({ success: true, orders });
+        res.json({ success: true, orders, data: orders });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Error fetching inpatient orders' });
+    }
+});
+
+// GET /api/ipd-clinical/patients/:patientId/orders — Get all inpatient orders for a patient
+router.get('/patients/:patientId/orders', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { patientId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(patientId)) {
+            return res.status(400).json({ success: false, message: 'Invalid patientId format' });
+        }
+
+        const { InpatientOrder, User } = getModels(req);
+        const orders = await InpatientOrder.find({ patientId, hospitalId })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        for (let ord of orders) {
+            if (ord.doctorId) {
+                ord.doctorId = await User.findById(ord.doctorId).select('name specialization phone email').lean() || ord.doctorId;
+            }
+            if (ord.createdBy) {
+                ord.createdBy = await User.findById(ord.createdBy).select('name').lean() || ord.createdBy;
+            }
+        }
+
+        res.json({ success: true, orders, data: orders });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Error fetching patient orders' });
     }
 });
 
@@ -199,9 +268,9 @@ router.get('/admissions/:admissionId/orders/active', verifyToken, resolveTenant,
             }
         }
 
-        res.json({ success: true, orders });
+        res.json({ success: true, orders, data: orders });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Error fetching active inpatient orders' });
+        res.status(500).json({ success: false, message: 'Error fetching active orders' });
     }
 });
 

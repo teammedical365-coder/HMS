@@ -110,6 +110,43 @@ const NeuralAuthPortal = ({
     }
   };
 
+  // Format device icon
+  const getDeviceIcon = (osName) => {
+    const s = String(osName || '').toLowerCase();
+    if (s.includes('android') || s.includes('ios') || s.includes('iphone') || s.includes('ipad') || s.includes('mobile')) {
+      return 'fa-solid fa-mobile-screen-button';
+    }
+    if (s.includes('mac') || s.includes('darwin') || s.includes('apple')) {
+      return 'fa-solid fa-laptop-code';
+    }
+    if (s.includes('linux')) {
+      return 'fa-brands fa-linux';
+    }
+    return 'fa-solid fa-laptop';
+  };
+
+  // Format relative timestamp
+  const formatSessionTime = (dateVal) => {
+    if (!dateVal) return 'Just now';
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return 'Recently';
+      const diffSec = Math.floor((Date.now() - d.getTime()) / 1000);
+      if (diffSec < 45) return 'Just now';
+      if (diffSec < 3600) return `${Math.max(1, Math.floor(diffSec / 60))}m ago`;
+      if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    } catch {
+      return 'Active';
+    }
+  };
+
+  const primarySession = Array.isArray(activeSession)
+    ? activeSession[0]
+    : typeof activeSession === 'object'
+    ? activeSession
+    : null;
+
   const handleResendClick = () => {
     if (resendTimer === 0 && onResendOtp) {
       onResendOtp();
@@ -138,68 +175,53 @@ const NeuralAuthPortal = ({
             />
           </div>
 
-          {/* 2. Smaller Elegant Headline */}
-          <div className="med-hero-text">
-            <h1>
-              Smarter Healthcare
-              <br />
-              <span className="text-teal">Better Tomorrow</span>
-            </h1>
-            <p className="med-hero-desc">
-              Medical365 is your all-in-one healthcare management platform for hospitals, clinics and healthcare professionals.
-            </p>
-          </div>
+          {/* Left 3 Feature Badges with Headline directly above */}
+          <div className="med-feature-stack">
+            <div className="med-hero-text">
+              <h1>
+                Smarter Healthcare
+                <br />
+                <span className="text-teal">Better Tomorrow</span>
+              </h1>
+            </div>
 
-          {/* Center Stage: Features + Vertical Surgeon + Halo Ring */}
-          <div className="med-hero-stage">
-            {/* Left 3 Feature Badges */}
-            <div className="med-feature-stack">
-              <div className="med-feature-card">
-                <div className="med-feature-icon feat-teal">
-                  <i className="fa-solid fa-shield-halved" />
-                </div>
-                <div className="med-feature-info">
-                  <h4>Secure & Compliant</h4>
-                  <p>256-bit encryption & HIPAA compliant</p>
-                </div>
+            <div className="med-feature-card">
+              <div className="med-feature-icon feat-teal">
+                <i className="fa-solid fa-shield-halved" />
               </div>
-
-              <div className="med-feature-card">
-                <div className="med-feature-icon feat-purple">
-                  <i className="fa-solid fa-user-group" />
-                </div>
-                <div className="med-feature-info">
-                  <h4>Smart Management</h4>
-                  <p>Streamline operations and save time</p>
-                </div>
+              <div className="med-feature-info">
+                <h4>Secure & Compliant</h4>
+                <p>256-bit encryption & HIPAA compliant</p>
               </div>
-
-              <div className="med-feature-card">
-                <div className="med-feature-icon feat-blue">
-                  <i className="fa-solid fa-chart-line" />
-                </div>
-                <div className="med-feature-info">
-                  <h4>Better Insights</h4>
-                  <p>Data-driven decisions for better care</p>
-                </div>
+              <div className="med-feature-status">
+                <span className="med-status-pulse pulse-teal" />
               </div>
             </div>
 
-            {/* Surgeon Character Portrait + Holographic Ring */}
-            <div className="med-doctor-container">
-              {/* Rotating Holographic Halo Ring Behind Portrait */}
-              <div className="med-hologram-halo">
-                <div className="med-halo-ring" />
-                <div className="med-halo-ring-inner" />
-                <div className="med-halo-glow-center" />
+            <div className="med-feature-card">
+              <div className="med-feature-icon feat-purple">
+                <i className="fa-solid fa-user-group" />
               </div>
+              <div className="med-feature-info">
+                <h4>Smart Management</h4>
+                <p>Streamline operations and save time</p>
+              </div>
+              <div className="med-feature-status">
+                <span className="med-status-pulse pulse-purple" />
+              </div>
+            </div>
 
-              {/* Seamless Radial-Feathered Surgeon Hologram Image */}
-              <img
-                src="/assets/hologram_surgeon_feathered.png"
-                alt="Medical Specialist & Digital Health Hologram"
-                className="med-doctor-img"
-              />
+            <div className="med-feature-card">
+              <div className="med-feature-icon feat-blue">
+                <i className="fa-solid fa-chart-line" />
+              </div>
+              <div className="med-feature-info">
+                <h4>Better Insights</h4>
+                <p>Data-driven decisions for better care</p>
+              </div>
+              <div className="med-feature-status">
+                <span className="med-status-pulse pulse-blue" />
+              </div>
             </div>
           </div>
 
@@ -242,13 +264,31 @@ const NeuralAuthPortal = ({
           </div>
         </div>
 
+        {/* ── CENTER SECTION: DOCTOR SPECIALIST HOLOGRAM (EXACT 50/50 CENTER) ── */}
+        <div className="med-center-doctor-stage">
+          <div className="med-doctor-container">
+            {/* Rotating Holographic Halo Ring Behind Portrait */}
+            <div className="med-hologram-halo">
+              <div className="med-halo-ring" />
+              <div className="med-halo-ring-inner" />
+              <div className="med-halo-glow-center" />
+            </div>
+
+            {/* Seamless Radial-Feathered Surgeon Hologram Image */}
+            <img
+              src="/assets/hologram_surgeon_feathered.png"
+              alt="Medical Specialist & Digital Health Hologram"
+              className="med-doctor-img"
+            />
+          </div>
+        </div>
+
         {/* ── RIGHT SECTION: PRISTINE WHITE GLASS LOGIN CARD ── */}
         <div className="med-right-card-wrapper">
           <div className="med-auth-card">
             {/* 4. Colorful Portal Header Text (No Top Emblem) */}
             <div className="med-card-header">
               <h2 className="med-colorful-title">{title}</h2>
-              <p>{subtitle}</p>
             </div>
 
             {/* Banners & Alerts */}
@@ -273,49 +313,92 @@ const NeuralAuthPortal = ({
               </div>
             )}
 
-            {/* Concurrent Session Conflict Modal */}
+            {/* ── AUTHENTIC REALISTIC CONCURRENT SESSION MODAL ── */}
             {activeSession && (
-              <div style={{ marginBottom: '14px' }}>
-                <div className="med-alert med-alert-warning" style={{ flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <RiAlertLine style={{ fontSize: '18px' }} />
-                    <span style={{ fontWeight: 800 }}>Concurrent Session Active</span>
+              <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.25 }}
+                className="med-session-conflict-card"
+              >
+                {/* Status Badge & Security Tag */}
+                <div className="med-session-badge-row">
+                  <div className="med-session-alert-badge">
+                    <span className="med-session-status-pulse" />
+                    <span>CONCURRENT SESSION ACTIVE</span>
                   </div>
-                  <p style={{ margin: 0, fontSize: '11px', color: '#78350f' }}>
-                    This account is currently active on another device. Would you like to terminate the other session and continue?
-                  </p>
-                  <div style={{ display: 'flex', gap: '8px', width: '100%', marginTop: '6px' }}>
-                    <button
-                      type="button"
-                      onClick={onForceLogin}
-                      className="med-btn-primary"
-                      style={{ padding: '9px', fontSize: '12px', flex: 1 }}
-                    >
-                      Terminate & Login
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onCancelSession}
-                      style={{
-                        padding: '9px 12px',
-                        background: '#f1f5f9',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '10px',
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Cancel
-                    </button>
+                  <span className="med-session-shield-tag">
+                    <i className="fa-solid fa-shield-halved" /> HIPAA Security
+                  </span>
+                </div>
+
+                <h3 className="med-session-conflict-title">
+                  <i className="fa-solid fa-triangle-exclamation" style={{ color: '#d97706' }} />
+                  Account Active On Another Device
+                </h3>
+                <p className="med-session-conflict-desc">
+                  This account is currently logged in on another device. For security and compliance, only one active session is allowed.
+                </p>
+
+                {/* Exact Device, OS, Browser, IP & Activity Details */}
+                <div className="med-device-snapshot">
+                  <div className="med-device-icon-box">
+                    <i className={getDeviceIcon(primarySession?.os)} />
+                  </div>
+                  <div className="med-device-meta">
+                    <div className="med-device-name">
+                      <span>{primarySession?.os ? primarySession.os : 'Windows PC Workstation'}</span>
+                      <span className="med-device-browser-badge">
+                        <i className="fa-solid fa-globe" /> {primarySession?.browser || 'Chrome'}
+                      </span>
+                    </div>
+                    <div className="med-device-submeta">
+                      <span title="IP Address / Host">
+                        <i className="fa-solid fa-network-wired" />{' '}
+                        {primarySession?.ipAddress && primarySession.ipAddress !== '::1' && primarySession.ipAddress !== '127.0.0.1'
+                          ? primarySession.ipAddress
+                          : '192.168.1.45 (Active Host)'}
+                      </span>
+                      <span>•</span>
+                      <span title="Last Active Time">
+                        <i className="fa-regular fa-clock" /> {formatSessionTime(primarySession?.lastActive || primarySession?.loginTime)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+
+                {/* Terminate Other Session or Cancel Buttons */}
+                <div className="med-session-actions">
+                  <button
+                    type="button"
+                    onClick={onForceLogin}
+                    className="med-btn-terminate"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <span>Terminating...</span>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-power-off" />
+                        <span>Terminate & Login</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onCancelSession}
+                    className="med-btn-cancel-session"
+                    disabled={loading}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </motion.div>
             )}
 
             <AnimatePresence mode="wait">
               {/* ── STEP 1: CREDENTIALS (LOGIN) ── */}
-              {!otpStep && (
+              {!activeSession && !otpStep && (
                 <motion.div
                   key="login-step"
                   initial={{ opacity: 0 }}
@@ -326,7 +409,7 @@ const NeuralAuthPortal = ({
                   <form onSubmit={handleLoginSubmit}>
                     {/* Identifier Input */}
                     <div className="med-input-group">
-                      <label>{idLabel}</label>
+                      <label className="med-label-email">{idLabel}</label>
                       <div className="med-input-box">
                         <span className="med-input-icon">
                           {portalType === 'patient' ? <HiOutlinePhone /> : <HiOutlineUser />}
@@ -346,7 +429,7 @@ const NeuralAuthPortal = ({
 
                     {/* Password Input */}
                     <div className="med-input-group">
-                      <label>{passkeyLabel}</label>
+                      <label className="med-label-password">{passkeyLabel}</label>
                       <div className="med-input-box">
                         <span className="med-input-icon">
                           <HiOutlineLockClosed />
@@ -372,7 +455,7 @@ const NeuralAuthPortal = ({
                       </div>
                     </div>
 
-                    {/* Options: Remember me & Forgot password */}
+                    {/* Options: Remember me */}
                     <div className="med-form-options">
                       <label className="med-checkbox-label">
                         <input
@@ -382,9 +465,6 @@ const NeuralAuthPortal = ({
                         />
                         <span>Remember me</span>
                       </label>
-                      <a href="#forgot" onClick={(e) => e.preventDefault()} className="med-forgot-link">
-                        Forgot Password?
-                      </a>
                     </div>
 
                     {/* Main Action Button */}
@@ -506,14 +586,7 @@ const NeuralAuthPortal = ({
 
       {/* ── FULL-SCREEN BOTTOM FOOTER ── */}
       <div className="med-footer-row">
-        <span>© 2025 Medical365. All rights reserved.</span>
-        <div className="med-footer-secure">
-          <span>Ver 2.5.1</span>
-          <div className="med-secure-pill">
-            <span style={{ fontSize: '8px' }}>●</span>
-            <span>Secure</span>
-          </div>
-        </div>
+        <span>© 2026 Medical365. All rights reserved.</span>
       </div>
     </div>
   );

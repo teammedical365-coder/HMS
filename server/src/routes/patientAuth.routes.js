@@ -340,13 +340,10 @@ router.post('/send-otp', async (req, res) => {
             { upsert: true, new: true }
         );
 
-        // Send Email OTP if email exists
+        // Send Email OTP if email exists (Non-blocking background delivery)
         if (patient.email) {
-            try {
-                await sendLoginOtpEmail({ email: patient.email, otp: plainOtp, userName: patient.name });
-            } catch (mailErr) {
-                console.error('[PatientAuth] Failed to send email OTP:', mailErr.message);
-            }
+            sendLoginOtpEmail({ email: patient.email, otp: plainOtp, userName: patient.name })
+                .catch(mailErr => console.error('[PatientAuth] Failed to send email OTP:', mailErr.message));
         }
 
         // Output to console for fast dev access
@@ -503,11 +500,8 @@ router.post('/resend-otp', async (req, res) => {
         await otpDoc.save();
 
         if (decoded.email) {
-            try {
-                await sendLoginOtpEmail({ email: decoded.email, otp: plainOtp, userName: decoded.name });
-            } catch (mailErr) {
-                console.error('[PatientAuth] Failed to send resend email OTP:', mailErr.message);
-            }
+            sendLoginOtpEmail({ email: decoded.email, otp: plainOtp, userName: decoded.name })
+                .catch(mailErr => console.error('[PatientAuth] Failed to send resend email OTP:', mailErr.message));
         }
 
         console.log(`\x1b[35m[PATIENT OTP RESEND]\x1b[0m New OTP for ${decoded.name} (${decoded.email}): \x1b[32m\x1b[1m${plainOtp}\x1b[0m`);
