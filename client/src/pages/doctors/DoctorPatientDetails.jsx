@@ -8,6 +8,7 @@ import DynamicQuestionForm from '../../components/DynamicQuestionForm';
 import { useAuth } from '../../store/hooks';
 
 import AppointmentReports from '../../components/AppointmentReports';
+import DoctorIPDOrdersPanel from '../../components/ipd/DoctorIPDOrdersPanel';
 
 const doseOptions = [
     'OD – Once Daily',
@@ -938,6 +939,7 @@ const DoctorPatientDetails = () => {
 
     const tabs = [
         { id: 'overview', label: 'Overview', icon: '📋' },
+        { id: 'ipd_orders', label: 'IPD / Admission Orders', icon: '🏥' },
         { id: 'history', label: 'Past Visits', icon: '📜' },
         { id: 'reports', label: 'Reports & Files', icon: '📁' },
     ];
@@ -1356,6 +1358,16 @@ const DoctorPatientDetails = () => {
                     );
                 })()}
 
+                    {/* IPD / ADMISSION ORDERS TAB */}
+                    {activeTab === 'ipd_orders' && (
+                        <DoctorIPDOrdersPanel
+                            patientId={id || patient?._id}
+                            patient={patient}
+                            appointment={appointment}
+                            currentUser={user}
+                        />
+                    )}
+
                     {/* REPORTS & FILES TAB */}
                     {activeTab === 'reports' && (
                         <AppointmentReports appointmentId={appointment?._id} prescriptions={appointment?.prescriptions} />
@@ -1572,13 +1584,38 @@ const DoctorPatientDetails = () => {
 
                             <div className="dpd-session-field">
                                 {!isLocked && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPrescribeModal(true)}
-                                        style={{ padding: '14px', fontSize: '15px', background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(79, 70, 229, 0.25)', marginTop: '10px' }}
-                                    >
-                                        💊 / 🧪 Prescribe Medicines & Lab Tests
-                                    </button>
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPrescribeModal(true)}
+                                            style={{ padding: '14px', fontSize: '15px', background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(79, 70, 229, 0.25)', marginTop: '10px' }}
+                                        >
+                                            💊 / 🧪 Prescribe Medicines & Lab Tests
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveTab('ipd_orders')}
+                                            style={{
+                                                padding: '12px',
+                                                fontSize: '14px',
+                                                background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '10px',
+                                                cursor: 'pointer',
+                                                fontWeight: 'bold',
+                                                boxShadow: '0 4px 10px rgba(2, 132, 199, 0.25)',
+                                                marginTop: '8px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '8px',
+                                                width: '100%'
+                                            }}
+                                        >
+                                            🏥 Hospitalization &amp; IPD Orders
+                                        </button>
+                                    </>
                                 )}
 
                                 {(sessionData.medicines?.length > 0 || sessionData.labTests || (isLocked && appointment.pharmacy?.length > 0)) && (

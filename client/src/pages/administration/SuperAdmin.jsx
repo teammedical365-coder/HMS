@@ -222,7 +222,12 @@ const SuperAdmin = () => {
             <div className="superadmin-container">
                 <div className="admin-header">
                     <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <img src="/assets/medical365-logo.png" alt="Medical 365" style={{ height: '36px', width: 'auto', marginRight: '10px', objectFit: 'contain' }} />
+                        <img 
+                            src="/assets/logo.png" 
+                            alt="Medical 365" 
+                            onError={(e) => { e.target.onerror = null; e.target.src = '/logo.png'; }}
+                            style={{ height: '36px', width: 'auto', marginRight: '10px', objectFit: 'contain' }} 
+                        />
                         <div>
                             <h1>SuperAdmin Dashboard</h1>
                             <p>Manage System Users & Staff Accounts</p>

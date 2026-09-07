@@ -56,10 +56,12 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 // Simple clinic or starter plan — single hub page with built-in role switcher
                 return [
                     { label: 'Clinic Hub', path: '/hospitaladmin', icon: <FiHome /> },
+                    { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox /> },
                 ];
             }
             return [
                 { label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiHome /> },
+                { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox /> },
                 { label: 'Clinical Questions', path: '/hospitaladmin/question-library', icon: <FiFileText /> },
                 { label: 'Staff Management', path: '/admin/users', icon: <FiUsers /> },
                 { label: 'Doctors Feed', path: '/admin/doctors', icon: <FiActivity /> },
@@ -130,8 +132,12 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             <div className={`sidebar-brand ${isCentralAdmin ? 'ca-sidebar-brand' : ''}`}>
                 <div className="ca-brand-container">
                     <img
-                        src={(isCentralAdmin ? '/assets/medical365-logo.png' : (branding?.logoUrl || branding?.logo || '/assets/medical365-logo.png'))}
+                        src={(isCentralAdmin ? '/assets/logo.png' : (branding?.logoUrl || branding?.logo || '/assets/logo.png'))}
                         alt={hospitalName || "Medical 365"}
+                        onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = '/logo.png';
+                        }}
                         style={{ height: '36px', maxWidth: '175px', width: 'auto', objectFit: 'contain' }}
                     />
                 </div>
@@ -313,14 +319,6 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
             <div className="topbar-right">
                 <div className="ca-topbar-actions" ref={dropdownRef}>
                     <GlobalSearch />
-
-                    <button className="ca-action-circle-btn ca-notif-btn" title="Notifications">
-                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
-                            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
-                        </svg>
-                        <span className="ca-notif-badge">3</span>
-                    </button>
 
                     <div 
                         className={`ca-user-profile-circle-btn ${dropdownOpen ? 'active' : ''}`}

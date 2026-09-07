@@ -23,6 +23,7 @@ const admissionSchema = new mongoose.Schema({
     hospitalId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
     patientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment' },
+    doctorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     admittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     admissionDate: { type: Date, default: Date.now },
     admissionTime: { type: String, default: '' },

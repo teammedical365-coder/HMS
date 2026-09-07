@@ -1,0 +1,477 @@
+/* PatientVialsSection.css - Embedded Patient Profile Vial Section */
+
+.pvs-container {
+    margin-top: 20px;
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    padding: 24px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Header */
+.pvs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.pvs-header-left h2 {
+    font-size: 20px;
+    font-weight: 800;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 4px 0;
+}
+
+.pvs-header-left p {
+    font-size: 13px;
+    color: #64748b;
+    margin: 0;
+}
+
+.pvs-btn-store {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+    transition: all 0.2s ease;
+}
+
+.pvs-btn-store:hover {
+    background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+    transform: translateY(-1px);
+}
+
+.pvs-role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f0fdf4;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+/* ========================================================================= */
+/* RECEPTION WAYFINDING & PATIENT GUIDANCE CARD */
+/* ========================================================================= */
+.pvs-wayfinding-card {
+    background: linear-gradient(145deg, #f0f9ff 0%, #e0f2fe 100%);
+    border: 1.5px solid #7dd3fc;
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 22px;
+    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.08);
+}
+
+.pvs-wayfinding-header {
+    margin-bottom: 14px;
+}
+
+.pvs-wayfinding-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.pvs-wayfinding-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #0284c7;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 4px 10px;
+    border-radius: 6px;
+}
+
+.pvs-wayfinding-count {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0369a1;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid #bae6fd;
+}
+
+.pvs-wayfinding-desc {
+    font-size: 12.5px;
+    color: #0369a1;
+    margin: 4px 0 0 0;
+    font-weight: 500;
+}
+
+.pvs-wayfinding-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 14px;
+}
+
+.pvs-wayfinding-item {
+    background: #ffffff;
+    border: 1px solid #bae6fd;
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.pvs-wayfinding-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.pvs-vial-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 12px;
+    color: #0369a1;
+    background: #f0f9ff;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid #bae6fd;
+}
+
+.pvs-vial-type {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.pvs-received-time {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.pvs-destination-banner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 10px 12px;
+    border: 1px solid #e2e8f0;
+}
+
+.pvs-dest-label {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+    margin-bottom: 3px;
+}
+
+.pvs-dest-val-room {
+    font-size: 14px;
+    font-weight: 800;
+    color: #0f172a;
+    display: block;
+}
+
+.pvs-dest-val-unit {
+    font-size: 14px;
+    font-weight: 800;
+    color: #0284c7;
+    display: block;
+}
+
+.pvs-dest-sub {
+    font-size: 12px;
+    color: #475569;
+    padding-left: 2px;
+}
+
+.pvs-dest-sub strong {
+    color: #0f172a;
+}
+
+.pvs-patient-prompt {
+    background: #eff6ff;
+    border-left: 3px solid #3b82f6;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #1e40af;
+    line-height: 1.4;
+}
+
+/* Pills in table */
+.pvs-room-pill {
+    display: inline-block;
+    font-size: 12px;
+    color: #0f172a;
+}
+
+.pvs-unit-pill {
+    display: inline-block;
+    font-size: 12px;
+    color: #0284c7;
+}
+
+/* Details Modal Wayfinding Box */
+.pvs-details-wayfinding-box {
+    background: #f0f9ff;
+    border: 1.5px solid #7dd3fc;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+}
+
+.pvs-dwb-title {
+    font-size: 12.5px;
+    font-weight: 800;
+    color: #0369a1;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.pvs-dwb-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    background: #ffffff;
+    border: 1px solid #bae6fd;
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.pvs-dwb-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pvs-dwb-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+}
+
+.pvs-dwb-val-room {
+    font-size: 14px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.pvs-dwb-val-unit {
+    font-size: 14px;
+    font-weight: 800;
+    color: #0284c7;
+}
+
+.pvs-dwb-val {
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+}
+
+.pvs-dwb-footer {
+    margin-top: 10px;
+    background: #e0f2fe;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #0369a1;
+}
+
+/* 4 Summary Cards */
+.pvs-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+.pvs-summary-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: transform 0.15s ease;
+}
+
+.pvs-summary-card:hover {
+    transform: translateY(-2px);
+}
+
+.pvs-summary-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.pvs-summary-icon.blue {
+    background: #e0f2fe;
+    color: #0284c7;
+}
+
+.pvs-summary-icon.emerald {
+    background: #dcfce7;
+    color: #10b981;
+}
+
+.pvs-summary-icon.amber {
+    background: #fef3c7;
+    color: #f59e0b;
+}
+
+.pvs-summary-icon.rose {
+    background: #ffe4e6;
+    color: #f43f5e;
+}
+
+.pvs-summary-val {
+    font-size: 20px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.2;
+}
+
+.pvs-summary-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #64748b;
+}
+
+/* Vials Table */
+.pvs-table-wrapper {
+    overflow-x: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+}
+
+.pvs-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.pvs-table th {
+    background: #f8fafc;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+
+.pvs-table td {
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #1e293b;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+
+.pvs-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+/* Empty / Loading States */
+.pvs-empty-state {
+    padding: 48px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px dashed #cbd5e1;
+    border-radius: 12px;
+}
+
+.pvs-empty-icon {
+    font-size: 40px;
+    color: #94a3b8;
+    margin-bottom: 10px;
+}
+
+.pvs-empty-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 4px;
+}
+
+.pvs-empty-sub {
+    font-size: 13px;
+    color: #64748b;
+    max-width: 360px;
+}
+
+@media (max-width: 900px) {
+    .pvs-summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .pvs-destination-banner {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .pvs-summary-grid {
+        grid-template-columns: 1fr;
+    }
+    .pvs-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .pvs-btn-store {
+        justify-content: center;
+    }
+}

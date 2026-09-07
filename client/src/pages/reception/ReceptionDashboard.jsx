@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI, bedAPI } from '../../utils/api';
+import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI, bedAPI, ipdClinicalAPI } from '../../utils/api';
+import socket from '../../utils/socket';
 import { useAuth } from '../../store/hooks';
 import { getSubdomain } from '../../utils/subdomain';
 import toast from 'react-hot-toast';
@@ -181,6 +182,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     });
     const [hospitalizingSaving, setHospitalizingSaving] = useState(false);
     const [availableBeds, setAvailableBeds] = useState([]);
+    const [hospitalizeDoctorOrders, setHospitalizeDoctorOrders] = useState([]);
+    const [loadingHospitalizeOrders, setLoadingHospitalizeOrders] = useState(false);
+    const [existingActiveAdmission, setExistingActiveAdmission] = useState(null);
 
     // Transfer Modal
     const [transferModal, setTransferModal] = useState({
@@ -568,6 +572,41 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         }
     }, [isPatientPortal]);
 
+    // Real-time socket synchronization for admissions and clinical orders
+    useEffect(() => {
+        if (!socket) return;
+        if (!socket.connected) {
+            socket.connect();
+        }
+        if (hospitalContext?._id) {
+            socket.emit('joinHospitalRoom', hospitalContext._id);
+        }
+
+        const handleRealtimeRefresh = () => {
+            fetchHospitalizedPatients();
+            fetchAvailableBeds();
+            fetchAppointments();
+        };
+
+        socket.on('admission_created', handleRealtimeRefresh);
+        socket.on('bed_status_changed', handleRealtimeRefresh);
+        socket.on('bed_transferred', handleRealtimeRefresh);
+        socket.on('patient_discharged', handleRealtimeRefresh);
+        socket.on('inpatient_order_created', handleRealtimeRefresh);
+        socket.on('inpatient_order_updated', handleRealtimeRefresh);
+        socket.on('connect', handleRealtimeRefresh);
+
+        return () => {
+            socket.off('admission_created', handleRealtimeRefresh);
+            socket.off('bed_status_changed', handleRealtimeRefresh);
+            socket.off('bed_transferred', handleRealtimeRefresh);
+            socket.off('patient_discharged', handleRealtimeRefresh);
+            socket.off('inpatient_order_created', handleRealtimeRefresh);
+            socket.off('inpatient_order_updated', handleRealtimeRefresh);
+            socket.off('connect', handleRealtimeRefresh);
+        };
+    }, [hospitalContext?._id]);
+
     const fetchHospitalizedPatients = async () => {
         try {
             setLoadingHospitalized(true);
@@ -871,7 +910,15 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         }
     };
 
-    const openHospitalizeModal = (apt) => {
+    const openHospitalizeModal = async (apt) => {
+        const patientId = apt.userId?._id || apt.patientId?._id || apt.patientId;
+        
+        // Check if patient already has an active admission
+        const activeAdm = hospitalizedPatients.find(p => 
+            (p.patientId?._id === patientId || p.patientId === patientId) && p.status === 'ADMITTED'
+        );
+        setExistingActiveAdmission(activeAdm || null);
+
         setHospitalizeForm({
             ward: '',
             bedId: '',
@@ -880,22 +927,55 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             notes: ''
         });
         setHospitalizeModal({ open: true, appointment: apt });
+        setHospitalizeDoctorOrders([]);
         fetchAvailableBeds();
+
+        // Fetch doctor's IPD orders for this patient
+        if (patientId) {
+            setLoadingHospitalizeOrders(true);
+            try {
+                const res = await ipdClinicalAPI.getPatientOrders(patientId, { status: 'ACTIVE' });
+                if (res.success && res.data) {
+                    setHospitalizeDoctorOrders(res.data);
+                }
+            } catch (err) {
+                console.warn('Could not fetch doctor orders for hospitalization modal', err);
+            } finally {
+                setLoadingHospitalizeOrders(false);
+            }
+        }
     };
 
     const handleHospitalize = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
         const { appointment } = hospitalizeModal;
+        const patientId = appointment.userId?._id || appointment.patientId?._id || appointment.patientId;
+
+        // Prevent duplicate concurrent admission
+        const activeAdm = hospitalizedPatients.find(p => 
+            (p.patientId?._id === patientId || p.patientId === patientId) && p.status === 'ADMITTED'
+        );
+        if (activeAdm) {
+            toast.error('This patient already has an active admission.');
+            return;
+        }
+
         if (!hospitalizeForm.ward) return toast.error('Please select a Ward');
         if (!hospitalizeForm.bedId) return toast.error('Please select an available Bed');
         if (!hospitalizeForm.admissionDate) return toast.error('Please specify Admission Date');
         if (!hospitalizeForm.admissionTime) return toast.error('Please specify Admission Time');
 
+        // Resolve attending doctorId from appointment or clinical order
+        const doctorId = appointment.doctorId?._id || 
+                         appointment.doctorId || 
+                         (hospitalizeDoctorOrders.length > 0 ? (hospitalizeDoctorOrders[0].doctorId?._id || hospitalizeDoctorOrders[0].doctorId) : null);
+
         setHospitalizingSaving(true);
         try {
             await admissionAPI.createAdmission({
-                patientId: appointment.userId?._id || appointment.patientId,
+                patientId: patientId,
                 appointmentId: appointment._id,
+                doctorId: doctorId,
                 ward: hospitalizeForm.ward,
                 bedId: hospitalizeForm.bedId,
                 admissionDate: hospitalizeForm.admissionDate,
@@ -3024,15 +3104,154 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             {/* ====== HOSPITALIZE PATIENT MODAL ====== */}
             {hospitalizeModal.open && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-                    <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+                    <div style={{ background: '#fff', borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '620px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700, color: '#0f172a' }}>🏥 Hospitalize Patient</h2>
                                 <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem' }}>
-                                    {hospitalizeModal.appointment?.userId?.name || 'Patient'} — Dr. {hospitalizeModal.appointment?.doctorName || 'Doctor'}
+                                    {hospitalizeModal.appointment?.userId?.name || 'Patient'} — Dr. {hospitalizeModal.appointment?.doctorName || hospitalizeDoctorOrders[0]?.doctorId?.name || 'Doctor'}
                                 </p>
                             </div>
                             <button onClick={() => setHospitalizeModal({ open: false, appointment: null })} style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '16px', cursor: 'pointer', color: '#64748b' }}>✕</button>
+                        </div>
+
+                        {/* ACTIVE ADMISSION WARNING BANNER */}
+                        {existingActiveAdmission && (
+                            <div style={{
+                                background: '#fef2f2',
+                                border: '1.5px solid #fecaca',
+                                borderRadius: '10px',
+                                padding: '16px',
+                                marginBottom: '18px'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#991b1b', fontWeight: 700, fontSize: '0.98rem', marginBottom: '6px' }}>
+                                    <span>⚠️</span> This patient already has an active admission.
+                                </div>
+                                <p style={{ margin: '0 0 12px', fontSize: '0.86rem', color: '#7f1d1d', lineHeight: 1.4 }}>
+                                    Current Inpatient Record: Ward <strong>{existingActiveAdmission.ward}</strong>, Bed <strong>{existingActiveAdmission.bedId?.bedNumber || 'Assigned'}</strong> (Admitted: {new Date(existingActiveAdmission.admissionDate).toLocaleDateString()}).
+                                    A patient cannot have multiple concurrent active admissions.
+                                </p>
+                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setHospitalizeModal({ open: false, appointment: null });
+                                            openTransferModal(existingActiveAdmission);
+                                        }}
+                                        style={{
+                                            padding: '8px 14px',
+                                            background: '#2563eb',
+                                            color: '#fff',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            fontSize: '0.82rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        🔄 Transfer Bed / Ward
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setHospitalizeModal({ open: false, appointment: null });
+                                            navigate(`/patient/${existingActiveAdmission.patientId?._id || existingActiveAdmission.patientId}`);
+                                        }}
+                                        style={{
+                                            padding: '8px 14px',
+                                            background: '#f1f5f9',
+                                            border: '1px solid #cbd5e1',
+                                            borderRadius: '6px',
+                                            fontSize: '0.82rem',
+                                            fontWeight: 600,
+                                            color: '#334155',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        👤 Open Patient Profile
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* DOCTOR CLINICAL DECISION & MEDICINES ORDERED (READ-ONLY) */}
+                        <div style={{
+                            background: '#f8fafc',
+                            border: '1.5px solid #e2e8f0',
+                            borderRadius: '10px',
+                            padding: '16px',
+                            marginBottom: '18px'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                                <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span>🩺</span> Doctor Clinical Recommendation
+                                </span>
+                                <span style={{
+                                    background: '#e0f2fe',
+                                    color: '#0369a1',
+                                    padding: '2px 8px',
+                                    borderRadius: '9999px',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700,
+                                    textTransform: 'uppercase'
+                                }}>
+                                    Authoritative &amp; Locked
+                                </span>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.84rem', marginBottom: '10px' }}>
+                                <div>
+                                    <span style={{ color: '#64748b', fontSize: '0.76rem', display: 'block' }}>Patient</span>
+                                    <strong style={{ color: '#0f172a' }}>{hospitalizeModal.appointment?.userId?.name || 'Patient'}</strong>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#64748b', fontSize: '0.76rem', display: 'block' }}>Attending Doctor</span>
+                                    <strong style={{ color: '#0f172a' }}>Dr. {hospitalizeModal.appointment?.doctorName || hospitalizeDoctorOrders[0]?.doctorId?.name || 'Assigned Doctor'}</strong>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#64748b', fontSize: '0.76rem', display: 'block' }}>Admission Reason</span>
+                                    <span style={{ color: '#1e293b', fontWeight: 600 }}>
+                                        {hospitalizeDoctorOrders[0]?.admissionReason || hospitalizeModal.appointment?.reason || 'Inpatient Admission Recommended'}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#64748b', fontSize: '0.76rem', display: 'block' }}>Diagnosis</span>
+                                    <span style={{ color: '#1e293b', fontWeight: 600 }}>
+                                        {hospitalizeDoctorOrders[0]?.diagnosis || hospitalizeModal.appointment?.diagnosis || hospitalizeModal.appointment?.serviceName || 'Clinical Diagnosis on File'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {hospitalizeDoctorOrders[0]?.clinicalNotes && (
+                                <div style={{ fontSize: '0.82rem', background: '#fff', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', marginBottom: '10px' }}>
+                                    <span style={{ color: '#64748b', fontWeight: 600, display: 'block', fontSize: '0.74rem' }}>Clinical Notes:</span>
+                                    <span style={{ color: '#334155' }}>{hospitalizeDoctorOrders[0].clinicalNotes}</span>
+                                </div>
+                            )}
+
+                            {/* Medicines Ordered */}
+                            <div style={{ marginTop: '8px' }}>
+                                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
+                                    💊 Medicines Ordered ({hospitalizeDoctorOrders.length}):
+                                </div>
+                                {loadingHospitalizeOrders ? (
+                                    <div style={{ fontSize: '0.8rem', color: '#3b82f6', fontStyle: 'italic' }}>Loading clinical orders...</div>
+                                ) : hospitalizeDoctorOrders.length === 0 ? (
+                                    <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic', background: '#fff', padding: '8px 10px', borderRadius: '6px', border: '1px dashed #cbd5e1' }}>
+                                        No active medication orders recorded yet. (Doctor can prescribe orders directly from the IPD Orders tab).
+                                    </div>
+                                ) : (
+                                    <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '0.82rem', color: '#1e293b' }}>
+                                        {hospitalizeDoctorOrders.map((ord, idx) => (
+                                            <li key={ord._id || idx} style={{ marginBottom: '4px' }}>
+                                                <strong>{ord.medicineName}</strong> — {ord.dosage?.value} {ord.dosage?.unit}, {ord.route}, {ord.frequency}
+                                                {ord.schedule?.duration ? ` (${ord.schedule.duration})` : ''}
+                                                {ord.instructions ? ` — ${ord.instructions}` : ''}
+                                            </li>
+                                        ))}
+                                    </ol>
+                                )}
+                            </div>
                         </div>
 
                         <form onSubmit={handleHospitalize}>
@@ -3041,10 +3260,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Select Ward *</label>
                                     <select
                                         required
+                                        disabled={!!existingActiveAdmission}
                                         value={hospitalizeForm.ward}
                                         name="ward" 
                                         onChange={(e) => setHospitalizeForm(prev => ({ ...prev, ward: e.target.value, bedId: '' }))}
-                                        style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box', background: '#fff' }}
+                                        style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box', background: existingActiveAdmission ? '#f8fafc' : '#fff' }}
                                     >
                                         <option value="">-- Choose Ward --</option>
                                         {Array.from(new Set(availableBeds.map(b => b.ward))).map(w => (
@@ -3059,8 +3279,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         value={hospitalizeForm.bedId}
                                         name="bedId" 
                                         onChange={(e) => setHospitalizeForm(prev => ({ ...prev, bedId: e.target.value }))}
-                                        disabled={!hospitalizeForm.ward}
-                                        style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box', background: hospitalizeForm.ward ? '#fff' : '#f8fafc' }}
+                                        disabled={!hospitalizeForm.ward || !!existingActiveAdmission}
+                                        style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box', background: (hospitalizeForm.ward && !existingActiveAdmission) ? '#fff' : '#f8fafc' }}
                                     >
                                         <option value="">{hospitalizeForm.ward ? '-- Choose Available Bed --' : '-- Select Ward First --'}</option>
                                         {availableBeds.filter(b => b.ward === hospitalizeForm.ward).map(b => (
@@ -3076,9 +3296,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     <input
                                         type="date"
                                         required
+                                        disabled={!!existingActiveAdmission}
                                         value={hospitalizeForm.admissionDate}
                                         onChange={(e) => setHospitalizeForm(prev => ({ ...prev, admissionDate: e.target.value }))}
-                                        style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box', background: existingActiveAdmission ? '#f8fafc' : '#fff' }}
                                     />
                                 </div>
                                 <div>
@@ -3086,9 +3307,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     <input
                                         type="time"
                                         required
+                                        disabled={!!existingActiveAdmission}
                                         value={hospitalizeForm.admissionTime}
                                         onChange={(e) => setHospitalizeForm(prev => ({ ...prev, admissionTime: e.target.value }))}
-                                        style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.95rem', boxSizing: 'border-box', background: existingActiveAdmission ? '#f8fafc' : '#fff' }}
                                     />
                                 </div>
                             </div>
@@ -3124,13 +3346,14 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             })()}
 
                             <div style={{ marginBottom: '20px' }}>
-                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Admission Notes (optional)</label>
+                                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#374151', marginBottom: '5px' }}>Admission Notes (Administrative)</label>
                                 <textarea
-                                    placeholder="Any clinical observations or admission reasons..."
+                                    placeholder="Any administrative observations, attendant info, or admission remarks..."
+                                    disabled={!!existingActiveAdmission}
                                     value={hospitalizeForm.notes}
                                     onChange={(e) => setHospitalizeForm(prev => ({ ...prev, notes: e.target.value }))}
                                     rows={2}
-                                    style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
+                                    style={{ width: '100%', padding: '9px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box', background: existingActiveAdmission ? '#f8fafc' : '#fff' }}
                                 />
                             </div>
 
@@ -3140,10 +3363,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={hospitalizingSaving}
-                                    style={{ padding: '10px 24px', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: hospitalizingSaving ? 0.6 : 1 }}
+                                    disabled={hospitalizingSaving || !!existingActiveAdmission}
+                                    style={{ padding: '10px 24px', background: existingActiveAdmission ? '#94a3b8' : '#1d4ed8', color: '#fff', border: 'none', borderRadius: '8px', cursor: existingActiveAdmission ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '0.95rem', opacity: hospitalizingSaving ? 0.6 : 1 }}
                                 >
-                                    {hospitalizingSaving ? 'Admitting...' : '✓ Hospitalize Patient'}
+                                    {hospitalizingSaving ? 'Admitting...' : '✓ Confirm Hospitalization'}
                                 </button>
                             </div>
                         </form>

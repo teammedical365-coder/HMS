@@ -23,12 +23,22 @@ import toast from 'react-hot-toast';
 import { confirmToast } from '../../utils/confirmToast';
 
 import AppointmentReports from '../../components/AppointmentReports';
+import PatientVialsSection from '../../components/vials/PatientVialsSection';
 
 const ClinicPatientProfile = () => {
     const { id: patientId } = useParams();
     const navigate = useNavigate();
 
     // Data States
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const userRoleStr = (currentUser.role || '').toLowerCase();
+    const dynRoleStr = (currentUser._roleData?.name || '').toLowerCase();
+    const isHospitalAdmin = ['hospitaladmin', 'centraladmin', 'superadmin'].includes(userRoleStr) ||
+                            ['hospitaladmin', 'centraladmin', 'superadmin'].includes(dynRoleStr);
+    const canViewVials = isHospitalAdmin || 
+                         ['reception', 'receptionist', 'doctor', 'clinicdoctor', 'clinic doctor', 'staff', 'frontdesk'].includes(userRoleStr) ||
+                         ['reception', 'receptionist', 'doctor', 'clinicdoctor', 'clinic doctor', 'staff', 'frontdesk'].includes(dynRoleStr);
+
     const [patientData, setPatientData] = useState(null);
     const [timeline, setTimeline] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -599,6 +609,14 @@ const ClinicPatientProfile = () => {
                                     >
                                         💰 Financials ({invoicesList.length})
                                     </button>
+                                    {canViewVials && (
+                                        <button 
+                                            className={`cpp-tab-btn ${activeTab === 'vials' ? 'active' : ''}`}
+                                            onClick={() => setActiveTab('vials')}
+                                        >
+                                            🧪 Vial Management
+                                        </button>
+                                    )}
                                 </div>
 
                                 {/* Tab Panels */}
@@ -794,6 +812,10 @@ const ClinicPatientProfile = () => {
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {activeTab === 'vials' && (
+                        <PatientVialsSection patientId={patientData?._id || patientId} patientData={patientData} />
                     )}
                 </>
             );
