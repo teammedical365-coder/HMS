@@ -744,11 +744,19 @@ export const simpleClinicAPI = {
 
 export const revenueAPI = {
     // Full system revenue analytics (monthly, quarterly, by model)
-    getSystemAnalytics: async () => (await apiClient.get('/api/revenue/system')).data,
+    getSystemAnalytics: async (force = false) => {
+        if (force) {
+            invalidateMetaCache('revenue_system_analytics');
+        }
+        return getCachedOrFetch('revenue_system_analytics', async () => (await apiClient.get('/api/revenue/system')).data);
+    },
     // All hospitals with revenue config (lightweight)
     getHospitalsRevenue: async () => (await apiClient.get('/api/revenue/hospitals')).data,
     // Set or update revenue model for a hospital/clinic
-    setHospitalPlan: async (id, data) => (await apiClient.put(`/api/revenue/hospital/${id}`, data)).data,
+    setHospitalPlan: async (id, data) => {
+        invalidateMetaCache('revenue_system_analytics');
+        return (await apiClient.put(`/api/revenue/hospital/${id}`, data)).data;
+    },
 };
 
 // Patient Auth Client (Keeps Patient Auth Separate from Staff Auth)

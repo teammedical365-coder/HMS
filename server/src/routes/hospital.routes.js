@@ -797,9 +797,6 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
             return res.status(403).json({ success: false, message: 'Unauthorized to view stats for this hospital' });
         }
 
-        const hospital = await Hospital.findById(hospitalId).populate('adminUserId', 'name email');
-        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
-
         // Lazy-load models to avoid circular issues
         const Appointment = require('../models/appointment.model');
         const Doctor = require('../models/doctor.model');
@@ -808,6 +805,24 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
         const LabReport = require('../models/labReport.model');
         const PharmacyOrder = require('../models/pharmacyOrder.model');
         const Role = require('../models/role.model');
+        const Bed = require('../models/bed.model');
+
+        // Parallel initial fetch: Hospital record + All Roles lookup map
+        const [hospital, roles, doctorIds] = await Promise.all([
+            Hospital.findById(hospitalId).populate('adminUserId', 'name email').lean(),
+            Role.find().select('_id name').lean(),
+            Doctor.find({ hospitalId }).select('_id doctorId userId').lean()
+        ]);
+
+        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+
+        // Build fast in-memory role lookup
+        const roleMap = new Map(roles.map(r => [String(r._id), r.name]));
+        const patientRoleIds = roles.filter(r => /^patient$/i.test(r.name)).map(r => r._id);
+        const excludedRoles = ['centraladmin', 'superadmin', 'hospitaladmin', 'patient', ...patientRoleIds.map(String), ...patientRoleIds];
+
+        const doctorObjectIds = doctorIds.map(d => d._id);
+        const doctorUserIds = doctorIds.map(d => d.userId).filter(Boolean);
 
         // Date filter construction
         let dateFilter = {};
@@ -824,63 +839,6 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
             if (endDate) createdDateFilter.createdAt.$lte = new Date(endDate);
         }
 
-        // 1. Staff counts (all non-patient users linked to this hospital)
-        const patientRole = await Role.findOne({ name: { $regex: /^patient$/i } });
-        const patientRoleId = patientRole ? patientRole._id : null;
-
-        const totalStaff = await User.countDocuments({
-            hospitalId,
-            role: { $nin: ['centraladmin', 'superadmin', 'hospitaladmin', 'patient', patientRoleId].filter(Boolean) }
-        });
-
-        // Staff by role (excluding patient, centraladmin, superadmin, hospitaladmin)
-        const staffByRole = await User.aggregate([
-            {
-                $match: {
-                    hospitalId: new mongoose.Types.ObjectId(hospitalId),
-                    role: { $nin: ['centraladmin', 'superadmin', 'hospitaladmin', 'patient', patientRoleId].filter(Boolean) }
-                }
-            },
-            { $group: { _id: '$role', count: { $sum: 1 } } }
-        ]);
-
-        // Resolve role names for staff breakdown
-        const staffBreakdown = (await Promise.all(staffByRole.map(async (item) => {
-            let name = String(item._id);
-            if (mongoose.Types.ObjectId.isValid(item._id)) {
-                const r = await Role.findById(item._id);
-                if (r) name = r.name;
-            }
-            return { role: name, count: item.count };
-        }))).filter(item => item.role && item.role.toLowerCase() !== 'patient');
-
-        // 2. Doctor count
-        const doctorCount = await Doctor.countDocuments({ hospitalId });
-
-        // 3. Lab count
-        const labCount = await Lab.countDocuments({ hospitalId });
-
-        // 4. Pharmacy count
-        const pharmacyCount = await Pharmacy.countDocuments({ hospitalId });
-
-        // 4b. Bed Occupancy
-        const Bed = require('../models/bed.model');
-        const totalBeds = await Bed.countDocuments({ hospitalId });
-        const occupiedBeds = await Bed.countDocuments({ hospitalId, status: 'OCCUPIED' });
-        const occupancyRate = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
-
-        // 5. Patients - unique patients seen by doctors in this hospital (filtered by date if applicable)
-        const doctorIds = await Doctor.find({ hospitalId }).select('_id doctorId userId');
-        const doctorObjectIds = doctorIds.map(d => d._id); // Doctor model _ids (used in Appointment.doctorId)
-        const doctorUserIds = doctorIds.map(d => d.userId).filter(Boolean); // User model _ids (used in LabReport.doctorId, PharmacyOrder.doctorId)
-
-        const uniquePatientIds = await Appointment.distinct('userId', {
-            doctorId: { $in: doctorObjectIds },
-            ...dateFilter
-        });
-        const totalPatients = uniquePatientIds.length;
-
-        // 6. Appointments stats (query by hospitalId OR doctors linked to the hospital)
         const appointmentMatch = {
             $or: [
                 { hospitalId: new mongoose.Types.ObjectId(hospitalId) },
@@ -888,142 +846,182 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
             ]
         };
 
-        const totalAppointments = await Appointment.countDocuments({
-            ...appointmentMatch,
-            ...dateFilter
-        });
-
-        const completedAppointments = await Appointment.countDocuments({
-            ...appointmentMatch,
-            status: 'completed',
-            ...dateFilter
-        });
-
-        const pendingAppointments = await Appointment.countDocuments({
-            ...appointmentMatch,
-            status: { $in: ['pending', 'confirmed'] },
-            ...dateFilter
-        });
-
-        // 7. Revenue — from paid appointments
-        // Case insensitive match for 'paid' and include 'Pending' if amount is collected, or just verify amount > 0.
-        // Receptionist might just set paymentStatus to 'Paid' or 'paid'
-        const revenueData = await Appointment.aggregate([
-            {
-                $match: {
-                    $and: [
-                        appointmentMatch,
-                        {
-                            $or: [
-                                { paymentStatus: { $regex: /^paid$/i } },
-                                { amount: { $gt: 0 } }
-                            ]
-                        }
-                    ],
-                    ...(startDate || endDate ? { appointmentDate: dateFilter.appointmentDate } : {})
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalRevenue: { $sum: '$amount' }
-                }
-            }
-        ]);
-        const totalRevenue = revenueData[0]?.totalRevenue || 0;
-
-        // Monthly revenue (always last 6 months regardless of date filter, to keep chart consistent)
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-        const monthlyRevenue = await Appointment.aggregate([
-            {
-                $match: {
-                    $and: [
-                        appointmentMatch,
-                        {
-                            $or: [
-                                { paymentStatus: { $regex: /^paid$/i } },
-                                { amount: { $gt: 0 } }
-                            ]
-                        }
-                    ],
-                    appointmentDate: { $gte: sixMonthsAgo }
+        // Run ALL remaining analytics and list queries concurrently in parallel
+        const [
+            totalStaff,
+            staffByRole,
+            doctorCount,
+            labCount,
+            pharmacyCount,
+            totalBeds,
+            occupiedBeds,
+            uniquePatientIds,
+            totalAppointments,
+            completedAppointments,
+            pendingAppointments,
+            revenueData,
+            monthlyRevenue,
+            labReportCount,
+            pendingLabReports,
+            pharmacyOrderCount,
+            recentAppointments,
+            staffList
+        ] = await Promise.all([
+            // 1. Staff count
+            User.countDocuments({
+                hospitalId,
+                role: { $nin: excludedRoles }
+            }),
+            // 1b. Staff by role
+            User.aggregate([
+                {
+                    $match: {
+                        hospitalId: new mongoose.Types.ObjectId(hospitalId),
+                        role: { $nin: excludedRoles }
+                    }
+                },
+                { $group: { _id: '$role', count: { $sum: 1 } } }
+            ]),
+            // 2. Doctor count
+            Doctor.countDocuments({ hospitalId }),
+            // 3. Lab count
+            Lab.countDocuments({ hospitalId }),
+            // 4. Pharmacy count
+            Pharmacy.countDocuments({ hospitalId }),
+            // 4b. Bed Occupancy
+            Bed.countDocuments({ hospitalId }),
+            Bed.countDocuments({ hospitalId, status: 'OCCUPIED' }),
+            // 5. Unique Patients
+            Appointment.distinct('userId', {
+                doctorId: { $in: doctorObjectIds },
+                ...dateFilter
+            }),
+            // 6. Appointments stats
+            Appointment.countDocuments({
+                ...appointmentMatch,
+                ...dateFilter
+            }),
+            Appointment.countDocuments({
+                ...appointmentMatch,
+                status: 'completed',
+                ...dateFilter
+            }),
+            Appointment.countDocuments({
+                ...appointmentMatch,
+                status: { $in: ['pending', 'confirmed'] },
+                ...dateFilter
+            }),
+            // 7. Revenue
+            Appointment.aggregate([
+                {
+                    $match: {
+                        $and: [
+                            appointmentMatch,
+                            {
+                                $or: [
+                                    { paymentStatus: { $regex: /^paid$/i } },
+                                    { amount: { $gt: 0 } }
+                                ]
+                            }
+                        ],
+                        ...(startDate || endDate ? { appointmentDate: dateFilter.appointmentDate } : {})
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalRevenue: { $sum: '$amount' }
+                    }
                 }
-            },
-            {
-                $group: {
-                    _id: {
-                        year: { $year: '$appointmentDate' },
-                        month: { $month: '$appointmentDate' }
-                    },
-                    revenue: { $sum: '$amount' },
-                    count: { $sum: 1 }
-                }
-            },
-            { $sort: { '_id.year': 1, '_id.month': 1 } }
+            ]),
+            // 7b. Monthly revenue
+            Appointment.aggregate([
+                {
+                    $match: {
+                        $and: [
+                            appointmentMatch,
+                            {
+                                $or: [
+                                    { paymentStatus: { $regex: /^paid$/i } },
+                                    { amount: { $gt: 0 } }
+                                ]
+                            }
+                        ],
+                        appointmentDate: { $gte: sixMonthsAgo }
+                    }
+                },
+                {
+                    $group: {
+                        _id: {
+                            year: { $year: '$appointmentDate' },
+                            month: { $month: '$appointmentDate' }
+                        },
+                        revenue: { $sum: '$amount' },
+                        count: { $sum: 1 }
+                    }
+                },
+                { $sort: { '_id.year': 1, '_id.month': 1 } }
+            ]),
+            // 8. Lab reports
+            LabReport.countDocuments({
+                doctorId: { $in: doctorUserIds },
+                ...createdDateFilter
+            }),
+            LabReport.countDocuments({
+                doctorId: { $in: doctorUserIds },
+                reportStatus: 'PENDING',
+                ...createdDateFilter
+            }),
+            // 9. Pharmacy orders
+            PharmacyOrder.countDocuments({
+                doctorId: { $in: doctorUserIds },
+                ...createdDateFilter
+            }),
+            // 10. Recent appointments
+            Appointment.find({
+                doctorId: { $in: doctorObjectIds },
+                ...dateFilter
+            })
+                .populate('userId', 'name patientId phone')
+                .populate('doctorId', 'name specialty')
+                .sort({ createdAt: -1 })
+                .limit(10)
+                .lean(),
+            // 11. Staff list
+            User.find({
+                hospitalId,
+                role: { $nin: ['centraladmin', 'superadmin', 'hospitaladmin'] }
+            }, { password: 0 })
+                .sort({ createdAt: -1 })
+                .lean()
         ]);
 
-        // 8. Lab reports (doctorId on LabReport is User._id, not Doctor._id)
-        const labReportCount = await LabReport.countDocuments({
-            doctorId: { $in: doctorUserIds },
-            ...createdDateFilter
-        });
-        const pendingLabReports = await LabReport.countDocuments({
-            doctorId: { $in: doctorUserIds },
-            reportStatus: 'PENDING',
-            ...createdDateFilter
-        });
+        // In-memory role resolution (0ms, no extra DB queries)
+        const staffBreakdown = staffByRole.map((item) => {
+            const name = roleMap.get(String(item._id)) || String(item._id);
+            return { role: name, count: item.count };
+        }).filter(item => item.role && item.role.toLowerCase() !== 'patient');
 
-        // 9. Pharmacy orders (doctorId on PharmacyOrder is User._id, not Doctor._id)
-        const pharmacyOrderCount = await PharmacyOrder.countDocuments({
-            doctorId: { $in: doctorUserIds },
-            ...createdDateFilter
-        });
-
-        // 10. Recent appointments (last 10 within filter)
-        const recentAppointments = await Appointment.find({
-            doctorId: { $in: doctorObjectIds },
-            ...dateFilter
-        })
-            .populate('userId', 'name patientId phone')
-            .populate('doctorId', 'name specialty')
-            .sort({ createdAt: -1 })
-            .limit(10)
-            .lean();
-
-        // 11. All staff list (excluding patients)
-        const staffList = await User.find({
-            hospitalId,
-            role: { $nin: ['centraladmin', 'superadmin', 'hospitaladmin'] }
-        }, { password: 0 })
-            .sort({ createdAt: -1 })
-            .lean();
-
-        // Resolve role names for staff list
-        const staffWithRoles = await Promise.all(staffList.map(async (u) => {
-            let roleName = String(u.role);
-            if (mongoose.Types.ObjectId.isValid(u.role)) {
-                const r = await Role.findById(u.role);
-                if (r) roleName = r.name;
-            }
+        const actualStaff = staffList.map((u) => {
+            const roleName = roleMap.get(String(u.role)) || String(u.role);
             return { ...u, roleName };
-        }));
+        }).filter(u => !['patient'].includes(u.roleName?.toLowerCase()));
 
-        // Filter out patients from staff list
-        const actualStaff = staffWithRoles.filter(u =>
-            !['patient'].includes(u.roleName?.toLowerCase())
-        );
+        const totalRevenue = revenueData[0]?.totalRevenue || 0;
+        const totalPatients = uniquePatientIds.length;
+        const occupancyRate = totalBeds > 0 ? Math.round((occupiedBeds / totalBeds) * 100) : 0;
 
         res.json({
             success: true,
             hospital: {
-                ...hospital.toObject(),
+                ...hospital,
                 adminName: hospital.adminUserId?.name || null,
                 adminEmail: hospital.adminUserId?.email || null
             },
             stats: {
-                // Staff
                 totalStaff,
                 doctorCount,
                 totalDoctors: doctorCount,
@@ -1033,16 +1031,12 @@ router.get('/:id/stats', verifyHospitalAdmin, async (req, res) => {
                 occupiedBeds,
                 occupancyRate,
                 staffBreakdown,
-                // Patients
                 totalPatients,
-                // Appointments
                 totalAppointments,
                 completedAppointments,
                 pendingAppointments,
-                // Revenue
                 totalRevenue,
                 monthlyRevenue,
-                // Lab & Pharmacy
                 labReportCount,
                 pendingLabReports,
                 pharmacyOrderCount

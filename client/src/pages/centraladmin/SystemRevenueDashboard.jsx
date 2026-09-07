@@ -35,34 +35,65 @@ const fmt = (n) =>
 
 const SystemRevenueDashboard = () => {
     const navigate = useNavigate();
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(true);
+    
+    // Instant cache read for 0ms initial load
+    const [data, setData] = useState(() => {
+        try {
+            const cached = sessionStorage.getItem('cached_system_revenue_data');
+            return cached ? JSON.parse(cached) : null;
+        } catch {
+            return null;
+        }
+    });
+
+    const [loading, setLoading] = useState(() => {
+        try {
+            return !sessionStorage.getItem('cached_system_revenue_data');
+        } catch {
+            return true;
+        }
+    });
+
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState('');
     const [activeView, setActiveView] = useState('overview'); // overview | hospitals | monthly | quarterly
     const [search, setSearch] = useState('');
     const [filterModel, setFilterModel] = useState('all');
 
     useEffect(() => {
-        load();
+        load(false);
     }, []);
 
-    const load = async () => {
-        setLoading(true);
+    const load = async (isManual = false) => {
+        if (isManual) {
+            setIsRefreshing(true);
+        } else if (!data) {
+            setLoading(true);
+        }
         setError('');
         try {
-            const res = await revenueAPI.getSystemAnalytics();
-            if (res.success) setData(res);
-            else setError(res.message || 'Failed to load analytics');
+            const res = await revenueAPI.getSystemAnalytics(isManual);
+            if (res?.success) {
+                setData(res);
+                try {
+                    sessionStorage.setItem('cached_system_revenue_data', JSON.stringify(res));
+                } catch (e) {
+                    console.error('Failed to cache revenue data:', e);
+                }
+            } else {
+                if (!data) setError(res?.message || 'Failed to load analytics');
+            }
         } catch (err) {
-            setError(err?.response?.data?.message || err.message);
+            if (!data) setError(err?.response?.data?.message || err.message);
         } finally {
             setLoading(false);
+            setIsRefreshing(false);
         }
     };
 
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
-    if (loading) {
+    if (loading && !data) {
         return (
             <div className="srd-page">
                 <div className="srd-loader">
@@ -73,13 +104,13 @@ const SystemRevenueDashboard = () => {
         );
     }
 
-    if (error) {
+    if (error && !data) {
         return (
             <div className="srd-page">
                 <div className="srd-error-box">
                     <span>⚠️</span>
                     <p>{error}</p>
-                    <button onClick={load}>Retry</button>
+                    <button onClick={() => load(true)}>Retry</button>
                 </div>
             </div>
         );
@@ -91,12 +122,11 @@ const SystemRevenueDashboard = () => {
     const maxQuarterTotal = Math.max(...quarterlyBreakdown.map(q => q.total), 1);
 
     const filteredHospitals = hospitals.filter(h => {
-        const matchSearch = !search || h.name.toLowerCase().includes(search.toLowerCase());
+        const matchSearch = !search || h.name?.toLowerCase().includes(search.toLowerCase());
         const matchModel = filterModel === 'all' || h.revenueModel === filterModel;
         return matchSearch && matchModel;
     });
 
-    // Annual projected revenue = last 12 months average × 12 OR sum of monthly fees × 12
     const annualProjected = monthlyBreakdown.length
         ? (monthlyBreakdown.reduce((s, m) => s + m.total, 0) / monthlyBreakdown.length) * 12
         : 0;
@@ -105,6 +135,9 @@ const SystemRevenueDashboard = () => {
 
     return (
         <div className="srd-page">
+            {/* Top syncing bar */}
+            {isRefreshing && <div className="srd-top-sync-bar" />}
+
             <div className="srd-container">
 
                 {/* ── Header ───────────────────────────────────── */}
@@ -115,11 +148,17 @@ const SystemRevenueDashboard = () => {
                         </button>
                         <div className="srd-brand-badge">REVENUE INTELLIGENCE</div>
                         <h1>System Revenue Analytics</h1>
-                        <p>Complete financial overview of your SaaS platform across all hospitals & clinics</p>
+                        <p>Complete financial overview of your SaaS platform across all hospitals &amp; clinics</p>
                     </div>
                     <div className="srd-header-right">
-                        <span className="srd-admin-name">{currentUser?.name}</span>
-                        <button className="srd-refresh-btn" onClick={load}>↻ Refresh</button>
+                        <span className="srd-admin-name">{currentUser?.name || 'Central Admin'}</span>
+                        <button 
+                            className={`srd-refresh-btn ${isRefreshing ? 'is-spinning' : ''}`} 
+                            onClick={() => load(true)}
+                            disabled={isRefreshing}
+                        >
+                            <span className="refresh-icon">↻</span> {isRefreshing ? 'Updating...' : 'Refresh'}
+                        </button>
                     </div>
                 </div>
 
@@ -146,7 +185,7 @@ const SystemRevenueDashboard = () => {
                         <div className="srd-kpi-body">
                             <p>Total Entities</p>
                             <h2>{summary?.totalEntities || 0}</h2>
-                            <span>Active hospitals & clinics</span>
+                            <span>Active hospitals &amp; clinics</span>
                         </div>
                     </div>
                     <div className="srd-kpi-card">
@@ -207,7 +246,7 @@ const SystemRevenueDashboard = () => {
                     {[
                         { id: 'overview', label: '📈 Monthly Chart' },
                         { id: 'quarterly', label: '📆 Quarterly' },
-                        { id: 'hospitals', label: '🏥 All Hospitals' },
+                        { id: 'hospitals', label: `🏥 All Hospitals (${hospitals.length})` },
                     ].map(v => (
                         <button
                             key={v.id}
@@ -239,31 +278,33 @@ const SystemRevenueDashboard = () => {
                             ))}
                         </div>
 
-                        <div className="srd-bar-chart">
-                            {monthlyBreakdown.map((m, i) => (
-                                <div key={i} className="srd-bar-col">
-                                    <div className="srd-bar-amount">{fmt(m.total)}</div>
-                                    <div className="srd-bar-stack" style={{ height: '160px' }}>
-                                        <div
-                                            className="srd-bar-seg"
-                                            style={{
-                                                height: `${maxMonthlyTotal > 0 ? (m.perPatient / maxMonthlyTotal) * 100 : 0}%`,
-                                                background: MODEL_META.per_patient.color,
-                                            }}
-                                            title={`Per Patient: ${fmt(m.perPatient)}`}
-                                        />
-                                        <div
-                                            className="srd-bar-seg"
-                                            style={{
-                                                height: `${maxMonthlyTotal > 0 ? (m.fixedMonthly / maxMonthlyTotal) * 100 : 0}%`,
-                                                background: MODEL_META.fixed_monthly.color,
-                                            }}
-                                            title={`Fixed Monthly: ${fmt(m.fixedMonthly)}`}
-                                        />
+                        <div className="srd-bar-chart-container">
+                            <div className="srd-bar-chart">
+                                {monthlyBreakdown.map((m, i) => (
+                                    <div key={i} className="srd-bar-col">
+                                        <div className="srd-bar-amount">{fmt(m.total)}</div>
+                                        <div className="srd-bar-stack" style={{ height: '160px' }}>
+                                            <div
+                                                className="srd-bar-seg"
+                                                style={{
+                                                    height: `${maxMonthlyTotal > 0 ? (m.perPatient / maxMonthlyTotal) * 100 : 0}%`,
+                                                    background: MODEL_META.per_patient.color,
+                                                }}
+                                                title={`Per Patient: ${fmt(m.perPatient)}`}
+                                            />
+                                            <div
+                                                className="srd-bar-seg"
+                                                style={{
+                                                    height: `${maxMonthlyTotal > 0 ? (m.fixedMonthly / maxMonthlyTotal) * 100 : 0}%`,
+                                                    background: MODEL_META.fixed_monthly.color,
+                                                }}
+                                                title={`Fixed Monthly: ${fmt(m.fixedMonthly)}`}
+                                            />
+                                        </div>
+                                        <div className="srd-bar-label">{m.label}</div>
                                     </div>
-                                    <div className="srd-bar-label">{m.label}</div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
 
                         {monthlyBreakdown.length === 0 && (
@@ -345,7 +386,7 @@ const SystemRevenueDashboard = () => {
                 {activeView === 'hospitals' && (
                     <div className="srd-card">
                         <div className="srd-card-header">
-                            <h2>All Hospitals & Clinics</h2>
+                            <h2>All Hospitals &amp; Clinics</h2>
                             <p>Revenue model, rate, and current month charge for each entity</p>
                         </div>
 
@@ -374,7 +415,7 @@ const SystemRevenueDashboard = () => {
                                         <th>Revenue Model</th>
                                         <th>Rate / Fee</th>
                                         <th>This Month Charge</th>
-                                        <th>Action</th>
+                                        <th style={{ textAlign: 'right' }}>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -399,7 +440,7 @@ const SystemRevenueDashboard = () => {
                                                 </td>
                                                 <td>{h.rateLabel || '—'}</td>
                                                 <td><strong>{fmt(h.currentCharge)}</strong></td>
-                                                <td>
+                                                <td style={{ textAlign: 'right' }}>
                                                     <button
                                                         className="srd-manage-btn"
                                                         onClick={() => navigate('/supremeadmin', { state: { openTab: 'revenue-plans', hospitalId: h._id } })}

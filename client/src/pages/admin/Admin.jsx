@@ -34,12 +34,15 @@ const HospitalSelect = ({ hospitals, value, onChange }) => {
             </div>
             {isOpen && (
                 <div 
+                    data-lenis-prevent
                     onWheel={(e) => e.stopPropagation()}
                     style={{
                         position: 'absolute', top: '100%', left: 0, right: 0, 
                         background: '#fff', border: '1px solid #767676', 
                         borderRadius: '2px', marginTop: '1px', zIndex: 50,
-                        maxHeight: '160px', overflowY: 'auto', boxShadow: '2px 2px 5px rgba(0,0,0,0.2)', padding: '2px 0'
+                        maxHeight: '160px', overflowY: 'auto', overscrollBehavior: 'contain',
+                        WebkitOverflowScrolling: 'touch',
+                        boxShadow: '2px 2px 5px rgba(0,0,0,0.2)', padding: '2px 0'
                     }}
                 >
                     <div 
@@ -283,11 +286,13 @@ const Admin = () => {
         }
     };
 
+    const PAGE_SIZE = 10;
+
     const fetchUsers = async (
         plan = staffPlanFilter, 
         hospitalId = staffHospitalFilter, 
         targetPage = 1, 
-        limit = 15, 
+        limit = PAGE_SIZE, 
         search = staffSearchQuery,
         isAppend = false
     ) => {
@@ -336,6 +341,14 @@ const Admin = () => {
         }
     };
 
+    const handleTableScroll = (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        if (scrollHeight - scrollTop - clientHeight < 150 && hasMore && !loadingMore && !loadingUsers) {
+            const nextPage = page + 1;
+            fetchUsers(staffPlanFilter, staffHospitalFilter, nextPage, PAGE_SIZE, staffSearchQuery, true);
+        }
+    };
+
     // Infinite Scroll IntersectionObserver trigger
     useEffect(() => {
         if (loadingUsers || loadingMore || !hasMore) return;
@@ -344,7 +357,7 @@ const Admin = () => {
             (entries) => {
                 if (entries[0].isIntersecting && hasMore && !loadingMore && !loadingUsers) {
                     const nextPage = page + 1;
-                    fetchUsers(staffPlanFilter, staffHospitalFilter, nextPage, 15, staffSearchQuery, true);
+                    fetchUsers(staffPlanFilter, staffHospitalFilter, nextPage, PAGE_SIZE, staffSearchQuery, true);
                 }
             },
             { threshold: 0.1, rootMargin: '120px' }
@@ -373,7 +386,7 @@ const Admin = () => {
         }
 
         searchTimeoutRef.current = setTimeout(() => {
-            fetchUsers(staffPlanFilter, staffHospitalFilter, 1, 15, query, false);
+            fetchUsers(staffPlanFilter, staffHospitalFilter, 1, PAGE_SIZE, query, false);
         }, 300);
     };
 
@@ -383,7 +396,7 @@ const Admin = () => {
         if (searchTimeoutRef.current) {
             clearTimeout(searchTimeoutRef.current);
         }
-        fetchUsers(staffPlanFilter, staffHospitalFilter, 1, 15, '', false);
+        fetchUsers(staffPlanFilter, staffHospitalFilter, 1, PAGE_SIZE, '', false);
     };
 
     const handlePlanFilterChange = (e) => {
@@ -391,14 +404,14 @@ const Admin = () => {
         setStaffPlanFilter(newPlan);
         setStaffHospitalFilter('');
         setPage(1);
-        fetchUsers(newPlan, '', 1, 15, staffSearchQuery, false);
+        fetchUsers(newPlan, '', 1, PAGE_SIZE, staffSearchQuery, false);
         fetchHospitals(newPlan);
     };
 
     const handleHospitalFilterChange = (newHosp) => {
         setStaffHospitalFilter(newHosp);
         setPage(1);
-        fetchUsers(staffPlanFilter, newHosp, 1, 15, staffSearchQuery, false);
+        fetchUsers(staffPlanFilter, newHosp, 1, PAGE_SIZE, staffSearchQuery, false);
     };
 
     useEffect(() => {
@@ -908,13 +921,13 @@ const Admin = () => {
                                 <p>No staff members match your current search or filters.</p>
                                 {(staffSearchQuery || staffPlanFilter || staffHospitalFilter) && (
                                     <button 
-                                        type="button"
+                                        type="button" 
                                         onClick={() => {
                                             setStaffSearchQuery('');
                                             setStaffPlanFilter('');
                                             setStaffHospitalFilter('');
                                             setPage(1);
-                                            fetchUsers('', '', 1, 15, '', false);
+                                            fetchUsers('', '', 1, PAGE_SIZE, '', false);
                                         }}
                                         className="btn-cancel"
                                         style={{ marginTop: '14px', padding: '8px 18px', fontSize: '13px', borderRadius: '8px' }}
@@ -924,7 +937,11 @@ const Admin = () => {
                                 )}
                             </div>
                         ) : (
-                            <div className="users-table">
+                            <div 
+                                className="users-table" 
+                                data-lenis-prevent
+                                onScroll={handleTableScroll}
+                            >
                                 <table>
                                     <thead>
                                         <tr>
@@ -950,7 +967,7 @@ const Admin = () => {
                                                 <tr 
                                                     key={userItem.id || userItem._id} 
                                                     className={`staff-table-row ${colorThemeClass}`}
-                                                    style={{ animationDelay: `${(index % 15) * 25}ms` }}
+                                                    style={{ animationDelay: `${(index % 10) * 25}ms` }}
                                                 >
                                                     <td className="staff-col-avatar">
                                                         {userItem.avatar ? (
@@ -996,23 +1013,22 @@ const Admin = () => {
                                         })}
                                     </tbody>
                                 </table>
+
+                                {/* Infinite Scroll Sentinel inside scrollable table */}
+                                <div ref={observerRef} className="staff-infinite-sentinel" data-lenis-prevent>
+                                    {loadingMore && (
+                                        <div className="staff-infinite-loader" style={{ padding: '6px 0', display: 'flex', justifyContent: 'center' }}>
+                                            <div className="staff-infinite-spinner" />
+                                        </div>
+                                    )}
+                                    {!hasMore && users.length > 0 && !loadingUsers && (
+                                        <span className="staff-all-loaded-text">
+                                            ✨ All {totalRecords} staff records loaded
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         )}
-
-                        {/* Infinite Scroll Sentinel */}
-                        <div ref={observerRef} className="staff-infinite-sentinel">
-                            {loadingMore && (
-                                <div className="staff-infinite-loader">
-                                    <div className="staff-infinite-spinner" />
-                                    <span>Loading more staff members...</span>
-                                </div>
-                            )}
-                            {!hasMore && users.length > 0 && !loadingUsers && (
-                                <span className="staff-all-loaded-text">
-                                    ✨ All {totalRecords} staff records loaded
-                                </span>
-                            )}
-                        </div>
                     </div>
                 </div>
 

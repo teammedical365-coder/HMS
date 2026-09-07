@@ -66,6 +66,30 @@ const App = () => {
       smoothWheel: true,
       wheelMultiplier: 1.0,
       touchMultiplier: 1.5,
+      prevent: (node) => {
+        if (!node || typeof node.closest !== 'function') return false;
+        // Prevent Lenis from intercepting scroll on custom dropdowns, lists, selects, modals or any element marked with data-lenis-prevent
+        if (node.closest('[data-lenis-prevent], .lenis-prevent, select, textarea, .ql-lang-list, .ql-lang-dropdown-menu, .modal-content, .modal-body, .custom-select-menu, .custom-dropdown-list, [role="listbox"], [role="menu"], [role="dialog"]')) {
+          return true;
+        }
+        // Auto-detect any scrollable container with overflow-y auto/scroll
+        let current = node;
+        while (current && current !== document.body && current !== document.documentElement) {
+          if (current.scrollHeight > current.clientHeight || current.scrollWidth > current.clientWidth) {
+            const style = window.getComputedStyle(current);
+            const overflowY = style.overflowY;
+            const overflowX = style.overflowX;
+            if (
+              overflowY === 'auto' || overflowY === 'scroll' ||
+              overflowX === 'auto' || overflowX === 'scroll'
+            ) {
+              return true;
+            }
+          }
+          current = current.parentElement;
+        }
+        return false;
+      },
     });
 
     let animId;

@@ -336,6 +336,7 @@ const MainRoutes = () => {
                             
                             {/* Supreme Admin Isolated Login Route */}
                             <Route path="/supremeadmin" element={<CentralAdminLogin />} />
+                            <Route path="/supremeadmin/login" element={<CentralAdminLogin />} />
                             
                             {/* Legacy/Signups routing */}
                             <Route path="/signup" element={<Signup />} />

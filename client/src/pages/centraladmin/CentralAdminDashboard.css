@@ -625,7 +625,7 @@
 /* Hospital Grid */
 .cad-hospitals-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 18px;
   margin-top: 16px;
   width: 100%;
@@ -1064,6 +1064,16 @@
     display: none; /* Hide decorative SVG on narrow screens */
   }
 
+  .cad-hospitals-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  .cad-hospital-card {
+    padding: 14px !important;
+    border-radius: 14px !important;
+  }
+
   .cad-create-hospital-page {
     width: 100% !important;
     max-width: 100% !important;
@@ -1200,13 +1210,15 @@
     display: flex !important;
     flex-wrap: wrap !important;
     align-items: center !important;
-    justify-content: space-around !important;
+    justify-content: space-between !important;
     gap: 8px !important;
-    padding: 10px 12px !important;
+    padding: 8px 12px !important;
     border-radius: 12px !important;
     width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
     box-sizing: border-box !important;
-    margin-top: 10px !important;
+    margin: 8px 0 0 0 !important;
   }
 
   .h-detail-bottom-stat-sep {
@@ -1498,6 +1510,79 @@
   .cad-actions-grid {
     grid-template-columns: 1fr !important;
     gap: 10px !important;
+  }
+
+  /* Admin Card Responsive Overrides for Android/Mobile */
+  .admin-card {
+    padding: 16px 12px !important;
+    margin-bottom: 16px !important;
+    border-radius: 14px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .admin-card h2,
+  .admin-card h3 {
+    font-size: 1.15rem !important;
+    margin-bottom: 10px !important;
+  }
+
+  /* Expandable Full-Width Table with touch scroll */
+  .admin-card .users-table {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-top: 12px !important;
+    margin-bottom: 0 !important;
+    border-radius: 10px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    box-sizing: border-box !important;
+  }
+
+  .admin-card .users-table table {
+    width: 100% !important;
+    min-width: 480px !important;
+  }
+
+  .admin-card .users-table th,
+  .admin-card .users-table td {
+    padding: 10px 8px !important;
+    font-size: 0.8rem !important;
+  }
+
+  /* Clinic Admin Profile Box */
+  .clinic-admin-profile-box {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    background: #f0fdf4 !important;
+    border: 1px solid #bbf7d0 !important;
+    border-radius: 10px !important;
+    padding: 12px 14px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Responsive Form Rows inside Cards */
+  .admin-card .form-row {
+    grid-template-columns: 1fr !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .admin-card .form-group {
+    width: 100% !important;
+    margin-bottom: 4px !important;
+  }
+
+  .admin-card .staff-input {
+    width: 100% !important;
+    padding: 10px 12px !important;
+    font-size: 0.9rem !important;
+    box-sizing: border-box !important;
   }
 }
 
@@ -3470,7 +3555,7 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 195px;
+  width: 245px;
   height: 100%;
   pointer-events: none;
   z-index: 1;
@@ -4056,7 +4141,7 @@
   margin: 6px auto 0 auto;
   width: 58%;
   max-width: 540px;
-  min-width: 420px;
+  min-width: 300px;
   position: relative;
   z-index: 6;
   box-sizing: border-box;
@@ -5475,4 +5560,250 @@
   .h-detail-hero-content { flex-direction: column; align-items: flex-start; gap: 16px; }
   .h-detail-hero-right { width: 100%; flex-direction: row; justify-content: space-between; align-items: center; }
   .h-detail-timeframe-controls { flex-direction: column; align-items: flex-start; }
+}
+
+/* ==========================================================================
+   MEDICAL TELEMETRY HUD LOADING EXPERIENCE & GLOWING ECG ANIMATION
+   ========================================================================== */
+
+.h-detail-loading-hud {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  animation: hudFadeIn 0.35s ease-out;
+}
+
+@keyframes hudFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.h-hud-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdfa 50%, #f8faff 100%);
+  border: 1px solid #c7d2fe;
+  border-radius: 18px;
+  padding: 20px 28px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  box-shadow: 0 10px 28px rgba(99, 102, 241, 0.08), 0 2px 8px rgba(0, 0, 0, 0.03);
+  position: relative;
+  overflow: hidden;
+}
+
+.h-hud-pulse-cluster {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.h-hud-core-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+  z-index: 2;
+  animation: hudCoreFloat 2.5s ease-in-out infinite alternate;
+}
+
+@keyframes hudCoreFloat {
+  0% { transform: scale(0.96); }
+  100% { transform: scale(1.05); }
+}
+
+.h-hud-radar-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  border: 2px solid #818cf8;
+  opacity: 0.8;
+  animation: hudRadarRing 2.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+  pointer-events: none;
+}
+
+.h-hud-radar-ring-delay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  border: 2px solid #38bdf8;
+  opacity: 0.8;
+  animation: hudRadarRing 2.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite 0.75s;
+  pointer-events: none;
+}
+
+@keyframes hudRadarRing {
+  0% { transform: scale(0.7); opacity: 0.9; }
+  70% { transform: scale(1.6); opacity: 0.2; }
+  100% { transform: scale(1.85); opacity: 0; }
+}
+
+.h-hud-text-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.h-hud-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #1e1b4b;
+  letter-spacing: -0.2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.h-hud-subtitle {
+  font-size: 0.82rem;
+  color: #475569;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.h-hud-dot-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  display: inline-block;
+  animation: hudDotPulse 1.4s infinite ease-in-out;
+}
+
+@keyframes hudDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.75); }
+}
+
+.h-hud-ecg-stream {
+  width: 220px;
+  height: 36px;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.h-hud-ecg-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.h-hud-ecg-glow {
+  stroke-dasharray: 120;
+  stroke-dashoffset: 240;
+  animation: hudEcgSweep 1.8s linear infinite;
+  filter: drop-shadow(0 0 4px #38bdf8);
+}
+
+@keyframes hudEcgSweep {
+  to { stroke-dashoffset: 0; }
+}
+
+/* Shimmering Skeleton KPI Grid */
+.h-skeleton-grid {
+  margin-top: 0 !important;
+}
+
+.h-skeleton-card {
+  position: relative;
+  overflow: hidden;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px !important;
+}
+
+.h-skeleton-shimmer {
+  position: absolute;
+  top: 0;
+  left: -150%;
+  width: 150%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent 0%, rgba(224, 231, 255, 0.5) 50%, transparent 100%);
+  animation: skeletonSweep 1.6s infinite ease-in-out;
+  pointer-events: none;
+}
+
+@keyframes skeletonSweep {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(200%); }
+}
+
+.h-skeleton-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #e2e8f0;
+}
+
+.h-skeleton-line {
+  border-radius: 6px;
+  background: #e2e8f0;
+}
+
+.h-skeleton-line-lg {
+  width: 60%;
+  height: 24px;
+}
+
+.h-skeleton-line-sm {
+  width: 80%;
+  height: 14px;
+}
+
+.h-skeleton-charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+}
+
+.h-skeleton-chart-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  min-height: 220px;
+  position: relative;
+  overflow: hidden;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (max-width: 768px) {
+  .h-hud-card {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px;
+    gap: 14px;
+  }
+  .h-hud-ecg-stream {
+    width: 100%;
+  }
+  .h-skeleton-charts-row {
+    grid-template-columns: 1fr;
+  }
 }

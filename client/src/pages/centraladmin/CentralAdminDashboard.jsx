@@ -101,6 +101,18 @@ const WhiteLabelBuilder = ({ hospital }) => {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+// Module-level in-memory cache for instant 0ms tab switching and high performance
+const centralAdminCache = {
+    hospitals: {}, // { enterprise: [...], multi_speciality_starter: [...], clinic_basic: [...] }
+    clinics: {},   // { starter: [...], basic: [...] }
+    hospitalStats: {}, // { [cacheKey]: {...} }
+    clinicStats: {},   // { [clinicId]: {...} }
+    roles: {},     // { [plan]: [...] }
+    departments: null,
+    revenuePlans: null,
+    systemAnalytics: null
+};
+
 const CentralAdminDashboard = () => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('hospitals');
@@ -211,11 +223,16 @@ const CentralAdminDashboard = () => {
         return 'enterprise';
     };
 
-    const fetchSystemAnalytics = async () => {
-        try {
+    const fetchSystemAnalytics = async (force = false) => {
+        if (!force && centralAdminCache.systemAnalytics) {
+            setSystemAnalytics(centralAdminCache.systemAnalytics);
+        } else if (!centralAdminCache.systemAnalytics) {
             setLoadingAnalytics(true);
+        }
+        try {
             const res = await revenueAPI.getSystemAnalytics();
             if (res && res.success) {
+                centralAdminCache.systemAnalytics = res;
                 setSystemAnalytics(res);
             }
         } catch (err) {
@@ -246,13 +263,21 @@ const CentralAdminDashboard = () => {
     const handleRefreshAll = async () => {
         setIsRefreshing(true);
         try {
+            // Bust client cache to force fresh DB fetch
+            centralAdminCache.hospitals = {};
+            centralAdminCache.clinics = {};
+            centralAdminCache.roles = {};
+            centralAdminCache.departments = null;
+            centralAdminCache.revenuePlans = null;
+            centralAdminCache.systemAnalytics = null;
+
             const plan = getActivePlanName();
             await Promise.all([
-                fetchHospitals(plan),
-                fetchRoles(plan),
-                fetchDepartments(),
-                fetchClinics(plan),
-                fetchSystemAnalytics()
+                fetchHospitals(plan, true),
+                fetchRoles(plan, true),
+                fetchDepartments(true),
+                fetchClinics(plan, true),
+                fetchSystemAnalytics(true)
             ]);
             toast.success('Dashboard data refreshed!');
         } catch (err) {
@@ -262,15 +287,10 @@ const CentralAdminDashboard = () => {
         }
     };
 
+    // Load initial global static metadata (departments, analytics) once on mount
     useEffect(() => {
-        const plan = getActivePlanName();
-        Promise.all([
-            fetchHospitals(plan),
-            fetchRoles(plan),
-            fetchDepartments(),
-            fetchClinics(plan),
-            fetchSystemAnalytics()
-        ]).catch(err => console.error('Failed initial dashboard load:', err));
+        fetchDepartments();
+        fetchSystemAnalytics();
     }, []);
 
     // Handle navigation state from SystemRevenueDashboard "Manage Plan" button
@@ -348,7 +368,7 @@ const CentralAdminDashboard = () => {
         setEditClinic(null);
         setSelectedClinic(null);
 
-        if (activeTab === 'revenue-plans' && revenuePlans.length === 0) {
+        if (activeTab === 'revenue-plans') {
             fetchRevenuePlans();
         } else if (activeTab === 'simple-clinics') {
             fetchClinics(plan);
@@ -359,11 +379,18 @@ const CentralAdminDashboard = () => {
         }
     }, [activeTab]);
 
-    const fetchRevenuePlans = async () => {
-        setLoadingRevenuePlans(true);
+    const fetchRevenuePlans = async (force = false) => {
+        if (!force && centralAdminCache.revenuePlans) {
+            setRevenuePlans(centralAdminCache.revenuePlans);
+        } else if (!centralAdminCache.revenuePlans) {
+            setLoadingRevenuePlans(true);
+        }
         try {
             const res = await revenueAPI.getHospitalsRevenue();
-            if (res.success) setRevenuePlans(res.hospitals || []);
+            if (res.success) {
+                centralAdminCache.revenuePlans = res.hospitals || [];
+                setRevenuePlans(res.hospitals || []);
+            }
         } catch (err) { console.error('Failed to load revenue plans:', err); }
         finally { setLoadingRevenuePlans(false); }
     };
@@ -390,19 +417,26 @@ const CentralAdminDashboard = () => {
                 ratePerLogin: planForm.ratePerLogin !== '' ? Number(planForm.ratePerLogin) : undefined,
                 billingCycle: planForm.billingCycle,
             });
+            centralAdminCache.revenuePlans = null;
             setSuccess(`Revenue plan updated for ${editingPlan.name}`);
             setEditingPlan(null);
-            fetchRevenuePlans();
+            fetchRevenuePlans(true);
         } catch (err) { setError(err?.response?.data?.message || err.message); }
         finally { setSavingPlan(false); }
     };
 
-    const fetchDepartments = async () => {
+    const fetchDepartments = async (force = false) => {
+        if (!force && centralAdminCache.departments) {
+            setAvailableDepartments(centralAdminCache.departments);
+            return;
+        }
         try {
             const res = await questionLibraryAPI.getLibrary();
             if (res.success && res.data && res.data.data) {
                 // The root keys of the question library JSON are the department names
-                setAvailableDepartments(Object.keys(res.data.data));
+                const depts = Object.keys(res.data.data);
+                centralAdminCache.departments = depts;
+                setAvailableDepartments(depts);
             }
         } catch (err) { console.error('Failed to load global question libraries:', err); }
     };
@@ -410,31 +444,54 @@ const CentralAdminDashboard = () => {
     // ==========================================
     // SIMPLE CLINIC HANDLERS
     // ==========================================
-    const fetchClinics = async (plan = getActivePlanName()) => {
-        try {
+    const fetchClinics = async (plan = getActivePlanName(), force = false) => {
+        if (!force && centralAdminCache.clinics[plan]) {
+            setClinics(centralAdminCache.clinics[plan]);
+        } else if (!centralAdminCache.clinics[plan]) {
             setLoadingClinics(true);
+        }
+        try {
             const res = await simpleClinicAPI.getClinics(plan);
-            if (res.success) setClinics(res.clinics);
+            if (res.success) {
+                centralAdminCache.clinics[plan] = res.clinics;
+                setClinics(res.clinics);
+            }
         } catch (err) { console.error('Failed to load clinics:', err); }
         finally { setLoadingClinics(false); }
     };
 
-    const openClinicDetail = async (clinic) => {
+    const openClinicDetail = async (clinic, forceRefresh = false) => {
         setSelectedClinic(clinic);
         setClinicApptMode(clinic.appointmentMode || 'token');
-        setLoadingClinicStats(true);
-        setClinicStats(null);
-        setClinicSubscriptions([]);
         setSubscriptionRateForm({
             ratePerPatient: clinic.subscription?.ratePerPatient ?? '',
             billingEnabled: clinic.subscription?.billingEnabled ?? false,
         });
+
+        const cacheKey = clinic._id;
+        if (!forceRefresh && centralAdminCache.clinicStats && centralAdminCache.clinicStats[cacheKey]) {
+            setClinicStats(centralAdminCache.clinicStats[cacheKey].statsRes);
+            setClinicSubscriptions(centralAdminCache.clinicStats[cacheKey].subRes || []);
+            setLoadingClinicStats(false);
+        } else {
+            setLoadingClinicStats(true);
+            setClinicStats(null);
+            setClinicSubscriptions([]);
+        }
+
         try {
             const [statsRes, subRes] = await Promise.all([
                 simpleClinicAPI.getStats(clinic._id),
                 simpleClinicAPI.getSubscriptions(clinic._id),
             ]);
-            if (statsRes.success) setClinicStats(statsRes);
+            if (statsRes.success) {
+                if (!centralAdminCache.clinicStats) centralAdminCache.clinicStats = {};
+                centralAdminCache.clinicStats[cacheKey] = {
+                    statsRes,
+                    subRes: subRes.subscriptions || []
+                };
+                setClinicStats(statsRes);
+            }
             if (subRes.success) setClinicSubscriptions(subRes.subscriptions || []);
         } catch (err) { console.error('Failed to load clinic stats:', err); }
         finally { setLoadingClinicStats(false); }
@@ -484,12 +541,22 @@ const CentralAdminDashboard = () => {
             const plan = activeTab === 'clinic-basic' ? 'basic' : 'starter';
             if (editClinic) {
                 const res = await simpleClinicAPI.updateClinic(editClinic._id, { ...clinicForm, plan });
-                if (res.success) { setSuccess('Clinic updated.'); fetchClinics(); setEditClinic(null); setShowClinicForm(false); }
-                else setError(res.message || 'Failed to update clinic');
+                if (res.success) {
+                    centralAdminCache.clinics = {};
+                    setSuccess('Clinic updated.');
+                    fetchClinics(getActivePlanName(), true);
+                    setEditClinic(null);
+                    setShowClinicForm(false);
+                } else setError(res.message || 'Failed to update clinic');
             } else {
                 const res = await simpleClinicAPI.createClinic({ ...clinicForm, plan });
-                if (res.success) { setSuccess('Clinic created successfully!'); fetchClinics(); setShowClinicForm(false); setClinicForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', defaultFee: 0 }); }
-                else setError(res.message || 'Failed to create clinic');
+                if (res.success) {
+                    centralAdminCache.clinics = {};
+                    setSuccess('Clinic created successfully!');
+                    fetchClinics(getActivePlanName(), true);
+                    setShowClinicForm(false);
+                    setClinicForm({ name: '', slug: '', address: '', city: '', state: '', phone: '', email: '', website: '', defaultFee: 0 });
+                } else setError(res.message || 'Failed to create clinic');
             }
         } catch (err) { setError(err.response?.data?.message || err.message); }
         finally { setSavingClinic(false); }
@@ -497,10 +564,13 @@ const CentralAdminDashboard = () => {
 
     const handleDeleteClinic = async (id) => {
         try {
-            const plan = activeTab === 'clinic-basic' ? 'basic' : 'starter';
             const res = await simpleClinicAPI.deleteClinic(id);
-            if (res.success) { setSuccess('Clinic deleted.'); fetchClinics(); setDeleteClinicConfirm(null); }
-            else setError(res.message);
+            if (res.success) {
+                centralAdminCache.clinics = {};
+                setSuccess('Clinic deleted.');
+                fetchClinics(getActivePlanName(), true);
+                setDeleteClinicConfirm(null);
+            } else setError(res.message);
         } catch (err) { setError(err.response?.data?.message || err.message); }
     };
 
@@ -511,12 +581,13 @@ const CentralAdminDashboard = () => {
         try {
             const res = await simpleClinicAPI.createManager(selectedClinic._id, clinicManagerForm);
             if (res.success) {
+                centralAdminCache.clinics = {};
                 setSuccess(`Admin created! ${res.manager.name} can now login at /login with email: ${res.manager.email}`);
                 setClinicManagerForm({ name: '', email: '', password: '', phone: '', age: '', aadhaarNumber: '' });
                 setShowClinicManagerForm(false);
                 // Refresh clinic list and re-open detail with fresh data
                 setSelectedClinic(prev => ({ ...prev, adminUserId: res.manager }));
-                await fetchClinics();
+                await fetchClinics(getActivePlanName(), true);
                 // Re-fetch stats so adminUserId populates
                 setLoadingClinicStats(true);
                 const statsRes = await simpleClinicAPI.getStats(selectedClinic._id);
@@ -562,27 +633,54 @@ const CentralAdminDashboard = () => {
         }
     };
 
-    const fetchHospitals = async (plan = getActivePlanName()) => {
-        try {
+    const fetchHospitals = async (plan = getActivePlanName(), force = false) => {
+        if (!force && centralAdminCache.hospitals[plan]) {
+            setHospitals(centralAdminCache.hospitals[plan]);
+        } else if (!centralAdminCache.hospitals[plan]) {
             setLoadingHospitals(true);
+        }
+        try {
             const res = await hospitalAPI.getHospitals(plan);
-            if (res.success) setHospitals(res.hospitals);
-        } catch (err) { console.error(err); } finally { setLoadingHospitals(false); }
+            if (res.success) {
+                centralAdminCache.hospitals[plan] = res.hospitals;
+                setHospitals(res.hospitals);
+            }
+        } catch (err) {
+            console.error('Failed to load hospitals:', err);
+        } finally {
+            setLoadingHospitals(false);
+        }
     };
 
-    const fetchRoles = async (plan = getActivePlanName()) => {
+    const fetchRoles = async (plan = getActivePlanName(), force = false) => {
+        if (!force && centralAdminCache.roles[plan]) {
+            setRoles(centralAdminCache.roles[plan]);
+            return;
+        }
         try {
             const res = await adminAPI.getRoles(plan);
-            if (res.success) setRoles(res.data.filter(r => !['patient'].includes(r.name?.toLowerCase())));
-        } catch (err) { console.error(err); }
+            if (res.success) {
+                const filtered = res.data.filter(r => !['patient'].includes(r.name?.toLowerCase()));
+                centralAdminCache.roles[plan] = filtered;
+                setRoles(filtered);
+            }
+        } catch (err) {
+            console.error('Failed to load roles:', err);
+        }
     };
 
 
-    const fetchHospitalStats = async (hospitalId, preset = datePreset, start = customStartDate, end = customEndDate) => {
-        try {
-            setLoadingStats(true);
-            setHospitalStats(null);
+    const fetchHospitalStats = async (hospitalId, preset = datePreset, start = customStartDate, end = customEndDate, forceRefresh = false) => {
+        const cacheKey = `${hospitalId}_${preset}_${start}_${end}`;
 
+        if (!forceRefresh && centralAdminCache.hospitalStats && centralAdminCache.hospitalStats[cacheKey]) {
+            setHospitalStats(centralAdminCache.hospitalStats[cacheKey]);
+            setLoadingStats(false);
+        } else {
+            setLoadingStats(true);
+        }
+
+        try {
             let queryStart = '';
             let queryEnd = '';
 
@@ -610,11 +708,16 @@ const CentralAdminDashboard = () => {
             }
 
             const res = await hospitalAPI.getHospitalStats(hospitalId, queryStart, queryEnd);
-            if (res.success) setHospitalStats(res);
+            if (res.success) {
+                if (!centralAdminCache.hospitalStats) centralAdminCache.hospitalStats = {};
+                centralAdminCache.hospitalStats[cacheKey] = res;
+                setHospitalStats(res);
+            }
         } catch (err) {
             console.error('Stats error:', err);
-            setHospitalStats(null);
-        } finally { setLoadingStats(false); }
+        } finally {
+            setLoadingStats(false);
+        }
     };
 
     const handleDatePresetChange = (preset) => {
@@ -646,6 +749,16 @@ const CentralAdminDashboard = () => {
         setShowCustomPicker(false);
         setCustomStartDate('');
         setCustomEndDate('');
+
+        const cacheKey = `${h._id}_all__`;
+        if (centralAdminCache.hospitalStats && centralAdminCache.hospitalStats[cacheKey]) {
+            setHospitalStats(centralAdminCache.hospitalStats[cacheKey]);
+            setLoadingStats(false);
+        } else {
+            setHospitalStats(null);
+            setLoadingStats(true);
+        }
+
         fetchHospitalStats(h._id, 'all', '', '');
     };
 
@@ -689,10 +802,22 @@ const CentralAdminDashboard = () => {
 
             if (editHospital) {
                 const res = await hospitalAPI.updateHospital(editHospital._id, payload);
-                if (res.success) { setSuccess('Hospital updated!'); setEditHospital(null); setShowHospitalForm(false); fetchHospitals(); }
+                if (res.success) {
+                    centralAdminCache.hospitals = {};
+                    setSuccess('Hospital updated!');
+                    setEditHospital(null);
+                    setShowHospitalForm(false);
+                    fetchHospitals(plan, true);
+                }
             } else {
                 const res = await hospitalAPI.createHospital(payload);
-                if (res.success) { setSuccess('Hospital created!'); setShowHospitalForm(false); setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], whiteLabelEnabled: false, brandingSchema: { appName: '', logoUrl: '', customDomain: '', themeColors: { primary: '#14b8a6', secondary: '#0a2647', background: '#ffffff' } } }); fetchHospitals(); }
+                if (res.success) {
+                    centralAdminCache.hospitals = {};
+                    setSuccess('Hospital created!');
+                    setShowHospitalForm(false);
+                    setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], whiteLabelEnabled: false, brandingSchema: { appName: '', logoUrl: '', customDomain: '', themeColors: { primary: '#14b8a6', secondary: '#0a2647', background: '#ffffff' } } });
+                    fetchHospitals(plan, true);
+                }
             }
         } catch (err) { setError(err.response?.data?.message || 'Error saving hospital.'); }
         finally { setSavingHospital(false); }
@@ -702,11 +827,12 @@ const CentralAdminDashboard = () => {
         try {
             const res = await hospitalAPI.deleteHospital(id);
             if (res.success) {
+                centralAdminCache.hospitals = {};
                 const log = res.deletionLog || {};
                 const total = (log.users || 0) + (log.doctors || 0) + (log.appointments || 0) + (log.labs || 0) + (log.pharmacies || 0) + (log.receptions || 0) + (log.inventory || 0) + (log.roles || 0);
                 setSuccess(`Hospital deleted successfully. ${total} related records removed.`);
                 setDeleteHospitalConfirm(null);
-                fetchHospitals();
+                fetchHospitals(getActivePlanName(), true);
             }
         } catch (err) { setError(err.response?.data?.message || 'Error deleting hospital.'); setDeleteHospitalConfirm(null); }
     };
@@ -749,6 +875,7 @@ const CentralAdminDashboard = () => {
         try {
             const res = await hospitalAdminAPI.createHospitalAdmin(hospitalAdminForm);
             if (res.success) {
+                centralAdminCache.hospitals = {};
                 // If a photo was selected, upload it and update the new admin's avatar
                 if (hospitalAdminForm.file && res.user?.id) {
                     try {
@@ -763,7 +890,7 @@ const CentralAdminDashboard = () => {
                 setSuccess(`✅ Hospital Admin account created! Login: ${hospitalAdminForm.email}`);
                 setHospitalAdminForm({ name: '', email: '', password: '', phone: '', hospitalId: '', file: null, age: '', aadhaarNumber: '' });
                 setShowHospitalAdminForm(false);
-                fetchHospitals();
+                fetchHospitals(getActivePlanName(), true);
             }
         } catch (err) { setError(err.response?.data?.message || 'Error creating hospital admin.'); }
         finally { setCreatingHospitalAdmin(false); }
@@ -907,34 +1034,31 @@ const CentralAdminDashboard = () => {
         return (
             <div className="centraladmin-page">
                 <div className="centraladmin-container" style={{ maxWidth: '1280px', margin: '0 auto', paddingBottom: '40px' }}>
-                    {loadingStats ? (
-                        <div style={{ padding: '60px', textAlign: 'center', fontSize: '18px', background: '#fff', borderRadius: '20px', border: '1px solid #dfecec', marginTop: '16px' }}>
-                            ⏳ Loading hospital details...
-                        </div>
-                    ) : (
-                        <div className="h-detail-container">
-                            {/* 1. Hospital Profile Hero Header Banner (100% Exact to Reference Image 1) */}
-                            <div className="h-detail-hero-banner">
+                    <div className="h-detail-container">
+                        {/* 1. Hospital Profile Hero Header Banner (100% Exact to Reference Image 1) */}
+                        <div className="h-detail-hero-banner">
                                 {/* Left Organic Deep Blue / Indigo Wave Background */}
                                 <div className="h-detail-hero-waves">
                                     <svg className="h-detail-hero-wave-svg" viewBox="0 0 280 280" preserveAspectRatio="none">
                                         <defs>
                                             <linearGradient id="heroBlueDeep" x1="0%" y1="0%" x2="100%" y2="100%">
-                                                <stop offset="0%" stopColor="#0a184e" />
-                                                <stop offset="35%" stopColor="#1e2d7d" />
-                                                <stop offset="70%" stopColor="#312e81" />
-                                                <stop offset="100%" stopColor="#4338ca" />
+                                                <stop offset="0%" stopColor="#081038" />
+                                                <stop offset="28%" stopColor="#131e5c" />
+                                                <stop offset="55%" stopColor="#2e1a6b" />
+                                                <stop offset="78%" stopColor="#4c1d95" />
+                                                <stop offset="100%" stopColor="#6366f1" />
                                             </linearGradient>
                                             <linearGradient id="heroBlueEdge" x1="0%" y1="0%" x2="100%" y2="100%">
                                                 <stop offset="0%" stopColor="#38bdf8" />
-                                                <stop offset="60%" stopColor="#818cf8" />
+                                                <stop offset="45%" stopColor="#818cf8" />
+                                                <stop offset="80%" stopColor="#a855f7" />
                                                 <stop offset="100%" stopColor="#c084fc" />
                                             </linearGradient>
                                         </defs>
-                                        {/* Deep royal blue / indigo organic wave - stays cleanly on the left side */}
-                                        <path d="M0 0 L240 0 C190 55 200 120 160 180 C125 230 85 280 0 280 Z" fill="url(#heroBlueDeep)" />
-                                        {/* Glowing neon cyan/indigo wave contour edge */}
-                                        <path d="M240 0 C190 55 200 120 160 180 C125 230 85 280 0 280" fill="none" stroke="url(#heroBlueEdge)" strokeWidth="3.5" strokeOpacity="0.95" />
+                                        {/* Deep royal blue / purple organic wave - extended moderately rightward */}
+                                        <path d="M0 0 L265 0 C215 55 225 120 185 180 C145 230 100 280 0 280 Z" fill="url(#heroBlueDeep)" />
+                                        {/* Glowing neon cyan/purple wave contour edge */}
+                                        <path d="M265 0 C215 55 225 120 185 180 C145 230 100 280 0 280" fill="none" stroke="url(#heroBlueEdge)" strokeWidth="3.5" strokeOpacity="0.95" />
                                     </svg>
                                     {/* Bottom Left Dot Matrix */}
                                     <div className="h-detail-dark-dot-matrix">
@@ -1219,8 +1343,69 @@ const CentralAdminDashboard = () => {
                                 </div>
                             </div>
 
-                            {/* 3. 4 KPI Stat Cards (100% Real API Data with Light Colorful Aesthetics) */}
-                            <div className="h-detail-kpi-grid">
+                            {/* 2b. Live Medical Telemetry HUD Loader or Loaded Analytics */}
+                            {loadingStats && !hospitalStats ? (
+                                <div className="h-detail-loading-hud">
+                                    <div className="h-hud-card">
+                                        <div className="h-hud-pulse-cluster">
+                                            <div className="h-hud-radar-ring" />
+                                            <div className="h-hud-radar-ring-delay" />
+                                            <div className="h-hud-core-icon">
+                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                                    <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" fill="#ffffff" fillOpacity="0.25" stroke="#ffffff" strokeWidth="2" />
+                                                    <path d="M12 7v10M7 12h10" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
+                                                </svg>
+                                            </div>
+                                        </div>
+
+                                        <div className="h-hud-text-area">
+                                            <div className="h-hud-title">
+                                                <span>Synchronizing Hospital Intelligence</span>
+                                                <span className="h-hud-dot-pulse" />
+                                            </div>
+                                            <div className="h-hud-subtitle">
+                                                Aggregating Real-Time Doctors, Patient Census & Revenue Analytics...
+                                            </div>
+                                        </div>
+
+                                        <div className="h-hud-ecg-stream">
+                                            <svg className="h-hud-ecg-svg" viewBox="0 0 220 36" preserveAspectRatio="none">
+                                                <path className="h-hud-ecg-track" d="M0 18 L40 18 L50 18 L58 4 L66 32 L74 8 L82 24 L90 18 L130 18 L140 18 L148 4 L156 32 L164 8 L172 24 L180 18 L220 18" fill="none" stroke="rgba(56, 189, 248, 0.2)" strokeWidth="2" />
+                                                <path className="h-hud-ecg-glow" d="M0 18 L40 18 L50 18 L58 4 L66 32 L74 8 L82 24 L90 18 L130 18 L140 18 L148 4 L156 32 L164 8 L172 24 L180 18 L220 18" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" />
+                                            </svg>
+                                        </div>
+                                    </div>
+
+                                    {/* Shimmering Skeleton KPI Grid */}
+                                    <div className="h-detail-kpi-grid h-skeleton-grid">
+                                        {[1, 2, 3, 4].map(idx => (
+                                            <div key={idx} className="h-detail-kpi-card h-skeleton-card">
+                                                <div className="h-skeleton-shimmer" />
+                                                <div className="h-skeleton-icon" />
+                                                <div className="h-skeleton-line h-skeleton-line-lg" />
+                                                <div className="h-skeleton-line h-skeleton-line-sm" />
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Shimmering Skeleton Charts Row */}
+                                    <div className="h-skeleton-charts-row">
+                                        <div className="h-skeleton-chart-box">
+                                            <div className="h-skeleton-shimmer" />
+                                            <div className="h-skeleton-line h-skeleton-line-lg" style={{ width: '40%' }} />
+                                            <div className="h-skeleton-line" style={{ width: '100%', height: '140px', marginTop: '10px' }} />
+                                        </div>
+                                        <div className="h-skeleton-chart-box">
+                                            <div className="h-skeleton-shimmer" />
+                                            <div className="h-skeleton-line h-skeleton-line-lg" style={{ width: '40%' }} />
+                                            <div className="h-skeleton-line" style={{ width: '100%', height: '140px', marginTop: '10px' }} />
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* 3. 4 KPI Stat Cards (100% Real API Data with Light Colorful Aesthetics) */}
+                                    <div className="h-detail-kpi-grid">
                                 <div className="h-detail-kpi-card kpi-card-green">
                                     <div className="h-detail-kpi-icon-wrap kpi-icon-green">
                                         <i className="fa-solid fa-user" />
@@ -1774,8 +1959,9 @@ const CentralAdminDashboard = () => {
                                     </table>
                                 </div>
                             </div>
-                        </div>
-                    )}
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
         );
@@ -1799,19 +1985,23 @@ const CentralAdminDashboard = () => {
                                 <svg className="h-detail-hero-wave-svg" viewBox="0 0 280 280" preserveAspectRatio="none">
                                     <defs>
                                         <linearGradient id="heroBlueDeepClinic" x1="0%" y1="0%" x2="100%" y2="100%">
-                                            <stop offset="0%" stopColor="#0a184e" />
-                                            <stop offset="35%" stopColor="#1e2d7d" />
-                                            <stop offset="70%" stopColor="#312e81" />
-                                            <stop offset="100%" stopColor="#4338ca" />
+                                            <stop offset="0%" stopColor="#081038" />
+                                            <stop offset="28%" stopColor="#131e5c" />
+                                            <stop offset="55%" stopColor="#2e1a6b" />
+                                            <stop offset="78%" stopColor="#4c1d95" />
+                                            <stop offset="100%" stopColor="#6366f1" />
                                         </linearGradient>
                                         <linearGradient id="heroBlueEdgeClinic" x1="0%" y1="0%" x2="100%" y2="100%">
                                             <stop offset="0%" stopColor="#38bdf8" />
-                                            <stop offset="60%" stopColor="#818cf8" />
+                                            <stop offset="45%" stopColor="#818cf8" />
+                                            <stop offset="80%" stopColor="#a855f7" />
                                             <stop offset="100%" stopColor="#c084fc" />
                                         </linearGradient>
                                     </defs>
-                                    <path d="M0 0 L240 0 C190 55 200 120 160 180 C125 230 85 280 0 280 Z" fill="url(#heroBlueDeepClinic)" />
-                                    <path d="M240 0 C190 55 200 120 160 180 C125 230 85 280 0 280" fill="none" stroke="url(#heroBlueEdgeClinic)" strokeWidth="3.5" strokeOpacity="0.95" />
+                                    {/* Deep royal blue / purple organic wave - extended moderately rightward */}
+                                    <path d="M0 0 L265 0 C215 55 225 120 185 180 C145 230 100 280 0 280 Z" fill="url(#heroBlueDeepClinic)" />
+                                    {/* Glowing neon cyan/purple wave contour edge */}
+                                    <path d="M265 0 C215 55 225 120 185 180 C145 230 100 280 0 280" fill="none" stroke="url(#heroBlueEdgeClinic)" strokeWidth="3.5" strokeOpacity="0.95" />
                                 </svg>
                                 {/* Bottom Left Dot Matrix */}
                                 <div className="h-detail-dark-dot-matrix">
@@ -1997,11 +2187,53 @@ const CentralAdminDashboard = () => {
                         </div>
 
                         {/* 2. KPI Cards Grid (Light Colorful Themes) */}
-                        {loadingClinicStats ? (
-                            <div className="loading-message">⏳ Loading analytics...</div>
+                        {loadingClinicStats && !clinicStats ? (
+                            <div className="h-detail-loading-hud">
+                                <div className="h-hud-card">
+                                    <div className="h-hud-pulse-cluster">
+                                        <div className="h-hud-radar-ring" />
+                                        <div className="h-hud-radar-ring-delay" />
+                                        <div className="h-hud-core-icon">
+                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                                                <path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z" fill="#ffffff" fillOpacity="0.25" stroke="#ffffff" strokeWidth="2" />
+                                                <path d="M12 7v10M7 12h10" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
+                                            </svg>
+                                        </div>
+                                    </div>
+
+                                    <div className="h-hud-text-area">
+                                        <div className="h-hud-title">
+                                            <span>Synchronizing Clinic Intelligence</span>
+                                            <span className="h-hud-dot-pulse" />
+                                        </div>
+                                        <div className="h-hud-subtitle">
+                                            Aggregating Real-Time Doctor Schedule, Patient Queue & Subscription Billing...
+                                        </div>
+                                    </div>
+
+                                    <div className="h-hud-ecg-stream">
+                                        <svg className="h-hud-ecg-svg" viewBox="0 0 220 36" preserveAspectRatio="none">
+                                            <path className="h-hud-ecg-track" d="M0 18 L40 18 L50 18 L58 4 L66 32 L74 8 L82 24 L90 18 L130 18 L140 18 L148 4 L156 32 L164 8 L172 24 L180 18 L220 18" fill="none" stroke="rgba(56, 189, 248, 0.2)" strokeWidth="2" />
+                                            <path className="h-hud-ecg-glow" d="M0 18 L40 18 L50 18 L58 4 L66 32 L74 8 L82 24 L90 18 L130 18 L140 18 L148 4 L156 32 L164 8 L172 24 L180 18 L220 18" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" />
+                                        </svg>
+                                    </div>
+                                </div>
+
+                                {/* Shimmering Skeleton KPI Grid */}
+                                <div className="h-detail-kpi-grid h-skeleton-grid">
+                                    {[1, 2, 3, 4].map(idx => (
+                                        <div key={idx} className="h-detail-kpi-card h-skeleton-card">
+                                            <div className="h-skeleton-shimmer" />
+                                            <div className="h-skeleton-icon" />
+                                            <div className="h-skeleton-line h-skeleton-line-lg" />
+                                            <div className="h-skeleton-line h-skeleton-line-sm" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         ) : clinicStats ? (
                             <>
-                                <div className="h-detail-kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+                                <div className="h-detail-kpi-grid">
                                     <div className="h-detail-kpi-card kpi-card-blue">
                                         <div className="h-detail-kpi-icon-wrap kpi-icon-blue">
                                             <i className="fa-solid fa-user-group" />
@@ -2087,16 +2319,16 @@ const CentralAdminDashboard = () => {
 
                                     {/* Current admin info */}
                                     {clinicStats.clinic?.adminUserId && !showClinicManagerForm && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px 18px' }}>
-                                            <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 700, color: '#16a34a' }}>
+                                        <div className="clinic-admin-profile-box">
+                                            <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', fontWeight: 700, color: '#16a34a', flexShrink: 0 }}>
                                                 {clinicStats.clinic.adminUserId.name?.charAt(0)?.toUpperCase() || '?'}
                                             </div>
-                                            <div>
-                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '15px' }}>{clinicStats.clinic.adminUserId.name}</div>
-                                                <div style={{ color: '#64748b', fontSize: '13px' }}>{clinicStats.clinic.adminUserId.email}</div>
+                                            <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+                                                <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '15px', wordBreak: 'break-word' }}>{clinicStats.clinic.adminUserId.name}</div>
+                                                <div style={{ color: '#64748b', fontSize: '13px', wordBreak: 'break-all' }}>{clinicStats.clinic.adminUserId.email}</div>
                                                 {clinicStats.clinic.adminUserId.phone && <div style={{ color: '#64748b', fontSize: '13px' }}>📞 {clinicStats.clinic.adminUserId.phone}</div>}
                                             </div>
-                                            <span style={{ marginLeft: 'auto', background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700 }}>CLINIC ADMIN</span>
+                                            <span style={{ marginLeft: 'auto', background: '#dcfce7', color: '#16a34a', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, whiteSpace: 'nowrap' }}>CLINIC ADMIN</span>
                                         </div>
                                     )}
 

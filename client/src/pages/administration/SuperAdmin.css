@@ -542,23 +542,41 @@
 
 /* Responsive */
 @media (max-width: 768px) {
+  .superadmin-page {
+    padding: 12px 10px 32px !important;
+  }
+
+  .admin-card {
+    padding: 16px 12px !important;
+    margin-bottom: 16px !important;
+    border-radius: 14px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
   .admin-header {
     flex-direction: column;
-    gap: 24px;
+    gap: 16px;
     align-items: flex-start;
-    padding: 24px;
+    padding: 16px 14px;
+    border-radius: 14px;
   }
 
   .form-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .users-table {
+    border-radius: 10px !important;
+    margin: 0 !important;
+    width: 100% !important;
+    overflow-x: auto !important;
   }
 
   .users-table th,
   .users-table td {
-    padding: 12px 16px;
-  }
-
-  .superadmin-page {
-    padding: 20px;
+    padding: 10px 10px !important;
+    font-size: 0.82rem !important;
   }
 }

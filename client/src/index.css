@@ -537,6 +537,8 @@ body.modal-open, body:has(.modal), body:has(.erp-modal-overlay), body:has(.dialo
   width: 100%;
   max-height: 400px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background: var(--surface-0);
   border: 1px solid var(--gray-200);
   border-radius: var(--radius-xl);

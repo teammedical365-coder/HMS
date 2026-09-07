@@ -801,25 +801,17 @@ const AdminQuestionLibrary = () => {
                         <h1>{getUIText('pageTitle', currentLang)}</h1>
                         <p>{getUIText('pageSubtitle', currentLang)}</p>
                     </div>
-                    <div className="ql-header-right-column">
-                        <div className="ql-header-top-row">
-                            {/* Multi-Language Selector placed on top above Save & Deploy */}
-                            <LanguageSelector currentLang={currentLang} onLanguageChange={handleLanguageChange} />
-                        </div>
-                        <div className="ql-header-actions">
-                            <button className="ql-btn ql-btn-refresh" onClick={handleRefresh} disabled={refreshing || loading} title="Refresh library from server">
-                                <FaArrowsRotate className={refreshing ? 'refresh-spin' : ''} /> {refreshing ? getUIText('refreshing', currentLang) : getUIText('refresh', currentLang)}
-                            </button>
-                            <button className="ql-btn ql-btn-reset" onClick={handleResetToStandard} disabled={saving} title="Reload all 12 standard medical departments">
-                                <FaMicrochip /> {getUIText('resetDepts', currentLang)}
-                            </button>
-                            <button className="ql-btn ql-btn-preview" onClick={() => { setPreviewIntake({}); setShowPreview(true); }}>
-                                <FaEye /> {getUIText('preview', currentLang)}
-                            </button>
-                            <button className="ql-btn ql-btn-save" onClick={handleSave} disabled={saving}>
-                                <FaCloudArrowUp /> {saving ? getUIText('syncing', currentLang) : getUIText('saveDeploy', currentLang)}
-                            </button>
-                        </div>
+                    <div className="ql-header-actions">
+                        <button className="ql-btn ql-btn-refresh" onClick={handleRefresh} disabled={refreshing || loading} title="Refresh library from server">
+                            <FaArrowsRotate className={refreshing ? 'refresh-spin' : ''} /> {refreshing ? getUIText('refreshing', currentLang) : getUIText('refresh', currentLang)}
+                        </button>
+                        <LanguageSelector currentLang={currentLang} onLanguageChange={handleLanguageChange} />
+                        <button className="ql-btn ql-btn-preview" onClick={() => { setPreviewIntake({}); setShowPreview(true); }}>
+                            <FaEye /> {getUIText('preview', currentLang)}
+                        </button>
+                        <button className="ql-btn ql-btn-save" onClick={handleSave} disabled={saving}>
+                            <FaCloudArrowUp /> {saving ? getUIText('syncing', currentLang) : getUIText('saveDeploy', currentLang)}
+                        </button>
                     </div>
                 </header>
 

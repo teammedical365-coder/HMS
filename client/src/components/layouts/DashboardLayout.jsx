@@ -235,14 +235,6 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 )}
             </nav>
 
-            {/* Collapse button for Central Admin */}
-            {isCentralAdmin && (
-                <div className="ca-sidebar-footer">
-                    <button className="ca-sidebar-collapse-btn" onClick={() => setOpen(!isOpen)} title={isOpen ? "Collapse sidebar" : "Expand sidebar"}>
-                        {isOpen ? '«' : '»'}
-                    </button>
-                </div>
-            )}
         </aside>
     );
 });

@@ -392,14 +392,15 @@
 /* Remove/reduce outer padding when inside full-bleed views */
 .erp-page-content:has(.centraladmin-page),
 .erp-page-content:has(.rpm-main-wrapper),
-.erp-page-content:has(.consent-hub-wrapper) {
+.erp-page-content:has(.consent-hub-wrapper),
+.erp-page-content:has(.srd-page),
+.erp-page-content:has(.ql-admin-body) {
   padding: 0 !important;
   background: transparent !important;
 }
 
 .erp-page-content:has(.cca-exact-page-container),
 .erp-page-content:has(.cca-page-container),
-.erp-page-content:has(.ql-admin-body),
 .erp-page-content:has(.staff-management-page),
 .erp-page-content:has(.superadmin-page) {
   padding: 8px 12px !important;
@@ -456,7 +457,9 @@
   
   .erp-page-content:has(.centraladmin-page),
   .erp-page-content:has(.rpm-main-wrapper),
-  .erp-page-content:has(.consent-hub-wrapper) {
+  .erp-page-content:has(.consent-hub-wrapper),
+  .erp-page-content:has(.srd-page),
+  .erp-page-content:has(.ql-admin-body) {
     padding: 0 !important;
     background: transparent !important;
   }
@@ -505,7 +508,9 @@
 
   .erp-page-content:has(.centraladmin-page),
   .erp-page-content:has(.rpm-main-wrapper),
-  .erp-page-content:has(.consent-hub-wrapper) {
+  .erp-page-content:has(.consent-hub-wrapper),
+  .erp-page-content:has(.srd-page),
+  .erp-page-content:has(.ql-admin-body) {
     padding: 0 !important;
     background: transparent !important;
   }

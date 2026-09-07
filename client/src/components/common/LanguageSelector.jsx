@@ -47,7 +47,7 @@ const LanguageSelector = ({ currentLang = 'en', onLanguageChange }) => {
             </button>
 
             {isOpen && (
-                <div className="ql-lang-dropdown-menu">
+                <div className="ql-lang-dropdown-menu" data-lenis-prevent>
                     <div className="ql-lang-search-box">
                         <FaMagnifyingGlass className="ql-lang-search-icon" />
                         <input 
@@ -58,7 +58,11 @@ const LanguageSelector = ({ currentLang = 'en', onLanguageChange }) => {
                             autoFocus
                         />
                     </div>
-                    <div className="ql-lang-list">
+                    <div 
+                        className="ql-lang-list" 
+                        data-lenis-prevent
+                        onWheel={(e) => e.stopPropagation()}
+                    >
                         {filteredLanguages.map(lang => {
                             const isSelected = lang.code === currentLang;
                             return (
