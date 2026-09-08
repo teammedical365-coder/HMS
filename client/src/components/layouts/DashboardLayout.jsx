@@ -61,6 +61,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             }
             return [
                 { label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiHome /> },
+                { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity /> },
                 { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox /> },
                 { label: 'Clinical Questions', path: '/hospitaladmin/question-library', icon: <FiFileText /> },
                 { label: 'Staff Management', path: '/admin/users', icon: <FiUsers /> },
@@ -71,6 +72,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
         if (role === 'doctor' || role === 'clinic doctor') {
             return [
                 { label: 'Dashboard', path: '/my-dashboard', icon: <FiHome /> },
+                { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity /> },
                 { label: 'My Patients', path: '/doctor/patients', icon: <FiUsers /> },
                 { label: 'AI Assistant', path: '/doctor/ai-assistant', icon: <FiFileText /> },
                 { label: 'Reports', path: '/lab-reports', icon: <FiFileText /> },
@@ -111,10 +113,12 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Billing/Payments', path: '/cashier/billing', icon: <FiFileText /> },
             ];
         }
-        if (role === 'nurse') {
+        if (role === 'nurse' || role === 'staffnurse' || role === 'headnurse') {
             return [
-                { label: 'Patient Queue', path: '/doctor/patients', icon: <FiUsers /> },
-                { label: 'Appointments', path: '/appointment', icon: <FiCalendar /> },
+                { label: 'Nurse Command Center', path: '/nurse/dashboard', icon: <FiHome /> },
+                { label: 'OPD Patient Queue', path: '/nurse/opd-queue', icon: <FiUsers /> },
+                { label: 'Appointments', path: '/nurse/appointments', icon: <FiCalendar /> },
+                { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity /> },
             ];
         }
         if (role === 'billing') {
@@ -281,6 +285,24 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
         return 'CENTRAL ADMIN';
     };
 
+    const getPageTitle = (pathname) => {
+        if (pathname === '/nurse/dashboard') return 'Nurse Command Center';
+        if (pathname === '/nurse/opd-queue') return 'OPD Patient Queue';
+        if (pathname === '/nurse/appointments') return 'Appointments';
+        if (pathname.startsWith('/nurse/patient/') || pathname.startsWith('/nurse/ipd/patient/')) return 'Inpatient Workspace';
+        if (pathname === '/ipd/command-center' || pathname === '/nurse/command-center') return 'IPD Command Center';
+        if (pathname === '/doctor/dashboard') return 'Doctor Dashboard';
+        if (pathname === '/doctor/patients') return 'My Patients';
+        if (pathname.includes('/doctor/patient/')) return 'Patient Consultation Details';
+        if (pathname.includes('/patient/')) return 'Patient Profile';
+        if (pathname === '/reception/dashboard') return 'Reception Dashboard';
+        if (pathname === '/reception/patients') return 'Patient Search';
+        if (pathname === '/hospitaladmin') return 'Hospital Overview';
+        if (pathname === '/supremeadmin') return 'System Overview';
+        const lastPart = pathname.split('/').filter(Boolean).pop();
+        return lastPart ? decodeURIComponent(lastPart).replace(/-/g, ' ') : 'Dashboard';
+    };
+
     return (
         <header className={`erp-topbar ${isCentralAdmin ? 'ca-erp-topbar' : ''}`}>
             <div className="topbar-left">
@@ -297,10 +319,8 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                     </div>
                 ) : (
                     <div className="breadcrumb-wrap flex flex-nowrap whitespace-nowrap overflow-x-auto overflow-y-hidden items-center">
-                        <span className="curr-page-name">
-                            {location.pathname.includes('/patient/') 
-                                ? 'Patient Profile' 
-                                : decodeURIComponent(location.pathname.split('/').pop()).replace(/-/g, ' ') || 'Dashboard'}
+                        <span className="curr-page-name capitalize">
+                            {getPageTitle(location.pathname)}
                         </span>
                         <span className="path-slash">/</span>
                         <span className="path-user-role">{user?.role}</span>

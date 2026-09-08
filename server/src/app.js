@@ -217,6 +217,7 @@ app.use('/api/ot', otRoutes);
 app.use('/api/referrals', referralRoutes);
 app.use('/api/vials', vialRoutes);
 app.use('/api/ipd-clinical', require('./routes/ipdClinical.routes'));
+app.use('/api/ipd-nursing', require('./routes/ipdNursing.routes'));
 
 app.get('/', (req, res) => {
     res.send('API is running...');

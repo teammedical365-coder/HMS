@@ -30,6 +30,7 @@ const AdminRoles = () => {
         {
             category: "CLINICAL & MEDICAL",
             items: [
+                { key: 'nurse_access', label: 'Nurse Command Center & Inpatients' },
                 { key: 'visit_intake', label: 'Nurse Intake (Vitals & History)' },
                 { key: 'visit_diagnose', label: 'Doctor Diagnosis & Prescription' },
                 { key: 'clinical_history_view', label: 'View Medical History' }
@@ -64,11 +65,12 @@ const AdminRoles = () => {
     ];
 
     const PERMISSION_NAV_MAP = {
+        nurse_access: { label: 'Nurse Command Center', path: '/nurse/dashboard' },
         patient_create: { label: 'Patient Registration', path: '/reception/dashboard' },
-        patient_search: { label: 'Patient Search', path: '/doctor/patients' },
-        patient_view: { label: 'Patient Records', path: '/doctor/patients' },
-        patient_edit: { label: 'Edit Patients', path: '/doctor/patients' },
-        visit_intake: { label: 'Nurse Intake', path: '/doctor/patients' },
+        patient_search: { label: 'Patient Search', path: '/reception/patients' },
+        patient_view: { label: 'Patient Records', path: '/reception/patients' },
+        patient_edit: { label: 'Edit Patients', path: '/reception/patients' },
+        visit_intake: { label: 'Nurse Intake', path: '/nurse/opd-queue' },
         visit_diagnose: { label: 'Consultations', path: '/doctor/patients' },
         clinical_history_view: { label: 'Medical History', path: '/doctor/patients' },
         appointment_manage: { label: 'Reception', path: '/reception/dashboard' },

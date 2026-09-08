@@ -30,6 +30,8 @@ exports.globalSearch = async (req, res) => {
         const isHospitalAdmin = role === 'hospitaladmin' || hasPerm('admin_manage_roles');
         // Doctors have diagnosis access
         const isDoctor = hasPerm('visit_diagnose');
+        // Nurse access
+        const isNurse = ['nurse', 'staffnurse', 'headnurse'].includes(role.replace(/\s+/g, '')) || hasPerm('visit_intake') || hasPerm('nurse_access');
         // Reception manages appointments/patients
         const isReception = hasPerm('appointment_manage') || hasPerm('patient_create') || hasPerm('appointment_view_all');
         // Pharmacy
@@ -59,7 +61,7 @@ exports.globalSearch = async (req, res) => {
 
         // 2. Search Patients
         // Anyone with basically any operational role can search patients
-        const canSearchPatients = isCentralRole || isHospitalAdmin || isDoctor || isReception || isPharmacy || isLab || isFinance || role === 'patient';
+        const canSearchPatients = isCentralRole || isHospitalAdmin || isDoctor || isNurse || isReception || isPharmacy || isLab || isFinance || role === 'patient';
         
         if (canSearchPatients) {
             let patientFilter = { ...hospitalFilter, role: 'patient' };
@@ -82,9 +84,7 @@ exports.globalSearch = async (req, res) => {
             patients.forEach(p => {
                 const mrn = p.uhid || p.patientId || p.phone;
                 let route = `/admin/users`;
-                if (isDoctor) route = `/patient/${p._id}`;
-                else if (isReception) route = `/patient/${p._id}`;
-                else if (isHospitalAdmin) route = `/patient/${p._id}`;
+                if (isDoctor || isNurse || isReception || isHospitalAdmin) route = `/patient/${p._id}`;
                 
                 results.push({
                     type: 'Patient',
@@ -98,7 +98,7 @@ exports.globalSearch = async (req, res) => {
 
         // 3. Search Doctors
         // Reception, Admins, and Central Admins need to search doctors
-        const canSearchDoctors = isCentralRole || isHospitalAdmin || isReception;
+        const canSearchDoctors = isCentralRole || isHospitalAdmin || isReception || isNurse;
         if (canSearchDoctors) {
             const doctorSearchQuery = {
                 ...hospitalFilter,
@@ -143,7 +143,7 @@ exports.globalSearch = async (req, res) => {
         }
 
         // 5. Search Appointments
-        const canSearchAppointments = isCentralRole || isHospitalAdmin || isReception || isDoctor;
+        const canSearchAppointments = isCentralRole || isHospitalAdmin || isReception || isDoctor || isNurse;
         if (canSearchAppointments) {
             const appointmentSearchQuery = {
                 ...hospitalFilter,
@@ -177,7 +177,8 @@ exports.globalSearch = async (req, res) => {
                 const dName = a.doctorId?.name ? `with Dr. ${a.doctorId.name}` : '';
                 
                 let route = '/appointment';
-                if (isReception) route = '/reception/dashboard';
+                if (isNurse) route = '/nurse/appointments';
+                else if (isReception) route = '/reception/dashboard';
                 else if (isDoctor) route = '/doctor/dashboard';
 
                 results.push({

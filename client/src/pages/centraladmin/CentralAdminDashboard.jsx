@@ -143,6 +143,7 @@ const CentralAdminDashboard = () => {
     const [hospitalStats, setHospitalStats] = useState(null);
     const [loadingStats, setLoadingStats] = useState(false);
     const [staffRoleFilter, setStaffRoleFilter] = useState('all');
+    const [staffSearchQuery, setStaffSearchQuery] = useState('');
 
     // Appointment Mode customization (per hospital, Supreme Admin only)
     const [apptMode, setApptMode] = useState('slot'); // 'slot' | 'token'
@@ -749,6 +750,8 @@ const CentralAdminDashboard = () => {
         setShowCustomPicker(false);
         setCustomStartDate('');
         setCustomEndDate('');
+        setStaffRoleFilter('all');
+        setStaffSearchQuery('');
 
         const cacheKey = `${h._id}_all__`;
         if (centralAdminCache.hospitalStats && centralAdminCache.hospitalStats[cacheKey]) {
@@ -1018,13 +1021,20 @@ const CentralAdminDashboard = () => {
         });
         const uniqueRoles = Object.keys(roleCountMap);
 
-        // Filter staff based on selected role filter
-        const filteredStaffToRender = staffRoleFilter === 'all'
-            ? staffToRender
-            : staffToRender.filter(st => {
-                const r = (st.roleName || st.role || 'STAFF').toLowerCase();
-                return r === staffRoleFilter.toLowerCase();
-            });
+        // Filter staff based on selected role filter and live search query
+        const filteredStaffToRender = staffToRender.filter(st => {
+            const r = (st.roleName || st.role || 'STAFF').toLowerCase();
+            const roleMatch = staffRoleFilter === 'all' || r === staffRoleFilter.toLowerCase();
+            if (!roleMatch) return false;
+
+            if (!staffSearchQuery.trim()) return true;
+            const q = staffSearchQuery.toLowerCase().trim();
+            const name = (st.name || '').toLowerCase();
+            const email = (st.email || '').toLowerCase();
+            const phone = (st.phone || '').toLowerCase();
+            const roleStr = (st.roleName || st.role || '').toLowerCase();
+            return name.includes(q) || email.includes(q) || phone.includes(q) || roleStr.includes(q);
+        });
 
         const appointmentsToRender = hospitalStats?.recentAppointments || [];
 
@@ -1879,38 +1889,79 @@ const CentralAdminDashboard = () => {
                                 </p>
                             </div>
 
-                            {/* 9. Staff Members Table with Dynamic Role Filter Pills */}
+                            {/* 9. Staff Members Table with Filter & Search Controls */}
                             <div className="h-detail-table-card">
-                                <div className="h-detail-card-head" style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                                <div className="h-detail-card-head h-detail-staff-head">
                                     <div className="h-detail-timeframe-title-group">
                                         <div className="h-detail-purple-icon-circle">
                                             <i className="fa-solid fa-users" />
                                         </div>
                                         <div>
-                                            <h4 className="h-detail-col-title" style={{ margin: 0 }}>Staff Members ({filteredStaffToRender.length})</h4>
+                                            <h4 className="h-detail-col-title" style={{ margin: 0 }}>
+                                                Staff Members <span className="h-detail-count-badge">({filteredStaffToRender.length}{filteredStaffToRender.length !== staffToRender.length ? ` of ${staffToRender.length}` : ''})</span>
+                                            </h4>
                                             <p className="h-detail-col-sub" style={{ margin: '2px 0 0' }}>See staff and login details in hospital's panel</p>
                                         </div>
                                     </div>
 
-                                    {/* Role Filter Pills */}
-                                    <div className="h-detail-role-filter-group">
-                                        <button
-                                            type="button"
-                                            onClick={() => setStaffRoleFilter('all')}
-                                            className={`h-detail-role-filter-btn ${staffRoleFilter === 'all' ? 'active' : ''}`}
-                                        >
-                                            All <span className="h-detail-role-count-tag">{staffToRender.length}</span>
-                                        </button>
-                                        {uniqueRoles.map(role => (
+                                    {/* Filter Controls: Live Search + Role Filter Dropdown with Filter Icon */}
+                                    <div className="h-detail-staff-filter-toolbar">
+                                        {/* Search Box */}
+                                        <div className="h-detail-staff-search-box">
+                                            <i className="fa-solid fa-magnifying-glass h-detail-staff-search-icon" />
+                                            <input
+                                                type="text"
+                                                placeholder="Search staff (name, email, phone)..."
+                                                value={staffSearchQuery}
+                                                onChange={(e) => setStaffSearchQuery(e.target.value)}
+                                                className="h-detail-staff-search-input"
+                                            />
+                                            {staffSearchQuery && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setStaffSearchQuery('')}
+                                                    className="h-detail-staff-search-clear"
+                                                    title="Clear search"
+                                                >
+                                                    <i className="fa-solid fa-xmark" />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Role Filter Dropdown with Filter Icon */}
+                                        <div className="h-detail-role-select-wrap">
+                                            <i className="fa-solid fa-filter h-detail-role-select-icon" />
+                                            <select
+                                                value={staffRoleFilter}
+                                                onChange={(e) => setStaffRoleFilter(e.target.value)}
+                                                className="h-detail-role-select"
+                                                title="Filter staff by role"
+                                            >
+                                                <option value="all">All Roles ({staffToRender.length})</option>
+                                                {uniqueRoles.map(role => (
+                                                    <option key={role} value={role}>
+                                                        {role} ({roleCountMap[role]})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <i className="fa-solid fa-chevron-down h-detail-role-select-arrow" />
+                                        </div>
+
+                                        {/* Reset Button (visible when any filter or search is active) */}
+                                        {(staffRoleFilter !== 'all' || staffSearchQuery.trim() !== '') && (
                                             <button
                                                 type="button"
-                                                key={role}
-                                                onClick={() => setStaffRoleFilter(role)}
-                                                className={`h-detail-role-filter-btn ${staffRoleFilter.toLowerCase() === role.toLowerCase() ? 'active' : ''}`}
+                                                onClick={() => {
+                                                    setStaffRoleFilter('all');
+                                                    setStaffSearchQuery('');
+                                                }}
+                                                className="h-detail-filter-reset-btn"
+                                                title="Reset all filters"
                                             >
-                                                {role} <span className="h-detail-role-count-tag">{roleCountMap[role]}</span>
+                                                <i className="fa-solid fa-rotate-left" />
+                                                <span>Reset</span>
                                             </button>
-                                        ))}
+                                        )}
                                     </div>
                                 </div>
 
@@ -1928,30 +1979,78 @@ const CentralAdminDashboard = () => {
                                             {filteredStaffToRender.length > 0 ? (
                                                 filteredStaffToRender.map((staff, idx) => {
                                                     const initials = staff.name
-                                                        ? staff.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+                                                        ? staff.name.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase()
                                                         : 'S';
+                                                    const roleRaw = staff.roleName || staff.role || 'STAFF';
+                                                    const roleKey = roleRaw.toLowerCase();
+                                                    let roleBadgeClass = 'role-badge-default';
+                                                    if (roleKey.includes('doc')) roleBadgeClass = 'role-badge-doctor';
+                                                    else if (roleKey.includes('nurse')) roleBadgeClass = 'role-badge-nurse';
+                                                    else if (roleKey.includes('recept')) roleBadgeClass = 'role-badge-reception';
+                                                    else if (roleKey.includes('pharm')) roleBadgeClass = 'role-badge-pharmacy';
+                                                    else if (roleKey.includes('lab')) roleBadgeClass = 'role-badge-lab';
+                                                    else if (roleKey.includes('admin')) roleBadgeClass = 'role-badge-admin';
+
                                                     return (
                                                         <tr key={staff.id || staff._id || idx}>
                                                             <td>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                                     <div className="h-detail-avatar-circle">{initials}</div>
-                                                                    <span style={{ fontWeight: 700 }}>{staff.name}</span>
+                                                                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{staff.name}</span>
                                                                 </div>
                                                             </td>
                                                             <td>
-                                                                <span className="h-detail-role-tag">{staff.roleName || staff.role || 'STAFF'}</span>
+                                                                <span className={`h-detail-role-badge ${roleBadgeClass}`}>
+                                                                    {roleRaw}
+                                                                </span>
                                                             </td>
-                                                            <td>{staff.email || '—'}</td>
-                                                            <td>{staff.phone || '—'}</td>
+                                                            <td>
+                                                                {staff.email ? (
+                                                                    <a href={`mailto:${staff.email}`} className="h-detail-contact-link">
+                                                                        {staff.email}
+                                                                    </a>
+                                                                ) : (
+                                                                    <span style={{ color: '#94a3b8' }}>—</span>
+                                                                )}
+                                                            </td>
+                                                            <td>
+                                                                {staff.phone ? (
+                                                                    <a href={`tel:${staff.phone}`} className="h-detail-contact-link">
+                                                                        {staff.phone}
+                                                                    </a>
+                                                                ) : (
+                                                                    <span style={{ color: '#94a3b8' }}>—</span>
+                                                                )}
+                                                            </td>
                                                         </tr>
                                                     );
                                                 })
                                             ) : (
                                                 <tr>
-                                                    <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: '#94a3b8', fontSize: '13px' }}>
-                                                        {staffRoleFilter === 'all'
-                                                            ? 'No staff members found for this hospital. Click "Staff" in Feature Management above to add staff.'
-                                                            : `No staff members found with role "${staffRoleFilter}".`}
+                                                    <td colSpan="4" style={{ textAlign: 'center', padding: '36px 16px', color: '#64748b', fontSize: '13px' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                                            <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '18px' }}>
+                                                                <i className="fa-solid fa-user-slash" />
+                                                            </div>
+                                                            <span style={{ fontWeight: 600, color: '#334155' }}>
+                                                                {staffToRender.length === 0
+                                                                    ? 'No staff members found for this hospital. Click "Staff" in Feature Management above to add staff.'
+                                                                    : 'No staff matching your search/filter.'}
+                                                            </span>
+                                                            {(staffRoleFilter !== 'all' || staffSearchQuery.trim() !== '') && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setStaffRoleFilter('all');
+                                                                        setStaffSearchQuery('');
+                                                                    }}
+                                                                    className="h-detail-filter-reset-btn"
+                                                                    style={{ marginTop: '4px' }}
+                                                                >
+                                                                    <i className="fa-solid fa-rotate-left" /> Clear Filters
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             )}

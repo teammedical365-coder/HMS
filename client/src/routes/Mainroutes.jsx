@@ -116,6 +116,13 @@ const AccountantDashboard = lazy(() => import('../pages/accountant/AccountantDas
 // Billing Pages
 const PatientBillingProfile = lazy(() => import('../pages/billing/PatientBillingProfile'));
 
+// Nurse & IPD Command Center Pages
+const NurseDashboard = lazy(() => import('../pages/nurse/NurseDashboard'));
+const NursePatientWorkspace = lazy(() => import('../pages/nurse/NursePatientWorkspace'));
+const NurseOPDQueue = lazy(() => import('../pages/nurse/NurseOPDQueue'));
+const NurseAppointments = lazy(() => import('../pages/nurse/NurseAppointments'));
+const IPDCommandCenter = lazy(() => import('../pages/nurse/IPDCommandCenter'));
+
 // Subdomains reserved for the platform itself — NOT hospital slugs
 const RESERVED_SUBDOMAINS = ['admin', 'www', 'api'];
 
@@ -126,6 +133,11 @@ const SmartDashboardRedirector = () => {
     
     if (roleStr === 'centraladmin' || roleStr === 'superadmin') {
         return <Navigate to="/supremeadmin" replace />;
+    }
+
+    // Nurse role → dedicated nurse dashboard
+    if (roleStr === 'nurse' || roleStr === 'staffnurse' || roleStr === 'headnurse') {
+        return <Navigate to="/nurse/dashboard" replace />;
     }
 
     if (subdomain && !RESERVED_SUBDOMAINS.includes(subdomain)) {
@@ -199,6 +211,13 @@ const MainRoutes = () => {
                 { key: 'rec_dash', importFn: () => import('../pages/reception/ReceptionDashboard') },
                 { key: 'rec_billing', importFn: () => import('../pages/billing/PatientBillingProfile') },
             ]);
+        } else if (role === 'nurse' || role === 'staffnurse' || role === 'headnurse') {
+            prefetchRoutes([
+                { key: 'nurse_dash', importFn: () => import('../pages/nurse/NurseDashboard') },
+                { key: 'nurse_opd', importFn: () => import('../pages/nurse/NurseOPDQueue') },
+                { key: 'nurse_appts', importFn: () => import('../pages/nurse/NurseAppointments') },
+                { key: 'nurse_ws', importFn: () => import('../pages/nurse/NursePatientWorkspace') },
+            ]);
         }
     }, [isAuthenticated, user]);
     
@@ -236,8 +255,8 @@ const MainRoutes = () => {
                                 {/* Transitions between roles/admin */}
                                 <Route path="doctor/dashboard" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><DoctorDashboard /></ProtectedRoute>} />
                                 <Route path="doctor/cases" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor']}><DoctorDashboard /></ProtectedRoute>} />
-                                <Route path="doctor/patients" element={<Patient />} />
-                                <Route path="doctor/patient/:id" element={<ProtectedRoute requiredPermissions={['visit_diagnose']}><DoctorPatientDetails /></ProtectedRoute>} />
+                                <Route path="doctor/patients" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor']}><Patient /></ProtectedRoute>} />
+                                <Route path="doctor/patient/:id" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><DoctorPatientDetails /></ProtectedRoute>} />
                                 <Route path="doctor/ai-assistant" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><AIAssistant /></ProtectedRoute>} />
 
                                 <Route path="admin" element={<ProtectedRoute requiredPermissions={['admin_view_stats', 'admin_manage_roles']}><AdminMainDashboard /></ProtectedRoute>} />
@@ -297,6 +316,15 @@ const MainRoutes = () => {
                                 {/* Reception Pages */}
                                 <Route path="reception/dashboard" element={<ProtectedRoute requiredPermissions={['appointment_manage']}><ReceptionDashboard /></ProtectedRoute>} />
                                 <Route path="reception/patients" element={<ProtectedRoute requiredPermissions={['appointment_manage']}><ReceptionPatients /></ProtectedRoute>} />
+
+                                {/* Nurse & IPD Command Center Pages */}
+                                <Route path="nurse/dashboard" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NurseDashboard /></ProtectedRoute>} />
+                                <Route path="nurse/opd-queue" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NurseOPDQueue /></ProtectedRoute>} />
+                                <Route path="nurse/appointments" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NurseAppointments /></ProtectedRoute>} />
+                                <Route path="nurse/patient/:admissionId" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NursePatientWorkspace /></ProtectedRoute>} />
+                                <Route path="nurse/ipd/patient/:admissionId" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NursePatientWorkspace /></ProtectedRoute>} />
+                                <Route path="ipd/command-center" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'doctor', 'hospitaladmin', 'centraladmin', 'superadmin']}><IPDCommandCenter /></ProtectedRoute>} />
+                                <Route path="nurse/command-center" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'doctor', 'hospitaladmin', 'centraladmin', 'superadmin']}><IPDCommandCenter /></ProtectedRoute>} />
 
                                 {/* Accountant / Finance Pages */}
                                 <Route path="accountant/dashboard" element={<ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}><AccountantDashboard /></ProtectedRoute>} />

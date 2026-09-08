@@ -11,6 +11,29 @@ const MasterInpatientOrder = require('../models/inpatientOrder.model');
 const MasterMARRecord = require('../models/marRecord.model');
 const MasterIPDVitals = require('../models/ipdVitals.model');
 const MasterUser = require('../models/user.model');
+const AuditLog = require('../models/auditLog.model');
+
+// Audit logger helper
+const logClinicalAudit = async ({ hospitalId, user, action, targetModel, targetId, targetLabel, req }) => {
+    try {
+        if (!hospitalId || !action) return;
+        await AuditLog.create({
+            clinicId: hospitalId,
+            userId: user?._id || user?.userId || null,
+            userName: user?.name || 'Staff',
+            role: user?._roleData?.name || user?.role || 'staff',
+            action,
+            targetModel: targetModel || 'InpatientOrder',
+            targetId: targetId || null,
+            targetLabel: targetLabel || '',
+            ip: req?.ip || '',
+            userAgent: req?.headers ? req.headers['user-agent'] || '' : '',
+            success: true
+        });
+    } catch (auditErr) {
+        console.error('Clinical audit log failed:', auditErr.message);
+    }
+};
 
 // Helper: retrieve models bound to tenant connection
 const getModels = (req) => {
@@ -600,4 +623,559 @@ router.get('/admissions/:admissionId/vitals/latest', verifyToken, resolveTenant,
     }
 });
 
+// POST /api/ipd-clinical/admissions/:admissionId/discharge-order — Doctor Clinical Discharge Order
+router.post('/admissions/:admissionId/discharge-order', verifyToken, resolveTenant, requireDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId } = req.params;
+        const { dischargeNotes, dischargeDate } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+            return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
+        }
+
+        const { Admission, NursingTask, User } = getModels(req);
+        const admission = await Admission.findOne({ _id: admissionId, hospitalId });
+        if (!admission) {
+            return res.status(404).json({ success: false, message: 'Admission not found' });
+        }
+
+        if (admission.status === 'Discharged') {
+            return res.status(400).json({ success: false, message: 'Patient is already discharged' });
+        }
+
+        if (!admission.dischargeReadiness) {
+            admission.dischargeReadiness = {};
+        }
+
+        admission.dischargeReadiness.doctorDischargeOrdered = true;
+        admission.dischargeReadiness.doctorDischargeDate = dischargeDate ? new Date(dischargeDate) : new Date();
+        admission.dischargeReadiness.doctorDischargeDoctorId = req.user._id || req.user.userId;
+        admission.dischargeReadiness.doctorDischargeNotes = dischargeNotes ? String(dischargeNotes).trim() : 'Patient clinically stable for discharge.';
+
+        if (admission.dischargeReadiness.nursingClearance) {
+            admission.dischargeReadiness.status = 'READY_FOR_DISCHARGE';
+        } else {
+            admission.dischargeReadiness.status = 'DOCTOR_ORDERED';
+        }
+
+        await admission.save();
+
+        // Automatically create a high-priority nursing task for discharge preparation
+        try {
+            if (NursingTask) {
+                const prepTask = new NursingTask({
+                    hospitalId,
+                    admissionId: admission._id,
+                    patientId: admission.patientId,
+                    taskType: 'PROCEDURE_PREP',
+                    title: 'Discharge Preparation: Remove lines, reconcile meds & educate patient',
+                    description: admission.dischargeReadiness.doctorDischargeNotes,
+                    priority: 'HIGH',
+                    scheduledAt: new Date(),
+                    status: 'PENDING',
+                    createdBy: req.user._id || req.user.userId
+                });
+                await prepTask.save();
+            }
+        } catch (taskErr) {
+            console.error('Failed to auto-generate discharge nursing task:', taskErr.message);
+        }
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`hospital_${hospitalId}`).emit('discharge_readiness_changed', {
+                admissionId: admission._id,
+                patientId: admission.patientId,
+                status: admission.dischargeReadiness.status,
+                doctorDischargeOrdered: true
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Doctor clinical discharge order recorded successfully',
+            dischargeReadiness: admission.dischargeReadiness,
+            data: admission.dischargeReadiness
+        });
+    } catch (err) {
+        console.error('Doctor discharge order error:', err);
+        res.status(500).json({ success: false, message: err.message || 'Error recording doctor discharge order' });
+    }
+});
+
+// ============================================================================
+// SECTION G: DOCTOR ↔ NURSE CLINICAL COORDINATION & CLARIFICATION
+// ============================================================================
+
+// POST /api/ipd-clinical/admissions/:admissionId/orders/:orderId/acknowledge — Nurse acknowledges order
+router.post('/admissions/:admissionId/orders/:orderId/acknowledge', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId, orderId } = req.params;
+        const { shift = 'General', notes = '' } = req.body;
+
+        if (!mongoose.Types.ObjectId.isValid(admissionId) || !mongoose.Types.ObjectId.isValid(orderId)) {
+            return res.status(400).json({ success: false, message: 'Invalid admissionId or orderId' });
+        }
+
+        const { InpatientOrder, User } = getModels(req);
+        const order = await InpatientOrder.findOne({ _id: orderId, admissionId, hospitalId });
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Inpatient order not found' });
+        }
+
+        const nurseId = req.user._id || req.user.userId;
+        const nurseName = req.user.name || 'Nurse';
+
+        if (!order.acknowledgments) {
+            order.acknowledgments = [];
+        }
+
+        // Avoid duplicate acknowledgment by the same nurse within a short period if already recorded
+        order.acknowledgments.push({
+            nurseId,
+            acknowledgedAt: new Date(),
+            shift: String(shift).trim(),
+            notes: String(notes).trim()
+        });
+
+        await order.save();
+
+        await logClinicalAudit({
+            hospitalId,
+            user: req.user,
+            action: 'DOCTOR_ORDER_ACKNOWLEDGED',
+            targetModel: 'InpatientOrder',
+            targetId: order._id,
+            targetLabel: `${order.medicineName} acknowledged by ${nurseName}`,
+            req
+        });
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`hospital_${hospitalId}`).emit('doctor_order_acknowledged', {
+                orderId: order._id,
+                admissionId,
+                nurseId,
+                nurseName,
+                acknowledgedAt: new Date()
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Order acknowledged successfully',
+            order,
+            data: order
+        });
+    } catch (err) {
+        console.error('Order acknowledgment error:', err);
+        res.status(500).json({ success: false, message: err.message || 'Error acknowledging order' });
+    }
+});
+
+// POST /api/ipd-clinical/admissions/:admissionId/orders/:orderId/clarification — Nurse requests clarification
+router.post('/admissions/:admissionId/orders/:orderId/clarification', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId, orderId } = req.params;
+        const { issueType = 'DOSAGE_CONFIRMATION', question } = req.body;
+
+        if (!question || !String(question).trim()) {
+            return res.status(400).json({ success: false, message: 'Clarification question is required' });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(admissionId) || !mongoose.Types.ObjectId.isValid(orderId)) {
+            return res.status(400).json({ success: false, message: 'Invalid admissionId or orderId' });
+        }
+
+        const { InpatientOrder, Admission } = getModels(req);
+        const order = await InpatientOrder.findOne({ _id: orderId, admissionId, hospitalId });
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Inpatient order not found' });
+        }
+
+        const nurseId = req.user._id || req.user.userId;
+        const nurseName = req.user.name || 'Nurse';
+
+        if (!order.clarifications) {
+            order.clarifications = [];
+        }
+
+        const newClarification = {
+            requestedBy: nurseName,
+            nurseId,
+            issueType,
+            question: String(question).trim(),
+            requestedAt: new Date(),
+            status: 'OPEN'
+        };
+
+        order.clarifications.push(newClarification);
+        await order.save();
+
+        await logClinicalAudit({
+            hospitalId,
+            user: req.user,
+            action: 'CLARIFICATION_REQUESTED',
+            targetModel: 'InpatientOrder',
+            targetId: order._id,
+            targetLabel: `Clarification requested on ${order.medicineName}: ${question.substring(0, 50)}`,
+            req
+        });
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`hospital_${hospitalId}`).emit('order_clarification_requested', {
+                orderId: order._id,
+                admissionId,
+                clarification: order.clarifications[order.clarifications.length - 1],
+                medicineName: order.medicineName,
+                nurseName
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Clarification request submitted to doctor',
+            clarifications: order.clarifications,
+            order
+        });
+    } catch (err) {
+        console.error('Clarification request error:', err);
+        res.status(500).json({ success: false, message: err.message || 'Error submitting clarification request' });
+    }
+});
+
+// POST /api/ipd-clinical/admissions/:admissionId/orders/:orderId/clarification-response — Doctor responds
+router.post('/admissions/:admissionId/orders/:orderId/clarification-response', verifyToken, resolveTenant, requireDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId, orderId } = req.params;
+        const { clarificationId, responseText } = req.body;
+
+        if (!responseText || !String(responseText).trim()) {
+            return res.status(400).json({ success: false, message: 'Doctor response text is required' });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(admissionId) || !mongoose.Types.ObjectId.isValid(orderId)) {
+            return res.status(400).json({ success: false, message: 'Invalid admissionId or orderId' });
+        }
+
+        const { InpatientOrder } = getModels(req);
+        const order = await InpatientOrder.findOne({ _id: orderId, admissionId, hospitalId });
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Inpatient order not found' });
+        }
+
+        const doctorId = req.user._id || req.user.userId;
+        const doctorName = req.user.name || 'Doctor';
+
+        let targetClarification = null;
+        if (clarificationId) {
+            targetClarification = order.clarifications.id(clarificationId);
+        } else {
+            // Pick latest OPEN clarification
+            targetClarification = order.clarifications.filter(c => c.status === 'OPEN').pop();
+        }
+
+        if (!targetClarification) {
+            return res.status(404).json({ success: false, message: 'Open clarification not found for this order' });
+        }
+
+        targetClarification.responseDoctorId = doctorId;
+        targetClarification.responseText = String(responseText).trim();
+        targetClarification.respondedAt = new Date();
+        targetClarification.status = 'RESOLVED';
+
+        await order.save();
+
+        await logClinicalAudit({
+            hospitalId,
+            user: req.user,
+            action: 'CLARIFICATION_RESPONDED',
+            targetModel: 'InpatientOrder',
+            targetId: order._id,
+            targetLabel: `Doctor responded to clarification on ${order.medicineName}`,
+            req
+        });
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`hospital_${hospitalId}`).emit('order_clarification_resolved', {
+                orderId: order._id,
+                admissionId,
+                clarificationId: targetClarification._id,
+                responseText: targetClarification.responseText,
+                doctorName,
+                respondedAt: targetClarification.respondedAt
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Clarification response submitted successfully',
+            order,
+            clarification: targetClarification
+        });
+    } catch (err) {
+        console.error('Clarification response error:', err);
+        res.status(500).json({ success: false, message: err.message || 'Error saving clarification response' });
+    }
+});
+
+// GET /api/ipd-clinical/clarifications/inbox — Inbox for doctors/nurses to view all active & pending clarifications
+router.get('/clarifications/inbox', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { status = 'OPEN', admissionId } = req.query;
+
+        const { InpatientOrder, Admission, User } = getModels(req);
+
+        const filter = { hospitalId, 'clarifications.0': { $exists: true } };
+        if (admissionId && mongoose.Types.ObjectId.isValid(admissionId)) {
+            filter.admissionId = admissionId;
+        }
+
+        const orders = await InpatientOrder.find(filter)
+            .populate('patientId', 'name age gender patientId mrn phone')
+            .populate('doctorId', 'name email phone')
+            .populate('admissionId', 'ward bedNumber status')
+            .lean();
+
+        let inbox = [];
+        orders.forEach(order => {
+            (order.clarifications || []).forEach(clar => {
+                if (status === 'ALL' || clar.status === status) {
+                    inbox.push({
+                        clarificationId: clar._id,
+                        orderId: order._id,
+                        medicineName: order.medicineName,
+                        dosage: `${order.dosageValue} ${order.dosageUnit}`,
+                        route: order.route,
+                        frequency: order.frequency,
+                        instructions: order.instructions,
+                        admissionId: order.admissionId?._id || order.admissionId,
+                        ward: order.admissionId?.ward || '—',
+                        bedNumber: order.admissionId?.bedNumber || '—',
+                        patient: order.patientId,
+                        doctor: order.doctorId,
+                        issueType: clar.issueType,
+                        question: clar.question,
+                        requestedBy: clar.requestedBy,
+                        nurseId: clar.nurseId,
+                        requestedAt: clar.requestedAt,
+                        responseText: clar.responseText,
+                        responseDoctorId: clar.responseDoctorId,
+                        respondedAt: clar.respondedAt,
+                        status: clar.status
+                    });
+                }
+            });
+        });
+
+        // Sort by requestedAt descending
+        inbox.sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
+
+        res.json({
+            success: true,
+            count: inbox.length,
+            clarifications: inbox,
+            data: inbox
+        });
+    } catch (err) {
+        console.error('Clarifications inbox error:', err);
+        res.status(500).json({ success: false, message: err.message || 'Error fetching clarifications inbox' });
+    }
+});
+
+// ============================================================================
+// SECTION H: STRUCTURED IPD DISCHARGE SUMMARY (CLINICAL DOCUMENTATION)
+// ============================================================================
+
+// POST /api/ipd-clinical/admissions/:admissionId/discharge-summary — Doctor creates/updates Discharge Summary
+router.post('/admissions/:admissionId/discharge-summary', verifyToken, resolveTenant, requireDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+            return res.status(400).json({ success: false, message: 'Invalid admissionId' });
+        }
+
+        const {
+            diagnosis,
+            admissionReason,
+            hospitalCourse,
+            proceduresSummary,
+            keyInvestigationsSummary,
+            treatmentSummary,
+            conditionAtDischarge = 'STABLE',
+            dischargeMedications = [],
+            followUpInstructions,
+            returnPrecautions,
+            followUpDate,
+            status = 'DRAFT' // 'DRAFT' or 'FINALIZED'
+        } = req.body;
+
+        const { Admission, User } = getModels(req);
+        const admission = await Admission.findOne({ _id: admissionId, hospitalId });
+        if (!admission) {
+            return res.status(404).json({ success: false, message: 'Admission record not found' });
+        }
+
+        const doctorId = req.user._id || req.user.userId;
+        const doctorName = req.user.name || 'Doctor';
+
+        const summaryData = {
+            diagnosis: diagnosis ? String(diagnosis).trim() : '',
+            admissionReason: admissionReason ? String(admissionReason).trim() : '',
+            hospitalCourse: hospitalCourse ? String(hospitalCourse).trim() : '',
+            proceduresSummary: proceduresSummary ? String(proceduresSummary).trim() : '',
+            keyInvestigationsSummary: keyInvestigationsSummary ? String(keyInvestigationsSummary).trim() : '',
+            treatmentSummary: treatmentSummary ? String(treatmentSummary).trim() : '',
+            conditionAtDischarge,
+            dischargeMedications: Array.isArray(dischargeMedications) ? dischargeMedications.map(m => ({
+                medicineName: String(m.medicineName || '').trim(),
+                dosage: String(m.dosage || '').trim(),
+                route: String(m.route || 'Oral').trim(),
+                frequency: String(m.frequency || 'OD').trim(),
+                duration: String(m.duration || '5 days').trim(),
+                instructions: String(m.instructions || '').trim()
+            })).filter(m => m.medicineName) : [],
+            followUpInstructions: followUpInstructions ? String(followUpInstructions).trim() : '',
+            returnPrecautions: returnPrecautions ? String(returnPrecautions).trim() : '',
+            followUpDate: followUpDate ? new Date(followUpDate) : undefined,
+            status,
+            doctorId,
+            doctorSignedAt: status === 'FINALIZED' ? new Date() : (admission.dischargeSummary?.doctorSignedAt || null)
+        };
+
+        admission.dischargeSummary = summaryData;
+
+        // If doctor finalizes the discharge summary, also mark doctorDischargeOrdered as true
+        if (status === 'FINALIZED') {
+            if (!admission.dischargeReadiness) {
+                admission.dischargeReadiness = {};
+            }
+            admission.dischargeReadiness.doctorDischargeOrdered = true;
+            admission.dischargeReadiness.doctorDischargeDate = new Date();
+            admission.dischargeReadiness.doctorDischargeDoctorId = doctorId;
+            admission.dischargeReadiness.doctorDischargeNotes = summaryData.followUpInstructions || 'Discharge summary finalized by attending doctor';
+
+            if (admission.dischargeReadiness.nursingClearance) {
+                admission.dischargeReadiness.status = 'READY_FOR_DISCHARGE';
+            } else {
+                admission.dischargeReadiness.status = 'DOCTOR_ORDERED';
+            }
+        }
+
+        await admission.save();
+
+        await logClinicalAudit({
+            hospitalId,
+            user: req.user,
+            action: status === 'FINALIZED' ? 'DISCHARGE_SUMMARY_FINALIZED' : 'DISCHARGE_SUMMARY_SAVED',
+            targetModel: 'Admission',
+            targetId: admission._id,
+            targetLabel: `Discharge summary ${status} for admission ${admission._id}`,
+            req
+        });
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`hospital_${hospitalId}`).emit('discharge_summary_updated', {
+                admissionId: admission._id,
+                patientId: admission.patientId,
+                status,
+                doctorName,
+                updatedAt: new Date()
+            });
+        }
+
+        res.json({
+            success: true,
+            message: `Discharge summary ${status === 'FINALIZED' ? 'finalized and signed' : 'saved as draft'} successfully`,
+            dischargeSummary: admission.dischargeSummary,
+            dischargeReadiness: admission.dischargeReadiness,
+            data: admission.dischargeSummary
+        });
+    } catch (err) {
+        console.error('Save discharge summary error:', err);
+        res.status(500).json({ success: false, message: err.message || 'Error saving discharge summary' });
+    }
+});
+
+// GET /api/ipd-clinical/admissions/:admissionId/discharge-summary — Fetch structured discharge summary + complete patient clinical summary
+router.get('/admissions/:admissionId/discharge-summary', verifyToken, resolveTenant, requireNurseOrDoctorAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const { admissionId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+            return res.status(400).json({ success: false, message: 'Invalid admissionId' });
+        }
+
+        const { Admission, IPDVitals, InpatientOrder, MARRecord, LabReport, SurgeryPlan, User } = getModels(req);
+
+        const admission = await Admission.findOne({ _id: admissionId, hospitalId })
+            .populate('patientId', 'name age gender patientId mrn phone address bloodGroup aadhaarNumber')
+            .populate('doctorId', 'name email phone specialization licenseNumber')
+            .populate('bedId', 'bedNumber ward bedType')
+            .lean();
+
+        if (!admission) {
+            return res.status(404).json({ success: false, message: 'Admission record not found' });
+        }
+
+        // Fetch latest vitals for reference snapshot
+        const latestVitals = await IPDVitals.findOne({ admissionId, hospitalId })
+            .sort({ recordedAt: -1 })
+            .lean();
+
+        // Fetch active/past medications
+        const inpatientOrders = await InpatientOrder.find({ admissionId, hospitalId }).lean();
+
+        // Fetch completed lab investigations
+        const labReports = await LabReport.find({
+            $or: [{ admissionId }, { patientId: admission.patientId?._id || admission.patientId }, { userId: admission.patientId?._id || admission.patientId }],
+            hospitalId
+        }).lean();
+
+        // Fetch surgeries if any
+        const surgeries = await SurgeryPlan.find({
+            $or: [{ admissionId }, { patientId: admission.patientId?._id || admission.patientId }],
+            hospitalId
+        }).populate('surgeonId', 'name specialization').lean();
+
+        // Populate doctor who signed summary if populated
+        let signingDoctor = null;
+        if (admission.dischargeSummary?.doctorId) {
+            signingDoctor = await User.findById(admission.dischargeSummary.doctorId, 'name email specialization licenseNumber').lean();
+        }
+
+        res.json({
+            success: true,
+            admission,
+            dischargeSummary: admission.dischargeSummary || null,
+            latestVitals: latestVitals || null,
+            inpatientOrders: inpatientOrders || [],
+            labReports: labReports || [],
+            surgeries: surgeries || [],
+            signingDoctor: signingDoctor || admission.doctorId,
+            data: {
+                admission,
+                dischargeSummary: admission.dischargeSummary || null,
+                latestVitals,
+                signingDoctor: signingDoctor || admission.doctorId
+            }
+        });
+    } catch (err) {
+        console.error('Fetch discharge summary error:', err);
+        res.status(500).json({ success: false, message: err.message || 'Error fetching discharge summary' });
+    }
+});
+
 module.exports = router;
+

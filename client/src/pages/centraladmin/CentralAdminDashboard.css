@@ -5338,53 +5338,152 @@
   }
 }
 
-/* Role Filter Group on Staff Table */
-.h-detail-role-filter-group {
+/* Staff Filter Toolbar & Header */
+.h-detail-staff-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.h-detail-count-badge {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #6366f1;
+}
+
+.h-detail-staff-filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
-.h-detail-role-filter-btn {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 9px;
-  padding: 5px 12px;
-  font-size: 0.76rem;
-  font-weight: 700;
-  color: #475569;
-  cursor: pointer;
-  display: inline-flex;
+.h-detail-staff-search-box {
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  min-width: 220px;
+}
+
+.h-detail-staff-search-icon {
+  position: absolute;
+  left: 11px;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.h-detail-staff-search-input {
+  width: 100%;
+  padding: 7px 28px 7px 32px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #1e293b;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.h-detail-staff-search-input:focus {
+  background: #ffffff;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.h-detail-staff-search-clear {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  border-radius: 50%;
   transition: all 0.15s;
 }
 
-.h-detail-role-filter-btn:hover {
+.h-detail-staff-search-clear:hover {
+  color: #ef4444;
+  background: #fee2e2;
+}
+
+.h-detail-role-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.h-detail-role-select-icon {
+  position: absolute;
+  left: 11px;
+  font-size: 0.78rem;
+  color: #6366f1;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.h-detail-role-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 7px 30px 7px 32px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #334155;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.h-detail-role-select:hover {
   background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: #1e293b;
+  border-color: #94a3b8;
 }
 
-.h-detail-role-filter-btn.active {
-  background: #6366f1;
+.h-detail-role-select:focus {
+  background: #ffffff;
   border-color: #6366f1;
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.25);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
 }
 
-.h-detail-role-count-tag {
-  background: rgba(0, 0, 0, 0.07);
-  padding: 1px 6px;
-  border-radius: 5px;
+.h-detail-role-select-arrow {
+  position: absolute;
+  right: 11px;
   font-size: 0.7rem;
-  font-weight: 800;
+  color: #64748b;
+  pointer-events: none;
 }
 
-.h-detail-role-filter-btn.active .h-detail-role-count-tag {
-  background: rgba(255, 255, 255, 0.25);
-  color: #ffffff;
+.h-detail-filter-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.h-detail-filter-reset-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fecaca;
 }
 
 /* 8. Monthly Revenue Card */
@@ -5504,6 +5603,71 @@
   text-transform: uppercase;
 }
 
+/* Color-coded Role Badges */
+.h-detail-role-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 6px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.role-badge-doctor {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.role-badge-nurse {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.role-badge-reception {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.role-badge-pharmacy {
+  background: #fdf2f8;
+  color: #db2777;
+  border: 1px solid #fbcfe8;
+}
+
+.role-badge-lab {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border: 1px solid #ddd6fe;
+}
+
+.role-badge-admin {
+  background: #ede9fe;
+  color: #6366f1;
+  border: 1px solid #c7d2fe;
+}
+
+.role-badge-default {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.h-detail-contact-link {
+  color: #334155;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.15s ease;
+}
+
+.h-detail-contact-link:hover {
+  color: #6366f1;
+  text-decoration: underline;
+}
+
 /* Appointments Table */
 .h-detail-appt-table {
   width: 100%;
@@ -5553,6 +5717,51 @@
   .h-detail-mode-options-grid { grid-template-columns: 1fr; }
 }
 
+@media (max-width: 768px) {
+  .h-detail-staff-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .h-detail-staff-filter-toolbar {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .h-detail-staff-search-box {
+    flex: 1 1 180px;
+    min-width: 140px;
+  }
+
+  .h-detail-role-select-wrap {
+    flex: 1 1 140px;
+  }
+
+  .h-detail-role-select {
+    width: 100%;
+  }
+
+  .h-detail-filter-reset-btn {
+    flex-shrink: 0;
+  }
+
+  .h-detail-staff-table-wrap {
+    max-height: 340px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .h-detail-staff-table th,
+  .h-detail-staff-table td {
+    padding: 10px 12px;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 600px) {
   .h-detail-kpi-grid { grid-template-columns: 1fr; }
   .h-detail-features-grid { grid-template-columns: repeat(2, 1fr); }
@@ -5560,6 +5769,23 @@
   .h-detail-hero-content { flex-direction: column; align-items: flex-start; gap: 16px; }
   .h-detail-hero-right { width: 100%; flex-direction: row; justify-content: space-between; align-items: center; }
   .h-detail-timeframe-controls { flex-direction: column; align-items: flex-start; }
+}
+
+@media (max-width: 480px) {
+  .h-detail-staff-filter-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .h-detail-staff-search-box,
+  .h-detail-role-select-wrap,
+  .h-detail-filter-reset-btn {
+    width: 100%;
+  }
+
+  .h-detail-filter-reset-btn {
+    justify-content: center;
+  }
 }
 
 /* ==========================================================================

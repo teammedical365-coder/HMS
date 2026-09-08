@@ -2,6 +2,42 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../store/hooks';
 
+const getRoleDashboardPath = (user) => {
+  if (user?.dashboardPath) return user.dashboardPath;
+  const role = (user?.role || '').toLowerCase().replace(/\s+/g, '');
+  if (['nurse', 'staffnurse', 'headnurse'].includes(role)) {
+    return '/nurse/dashboard';
+  }
+  if (role === 'doctor' || role === 'clinicdoctor') {
+    return '/doctor/dashboard';
+  }
+  if (role === 'reception' || role === 'receptionist') {
+    return '/reception/dashboard';
+  }
+  if (role === 'cashier' || role === 'billing') {
+    return '/cashier/billing';
+  }
+  if (role === 'accountant') {
+    return '/accountant/dashboard';
+  }
+  if (role === 'lab') {
+    return '/lab/dashboard';
+  }
+  if (role.includes('pharmac')) {
+    return '/pharmacy/inventory';
+  }
+  if (role === 'otmanager' || role === 'otstaff') {
+    return '/ot/dashboard';
+  }
+  if (role === 'hospitaladmin') {
+    return '/hospitaladmin';
+  }
+  if (role === 'centraladmin' || role === 'superadmin') {
+    return '/supremeadmin';
+  }
+  return '/my-dashboard';
+};
+
 const ProtectedRoute = ({ children, requiredPermissions = [], allowedRoles = [] }) => {
   const { user, isAuthenticated, token } = useAuth();
 
@@ -30,11 +66,11 @@ const ProtectedRoute = ({ children, requiredPermissions = [], allowedRoles = [] 
     // When only one is specified, that check must pass
     if (requiredPermissions.length > 0 && allowedRoles.length > 0) {
       if (!hasRequiredPermission && !hasAllowedRole) {
-        const dashboardPath = user.dashboardPath || '/my-dashboard';
+        const dashboardPath = getRoleDashboardPath(user);
         return <Navigate to={dashboardPath} replace />;
       }
     } else if (!hasRequiredPermission || !hasAllowedRole) {
-      const dashboardPath = user.dashboardPath || '/my-dashboard';
+      const dashboardPath = getRoleDashboardPath(user);
       return <Navigate to={dashboardPath} replace />;
     }
   }

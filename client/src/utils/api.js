@@ -1056,6 +1056,12 @@ export const ipdClinicalAPI = {
     getActiveOrders: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/orders/active`)).data,
     updateOrder: async (orderId, data) => (await apiClient.patch(`/api/ipd-clinical/orders/${orderId}`, data)).data,
 
+    // Clinical Coordination (Phase 7)
+    acknowledgeOrder: async (admissionId, orderId, data = {}) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/orders/${orderId}/acknowledge`, data)).data,
+    requestClarification: async (admissionId, orderId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/orders/${orderId}/clarification`, data)).data,
+    respondClarification: async (admissionId, orderId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/orders/${orderId}/clarification-response`, data)).data,
+    getClarificationsInbox: async (params = {}) => (await apiClient.get('/api/ipd-clinical/clarifications/inbox', { params })).data,
+
     // Medication Administration Records (MAR)
     scheduleMAR: async (data) => (await apiClient.post('/api/ipd-clinical/mar', data)).data,
     getMARRecords: async (admissionId, params = {}) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/mar`, { params })).data,
@@ -1066,6 +1072,87 @@ export const ipdClinicalAPI = {
     recordVitals: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/vitals`, data)).data,
     getVitalsHistory: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/vitals`)).data,
     getLatestVitals: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/vitals/latest`)).data,
+
+    // Doctor Clinical Discharge Order & Structured Summary (Phase 7)
+    createDischargeOrder: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/discharge-order`, data)).data,
+    saveDischargeSummary: async (admissionId, data) => (await apiClient.post(`/api/ipd-clinical/admissions/${admissionId}/discharge-summary`, data)).data,
+    getDischargeSummary: async (admissionId) => (await apiClient.get(`/api/ipd-clinical/admissions/${admissionId}/discharge-summary`)).data,
 };
+
+// ── IPD Nursing Workflow APIs ──
+export const nursingNoteAPI = {
+    createNote: async (admissionId, data) => (await apiClient.post(`/api/ipd-nursing/admissions/${admissionId}/notes`, data)).data,
+    getNotes: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/notes`)).data,
+};
+
+export const nursingTaskAPI = {
+    createTask: async (data) => (await apiClient.post('/api/ipd-nursing/tasks', data)).data,
+    getTasks: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/tasks`)).data,
+    updateTask: async (taskId, data) => (await apiClient.patch(`/api/ipd-nursing/tasks/${taskId}`, data)).data,
+};
+
+export const intakeOutputAPI = {
+    record: async (admissionId, data) => (await apiClient.post(`/api/ipd-nursing/admissions/${admissionId}/intake-output`, data)).data,
+    getHistory: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/intake-output`)).data,
+    getSummary: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/intake-output/summary`)).data,
+};
+
+export const ipdLineAPI = {
+    insertLine: async (admissionId, data) => (await apiClient.post(`/api/ipd-nursing/admissions/${admissionId}/lines`, data)).data,
+    getLines: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/lines`)).data,
+    removeLine: async (lineId, data) => (await apiClient.patch(`/api/ipd-nursing/lines/${lineId}/remove`, data)).data,
+};
+
+export const ipdCatheterAPI = {
+    insertCatheter: async (admissionId, data) => (await apiClient.post(`/api/ipd-nursing/admissions/${admissionId}/catheters`, data)).data,
+    getCatheters: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/catheters`)).data,
+    removeCatheter: async (catheterId, data) => (await apiClient.patch(`/api/ipd-nursing/catheters/${catheterId}/remove`, data)).data,
+};
+
+export const woundCareAPI = {
+    recordDressingChange: async (admissionId, data) => (await apiClient.post(`/api/ipd-nursing/admissions/${admissionId}/wound-care`, data)).data,
+    getHistory: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/wound-care`)).data,
+};
+
+export const nurseHandoverAPI = {
+    createHandover: async (admissionId, data) => (await apiClient.post(`/api/ipd-nursing/admissions/${admissionId}/handovers`, data)).data,
+    getHandovers: async (admissionId, params = {}) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/handovers`, { params })).data,
+};
+
+export const ipdNursingAPI = {
+    getInvestigations: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/investigations`)).data,
+    updateInvestigationStatus: async (reportId, data) => (await apiClient.patch(`/api/ipd-nursing/investigations/${reportId}/status`, data)).data,
+    getOTPlans: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/ot-plans`)).data,
+    getTimeline: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/timeline`)).data,
+
+    // Nurse Assignment
+    assignNurse: async (admissionId, data) => (await apiClient.post(`/api/ipd-nursing/admissions/${admissionId}/assign-nurse`, data)).data,
+    unassignNurse: async (admissionId, data) => (await apiClient.patch(`/api/ipd-nursing/admissions/${admissionId}/unassign-nurse`, data)).data,
+    getAssignedNurses: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/assigned-nurses`)).data,
+    getMyAssignedAdmissions: async () => (await apiClient.get('/api/ipd-nursing/my-assigned-admissions')).data,
+    getHospitalNurses: async () => (await apiClient.get('/api/ipd-nursing/staff/nurses')).data,
+
+    // Discharge Readiness & Blocker Engine (Phase 7)
+    getDischargeReadiness: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/discharge-readiness`)).data,
+    getDischargeBlockers: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/discharge-blockers`)).data,
+    recordNursingClearance: async (admissionId, data) => (await apiClient.post(`/api/ipd-nursing/admissions/${admissionId}/nursing-clearance`, data)).data,
+
+    // Operations Dashboard & Alerts
+    getOperationsMetrics: async () => (await apiClient.get('/api/ipd-nursing/operations/metrics')).data,
+    getAdmissionAlerts: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/alerts`)).data,
+    getHospitalAlerts: async () => (await apiClient.get('/api/ipd-nursing/alerts')).data,
+};
+
+// ── IPD Command Center & Analytics (Phase 7) ──
+export const ipdCommandCenterAPI = {
+    getOverview: async () => (await apiClient.get('/api/ipd-nursing/command-center/overview')).data,
+    getFlowBoard: async (params = {}) => (await apiClient.get('/api/ipd-nursing/command-center/flow-board', { params })).data,
+    getDischargeBlockers: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/discharge-blockers`)).data,
+    reconcileBeds: async () => (await apiClient.post('/api/ipd-nursing/beds/reconcile')).data,
+    getCensusTrends: async (params = {}) => (await apiClient.get('/api/ipd-nursing/analytics/census-trends', { params })).data,
+    getNurseWorkload: async () => (await apiClient.get('/api/ipd-nursing/analytics/nurse-workload')).data,
+};
+
+
 
 

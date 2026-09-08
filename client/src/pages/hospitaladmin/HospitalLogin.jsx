@@ -93,7 +93,9 @@ const HospitalLogin = () => {
         if (isAuthenticated && user) {
             const role = (user.role || '').toLowerCase().replace(/\s+/g, '');
             const redirectMap = { 
-                nurse: '/doctor/patients',
+                nurse: '/nurse/dashboard',
+                staffnurse: '/nurse/dashboard',
+                headnurse: '/nurse/dashboard',
                 otmanager: '/ot/dashboard',
                 otstaff: '/ot/dashboard',
                 ot: '/ot/dashboard'

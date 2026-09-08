@@ -1,0 +1,636 @@
+/* ── Nurse Appointments Stylesheet ── */
+
+.nurse-appts-container {
+    padding: 24px;
+    max-width: 1560px;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: #0f172a;
+}
+
+/* ── Top Header ── */
+.na-header-card {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border-radius: 16px;
+    padding: 24px 28px;
+    color: #ffffff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.15);
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.na-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.na-title-row h1 {
+    margin: 0;
+    font-size: 1.55rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+}
+
+.na-role-badge {
+    background: #10b981;
+    color: #ffffff;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.na-subtitle {
+    margin: 6px 0 0;
+    font-size: 0.88rem;
+    color: #94a3b8;
+}
+
+.na-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    padding: 9px 16px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.na-refresh-btn:hover {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.na-refresh-btn .spin {
+    animation: spin 1s linear infinite;
+}
+
+/* ── KPI Grid ── */
+.na-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.na-kpi-card {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.na-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.06);
+}
+
+.na-kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.na-kpi-card.blue .no-kpi-icon,
+.na-kpi-card.blue .na-kpi-icon { background: #eff6ff; color: #2563eb; }
+.na-kpi-card.emerald .na-kpi-icon { background: #f0fdf4; color: #059669; }
+.na-kpi-card.amber .na-kpi-icon { background: #fffbeb; color: #d97706; }
+.na-kpi-card.purple .na-kpi-icon { background: #faf5ff; color: #7c3aed; }
+
+.na-kpi-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.na-kpi-val {
+    font-size: 1.65rem;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.1;
+}
+
+.na-kpi-lbl {
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 3px;
+}
+
+/* ── Filter Toolbar ── */
+.na-toolbar {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 14px 18px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.na-date-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f8fafc;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 9px;
+    padding: 6px 12px;
+}
+
+.na-date-box input {
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: #0f172a;
+    cursor: pointer;
+}
+
+.na-today-btn {
+    border: none;
+    background: #e2e8f0;
+    color: #334155;
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.na-today-btn:hover {
+    background: #cbd5e1;
+}
+
+.na-search-box {
+    display: flex;
+    align-items: center;
+    background: #f8fafc;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 9px;
+    padding: 8px 12px;
+    flex: 1 1 240px;
+    max-width: 340px;
+    position: relative;
+}
+
+.na-search-icon {
+    color: #94a3b8;
+    margin-right: 8px;
+}
+
+.na-search-box input {
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 0.88rem;
+    width: 100%;
+    color: #0f172a;
+}
+
+.na-search-clear {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+}
+
+.na-tab-group {
+    display: flex;
+    background: #f1f5f9;
+    border-radius: 10px;
+    padding: 3px;
+    gap: 2px;
+    overflow-x: auto;
+}
+
+.na-tab-btn {
+    border: none;
+    background: transparent;
+    padding: 7px 14px;
+    border-radius: 7px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #64748b;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+
+.na-tab-btn.active {
+    background: #0f172a;
+    color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.na-doc-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    padding: 6px 12px;
+}
+
+.na-doc-filter select {
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #1e293b;
+    cursor: pointer;
+}
+
+/* ── Table Card ── */
+.na-table-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
+}
+
+.na-table-header {
+    padding: 16px 22px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fafafa;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.na-table-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 800;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.na-table-responsive {
+    overflow-x: auto;
+    width: 100%;
+}
+
+.na-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    text-align: left;
+}
+
+.na-table th {
+    background: #f8fafc;
+    padding: 12px 16px;
+    color: #475569;
+    font-size: 0.74rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 2px solid #e2e8f0;
+    white-space: nowrap;
+}
+
+.na-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+
+.na-table tbody tr:hover {
+    background: #f8fafc;
+}
+
+.na-pat-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.na-pat-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #0284c7;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+.na-pat-name {
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.na-pat-mrn {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+.na-doc-name {
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.na-status-tag {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.74rem;
+    font-weight: 800;
+    text-transform: capitalize;
+}
+
+.na-status-tag.confirmed,
+.na-status-tag.checked_in {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.na-status-tag.pending,
+.na-status-tag.waiting {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.na-status-tag.completed {
+    background: #eff6ff;
+    color: #1e40af;
+}
+
+.na-status-tag.cancelled {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.na-pay-tag {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.na-pay-tag.paid {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.na-pay-tag.pending {
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+.na-actions-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: center;
+}
+
+.na-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.na-btn.primary {
+    background: #0284c7;
+    color: #ffffff;
+}
+
+.na-btn.primary:hover {
+    background: #0369a1;
+}
+
+.na-btn.outline {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+}
+
+.na-btn.outline:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+.na-btn.secondary {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.na-btn.secondary:hover {
+    background: #e2e8f0;
+}
+
+/* Empty & Loading */
+.na-empty-box,
+.na-loading-box {
+    padding: 60px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: #64748b;
+}
+
+.na-empty-box h4 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+.na-empty-box p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+
+.na-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #e2e8f0;
+    border-top-color: #0284c7;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* ── Modals ── */
+.na-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 20px;
+}
+
+.na-modal {
+    background: #ffffff;
+    border-radius: 18px;
+    width: 100%;
+    max-width: 620px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+    animation: modalPop 0.2s ease-out;
+}
+
+.na-modal-header {
+    padding: 18px 22px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.na-modal-header h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.na-close-btn {
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 4px;
+    border-radius: 6px;
+}
+
+.na-close-btn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.na-modal-body {
+    padding: 22px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.na-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.na-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.na-form-group.full-width {
+    grid-column: span 2;
+}
+
+.na-form-group label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.na-form-group input,
+.na-form-group textarea,
+.na-form-group select {
+    border: 1.5px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.88rem;
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+.na-form-group input:focus,
+.na-form-group textarea:focus,
+.na-form-group select:focus {
+    border-color: #0284c7;
+}
+
+.na-modal-footer {
+    padding: 16px 22px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* ── Toast ── */
+.na-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 12px 20px;
+    border-radius: 10px;
+    color: #ffffff;
+    font-size: 0.88rem;
+    font-weight: 700;
+    z-index: 10000;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15);
+    animation: toastPop 0.2s ease-out;
+}
+
+.na-toast.success { background: #059669; }
+.na-toast.error { background: #dc2626; }
