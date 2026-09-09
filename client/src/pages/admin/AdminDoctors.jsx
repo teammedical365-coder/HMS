@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { useAppDispatch, useAuth, useAdminEntities } from '../../store/hooks';
 import { fetchAdminDoctors, createDoctor, updateDoctor, deleteDoctor } from '../../store/slices/adminEntitiesSlice';
 import { adminEntitiesAPI, hospitalAPI } from '../../utils/api';
@@ -15,10 +17,8 @@ const AdminDoctors = () => {
     const doctors = doctorsState.data || [];
     const loadingData = doctorsState.loading;
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
     const [editingDoctor, setEditingDoctor] = useState(null);
-    const [showForm, setShowForm] = useState(true);
+    const [showForm, setShowForm] = useState(false);
     const [hospital, setHospital] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
 
@@ -91,7 +91,7 @@ const AdminDoctors = () => {
     }, [navigate, user, dispatch]);
 
     useEffect(() => {
-        if (doctorsState.error) setError(doctorsState.error);
+        if (doctorsState.error) toast.error(doctorsState.error);
     }, [doctorsState.error]);
 
     // Auto-fetch department consultation fee when a new department is selected
@@ -110,8 +110,6 @@ const AdminDoctors = () => {
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData({ ...formData, [name]: value });
-        setError('');
-        setSuccess('');
     };
 
     const handleAvailabilityChange = (day, field, value) => {
@@ -129,28 +127,26 @@ const AdminDoctors = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError('');
-        setSuccess('');
         setLoading(true);
 
         try {
             if (editingDoctor) {
                 const result = await dispatch(updateDoctor({ id: editingDoctor._id, doctorData: formData }));
                 if (updateDoctor.fulfilled.match(result)) {
-                    setSuccess('Doctor profile updated successfully!');
+                    toast.success('Doctor profile updated successfully!');
                     resetForm();
                     dispatch(fetchAdminDoctors());
                 } else {
-                    setError(result.payload || 'Failed to update doctor profile');
+                    toast.error(result.payload || 'Failed to update doctor profile');
                 }
             } else {
                 if (!formData.name || !formData.email) {
-                    setError('Name and email are required');
+                    toast.error('Name and email are required');
                     setLoading(false);
                     return;
                 }
                 if (!formData.password || formData.password.length < 6) {
-                    setError('Password is required and must be at least 6 characters');
+                    toast.error('Password is required and must be at least 6 characters');
                     setLoading(false);
                     return;
                 }
@@ -162,15 +158,15 @@ const AdminDoctors = () => {
 
                 const result = await dispatch(createDoctor(doctorData));
                 if (createDoctor.fulfilled.match(result)) {
-                    setSuccess('Doctor profile created successfully!');
+                    toast.success('Doctor profile created successfully!');
                     resetForm();
                     dispatch(fetchAdminDoctors());
                 } else {
-                    setError(result.payload || 'Failed to create doctor');
+                    toast.error(result.payload || 'Failed to create doctor');
                 }
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Error saving doctor');
+            toast.error(err.response?.data?.message || 'Error saving doctor');
         } finally {
             setLoading(false);
         }
@@ -229,16 +225,16 @@ const AdminDoctors = () => {
     };
 
     const handleDelete = async (id) => {
-        if (window.confirm('Are you sure you want to delete this doctor?')) {
-            await dispatch(deleteDoctor(id));
-            setSuccess('Doctor deleted successfully');
-            dispatch(fetchAdminDoctors());
-        }
+        if (!(await confirmToast('Are you sure you want to delete this doctor?', { title: 'Delete Doctor' }))) return;
+        await dispatch(deleteDoctor(id));
+        toast.success('Doctor deleted successfully');
+        dispatch(fetchAdminDoctors());
     };
 
     const resetForm = () => {
         setFormData(initialFormState);
         setEditingDoctor(null);
+        setShowForm(false);
     };
 
     // Filtered Doctors List
@@ -345,9 +341,6 @@ const AdminDoctors = () => {
                     </button>
                 </div>
             </div>
-
-            {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '12px 18px', borderRadius: '12px', marginBottom: '20px', fontWeight: 600, fontSize: '13.5px' }}>⚠️ {error}</div>}
-            {success && <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d', padding: '12px 18px', borderRadius: '12px', marginBottom: '20px', fontWeight: 600, fontSize: '13.5px' }}>✅ {success}</div>}
 
             {/* ==================== 2. ADD NEW DOCTOR FORM CARD (MATCHING SCREENSHOT) ==================== */}
             {showForm && (

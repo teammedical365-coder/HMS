@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { labAPI } from '../../utils/api';
 import './AssignedTests.css';
 
@@ -31,7 +33,7 @@ const AssignedTests = () => {
         const file = e.target.files[0];
         if (!file) return;
 
-        if (!window.confirm(`Upload ${file.name} for this patient?`)) return;
+        if (!(await confirmToast(`Upload ${file.name} for this patient?`, { title: 'Upload Lab Report', danger: false, confirmText: 'Upload File' }))) return;
 
         setUploadingId(reportId);
         const formData = new FormData();
@@ -41,11 +43,11 @@ const AssignedTests = () => {
         try {
             const res = await labAPI.uploadReport(reportId, formData);
             if (res.success) {
-                alert("✅ Report Uploaded & Sent to Doctor!");
+                toast.success("Report uploaded & sent to doctor!");
                 loadRequests(); // Refresh list to remove completed
             }
         } catch (err) {
-            alert("Upload Failed: " + err.message);
+            toast.error("Upload Failed: " + err.message);
         } finally {
             setUploadingId(null);
         }

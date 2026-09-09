@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { doctorAPI, receptionAPI, otAPI, adminEntitiesAPI, admissionAPI, bedAPI } from '../../utils/api';
 
 const PatientProfile = () => {
@@ -109,12 +111,12 @@ const PatientProfile = () => {
             const apiCall = isEdit ? otAPI.updateScheduledSurgery : otAPI.scheduleSurgery;
             const res = await apiCall(scheduleData.id, scheduleData);
             if (res.success) {
-                alert(res.message || 'Surgery scheduled successfully');
+                toast.success(res.message || 'Surgery scheduled successfully');
                 setShowScheduleModal(false);
                 fetchProfile();
             }
         } catch (err) {
-            alert(err.response?.data?.message || 'Error scheduling surgery');
+            toast.error(err.response?.data?.message || 'Error scheduling surgery');
         }
     };
 
@@ -122,11 +124,11 @@ const PatientProfile = () => {
         try {
             const res = await otAPI.updateSurgeryWorkflow(id, { status });
             if (res.success) {
-                alert(res.message || `Status updated to ${status}`);
+                toast.success(res.message || `Status updated to ${status}`);
                 fetchProfile();
             }
         } catch (err) {
-            alert(err.response?.data?.message || 'Error updating workflow');
+            toast.error(err.response?.data?.message || 'Error updating workflow');
         }
     };
 
@@ -138,13 +140,13 @@ const PatientProfile = () => {
             if (res.success) setWorkflowBeds(res.beds || []);
             setShowWorkflowModal(true);
         } catch (err) {
-            alert('Failed to fetch available beds');
+            toast.error('Failed to fetch available beds');
         }
     };
 
     const handleWorkflowModalSubmit = async (e) => {
         e.preventDefault();
-        if (!selectedBedId) return alert('Please select a bed');
+        if (!selectedBedId) return toast.error('Please select a bed');
         try {
             if (workflowActionType === 'ADMIT') {
                 const targetBed = workflowBeds.find(b => b._id === selectedBedId);
@@ -157,7 +159,7 @@ const PatientProfile = () => {
                 });
                 if (admRes.success) {
                     await otAPI.updateSurgeryWorkflow(activeSurgeryId, { status: 'ADMITTED' });
-                    alert('Patient admitted successfully');
+                    toast.success('Patient admitted successfully');
                 }
             } else if (workflowActionType === 'TRANSFER') {
                 const actAdmRes = await admissionAPI.getPatientAdmissions(patientId);
@@ -172,30 +174,30 @@ const PatientProfile = () => {
                     });
                     if (transRes.success) {
                         await otAPI.updateSurgeryWorkflow(activeSurgeryId, { status: 'POST_OP' });
-                        alert('Patient transferred successfully');
+                        toast.success('Patient transferred successfully');
                     }
                 } else {
-                    alert('No active admission found to transfer');
+                    toast.error('No active admission found to transfer');
                 }
             }
             setShowWorkflowModal(false);
             setSelectedBedId('');
             fetchProfile();
         } catch (err) {
-            alert(err.response?.data?.message || 'Error processing request');
+            toast.error(err.response?.data?.message || 'Error processing request');
         }
     };
 
     const handleCancelSurgery = async (id) => {
-        if (!window.confirm("Are you sure you want to cancel this scheduled surgery?")) return;
+        if (!(await confirmToast("Are you sure you want to cancel this scheduled surgery?", { title: 'Cancel Scheduled Surgery' }))) return;
         try {
             const res = await otAPI.cancelSurgery(id);
             if (res.success) {
-                alert(res.message || 'Surgery cancelled');
+                toast.success(res.message || 'Surgery cancelled');
                 fetchProfile();
             }
         } catch (err) {
-            alert(err.response?.data?.message || 'Error cancelling surgery');
+            toast.error(err.response?.data?.message || 'Error cancelling surgery');
         }
     };
 

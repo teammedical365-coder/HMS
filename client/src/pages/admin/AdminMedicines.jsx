@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { medicineAPI } from '../../utils/api';
 import '../administration/SuperAdmin.css';
 
@@ -82,15 +84,18 @@ const AdminMedicines = () => {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this medicine?')) return;
+        if (!(await confirmToast('Are you sure you want to delete this medicine?', { title: 'Delete Medicine' }))) return;
         try {
             const res = await medicineAPI.deleteMedicine(id);
             if (res.success) {
+                toast.success('Medicine deleted.');
                 setSuccess('Medicine deleted.');
                 fetchMedicines();
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Error deleting medicine.');
+            const msg = err.response?.data?.message || 'Error deleting medicine.';
+            toast.error(msg);
+            setError(msg);
         }
     };
 

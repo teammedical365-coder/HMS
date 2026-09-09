@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { pharmacyAPI, billingAPI } from '../../utils/api';
 import { FiPlus, FiArrowRightCircle, FiZap, FiBox } from 'react-icons/fi';
 import './PharmacyDepartments.css';
@@ -34,7 +35,7 @@ const PharmacyDepartments = () => {
             if (stockRes.success) setStocks(stockRes.stocks);
         } catch (error) {
             console.error('Error fetching data:', error);
-            alert('Failed to load department data');
+            toast.error('Failed to load department data');
         }
     };
 
@@ -53,12 +54,13 @@ const PharmacyDepartments = () => {
         try {
             const res = await pharmacyAPI.createDepartment(deptForm);
             if (res.success) {
+                toast.success('Department created successfully!');
                 setShowDeptModal(false);
                 setDeptForm({ name: '', description: '' });
                 fetchData();
             }
         } catch (error) {
-            alert(error.response?.data?.message || 'Error creating department');
+            toast.error(error.response?.data?.message || 'Error creating department');
         }
     };
 
@@ -74,10 +76,10 @@ const PharmacyDepartments = () => {
                 setTransferForm({ departmentId: '', medicineId: '', quantity: '' });
                 fetchData();
                 fetchInventory(); // refresh main stock
-                alert('Stock transferred successfully!');
+                toast.success('Stock transferred successfully!');
             }
         } catch (error) {
-            alert(error.response?.data?.message || 'Error transferring stock');
+            toast.error(error.response?.data?.message || 'Error transferring stock');
         }
     };
 
@@ -115,10 +117,10 @@ const PharmacyDepartments = () => {
                 setUsageForm({ departmentId: '', medicineId: '', patientId: '', quantity: '', unitPrice: '' });
                 setPatientSearch('');
                 fetchData();
-                alert('Usage recorded and patient billed successfully!');
+                toast.success('Usage recorded and patient billed successfully!');
             }
         } catch (error) {
-            alert(error.response?.data?.message || 'Error recording usage');
+            toast.error(error.response?.data?.message || 'Error recording usage');
         }
     };
 

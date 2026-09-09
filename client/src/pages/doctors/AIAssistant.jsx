@@ -15,10 +15,10 @@ import socket from '../../utils/socket';
 import AIResponseRenderer from '../../components/AIResponseRenderer';
 import './AIAssistant.css';
 
-// ── Currency & Status Helpers ──
-const formatINR = (amount) => {
+// ── AI Credits & Status Helpers ──
+const formatCredits = (amount) => {
     const num = Number(amount) || 0;
-    return '₹' + num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `${num.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} Credits`;
 };
 
 const getWalletStatusInfo = (status) => {
@@ -1163,10 +1163,10 @@ const AIAssistant = () => {
                             {wallet && (
                                 <>
                                     <div className="ai-tracker-kpi-grid">
-                                        <div className="ai-tracker-card highlight">
-                                            <span className="ai-tracker-card-title">Available AI Credits</span>
+                                        <div className="ai-tracker-card">
+                                            <span className="ai-tracker-card-title">Available Balance</span>
                                             <span className="ai-tracker-card-value" style={{ color: statusInfo.color }}>
-                                                {formatINR(wallet.remainingAmount)}
+                                                ⚡ {formatCredits(wallet.remainingAmount)}
                                             </span>
                                             <span className="ai-tracker-card-sub">
                                                 Status: <strong style={{ color: statusInfo.color }}>{statusInfo.icon} {statusInfo.label}</strong>
@@ -1174,12 +1174,12 @@ const AIAssistant = () => {
                                         </div>
 
                                         <div className="ai-tracker-card">
-                                            <span className="ai-tracker-card-title">Used Budget</span>
+                                            <span className="ai-tracker-card-title">Used Credits</span>
                                             <span className="ai-tracker-card-value">
-                                                {formatINR(wallet.usedAmount)}
+                                                {formatCredits(wallet.usedAmount)}
                                             </span>
                                             <span className="ai-tracker-card-sub">
-                                                Total Budget: {formatINR(wallet.budgetAmount || 2000)}
+                                                Total Pool: {formatCredits(wallet.budgetAmount || 2000)}
                                             </span>
                                         </div>
                                     </div>
@@ -1191,7 +1191,7 @@ const AIAssistant = () => {
                                                     <th>Time</th>
                                                     <th>Operation</th>
                                                     <th>Tokens</th>
-                                                    <th>Cost (₹)</th>
+                                                    <th>Credits Used</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -1209,8 +1209,8 @@ const AIAssistant = () => {
                                                             </td>
                                                             <td>{log.operation || 'CLINICAL_CHAT'}</td>
                                                             <td>{log.totalTokens || 0}</td>
-                                                            <td style={{ color: '#16a34a', fontWeight: 600 }}>
-                                                                ₹{(log.actualApiCost || log.estimatedCostInr || 0).toFixed(4)}
+                                                            <td style={{ color: '#6366f1', fontWeight: 600 }}>
+                                                                ⚡ {(log.actualApiCost || log.estimatedCostInr || 0).toFixed(2)} Credits
                                                             </td>
                                                         </tr>
                                                     ))

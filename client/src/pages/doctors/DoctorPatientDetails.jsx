@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { doctorAPI, labTestAPI, questionLibraryAPI, hospitalAPI, patientAPI, receptionAPI, otAPI, adminEntitiesAPI, referralAPI, publicAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -403,7 +405,7 @@ const DoctorPatientDetails = () => {
             };
             const res = await referralAPI.create(dataToSubmit);
             if (res.success) {
-                alert('Referral created successfully!');
+                toast.success('Referral created successfully!');
                 setShowReferralModal(false);
                 setReferralData({ referredToDoctorId: '', reason: '', notes: '' });
                 // Refresh referrals list
@@ -414,7 +416,7 @@ const DoctorPatientDetails = () => {
                 }
             }
         } catch (err) {
-            alert(err.response?.data?.message || 'Error creating referral');
+            toast.error(err.response?.data?.message || 'Error creating referral');
         }
     };
 
@@ -422,7 +424,7 @@ const DoctorPatientDetails = () => {
         try {
             const res = await referralAPI.review(referralId, { status, reviewNotes });
             if (res.success) {
-                alert(`Referral ${status.toLowerCase()} successfully!`);
+                toast.success(`Referral ${status.toLowerCase()} successfully!`);
                 setShowReferralReviewModal(false);
                 setActiveReferralForReview(null);
                 // Refresh
@@ -433,7 +435,7 @@ const DoctorPatientDetails = () => {
                 }
             }
         } catch (err) {
-            alert(err.response?.data?.message || 'Error reviewing referral');
+            toast.error(err.response?.data?.message || 'Error reviewing referral');
         }
     };
 
@@ -449,7 +451,7 @@ const DoctorPatientDetails = () => {
             };
             const res = await otAPI.createSurgeryPlan(dataToSubmit);
             if(res.success) {
-                alert('Surgery Plan created successfully!');
+                toast.success('Surgery Plan created successfully!');
                 setShowSurgeryPlanModal(false);
                 setOperationRequired(false);
                 // Reset form
@@ -459,7 +461,7 @@ const DoctorPatientDetails = () => {
                 // Re-fetch patient history if needed, but not strictly necessary here.
             }
         } catch(err) {
-            alert(err.response?.data?.message || 'Error creating surgery plan');
+            toast.error(err.response?.data?.message || 'Error creating surgery plan');
         }
     };
 
@@ -469,14 +471,14 @@ const DoctorPatientDetails = () => {
         setSaving(true);
         try {
             await doctorAPI.updatePatientProfile(patientId, intakeData);
-            alert("✅ Patient profile saved successfully!");
+            toast.success("Patient profile saved successfully!");
         } catch (err) {
-            alert("Error saving profile: " + (err.response?.data?.message || err.message));
+            toast.error("Error saving profile: " + (err.response?.data?.message || err.message));
         } finally { setSaving(false); }
     };
 
     const handleSaveAndMerge = async () => {
-        if (!window.confirm("Save all changes and finish session?")) return;
+        if (!(await confirmToast("Save all changes and finish session?", { title: "Finish Consultation", danger: false, confirmText: "Save & Finish" }))) return;
         setSaving(true);
         try {
             // 1. Save Profile
@@ -503,20 +505,13 @@ const DoctorPatientDetails = () => {
             // Immediately lock UI and update appointment status locally
             setIsLocked(true);
 
-            // OPTION B FIX: State Reset / Navigation to Reception Dashboard
-            if (window.confirm("Consultation Completed. Do you want to transition to the Reception Desk to Admit/Hospitalize this patient?")) {
+            // Transition check to Reception
+            if (await confirmToast("Consultation Completed. Do you want to transition to the Reception Desk to Admit/Hospitalize this patient?", { title: "Admit Patient?", danger: false, confirmText: "Go to Reception", cancelText: "Stay Here" })) {
                 const patientData = appointment?.userId || appointment?.clinicPatientId || appointment;
                 navigate('/reception/dashboard?view=intake', { state: { patient: patientData } });
                 return;
             } else {
-                setToast({
-                    show: true,
-                    title: '✅ Session Completed Successfully',
-                    message: 'This consultation has already been completed. This record is now read-only.'
-                });
-                setTimeout(() => {
-                    setToast(prev => ({ ...prev, show: false }));
-                }, 3000);
+                toast.success("Consultation completed successfully!");
             }
 
             setAppointment(prev => ({
@@ -548,7 +543,7 @@ const DoctorPatientDetails = () => {
                 navigateOnClose: true
             });
         } catch (err) {
-            alert("Error: " + (err.response?.data?.message || err.message));
+            toast.error("Error: " + (err.response?.data?.message || err.message));
         } finally { setSaving(false); }
     };
 
@@ -1466,7 +1461,7 @@ const DoctorPatientDetails = () => {
                                         labTests: (viewingPastSession.labTests || []).join(', ')
                                     });
                                     setViewingPastSession(null);
-                                    alert("Historical data copied into your Current Session editor!");
+                                    toast.success("Historical data copied into your Current Session editor!");
                                 }}
                                 style={{ padding: '10px 18px', background: 'transparent', color: '#3b82f6', border: '1px solid #3b82f6', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
                             >

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../utils/confirmToast';
 import { receptionAPI, publicAPI } from '../utils/api';
 import ReceptionPatients from './reception/ReceptionPatients';
 import DoctorDashboard from './doctors/DoctorDashboard';
@@ -131,17 +133,18 @@ const RoleDashboard = () => {
     };
 
     const handleCancelAppointment = async (apptId) => {
-        if (!window.confirm("Are you sure you want to cancel this appointment?")) return;
+        if (!(await confirmToast("Are you sure you want to cancel this appointment?", { title: 'Cancel Appointment' }))) return;
         try {
             const res = await receptionAPI.cancelAppointment(apptId);
             if (res.success) {
-                alert("Appointment cancelled successfully!");
+                toast.success("Appointment cancelled successfully!");
                 fetchAppointments();
             } else {
-                alert("Failed to cancel appointment: " + res.message);
+                toast.error("Failed to cancel appointment: " + res.message);
             }
         } catch (error) {
             console.error("Cancel appt error:", error);
+            toast.error("Error cancelling appointment");
         }
     };
 
@@ -181,15 +184,15 @@ const RoleDashboard = () => {
                 historyBp: vitalsForm.bp
             });
             if (res.success) {
-                alert(`Vitals updated successfully for ${vitalsModal.patient.name}!`);
+                toast.success(`Vitals updated successfully for ${vitalsModal.patient.name}!`);
                 setVitalsModal({ open: false, patient: null });
                 fetchRecentPatients();
             } else {
-                alert("Failed to save vitals: " + res.message);
+                toast.error("Failed to save vitals: " + res.message);
             }
         } catch (err) {
             console.error("Error saving vitals:", err);
-            alert("Error saving vitals: " + err.message);
+            toast.error("Error saving vitals: " + err.message);
         } finally {
             setSavingVitals(false);
         }
@@ -199,10 +202,10 @@ const RoleDashboard = () => {
     const handleReportSubmit = (e) => {
         e.preventDefault();
         if (!selectedReportFile) {
-            alert('Please select a file to upload!');
+            toast.error('Please select a file to upload!');
             return;
         }
-        alert(`Report file "${selectedReportFile.name}" uploaded successfully for ${uploadModal.patientName}!`);
+        toast.success(`Report file "${selectedReportFile.name}" uploaded successfully for ${uploadModal.patientName}!`);
         setSelectedReportFile(null);
         setUploadModal({ open: false, apptId: null, patientName: '' });
     };
@@ -795,9 +798,6 @@ const RoleDashboard = () => {
                                     </div>
                                     <div className="ha-quick-ops-title-group">
                                         <h3 className="ha-quick-ops-title">Quick Operations</h3>
-                                        <p className="ha-quick-ops-subtitle">
-                                            Jump to the areas you manage most frequently. Contact your Central Admin to manage question libraries, test packages, or medicine catalogs.
-                                        </p>
                                     </div>
                                 </div>
 

@@ -3,6 +3,8 @@ import {
     FiCalendar, FiClock, FiActivity, FiUsers, FiBox, FiCheckCircle, 
     FiAlertTriangle, FiEye, FiCheck, FiPlus, FiChevronLeft, FiChevronRight, FiEdit2, FiX
 } from 'react-icons/fi';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { otAPI, doctorAPI, bedAPI } from '../../utils/api';
 import socket from '../../utils/socket';
 import OTHeader from './OTHeader';
@@ -79,19 +81,25 @@ const OTSchedulePage = () => {
     const handleWorkflowTransition = async (surgeryId, nextStatus) => {
         try {
             const res = await otAPI.updateSurgeryWorkflow(surgeryId, { status: nextStatus });
-            if (res.success) fetchScheduleData();
+            if (res.success) {
+                toast.success('Workflow status updated');
+                fetchScheduleData();
+            }
         } catch (err) {
-            alert(err.response?.data?.message || 'Workflow update failed');
+            toast.error(err.response?.data?.message || 'Workflow update failed');
         }
     };
 
     const handleCancelSurgery = async (surgeryId) => {
-        if (!window.confirm('Are you sure you want to cancel this scheduled surgery?')) return;
+        if (!(await confirmToast('Are you sure you want to cancel this scheduled surgery?', { title: 'Cancel Surgery' }))) return;
         try {
             const res = await otAPI.cancelSurgery(surgeryId);
-            if (res.success) fetchScheduleData();
+            if (res.success) {
+                toast.success('Surgery cancelled');
+                fetchScheduleData();
+            }
         } catch (err) {
-            alert(err.response?.data?.message || 'Cancel failed');
+            toast.error(err.response?.data?.message || 'Cancel failed');
         }
     };
 

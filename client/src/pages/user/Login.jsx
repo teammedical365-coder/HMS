@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { useAppDispatch, useAuth } from '../../store/hooks';
 import { sendOtp, verifyOtp, resendOtp, forceLogin, clearError, resetOtpFlow } from '../../store/slices/authSlice';
 import NeuralAuthPortal from '../../components/auth/NeuralAuthPortal';
@@ -127,8 +128,8 @@ const Login = () => {
             })).unwrap();
         } catch (err) {
             console.error('[Login] OTP Request Failed:', err);
-            const errDetails = typeof err === 'object' ? JSON.stringify(err) : err;
-            alert(`[OTP Error]\nEndpoint: ${baseURL}/api/auth/otp/send\nDetails: ${errDetails}`);
+            const errDetails = typeof err === 'object' ? (err.message || JSON.stringify(err)) : err;
+            toast.error(errDetails || 'Failed to send OTP');
         }
     };
 

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { adminEntitiesAPI } from '../../utils/api';
 import '../administration/SuperAdmin.css';
 
@@ -110,16 +112,18 @@ const AdminServices = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this service?')) {
-      try {
-        const response = await adminEntitiesAPI.deleteService(id);
-        if (response.success) {
-          setSuccess('Service deleted successfully');
-          fetchServices();
-        }
-      } catch (err) {
-        setError(err.response?.data?.message || 'Error deleting service');
+    if (!(await confirmToast('Are you sure you want to delete this service?', { title: 'Delete Service' }))) return;
+    try {
+      const response = await adminEntitiesAPI.deleteService(id);
+      if (response.success) {
+        toast.success('Service deleted successfully');
+        setSuccess('Service deleted successfully');
+        fetchServices();
       }
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Error deleting service';
+      toast.error(msg);
+      setError(msg);
     }
   };
 

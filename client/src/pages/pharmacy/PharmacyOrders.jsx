@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ReactDOM from 'react-dom';
+import toast from 'react-hot-toast';
 import { pharmacyOrderAPI, hospitalAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -149,14 +150,14 @@ const PharmacyOrders = () => {
             });
             const data = await res.json();
             if (data.success) {
-                alert("Pharmacy Billing Details updated successfully!");
+                toast.success("Pharmacy Billing Details updated successfully!");
                 fetchHospital();
             } else {
-                alert(data.message || "Failed to update billing details");
+                toast.error(data.message || "Failed to update billing details");
             }
         } catch (error) {
             console.error(error);
-            alert("Error updating billing details");
+            toast.error("Error updating billing details");
         }
     };
 
@@ -164,9 +165,11 @@ const PharmacyOrders = () => {
         try {
             setLoading(true);
             const res = await pharmacyOrderAPI.getOrders();
-            if (res.success) setOrders(res.orders);
-        } catch (err) {
-            console.error("Failed to fetch pharmacy orders", err);
+            if (res.success) {
+                setOrders(res.orders);
+            }
+        } catch (error) {
+            console.error("Error fetching orders:", error);
         } finally {
             setLoading(false);
         }
@@ -174,49 +177,37 @@ const PharmacyOrders = () => {
 
     const handleWalkInSubmit = async (e) => {
         e.preventDefault();
+        if (walkInForm.items.length === 0) return toast.error('Please add at least one item');
         setWalkInSaving(true);
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(`${backendUrl}/api/pharmacy/orders/outside-patient-bill`, {
+            const res = await fetch(`${backendUrl}/api/pharmacy-orders/walk-in`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` 
                 },
-                body: JSON.stringify({
-                    patientName: walkInForm.patientName,
-                    patientPhone: walkInForm.patientPhone,
-                    doctorName: walkInForm.doctorName,
-                    items: walkInForm.items,
-                    totalAmount: walkInForm.subtotal,
-                    taxableAmount: walkInForm.subtotal,
-                    cgstAmount: walkInForm.cgstAmount,
-                    sgstAmount: walkInForm.sgstAmount,
-                    discountAmount: walkInForm.discountAmount,
-                    paymentMode: walkInForm.paymentMode
-                })
+                body: JSON.stringify(walkInForm)
             });
             const data = await res.json();
             if (data.success) {
-                setShowWalkInModal(false);
                 fetchOrders();
-                fetchInventory();
-                // Reset form
+                setShowWalkInModal(false);
                 setWalkInForm({
                     patientName: '', patientPhone: '', doctorName: '', items: [], discountPercent: 0,
                     subtotal: 0, cgstAmount: 0, sgstAmount: 0, totalAmount: 0, discountAmount: 0, grandTotal: 0, paymentMode: 'CASH'
                 });
-                alert('Walk-in Bill generated successfully!');
+                toast.success('Walk-in Bill generated successfully!');
                 
                 // Open bill modal to print
                 setSelectedOrder(data.order);
                 setShowBillModal(true);
             } else {
-                alert(data.message || 'Failed to generate bill');
+                toast.error(data.message || 'Failed to generate bill');
             }
         } catch (error) {
             console.error(error);
-            alert('Error generating walk-in bill');
+            toast.error('Error generating walk-in bill');
         } finally {
             setWalkInSaving(false);
         }
@@ -367,12 +358,12 @@ const PharmacyOrders = () => {
 
             const data = await res.json();
             if (data.success) {
-                alert("Order completed!");
+                toast.success("Order completed!");
                 setOrders(prev => prev.map(o => o._id === orderId ? { ...o, paymentStatus: payload.paymentStatus || 'Paid', paymentMode: payload.paymentMode, status: 'COMPLETED', orderStatus: 'Completed' } : o));
                 fetchDashboardStats();
             }
         } catch (err) {
-            alert("Failed to update order.");
+            toast.error("Failed to update order.");
         }
     };
     const handleViewBill = (order) => {
@@ -1562,7 +1553,7 @@ const PharmacyOrders = () => {
                             <button className="erp-button secondary" onClick={() => setShowPaymentModal(false)}>Cancel</button>
                             <button className="erp-button primary" onClick={() => {
                                 if (paymentSource === 'Doctor' && !authorizedByDoctor) {
-                                    return alert('Please select an authorizing doctor.');
+                                    return toast.error('Please select an authorizing doctor.');
                                 }
                                 let selectedDoctorName = '';
                                 if (authorizedByDoctor) {

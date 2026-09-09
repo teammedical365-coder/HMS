@@ -189,6 +189,7 @@ const MainRoutes = () => {
 
         if (role === 'centraladmin' || role === 'superadmin') {
             prefetchRoutes([
+                { key: 'central_dash', importFn: () => import('../pages/centraladmin/CentralAdminDashboard') },
                 { key: 'admin_users', importFn: () => import('../pages/admin/Admin') },
                 { key: 'admin_roles', importFn: () => import('../pages/admin/AdminRoles') },
                 { key: 'admin_ql', importFn: () => import('../pages/admin/AdminQuestionLibrary') },
@@ -196,15 +197,22 @@ const MainRoutes = () => {
             ]);
         } else if (role === 'hospitaladmin') {
             prefetchRoutes([
+                { key: 'hosp_dash', importFn: () => import('../pages/hospitaladmin/HospitalAdminDashboard') },
+                { key: 'clinic_dash', importFn: () => import('../pages/hospitaladmin/ClinicDashboard') },
                 { key: 'hosp_users', importFn: () => import('../pages/admin/Admin') },
-                { key: 'hosp_ot', importFn: () => import('../pages/ot/OTDashboard') },
+                { key: 'hosp_doctors', importFn: () => import('../pages/admin/AdminDoctors') },
                 { key: 'hosp_ql', importFn: () => import('../pages/hospitaladmin/HospitalAdminQuestionLibrary') },
                 { key: 'hosp_vials', importFn: () => import('../pages/hospitaladmin/VialManagement') },
+                { key: 'hosp_pharmacy', importFn: () => import('../pages/pharmacy/PharmacyInventory') },
+                { key: 'hosp_ipd', importFn: () => import('../pages/nurse/IPDCommandCenter') },
+                { key: 'hosp_ot', importFn: () => import('../pages/ot/OTDashboard') },
             ]);
         } else if (role === 'doctor' || role === 'clinic doctor') {
             prefetchRoutes([
+                { key: 'doc_dash', importFn: () => import('../pages/doctors/DoctorDashboard') },
                 { key: 'doc_patients', importFn: () => import('../pages/doctors/Patient') },
                 { key: 'doc_details', importFn: () => import('../pages/doctors/DoctorPatientDetails') },
+                { key: 'doc_ipd', importFn: () => import('../pages/nurse/IPDCommandCenter') },
             ]);
         } else if (role === 'reception' || role === 'receptionist') {
             prefetchRoutes([
@@ -217,6 +225,7 @@ const MainRoutes = () => {
                 { key: 'nurse_opd', importFn: () => import('../pages/nurse/NurseOPDQueue') },
                 { key: 'nurse_appts', importFn: () => import('../pages/nurse/NurseAppointments') },
                 { key: 'nurse_ws', importFn: () => import('../pages/nurse/NursePatientWorkspace') },
+                { key: 'nurse_ipd', importFn: () => import('../pages/nurse/IPDCommandCenter') },
             ]);
         }
     }, [isAuthenticated, user]);

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { uploadAPI } from '../utils/api'; // Import the function we made in Step 1
+import toast from 'react-hot-toast';
+import { uploadAPI } from '../utils/api';
 import './ImageUploader.css';
 
 const ImageUploader = () => {
@@ -29,7 +30,7 @@ const ImageUploader = () => {
       if (data.success) {
         console.log("Uploaded successfully:", data.files);
         setUploadedFiles(prev => [...prev, ...data.files]);
-        alert(`Successfully uploaded ${data.count} images!`);
+        toast.success(`Successfully uploaded ${data.count} images!`);
       }
     } catch (err) {
       console.error("Upload failed", err);

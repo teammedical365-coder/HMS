@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { adminEntitiesAPI } from '../../utils/api';
 import '../administration/SuperAdmin.css';
 import PasswordInput from '../../components/PasswordInput';
@@ -140,16 +142,18 @@ const AdminPharmacy = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this pharmacy?')) {
-      try {
-        const response = await adminEntitiesAPI.deletePharmacy(id);
-        if (response.success) {
-          setSuccess('Pharmacy deleted successfully');
-          fetchPharmacies();
-        }
-      } catch (err) {
-        setError(err.response?.data?.message || 'Error deleting pharmacy');
+    if (!(await confirmToast('Are you sure you want to delete this pharmacy?', { title: 'Delete Pharmacy' }))) return;
+    try {
+      const response = await adminEntitiesAPI.deletePharmacy(id);
+      if (response.success) {
+        toast.success('Pharmacy deleted successfully');
+        setSuccess('Pharmacy deleted successfully');
+        fetchPharmacies();
       }
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Error deleting pharmacy';
+      toast.error(msg);
+      setError(msg);
     }
   };
 

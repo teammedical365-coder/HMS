@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { reportAPI } from '../utils/api';
 import { useAuth } from '../store/hooks';
 
@@ -79,7 +80,7 @@ const AppointmentReports = ({ appointmentId, prescriptions = [] }) => {
         try {
             const res = await reportAPI.uploadReport(formData);
             if (res.success) {
-                alert('Report uploaded successfully!');
+                toast.success('Report uploaded successfully!');
                 setUploadFile(null);
                 // re-fetch reports
                 const newRes = await reportAPI.getReportsByAppointment(appointmentId);
@@ -87,11 +88,11 @@ const AppointmentReports = ({ appointmentId, prescriptions = [] }) => {
                     setReports(newRes.reports || []);
                 }
             } else {
-                alert(res.message || 'Failed to upload report');
+                toast.error(res.message || 'Failed to upload report');
             }
         } catch (err) {
             console.error("Upload error:", err);
-            alert("Upload failed.");
+            toast.error("Upload failed.");
         } finally {
             setUploading(false);
         }

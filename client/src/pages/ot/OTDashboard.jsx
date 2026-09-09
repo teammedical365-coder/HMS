@@ -4,6 +4,7 @@ import {
     FiCalendar, FiClock, FiActivity, FiUsers, FiBox, FiCheckCircle, 
     FiAlertTriangle, FiArrowRight, FiEye, FiCheck, FiPlus, FiFilter
 } from 'react-icons/fi';
+import toast from 'react-hot-toast';
 import { otAPI, doctorAPI, bedAPI } from '../../utils/api';
 import socket from '../../utils/socket';
 import OTHeader from './OTHeader';
@@ -99,9 +100,12 @@ const OTDashboard = () => {
     const handleWorkflowTransition = async (surgeryId, nextStatus) => {
         try {
             const res = await otAPI.updateSurgeryWorkflow(surgeryId, { status: nextStatus });
-            if (res.success) fetchDashboardData();
+            if (res.success) {
+                toast.success('Workflow transition updated');
+                fetchDashboardData();
+            }
         } catch (err) {
-            alert(err.response?.data?.message || 'Workflow transition failed');
+            toast.error(err.response?.data?.message || 'Workflow transition failed');
         }
     };
 

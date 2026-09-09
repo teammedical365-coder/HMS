@@ -157,8 +157,12 @@ const defaultQuestionLibraryData = {
     }
 };
 
+// Module-level in-memory cache for instant zero-lag tab transitions
+let cachedQuestionLibraryData = null;
+let cachedAllowedDepartments = null;
+
 const HospitalAdminQuestionLibrary = () => {
-    const [libraryData, setLibraryData] = useState(defaultQuestionLibraryData);
+    const [libraryData, setLibraryData] = useState(() => cachedQuestionLibraryData || defaultQuestionLibraryData);
 
     const [currentLang, setCurrentLang] = useState(() => {
         return localStorage.getItem('hms_question_lib_lang') || 'en';
@@ -173,7 +177,7 @@ const HospitalAdminQuestionLibrary = () => {
     const [saving, setSaving] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [isAiGenerating, setIsAiGenerating] = useState(false);
-    const [allowedDepartments, setAllowedDepartments] = useState(null);
+    const [allowedDepartments, setAllowedDepartments] = useState(() => cachedAllowedDepartments);
 
     const [departmentTab, setDepartmentTab] = useState('ENT');
     const [activeCategory, setActiveCategory] = useState('Clinical History & Intake');
@@ -210,9 +214,11 @@ const HospitalAdminQuestionLibrary = () => {
         fetchLibrary();
     }, []);
 
-    const fetchLibrary = async () => {
+    const fetchLibrary = async (isManualRefresh = false) => {
         try {
-            setLoading(true);
+            if (!cachedQuestionLibraryData && isManualRefresh) {
+                setLoading(true);
+            }
             const res = await questionLibraryAPI.getLibrary();
             let data = res.data?.data;
             if (!data || Object.keys(data).length === 0) {
@@ -222,20 +228,24 @@ const HospitalAdminQuestionLibrary = () => {
                 data = { ...defaultQuestionLibraryData, ...data };
             }
 
+            cachedQuestionLibraryData = data;
+            cachedAllowedDepartments = res.allowedDepartments || null;
+
             setLibraryData(data);
             setAllowedDepartments(res.allowedDepartments || null);
 
             const visibleDepts = res.allowedDepartments ? Object.keys(data).filter(d => res.allowedDepartments.includes(d)) : Object.keys(data);
-            let defaultDept = visibleDepts.length > 0 ? visibleDepts[0] : 'ENT';
-            
-            setDepartmentTab(defaultDept);
-            const firstDeptCats = Object.keys(data[defaultDept] || {});
-            if (firstDeptCats.length > 0) {
-                setActiveCategory(firstDeptCats[0]);
+            if (!visibleDepts.includes(departmentTab)) {
+                let defaultDept = visibleDepts.length > 0 ? visibleDepts[0] : 'ENT';
+                setDepartmentTab(defaultDept);
+                const firstDeptCats = Object.keys(data[defaultDept] || {});
+                if (firstDeptCats.length > 0) {
+                    setActiveCategory(firstDeptCats[0]);
+                }
             }
         } catch (err) {
             console.error('Error fetching question library:', err);
-            toast.error('Failed to fetch library.');
+            if (isManualRefresh) toast.error('Failed to fetch library.');
         } finally {
             setLoading(false);
         }
@@ -243,7 +253,7 @@ const HospitalAdminQuestionLibrary = () => {
 
     const handleRefresh = async () => {
         setRefreshing(true);
-        await fetchLibrary();
+        await fetchLibrary(true);
         setTimeout(() => {
             setRefreshing(false);
             toast.success('Question Library refreshed!');
@@ -257,6 +267,7 @@ const HospitalAdminQuestionLibrary = () => {
         );
         if (!confirmed) return;
         setLibraryData(defaultQuestionLibraryData);
+        cachedQuestionLibraryData = defaultQuestionLibraryData;
         setDepartmentTab('ENT');
         setActiveCategory('Clinical History & Intake');
         setSaving(true);
@@ -275,6 +286,7 @@ const HospitalAdminQuestionLibrary = () => {
         try {
             const res = await questionLibraryAPI.updateLibrary(libraryData);
             if (res.success) {
+                cachedQuestionLibraryData = libraryData;
                 toast.success('Question Library updated & synced with all doctor workflows successfully!');
             }
         } catch (err) {

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { FiClock, FiCalendar, FiSearch, FiFilter, FiEye, FiCheck, FiX, FiPlus, FiAlertCircle } from 'react-icons/fi';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { otAPI, doctorAPI } from '../../utils/api';
 import socket from '../../utils/socket';
 import OTHeader from './OTHeader';
@@ -63,14 +65,15 @@ const OTPlannedSurgeries = () => {
     }, [fetchPlannedData]);
 
     const handleCancelPlan = async (planId) => {
-        if (!window.confirm('Are you sure you want to cancel this surgery plan?')) return;
+        if (!(await confirmToast('Are you sure you want to cancel this surgery plan?', { title: 'Cancel Surgery Plan' }))) return;
         try {
             const res = await otAPI.cancelSurgery(planId);
             if (res.success) {
+                toast.success('Surgery plan cancelled');
                 fetchPlannedData();
             }
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to cancel surgery plan');
+            toast.error(err.response?.data?.message || 'Failed to cancel surgery plan');
         }
     };
 

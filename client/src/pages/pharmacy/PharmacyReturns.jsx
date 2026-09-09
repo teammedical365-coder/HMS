@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import toast from 'react-hot-toast';
 import { pharmacyOrderAPI, pharmacyAPI } from '../../utils/api';
 import './PharmacyReturns.css';
 
@@ -46,7 +47,7 @@ const PharmacyReturns = () => {
             const res = await pharmacyOrderAPI.searchBills(searchQuery);
             if (res.success) setOrders(res.orders);
         } catch (error) {
-            alert('Search failed');
+            toast.error('Search failed');
         } finally {
             setLoading(false);
         }
@@ -173,7 +174,7 @@ const PharmacyReturns = () => {
     const handleSubmit = async () => {
         if (!selectedOrder) return;
         if (returnedPayload.length === 0) {
-            return alert("Please specify quantities to return.");
+            return toast.error("Please specify quantities to return.");
         }
 
         let returnResponseData = null;
@@ -193,18 +194,18 @@ const PharmacyReturns = () => {
             if (res.success) {
                 console.log("✅ [RETURN SUCCESS] Backend response:", res);
                 returnResponseData = res.data;
-                alert(`Success! ${res.message}`);
+                toast.success(`Success! ${res.message}`);
                 setSelectedOrder(null);
                 setSearchQuery('');
                 setOrders([]);
             } else {
                 console.warn("⚠️ [RETURN] Backend returned 200 but success is falsy:", res);
-                alert(res.message || "Return processed but response was unexpected.");
+                toast.error(res.message || "Return processed but response was unexpected.");
             }
         } catch (error) {
             console.error("❌ [RETURN ERROR TRACE]:", error);
             console.error("❌ [RETURN ERROR] Response data:", error.response?.data);
-            alert(error.response?.data?.message || "Failed to process return.");
+            toast.error(error.response?.data?.message || "Failed to process return.");
         }
 
         // Generate PDF OUTSIDE the try-catch so it never masks a successful return
@@ -295,7 +296,7 @@ const PharmacyReturns = () => {
         window.open(doc.output('bloburl'), '_blank');
         } catch (pdfError) {
             console.error("❌ [PDF GENERATION FAILED]:", pdfError);
-            alert("Return processed successfully, but failed to generate the PDF receipt.");
+            toast.error("Return processed successfully, but failed to generate the PDF receipt.");
         }
     };
 

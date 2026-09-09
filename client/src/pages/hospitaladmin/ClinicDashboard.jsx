@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { clinicAPI, uploadAPI, medicineAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -1052,7 +1054,7 @@ const PatientReportPanel = ({ patientId, patientName }) => {
 
     const handleDeleteReport = async (reportId) => {
         if (!patientId) return;
-        if (!window.confirm('Delete this report?')) return;
+        if (!(await confirmToast('Delete this report?', { title: 'Delete Report' }))) return;
         try {
             const r = await clinicAPI.deletePatientReport(patientId, reportId);
             if (r.success) {
@@ -1255,7 +1257,7 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
 
     const handleDeleteReport = async (reportId) => {
         if (!selectedPatient) return;
-        if (!window.confirm('Delete this report?')) return;
+        if (!(await confirmToast('Delete this report?', { title: 'Delete Report' }))) return;
         try {
             const r = await clinicAPI.deletePatientReport(selectedPatient._id, reportId);
             if (r.success) setPatientReports(prev => prev.filter(rp => rp._id !== reportId));
@@ -1341,7 +1343,7 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                                             pdf.doc.save(pdf.filename);
                                         } catch (pdfErr) {
                                             console.error('PDF generation error:', pdfErr);
-                                            alert('Failed to generate registration slip PDF');
+                                            toast.error('Failed to generate registration slip PDF');
                                         }
                                     }}
                                     style={{
@@ -1367,7 +1369,7 @@ const PatientsMode = ({ onBookToken, setPendingDownload }) => {
                                             pdf.doc.save(pdf.filename);
                                         } catch (pdfErr) {
                                             console.error('Profile PDF generation error:', pdfErr);
-                                            alert('Failed to generate patient profile PDF');
+                                            toast.error('Failed to generate patient profile PDF');
                                         }
                                     }}
                                     style={{
@@ -2216,7 +2218,7 @@ const ReceptionMode = ({ preselectedPatient, clearPreselected, setPendingDownloa
     };
 
     const cancelAppt = async (id) => {
-        if (!window.confirm(isSlotMode ? 'Cancel this appointment?' : 'Cancel this token?')) return;
+        if (!(await confirmToast(isSlotMode ? 'Cancel this appointment?' : 'Cancel this token?', { title: 'Cancel Appointment' }))) return;
         try {
             await clinicAPI.cancelAppointment(id);
             setAppointments(prev => prev.map(a => a._id === id ? { ...a, status: 'cancelled' } : a));
@@ -3368,7 +3370,7 @@ const TreatmentPlanMode = () => {
         if (isLast && plan.pendingBalance > 0) {
             return flash('error', `❌ Cannot close treatment — ₹${plan.pendingBalance.toLocaleString('en-IN')} is still unpaid. Collect full payment before closing the last visit.`);
         }
-        if (!window.confirm('Mark this visit as completed?')) return;
+        if (!(await confirmToast('Mark this visit as completed?', { title: 'Complete Visit', danger: false, confirmText: 'Complete' }))) return;
         try {
             const r = await clinicAPI.completeVisit(planId, visitId, {});
             if (r.success) {
@@ -3380,7 +3382,7 @@ const TreatmentPlanMode = () => {
     };
 
     const handleMiss = async (planId, visitId) => {
-        if (!window.confirm('Mark this visit as missed?')) return;
+        if (!(await confirmToast('Mark this visit as missed?', { title: 'Mark Visit as Missed' }))) return;
         try {
             const r = await clinicAPI.missVisit(planId, visitId);
             if (r.success) {
@@ -3413,7 +3415,7 @@ const TreatmentPlanMode = () => {
     };
 
     const handleCancel = async (planId) => {
-        if (!window.confirm('Cancel this treatment plan?')) return;
+        if (!(await confirmToast('Cancel this treatment plan?', { title: 'Cancel Treatment Plan' }))) return;
         try {
             const r = await clinicAPI.cancelTreatmentPlan(planId);
             if (r.success) {

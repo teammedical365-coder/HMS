@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { adminEntitiesAPI } from '../../utils/api';
 import '../administration/SuperAdmin.css';
 import PasswordInput from '../../components/PasswordInput';
@@ -143,16 +145,18 @@ const AdminReception = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this reception?')) {
-      try {
-        const response = await adminEntitiesAPI.deleteReception(id);
-        if (response.success) {
-          setSuccess('Reception deleted successfully');
-          fetchReceptions();
-        }
-      } catch (err) {
-        setError(err.response?.data?.message || 'Error deleting reception');
+    if (!(await confirmToast('Are you sure you want to delete this reception?', { title: 'Delete Receptionist' }))) return;
+    try {
+      const response = await adminEntitiesAPI.deleteReception(id);
+      if (response.success) {
+        toast.success('Reception deleted successfully');
+        setSuccess('Reception deleted successfully');
+        fetchReceptions();
       }
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Error deleting reception';
+      toast.error(msg);
+      setError(msg);
     }
   };
 

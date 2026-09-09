@@ -382,7 +382,7 @@ const ConsentManagement = () => {
             window.URL.revokeObjectURL(blobUrl);
             document.body.removeChild(a);
         } catch (error) {
-            alert('Error downloading template');
+            toast.error('Error downloading template');
         }
     };
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { FiUserCheck, FiClock, FiCalendar, FiCheckCircle, FiActivity, FiAlertCircle } from 'react-icons/fi';
+import toast from 'react-hot-toast';
 import { otAPI } from '../../utils/api';
 import socket from '../../utils/socket';
 import OTHeader from './OTHeader';
@@ -48,9 +49,12 @@ const OTPreOpPage = () => {
     const handleWorkflowTransition = async (surgeryId, nextStatus) => {
         try {
             const res = await otAPI.updateSurgeryWorkflow(surgeryId, { status: nextStatus });
-            if (res.success) fetchPreOpData();
+            if (res.success) {
+                toast.success('Workflow updated successfully');
+                fetchPreOpData();
+            }
         } catch (err) {
-            alert(err.response?.data?.message || 'Workflow transition failed');
+            toast.error(err.response?.data?.message || 'Workflow transition failed');
         }
     };
 

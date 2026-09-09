@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { adminEntitiesAPI } from '../../utils/api';
 import '../administration/SuperAdmin.css';
 import PasswordInput from '../../components/PasswordInput';
@@ -152,16 +154,18 @@ const AdminLabs = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this lab?')) {
-      try {
-        const response = await adminEntitiesAPI.deleteLab(id);
-        if (response.success) {
-          setSuccess('Lab deleted successfully');
-          fetchLabs();
-        }
-      } catch (err) {
-        setError(err.response?.data?.message || 'Error deleting lab');
+    if (!(await confirmToast('Are you sure you want to delete this lab?', { title: 'Delete Laboratory' }))) return;
+    try {
+      const response = await adminEntitiesAPI.deleteLab(id);
+      if (response.success) {
+        toast.success('Lab deleted successfully');
+        setSuccess('Lab deleted successfully');
+        fetchLabs();
       }
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Error deleting lab';
+      toast.error(msg);
+      setError(msg);
     }
   };
 

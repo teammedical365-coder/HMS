@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import './Pharmacy.css';
 
 const Pharmacy = () => {
@@ -414,7 +415,7 @@ const Pharmacy = () => {
                     {order.status === 'delivered' && (
                       <button
                         className="btn btn-primary"
-                        onClick={() => alert(`Reordering ${order.orderId}...`)}
+                        onClick={() => toast.success(`Reordering ${order.orderId}...`)}
                       >
                         Reorder
                       </button>
@@ -422,7 +423,7 @@ const Pharmacy = () => {
                     {order.status === 'processing' && (
                       <button
                         className="btn btn-secondary"
-                        onClick={() => alert(`Tracking order ${order.orderId}...`)}
+                        onClick={() => toast(`Tracking order ${order.orderId}...`, { icon: '📦' })}
                       >
                         Track Order
                       </button>
@@ -430,7 +431,7 @@ const Pharmacy = () => {
                     {order.status === 'pending' && (
                       <button
                         className="btn btn-secondary"
-                        onClick={() => alert(`Order ${order.orderId} is pending confirmation...`)}
+                        onClick={() => toast(`Order ${order.orderId} is pending confirmation...`, { icon: '⏳' })}
                       >
                         View Details
                       </button>

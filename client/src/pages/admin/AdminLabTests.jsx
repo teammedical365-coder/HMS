@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { labTestAPI, hospitalAPI } from '../../utils/api';
 import '../administration/SuperAdmin.css';
 
@@ -109,15 +111,18 @@ const AdminLabTests = () => {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this lab test?')) return;
+        if (!(await confirmToast('Are you sure you want to delete this lab test?', { title: 'Delete Lab Test' }))) return;
         try {
             const res = await labTestAPI.deleteLabTest(id);
             if (res.success) {
+                toast.success('Lab test deleted.');
                 setSuccess('Lab test deleted.');
                 fetchTests();
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Error deleting test.');
+            const msg = err.response?.data?.message || 'Error deleting test.';
+            toast.error(msg);
+            setError(msg);
         }
     };
 

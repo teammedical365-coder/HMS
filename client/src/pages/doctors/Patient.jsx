@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { doctorAPI, uploadAPI, reportAPI, referralAPI, otAPI } from '../../utils/api';
 
 const Patient = () => {
@@ -127,7 +128,7 @@ const Patient = () => {
                     previousReports: [...existingReports, newReport]
                 });
 
-                alert("Report uploaded successfully!");
+                toast.success("Report uploaded successfully!");
                 setUploadPatient(null);
                 setUploadFile(null);
                 fetchAllAppointments();
@@ -136,7 +137,7 @@ const Patient = () => {
             }
         } catch (err) {
             console.error(err);
-            alert("Error uploading report: " + (err.message || ''));
+            toast.error("Error uploading report: " + (err.message || ''));
         } finally {
             setUploading(false);
         }
@@ -170,12 +171,12 @@ const Patient = () => {
                 } catch (e) {}
             }
 
-            alert('Vitals saved successfully!');
+            toast.success('Vitals saved successfully!');
             setVitalsPatient(null);
             setVitals({ weight: '', height: '', bmi: '', bloodPressure: '', pulse: '', temperature: '', spo2: '', respiratoryRate: '', chiefComplaint: '', notes: '' });
             fetchAllAppointments();
         } catch (err) {
-            alert('Error saving vitals: ' + (err.response?.data?.message || err.message));
+            toast.error('Error saving vitals: ' + (err.response?.data?.message || err.message));
         } finally {
             setSaving(false);
         }

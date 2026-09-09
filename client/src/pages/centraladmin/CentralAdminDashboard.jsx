@@ -1783,8 +1783,14 @@ const CentralAdminDashboard = () => {
                                                 </div>
                                                 <span className="h-detail-row-val">
                                                     {h.slug ? (
-                                                        <a href={`https://${h.slug}.${getBaseHost()}/login`} target="_blank" rel="noopener noreferrer" className="h-detail-login-pill-link">
-                                                            <span>{`https://${h.slug}.${getBaseHost()}/login`}</span>
+                                                        <a 
+                                                            href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer" 
+                                                            className="h-detail-login-pill-link"
+                                                            title={`Open ${h.slug}.${getBaseHost()}`}
+                                                        >
+                                                            <span>{`${h.slug}.${getBaseHost()}`}</span>
                                                             <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: '10px' }} />
                                                         </a>
                                                     ) : '—'}
@@ -1801,8 +1807,14 @@ const CentralAdminDashboard = () => {
                                                         <span className="h-detail-row-key">Custom Domain</span>
                                                     </div>
                                                     <span className="h-detail-row-val">
-                                                        <a href={`https://${h.customDomain}`} target="_blank" rel="noopener noreferrer" className="h-detail-login-pill-link">
-                                                            <span>{`https://${h.customDomain}`}</span>
+                                                        <a 
+                                                            href={`${window.location.protocol}//${h.customDomain.replace(/^https?:\/\//, '')}`} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer" 
+                                                            className="h-detail-login-pill-link"
+                                                            title={`Open ${h.customDomain}`}
+                                                        >
+                                                            <span>{h.customDomain.replace(/^https?:\/\//, '')}</span>
                                                             <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: '10px' }} />
                                                         </a>
                                                     </span>

@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, useAppDispatch } from '../../store/hooks';
 import { logout } from '../../store/slices/authSlice';
 import { useBranding } from '../../context/BrandingContext';
+import { prefetchRoute } from '../../utils/prefetch';
 import {
     FiHome, FiUsers, FiCalendar, FiActivity, FiPackage,
     FiSettings, FiLogOut, FiPieChart, FiClipboard,
@@ -21,115 +22,135 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
     const navigate = useNavigate();
     const isCentralAdmin = (role === 'centraladmin' || role === 'superadmin');
     
-    // Memoized Categorized Menus
+    // Memoized Categorized Menus with prefetch hooks
     const menuItems = useMemo(() => {
         const isOTRoute = location.pathname.startsWith('/ot') || location.pathname === '/ot-dashboard';
         const roleClean = role.replace(/\s+/g, '');
 
         if (roleClean === 'otmanager' || roleClean === 'otstaff' || (isOTRoute && (role === 'hospitaladmin' || role === 'centraladmin' || role === 'superadmin' || role === 'doctor'))) {
             return [
-                { label: 'OT Dashboard', path: '/ot/dashboard', icon: <FiHome /> },
-                { label: 'Planned Surgeries', path: '/ot/planned', icon: <FiClock /> },
-                { label: 'OT Schedule', path: '/ot/schedule', icon: <FiCalendar /> },
-                { label: 'OT Rooms', path: '/ot/rooms', icon: <FiBox /> },
-                { label: 'Pre-Op Patients', path: '/ot/pre-op', icon: <FiUserCheck /> },
-                { label: 'In OT', path: '/ot/in-progress', icon: <FiActivity /> },
-                { label: 'Post-Op', path: '/ot/post-op', icon: <FiHeart /> },
-                { label: 'Completed Surgeries', path: '/ot/completed', icon: <FiCheckCircle /> },
-                { label: 'Surgeons', path: '/ot/surgeons', icon: <FiUser /> },
-                { label: 'OT Reports', path: '/ot/reports', icon: <FiFileText /> }
+                { label: 'OT Dashboard', path: '/ot/dashboard', icon: <FiHome />, prefetchKey: 'ot_dash', prefetchFn: () => import('../../pages/ot/OTDashboard') },
+                { label: 'Planned Surgeries', path: '/ot/planned', icon: <FiClock />, prefetchKey: 'ot_planned', prefetchFn: () => import('../../pages/ot/OTPlannedSurgeries') },
+                { label: 'OT Schedule', path: '/ot/schedule', icon: <FiCalendar />, prefetchKey: 'ot_sched', prefetchFn: () => import('../../pages/ot/OTSchedulePage') },
+                { label: 'OT Rooms', path: '/ot/rooms', icon: <FiBox />, prefetchKey: 'ot_rooms', prefetchFn: () => import('../../pages/ot/OTRoomsPage') },
+                { label: 'Pre-Op Patients', path: '/ot/pre-op', icon: <FiUserCheck />, prefetchKey: 'ot_preop', prefetchFn: () => import('../../pages/ot/OTPreOpPage') },
+                { label: 'In OT', path: '/ot/in-progress', icon: <FiActivity />, prefetchKey: 'ot_inot', prefetchFn: () => import('../../pages/ot/OTInProgressPage') },
+                { label: 'Post-Op', path: '/ot/post-op', icon: <FiHeart />, prefetchKey: 'ot_postop', prefetchFn: () => import('../../pages/ot/OTPostOpPage') },
+                { label: 'Completed Surgeries', path: '/ot/completed', icon: <FiCheckCircle />, prefetchKey: 'ot_comp', prefetchFn: () => import('../../pages/ot/OTCompletedPage') },
+                { label: 'Surgeons', path: '/ot/surgeons', icon: <FiUser />, prefetchKey: 'ot_surgeons', prefetchFn: () => import('../../pages/ot/OTSurgeonsPage') },
+                { label: 'OT Reports', path: '/ot/reports', icon: <FiFileText />, prefetchKey: 'ot_reports', prefetchFn: () => import('../../pages/ot/OTReportsPage') }
             ];
         }
 
         if (role === 'centraladmin' || role === 'superadmin') {
             return [
-                { label: 'System Overview', path: '/supremeadmin', icon: <FiHome /> },
-                { label: 'Question Library', path: '/admin/question-library', icon: <FiFileText /> },
-                { label: 'Consent Hub', path: '/admin/consent', icon: <FiClipboard /> },
-                { label: 'Role & Permissions', path: '/admin/roles', icon: <FiShield /> },
-                { label: 'Manage All Staff', path: '/admin/users', icon: <FiUsers /> },
+                { label: 'System Overview', path: '/supremeadmin', icon: <FiHome />, prefetchKey: 'ca_dash', prefetchFn: () => import('../../pages/centraladmin/CentralAdminDashboard') },
+                { label: 'Question Library', path: '/admin/question-library', icon: <FiFileText />, prefetchKey: 'ca_ql', prefetchFn: () => import('../../pages/admin/AdminQuestionLibrary') },
+                { label: 'Consent Hub', path: '/admin/consent', icon: <FiClipboard />, prefetchKey: 'ca_consent', prefetchFn: () => import('../../pages/admin/ConsentManagement') },
+                { label: 'Role & Permissions', path: '/admin/roles', icon: <FiShield />, prefetchKey: 'ca_roles', prefetchFn: () => import('../../pages/admin/AdminRoles') },
+                { label: 'Manage All Staff', path: '/admin/users', icon: <FiUsers />, prefetchKey: 'ca_users', prefetchFn: () => import('../../pages/admin/Admin') },
             ];
         }
         if (role === 'hospitaladmin') {
             const u = JSON.parse(localStorage.getItem('user') || '{}');
             if (u.clinicType === 'clinic' || u.subscriptionPlan === 'starter') {
-                // Simple clinic or starter plan — single hub page with built-in role switcher
                 return [
-                    { label: 'Clinic Hub', path: '/hospitaladmin', icon: <FiHome /> },
-                    { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox /> },
+                    { label: 'Clinic Hub', path: '/hospitaladmin', icon: <FiHome />, prefetchKey: 'ha_clinic', prefetchFn: () => import('../../pages/hospitaladmin/ClinicDashboard') },
+                    { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox />, prefetchKey: 'ha_vials', prefetchFn: () => import('../../pages/hospitaladmin/VialManagement') },
                 ];
             }
             return [
-                { label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiHome /> },
-                { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity /> },
-                { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox /> },
-                { label: 'Clinical Questions', path: '/hospitaladmin/question-library', icon: <FiFileText /> },
-                { label: 'Staff Management', path: '/admin/users', icon: <FiUsers /> },
-                { label: 'Doctors Feed', path: '/admin/doctors', icon: <FiActivity /> },
-                { label: 'Pharma Inventory', path: '/pharmacy/inventory', icon: <FiPackage /> },
+                { label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiHome />, prefetchKey: 'ha_dash', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminDashboard') },
+                { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox />, prefetchKey: 'ha_vials', prefetchFn: () => import('../../pages/hospitaladmin/VialManagement') },
+                { label: 'Clinical Questions', path: '/hospitaladmin/question-library', icon: <FiFileText />, prefetchKey: 'ha_ql', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminQuestionLibrary') },
+                { label: 'Staff Management', path: '/admin/users', icon: <FiUsers />, prefetchKey: 'ha_users', prefetchFn: () => import('../../pages/admin/Admin') },
+                { label: 'Doctors Feed', path: '/admin/doctors', icon: <FiActivity />, prefetchKey: 'ha_doctors', prefetchFn: () => import('../../pages/admin/AdminDoctors') },
+                { label: 'Pharma Inventory', path: '/pharmacy/inventory', icon: <FiPackage />, prefetchKey: 'ha_pharma', prefetchFn: () => import('../../pages/pharmacy/PharmacyInventory') },
             ];
         }
         if (role === 'doctor' || role === 'clinic doctor') {
             return [
-                { label: 'Dashboard', path: '/my-dashboard', icon: <FiHome /> },
-                { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity /> },
-                { label: 'My Patients', path: '/doctor/patients', icon: <FiUsers /> },
-                { label: 'AI Assistant', path: '/doctor/ai-assistant', icon: <FiFileText /> },
-                { label: 'Reports', path: '/lab-reports', icon: <FiFileText /> },
+                { label: 'Dashboard', path: '/my-dashboard', icon: <FiHome />, prefetchKey: 'doc_dash', prefetchFn: () => import('../../pages/doctors/DoctorDashboard') },
+                { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity />, prefetchKey: 'doc_ipd', prefetchFn: () => import('../../pages/nurse/IPDCommandCenter') },
+                { label: 'My Patients', path: '/doctor/patients', icon: <FiUsers />, prefetchKey: 'doc_patients', prefetchFn: () => import('../../pages/doctors/Patient') },
+                { label: 'AI Assistant', path: '/doctor/ai-assistant', icon: <FiFileText />, prefetchKey: 'doc_ai', prefetchFn: () => import('../../pages/doctors/AIAssistant') },
+                { label: 'Reports', path: '/lab-reports', icon: <FiFileText />, prefetchKey: 'doc_reports', prefetchFn: () => import('../../pages/user/LabReports') },
             ];
         }
         if (role === 'reception' || role === 'receptionist') {
             return [
-                { label: 'Reception Dashboard', path: '/reception/dashboard', icon: <FiHome /> },
-                { label: 'Patient Registration', path: '/reception/dashboard?view=intake', icon: <FiPlusSquare /> },
-                { label: 'Patient Billing', path: '/billing/patient', icon: <FiFileText /> },
+                { label: 'Reception Dashboard', path: '/reception/dashboard', icon: <FiHome />, prefetchKey: 'rec_dash', prefetchFn: () => import('../../pages/reception/ReceptionDashboard') },
+                { label: 'Patient Registration', path: '/reception/dashboard?view=intake', icon: <FiPlusSquare />, prefetchKey: 'rec_intake', prefetchFn: () => import('../../pages/reception/ReceptionDashboard') },
+                { label: 'Patient Billing', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'rec_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
             ];
         }
         if (role === 'lab') {
             return [
-                { label: 'Lab Dashboard', path: '/lab/dashboard', icon: <FiActivity /> },
-                { label: 'Assigned Tests', path: '/lab/tests', icon: <FiFileText /> },
+                { label: 'Lab Dashboard', path: '/lab/dashboard', icon: <FiActivity />, prefetchKey: 'lab_dash', prefetchFn: () => import('../../pages/lab/LabDashboard') },
+                { label: 'Assigned Tests', path: '/lab/tests', icon: <FiFileText />, prefetchKey: 'lab_tests', prefetchFn: () => import('../../pages/lab/AssignedTests') },
             ];
         }
         if (role.includes('pharmac')) {
             return [
-                { label: 'Inventory', path: '/pharmacy/inventory', icon: <FiPackage /> },
-                { label: 'Pharmacy Orders', path: '/pharmacy/orders', icon: <FiClipboard /> },
-                { label: 'Purchase Invoices', path: '/pharmacy/purchase-invoices', icon: <FiFileText /> },
-                { label: 'Returns', path: '/pharmacy/returns', icon: <FiActivity /> },
-                { label: 'Vendor Returns', path: '/pharmacy/vendor-returns', icon: <FiActivity /> },
-                { label: 'Collections', path: '/pharmacy/collections', icon: <FiPieChart /> },
-                { label: 'Departments', path: '/pharmacy/departments', icon: <FiGrid /> },
+                { label: 'Inventory', path: '/pharmacy/inventory', icon: <FiPackage />, prefetchKey: 'pharm_inv', prefetchFn: () => import('../../pages/pharmacy/PharmacyInventory') },
+                { label: 'Pharmacy Orders', path: '/pharmacy/orders', icon: <FiClipboard />, prefetchKey: 'pharm_orders', prefetchFn: () => import('../../pages/pharmacy/PharmacyOrders') },
+                { label: 'Purchase Invoices', path: '/pharmacy/purchase-invoices', icon: <FiFileText />, prefetchKey: 'pharm_invs', prefetchFn: () => import('../../pages/pharmacy/PurchaseInvoiceHistory') },
+                { label: 'Returns', path: '/pharmacy/returns', icon: <FiActivity />, prefetchKey: 'pharm_rets', prefetchFn: () => import('../../pages/pharmacy/PharmacyReturns') },
+                { label: 'Vendor Returns', path: '/pharmacy/vendor-returns', icon: <FiActivity />, prefetchKey: 'pharm_vret', prefetchFn: () => import('../../pages/pharmacy/VendorReturns') },
+                { label: 'Collections', path: '/pharmacy/collections', icon: <FiPieChart />, prefetchKey: 'pharm_colls', prefetchFn: () => import('../../pages/pharmacy/PharmacyCollections') },
+                { label: 'Departments', path: '/pharmacy/departments', icon: <FiGrid />, prefetchKey: 'pharm_depts', prefetchFn: () => import('../../pages/pharmacy/PharmacyDepartments') },
             ];
         }
 
         if (role === 'accountant') {
             return [
-                { label: 'Finance Dashboard', path: '/accountant/dashboard', icon: <FiPieChart /> },
+                { label: 'Finance Dashboard', path: '/accountant/dashboard', icon: <FiPieChart />, prefetchKey: 'acc_dash', prefetchFn: () => import('../../pages/accountant/AccountantDashboard') },
             ];
         }
         if (role === 'cashier') {
             return [
-                { label: 'Billing/Payments', path: '/cashier/billing', icon: <FiFileText /> },
+                { label: 'Billing/Payments', path: '/cashier/billing', icon: <FiFileText />, prefetchKey: 'cash_bill', prefetchFn: () => import('../../pages/cashier/CashierDashboard') },
             ];
         }
         if (role === 'nurse' || role === 'staffnurse' || role === 'headnurse') {
             return [
-                { label: 'Nurse Command Center', path: '/nurse/dashboard', icon: <FiHome /> },
-                { label: 'OPD Patient Queue', path: '/nurse/opd-queue', icon: <FiUsers /> },
-                { label: 'Appointments', path: '/nurse/appointments', icon: <FiCalendar /> },
-                { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity /> },
+                { label: 'Nurse Command Center', path: '/nurse/dashboard', icon: <FiHome />, prefetchKey: 'nurse_dash', prefetchFn: () => import('../../pages/nurse/NurseDashboard') },
+                { label: 'OPD Patient Queue', path: '/nurse/opd-queue', icon: <FiUsers />, prefetchKey: 'nurse_opd', prefetchFn: () => import('../../pages/nurse/NurseOPDQueue') },
+                { label: 'Appointments', path: '/nurse/appointments', icon: <FiCalendar />, prefetchKey: 'nurse_appts', prefetchFn: () => import('../../pages/nurse/NurseAppointments') },
+                { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity />, prefetchKey: 'nurse_ipd', prefetchFn: () => import('../../pages/nurse/IPDCommandCenter') },
             ];
         }
         if (role === 'billing') {
             return [
-                { label: 'Patient Billing', path: '/cashier/billing', icon: <FiFileText /> },
+                { label: 'Patient Billing', path: '/cashier/billing', icon: <FiFileText />, prefetchKey: 'bill_page', prefetchFn: () => import('../../pages/cashier/CashierDashboard') },
             ];
         }
         return [
-            { label: 'My Dashboard', path: '/my-dashboard', icon: <FiHome /> },
+            { label: 'My Dashboard', path: '/my-dashboard', icon: <FiHome />, prefetchKey: 'my_dash', prefetchFn: () => import('../../pages/RoleDashboard') },
         ];
     }, [role, location.pathname, user?.clinicType]);
+
+    const isPathActive = (itemPath) => {
+        const currentPath = location.pathname;
+        const currentSearch = location.search;
+        
+        if (itemPath.includes('?')) {
+            const [basePath, searchPart] = itemPath.split('?');
+            return currentPath === basePath && currentSearch.includes(searchPart);
+        }
+        
+        if (itemPath === '/reception/dashboard') {
+            const searchParams = new URLSearchParams(currentSearch);
+            const view = searchParams.get('view');
+            return currentPath === '/reception/dashboard' && (!view || view === 'welcome');
+        }
+
+        if (itemPath === '/ot/dashboard' && currentPath === '/ot-dashboard') {
+            return true;
+        }
+        
+        return currentPath === itemPath;
+    };
 
     return (
         <aside className={`erp-sidebar ${isOpen ? 'open' : 'collapsed'} ${isCentralAdmin ? 'ca-erp-sidebar' : ''}`}>
@@ -156,36 +177,32 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             
             <nav className="sidebar-nav">
                 {menuItems.map((item, idx) => {
-                    const isItemActive = () => {
-                        const currentPath = location.pathname;
-                        const currentSearch = location.search;
-                        
-                        if (item.path.includes('?')) {
-                            const [basePath, searchPart] = item.path.split('?');
-                            return currentPath === basePath && currentSearch.includes(searchPart);
-                        }
-                        
-                        if (item.path === '/reception/dashboard') {
-                            const searchParams = new URLSearchParams(currentSearch);
-                            const view = searchParams.get('view');
-                            return currentPath === '/reception/dashboard' && (!view || view === 'welcome');
-                        }
-
-                        if (item.path === '/ot/dashboard' && currentPath === '/ot-dashboard') {
-                            return true;
-                        }
-                        
-                        return currentPath === item.path;
-                    };
-
+                    const active = isPathActive(item.path);
                     const caThemes = ['theme-green', 'theme-blue', 'theme-teal', 'theme-purple', 'theme-pink'];
                     const currentThemeClass = `ca-sidebar-link ${caThemes[idx % caThemes.length]}`;
 
+                    const handlePrefetch = () => {
+                        if (item.prefetchFn) {
+                            prefetchRoute(item.prefetchKey || item.path, item.prefetchFn, true);
+                        }
+                    };
+
+                    const handleNavClick = () => {
+                        // Instant drawer dismissal on mobile/tablet screens
+                        if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
+                            setOpen(false);
+                        }
+                    };
+
                     return (
                         <NavLink 
-                            key={idx} 
+                            key={item.path || idx} 
                             to={item.path} 
-                            className={() => `sidebar-link ${isItemActive() ? 'active' : ''} ${currentThemeClass}`}
+                            end
+                            className={() => `sidebar-link ${active ? 'active' : ''} ${currentThemeClass}`}
+                            onClick={handleNavClick}
+                            onMouseEnter={handlePrefetch}
+                            onTouchStart={handlePrefetch}
                         >
                             <span className="sidebar-link-icon">{item.icon}</span>
                             <span className="sidebar-link-text">{item.label}</span>

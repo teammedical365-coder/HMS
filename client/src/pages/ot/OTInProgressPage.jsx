@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { FiActivity, FiClock, FiCheckCircle, FiEye, FiCheck } from 'react-icons/fi';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { otAPI } from '../../utils/api';
 import socket from '../../utils/socket';
 import OTHeader from './OTHeader';
@@ -52,12 +54,15 @@ const OTInProgressPage = () => {
     }, [fetchInOtData]);
 
     const handleCompleteSurgery = async (surgeryId) => {
-        if (!window.confirm('Mark this surgery as completed and transfer to Post-Op recovery?')) return;
+        if (!(await confirmToast('Mark this surgery as completed and transfer to Post-Op recovery?', { title: 'Complete Surgery', danger: false, confirmText: 'Complete & Transfer' }))) return;
         try {
             const res = await otAPI.updateSurgeryWorkflow(surgeryId, { status: 'SURGERY_COMPLETED' });
-            if (res.success) fetchInOtData();
+            if (res.success) {
+                toast.success('Surgery marked completed and transferred to Post-Op!');
+                fetchInOtData();
+            }
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to complete surgery');
+            toast.error(err.response?.data?.message || 'Failed to complete surgery');
         }
     };
 

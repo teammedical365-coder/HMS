@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { pharmacyAPI } from '../../utils/api';
 import PurchaseInvoiceHistory from './PurchaseInvoiceHistory';
 import './PharmacyInventory.css';
@@ -57,9 +59,9 @@ const PharmacyInventory = () => {
     const handleRecordConsumption = async (e) => {
         e.preventDefault();
         const selectedMed = medicines.find(m => m._id === consumptionForm.medicineId);
-        if (!selectedMed) return alert("Please select a medicine.");
+        if (!selectedMed) return toast.error("Please select a medicine.");
         if (consumptionForm.quantity > selectedMed.stock) {
-            return alert(`Quantity cannot exceed available stock (${selectedMed.stock}).`);
+            return toast.error(`Quantity cannot exceed available stock (${selectedMed.stock}).`);
         }
 
         setSavingConsumption(true);
@@ -69,13 +71,13 @@ const PharmacyInventory = () => {
                 quantity: Number(consumptionForm.quantity)
             });
             if (res.success) {
-                alert("Consumption logged successfully");
+                toast.success("Consumption logged successfully");
                 setShowConsumptionModal(false);
                 setConsumptionForm({ medicineId: '', quantity: 1, reason: 'Doctor/Staff Use', givenTo: '' });
                 fetchInventory();
             }
         } catch (error) {
-            alert(error.response?.data?.message || "Failed to record consumption");
+            toast.error(error.response?.data?.message || "Failed to record consumption");
         } finally {
             setSavingConsumption(false);
         }
@@ -251,10 +253,10 @@ const PharmacyInventory = () => {
                 setShowVendorModal(false);
                 setVendorForm({ vendorName: '', contactPerson: '', phone: '', gstin: '', dlNumber: '' });
                 setVendorErrors({});
-                alert("Vendor added successfully");
+                toast.success("Vendor added successfully");
             }
         } catch (error) {
-            alert(error.response?.data?.message || "Failed to add vendor");
+            toast.error(error.response?.data?.message || "Failed to add vendor");
         } finally {
             setSavingVendor(false);
         }
@@ -359,17 +361,17 @@ const PharmacyInventory = () => {
         } catch (error) {
             const msg = error.response?.data?.message || "Check fields";
             console.error("Validation Error:", msg);
-            alert("Error: " + msg);
+            toast.error("Error: " + msg);
         }
     };
 
     const handleDelete = async (id) => {
-        if (window.confirm("Delete this item?")) {
-            try {
-                await pharmacyAPI.deleteMedicine(id);
-                fetchInventory();
-            } catch (error) { alert("Delete failed."); }
-        }
+        if (!(await confirmToast("Delete this inventory item?", { title: 'Delete Medicine' }))) return;
+        try {
+            await pharmacyAPI.deleteMedicine(id);
+            toast.success("Medicine deleted successfully");
+            fetchInventory();
+        } catch (error) { toast.error("Delete failed."); }
     };
 
     const handleEdit = (med) => {

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { billingAPI, admissionAPI, patientAPI, uploadAPI, hospitalAPI } from '../../utils/api';
 import { FaEye, FaDownload } from 'react-icons/fa';
 import PaymentSection from '../../components/PaymentSection';
@@ -285,7 +287,7 @@ const PatientBillingProfile = () => {
             setProofFile(null);
         } catch (err) {
             console.error('Proof upload failed:', err);
-            alert('Failed to process payment with proof');
+            toast.error('Failed to process payment with proof');
             setPaying(false);
         }
     };
@@ -307,25 +309,27 @@ const PatientBillingProfile = () => {
                 ...extraData
             });
             setSuccessMsg(`Payment of ${fmt(total)} processed successfully via ${paymentMode}.`);
+            toast.success(`Payment of ${fmt(total)} processed successfully!`);
             const res = await billingAPI.getPatientBills(searchQuery.trim());
             if (res.success) setBilling(res.billing);
             setSelected({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [], surgeryPlans: [] });
         } catch (err) {
-            alert(err.response?.data?.message || 'Payment failed');
+            toast.error(err.response?.data?.message || 'Payment failed');
         } finally {
             setPaying(false);
         }
     };
 
     const handleDischarge = async (admissionId) => {
-        if (!window.confirm('Discharge this patient?')) return;
+        if (!(await confirmToast('Discharge this patient?', { title: 'Discharge Patient' }))) return;
         setDischargingId(admissionId);
         try {
             await admissionAPI.dischargePatient(admissionId);
+            toast.success('Patient discharged successfully');
             const res = await billingAPI.getPatientBills(searchQuery.trim());
             if (res.success) setBilling(res.billing);
         } catch (err) {
-            alert(err.response?.data?.message || 'Discharge failed');
+            toast.error(err.response?.data?.message || 'Discharge failed');
         } finally {
             setDischargingId(null);
         }
@@ -918,15 +922,15 @@ const PatientBillingProfile = () => {
                                     <strong>{fmt(pendingTotal())}</strong>
                                 </div>
                             </div>
-                            <form className="payment-controls" onSubmit={(e) => {
+                            <form className="payment-controls" onSubmit={async (e) => {
                                 e.preventDefault();
                                 if (totalSplitAmount !== totalSelected()) {
-                                    alert(`Total split amount (${fmt(totalSplitAmount)}) must exactly match the selected amount (${fmt(totalSelected())}).`);
+                                    toast.error(`Total split amount (${fmt(totalSplitAmount)}) must exactly match the selected amount (${fmt(totalSelected())}).`);
                                     return;
                                 }
                                 const hasNonCash = splitPayments.some(p => p.method !== 'Cash');
                                 if (!hasNonCash) {
-                                    if (!window.confirm(`Process payment of ${fmt(totalSelected())} via Cash?`)) return;
+                                    if (!(await confirmToast(`Process payment of ${fmt(totalSelected())} via Cash?`, { title: 'Process Cash Payment', danger: false, confirmText: 'Process Payment' }))) return;
                                     executePayment({});
                                 } else {
                                     confirmPaymentWithProof(e);

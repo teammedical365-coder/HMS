@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { pharmacyAPI } from '../../utils/api';
 import { useAuth } from '../../store/hooks';
 import { FiSearch, FiEye, FiTrash2, FiPlay, FiDownload } from 'react-icons/fi';
@@ -35,14 +37,15 @@ const PurchaseInvoiceHistory = () => {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this invoice? This action cannot be undone.")) return;
+        if (!(await confirmToast("Are you sure you want to delete this invoice? This action cannot be undone.", { title: 'Delete Purchase Invoice' }))) return;
         try {
             const res = await pharmacyAPI.deletePurchaseInvoice(id);
             if (res.success) {
+                toast.success('Invoice deleted successfully');
                 setInvoices(invoices.filter(inv => inv._id !== id));
             }
         } catch (error) {
-            alert(error.response?.data?.message || "Failed to delete invoice");
+            toast.error(error.response?.data?.message || "Failed to delete invoice");
         }
     };
 
@@ -51,16 +54,16 @@ const PurchaseInvoiceHistory = () => {
     };
 
     const handleProcessInvoice = async (id) => {
-        if (!window.confirm("Are you sure you want to process and import this invoice?")) return;
+        if (!(await confirmToast("Are you sure you want to process and import this invoice?", { title: 'Process Invoice', danger: false, confirmText: 'Process & Import' }))) return;
         setLoading(true);
         try {
             const res = await pharmacyAPI.processPurchaseInvoice(id);
             if (res.success) {
-                alert(`Invoice processed successfully. ${res.importedCount} medicines imported.`);
+                toast.success(`Invoice processed successfully. ${res.importedCount} medicines imported.`);
                 fetchInvoices();
             }
         } catch (error) {
-            alert(error.response?.data?.message || "Failed to process invoice");
+            toast.error(error.response?.data?.message || "Failed to process invoice");
             setLoading(false);
         }
     };
@@ -74,7 +77,7 @@ const PurchaseInvoiceHistory = () => {
                 setShowModal(true);
             }
         } catch (error) {
-            alert(error.response?.data?.message || "Failed to load invoice details");
+            toast.error(error.response?.data?.message || "Failed to load invoice details");
         } finally {
             setLoading(false);
         }

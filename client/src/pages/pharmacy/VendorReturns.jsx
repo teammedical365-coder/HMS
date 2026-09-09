@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { pharmacyAPI } from '../../utils/api';
 import './PharmacyReturns.css'; // Reusing CSS from Patient returns to stay consistent
 
@@ -40,7 +41,7 @@ const VendorReturns = () => {
         if (!medicine) return;
 
         if (returnQuantity > medicine.stock) {
-            alert(`Cannot return more than current stock (${medicine.stock})`);
+            toast.error(`Cannot return more than current stock (${medicine.stock})`);
             return;
         }
 
@@ -65,8 +66,8 @@ const VendorReturns = () => {
     const totalReturnAmount = returnItems.reduce((sum, item) => sum + (item.quantityReturned * item.unitPrice), 0);
 
     const handleSubmitReturn = async () => {
-        if (!vendorName) return alert('Vendor Name is required');
-        if (returnItems.length === 0) return alert('Add at least one item to return');
+        if (!vendorName) return toast.error('Vendor Name is required');
+        if (returnItems.length === 0) return toast.error('Add at least one item to return');
 
         setLoading(true);
         try {
@@ -79,7 +80,7 @@ const VendorReturns = () => {
 
             const res = await pharmacyAPI.createVendorReturn(payload);
             if (res.success) {
-                alert('Vendor return submitted successfully');
+                toast.success('Vendor return submitted successfully');
                 // Reset form
                 setVendorName('');
                 setInvoiceOrBillNo('');
@@ -87,10 +88,10 @@ const VendorReturns = () => {
                 // Refresh data
                 fetchInitialData();
             } else {
-                alert(res.message || 'Error submitting return');
+                toast.error(res.message || 'Error submitting return');
             }
         } catch (error) {
-            alert('Error submitting return');
+            toast.error('Error submitting return');
             console.error(error);
         }
         setLoading(false);

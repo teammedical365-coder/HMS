@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import toast from 'react-hot-toast';
+import { confirmToast } from '../../utils/confirmToast';
 import { labTestAPI, testPackageAPI } from '../../utils/api';
 import '../administration/SuperAdmin.css';
 import './AdminTestPackages.css';
@@ -169,15 +171,18 @@ const AdminTestPackages = () => {
     };
 
     const handleDeletePackage = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this package?')) return;
+        if (!(await confirmToast('Are you sure you want to delete this package?', { title: 'Delete Test Package' }))) return;
         try {
             const res = await testPackageAPI.deletePackage(id);
             if (res.success) {
+                toast.success('Package deleted.');
                 setSuccess('Package deleted.');
                 fetchAll();
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Error deleting package.');
+            const msg = err.response?.data?.message || 'Error deleting package.';
+            toast.error(msg);
+            setError(msg);
         }
     };
 
@@ -207,17 +212,25 @@ const AdminTestPackages = () => {
 
             if (editingTestId) {
                 const res = await labTestAPI.updateLabTest(editingTestId, data);
-                if (res.success) setSuccess('✅ Test updated!');
+                if (res.success) {
+                    toast.success('Test updated!');
+                    setSuccess('✅ Test updated!');
+                }
             } else {
                 const res = await labTestAPI.createLabTest(data);
-                if (res.success) setSuccess('✅ Test created!');
+                if (res.success) {
+                    toast.success('Test created!');
+                    setSuccess('✅ Test created!');
+                }
             }
 
             setShowTestForm(false);
             resetTestForm();
             fetchAll();
         } catch (err) {
-            setError(err.response?.data?.message || 'Error saving test.');
+            const msg = err.response?.data?.message || 'Error saving test.';
+            toast.error(msg);
+            setError(msg);
         } finally {
             setLoading(false);
         }
@@ -238,15 +251,18 @@ const AdminTestPackages = () => {
     };
 
     const handleDeleteTest = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this test?')) return;
+        if (!(await confirmToast('Are you sure you want to delete this test?', { title: 'Delete Lab Test' }))) return;
         try {
             const res = await labTestAPI.deleteLabTest(id);
             if (res.success) {
+                toast.success('Test deleted.');
                 setSuccess('Test deleted.');
                 fetchAll();
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Error deleting test.');
+            const msg = err.response?.data?.message || 'Error deleting test.';
+            toast.error(msg);
+            setError(msg);
         }
     };
 

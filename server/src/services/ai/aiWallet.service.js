@@ -533,7 +533,7 @@ class AIWalletService {
         return {
             transactions: logs.map(l => ({
                 ...l,
-                costFormatted: '₹' + (l.actualApiCost || 0).toFixed(2)
+                costFormatted: `${(l.actualApiCost || 0).toFixed(2)} Credits`
             })),
             total: totalCount,
             page: Math.max(1, parseInt(page) || 1),
@@ -542,6 +542,7 @@ class AIWalletService {
             doctorBreakdown: doctorBreakdown.map(d => ({
                 userId: d._id.userId,
                 userName: d._id.userName || 'Doctor/Staff',
+                totalCreditsUsed: Number((d.totalCost || 0).toFixed(2)),
                 totalCostInr: Number((d.totalCost || 0).toFixed(2)),
                 requestCount: d.requestCount,
                 lastUsed: d.lastUsed

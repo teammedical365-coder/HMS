@@ -114,13 +114,14 @@ const App = () => {
         toastOptions={{
           duration: 3500,
           style: {
-            background: '#0f172a',
-            color: '#f8fafc',
+            background: '#ffffff',
+            color: '#0f172a',
+            border: '1.5px solid #e2e8f0',
             borderRadius: '14px',
             fontSize: '13.5px',
             fontWeight: 600,
             padding: '12px 18px',
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.25)',
+            boxShadow: '0 10px 30px -5px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(0, 0, 0, 0.04)',
           },
           success: {
             iconTheme: {

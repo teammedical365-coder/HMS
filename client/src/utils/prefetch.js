@@ -9,11 +9,12 @@
 const prefetchedModules = new Set();
 
 /**
- * Prefetch a dynamic import component function during idle time
+ * Prefetch a dynamic import component function during idle time or immediately on hover/touch
  * @param {string} key - Unique route or component identifier
  * @param {Function} importFn - Dynamic import function, e.g. () => import('./MyPage')
+ * @param {boolean} [immediate=false] - Whether to prefetch immediately instead of waiting for idle
  */
-export const prefetchRoute = (key, importFn) => {
+export const prefetchRoute = (key, importFn, immediate = false) => {
     if (typeof window === 'undefined' || !importFn || prefetchedModules.has(key)) {
         return;
     }
@@ -35,10 +36,12 @@ export const prefetchRoute = (key, importFn) => {
         }
     };
 
-    if ('requestIdleCallback' in window) {
-        window.requestIdleCallback(executePrefetch, { timeout: 4000 });
+    if (immediate) {
+        executePrefetch();
+    } else if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(executePrefetch, { timeout: 2000 });
     } else {
-        setTimeout(executePrefetch, 1000);
+        setTimeout(executePrefetch, 200);
     }
 };
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import toast from 'react-hot-toast';
 import { FiEye, FiCalendar, FiClock, FiPlus, FiX, FiDollarSign, FiCheck, FiAlertTriangle } from 'react-icons/fi';
 
 export const getStatusStyle = (status) => {
@@ -626,7 +627,7 @@ export const WorkflowBedModal = ({ open, actionType, patientId, surgeryId, onClo
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!selectedBedId) return alert('Please select a bed');
+        if (!selectedBedId) return toast.error('Please select a bed');
         try {
             const { admissionAPI, otAPI } = await import('../../utils/api');
             const targetBed = beds.find(b => b._id === selectedBedId);
@@ -640,6 +641,7 @@ export const WorkflowBedModal = ({ open, actionType, patientId, surgeryId, onClo
                     notes: 'Pre-Op Admission for Surgery'
                 });
                 await otAPI.updateSurgeryWorkflow(surgeryId, { status: 'ADMITTED' });
+                toast.success('Patient admitted for surgery');
             } else if (actionType === 'TRANSFER') {
                 const actAdmRes = await admissionAPI.getPatientAdmissions(patientId);
                 const activeAdm = actAdmRes.admissions?.find(a => a.status === 'Admitted');
@@ -652,15 +654,16 @@ export const WorkflowBedModal = ({ open, actionType, patientId, surgeryId, onClo
                         notes: 'Post-Op Ward Transfer'
                     });
                     await otAPI.updateSurgeryWorkflow(surgeryId, { status: 'POST_OP' });
+                    toast.success('Patient transferred to Post-Op');
                 } else {
-                    alert('No active admission found for this patient to transfer');
+                    toast.error('No active admission found for this patient to transfer');
                     return;
                 }
             }
             onClose();
             if (onSuccess) onSuccess();
         } catch (err) {
-            alert(err.response?.data?.message || 'Action failed');
+            toast.error(err.response?.data?.message || 'Action failed');
         }
     };
 

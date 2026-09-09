@@ -77,8 +77,6 @@ const HospitalSelect = ({ hospitals, value, onChange }) => {
 const Admin = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
     const [users, setUsers] = useState([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [roles, setRoles] = useState([]);
@@ -187,12 +185,6 @@ const Admin = () => {
             navigate('/');
         }
     }, [navigate]);
-
-    useEffect(() => {
-        if (location.state?.openCreateForm) {
-            setShowCreateForm(true);
-        }
-    }, [location.state]);
 
     useEffect(() => {
         fetchUsers();
@@ -436,19 +428,15 @@ const Admin = () => {
             department: (userItem.departments && userItem.departments.length > 0) ? userItem.departments[0] : ''
         });
         setEditModal(true);
-        setError('');
-        setSuccess('');
     };
 
     // Update User Logic
     const handleUpdateUser = async (e) => {
         e.preventDefault();
         setUpdating(true);
-        setError('');
-        setSuccess('');
 
         if (editForm.phone && editForm.phone.length !== 10) {
-            setError('Mobile number must be exactly 10 digits.');
+            toast.error('Mobile number must be exactly 10 digits.');
             setUpdating(false);
             return;
         }
@@ -479,12 +467,12 @@ const Admin = () => {
 
             const response = await adminAPI.updateUser(editForm.id, updateData);
             if (response.success) {
-                setSuccess('User updated successfully!');
+                toast.success('User updated successfully!');
                 setEditModal(false);
                 fetchUsers(staffPlanFilter, staffHospitalFilter, currentPage, pageSize, staffSearchQuery);
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Error updating user.');
+            toast.error(err.response?.data?.message || 'Error updating user.');
         } finally {
             setUpdating(false);
         }
@@ -515,17 +503,15 @@ const Admin = () => {
     const handleCreateStaff = async (e) => {
         e.preventDefault();
         setCreating(true);
-        setError('');
-        setSuccess('');
 
         if (createForm.phone && createForm.phone.length !== 10) {
-            setError('Mobile number must be exactly 10 digits.');
+            toast.error('Mobile number must be exactly 10 digits.');
             setCreating(false);
             return;
         }
 
         if (!createForm.name || !createForm.email || !createForm.password || !createForm.roleId) {
-            setError('Name, email, password, and role are all required.');
+            toast.error('Name, email, password, and role are all required.');
             setCreating(false);
             return;
         }
@@ -540,7 +526,7 @@ const Admin = () => {
                         return rName === 'clinic doctor' || rName === 'doctor';
                     });
                     if (hasDoc) {
-                        setError('This clinic already has an assigned Clinic Doctor.');
+                        toast.error('This clinic already has an assigned Clinic Doctor.');
                         setClinicDoctorExists(true);
                         setCreating(false);
                         return;
@@ -580,7 +566,7 @@ const Admin = () => {
 
             const response = await adminAPI.createUser(userData);
             if (response.success) {
-                setSuccess(`✅ ${response.user?.role?.name || 'Staff'} account created! They can log in with: ${createForm.email}`);
+                toast.success(`Staff account created for ${createForm.name}! They can log in with: ${createForm.email}`);
                 setCreateForm({ name: '', email: '', password: '', phone: '', age: '', aadhaar: '', roleId: '', file: null, department: '', hospitalId: '' });
                 setShowCreateForm(false);
                 setPage(1);
@@ -588,7 +574,7 @@ const Admin = () => {
             }
         } catch (err) {
             console.error("Creation error:", err);
-            setError(err.response?.data?.message || 'Error creating staff account.');
+            toast.error(err.response?.data?.message || 'Error creating staff account.');
         } finally {
             setCreating(false);
         }
@@ -605,9 +591,6 @@ const Admin = () => {
     return (
         <div className="superadmin-page staff-management-page">
             <div className="superadmin-container">
-                {error && <div className="error-message">{error}</div>}
-                {success && <div className="success-message">{success}</div>}
-
                 {/* ANIMATED TOP CARD: Create Staff Account */}
                 <div className="staff-create-card">
                     <div className="staff-create-header">
