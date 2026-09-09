@@ -7,6 +7,10 @@ import './App.css'
 import socket from './utils/socket'
 import { useAuth, useAppDispatch } from './store/hooks'
 import { useBranding } from './context/BrandingContext'
+import OfflineBanner from './components/OfflineBanner'
+import { initOfflineDb, clearAll as clearOfflineDb } from './utils/offlineDb'
+import { startNetworkMonitoring, stopNetworkMonitoring } from './utils/networkStatus'
+import { startSyncEngine, stopSyncEngine } from './utils/syncEngine'
 
 const App = () => {
   const { user, isAuthenticated } = useAuth();
@@ -25,6 +29,33 @@ const App = () => {
     } else {
       resetBranding();
     }
+  }, [isAuthenticated, user]);
+
+  // ── Offline-First System Initialization ─────────────────────────────────────
+  useEffect(() => {
+    // Start network monitoring for all users (even before login)
+    startNetworkMonitoring();
+
+    return () => {
+      stopNetworkMonitoring();
+    };
+  }, []);
+
+  // Initialize offline DB and sync engine when user logs in
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const userId = user._id || user.id;
+      if (userId) {
+        initOfflineDb(userId);
+        startSyncEngine();
+      }
+    } else {
+      stopSyncEngine();
+    }
+
+    return () => {
+      stopSyncEngine();
+    };
   }, [isAuthenticated, user]);
 
   // Socket Connection Management
@@ -108,6 +139,7 @@ const App = () => {
 
   return (
     <div style={{ width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
+      <OfflineBanner />
       <Toaster
         position="top-center"
         reverseOrder={false}

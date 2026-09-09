@@ -100,11 +100,14 @@ router.get('/tenant-config', async (req, res) => {
     }
 });
 
-// Get authentication configuration flags (public — used by frontend to adapt login flow)
+// Get authentication configuration flags (public — used by frontend to adapt login flow & check connectivity)
 router.get('/auth-config', (req, res) => {
-    res.set('Cache-Control', 'public, max-age=60');
+    const mongoose = require('mongoose');
+    const isDbConnected = mongoose.connection.readyState === 1;
+    res.set('Cache-Control', 'no-store');
     res.json({
         success: true,
+        dbConnected: isDbConnected,
         otpEnabled: process.env.AUTH_OTP_ENABLED !== 'false',
     });
 });

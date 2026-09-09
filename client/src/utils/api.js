@@ -1,16 +1,22 @@
 import axios from 'axios';
-
+import { nanoid } from 'nanoid';
+import {
+    buildCacheKey,
+    getCached,
+    putCache,
+    enqueue as enqueueOffline,
+    getQueueCount,
+} from './offlineDb';
+import { isOnline } from './networkStatus';
 const liveBackend = 'https://hms-n6nk.onrender.com';
-
-// Priority: 1. .env URL (VITE_API_URL) -> 2. Production Render Backend
-const rawBaseURL = import.meta.env.VITE_API_URL || liveBackend;
-
+const rawBaseURL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || liveBackend;
 export const baseURL = rawBaseURL.startsWith('http') ? rawBaseURL : `https://${rawBaseURL}`;
 
 const apiClient = axios.create({
     baseURL: baseURL,
     headers: { 'Content-Type': 'application/json' },
 });
+
 // Request Interceptor
 apiClient.interceptors.request.use(
     (config) => {
@@ -26,33 +32,403 @@ apiClient.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// Response Interceptor
+/**
+ * Check if a request is a network error (not a server error)
+ */
+function isNetworkError(error) {
+    if (!error) return true;
+    if (!navigator.onLine || !isOnline()) return true;
+    if (!error.response) return true; // No response from server (network drop, DNS, offline, timeout)
+    if (error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED' || error.code === 'ECONNREFUSED') return true;
+    if (error.message && (
+        error.message === 'Network Error' ||
+        error.message.includes('Network Error') ||
+        error.message.includes('Failed to fetch') ||
+        error.message.includes('timeout')
+    )) return true;
+    if (error.response && [502, 503, 504].includes(error.response.status)) return true;
+    return false;
+}
+
+// Response Interceptor (401 handler)
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
+        // CASE 1: Network / Offline failure — NEVER wipe tokens, NEVER logout
+        if (isNetworkError(error)) {
+            return Promise.reject(error);
+        }
+
+        // CASE 2: Genuine server-confirmed HTTP 401
         if (error.response?.status === 401) {
-            // Check if this is a session-expired (force logout from another device)
             const isSessionExpired = error.response?.data?.sessionExpired;
+            const errMsg = (error.response?.data?.message || '').toLowerCase();
 
-            // CIRCULAR DEPENDENCY FIX:
-            // Instead of dispatching logout action here, we simply clear storage and redirect.
-            // The authSlice will pick up the initial state from localStorage on reload.
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            // ONLY force logout on genuine session expiration or explicitly revoked/invalidated token
+            // NEVER logout on transient 'No token provided' or sub-resource auth errors
+            const shouldLogout = isSessionExpired || errMsg.includes('session') || errMsg.includes('revoked') || errMsg.includes('invalidated') || errMsg.includes('jwt expired');
 
-            // Store session expired message for the login page to display
-            if (isSessionExpired) {
-                sessionStorage.setItem('sessionExpiredMessage', error.response?.data?.message || 'Your account has been logged in from another device. Please login again.');
-            }
+            if (shouldLogout) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
 
-            // Only redirect if not already on the login page to avoid loops
-            if (!window.location.pathname.includes('/login')) {
-                window.location.href = '/login';
+                if (isSessionExpired) {
+                    sessionStorage.setItem('sessionExpiredMessage', error.response?.data?.message || 'Your account has been logged in from another device. Please login again.');
+                }
+
+                if (!window.location.pathname.includes('/login')) {
+                    window.location.href = '/login';
+                }
             }
         }
         return Promise.reject(error);
     }
 );
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// OFFLINE-FIRST INTERCEPTORS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Offline-writable operations allowlist across the entire project.
+ * Supports '*' (single segment) and '**' (multi segment) wildcards.
+ * Format: "METHOD /path/pattern"
+ */
+const OFFLINE_WRITABLE_OPS = [
+    // Reception & Appointments & Patients
+    'POST /api/reception/**',
+    'PUT /api/reception/**',
+    'PATCH /api/reception/**',
+    'DELETE /api/reception/**',
+    'POST /api/appointments/**',
+    'PUT /api/appointments/**',
+    'PATCH /api/appointments/**',
+    'DELETE /api/appointments/**',
+    'POST /api/patients/**',
+    'PUT /api/patients/**',
+    'PATCH /api/patients/**',
+    'DELETE /api/patients/**',
+
+    // Hospital Administration & Settings
+    'POST /api/hospitals/**',
+    'PUT /api/hospitals/**',
+    'PATCH /api/hospitals/**',
+    'DELETE /api/hospitals/**',
+    'POST /api/admin/**',
+    'PUT /api/admin/**',
+    'DELETE /api/admin/**',
+    'POST /api/staff/**',
+    'PUT /api/staff/**',
+    'DELETE /api/staff/**',
+
+    // Beds & Facilities
+    'POST /api/beds/**',
+    'PUT /api/beds/**',
+    'PATCH /api/beds/**',
+    'DELETE /api/beds/**',
+
+    // Vials & Blood Bank
+    'POST /api/vials/**',
+    'PUT /api/vials/**',
+    'PATCH /api/vials/**',
+    'DELETE /api/vials/**',
+
+    // Clinical, Doctor, OPD, IPD, Nurse
+    'POST /api/clinical/**',
+    'PUT /api/clinical/**',
+    'PATCH /api/clinical/**',
+    'POST /api/doctor/**',
+    'PUT /api/doctor/**',
+    'PATCH /api/doctor/**',
+    'POST /api/prescriptions/**',
+    'PUT /api/prescriptions/**',
+    'DELETE /api/prescriptions/**',
+    'POST /api/nurse/**',
+    'PUT /api/nurse/**',
+    'POST /api/ipd/**',
+    'PUT /api/ipd/**',
+    'POST /api/admissions/**',
+    'PATCH /api/admissions/**',
+    'PUT /api/admissions/**',
+
+    // OT (Operation Theatre)
+    'POST /api/ot/**',
+    'PUT /api/ot/**',
+    'PATCH /api/ot/**',
+    'DELETE /api/ot/**',
+
+    // Pharmacy & Medicines
+    'POST /api/pharmacy/**',
+    'PUT /api/pharmacy/**',
+    'PATCH /api/pharmacy/**',
+    'DELETE /api/pharmacy/**',
+    'POST /api/medicines/**',
+    'PUT /api/medicines/**',
+    'DELETE /api/medicines/**',
+
+    // Labs & Tests
+    'POST /api/lab/**',
+    'PUT /api/lab/**',
+    'PATCH /api/lab/**',
+    'POST /api/lab-tests/**',
+    'PUT /api/lab-tests/**',
+    'DELETE /api/lab-tests/**',
+    'POST /api/lab-test-packages/**',
+    'PUT /api/lab-test-packages/**',
+    'DELETE /api/lab-test-packages/**',
+
+    // Billing & Services
+    'POST /api/billing/**',
+    'PUT /api/billing/**',
+    'PATCH /api/billing/**',
+    'DELETE /api/billing/**',
+    'POST /api/services/**',
+    'PUT /api/services/**',
+    'DELETE /api/services/**',
+];
+
+/**
+ * Check if a request matches the offline-writable allowlist
+ */
+function isOfflineWritable(method, url) {
+    const normalizedMethod = (method || '').toUpperCase();
+    let normalizedUrl = (url || '').replace(baseURL, '');
+    if (normalizedUrl.startsWith('http://') || normalizedUrl.startsWith('https://')) {
+        try {
+            normalizedUrl = new URL(normalizedUrl).pathname;
+        } catch {}
+    }
+    // Remove query parameters
+    normalizedUrl = normalizedUrl.split('?')[0];
+    if (!normalizedUrl.startsWith('/')) {
+        normalizedUrl = '/' + normalizedUrl;
+    }
+
+    return OFFLINE_WRITABLE_OPS.some((pattern) => {
+        const [patternMethod, patternPath] = pattern.split(' ');
+        if (patternMethod !== '*' && patternMethod !== normalizedMethod) return false;
+        
+        // Escape regex characters except our placeholders
+        const regexStr = '^' + patternPath
+            .replace(/\*\*/g, '___DOUBLE_STAR___')
+            .replace(/\*/g, '[^/]+')
+            .replace(/___DOUBLE_STAR___/g, '.*') + '$';
+        const regex = new RegExp(regexStr);
+        return regex.test(normalizedUrl);
+    });
+}
+
+/**
+ * Response interceptor: Cache successful GET responses in IndexedDB & Queue offline writes
+ */
+apiClient.interceptors.response.use(
+    async (response) => {
+        // Cache successful GET responses
+        if (response.config.method === 'get' && response.status === 200) {
+            try {
+                const url = response.config.url || '';
+                // Don't cache auth endpoints, uploads, or streaming responses
+                if (
+                    !url.includes('/auth/') &&
+                    !url.includes('/upload') &&
+                    !url.includes('/otp') &&
+                    !url.includes('/login') &&
+                    response.data
+                ) {
+                    const cacheKey = buildCacheKey(url, response.config.params);
+                    await putCache(cacheKey, response.data);
+                }
+            } catch {
+                // Caching failure should never break the app
+            }
+        }
+        return response;
+    },
+    async (error) => {
+        // Only handle network/offline errors (not server-side 400, 500)
+        if (!isNetworkError(error)) {
+            return Promise.reject(error);
+        }
+
+        const config = error.config || {};
+        const method = (config.method || 'get').toLowerCase();
+        const url = config.url || '';
+
+        // ── GET requests: Fall back to IndexedDB cache ──
+        if (method === 'get') {
+            try {
+                const cacheKey = buildCacheKey(url, config.params);
+                const cached = await getCached(cacheKey);
+                if (cached) {
+                    // Return cached data as if it were a successful response
+                    return {
+                        data: cached.data,
+                        status: 200,
+                        statusText: 'OK (Cached)',
+                        headers: {},
+                        config,
+                        _offline: true,
+                        _isStale: cached.isStale,
+                        _cachedAt: cached.timestamp,
+                    };
+                }
+            } catch {
+                // Cache read failed — fall through to rejection
+            }
+            // No cache available — reject with a clear offline message
+            return Promise.reject({
+                ...error,
+                _offline: true,
+                message: 'You are offline and no cached data is available.',
+            });
+        }
+
+        // ── Write requests (POST/PUT/PATCH/DELETE): Queue if allowed ──
+        if (['post', 'put', 'patch', 'delete'].includes(method)) {
+            // Never queue file uploads
+            const contentType = config.headers?.['Content-Type'] || '';
+            if (contentType.includes('multipart/form-data')) {
+                return Promise.reject({
+                    ...error,
+                    _offline: true,
+                    message: 'File uploads require an internet connection.',
+                });
+            }
+
+            // Check if this operation is in the offline-writable allowlist
+            if (isOfflineWritable(method, url)) {
+                try {
+                    let requestData = config.data;
+                    if (typeof requestData === 'string') {
+                        try { requestData = JSON.parse(requestData); } catch {}
+                    }
+                    if (!requestData || typeof requestData !== 'object') {
+                        requestData = {};
+                    }
+
+                    // Assign a temporary client ID if creating a record
+                    const tempId = `tmp_${nanoid(16)}`;
+                    if (!requestData._tempId && ['post'].includes(method)) {
+                        requestData._tempId = tempId;
+                    }
+
+                    const queueId = await enqueueOffline({
+                        method: method.toUpperCase(),
+                        url: url.replace(baseURL, ''),
+                        data: requestData,
+                        clientOperationId: `cop_${nanoid(16)}`,
+                        description: getOperationDescription(method, url),
+                    });
+
+                    // Build synthetic response objects so UI handlers across all dashboards succeed
+                    const syntheticUser = {
+                        _id: tempId,
+                        id: tempId,
+                        name: requestData.name || 'Offline User',
+                        email: requestData.email || '',
+                        role: requestData.roleId || requestData.role || 'staff',
+                        ...requestData,
+                        _isOffline: true,
+                        _syncStatus: 'Pending Sync',
+                    };
+
+                    const syntheticAppointment = {
+                        _id: tempId,
+                        id: tempId,
+                        patient: requestData.patientId || tempId,
+                        doctor: requestData.doctorId,
+                        date: requestData.date,
+                        time: requestData.time,
+                        status: 'Scheduled',
+                        paymentStatus: requestData.paymentStatus || 'Paid',
+                        ...requestData,
+                        _isOffline: true,
+                        _syncStatus: 'Pending Sync',
+                    };
+
+                    const syntheticHospital = {
+                        _id: tempId,
+                        ...requestData,
+                        _isOffline: true,
+                        _syncStatus: 'Pending Sync',
+                    };
+
+                    // Return a synthetic success response so the UI flow continues seamlessly
+                    return {
+                        data: {
+                            success: true,
+                            _offline: true,
+                            _queued: true,
+                            _queueId: queueId,
+                            _syncStatus: 'Pending Sync',
+                            message: 'Saved offline. Status: Pending Sync (Will sync when connected).',
+                            user: syntheticUser,
+                            appointment: syntheticAppointment,
+                            patient: syntheticUser,
+                            hospital: syntheticHospital,
+                            departmentFees: requestData.departmentFees,
+                            departmentValidity: requestData.departmentValidity,
+                            facilities: requestData.facilities,
+                            medicine: requestData,
+                            inventory: requestData,
+                            bed: requestData,
+                            vial: requestData,
+                            data: {
+                                _id: tempId,
+                                ...requestData,
+                                _syncStatus: 'Pending Sync',
+                            },
+                            ...requestData,
+                        },
+                        status: 202,
+                        statusText: 'Accepted (Offline)',
+                        headers: {},
+                        config,
+                        _offline: true,
+                        _queued: true,
+                    };
+                } catch (err) {
+                    console.error('[OfflineQueue] Enqueue error:', err);
+                }
+            }
+
+            // Not in allowlist or queue failed
+            return Promise.reject({
+                ...error,
+                _offline: true,
+                message: 'This action requires an internet connection.',
+            });
+        }
+
+        return Promise.reject(error);
+    }
+);
+
+/**
+ * Generate a human-readable description for a queued operation
+ */
+function getOperationDescription(method, url) {
+    if (url.includes('/reception/register')) return 'Register new patient';
+    if (url.includes('/reception/book-appointment')) return 'Book appointment';
+    if (url.includes('/clinical/intake')) return 'Clinical intake';
+    if (url.includes('/confirm-payment')) return 'Confirm payment';
+    if (url.includes('/reception/intake')) return 'Update patient info';
+    if (url.includes('/department-fees')) return 'Update department fees';
+    if (url.includes('/facilities')) return 'Update hospital facilities';
+    if (url.includes('/upi-ids') || url.includes('/department-upi')) return 'Update UPI configuration';
+    if (url.includes('/admin/users') || url.includes('/staff')) return 'Manage staff user';
+    if (url.includes('/admin/roles')) return 'Manage role';
+    if (url.includes('/medicines') || url.includes('/pharmacy')) return 'Manage medicine / inventory';
+    if (url.includes('/lab-tests') || url.includes('/lab')) return 'Manage lab tests';
+    if (url.includes('/beds')) return 'Manage hospital beds';
+    if (url.includes('/vials')) return 'Manage blood bank vials';
+    if (url.includes('/doctor/session')) return 'Start patient consultation';
+    if (url.includes('/ot/schedule') || url.includes('/ot/')) return 'Manage OT surgery';
+    if (url.includes('/nurse/vitals') || url.includes('/ipd/vitals')) return 'Record vitals';
+    if (url.includes('/admissions')) return 'Manage patient admission';
+    if (url.includes('/billing')) return 'Manage patient billing';
+    return `${method.toUpperCase()} ${url.split('/api/')[1] || url}`;
+}
 
 export const authAPI = {
     login: async (email, password, hospitalId) => {
@@ -777,6 +1153,9 @@ patientApiClient.interceptors.request.use(
 patientApiClient.interceptors.response.use(
     (response) => response,
     (error) => {
+        if (!navigator.onLine || !isOnline()) {
+            return Promise.reject(error);
+        }
         if (error.response?.status === 401) {
             localStorage.removeItem('patientToken');
             localStorage.removeItem('patientUser');
@@ -1152,7 +1531,4 @@ export const ipdCommandCenterAPI = {
     getCensusTrends: async (params = {}) => (await apiClient.get('/api/ipd-nursing/analytics/census-trends', { params })).data,
     getNurseWorkload: async () => (await apiClient.get('/api/ipd-nursing/analytics/nurse-workload')).data,
 };
-
-
-
 

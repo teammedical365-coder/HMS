@@ -624,17 +624,19 @@ router.put('/my-hospital/facilities', verifyHospitalAdmin, async (req, res) => {
         }
 
         const { facilities } = req.body;
-        if (!facilities) return res.status(400).json({ success: false, message: 'Facilities data required' });
+        if (!facilities || !Array.isArray(facilities)) return res.status(400).json({ success: false, message: 'Valid facilities data array required' });
 
-        const hospital = await Hospital.findById(req.user.hospitalId);
+        const hospital = await Hospital.findByIdAndUpdate(
+            req.user.hospitalId,
+            { $set: { facilities } },
+            { new: true, runValidators: true }
+        );
         if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
-
-        hospital.facilities = facilities;
-        await hospital.save();
 
         res.json({ success: true, message: 'Facilities updated successfully', hospital });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'An internal error occurred' });
+        console.error('Error updating facilities:', err);
+        res.status(500).json({ success: false, message: err.message || 'An internal error occurred' });
     }
 });
 
@@ -650,18 +652,22 @@ router.put('/my-hospital/department-fees', verifyHospitalAdmin, async (req, res)
             return res.status(400).json({ success: false, message: 'Department fees data required' });
         }
 
-        const hospital = await Hospital.findById(req.user.hospitalId);
-        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
-
-        hospital.departmentFees = departmentFees;
+        const updateData = { departmentFees };
         if (departmentValidity && typeof departmentValidity === 'object') {
-            hospital.departmentValidity = departmentValidity;
+            updateData.departmentValidity = departmentValidity;
         }
-        await hospital.save();
+
+        const hospital = await Hospital.findByIdAndUpdate(
+            req.user.hospitalId,
+            { $set: updateData },
+            { new: true }
+        );
+        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
 
         res.json({ success: true, message: 'Department fees updated successfully', hospital });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'An internal error occurred' });
+        console.error('Error updating department fees:', err);
+        res.status(500).json({ success: false, message: err.message || 'An internal error occurred' });
     }
 });
 

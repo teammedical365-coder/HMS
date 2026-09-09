@@ -10,6 +10,7 @@ const { JWT_SECRET } = require('../config/jwt');
  * Verify JWT token and attach user + populated role to req.user
  */
 exports.verifyToken = async (req, res, next) => {
+    let decoded;
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -17,8 +18,12 @@ exports.verifyToken = async (req, res, next) => {
         }
 
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        decoded = jwt.verify(token, JWT_SECRET);
+    } catch (jwtErr) {
+        return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
 
+    try {
         // Reject tokens that have been explicitly invalidated (logout)
         const jti = decoded.jti;
         if (jti) {
@@ -141,8 +146,9 @@ exports.verifyToken = async (req, res, next) => {
         req.user.userId = user._id || user.id || user.userId;
         req.user._roleData = roleData;
         next();
-    } catch (error) {
-        return res.status(401).json({ success: false, message: 'Invalid token' });
+    } catch (dbErr) {
+        console.error('[verifyToken] Database connection error:', dbErr.message);
+        return res.status(503).json({ success: false, message: 'Database temporarily unavailable' });
     }
 };
 
@@ -240,6 +246,7 @@ exports.verifyAdminOrSuperAdmin = async (req, res, next) => {
 exports.verifyAdmin = exports.verifyAdminOrSuperAdmin;
 
 exports.verifyPatientToken = async (req, res, next) => {
+    let decoded;
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -247,12 +254,16 @@ exports.verifyPatientToken = async (req, res, next) => {
         }
 
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        decoded = jwt.verify(token, JWT_SECRET);
 
         if (!decoded.patientId) {
             return res.status(401).json({ success: false, message: 'Invalid token payload' });
         }
+    } catch (jwtErr) {
+        return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    }
 
+    try {
         const PatientAuth = require('../models/patientAuth.model');
         const patient = await PatientAuth.findById(decoded.patientId);
         if (!patient) {
@@ -265,7 +276,8 @@ exports.verifyPatientToken = async (req, res, next) => {
 
         req.patient = patient;
         next();
-    } catch (error) {
-        return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    } catch (dbErr) {
+        console.error('[verifyPatientToken] Database connection error:', dbErr.message);
+        return res.status(503).json({ success: false, message: 'Database temporarily unavailable' });
     }
 };

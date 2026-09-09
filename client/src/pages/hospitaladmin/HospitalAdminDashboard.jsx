@@ -231,8 +231,9 @@ const HospitalAdminDashboard = () => {
 
     // Auth check
     useEffect(() => {
-        const role = currentUser?.role;
-        if (role !== 'hospitaladmin') {
+        const role = (currentUser?.role || '').toLowerCase();
+        const allowed = ['hospitaladmin', 'doctor', 'clinic doctor', 'reception', 'receptionist'];
+        if (role && !allowed.includes(role)) {
             navigate('/hospitaladmin/login');
         }
     }, [navigate]);
@@ -2353,15 +2354,33 @@ const HospitalAdminDashboard = () => {
                                 style={{ padding: '8px 20px', whiteSpace: 'nowrap' }}
                                 onClick={async () => {
                                     try {
-                                        setError('');
-                                        await hospitalAPI.updateDepartmentFees({
-                                            departmentFees: hospitalInfo.departmentFees,
-                                            departmentValidity: hospitalInfo.departmentValidity
+                                        const fees = { ...(hospitalInfo?.departmentFees || {}) };
+                                        const validity = { ...(hospitalInfo?.departmentValidity || {}) };
+                                        (hospitalInfo?.departments || []).forEach((dept) => {
+                                            if (fees[dept] === undefined || fees[dept] === null || fees[dept] === '') fees[dept] = 500;
+                                            if (validity[dept] === undefined || validity[dept] === null || validity[dept] === '') validity[dept] = 5;
                                         });
-                                        setSuccess('All department fees and validity saved!');
-                                        setTimeout(() => setSuccess(''), 3000);
+
+                                        const res = await hospitalAPI.updateDepartmentFees({
+                                            departmentFees: fees,
+                                            departmentValidity: validity
+                                        });
+
+                                        if (res && res.hospital) {
+                                            setHospitalInfo(res.hospital);
+                                        } else {
+                                            setHospitalInfo(prev => ({
+                                                ...prev,
+                                                departmentFees: fees,
+                                                departmentValidity: validity
+                                            }));
+                                        }
+
+                                        toast.success('Department consultation fees saved successfully!');
                                     } catch (err) {
-                                        setError('Error saving fees');
+                                        console.error('Error saving department fees:', err);
+                                        const errMsg = err?.response?.data?.message || err?.message || 'Error saving fees';
+                                        toast.error(errMsg);
                                     }
                                 }}
                             >
@@ -2443,15 +2462,26 @@ const HospitalAdminDashboard = () => {
                             e.preventDefault();
                             if (!e.target.name.value || !e.target.price.value) return;
                             try {
-                                const newFacility = { name: e.target.name.value, pricePerDay: Number(e.target.price.value) };
+                                const newFacility = { name: e.target.name.value.trim(), pricePerDay: Number(e.target.price.value) };
                                 const newFacilities = [...(hospitalInfo?.facilities || []), newFacility];
                                 const res = await hospitalAPI.updateFacilities({ facilities: newFacilities });
-                                if (res.success) {
-                                    setHospitalInfo(res.hospital);
-                                    setSuccess('Facility added successfully!');
+                                if (res.success || res._offline) {
+                                    if (res.hospital) {
+                                        setHospitalInfo(res.hospital);
+                                    } else {
+                                        setHospitalInfo(prev => ({
+                                            ...prev,
+                                            facilities: newFacilities
+                                        }));
+                                    }
+                                    toast.success('Facility added successfully!');
                                     e.target.reset();
                                 }
-                            } catch (err) { setError('Error adding facility'); }
+                            } catch (err) {
+                                console.error('Error adding facility:', err);
+                                const errMsg = err?.response?.data?.message || err?.message || 'Error adding facility';
+                                toast.error(errMsg);
+                            }
                         }} className="user-form" style={{ marginBottom: '30px', padding: '15px', background: '#f8fafc', borderRadius: '8px' }}>
                             <div className="form-row" style={{ alignItems: 'flex-end' }}>
                                 <div className="form-group" style={{ marginBottom: 0 }}>

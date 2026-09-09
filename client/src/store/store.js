@@ -7,6 +7,7 @@ import publicDataReducer from './slices/publicDataSlice';
 import adminEntitiesReducer from './slices/adminEntitiesSlice';
 import labReducer from './slices/labSlice'; // Import the new Lab Slice
 import notificationReducer from './slices/notificationSlice';
+import offlineReducer from './slices/offlineSlice';
 import { setStoreRef } from './storeRef';
 
 export const store = configureStore({
@@ -19,6 +20,7 @@ export const store = configureStore({
     adminEntities: adminEntitiesReducer,
     lab: labReducer, // Register the Lab Reducer
     notifications: notificationReducer,
+    offline: offlineReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

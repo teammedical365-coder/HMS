@@ -62,3 +62,17 @@ export const useCachedDoctors = (serviceId = null) => {
     isCached: false
   };
 };
+
+const DEFAULT_OFFLINE_STATE = {
+  isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+  syncStatus: 'idle',
+  pendingCount: 0,
+  lastSyncAt: null,
+  syncProgress: null,
+  syncErrors: [],
+};
+
+// Offline status hook — exposes online/offline state, sync progress, and pending count
+export const useOfflineStatus = () => {
+  return useAppSelector((state) => state.offline || DEFAULT_OFFLINE_STATE);
+};

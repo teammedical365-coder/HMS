@@ -1,0 +1,271 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   OfflineBanner.css — Modern Floating Glassmorphic Offline/Sync Indicator
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.offline-banner-wrap {
+  position: fixed;
+  top: 14px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 99999;
+  pointer-events: none;
+  padding: 0 16px;
+}
+
+.offline-banner {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-family: 'Plus Jakarta Sans', 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.08);
+  animation: offlinePillPop 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 90vw;
+}
+
+@keyframes offlinePillPop {
+  0% {
+    transform: translateY(-24px) scale(0.92);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.offline-banner__text {
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Pulse Dots ── */
+.offline-banner__pulse-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.offline-banner__pulse-dot::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  border-radius: 50%;
+  animation: pulseDotGlow 1.6s ease-out infinite;
+}
+
+@keyframes pulseDotGlow {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.offline-banner__pulse-dot--amber {
+  background: #f59e0b;
+  box-shadow: 0 0 10px #f59e0b;
+}
+.offline-banner__pulse-dot--amber::after {
+  border: 1.5px solid #f59e0b;
+}
+
+.offline-banner__pulse-dot--green {
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+}
+.offline-banner__pulse-dot--green::after {
+  border: 1.5px solid #10b981;
+}
+
+.offline-banner__pulse-dot--blue {
+  background: #3b82f6;
+  box-shadow: 0 0 10px #3b82f6;
+}
+.offline-banner__pulse-dot--blue::after {
+  border: 1.5px solid #3b82f6;
+}
+
+.offline-banner__pulse-dot--red {
+  background: #ef4444;
+  box-shadow: 0 0 10px #ef4444;
+}
+.offline-banner__pulse-dot--red::after {
+  border: 1.5px solid #ef4444;
+}
+
+/* ── Offline State (Warm Sunset Amber) ── */
+.offline-banner--offline {
+  background: rgba(30, 25, 18, 0.88);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fef3c7;
+}
+
+/* ── Syncing State (Ocean Blue) ── */
+.offline-banner--syncing {
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  color: #e0f2fe;
+}
+
+/* ── Success State (Emerald Green) ── */
+.offline-banner--success {
+  background: rgba(6, 78, 59, 0.92);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  color: #ecfdf5;
+  animation: offlinePillPop 0.35s ease, offlinePillFade 0.4s ease 3.2s forwards;
+}
+
+@keyframes offlinePillFade {
+  to {
+    transform: translateY(-20px) scale(0.95);
+    opacity: 0;
+  }
+}
+
+/* ── Error State (Crimson Red) ── */
+.offline-banner--error {
+  background: rgba(69, 10, 10, 0.92);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #fee2e2;
+}
+
+/* ── Pending State (Indigo / Cyan) ── */
+.offline-banner--pending {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #e0e7ff;
+}
+
+/* ── Spinner ── */
+.offline-banner__spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: offlineBannerSpin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes offlineBannerSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Progress Bar ── */
+.offline-banner__progress-bar {
+  width: 70px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 99px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.offline-banner__progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8, #818cf8);
+  border-radius: 99px;
+  transition: width 0.25s ease;
+}
+
+/* ── Retry Button ── */
+.offline-banner__retry-btn {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 99px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.offline-banner__retry-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.offline-banner__retry-btn:active {
+  transform: scale(0.96);
+}
+
+/* ── Close / Dismiss Button ── */
+.offline-banner__close-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+  border: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: 4px;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.offline-banner__close-btn:hover {
+  background: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+  transform: scale(1.15);
+}
+
+.offline-banner__close-btn:active {
+  transform: scale(0.9);
+}
+
+/* ── Mobile Responsive ── */
+@media (max-width: 600px) {
+  .offline-banner-wrap {
+    top: 8px;
+    padding: 0 10px;
+  }
+
+  .offline-banner {
+    padding: 6px 14px;
+    font-size: 11.5px;
+    gap: 7px;
+  }
+
+  .offline-banner__progress-bar {
+    width: 45px;
+  }
+
+  .offline-banner__close-btn {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+}
+
