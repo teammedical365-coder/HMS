@@ -137,49 +137,66 @@ router.get('/', verifyToken, async (req, res) => {
             library = await QuestionLibrary.findOne({ hospitalId }).sort({ version: -1 });
         }
 
-        if (!library || !library.data || Object.keys(library.data).length === 0) {
-            // Fallback to global template
-            library = await QuestionLibrary.findOne({ hospitalId: null }).sort({ version: -1 });
-        }
+        let hospital = null;
+        let allowedDepartments = null;
 
-        if (!library || !library.data || Object.keys(library.data).length === 0) {
-            // Seed global template with comprehensive 12 departments
-            const newGlobal = new QuestionLibrary({
-                data: defaultQuestionLibraryData,
-                version: 1,
-                hospitalId: null
-            });
-            await newGlobal.save();
-            library = newGlobal;
-        } else {
-            // Ensure all 12 departments exist in library data (merge default data if missing)
-            let isModified = false;
-            const mergedData = { ...defaultQuestionLibraryData, ...library.data };
-            for (const dept of Object.keys(defaultQuestionLibraryData)) {
-                if (!library.data[dept] || Object.keys(library.data[dept]).length === 0) {
-                    mergedData[dept] = defaultQuestionLibraryData[dept];
-                    isModified = true;
-                }
-            }
-            if (isModified && !hospitalId) {
-                library.data = mergedData;
-                library.markModified('data');
-                await library.save();
-            } else if (isModified) {
-                library.data = mergedData;
-            }
-        }
-
-        let allowedDepartments = null; // null means all allowed (super/central admin)
         if (hospitalId) {
-            const hospital = await Hospital.findById(hospitalId);
+            hospital = await Hospital.findById(hospitalId);
             if (hospital && hospital.departments && hospital.departments.length > 0) {
                 allowedDepartments = hospital.departments;
             } else if (hospital && hospital.clinicType === 'clinic') {
-                allowedDepartments = ['General Medicine', 'General'];
-            } else {
-                allowedDepartments = Object.keys(library.data || defaultQuestionLibraryData);
+                allowedDepartments = ['General'];
             }
+        }
+
+        // If no hospital-specific library found, load the latest global library
+        if (!library || !library.data || Object.keys(library.data).length === 0) {
+            library = await QuestionLibrary.findOne({ hospitalId: null }).sort({ version: -1 });
+        }
+
+        // If still no library exists in DB, fallback to empty library
+        if (!library || !library.data || Object.keys(library.data).length === 0) {
+            const depts = allowedDepartments && allowedDepartments.length > 0 ? allowedDepartments : ['General'];
+            const initialData = {};
+            for (const d of depts) {
+                initialData[d] = {};
+            }
+            library = {
+                data: initialData,
+                version: 1,
+                hospitalId
+            };
+        }
+
+        // If Hospital Admin has specific allowed departments, strictly return only those departments
+        if (hospitalId && library && library.data) {
+            const rawLibData = library.data;
+            const filteredData = {};
+
+            const targetDepts = (allowedDepartments && allowedDepartments.length > 0)
+                ? allowedDepartments
+                : Object.keys(rawLibData);
+
+            for (const dept of targetDepts) {
+                if (rawLibData[dept]) {
+                    filteredData[dept] = rawLibData[dept];
+                } else {
+                    filteredData[dept] = {};
+                }
+            }
+
+            // Include any additional custom departments the hospital explicitly created
+            if (library.hospitalId) {
+                for (const key of Object.keys(rawLibData)) {
+                    if (filteredData[key] === undefined) {
+                        filteredData[key] = rawLibData[key];
+                    }
+                }
+            }
+
+            const libObj = library.toObject ? library.toObject() : { ...library };
+            libObj.data = filteredData;
+            library = libObj;
         }
 
         res.json({ success: true, data: library, allowedDepartments });

@@ -35,125 +35,8 @@ import {
 import '../admin/AdminQuestionLibrary.css';
 
 const defaultQuestionLibraryData = {
-    "ENT": {
-        "Clinical History & Intake": [
-            { q: "When did the ear/throat/nose pain or irritation first start?", type: "text" },
-            { q: "Have you consulted a doctor or taken any treatment for this previously?", type: "yes-no" },
-            { q: "Are you currently taking any medicines (antibiotics, pain killers, nasal sprays)?", type: "textarea" },
-            { q: "Does anyone in your family (parents/siblings) have a history of allergies or sinus/hearing issues?", type: "yes-no" },
-            { q: "Which primary symptoms are you currently experiencing?", type: "checkbox-group", options: ["Ear Pain / Discharge", "Throat Soreness / Pain Swallowing", "Nasal Congestion / Blockage", "Hearing Loss / Ringing (Tinnitus)", "Dizziness / Vertigo", "Frequent Sneezing / Cold"] },
-            { q: "Pain Severity Level (Scale 1 to 10)", type: "select", options: ["1 - Very Mild", "3 - Mild", "5 - Moderate", "7 - Severe", "9 - Very Severe", "10 - Unbearable"] }
-        ]
-    },
-    "Cardiology": {
-        "Cardiac Symptoms & Risk Profile": [
-            { q: "When did you first notice the chest discomfort, heaviness, or palpitations?", type: "text" },
-            { q: "Have you ever had an ECG, 2D Echo, Angiography, or TMT test done before?", type: "yes-no" },
-            { q: "Are you currently taking any blood pressure, blood thinner (Aspirin), or cholesterol medicines?", type: "textarea" },
-            { q: "Is there a family history of heart attack, hypertension, or sudden cardiac issues (Parents/Siblings)?", type: "yes-no" },
-            { q: "Nature and sensation of chest discomfort", type: "select", options: ["Heavy Pressure / Squeezing", "Sharp / Stabbing", "Burning / Acidity-like", "Shortness of Breath on Exertion", "No Chest Pain (Only Palpitations)"] },
-            { q: "Does the discomfort radiate to left arm, neck, shoulder, jaw, or back?", type: "yes-no" }
-        ]
-    },
-    "Orthopedics": {
-        "Joint & Bone Assessment": [
-            { q: "When did the bone/joint/back pain begin, and was it caused by an injury or fall?", type: "text" },
-            { q: "Have you had prior X-rays, MRI scans, or physiotherapy for this condition?", type: "yes-no" },
-            { q: "What pain relief tablets, ointments, or calcium/vitamin D supplements are you taking?", type: "textarea" },
-            { q: "Does any family member suffer from Arthritis, Gout, Spondylitis, or Osteoporosis?", type: "yes-no" },
-            { q: "Are you able to put weight on the affected limb and walk without support?", type: "yes-no" },
-            { q: "Associated symptoms observed", type: "checkbox-group", options: ["Joint Swelling / Warmth", "Morning Stiffness (>30 mins)", "Joint Clicking / Locking", "Numbness / Tingling in Limbs", "Restricted Joint Movement"] }
-        ]
-    },
-    "Pediatrics": {
-        "Child Health & Development": [
-            { q: "When did the child's fever, cough, vomiting, or symptoms first appear?", type: "text" },
-            { q: "Has the child visited a clinic or received emergency pediatric care for this episode?", type: "yes-no" },
-            { q: "What syrups, drops, or fever medicines (with dose & time) were given?", type: "textarea" },
-            { q: "Is the child's vaccination / immunization schedule completely up-to-date?", type: "yes-no" },
-            { q: "Feeding, fluid intake, and active urine output status", type: "select", options: ["Normal Feeding & Playful", "Mildly Reduced Oral Intake", "Lethargic / Decreased Urine Output", "Refusing All Feeds / Vomiting Everything"] },
-            { q: "Family history of childhood asthma, eczema, or food allergies", type: "yes-no" }
-        ]
-    },
-    "Gynecology & Obstetrics": {
-        "Women's Health & Obstetric Profile": [
-            { q: "What was the date of your Last Menstrual Period (LMP)?", type: "text" },
-            { q: "Have you consulted a gynecologist or had prior pelvic ultrasound scans?", type: "yes-no" },
-            { q: "Are you currently taking any hormonal pills, thyroid medication, iron, or folic acid?", type: "textarea" },
-            { q: "Is there a family history of PCOD/PCOS, Fibroids, Diabetes, or Gynae issues?", type: "yes-no" },
-            { q: "Primary complaints and symptoms experienced", type: "checkbox-group", options: ["Irregular / Delayed Periods", "Severe Cramps / Pelvic Pain", "Heavy Bleeding with Clots", "Abnormal Vaginal Discharge / Itching", "Morning Sickness / Nausea", "Difficulty in Conceiving"] },
-            { q: "Obstetric history: Total prior pregnancies (Gravida / Para / Living / Abortion)", type: "text" }
-        ]
-    },
-    "Dermatology": {
-        "Skin & Hair Assessment": [
-            { q: "When did the skin rash, itching, boil, or hair loss first appear?", type: "text" },
-            { q: "Have you applied any steroid creams, home remedies, or taken skin treatments before?", type: "yes-no" },
-            { q: "List all oral medicines, supplements, soaps, oils, or cosmetics started recently", type: "textarea" },
-            { q: "Does anyone in your family have Psoriasis, Eczema, Fungal infections, or Vitiligo?", type: "yes-no" },
-            { q: "Characteristics and triggers of the skin condition", type: "checkbox-group", options: ["Intense Itching (Worse at night)", "Burning / Painful Sensation", "Spreading to Other Body Parts", "Flaking / Peeling Skin", "Pus-filled Lesions / Blisters", "Triggered by Sun / Sweat"] },
-            { q: "Any known food, drug, or chemical allergies?", type: "text" }
-        ]
-    },
-    "Ophthalmology": {
-        "Eye Health & Vision Intake": [
-            { q: "When did you first notice blurriness, redness, irritation, or vision changes?", type: "text" },
-            { q: "Do you currently wear eyeglasses or contact lenses?", type: "yes-no" },
-            { q: "Are you using any eye drops (lubricant, antibiotic, anti-glaucoma, steroid)?", type: "textarea" },
-            { q: "Is there a family history of Glaucoma, Cataract, or Diabetic Retinopathy?", type: "yes-no" },
-            { q: "Which eye is affected and what are the primary symptoms?", type: "checkbox-group", options: ["Right Eye Only", "Left Eye Only", "Both Eyes", "Redness & Excessive Watering", "Foreign Body Sensation / Grittiness", "Night Blindness / Glare Sensitivity", "Floaters / Flashes of Light"] },
-            { q: "Do you have a history of Diabetes or High Blood Pressure?", type: "yes-no" }
-        ]
-    },
-    "Neurology": {
-        "Neurological Screening Protocol": [
-            { q: "When did the headaches, dizziness, tremors, or weakness first begin?", type: "text" },
-            { q: "Have you ever had an MRI/CT Brain scan, EEG, or consultation with a neurologist?", type: "yes-no" },
-            { q: "Are you currently taking any anti-seizure, nerve pain, or migraine medicines?", type: "textarea" },
-            { q: "Is there a family history of Stroke, Epilepsy, Parkinson's, or chronic migraines?", type: "yes-no" },
-            { q: "Symptoms experienced during or between episodes", type: "checkbox-group", options: ["One-sided Throbbing Headache", "Numbness / Tingling in Arms/Legs", "Fainting / Loss of Consciousness", "Hand Tremors / Muscle Jerks", "Slurred Speech / Difficulty Speaking", "Balance / Walking Difficulty"] },
-            { q: "Severity and impact on daily activities", type: "select", options: ["Mild - Does not affect daily work", "Moderate - Disables temporarily during episodes", "Severe - Unable to perform normal work / bedridden"] }
-        ]
-    },
-    "Gastroenterology": {
-        "Digestive & GI Tract Evaluation": [
-            { q: "When did the stomach pain, indigestion, acidity, or bowel irregularity begin?", type: "text" },
-            { q: "Have you undergone an Endoscopy, Colonoscopy, or Abdominal Ultrasound previously?", type: "yes-no" },
-            { q: "What antacids (Pan-D, Omez), laxatives, or digestive syrups do you consume regularly?", type: "textarea" },
-            { q: "Is there a family history of Gastric Ulcers, Gallstones, Fatty Liver, or Colon Polyps?", type: "yes-no" },
-            { q: "Primary digestive complaints noted", type: "checkbox-group", options: ["Heartburn / Chest Acid Burning (GERD)", "Stomach Bloating / Excessive Gas", "Chronic Constipation", "Frequent Loose Stools / Diarrhea", "Post-Meal Nausea / Vomiting", "Black Stool / Blood in Stool"] },
-            { q: "Pain relation to food consumption", type: "select", options: ["Increases after eating spicy/oily food", "Relieved after eating food/milk", "Severe on empty stomach", "No fixed relation to meals"] }
-        ]
-    },
-    "Pulmonology": {
-        "Respiratory & Chest Health": [
-            { q: "Since how many days/months have you had the cough, breathlessness, or wheezing?", type: "text" },
-            { q: "Have you had a Chest X-ray, HRCT Chest, or Pulmonary Function Test (PFT/Spirometry)?", type: "yes-no" },
-            { q: "Do you use an inhaler (Rotahaler/Metered dose), nebulizer, or steroid syrups?", type: "textarea" },
-            { q: "Is there a family history of Asthma, Chronic Bronchitis, TB, or Dust Allergy?", type: "yes-no" },
-            { q: "Nature of cough and sputum production", type: "select", options: ["Dry Persistent Cough", "Wet Cough with Clear White Sputum", "Thick Yellow/Green Sputum", "Cough with Blood Streaks (Hemoptysis)", "Night-time Wheezing / Breathlessness"] },
-            { q: "Tobacco / Smoking history and environmental exposure", type: "select", options: ["Non-Smoker (No exposure)", "Active Smoker (>5 cigarettes/day)", "Former Smoker (Quit)", "Heavy Dust / Chemical Factory Exposure"] }
-        ]
-    },
-    "General Medicine": {
-        "Baseline Clinical History": [
-            { q: "What is your main health concern or problem, and when did it start?", type: "textarea" },
-            { q: "Have you been hospitalized or had surgery in the past 2-3 years?", type: "yes-no" },
-            { q: "List all ongoing daily medications, dosages, and health supplements", type: "textarea" },
-            { q: "Family history of chronic conditions (Diabetes, High BP, Kidney Disease, Thyroid)?", type: "yes-no" },
-            { q: "Constitutional symptoms present currently", type: "checkbox-group", options: ["Fever / Chills", "Unexplained Weight Loss", "Extreme Fatigue / Weakness", "Loss of Appetite", "Disturbed Sleep / Insomnia", "Generalized Body Aches"] },
-            { q: "Any known drug allergies (e.g. Penicillin, Sulfa, Paracetamol, Aspirin)?", type: "text" }
-        ]
-    },
-    "Dentistry": {
-        "Dental & Oral Health History": [
-            { q: "When did the toothache, sensitivity, swelling, or gum bleeding start?", type: "text" },
-            { q: "When was your last dental check-up, cleaning (scaling), or tooth filling done?", type: "text" },
-            { q: "Are you taking pain relievers, antibiotics, or blood-thinning medications?", type: "textarea" },
-            { q: "Is there a family history of early tooth loss, gum problems, or jaw disorders?", type: "yes-no" },
-            { q: "Primary dental and oral complaints", type: "checkbox-group", options: ["Sharp Pain on Biting / Chewing", "Hot & Cold Sensitivity", "Bleeding / Swollen / Receding Gums", "Bad Breath (Halitosis)", "Mobile / Loose Tooth", "Jaw Joint (TMJ) Pain / Clicking"] },
-            { q: "Oral hygiene and habits", type: "select", options: ["Brushing Once Daily", "Brushing Twice Daily", "Night Teeth Grinding (Bruxism)", "Tobacco / Gutkha / Pan Masala Habit", "None"] }
-        ]
+    "General": {
+        "General Intake": []
     }
 };
 
@@ -162,7 +45,7 @@ let cachedQuestionLibraryData = null;
 let cachedAllowedDepartments = null;
 
 const HospitalAdminQuestionLibrary = () => {
-    const [libraryData, setLibraryData] = useState(() => cachedQuestionLibraryData || defaultQuestionLibraryData);
+    const [libraryData, setLibraryData] = useState(() => cachedQuestionLibraryData || {});
 
     const [currentLang, setCurrentLang] = useState(() => {
         return localStorage.getItem('hms_question_lib_lang') || 'en';
@@ -179,8 +62,8 @@ const HospitalAdminQuestionLibrary = () => {
     const [isAiGenerating, setIsAiGenerating] = useState(false);
     const [allowedDepartments, setAllowedDepartments] = useState(() => cachedAllowedDepartments);
 
-    const [departmentTab, setDepartmentTab] = useState('ENT');
-    const [activeCategory, setActiveCategory] = useState('Clinical History & Intake');
+    const [departmentTab, setDepartmentTab] = useState('');
+    const [activeCategory, setActiveCategory] = useState('');
     const [newCatName, setNewCatName] = useState('');
 
     const [showAddModal, setShowAddModal] = useState(false);
@@ -193,7 +76,7 @@ const HospitalAdminQuestionLibrary = () => {
 
     // Predefined departments for dropdown
     const [predefinedDepartments, setPredefinedDepartments] = useState([
-        "ENT", "Cardiology", "Orthopedics", "Pediatrics", "Gynecology & Obstetrics", 
+        "General", "ENT", "Cardiology", "Orthopedics", "Pediatrics", "Gynecology & Obstetrics", 
         "Dermatology", "Ophthalmology", "Neurology", "Gastroenterology", "Pulmonology", 
         "General Medicine", "Dentistry"
     ]);
@@ -220,28 +103,38 @@ const HospitalAdminQuestionLibrary = () => {
                 setLoading(true);
             }
             const res = await questionLibraryAPI.getLibrary();
-            let data = res.data?.data;
-            if (!data || Object.keys(data).length === 0) {
-                data = defaultQuestionLibraryData;
-            } else {
-                // Ensure all 12 departments are always merged in
-                data = { ...defaultQuestionLibraryData, ...data };
+            let data = res.data?.data || res.data;
+            if (!data || typeof data !== 'object' || Object.keys(data).length === 0) {
+                data = { "General": {} };
             }
 
+            const allowed = res.allowedDepartments || null;
+
             cachedQuestionLibraryData = data;
-            cachedAllowedDepartments = res.allowedDepartments || null;
+            cachedAllowedDepartments = allowed;
 
             setLibraryData(data);
-            setAllowedDepartments(res.allowedDepartments || null);
+            setAllowedDepartments(allowed);
 
-            const visibleDepts = res.allowedDepartments ? Object.keys(data).filter(d => res.allowedDepartments.includes(d)) : Object.keys(data);
-            if (!visibleDepts.includes(departmentTab)) {
-                let defaultDept = visibleDepts.length > 0 ? visibleDepts[0] : 'ENT';
-                setDepartmentTab(defaultDept);
-                const firstDeptCats = Object.keys(data[defaultDept] || {});
-                if (firstDeptCats.length > 0) {
-                    setActiveCategory(firstDeptCats[0]);
-                }
+            const allDeptKeys = Object.keys(data);
+            let visibleDepts = allowed && allowed.length > 0
+                ? allDeptKeys.filter(d => allowed.includes(d))
+                : allDeptKeys;
+
+            if (visibleDepts.length === 0) {
+                visibleDepts = allDeptKeys.length > 0 ? allDeptKeys : (allowed && allowed.length > 0 ? allowed : ['General']);
+            }
+
+            const activeDept = (departmentTab && visibleDepts.includes(departmentTab))
+                ? departmentTab
+                : visibleDepts[0];
+
+            setDepartmentTab(activeDept);
+            const firstDeptCats = Object.keys(data[activeDept] || {});
+            if (firstDeptCats.length > 0) {
+                setActiveCategory(firstDeptCats[0]);
+            } else {
+                setActiveCategory('');
             }
         } catch (err) {
             console.error('Error fetching question library:', err);
@@ -262,54 +155,66 @@ const HospitalAdminQuestionLibrary = () => {
 
     const handleResetToStandard = async () => {
         const confirmed = await confirmToast(
-            "Do you want to reset & load all 12 standard medical departments (ENT, Cardiology, Orthopedics, Pediatrics, Gynecology, etc.) with 60+ clinical intake questions?",
-            { title: 'Load 12 Medical Departments', confirmText: 'Load All 12 Depts' }
+            "Do you want to reset and reload the library from the server?",
+            { title: 'Reload Library', confirmText: 'Reload' }
         );
         if (!confirmed) return;
-        setLibraryData(defaultQuestionLibraryData);
-        cachedQuestionLibraryData = defaultQuestionLibraryData;
-        setDepartmentTab('ENT');
-        setActiveCategory('Clinical History & Intake');
-        setSaving(true);
-        try {
-            await questionLibraryAPI.updateLibrary(defaultQuestionLibraryData);
-            toast.success('✨ Successfully loaded and deployed all 12 Medical Departments!');
-        } catch (err) {
-            toast.error('Error updating standard library in database.');
-        } finally {
-            setSaving(false);
-        }
+        await fetchLibrary(true);
     };
 
     const handleSave = async () => {
         setSaving(true);
         try {
             const res = await questionLibraryAPI.updateLibrary(libraryData);
-            if (res.success) {
+            if (res.success || res._offline) {
                 cachedQuestionLibraryData = libraryData;
                 toast.success('Question Library updated & synced with all doctor workflows successfully!');
             }
         } catch (err) {
-            toast.error('Error saving library.');
+            console.error('Error saving library:', err);
+            toast.error(err?.response?.data?.message || err?.message || 'Error saving library.');
         } finally {
             setSaving(false);
         }
     };
 
+    // Derived properties for fail-safe active department & category selection
+    const allDeptKeys = Object.keys(libraryData);
+    let finalVisibleDepts = allowedDepartments && allowedDepartments.length > 0
+        ? allDeptKeys.filter(d => allowedDepartments.includes(d))
+        : allDeptKeys;
+
+    if (finalVisibleDepts.length === 0) {
+        finalVisibleDepts = allDeptKeys.length > 0 ? allDeptKeys : (allowedDepartments && allowedDepartments.length > 0 ? allowedDepartments : ['General']);
+    }
+
+    const currentDept = (departmentTab && finalVisibleDepts.includes(departmentTab))
+        ? departmentTab
+        : (finalVisibleDepts[0] || 'General');
+
+    const currentCategories = libraryData[currentDept] || {};
+    const categoryKeys = Object.keys(currentCategories);
+    const activeCat = (activeCategory && categoryKeys.includes(activeCategory))
+        ? activeCategory
+        : (categoryKeys[0] || '');
+
+    const questionsInActiveCategory = currentCategories[activeCat] || [];
+
     const handleAddCategory = () => {
         const cat = newCatName.trim();
         if (!cat) return;
 
-        if (libraryData[departmentTab]?.[cat]) {
+        const dept = currentDept;
+        if (libraryData[dept]?.[cat]) {
             toast.error('Category already exists in this department.');
             return;
         }
 
         const newLib = { ...libraryData };
-        if (!newLib[departmentTab]) {
-            newLib[departmentTab] = {};
+        if (!newLib[dept]) {
+            newLib[dept] = {};
         }
-        newLib[departmentTab][cat] = [];
+        newLib[dept][cat] = [];
         setLibraryData(newLib);
         setActiveCategory(cat);
         setNewCatName('');
@@ -317,6 +222,7 @@ const HospitalAdminQuestionLibrary = () => {
     };
 
     const handleEditCategory = async (oldCatName) => {
+        const dept = currentDept;
         const newCatName = await promptToast("Enter new category name:", oldCatName, {
             title: 'Rename Category',
             confirmText: 'Rename'
@@ -324,24 +230,26 @@ const HospitalAdminQuestionLibrary = () => {
         if (!newCatName || !newCatName.trim() || newCatName.trim() === oldCatName) return;
 
         const trimmed = newCatName.trim();
-        if (libraryData[departmentTab]?.[trimmed]) {
+        if (libraryData[dept]?.[trimmed]) {
             toast.error("A category with this name already exists.");
             return;
         }
 
         const newLib = { ...libraryData };
-        const questions = newLib[departmentTab][oldCatName];
-        delete newLib[departmentTab][oldCatName];
-        newLib[departmentTab][trimmed] = questions;
+        if (!newLib[dept]) newLib[dept] = {};
+        const questions = newLib[dept][oldCatName] || [];
+        delete newLib[dept][oldCatName];
+        newLib[dept][trimmed] = questions;
 
         setLibraryData(newLib);
-        if (activeCategory === oldCatName) {
+        if (activeCat === oldCatName) {
             setActiveCategory(trimmed);
         }
         toast.success(`Category renamed to "${trimmed}".`);
     };
 
     const handleDeleteCategory = async (catName) => {
+        const dept = currentDept;
         const confirmed = await confirmToast(`Are you sure you want to delete category "${catName}" and all its questions?`, {
             title: 'Delete Category',
             confirmText: 'Delete'
@@ -349,10 +257,12 @@ const HospitalAdminQuestionLibrary = () => {
         if (!confirmed) return;
 
         const newLib = { ...libraryData };
-        delete newLib[departmentTab][catName];
+        if (newLib[dept]) {
+            delete newLib[dept][catName];
+        }
         setLibraryData(newLib);
 
-        const remainingCats = Object.keys(newLib[departmentTab] || {});
+        const remainingCats = Object.keys(newLib[dept] || {});
         setActiveCategory(remainingCats.length > 0 ? remainingCats[0] : '');
         toast.success(`Category "${catName}" deleted.`);
     };
@@ -413,7 +323,8 @@ const HospitalAdminQuestionLibrary = () => {
         setSaving(true);
         try {
             const res = await questionLibraryAPI.updateLibrary(newLib);
-            if (res.success) {
+            if (res.success || res._offline) {
+                cachedQuestionLibraryData = newLib;
                 toast.success(`Department renamed to "${trimmed}" & saved successfully!`);
             }
         } catch (err) {
@@ -448,7 +359,8 @@ const HospitalAdminQuestionLibrary = () => {
         setSaving(true);
         try {
             const res = await questionLibraryAPI.updateLibrary(newLib);
-            if (res.success) {
+            if (res.success || res._offline) {
+                cachedQuestionLibraryData = newLib;
                 toast.success(`Department "${deptName}" deleted successfully!`);
             }
         } catch (err) {
@@ -489,20 +401,30 @@ const HospitalAdminQuestionLibrary = () => {
             finalQuestion.condition = newQ.condition.trim();
         }
 
+        const dept = currentDept;
+        const cat = activeCat;
+        if (!dept || !cat) {
+            toast.error("Please select a department and category first.");
+            return;
+        }
+
         const newLib = { ...libraryData };
-        if (!newLib[departmentTab][activeCategory]) {
-            newLib[departmentTab][activeCategory] = [];
+        if (!newLib[dept]) {
+            newLib[dept] = {};
+        }
+        if (!newLib[dept][cat]) {
+            newLib[dept][cat] = [];
         }
 
         if (editIndex !== null) {
-            newLib[departmentTab][activeCategory][editIndex] = finalQuestion;
-            toast.success('Data point updated');
+            newLib[dept][cat][editIndex] = finalQuestion;
+            toast.success('Question updated');
         } else {
-            newLib[departmentTab][activeCategory] = [
-                ...newLib[departmentTab][activeCategory],
+            newLib[dept][cat] = [
+                ...newLib[dept][cat],
                 finalQuestion
             ];
-            toast.success('Data point injected');
+            toast.success('Question added');
         }
 
         setLibraryData(newLib);
@@ -510,7 +432,10 @@ const HospitalAdminQuestionLibrary = () => {
     };
 
     const handleEditQuestion = (index) => {
-        const qToEdit = libraryData[departmentTab][activeCategory][index];
+        const dept = currentDept;
+        const cat = activeCat;
+        const qToEdit = libraryData[dept]?.[cat]?.[index] || currentCategories[cat]?.[index];
+        if (!qToEdit) return;
         setNewQ({
             q: qToEdit.q || '',
             type: qToEdit.type || 'text',
@@ -529,10 +454,13 @@ const HospitalAdminQuestionLibrary = () => {
             confirmText: 'Delete'
         });
         if (!confirmed) return;
+        const dept = currentDept;
         const newLib = { ...libraryData };
-        newLib[departmentTab][cat].splice(index, 1);
-        setLibraryData(newLib);
-        toast.success('Question deleted');
+        if (newLib[dept]?.[cat]) {
+            newLib[dept][cat].splice(index, 1);
+            setLibraryData(newLib);
+            toast.success('Question deleted');
+        }
     };
 
     const getTypeLabel = (type) => {
@@ -644,10 +572,6 @@ const HospitalAdminQuestionLibrary = () => {
         );
     }
 
-    const currentCategories = libraryData[departmentTab] || {};
-    const questionsInActiveCategory = currentCategories[activeCategory] || [];
-    const visibleDepartments = allowedDepartments ? Object.keys(libraryData).filter(dept => allowedDepartments.includes(dept)) : Object.keys(libraryData);
-
     const getDeptIcon = (dept) => {
         const d = (dept || '').toLowerCase();
         if (d.includes('ent') || d.includes('ear') || d.includes('throat')) return <FaEarListen />;
@@ -689,19 +613,19 @@ const HospitalAdminQuestionLibrary = () => {
 
                 {/* ─── 2. DEPARTMENT TABS ─── */}
                 <nav className="ql-dept-tabs">
-                    {visibleDepartments.map(dept => (
+                    {finalVisibleDepts.map(dept => (
                         <div
                             key={dept}
-                            className={`ql-tab ${departmentTab === dept ? 'active' : ''}`}
+                            className={`ql-tab ${currentDept === dept ? 'active' : ''}`}
                             onClick={() => {
                                 setDepartmentTab(dept);
-                                const cats = Object.keys(libraryData[dept] || {});
+                                const cats = Object.keys(libraryData[dept] || (dept === 'General' ? libraryData['General Medicine'] : null) || {});
                                 setActiveCategory(cats.length > 0 ? cats[0] : '');
                             }}
                         >
                             <span className="tab-icon">{getDeptIcon(dept)}</span>
                             <span>{getTranslatedDepartment(dept, currentLang)}</span>
-                            {departmentTab === dept && allowedDepartments === null && (
+                            {currentDept === dept && allowedDepartments === null && (
                                 <span className="tab-actions-quick">
                                     <span 
                                         onClick={(e) => { e.stopPropagation(); handleEditDepartment(dept); }} 
@@ -747,14 +671,14 @@ const HospitalAdminQuestionLibrary = () => {
                         </div>
 
                         <div className="ql-category-list">
-                            {Object.keys(currentCategories).map(cat => (
+                            {categoryKeys.map(cat => (
                                 <div 
                                     key={cat} 
-                                    className={`ql-category-item ${cat === activeCategory ? 'active' : ''}`} 
+                                    className={`ql-category-item ${cat === activeCat ? 'active' : ''}`} 
                                     onClick={() => setActiveCategory(cat)}
                                 >
                                     <div className="cat-item-left">
-                                        <span className="cat-folder-icon">{cat === activeCategory ? '📂' : '📁'}</span>
+                                        <span className="cat-folder-icon">{cat === activeCat ? '📂' : '📁'}</span>
                                         <span className="cat-text">{getTranslatedCategory(cat, currentLang)}</span>
                                     </div>
                                     <div className="cat-item-right">
@@ -768,7 +692,7 @@ const HospitalAdminQuestionLibrary = () => {
                                     </div>
                                 </div>
                             ))}
-                            {Object.keys(currentCategories).length === 0 && (
+                            {categoryKeys.length === 0 && (
                                 <div className="ql-no-cats">{getUIText('noCats', currentLang)}</div>
                             )}
                         </div>
@@ -777,7 +701,7 @@ const HospitalAdminQuestionLibrary = () => {
                     {/* RIGHT CANVAS */}
                     <section className="ql-main-canvas">
                         <div className="ql-canvas-content">
-                            {!activeCategory ? (
+                            {!activeCat ? (
                                 <div className="ql-canvas-empty">
                                     <FaCubes className="holo-icon" />
                                     <p>{getUIText('selectCatPrompt', currentLang)}</p>
@@ -786,7 +710,7 @@ const HospitalAdminQuestionLibrary = () => {
                                 <div className="ql-canvas-active">
                                     <div className="ql-canvas-header">
                                         <div className="ql-canvas-header-left">
-                                            <h2>{getTranslatedCategory(activeCategory, currentLang)}</h2>
+                                            <h2>{getTranslatedCategory(activeCat, currentLang)}</h2>
                                             <span className="ql-item-count-badge">
                                                 {questionsInActiveCategory.length} {getUIText('questionsCount', currentLang)}
                                             </span>
@@ -804,7 +728,7 @@ const HospitalAdminQuestionLibrary = () => {
                                     </div>
 
                                     <div className="ql-question-stream">
-                                        {questionsInActiveCategory.map((q, idx) => renderQuestionCard(q, idx, activeCategory))}
+                                        {questionsInActiveCategory.map((q, idx) => renderQuestionCard(q, idx, activeCat))}
                                         {questionsInActiveCategory.length === 0 && (
                                             <div className="ql-data-stream-empty">
                                                 <p>{getUIText('noQuestions', currentLang)}</p>

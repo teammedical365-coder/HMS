@@ -214,12 +214,9 @@ const AdminQuestionLibrary = () => {
         try {
             setLoading(true);
             const res = await questionLibraryAPI.getLibrary();
-            let data = res.data?.data;
-            if (!data || Object.keys(data).length === 0) {
-                data = defaultQuestionLibraryData;
-            } else {
-                // Ensure all 12 departments are always merged in
-                data = { ...defaultQuestionLibraryData, ...data };
+            let data = res.data?.data || res.data;
+            if (!data || typeof data !== 'object' || Object.keys(data).length === 0) {
+                data = { "General": {} };
             }
 
             setLibraryData(data);
@@ -772,9 +769,23 @@ const AdminQuestionLibrary = () => {
         );
     }
 
-    const currentCategories = libraryData[departmentTab] || {};
-    const questionsInActiveCategory = currentCategories[activeCategory] || [];
-    const visibleDepartments = allowedDepartments ? Object.keys(libraryData).filter(dept => allowedDepartments.includes(dept)) : Object.keys(libraryData);
+    // Derived properties for fail-safe active department & category selection
+    const allDeptKeys = Object.keys(libraryData);
+    const finalVisibleDepts = allowedDepartments && allowedDepartments.length > 0
+        ? allDeptKeys.filter(d => allowedDepartments.includes(d))
+        : allDeptKeys;
+
+    const currentDept = (departmentTab && (finalVisibleDepts.includes(departmentTab) || libraryData[departmentTab]))
+        ? departmentTab
+        : (finalVisibleDepts[0] || allDeptKeys[0] || 'ENT');
+
+    const currentCategories = libraryData[currentDept] || {};
+    const categoryKeys = Object.keys(currentCategories);
+    const activeCat = (activeCategory && categoryKeys.includes(activeCategory))
+        ? activeCategory
+        : (categoryKeys[0] || '');
+
+    const questionsInActiveCategory = currentCategories[activeCat] || [];
 
     const getDeptIcon = (dept) => {
         const d = (dept || '').toLowerCase();
@@ -802,6 +813,9 @@ const AdminQuestionLibrary = () => {
                         <p>{getUIText('pageSubtitle', currentLang)}</p>
                     </div>
                     <div className="ql-header-actions">
+                        <button className="ql-btn ql-btn-reset" onClick={handleResetToStandard} disabled={saving} title="Reset all departments to 60+ standard clinical questions">
+                            <FaBolt /> {getUIText('load12Depts', currentLang)}
+                        </button>
                         <button className="ql-btn ql-btn-refresh" onClick={handleRefresh} disabled={refreshing || loading} title="Refresh library from server">
                             <FaArrowsRotate className={refreshing ? 'refresh-spin' : ''} /> {refreshing ? getUIText('refreshing', currentLang) : getUIText('refresh', currentLang)}
                         </button>
@@ -817,10 +831,10 @@ const AdminQuestionLibrary = () => {
 
                 {/* ─── 2. DEPARTMENT TABS ─── */}
                 <nav className="ql-dept-tabs">
-                    {visibleDepartments.map(dept => (
+                    {finalVisibleDepts.map(dept => (
                         <div
                             key={dept}
-                            className={`ql-tab ${departmentTab === dept ? 'active' : ''}`}
+                            className={`ql-tab ${currentDept === dept ? 'active' : ''}`}
                             onClick={() => {
                                 setDepartmentTab(dept);
                                 const cats = Object.keys(libraryData[dept] || {});
@@ -829,7 +843,7 @@ const AdminQuestionLibrary = () => {
                         >
                             <span className="tab-icon">{getDeptIcon(dept)}</span>
                             <span>{getTranslatedDepartment(dept, currentLang)}</span>
-                            {departmentTab === dept && allowedDepartments === null && (
+                            {currentDept === dept && allowedDepartments === null && (
                                 <span className="tab-actions-quick">
                                     <span 
                                         onClick={(e) => { e.stopPropagation(); handleEditDepartment(dept); }} 
@@ -875,14 +889,14 @@ const AdminQuestionLibrary = () => {
                         </div>
 
                         <div className="ql-category-list">
-                            {Object.keys(currentCategories).map(cat => (
+                            {categoryKeys.map(cat => (
                                 <div 
                                     key={cat} 
-                                    className={`ql-category-item ${cat === activeCategory ? 'active' : ''}`} 
+                                    className={`ql-category-item ${cat === activeCat ? 'active' : ''}`} 
                                     onClick={() => setActiveCategory(cat)}
                                 >
                                     <div className="cat-item-left">
-                                        <span className="cat-folder-icon">{cat === activeCategory ? '📂' : '📁'}</span>
+                                        <span className="cat-folder-icon">{cat === activeCat ? '📂' : '📁'}</span>
                                         <span className="cat-text">{getTranslatedCategory(cat, currentLang)}</span>
                                     </div>
                                     <div className="cat-item-right">
@@ -896,7 +910,7 @@ const AdminQuestionLibrary = () => {
                                     </div>
                                 </div>
                             ))}
-                            {Object.keys(currentCategories).length === 0 && (
+                            {categoryKeys.length === 0 && (
                                 <div className="ql-no-cats">{getUIText('noCats', currentLang)}</div>
                             )}
                         </div>
@@ -905,7 +919,7 @@ const AdminQuestionLibrary = () => {
                     {/* RIGHT CANVAS */}
                     <section className="ql-main-canvas">
                         <div className="ql-canvas-content">
-                            {!activeCategory ? (
+                            {!activeCat ? (
                                 <div className="ql-canvas-empty">
                                     <FaCubes className="holo-icon" />
                                     <p>{getUIText('selectCatPrompt', currentLang)}</p>
@@ -914,7 +928,7 @@ const AdminQuestionLibrary = () => {
                                 <div className="ql-canvas-active">
                                     <div className="ql-canvas-header">
                                         <div className="ql-canvas-header-left">
-                                            <h2>{getTranslatedCategory(activeCategory, currentLang)}</h2>
+                                            <h2>{getTranslatedCategory(activeCat, currentLang)}</h2>
                                             <span className="ql-item-count-badge">
                                                 {questionsInActiveCategory.length} {getUIText('questionsCount', currentLang)}
                                             </span>
@@ -932,7 +946,7 @@ const AdminQuestionLibrary = () => {
                                     </div>
 
                                     <div className="ql-question-stream">
-                                        {questionsInActiveCategory.map((q, idx) => renderQuestionCard(q, idx, activeCategory))}
+                                        {questionsInActiveCategory.map((q, idx) => renderQuestionCard(q, idx, activeCat))}
                                         {questionsInActiveCategory.length === 0 && (
                                             <div className="ql-data-stream-empty">
                                                 <p>{getUIText('noQuestions', currentLang)}</p>

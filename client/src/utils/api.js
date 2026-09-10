@@ -177,6 +177,14 @@ const OFFLINE_WRITABLE_OPS = [
     'PUT /api/lab-test-packages/**',
     'DELETE /api/lab-test-packages/**',
 
+    // Question Library
+    'POST /api/question-library/**',
+    'PUT /api/question-library/**',
+    'DELETE /api/question-library/**',
+    'POST /api/question-library',
+    'PUT /api/question-library',
+    'DELETE /api/question-library',
+
     // Billing & Services
     'POST /api/billing/**',
     'PUT /api/billing/**',
@@ -185,6 +193,14 @@ const OFFLINE_WRITABLE_OPS = [
     'POST /api/services/**',
     'PUT /api/services/**',
     'DELETE /api/services/**',
+    'POST /api/test-packages/**',
+    'PUT /api/test-packages/**',
+    'DELETE /api/test-packages/**',
+    'POST /api/simple-clinic/**',
+    'PUT /api/simple-clinic/**',
+    'DELETE /api/simple-clinic/**',
+    'POST /api/ai-wallet/**',
+    'POST /api/revenue/**',
 ];
 
 /**
@@ -427,6 +443,7 @@ function getOperationDescription(method, url) {
     if (url.includes('/nurse/vitals') || url.includes('/ipd/vitals')) return 'Record vitals';
     if (url.includes('/admissions')) return 'Manage patient admission';
     if (url.includes('/billing')) return 'Manage patient billing';
+    if (url.includes('/question-library')) return 'Update clinical question library';
     return `${method.toUpperCase()} ${url.split('/api/')[1] || url}`;
 }
 
