@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
-    base: './', // <--- FIXED: Capacitor mein CSS aur Images load karne ke liye zaroori hai
+    base: '/', // Absolute root path for web production deployment and SPA deep routes
     plugins: [react()],
 
     // --- BUILD SECTION TO FIX REDUX & CHUNK SPLITTING ---

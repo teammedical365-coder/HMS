@@ -39,6 +39,7 @@ const showOfflineToast = ({ iconDotColor, iconGlow, message, prefix, duration = 
           background: 'rgba(15, 23, 42, 0.94)',
           color: '#f8fafc',
           border: `1px solid ${iconGlow || 'rgba(255, 255, 255, 0.2)'}`,
+          
           borderRadius: '999px',
           boxShadow: '0 12px 36px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.1)',
           fontSize: '13px',

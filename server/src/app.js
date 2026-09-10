@@ -219,9 +219,33 @@ app.use('/api/vials', vialRoutes);
 app.use('/api/ipd-clinical', require('./routes/ipdClinical.routes'));
 app.use('/api/ipd-nursing', require('./routes/ipdNursing.routes'));
 
-app.get('/', (req, res) => {
-    res.send('API is running...');
-});
+// ── Serve Frontend in Production (if client/dist exists) ──────────────────────
+const clientDistPath = path.join(__dirname, '../../client/dist');
+const fs = require('fs');
+if (fs.existsSync(clientDistPath)) {
+    app.use(express.static(clientDistPath, {
+        maxAge: '1d',
+        setHeaders: (res, filePath) => {
+            if (filePath.endsWith('.html')) {
+                res.setHeader('Cache-Control', 'no-cache');
+            } else if (filePath.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$/)) {
+                res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            }
+        }
+    }));
+
+    app.get('*', (req, res, next) => {
+        // Do not intercept API or static media routes
+        if (req.path.startsWith('/api') || req.path.startsWith('/socket.io') || req.path.startsWith('/downloads') || req.path.startsWith('/uploads')) {
+            return next();
+        }
+        res.sendFile(path.join(clientDistPath, 'index.html'));
+    });
+} else {
+    app.get('/', (req, res) => {
+        res.send('API is running...');
+    });
+}
 
 // ── Global error handler — never leak internal error details to client ────────
 app.use((err, req, res, next) => {

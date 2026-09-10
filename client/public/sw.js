@@ -1,19 +1,21 @@
 /**
- * sw.js — Production Service Worker for Medical365 HMS (PWA)
+ * sw.js — Production Service Worker for Medical365 HMS (PWA v3)
  *
  * Caching Strategy:
- *   App Shell (HTML, CSS, JS)  → Cache-First (precached on install)
- *   API calls (/api/*)         → Network-First (IndexedDB handles data caching in-app)
- *   Static assets (images)     → Cache-First with 30-day expiry
- *   Google Fonts               → Stale-While-Revalidate
+ *   Navigation (HTML)          → Network-First (ensures fresh JS chunk hashes when online; falls back to cached index.html when offline)
+ *   App Shell & Static Assets  → Cache-First (JS, CSS, images, fonts with strict MIME validation)
+ *   API calls (/api/*)         → Network-First / Direct (IndexedDB handles data caching in-app)
+ *   Google Fonts & CDNs        → Stale-While-Revalidate
  *
- * The SW's job is ONLY to cache the app shell so the PWA opens when offline.
- * All data-level caching is handled by the IndexedDB layer in the React app.
+ * The SW guarantees:
+ *   - Offline PWA opens and functions seamlessly.
+ *   - Outdated HTML or missing JS chunks NEVER get cached as valid JavaScript.
+ *   - Old caches are automatically purged upon activation.
  */
 
-const CACHE_NAME = 'hms-shell-v2';
-const STATIC_CACHE = 'hms-static-v2';
-const FONT_CACHE = 'hms-fonts-v2';
+const CACHE_NAME = 'hms-shell-v3';
+const STATIC_CACHE = 'hms-static-v3';
+const FONT_CACHE = 'hms-fonts-v3';
 
 // App shell files to precache on install
 const APP_SHELL = [
@@ -26,36 +28,33 @@ const APP_SHELL = [
 
 // ── INSTALL ───────────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
-  console.log('[Service Worker] Installing...');
+  console.log('[Service Worker v3] Installing...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(APP_SHELL).catch((err) => {
-        console.warn('[SW] Some shell files failed to cache:', err);
+        console.warn('[SW] Precache non-blocking warning:', err);
       });
     })
   );
-  // Activate immediately without waiting for old SW to finish
   self.skipWaiting();
 });
 
 // ── ACTIVATE ──────────────────────────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
-  console.log('[Service Worker] Activating...');
-  // Clean up old caches
+  console.log('[Service Worker v3] Activating & cleaning stale caches...');
+  const currentCaches = [CACHE_NAME, STATIC_CACHE, FONT_CACHE];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((name) => {
-          if (name !== CACHE_NAME && name !== STATIC_CACHE && name !== FONT_CACHE) {
-            console.log('[SW] Deleting old cache:', name);
+          if (!currentCaches.includes(name)) {
+            console.log('[SW] Purging stale cache:', name);
             return caches.delete(name);
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  // Take control of all open tabs immediately
-  self.clients.claim();
 });
 
 // ── FETCH ─────────────────────────────────────────────────────────────────────
@@ -63,10 +62,10 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET requests (POST, PUT, etc. should go to network)
+  // Skip non-GET requests
   if (request.method !== 'GET') return;
 
-  // Skip chrome-extension, dev server HMR, and other non-http(s) schemes
+  // Skip non-http(s) schemes (e.g. chrome-extension://)
   if (!url.protocol.startsWith('http')) return;
 
   // Skip Vite dev server modules and HMR
@@ -79,9 +78,34 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // ── API calls: Network-only (data caching is handled by IndexedDB in-app) ──
+  // ── API calls: Bypass SW completely (Axios + IndexedDB handles offline queueing) ──
   if (url.pathname.startsWith('/api/')) {
-    // Don't intercept API calls — let the Axios offline interceptor handle them
+    return;
+  }
+
+  // ── Navigation requests (HTML / SPA routes): Network-First with Offline fallback ──
+  if (request.mode === 'navigate' || (request.headers.get('accept') || '').includes('text/html')) {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put('/index.html', responseClone);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match('/index.html').then((cachedIndex) => {
+            return cachedIndex || new Response('Offline - Medical365', {
+              status: 503,
+              statusText: 'Service Unavailable',
+              headers: { 'Content-Type': 'text/html' }
+            });
+          });
+        })
+    );
     return;
   }
 
@@ -125,15 +149,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // ── App Shell & Static assets: Cache-First ──
+  // ── Static assets (/assets/*.js, /assets/*.css, images, manifest): Cache-First ──
   event.respondWith(
     caches.match(request).then((cached) => {
-      if (cached) return cached;
+      if (cached) {
+        // Guard against corrupted cache entries (e.g. HTML stored for a .js URL)
+        const cachedType = (cached.headers.get('content-type') || '').toLowerCase();
+        const isScriptOrStyle = url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.includes('/assets/');
+        if (isScriptOrStyle && cachedType.includes('text/html')) {
+          caches.open(STATIC_CACHE).then((cache) => cache.delete(request));
+        } else {
+          return cached;
+        }
+      }
 
       return fetch(request)
         .then((response) => {
-          // Cache successful responses for static assets
-          if (response.ok && shouldCacheResponse(url, response)) {
+          if (response && response.status === 200 && shouldCacheResponse(url, response)) {
             const responseClone = response.clone();
             caches.open(STATIC_CACHE).then((cache) => {
               cache.put(request, responseClone);
@@ -142,36 +174,47 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => {
-          // For navigation requests, return the cached index.html (SPA fallback)
-          if (request.mode === 'navigate') {
-            return caches.match('/index.html');
-          }
-          return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+          // If offline and requesting a static asset not in cache
+          return new Response('Asset Unavailable Offline', {
+            status: 503,
+            statusText: 'Service Unavailable'
+          });
         });
     })
   );
 });
 
 /**
- * Determine if a response should be cached as a static asset
+ * Determine if a response should be cached as a static asset.
+ * NEVER cache HTML responses under asset URLs.
  */
 function shouldCacheResponse(url, response) {
-  // Only cache same-origin responses
   if (url.origin !== self.location.origin) return false;
+  if (!response || response.status !== 200) return false;
 
-  // Cache JS, CSS, and image files
-  const contentType = response.headers.get('content-type') || '';
+  const contentType = (response.headers.get('content-type') || '').toLowerCase();
+
+  // STRICT GUARD: NEVER cache HTML as a static asset
+  if (contentType.includes('text/html')) {
+    return false;
+  }
+
   if (
     contentType.includes('javascript') ||
+    contentType.includes('application/javascript') ||
+    contentType.includes('text/javascript') ||
     contentType.includes('text/css') ||
     contentType.includes('image/') ||
-    contentType.includes('font/')
+    contentType.includes('font/') ||
+    contentType.includes('application/json') ||
+    contentType.includes('application/manifest+json')
   ) {
     return true;
   }
 
-  // Cache files in /assets/ directory (Vite build output)
-  if (url.pathname.startsWith('/assets/')) return true;
+  if (url.pathname.startsWith('/assets/') && (contentType.includes('javascript') || contentType.includes('css'))) {
+    return true;
+  }
 
   return false;
 }
