@@ -4,12 +4,12 @@ const path = require('path');
 
 // Supported valid Google Gemini models in smart cascade order (all validated for generateContent)
 const DEFAULT_MODELS = [
-    'gemini-3.1-flash',
+    'gemini-3.6-flash',
     'gemini-3.5-flash',
     'gemini-3.7-flash',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash'
+    'gemini-flash-latest',
+    'gemini-3.5-flash-lite',
+    'gemini-pro-latest'
 ];
 
 class GeminiProvider {
@@ -28,20 +28,20 @@ class GeminiProvider {
 
     /**
      * Normalize any user model string to standard Gemini format.
-     * Handles: '3.1-flash', '3.5-flash', '3.1', '3.5', 'gemini-3.1-flash', etc.
      */
     _normalizeModelName(rawModel) {
-        if (!rawModel) return 'gemini-3.1-flash';
+        if (!rawModel) return 'gemini-3.6-flash';
         let clean = rawModel.toLowerCase().trim().replace(/^["']|["']$/g, '');
         clean = clean.replace(/\s+/g, '-'); // replace spaces with hyphens
 
-        if (clean === '3.1' || clean === '3.1-flash' || clean === 'flash-3.1') return 'gemini-3.1-flash';
+        if (clean === '3.6' || clean === '3.6-flash' || clean === 'flash-3.6') return 'gemini-3.6-flash';
         if (clean === '3.5' || clean === '3.5-flash' || clean === 'flash-3.5') return 'gemini-3.5-flash';
         if (clean === '3.7' || clean === '3.7-flash' || clean === 'flash-3.7') return 'gemini-3.7-flash';
-        if (clean === '2.5' || clean === '2.5-flash' || clean === 'flash-2.5') return 'gemini-2.5-flash';
-        if (clean === '2.0' || clean === '2.0-flash' || clean === 'flash-2.0' || clean === '2') return 'gemini-2.0-flash';
-        if (clean === '1.5' || clean === '1.5-flash' || clean === 'flash-1.5' || clean === 'flash') return 'gemini-1.5-flash';
-        if (clean === '1.5-pro' || clean === 'pro') return 'gemini-1.5-pro';
+        if (clean === '3.1' || clean === '3.1-flash' || clean === 'flash-3.1') return 'gemini-3.6-flash';
+        if (clean === '2.5' || clean === '2.5-flash' || clean === 'flash-2.5') return 'gemini-3.6-flash';
+        if (clean === '2.0' || clean === '2.0-flash' || clean === 'flash-2.0' || clean === '2') return 'gemini-3.6-flash';
+        if (clean === '1.5' || clean === '1.5-flash' || clean === 'flash-1.5' || clean === 'flash') return 'gemini-flash-latest';
+        if (clean === '1.5-pro' || clean === '2.5-pro' || clean === 'pro') return 'gemini-pro-latest';
 
         if (!clean.startsWith('gemini-')) {
             clean = `gemini-${clean}`;
@@ -225,6 +225,34 @@ class GeminiProvider {
                 }
             }];
             return await generativeModel.generateContent([prompt, ...imageParts]);
+        }, modelName);
+
+        return {
+            text: result.response.text(),
+            usage: this._extractUsage(result, resolvedModel)
+        };
+    }
+
+    /**
+     * Transcribe and analyze audio content with a text prompt.
+     * Used for Voice Scribe (doctor-patient consultation audio).
+     */
+    async transcribeAudio(systemPrompt, audioBase64, mimeType, modelName) {
+        const { result, modelName: resolvedModel } = await this._executeWithRetry('transcribeAudio', async (genAI, model) => {
+            const generativeModel = genAI.getGenerativeModel({
+                model,
+                systemInstruction: systemPrompt
+            });
+            const audioPart = {
+                inlineData: {
+                    data: audioBase64,
+                    mimeType: mimeType || 'audio/webm'
+                }
+            };
+            return await generativeModel.generateContent([
+                'Transcribe and analyze this medical consultation audio. Return the response as valid JSON.',
+                audioPart
+            ]);
         }, modelName);
 
         return {

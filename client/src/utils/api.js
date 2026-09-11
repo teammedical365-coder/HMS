@@ -27,6 +27,11 @@ apiClient.interceptors.request.use(
         } else if (patientToken) {
             config.headers.Authorization = `Bearer ${patientToken}`;
         }
+
+        // If sending FormData, remove default Content-Type: application/json so browser sets multipart boundary
+        if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+            delete config.headers['Content-Type'];
+        }
         return config;
     },
     (error) => Promise.reject(error)
@@ -302,12 +307,15 @@ apiClient.interceptors.response.use(
         // ── Write requests (POST/PUT/PATCH/DELETE): Queue if allowed ──
         if (['post', 'put', 'patch', 'delete'].includes(method)) {
             // Never queue file uploads
-            const contentType = config.headers?.['Content-Type'] || '';
+            const contentType = config.headers?.['Content-Type'] || config.headers?.['content-type'] || '';
             if (contentType.includes('multipart/form-data')) {
+                const isActuallyOffline = !navigator.onLine || !isOnline();
                 return Promise.reject({
                     ...error,
-                    _offline: true,
-                    message: 'File uploads require an internet connection.',
+                    _offline: isActuallyOffline,
+                    message: isActuallyOffline
+                        ? 'File uploads require an internet connection.'
+                        : (error.response?.data?.message || error.message || 'Request failed. Please check your server connection.'),
                 });
             }
 
@@ -1549,3 +1557,16 @@ export const ipdCommandCenterAPI = {
     getNurseWorkload: async () => (await apiClient.get('/api/ipd-nursing/analytics/nurse-workload')).data,
 };
 
+// ── Voice Scribe API ──
+export const voiceScribeAPI = {
+    analyze: async (formData) => (await apiClient.post('/api/voice-scribe/analyze', formData, {
+        timeout: 180000,
+        headers: (typeof FormData !== 'undefined' && formData instanceof FormData)
+            ? { 'Content-Type': 'multipart/form-data' }
+            : undefined
+    })).data,
+    saveDraft: async (data) => (await apiClient.post('/api/voice-scribe/save-draft', data)).data,
+    approve: async (id, data) => (await apiClient.put(`/api/voice-scribe/${id}/approve`, data)).data,
+    discard: async (id) => (await apiClient.put(`/api/voice-scribe/${id}/discard`)).data,
+    getForAppointment: async (appointmentId) => (await apiClient.get(`/api/voice-scribe/appointment/${appointmentId}`)).data,
+};

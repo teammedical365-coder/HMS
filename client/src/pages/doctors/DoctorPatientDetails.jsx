@@ -1072,6 +1072,32 @@ const DoctorPatientDetails = () => {
                             <span className="dpd-appt-label">Service</span>
                             <span className="dpd-appt-value">{appointment.serviceName || 'Consultation'}</span>
                         </div>
+                        <div className="dpd-appt-item" style={{ alignSelf: 'center', marginLeft: 'auto' }}>
+                            <button
+                                className="dpd-open-ai-btn"
+                                onClick={() => navigate('/doctor/ai-assistant', {
+                                    state: { patientId: patient._id || id, appointmentId: appointmentId || appointment?._id }
+                                })}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '7px 14px',
+                                    background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontSize: '0.8rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                title="Open AI Assistant & Scribe in Sidebar"
+                            >
+                                🤖 Open AI Assistant
+                            </button>
+                        </div>
                     </div>
 
                 </div>

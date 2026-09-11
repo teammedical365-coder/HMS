@@ -8,11 +8,13 @@ import {
     FiDollarSign, FiClock, FiCheck, FiHeadphones, FiX, FiAlertTriangle,
     FiCheckCircle, FiThumbsUp, FiThumbsDown, FiChevronUp, FiEye, FiExternalLink
 } from 'react-icons/fi';
+import { useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { reportAPI, patientAPI, doctorAPI, aiWalletAPI } from '../../utils/api';
 import socket from '../../utils/socket';
 import AIResponseRenderer from '../../components/AIResponseRenderer';
+import VoiceScribe from '../../components/voicescribe/VoiceScribe';
 import './AIAssistant.css';
 
 // ── AI Credits & Status Helpers ──
@@ -20,6 +22,7 @@ const formatCredits = (amount) => {
     const num = Number(amount) || 0;
     return `${num.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} Credits`;
 };
+const formatINR = formatCredits;
 
 const getWalletStatusInfo = (status) => {
     switch (status) {
@@ -45,6 +48,9 @@ const isPdfMime = (mime, url = '') => {
 };
 
 const AIAssistant = () => {
+    const location = useLocation();
+    const [activeAIMode, setActiveAIMode] = useState(location.state?.tab === 'voice_scribe' ? 'voice_scribe' : 'reports');
+
     // ── Patient State ──
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
@@ -182,7 +188,11 @@ const AIAssistant = () => {
             const res = await doctorAPI.getPatients();
             if (res && res.success && Array.isArray(res.patients) && res.patients.length > 0) {
                 setAllPatients(res.patients);
-                const p = res.patients[0];
+                const targetPatientId = location.state?.patientId;
+                const matchedPatient = targetPatientId 
+                    ? res.patients.find(pt => String(pt._id) === String(targetPatientId))
+                    : null;
+                const p = matchedPatient || res.patients[0];
                 const patientObj = {
                     _id: p._id,
                     name: p.name || 'Patient',
@@ -196,6 +206,31 @@ const AIAssistant = () => {
                 };
                 setSelectedPatient(patientObj);
                 loadPatientDocuments(p._id);
+            } else if (location.state?.patientId) {
+                try {
+                    const singleRes = await patientAPI.getPatient(location.state.patientId);
+                    if (singleRes && singleRes.patient) {
+                        const p = singleRes.patient;
+                        const patientObj = {
+                            _id: p._id,
+                            name: p.name || 'Patient',
+                            status: 'Active',
+                            profile: {
+                                mrn: p.patientId || p.mrn || 'CIT-' + String(p._id).slice(-4),
+                                gender: p.gender || 'Not specified',
+                                age: p.age || '--',
+                                phone: p.phone || 'Not available'
+                            }
+                        };
+                        setSelectedPatient(patientObj);
+                        setAllPatients([p]);
+                        loadPatientDocuments(p._id);
+                    }
+                } catch (e) {
+                    setAllPatients([]);
+                    setSelectedPatient(null);
+                    setReports([]);
+                }
             } else {
                 setAllPatients([]);
                 setSelectedPatient(null);
@@ -622,6 +657,87 @@ const AIAssistant = () => {
                         </div>
                     </div>
 
+                    {/* AI Feature Mode Switcher (Reports vs Voice Scribe) */}
+                    <div className="cca-ai-mode-nav" style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        background: '#f1f5f9',
+                        padding: '5px',
+                        borderRadius: '12px',
+                        margin: '14px 0 16px 0',
+                        border: '1px solid #e2e8f0'
+                    }}>
+                        <button
+                            className={`cca-mode-btn ${activeAIMode === 'reports' ? 'active' : ''}`}
+                            onClick={() => setActiveAIMode('reports')}
+                            style={{
+                                flex: 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                padding: '9px 14px',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontSize: '0.86rem',
+                                fontWeight: activeAIMode === 'reports' ? 700 : 500,
+                                background: activeAIMode === 'reports' ? '#ffffff' : 'transparent',
+                                color: activeAIMode === 'reports' ? '#3b82f6' : '#64748b',
+                                boxShadow: activeAIMode === 'reports' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease'
+                            }}
+                        >
+                            <span>📑</span> Document & Report Intelligence
+                        </button>
+                        <button
+                            className={`cca-mode-btn ${activeAIMode === 'voice_scribe' ? 'active' : ''}`}
+                            onClick={() => setActiveAIMode('voice_scribe')}
+                            style={{
+                                flex: 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                padding: '9px 14px',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontSize: '0.86rem',
+                                fontWeight: activeAIMode === 'voice_scribe' ? 700 : 500,
+                                background: activeAIMode === 'voice_scribe' ? 'linear-gradient(135deg, #059669, #10b981)' : 'transparent',
+                                color: activeAIMode === 'voice_scribe' ? '#ffffff' : '#64748b',
+                                boxShadow: activeAIMode === 'voice_scribe' ? '0 2px 8px rgba(16, 185, 129, 0.25)' : 'none',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease'
+                            }}
+                        >
+                            <span>🎙️</span> AI Clinical Voice Scribe
+                        </button>
+                    </div>
+
+                    {/* ════════ RENDER: VOICE SCRIBE WORKSPACE ════════ */}
+                    {activeAIMode === 'voice_scribe' && (
+                        <div className="cca-voice-scribe-container" style={{
+                            background: '#ffffff',
+                            borderRadius: '16px',
+                            border: '1px solid #e2e8f0',
+                            padding: '16px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+                        }}>
+                            <VoiceScribe
+                                appointmentId={location.state?.appointmentId}
+                                patientId={selectedPatient?._id}
+                                patient={selectedPatient}
+                                appointment={location.state?.appointment}
+                                isLocked={false}
+                            />
+                        </div>
+                    )}
+
+                    {/* ════════ RENDER: REPORTS INTELLIGENCE WORKSPACE ════════ */}
+                    {activeAIMode === 'reports' && (
+                        <>
                     {/* 2. Uploaded Reports Card (SHOWN FIRST BEFORE SUMMARY, 4 REPORTS VISIBLE) */}
                     <div className="cca-exact-card cca-exact-reports-card">
                         <div className="cca-exact-card-header">
@@ -986,6 +1102,8 @@ const AIAssistant = () => {
                             </div>
                         )}
                     </div>
+                        </>
+                    )}
 
                 </div>
 

@@ -266,7 +266,7 @@ const MainRoutes = () => {
                                 <Route path="doctor/cases" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor']}><DoctorDashboard /></ProtectedRoute>} />
                                 <Route path="doctor/patients" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor']}><Patient /></ProtectedRoute>} />
                                 <Route path="doctor/patient/:id" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><DoctorPatientDetails /></ProtectedRoute>} />
-                                <Route path="doctor/ai-assistant" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><AIAssistant /></ProtectedRoute>} />
+                                <Route path="doctor/ai-assistant" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><AIAssistant /></ProtectedRoute>} />
 
                                 <Route path="admin" element={<ProtectedRoute requiredPermissions={['admin_view_stats', 'admin_manage_roles']}><AdminMainDashboard /></ProtectedRoute>} />
                                 <Route path="admin/users" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><Admin /></ProtectedRoute>} />

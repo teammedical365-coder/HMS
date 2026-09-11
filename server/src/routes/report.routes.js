@@ -9,6 +9,96 @@ const aiService = require('../services/ai/ai.service');
 const aiWalletService = require('../services/ai/aiWallet.service');
 const { validateMedia } = require('../services/ai/mediaValidator');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+
+/**
+ * Universal file buffer fetcher: handles base64 data URIs, local disk files,
+ * relative API paths (/api/patients/reports/...), and remote HTTP/HTTPS URLs.
+ */
+async function fetchFileBuffer(fileUrl) {
+  if (!fileUrl) throw new Error('File URL is required');
+
+  // Case 1: Data URL (base64)
+  if (typeof fileUrl === 'string' && fileUrl.startsWith('data:')) {
+    const base64Index = fileUrl.indexOf(';base64,');
+    if (base64Index !== -1) {
+      return Buffer.from(fileUrl.substring(base64Index + 8), 'base64');
+    }
+    const commaIndex = fileUrl.indexOf(',');
+    return Buffer.from(fileUrl.substring(commaIndex + 1), 'base64');
+  }
+
+  const cleanUrl = String(fileUrl).trim();
+
+  // Case 2: Check local filesystem directories
+  const candidatePaths = [];
+
+  // Match /api/patients/reports/:filename
+  const reportsMatch = cleanUrl.match(/\/api\/patients\/reports\/([^?#]+)/);
+  if (reportsMatch) {
+    const filename = decodeURIComponent(reportsMatch[1]);
+    candidatePaths.push(path.join(__dirname, '../../uploads/patient-reports', filename));
+    candidatePaths.push(path.join(__dirname, '../../../uploads/patient-reports', filename));
+    candidatePaths.push(path.join(process.cwd(), 'uploads/patient-reports', filename));
+  }
+
+  // Match /uploads/...
+  const uploadsMatch = cleanUrl.match(/\/uploads\/patient-reports\/([^?#]+)/) || cleanUrl.match(/\/uploads\/([^?#]+)/);
+  if (uploadsMatch) {
+    const filename = decodeURIComponent(uploadsMatch[1]);
+    candidatePaths.push(path.join(__dirname, '../../uploads/patient-reports', filename));
+    candidatePaths.push(path.join(__dirname, '../../uploads', filename));
+    candidatePaths.push(path.join(process.cwd(), 'uploads/patient-reports', filename));
+    candidatePaths.push(path.join(process.cwd(), 'uploads', filename));
+  }
+
+  // Direct paths
+  candidatePaths.push(cleanUrl);
+  candidatePaths.push(path.join(__dirname, '../../uploads/patient-reports', path.basename(cleanUrl)));
+  candidatePaths.push(path.join(process.cwd(), 'uploads/patient-reports', path.basename(cleanUrl)));
+  candidatePaths.push(path.join(__dirname, '../../uploads', path.basename(cleanUrl)));
+  candidatePaths.push(path.join(process.cwd(), 'uploads', path.basename(cleanUrl)));
+
+  for (const p of candidatePaths) {
+    try {
+      if (p && fs.existsSync(p) && fs.statSync(p).isFile()) {
+        return await fs.promises.readFile(p);
+      }
+    } catch (e) {
+      // Continue searching
+    }
+  }
+
+  // Case 3: HTTP/HTTPS URL
+  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+    try {
+      const response = await axios.get(cleanUrl, { responseType: 'arraybuffer', timeout: 30000 });
+      return Buffer.from(response.data, 'binary');
+    } catch (netErr) {
+      // If localhost or local server, try falling back to local disk
+      const urlBaseName = path.basename(cleanUrl.split('?')[0]);
+      const fallbackLocal = path.join(__dirname, '../../uploads/patient-reports', urlBaseName);
+      if (fs.existsSync(fallbackLocal)) {
+        return await fs.promises.readFile(fallbackLocal);
+      }
+      throw new Error(`Failed to fetch report from URL: ${netErr.message}`);
+    }
+  }
+
+  // Case 4: Relative path with '/'
+  if (cleanUrl.startsWith('/')) {
+    const port = process.env.PORT || 3000;
+    try {
+      const response = await axios.get(`http://localhost:${port}${cleanUrl}`, { responseType: 'arraybuffer', timeout: 15000 });
+      return Buffer.from(response.data, 'binary');
+    } catch (e) {
+      throw new Error(`Unable to load report file: ${cleanUrl}`);
+    }
+  }
+
+  throw new Error(`Report file not found or inaccessible: ${fileUrl}`);
+}
 
 // Configure Multer for memory storage (Required for ImageKit)
 const SUPPORTED_UPLOAD_TYPES = [
@@ -233,9 +323,8 @@ router.post('/summary', verifyToken, async (req, res) => {
       hospitalId: hospitalId
     };
 
-    // 2. Download file
-    const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
-    const buffer = Buffer.from(response.data, 'binary');
+    // 2. Download / Read file buffer
+    const buffer = await fetchFileBuffer(fileUrl);
 
     // 3. Validate media
     const validation = validateMedia(buffer, mimeType, fileName);
@@ -306,9 +395,8 @@ router.post('/analyze', verifyToken, async (req, res) => {
       hospitalId: hospitalId
     };
 
-    // 2. Download file
-    const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
-    const buffer = Buffer.from(response.data, 'binary');
+    // 2. Download / Read file buffer
+    const buffer = await fetchFileBuffer(fileUrl);
 
     // 3. Validate
     const validation = validateMedia(buffer, mimeType, fileName);
@@ -410,13 +498,13 @@ router.post('/compare', verifyToken, async (req, res) => {
     };
 
     // 3. Fetch report data
-    const [latestResponse, prevResponse] = await Promise.all([
-      axios.get(targetLatestUrl, { responseType: 'arraybuffer', timeout: 20000 }),
-      axios.get(targetPrevUrl, { responseType: 'arraybuffer', timeout: 20000 })
+    const [latestBuffer, prevBuffer] = await Promise.all([
+      fetchFileBuffer(targetLatestUrl),
+      fetchFileBuffer(targetPrevUrl)
     ]);
 
-    const latestBase64 = Buffer.from(latestResponse.data, 'binary').toString('base64');
-    const prevBase64 = Buffer.from(prevResponse.data, 'binary').toString('base64');
+    const latestBase64 = latestBuffer.toString('base64');
+    const prevBase64 = prevBuffer.toString('base64');
 
     // 4. Execute comparison using centralized Gemini model
     const { comparison, usage } = await aiService.compareReports(
@@ -566,8 +654,7 @@ router.post('/chat', verifyToken, async (req, res) => {
       const mediaInputs = [];
       for (const media of mediaUrls.slice(0, 5)) { // Max 5 attachments
         try {
-          const mediaResponse = await axios.get(media.url, { responseType: 'arraybuffer' });
-          const mediaBuffer = Buffer.from(mediaResponse.data, 'binary');
+          const mediaBuffer = await fetchFileBuffer(media.url);
           const validation = validateMedia(mediaBuffer, media.mimeType);
           if (validation.valid) {
             mediaInputs.push({

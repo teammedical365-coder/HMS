@@ -4,7 +4,7 @@ import { useAuth } from '../../store/hooks';
 import { doctorAPI } from '../../utils/api';
 import { 
     FiUsers, FiActivity, FiFileText, FiHeart, FiLock, 
-    FiZap, FiPackage, FiClipboard, FiCheckCircle
+    FiZap, FiPackage, FiClipboard, FiCheckCircle, FiCpu
 } from 'react-icons/fi';
 import { FaFlask, FaCapsules, FaStethoscope } from 'react-icons/fa';
 import './DoctorDashboard.css';
@@ -68,6 +68,14 @@ const DoctorDashboard = () => {
     }, []);
 
     const permissionItems = [
+        {
+            id: 'ai_assistant',
+            title: 'AI Assistant',
+            icon: <FiCpu />,
+            iconBg: '#ede9fe',
+            iconColor: '#7c3aed',
+            path: '/doctor/ai-assistant'
+        },
         {
             id: 'visit_diagnose',
             title: 'Visit Diagnose',
@@ -142,27 +150,52 @@ const DoctorDashboard = () => {
                     <h2>QUICK ACCESS</h2>
                 </div>
 
-                <div 
-                    className="doc-quick-access-card" 
-                    onClick={() => navigate('/doctor/patients')}
-                    title="Click to access Patient Queue and Workspace"
-                >
-                    <div className="doc-quick-left">
-                        <div className="doc-quick-icon-wrapper">
-                            <FiUsers className="doc-quick-icon" />
+                <div className="doc-quick-access-grid">
+                    <div 
+                        className="doc-quick-access-card" 
+                        onClick={() => navigate('/doctor/patients')}
+                        title="Click to access Patient Queue and Workspace"
+                    >
+                        <div className="doc-quick-left">
+                            <div className="doc-quick-icon-wrapper">
+                                <FiUsers className="doc-quick-icon" />
+                            </div>
+                            <div className="doc-quick-info">
+                                <h3 className="doc-quick-title">Patients</h3>
+                                <p className="doc-quick-desc">Access your patient queue and clinical workspace</p>
+                            </div>
                         </div>
-                        <div className="doc-quick-info">
-                            <h3 className="doc-quick-title">Patients</h3>
-                            <p className="doc-quick-desc">Access your patient queue and clinical workspace</p>
+
+                        <div className="doc-quick-art-wrapper">
+                            <img 
+                                src="/assets/stethoscope_card_bg.jpg" 
+                                alt="Stethoscope clinical art" 
+                                className="doc-quick-stethoscope-img"
+                            />
                         </div>
                     </div>
 
-                    <div className="doc-quick-art-wrapper">
-                        <img 
-                            src="/assets/stethoscope_card_bg.jpg" 
-                            alt="Stethoscope clinical art" 
-                            className="doc-quick-stethoscope-img"
-                        />
+                    <div 
+                        className="doc-quick-access-card doc-quick-ai-card" 
+                        onClick={() => navigate('/doctor/ai-assistant')}
+                        title="Click to launch AI Clinical Assistant"
+                    >
+                        <div className="doc-quick-left">
+                            <div className="doc-quick-icon-wrapper doc-ai-icon-wrap">
+                                <FiCpu className="doc-quick-icon" />
+                            </div>
+                            <div className="doc-quick-info">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <h3 className="doc-quick-title">AI Assistant</h3>
+                                    <span className="doc-quick-ai-badge">⚡ AI POWERED</span>
+                                </div>
+                                <p className="doc-quick-desc">Clinical intelligence, report analysis & diagnostic assistant</p>
+                            </div>
+                        </div>
+
+                        <div className="doc-quick-art-wrapper doc-quick-ai-art">
+                            <div className="doc-quick-ai-orb"></div>
+                        </div>
                     </div>
                 </div>
             </div>

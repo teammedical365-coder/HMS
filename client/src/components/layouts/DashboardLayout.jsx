@@ -9,7 +9,7 @@ import {
     FiSettings, FiLogOut, FiPieChart, FiClipboard,
     FiFileText, FiPlusSquare, FiDatabase, FiGrid, FiShield, FiMenu, FiX,
     FiClock, FiBox, FiUserCheck, FiHeart, FiCheckCircle, FiUser,
-    FiChevronDown, FiChevronRight
+    FiChevronDown, FiChevronRight, FiCpu
 } from 'react-icons/fi';
 import GlobalSearch from '../GlobalSearch';
 import './DashboardLayout.css';
@@ -68,12 +68,12 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Pharma Inventory', path: '/pharmacy/inventory', icon: <FiPackage />, prefetchKey: 'ha_pharma', prefetchFn: () => import('../../pages/pharmacy/PharmacyInventory') },
             ];
         }
-        if (role === 'doctor' || role === 'clinic doctor') {
+        if (role === 'doctor' || role === 'clinic doctor' || role === 'clinicdoctor' || role.includes('doctor')) {
             return [
                 { label: 'Dashboard', path: '/my-dashboard', icon: <FiHome />, prefetchKey: 'doc_dash', prefetchFn: () => import('../../pages/doctors/DoctorDashboard') },
                 { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity />, prefetchKey: 'doc_ipd', prefetchFn: () => import('../../pages/nurse/IPDCommandCenter') },
                 { label: 'My Patients', path: '/doctor/patients', icon: <FiUsers />, prefetchKey: 'doc_patients', prefetchFn: () => import('../../pages/doctors/Patient') },
-                { label: 'AI Assistant', path: '/doctor/ai-assistant', icon: <FiFileText />, prefetchKey: 'doc_ai', prefetchFn: () => import('../../pages/doctors/AIAssistant') },
+                { label: 'AI Assistant', path: '/doctor/ai-assistant', icon: <FiCpu />, prefetchKey: 'doc_ai', prefetchFn: () => import('../../pages/doctors/AIAssistant') },
                 { label: 'Reports', path: '/lab-reports', icon: <FiFileText />, prefetchKey: 'doc_reports', prefetchFn: () => import('../../pages/user/LabReports') },
             ];
         }
@@ -148,6 +148,10 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
         if (itemPath === '/ot/dashboard' && currentPath === '/ot-dashboard') {
             return true;
         }
+
+        if (itemPath === '/my-dashboard' && (currentPath === '/doctor/dashboard' || currentPath === '/my-dashboard')) {
+            return true;
+        }
         
         return currentPath === itemPath;
     };
@@ -211,8 +215,13 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 })}
 
                 {/* AI Assistant Card inside Sidebar (Image + AI Assistant title only) */}
-                {(role === 'hospitaladmin' || isCentralAdmin) && isOpen && (
-                    <div className="ha-sidebar-ai-card">
+                {(role === 'hospitaladmin' || isCentralAdmin || role.includes('doctor')) && isOpen && (
+                    <div 
+                        className="ha-sidebar-ai-card"
+                        onClick={() => navigate('/doctor/ai-assistant')}
+                        style={{ cursor: 'pointer' }}
+                        title="Open AI Assistant"
+                    >
                         {/* Cute 3D AI Robot Illustration with glowing pedestal */}
                         <div className="ha-sidebar-ai-bot-wrap">
                             <svg className="ha-sidebar-ai-bot-svg" viewBox="0 0 160 140" fill="none" xmlns="http://www.w3.org/2000/svg">

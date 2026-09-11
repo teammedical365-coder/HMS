@@ -176,7 +176,8 @@ class AIWalletService {
                 return { success: false, error: 'hospitalId is required' };
             }
 
-            const cleanHospitalId = new mongoose.Types.ObjectId(hospitalId);
+            const isObjId = mongoose.Types.ObjectId.isValid(hospitalId) && String(hospitalId).length === 24;
+            const cleanHospitalId = isObjId ? new mongoose.Types.ObjectId(hospitalId) : hospitalId;
             const promptTokens = rawUsage.promptTokens || rawUsage.inputTokens || 0;
             const candidateTokens = rawUsage.candidateTokens || rawUsage.outputTokens || 0;
             const totalTokens = rawUsage.totalTokens || (promptTokens + candidateTokens);
