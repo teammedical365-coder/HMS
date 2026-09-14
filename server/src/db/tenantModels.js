@@ -362,6 +362,8 @@ function getTenantModels(tenantDb) {
     const { ipdCatheterSchema } = require('../models/ipdCatheter.model');
     const { ipdWoundCareSchema } = require('../models/ipdWoundCare.model');
     const { nurseHandoverSchema } = require('../models/nurseHandover.model');
+    const { hospitalPolicySchema } = require('../models/hospitalPolicy.model');
+    const { policyAcceptanceSchema } = require('../models/policyAcceptance.model');
 
     return {
         User: model('User', userSchema),
@@ -387,6 +389,8 @@ function getTenantModels(tenantDb) {
         IPDCatheter: model('IPDCatheter', ipdCatheterSchema),
         IPDWoundCare: model('IPDWoundCare', ipdWoundCareSchema),
         NurseHandover: model('NurseHandover', nurseHandoverSchema),
+        HospitalPolicy: model('HospitalPolicy', hospitalPolicySchema),
+        PolicyAcceptance: model('PolicyAcceptance', policyAcceptanceSchema),
     };
 }
 

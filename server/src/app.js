@@ -32,6 +32,7 @@ const medicineRoutes = require('./routes/medicine.routes');
 const questionLibraryRoutes = require('./routes/questionLibrary.routes');
 const testPackageRoutes = require('./routes/testPackage.routes');
 const hospitalRoutes = require('./routes/hospital.routes');
+const hospitalPolicyRoutes = require('./routes/hospitalPolicy.routes');
 const financeRoutes = require('./routes/finance.routes');
 const billingRoutes = require('./routes/billing.routes');
 const admissionRoutes = require('./routes/admission.routes');
@@ -193,6 +194,7 @@ app.use('/api/medicines', medicineRoutes);
 app.use('/api/question-library', questionLibraryRoutes);
 app.use('/api/test-packages', testPackageRoutes);
 app.use('/api/hospitals', hospitalRoutes);
+app.use('/api/hospital-policies', hospitalPolicyRoutes);
 app.use('/api/superadmin/hospitals', require('./routes/superadmin.build.routes')); // Added superadmin build routes
 app.use('/api/finance', financeRoutes);
 

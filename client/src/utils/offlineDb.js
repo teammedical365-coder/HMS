@@ -27,6 +27,7 @@ const STATIC_CACHE_PATTERNS = [
   '/api/medicines',
   '/api/public/auth-config',
   '/api/test-packages',
+  '/api/hospital-policies',
 ];
 
 /**

@@ -340,10 +340,27 @@ router.post('/send-otp', async (req, res) => {
             { upsert: true, new: true }
         );
 
-        // Send Email OTP if email exists (Non-blocking background delivery)
+        // Send Email OTP if email exists (Non-blocking background delivery with hospital identity)
         if (patient.email) {
-            sendLoginOtpEmail({ email: patient.email, otp: plainOtp, userName: patient.name })
-                .catch(mailErr => console.error('[PatientAuth] Failed to send email OTP:', mailErr.message));
+            (async () => {
+                try {
+                    const Hospital = require('../models/hospital.model');
+                    const hosp = hospitalId ? await Hospital.findById(hospitalId) : null;
+                    await sendLoginOtpEmail({
+                        email: patient.email,
+                        otp: plainOtp,
+                        userName: patient.name,
+                        hospitalName: hosp?.name,
+                        emailDisplayName: hosp?.branding?.emailDisplayName || hosp?.brandingSchema?.emailDisplayName || hosp?.name,
+                        hospitalLogo: hosp?.branding?.logoUrl || hosp?.logo,
+                        supportEmail: hosp?.branding?.supportEmail || hosp?.email,
+                        hospitalPhone: hosp?.branding?.supportPhone || hosp?.phone,
+                        hospitalAddress: [hosp?.address, hosp?.city, hosp?.state].filter(Boolean).join(', ')
+                    });
+                } catch (mailErr) {
+                    console.error('[PatientAuth] Failed to send email OTP:', mailErr.message);
+                }
+            })();
         }
 
         // Output to console for fast dev access
@@ -500,8 +517,25 @@ router.post('/resend-otp', async (req, res) => {
         await otpDoc.save();
 
         if (decoded.email) {
-            sendLoginOtpEmail({ email: decoded.email, otp: plainOtp, userName: decoded.name })
-                .catch(mailErr => console.error('[PatientAuth] Failed to send resend email OTP:', mailErr.message));
+            (async () => {
+                try {
+                    const Hospital = require('../models/hospital.model');
+                    const hosp = decoded.hospitalId ? await Hospital.findById(decoded.hospitalId) : null;
+                    await sendLoginOtpEmail({
+                        email: decoded.email,
+                        otp: plainOtp,
+                        userName: decoded.name,
+                        hospitalName: hosp?.name,
+                        emailDisplayName: hosp?.branding?.emailDisplayName || hosp?.brandingSchema?.emailDisplayName || hosp?.name,
+                        hospitalLogo: hosp?.branding?.logoUrl || hosp?.logo,
+                        supportEmail: hosp?.branding?.supportEmail || hosp?.email,
+                        hospitalPhone: hosp?.branding?.supportPhone || hosp?.phone,
+                        hospitalAddress: [hosp?.address, hosp?.city, hosp?.state].filter(Boolean).join(', ')
+                    });
+                } catch (mailErr) {
+                    console.error('[PatientAuth] Failed to send resend email OTP:', mailErr.message);
+                }
+            })();
         }
 
         console.log(`\x1b[35m[PATIENT OTP RESEND]\x1b[0m New OTP for ${decoded.name} (${decoded.email}): \x1b[32m\x1b[1m${plainOtp}\x1b[0m`);

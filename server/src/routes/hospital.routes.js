@@ -8,9 +8,9 @@ const Inventory = require('../models/inventory.model');
 const LabTest = require('../models/labTest.model');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
-const path = require('path');
-const { sendStaffWelcomeEmail } = require('../services/email.service');
-const Doctor = require('../models/doctor.model');
+const { sendStaffWelcomeEmail, renderEmailPreview } = require('../services/email.service');
+const { HospitalPolicy, POLICY_CATEGORIES } = require('../models/hospitalPolicy.model');
+const { getTenantModels } = require('../db/tenantModels');
 const Lab = require('../models/lab.model');
 const Pharmacy = require('../models/pharmacy.model');
 const Reception = require('../models/reception.model');
@@ -195,6 +195,27 @@ router.post('/', verifyCentralAdmin, async (req, res) => {
             });
 
             console.log(`✅ Tenant DB created and seeded: ${dbName}`);
+
+            // 📜 Auto-seed initial policy templates into the newly created tenant DB
+            try {
+                const { HospitalPolicy: TenantPolicy } = getTenantModels(tenantConn);
+                const defaultPolicies = [
+                    { title: 'General Hospital Policy', category: 'General Hospital Policy', content: '1. Code of Conduct: Mutual dignity and respect are expected from all patients, visitors, and hospital staff.\n2. Admission: Authentic identification required upon admission.\n3. Safety: Strict hygiene and safety protocols observed across all facilities.', isMandatory: true, displayOrder: 1, applicableTo: ['ALL'] },
+                    { title: 'Appointment & Cancellation Policy', category: 'Appointment & Cancellation Policy', content: '1. Punctuality: Please arrive 15 minutes before your scheduled appointment.\n2. Cancellation: Notice of cancellation requested at least 2 hours in advance.\n3. Triage: Emergency cases take clinical priority.', isMandatory: true, displayOrder: 2, applicableTo: ['APPOINTMENT_BOOKING'] },
+                    { title: 'Patient Privacy Policy', category: 'Patient Privacy Policy', content: '1. Medical Confidentiality: Patient health records are strictly confidential and shared only for clinical care.\n2. Security: Electronic records are encrypted and protected under healthcare privacy standards.', isMandatory: true, displayOrder: 3, applicableTo: ['PATIENT_REGISTRATION', 'APPOINTMENT_BOOKING'] },
+                    { title: 'Patient Consent', category: 'Patient Consent', content: '1. Routine Care: By registering, the patient agrees to routine clinical examinations and diagnostic investigations.\n2. Special Procedures: Surgeries and invasive procedures require additional specific consent.', isMandatory: true, displayOrder: 4, applicableTo: ['PATIENT_REGISTRATION', 'APPOINTMENT_BOOKING'] }
+                ];
+
+                const seedDocs = defaultPolicies.map(p => ({
+                    ...p,
+                    hospitalId: hospital._id,
+                    version: 1
+                }));
+                await TenantPolicy.insertMany(seedDocs);
+                console.log(`📜 [Policy System] Auto-seeded initial policies for hospital: ${hospital.name}`);
+            } catch (policyErr) {
+                console.warn(`⚠️ [Policy System] Could not seed policies for ${hospital.name}:`, policyErr.message);
+            }
         } catch (dbErr) {
             // Non-fatal: hospital is created, DB will be provisioned on first login
             console.warn(`⚠️  Could not pre-provision tenant DB for ${hospital.name}:`, dbErr.message);
@@ -612,6 +633,132 @@ router.put('/my-hospital/upi-ids', verifyHospitalAdmin, async (req, res) => {
         res.json({ success: true, message: 'UPI IDs updated', upiIds: hospital.upiIds });
     } catch (err) {
         console.error('Error updating UPI IDs:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// Get branding details for current hospital (Hospital Admin)
+router.get('/my-hospital/branding', verifyToken, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'Hospital context required' });
+
+        const hospital = await Hospital.findById(hospitalId);
+        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+
+        res.json({
+            success: true,
+            hospital: {
+                id: hospital._id,
+                name: hospital.name,
+                email: hospital.email,
+                phone: hospital.phone,
+                address: hospital.address,
+                city: hospital.city,
+                state: hospital.state,
+                website: hospital.website,
+                logo: hospital.logo,
+                branding: hospital.branding || {},
+                brandingSchema: hospital.brandingSchema || {}
+            }
+        });
+    } catch (err) {
+        console.error('Error fetching my-hospital branding:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// Update branding & profile for current hospital (Hospital Admin)
+router.put('/my-hospital/branding', verifyHospitalAdmin, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'Hospital context required' });
+
+        const hospital = await Hospital.findById(hospitalId);
+        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+
+        const {
+            name, logo, email, phone, address, city, state, website,
+            branding = {}
+        } = req.body;
+
+        // Update core profile fields if provided
+        if (name && typeof name === 'string' && name.trim()) hospital.name = name.trim();
+        if (logo !== undefined) hospital.logo = logo;
+        if (email && typeof email === 'string') hospital.email = email.trim().toLowerCase();
+        if (phone && typeof phone === 'string') hospital.phone = phone.trim();
+        if (address !== undefined) hospital.address = address;
+        if (city !== undefined) hospital.city = city;
+        if (state !== undefined) hospital.state = state;
+        if (website !== undefined) hospital.website = website;
+
+        // Merge branding fields
+        const currentBranding = hospital.branding || {};
+        const allowedBrandingKeys = [
+            'appName', 'tagline', 'logoUrl', 'faviconUrl', 'emailDisplayName',
+            'primaryColor', 'secondaryColor', 'accentColor', 'successColor',
+            'backgroundColor', 'textColor', 'supportEmail', 'supportPhone',
+            'address', 'websiteUrl', 'footerText'
+        ];
+
+        for (const key of allowedBrandingKeys) {
+            if (branding[key] !== undefined) {
+                currentBranding[key] = branding[key];
+            }
+        }
+
+        // If appName not provided, sync with hospital name
+        if (!currentBranding.appName && hospital.name) {
+            currentBranding.appName = hospital.name;
+        }
+
+        hospital.branding = currentBranding;
+        hospital.markModified('branding');
+        await hospital.save();
+
+        // Real-time live update notification via Socket.IO
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('branding_update', { hospitalId: hospital._id, branding: hospital.branding, hospitalName: hospital.name });
+        }
+
+        res.json({
+            success: true,
+            message: 'Hospital branding and profile updated successfully',
+            hospital: {
+                id: hospital._id,
+                name: hospital.name,
+                email: hospital.email,
+                phone: hospital.phone,
+                address: hospital.address,
+                city: hospital.city,
+                state: hospital.state,
+                website: hospital.website,
+                logo: hospital.logo,
+                branding: hospital.branding
+            }
+        });
+    } catch (err) {
+        console.error('Error updating my-hospital branding:', err);
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// Preview email template with current hospital branding (Hospital Admin)
+router.post('/my-hospital/preview-email', verifyHospitalAdmin, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        if (!hospitalId) return res.status(400).json({ success: false, message: 'Hospital context required' });
+
+        const hospital = await Hospital.findById(hospitalId);
+        if (!hospital) return res.status(404).json({ success: false, message: 'Hospital not found' });
+
+        const { type = 'otp', recipientName = 'Dr. Rahul Sharma' } = req.body;
+        const preview = renderEmailPreview({ type, hospital, recipientName });
+
+        res.json({ success: true, preview });
+    } catch (err) {
+        console.error('Error generating email preview:', err);
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });

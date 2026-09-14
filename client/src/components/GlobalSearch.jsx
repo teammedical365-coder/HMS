@@ -152,7 +152,7 @@ const GlobalSearch = () => {
                     ref={mobileExpanded ? mobileInputRef : desktopInputRef}
                     type="text"
                     className="global-search-input"
-                    placeholder="Search patients, doctors, staff, records..."
+                    placeholder="Search patients, doctors, MRN, phone..."
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={handleKeyDown}

@@ -119,6 +119,10 @@ const OFFLINE_WRITABLE_OPS = [
     'PUT /api/hospitals/**',
     'PATCH /api/hospitals/**',
     'DELETE /api/hospitals/**',
+    'POST /api/hospital-policies/**',
+    'PUT /api/hospital-policies/**',
+    'PATCH /api/hospital-policies/**',
+    'DELETE /api/hospital-policies/**',
     'POST /api/admin/**',
     'PUT /api/admin/**',
     'DELETE /api/admin/**',
@@ -1018,9 +1022,28 @@ export const hospitalAPI = {
     // White-label branding
     getBranding: async (id) => (await apiClient.get(`/api/hospitals/${id}/branding`)).data,
     updateBranding: async (id, data) => (await apiClient.put(`/api/hospitals/${id}/branding`, data)).data,
+    getMyBranding: async () => (await apiClient.get('/api/hospitals/my-hospital/branding')).data,
+    updateMyBranding: async (data) => (await apiClient.put('/api/hospitals/my-hospital/branding', data)).data,
+    previewEmail: async (data) => (await apiClient.post('/api/hospitals/my-hospital/preview-email', data)).data,
     // Appointment mode (Supreme Admin)
     updateAppointmentMode: async (id, appointmentMode) => (await apiClient.put(`/api/hospitals/${id}`, { appointmentMode })).data,
     getNextToken: async (hospitalId, doctorId, date) => (await apiClient.get(`/api/hospitals/${hospitalId}/next-token?doctorId=${doctorId}&date=${date}`)).data,
+};
+
+export const policyAPI = {
+    getActivePolicies: async (params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return (await apiClient.get(`/api/hospital-policies/active?${query}`)).data;
+    },
+    getAllPolicies: async () => (await apiClient.get('/api/hospital-policies')).data,
+    createPolicy: async (data) => (await apiClient.post('/api/hospital-policies', data)).data,
+    updatePolicy: async (id, data) => (await apiClient.put(`/api/hospital-policies/${id}`, data)).data,
+    togglePolicyStatus: async (id, isActive) => (await apiClient.patch(`/api/hospital-policies/${id}/status`, { isActive })).data,
+    reorderPolicies: async (items) => (await apiClient.patch('/api/hospital-policies/reorder', { items })).data,
+    deletePolicy: async (id) => (await apiClient.delete(`/api/hospital-policies/${id}`)).data,
+    acceptPolicies: async (data) => (await apiClient.post('/api/hospital-policies/accept', data)).data,
+    getAcceptanceHistory: async (patientId) => (await apiClient.get(`/api/hospital-policies/history/${patientId}`)).data,
+    seedDefaults: async () => (await apiClient.post('/api/hospital-policies/seed-defaults')).data,
 };
 
 export const hospitalAdminAPI = {

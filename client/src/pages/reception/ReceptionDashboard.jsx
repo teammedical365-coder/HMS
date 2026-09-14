@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI, bedAPI, ipdClinicalAPI } from '../../utils/api';
+import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI, bedAPI, ipdClinicalAPI, policyAPI } from '../../utils/api';
+import HospitalPolicyModal from '../../components/HospitalPolicyModal';
 import socket from '../../utils/socket';
 import { useAuth } from '../../store/hooks';
 import { getSubdomain } from '../../utils/subdomain';
@@ -128,6 +129,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const [selectedPatientId, setSelectedPatientId] = useState(null);
     const [saving, setSaving] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [intakePolicyAgreed, setIntakePolicyAgreed] = useState(false);
+    const [showPolicyModal, setShowPolicyModal] = useState(false);
     const [searchResults, setSearchResults] = useState([]);
     const [profilePatient, setProfilePatient] = useState(null);
     const [profileAppointments, setProfileAppointments] = useState([]);
@@ -1526,6 +1529,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             }
         }
 
+        if (!isEditingProfileOnly && !intakePolicyAgreed) {
+            toast.error("Please review and agree to the Hospital Terms & Policies before proceeding.");
+            setSaving(false); return;
+        }
+
         try {
             let userId = selectedPatientId;
 
@@ -1553,6 +1561,18 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                         localStorage.setItem('patientUser', JSON.stringify(pU));
                         setSelectedPatientId(userId);
                     }
+                    // Record policy acceptance for newly registered patient
+                    try {
+                        const activeHid = hospitalContext?._id || currentUser?.hospitalId;
+                        if (activeHid && userId) {
+                            policyAPI.acceptPolicies({
+                                hospitalId: activeHid,
+                                patientId: userId,
+                                source: isPatientPortal ? 'PATIENT_PORTAL' : 'RECEPTION_DESK',
+                                offlineSync: !navigator.onLine
+                            }).catch(() => {});
+                        }
+                    } catch { /* non-fatal */ }
                 } else {
                     throw new Error(regRes.message || "Registration failed.");
                 }
@@ -1631,6 +1651,20 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 });
 
                 if (bookingRes.success) {
+                    // Record policy acceptance for appointment booking
+                    try {
+                        const activeHid = hospitalContext?._id || currentUser?.hospitalId;
+                        if (activeHid && userId) {
+                            policyAPI.acceptPolicies({
+                                hospitalId: activeHid,
+                                patientId: userId,
+                                appointmentId: bookingRes.appointment?._id || null,
+                                source: isPatientPortal ? 'PATIENT_PORTAL' : 'APPOINTMENT_BOOKING',
+                                offlineSync: !navigator.onLine
+                            }).catch(() => {});
+                        }
+                    } catch { /* non-fatal */ }
+
                     // --- Dynamic Receipt PDF (generate BEFORE alert so it isn't blocked) ---
                     const doc = new jsPDF();
                     const hName = hospitalContext?.name || 'HOSPITAL';
@@ -1951,6 +1985,37 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                 </div>
                             </div>
 
+                            {/* Hospital Policy Acceptance Checkbox */}
+                            <div style={{
+                                margin: '16px 0',
+                                padding: '12px 14px',
+                                background: '#f8fafc',
+                                borderRadius: '8px',
+                                border: '1px solid #e2e8f0',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '10px'
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    id="rebookPolicyAgreement"
+                                    checked={intakePolicyAgreed}
+                                    onChange={(e) => setIntakePolicyAgreed(e.target.checked)}
+                                    style={{ marginTop: '3px', cursor: 'pointer', accentColor: '#2563eb', width: '16px', height: '16px' }}
+                                />
+                                <label htmlFor="rebookPolicyAgreement" style={{ fontSize: '0.86rem', color: '#475569', cursor: 'pointer', lineHeight: 1.4 }}>
+                                    I confirm that the patient acknowledges and agrees to the{' '}
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPolicyModal(true)}
+                                        style={{ background: 'none', border: 'none', padding: 0, color: '#2563eb', textDecoration: 'underline', cursor: 'pointer', fontWeight: 600, fontSize: 'inherit' }}
+                                    >
+                                        Hospital Terms & Policies
+                                    </button>{' '}
+                                    and data consent provisions.
+                                </label>
+                            </div>
+
                             <div className="form-footer">
                                 <button type="submit" className="btn-save" disabled={saving}>
                                     {saving
@@ -1969,6 +2034,16 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             </div>
                         </form>
                     </div>
+                    <HospitalPolicyModal
+                        isOpen={showPolicyModal}
+                        onClose={() => setShowPolicyModal(false)}
+                        onAgree={() => {
+                            setIntakePolicyAgreed(true);
+                            setShowPolicyModal(false);
+                        }}
+                        hospitalId={hospitalContext?._id || currentUser?.hospitalId}
+                        hospitalName={hospitalContext?.name || hospitalName || 'Hospital'}
+                    />
                 </div>
             );
         }
@@ -2653,6 +2728,37 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         </div>
                                     </div>
 
+                                    {/* Hospital Policy Agreement Checkbox */}
+                                    <div style={{
+                                        margin: '16px 20px 0 20px',
+                                        padding: '12px 16px',
+                                        background: '#f8fafc',
+                                        borderRadius: '10px',
+                                        border: '1px solid #e2e8f0',
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '12px'
+                                    }}>
+                                        <input
+                                            type="checkbox"
+                                            id="intakePolicyAgreement"
+                                            checked={intakePolicyAgreed}
+                                            onChange={(e) => setIntakePolicyAgreed(e.target.checked)}
+                                            style={{ marginTop: '3px', cursor: 'pointer', accentColor: '#2563eb', width: '18px', height: '18px' }}
+                                        />
+                                        <label htmlFor="intakePolicyAgreement" style={{ fontSize: '0.88rem', color: '#334155', cursor: 'pointer', lineHeight: 1.5 }}>
+                                            I have read, understood, and agree to the{' '}
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPolicyModal(true)}
+                                                style={{ background: 'none', border: 'none', padding: 0, color: '#2563eb', textDecoration: 'underline', cursor: 'pointer', fontWeight: 600, fontSize: 'inherit' }}
+                                            >
+                                                Hospital Policies, Terms of Service & Privacy Practices
+                                            </button>{' '}
+                                            for medical care and treatment. <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                    </div>
+
                                     <div className="reg-form-footer">
                                         <div className="reg-footer-info">
                                             🔒 Patient information is encrypted & securely stored
@@ -2692,6 +2798,16 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     </div>
                 </main>
                 {renderCameraModal()}
+                <HospitalPolicyModal
+                    isOpen={showPolicyModal}
+                    onClose={() => setShowPolicyModal(false)}
+                    onAgree={() => {
+                        setIntakePolicyAgreed(true);
+                        setShowPolicyModal(false);
+                    }}
+                    hospitalId={hospitalContext?._id || currentUser?.hospitalId}
+                    hospitalName={hospitalContext?.name || hospitalName || 'Hospital'}
+                />
             </div>
         );
     }

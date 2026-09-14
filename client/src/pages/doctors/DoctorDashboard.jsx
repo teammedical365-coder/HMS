@@ -67,62 +67,56 @@ const DoctorDashboard = () => {
         fetchDoctorStats();
     }, []);
 
+    // Non-clickable display-only permission items
     const permissionItems = [
         {
             id: 'ai_assistant',
             title: 'AI Assistant',
             icon: <FiCpu />,
             iconBg: '#ede9fe',
-            iconColor: '#7c3aed',
-            path: '/doctor/ai-assistant'
+            iconColor: '#7c3aed'
         },
         {
             id: 'visit_diagnose',
             title: 'Visit Diagnose',
             icon: <FaStethoscope />,
             iconBg: '#eff6ff',
-            iconColor: '#2563eb',
-            path: '/doctor/patients'
+            iconColor: '#2563eb'
         },
         {
             id: 'patient_view',
             title: 'Patient View',
             icon: <FiUsers />,
             iconBg: '#ecfdf5',
-            iconColor: '#059669',
-            path: '/doctor/patients'
+            iconColor: '#059669'
         },
         {
             id: 'clinical_history',
             title: 'Clinical History View',
             icon: <FiFileText />,
             iconBg: '#f5f3ff',
-            iconColor: '#7c3aed',
-            path: '/doctor/patients'
+            iconColor: '#7c3aed'
         },
         {
             id: 'lab_view',
             title: 'Lab View',
             icon: <FaFlask />,
             iconBg: '#fffbeb',
-            iconColor: '#d97706',
-            path: '/lab-reports'
+            iconColor: '#d97706'
         },
         {
             id: 'pharmacy_view',
             title: 'Pharmacy View',
             icon: <FaCapsules />,
             iconBg: '#fdf2f8',
-            iconColor: '#db2777',
-            path: '/pharmacy'
+            iconColor: '#db2777'
         }
     ];
 
     return (
         <div className="doc-main-dashboard-container">
-            {/* 1. HERO BANNER SECTION */}
+            {/* 1. HERO BANNER SECTION (Full Width, Sleek Dark Navy Theme, Seamlessly Blended Doctor AI Graphic) */}
             <div className="doc-hero-banner">
-                {/* Left Text Column */}
                 <div className="doc-hero-content">
                     <div className="doc-hero-badge">
                         <span className="doc-hero-wave">👋</span>
@@ -141,89 +135,100 @@ const DoctorDashboard = () => {
                         Pick any section to get started.
                     </p>
                 </div>
-            </div>
 
-            {/* 2. QUICK ACCESS SECTION */}
-            <div className="doc-section-block">
-                <div className="doc-section-header">
-                    <FiZap className="doc-section-icon" />
-                    <h2>QUICK ACCESS</h2>
-                </div>
-
-                <div className="doc-quick-access-grid">
-                    <div 
-                        className="doc-quick-access-card" 
-                        onClick={() => navigate('/doctor/patients')}
-                        title="Click to access Patient Queue and Workspace"
-                    >
-                        <div className="doc-quick-left">
-                            <div className="doc-quick-icon-wrapper">
-                                <FiUsers className="doc-quick-icon" />
-                            </div>
-                            <div className="doc-quick-info">
-                                <h3 className="doc-quick-title">Patients</h3>
-                                <p className="doc-quick-desc">Access your patient queue and clinical workspace</p>
-                            </div>
-                        </div>
-
-                        <div className="doc-quick-art-wrapper">
-                            <img 
-                                src="/assets/stethoscope_card_bg.jpg" 
-                                alt="Stethoscope clinical art" 
-                                className="doc-quick-stethoscope-img"
-                            />
-                        </div>
-                    </div>
-
-                    <div 
-                        className="doc-quick-access-card doc-quick-ai-card" 
-                        onClick={() => navigate('/doctor/ai-assistant')}
-                        title="Click to launch AI Clinical Assistant"
-                    >
-                        <div className="doc-quick-left">
-                            <div className="doc-quick-icon-wrapper doc-ai-icon-wrap">
-                                <FiCpu className="doc-quick-icon" />
-                            </div>
-                            <div className="doc-quick-info">
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <h3 className="doc-quick-title">AI Assistant</h3>
-                                    <span className="doc-quick-ai-badge">⚡ AI POWERED</span>
-                                </div>
-                                <p className="doc-quick-desc">Clinical intelligence, report analysis & diagnostic assistant</p>
-                            </div>
-                        </div>
-
-                        <div className="doc-quick-art-wrapper doc-quick-ai-art">
-                            <div className="doc-quick-ai-orb"></div>
-                        </div>
-                    </div>
+                {/* Seamlessly Integrated Doctor AI Graphic */}
+                <div className="doc-hero-bg-art">
+                    <img 
+                        src="/assets/doctor_ai_neural_banner.png" 
+                        alt="Doctor AI Clinical Assistant" 
+                        className="doc-hero-doctor-bg-img"
+                    />
+                    <div className="doc-hero-art-glow" />
                 </div>
             </div>
 
-            {/* 3. YOUR PERMISSIONS SECTION */}
-            <div className="doc-section-block">
-                <div className="doc-section-header">
-                    <FiLock className="doc-section-icon" />
-                    <h2>YOUR PERMISSIONS</h2>
-                </div>
+            {/* 2. MAIN BODY CONTENT (Zero outer margin/padding on page, clean structured inner spacing) */}
+            <div className="doc-main-body-content">
+                {/* QUICK ACCESS SECTION */}
+                <div className="doc-section-block">
+                    <div className="doc-section-header">
+                        <FiZap className="doc-section-icon" />
+                        <h2>QUICK ACCESS</h2>
+                    </div>
 
-                <div className="doc-permissions-container">
-                    {permissionItems.map((item) => (
+                    <div className="doc-quick-access-grid">
                         <div 
-                            key={item.id} 
-                            className="doc-permission-pill-btn"
-                            onClick={() => navigate(item.path)}
-                            title={`Navigate to ${item.title}`}
+                            className="doc-quick-access-card" 
+                            onClick={() => navigate('/doctor/patients')}
+                            title="Click to access Patient Queue and Workspace"
                         >
-                            <div 
-                                className="doc-permission-icon-circle"
-                                style={{ background: item.iconBg, color: item.iconColor }}
-                            >
-                                {item.icon}
+                            <div className="doc-quick-left">
+                                <div className="doc-quick-icon-wrapper">
+                                    <FiUsers className="doc-quick-icon" />
+                                </div>
+                                <div className="doc-quick-info">
+                                    <h3 className="doc-quick-title">Patients</h3>
+                                    <p className="doc-quick-desc">Access your patient queue and clinical workspace</p>
+                                </div>
                             </div>
-                            <span className="doc-permission-label">{item.title}</span>
+
+                            <div className="doc-quick-art-wrapper">
+                                <img 
+                                    src="/assets/stethoscope_card_bg.jpg" 
+                                    alt="Stethoscope clinical art" 
+                                    className="doc-quick-stethoscope-img"
+                                />
+                            </div>
                         </div>
-                    ))}
+
+                        <div 
+                            className="doc-quick-access-card doc-quick-ai-card" 
+                            onClick={() => navigate('/doctor/ai-assistant')}
+                            title="Click to launch AI Clinical Assistant"
+                        >
+                            <div className="doc-quick-left">
+                                <div className="doc-quick-icon-wrapper doc-ai-icon-wrap">
+                                    <FiCpu className="doc-quick-icon" />
+                                </div>
+                                <div className="doc-quick-info">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <h3 className="doc-quick-title">AI Assistant</h3>
+                                        <span className="doc-quick-ai-badge">⚡ AI POWERED</span>
+                                    </div>
+                                    <p className="doc-quick-desc">Clinical intelligence, report analysis & diagnostic assistant</p>
+                                </div>
+                            </div>
+
+                            <div className="doc-quick-art-wrapper doc-quick-ai-art">
+                                <div className="doc-quick-ai-orb"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 3. YOUR PERMISSIONS SECTION (Display-Only / Non-Clickable Badges) */}
+                <div className="doc-section-block">
+                    <div className="doc-section-header">
+                        <FiLock className="doc-section-icon" />
+                        <h2>YOUR PERMISSIONS</h2>
+                    </div>
+
+                    <div className="doc-permissions-container">
+                        {permissionItems.map((item) => (
+                            <div 
+                                key={item.id} 
+                                className="doc-permission-pill"
+                            >
+                                <div 
+                                    className="doc-permission-icon-circle"
+                                    style={{ background: item.iconBg, color: item.iconColor }}
+                                >
+                                    {item.icon}
+                                </div>
+                                <span className="doc-permission-label">{item.title}</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>

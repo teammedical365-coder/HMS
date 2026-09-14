@@ -524,12 +524,27 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
         // Output to console for superfast local testing
         console.log(`\\x1b[36m[STAFF OTP]\\x1b[0m Login OTP for ${user.name} (${user.email}): \\x1b[32m\\x1b[1m${otp}\\x1b[0m`);
 
+        // ── Resolve hospital branding ──────────────────────────────────────────
+        let hospital = null;
+        const targetHospitalId = hospitalId || user.hospitalId;
+        if (targetHospitalId) {
+            try {
+                hospital = await Hospital.findById(targetHospitalId);
+            } catch (_) {}
+        }
+
         // ── Send OTP email ────────────────────────────────────────────────────
         try {
             await sendLoginOtpEmail({
                 email: user.email,
                 otp,
                 userName: user.name,
+                hospitalName: hospital?.name,
+                emailDisplayName: hospital?.branding?.emailDisplayName || hospital?.brandingSchema?.emailDisplayName || hospital?.name,
+                hospitalLogo: hospital?.branding?.logoUrl || hospital?.logo,
+                supportEmail: hospital?.branding?.supportEmail || hospital?.email,
+                hospitalPhone: hospital?.branding?.supportPhone || hospital?.phone,
+                hospitalAddress: [hospital?.address, hospital?.city, hospital?.state].filter(Boolean).join(', ')
             });
         } catch (emailError) {
             console.error('[otp/send] Email sending failed:', emailError);
@@ -743,11 +758,26 @@ router.post('/resend', emailOtpSendLimiter, async (req, res) => {
         otpRecord.expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
         await otpRecord.save();
 
+        // Resolve hospital branding
+        let hospital = null;
+        const resendHospitalId = otpRecord.hospitalId || user.hospitalId;
+        if (resendHospitalId) {
+            try {
+                hospital = await Hospital.findById(resendHospitalId);
+            } catch (_) {}
+        }
+
         // Send OTP email in background
         sendLoginOtpEmail({
             email: user.email,
             otp,
             userName: user.name,
+            hospitalName: hospital?.name,
+            emailDisplayName: hospital?.branding?.emailDisplayName || hospital?.brandingSchema?.emailDisplayName || hospital?.name,
+            hospitalLogo: hospital?.branding?.logoUrl || hospital?.logo,
+            supportEmail: hospital?.branding?.supportEmail || hospital?.email,
+            hospitalPhone: hospital?.branding?.supportPhone || hospital?.phone,
+            hospitalAddress: [hospital?.address, hospital?.city, hospital?.state].filter(Boolean).join(', ')
         }).catch(err => console.error('[otp/resend] Background email error:', err));
 
         console.log(`\x1b[36m[STAFF RESEND OTP]\x1b[0m Resent OTP for ${user.name} (${user.email}): \x1b[32m\x1b[1m${otp}\x1b[0m`);

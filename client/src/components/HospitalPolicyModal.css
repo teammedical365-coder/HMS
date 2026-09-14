@@ -1,0 +1,366 @@
+/* HospitalPolicyModal.css — Premium Hospital Policy Reader Modal */
+
+.hpm-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(6px);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    animation: hpmFadeIn 0.2s ease-out;
+}
+
+@keyframes hpmFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.hpm-container {
+    background: #ffffff;
+    width: 100%;
+    max-width: 780px;
+    max-height: 88vh;
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(226, 232, 240, 0.8);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: hpmSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes hpmSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Header */
+.hpm-header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: #ffffff;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.hpm-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.hpm-hospital-logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    object-fit: contain;
+    background: #ffffff;
+    padding: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.hpm-hospital-icon-fallback {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #14b8a6, #0d9488);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+
+.hpm-title-group h2 {
+    margin: 0;
+    font-size: 1.18rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.01em;
+}
+
+.hpm-title-group p {
+    margin: 3px 0 0;
+    font-size: 0.82rem;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.hpm-badge-count {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.hpm-close-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.hpm-close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+/* Category Filter Chips */
+.hpm-category-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+.hpm-cat-chip {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.hpm-cat-chip:hover {
+    border-color: #94a3b8;
+    background: #f1f5f9;
+}
+
+.hpm-cat-chip.active {
+    background: #0f172a;
+    color: #ffffff;
+    border-color: #0f172a;
+}
+
+/* Body / Policies Scroll Area */
+.hpm-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* Individual Policy Card */
+.hpm-policy-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #ffffff;
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hpm-policy-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.hpm-policy-card-header {
+    padding: 14px 18px;
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+}
+
+.hpm-policy-card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.hpm-policy-index {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.hpm-policy-name {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.hpm-policy-tags {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hpm-tag-category {
+    background: #e0f2fe;
+    color: #0369a1;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.hpm-tag-mandatory {
+    background: #fee2e2;
+    color: #b91c1c;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.hpm-tag-version {
+    background: #f1f5f9;
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
+.hpm-policy-content {
+    padding: 16px 20px;
+    font-size: 0.88rem;
+    color: #334155;
+    line-height: 1.65;
+    white-space: pre-line;
+    border-top: 1px solid #f1f5f9;
+    background: #ffffff;
+}
+
+.hpm-policy-footer {
+    padding: 8px 20px 12px;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #ffffff;
+}
+
+/* Footer / Action Bar */
+.hpm-footer {
+    padding: 16px 24px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.hpm-agreement-confirm {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.86rem;
+    color: #334155;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.hpm-agreement-confirm input[type="checkbox"] {
+    width: 17px;
+    height: 17px;
+    accent-color: #14b8a6;
+    cursor: pointer;
+}
+
+.hpm-btn-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.hpm-btn-secondary {
+    padding: 9px 18px;
+    border-radius: 8px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    font-size: 0.86rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.hpm-btn-secondary:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.hpm-btn-primary {
+    padding: 9px 22px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+    border: none;
+    color: #ffffff;
+    font-size: 0.86rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(20, 184, 166, 0.35);
+    transition: all 0.15s ease;
+}
+
+.hpm-btn-primary:hover {
+    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+    box-shadow: 0 4px 12px rgba(20, 184, 166, 0.45);
+}
+
+.hpm-btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* Empty State */
+.hpm-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #64748b;
+}
+
+.hpm-empty-icon {
+    font-size: 2.5rem;
+    margin-bottom: 8px;
+}

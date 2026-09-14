@@ -27,6 +27,7 @@ const brandingSchema = new mongoose.Schema({
     
     // NEW FIELDS added as per White-Label Architecture request
     customDomain:  { type: String, default: '' },
+    emailDisplayName: { type: String, trim: true, default: '' }, // Custom sender display name for emails/OTPs
     themeColors: {
         primary: { type: String, default: '#14b8a6' },
         secondary: { type: String, default: '#0a2647' },

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useBranding } from '../../context/BrandingContext';
-import { publicAPI, patientAuthAPI } from '../../utils/api';
+import { publicAPI, patientAuthAPI, policyAPI } from '../../utils/api';
 import './PatientPortalLogin.css'; // Reuse the premium styles from login
 import PasswordInput from '../../components/PasswordInput';
+import HospitalPolicyModal from '../../components/HospitalPolicyModal';
 import toast from 'react-hot-toast';
 
 const PatientSignup = () => {
@@ -14,6 +15,8 @@ const PatientSignup = () => {
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
+    const [policyAgreed, setPolicyAgreed] = useState(false);
+    const [showPolicyModal, setShowPolicyModal] = useState(false);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -77,6 +80,8 @@ const PatientSignup = () => {
         
         if (formData.password !== formData.confirmPassword) return "Passwords do not match.";
 
+        if (!policyAgreed) return "You must agree to the hospital's Terms & Policies.";
+
         return null;
     };
 
@@ -105,6 +110,20 @@ const PatientSignup = () => {
             );
 
             if (response.success) {
+                // Record auditable policy acceptance
+                try {
+                    const patientId = response.patient?._id || response.user?._id;
+                    if (patientId) {
+                        await policyAPI.acceptPolicies({
+                            hospitalId: hospital.id,
+                            patientId,
+                            source: 'PATIENT_PORTAL_SIGNUP'
+                        });
+                    }
+                } catch (pErr) {
+                    console.warn('[Policy Acceptance on Signup]:', pErr.message);
+                }
+
                 toast.success("Your account has been created successfully. Please login to continue.");
                 navigate('/patient');
             }
@@ -176,6 +195,36 @@ const PatientSignup = () => {
                         </div>
                     </div>
 
+                    {/* Policy Agreement Checkbox */}
+                    <div style={{ margin: '14px 0 6px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <input
+                            type="checkbox"
+                            id="signup-policy-agree"
+                            checked={policyAgreed}
+                            onChange={(e) => setPolicyAgreed(e.target.checked)}
+                            style={{ width: '18px', height: '18px', accentColor: '#14b8a6', cursor: 'pointer' }}
+                        />
+                        <label htmlFor="signup-policy-agree" style={{ fontSize: '0.86rem', color: '#475569', cursor: 'pointer', userSelect: 'none' }}>
+                            I agree to the hospital's{' '}
+                            <button
+                                type="button"
+                                onClick={() => setShowPolicyModal(true)}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#0284c7',
+                                    fontWeight: '700',
+                                    textDecoration: 'underline',
+                                    cursor: 'pointer',
+                                    padding: 0,
+                                    fontSize: 'inherit'
+                                }}
+                            >
+                                Terms & Policies
+                            </button>
+                        </label>
+                    </div>
+
                     <button type="submit" className="btn-primary" disabled={isSubmitting} style={{ marginTop: '1rem' }}>
                         {isSubmitting ? 'Creating Account...' : 'Sign Up'}
                     </button>
@@ -189,6 +238,19 @@ const PatientSignup = () => {
                     </button>
                 </Link>
             </div>
+
+            {/* Hospital Policy Reader Modal */}
+            <HospitalPolicyModal
+                isOpen={showPolicyModal}
+                onClose={() => setShowPolicyModal(false)}
+                onAccept={() => {
+                    setPolicyAgreed(true);
+                    setShowPolicyModal(false);
+                }}
+                hospitalId={hospital?.id}
+                applicableTo="PATIENT_REGISTRATION"
+                alreadyAccepted={policyAgreed}
+            />
         </div>
     );
 };
