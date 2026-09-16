@@ -488,12 +488,14 @@ router.post('/admin/signup', verifyCentralAdmin, async (req, res) => {
 
         await admin.save();
 
-        // --- SEND WELCOME EMAIL ---
-        try {
-            const hName = hospital.name || 'Medical 365';
-            const loginUrl = hospital.customDomain ? `https://${hospital.customDomain}/login` : `https://${hospital.slug}.medical365.in/login`;
-            await sendStaffWelcomeEmail({ email: admin.email, password: password, name: admin.name, role: 'Hospital Admin', hospitalName: hName, loginUrl });
-        } catch (emailErr) { console.error('[hospital.routes] Failed to send email:', emailErr.message); }
+        // --- SEND WELCOME EMAIL (Dispatched asynchronously in background) ---
+        (async () => {
+            try {
+                const hName = hospital.name || 'Medical 365';
+                const loginUrl = hospital.customDomain ? `https://${hospital.customDomain}/login` : `https://${hospital.slug}.medical365.in/login`;
+                await sendStaffWelcomeEmail({ email: admin.email, password: password, name: admin.name, role: 'Hospital Admin', hospitalName: hName, loginUrl });
+            } catch (emailErr) { console.error('[hospital.routes] Failed to send email in background:', emailErr.message); }
+        })();
         // --------------------------
 
         // Link hospital admin to hospital record

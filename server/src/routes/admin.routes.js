@@ -26,7 +26,7 @@ const { sendStaffWelcomeEmail } = require('../services/email.service');
 /**
  * Build user response with full role data
  */
-async function buildUserResponse(user) {
+async function buildUserResponse(user, hospitalCache = null, roleCache = null) {
     let roleData = null;
     let roleName = null;
 
@@ -43,8 +43,12 @@ async function buildUserResponse(user) {
             isSystemRole: true
         };
     } else if (user.role) {
-        if (mongoose.Types.ObjectId.isValid(user.role)) {
+        const roleKey = String(user.role);
+        if (roleCache && roleCache.has(roleKey)) {
+            roleData = roleCache.get(roleKey);
+        } else if (mongoose.Types.ObjectId.isValid(user.role)) {
             roleData = await Role.findById(user.role);
+            if (roleCache) roleCache.set(roleKey, roleData);
         }
         if (!roleData) {
             // Legacy string fallback - find role by name scoped to the user's hospital
@@ -63,6 +67,7 @@ async function buildUserResponse(user) {
             if (roleData) {
                 user.role = roleData._id;
                 await user.save();
+                if (roleCache) roleCache.set(roleKey, roleData);
             }
         }
         roleName = roleData ? roleData.name : String(user.role);
@@ -72,7 +77,14 @@ async function buildUserResponse(user) {
     let subscriptionPlan = null;
     if (user.hospitalId) {
         try {
-            const hosp = await Hospital.findById(user.hospitalId).select('name subscriptionPlan clinicType clinicPlan');
+            const hidStr = String(user.hospitalId);
+            let hosp = hospitalCache ? hospitalCache.get(hidStr) : null;
+            if (!hosp && hospitalCache) {
+                hosp = await Hospital.findById(user.hospitalId).select('name subscriptionPlan clinicType clinicPlan').lean();
+                if (hosp) hospitalCache.set(hidStr, hosp);
+            } else if (!hosp) {
+                hosp = await Hospital.findById(user.hospitalId).select('name subscriptionPlan clinicType clinicPlan').lean();
+            }
             if (hosp) {
                 hospitalName = hosp.name;
                 subscriptionPlan = hosp.subscriptionPlan;
@@ -470,9 +482,11 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
             totalRecords = users.length;
         }
 
-        // Build full response and filter out patients/doctors if any slipped through mixed role definitions
+        // Build full response with request-level caching to prevent N+1 queries
+        const hospitalCache = new Map();
+        const roleCache = new Map();
         const usersWithRoles = await Promise.all(users.map(async (u) => {
-            return await buildUserResponse(u);
+            return await buildUserResponse(u, hospitalCache, roleCache);
         }));
 
         const staffOnly = usersWithRoles.filter(u => {
@@ -574,16 +588,12 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
                     const existingStaffDocs = await User.find({ 
                         hospitalId: assignedHospitalId,
                         role: { $nin: systemRoles }
-                    });
-
-                    const usersWithRoles = await Promise.all(existingStaffDocs.map(async (u) => {
-                        return await buildUserResponse(u);
-                    }));
+                    }).populate('role', 'name').select('role').lean();
 
                     let doctorCount = 0;
                     let staffCount = 0;
                     
-                    usersWithRoles.forEach(u => {
+                    existingStaffDocs.forEach(u => {
                         const rName = (typeof u.role === 'string' ? u.role : (u.role?.name || '')).toLowerCase();
                         
                         // Exact same exclusion logic as UI and GET /users
@@ -715,33 +725,32 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
             console.error('Error creating linked profile:', profileError);
         }
 
-        // Dynamic URL Logic for Welcome Email
-        let loginUrl = 'https://medical365.in/login';
-        let hName = 'Medical 365';
-        if (assignedHospitalId) {
-            // hospitalDoc was already fetched above, but it didn't select name/slug/customDomain
-            const emailHosp = await Hospital.findById(assignedHospitalId).select('name slug customDomain');
-            if (emailHosp) {
-                hName = emailHosp.name || 'Medical 365';
-                loginUrl = emailHosp.customDomain 
-                    ? `https://${emailHosp.customDomain}/login` 
-                    : `https://${emailHosp.slug}.medical365.in/login`;
+        // Dynamic URL Logic for Welcome Email (dispatched in background so HTTP response returns instantly)
+        (async () => {
+            try {
+                let loginUrl = 'https://medical365.in/login';
+                let hName = 'Medical 365';
+                if (assignedHospitalId) {
+                    const emailHosp = await Hospital.findById(assignedHospitalId).select('name slug customDomain').lean();
+                    if (emailHosp) {
+                        hName = emailHosp.name || 'Medical 365';
+                        loginUrl = emailHosp.customDomain 
+                            ? `https://${emailHosp.customDomain}/login` 
+                            : `https://${emailHosp.slug}.medical365.in/login`;
+                    }
+                }
+                await sendStaffWelcomeEmail({
+                    email: user.email,
+                    password: password, 
+                    name: user.name,
+                    role: roleDoc.name,
+                    hospitalName: hName,
+                    loginUrl: loginUrl
+                });
+            } catch (emailError) {
+                console.error('[admin.routes] Error calling sendStaffWelcomeEmail in background:', emailError.message);
             }
-        }
-
-        // Send Welcome Email
-        try {
-            await sendStaffWelcomeEmail({
-                email: user.email,
-                password: password, 
-                name: user.name,
-                role: roleDoc.name,
-                hospitalName: hName,
-                loginUrl: loginUrl
-            });
-        } catch (emailError) {
-            console.error('[admin.routes] Error calling sendStaffWelcomeEmail:', emailError.message);
-        }
+        })();
 
         const userData = await buildUserResponse(user);
         res.status(201).json({

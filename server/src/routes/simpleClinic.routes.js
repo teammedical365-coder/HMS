@@ -334,12 +334,14 @@ router.post('/:id/manager', verifyCentralAdmin, async (req, res) => {
         });
         await manager.save();
 
-        // --- SEND WELCOME EMAIL ---
-        try {
-            const hName = clinic.name || 'Medical 365';
-            const loginUrl = clinic.customDomain ? `https://${clinic.customDomain}/login` : `https://${clinic.slug}.medical365.in/login`;
-            await sendStaffWelcomeEmail({ email: manager.email, password: password, name: manager.name, role: 'Clinic Manager', hospitalName: hName, loginUrl });
-        } catch (emailErr) { console.error('[simpleClinic.routes] Failed to send email:', emailErr.message); }
+        // --- SEND WELCOME EMAIL (Dispatched asynchronously in background) ---
+        (async () => {
+            try {
+                const hName = clinic.name || 'Medical 365';
+                const loginUrl = clinic.customDomain ? `https://${clinic.customDomain}/login` : `https://${clinic.slug}.medical365.in/login`;
+                await sendStaffWelcomeEmail({ email: manager.email, password: password, name: manager.name, role: 'Clinic Manager', hospitalName: hName, loginUrl });
+            } catch (emailErr) { console.error('[simpleClinic.routes] Failed to send manager email in background:', emailErr.message); }
+        })();
         // --------------------------
 
         clinic.adminUserId = manager._id;
@@ -482,12 +484,14 @@ router.post('/:id/staff', verifyCentralAdmin, async (req, res) => {
         });
         await staffMember.save();
 
-        // --- SEND WELCOME EMAIL ---
-        try {
-            const hName = clinic.name || 'Medical 365';
-            const loginUrl = clinic.customDomain ? `https://${clinic.customDomain}/login` : `https://${clinic.slug}.medical365.in/login`;
-            await sendStaffWelcomeEmail({ email: staffMember.email, password: password, name: staffMember.name, role: 'Clinic Doctor', hospitalName: hName, loginUrl });
-        } catch (emailErr) { console.error('[simpleClinic.routes] Failed to send email:', emailErr.message); }
+        // --- SEND WELCOME EMAIL (Dispatched asynchronously in background) ---
+        (async () => {
+            try {
+                const hName = clinic.name || 'Medical 365';
+                const loginUrl = clinic.customDomain ? `https://${clinic.customDomain}/login` : `https://${clinic.slug}.medical365.in/login`;
+                await sendStaffWelcomeEmail({ email: staffMember.email, password: password, name: staffMember.name, role: 'Clinic Doctor', hospitalName: hName, loginUrl });
+            } catch (emailErr) { console.error('[simpleClinic.routes] Failed to send clinic doctor email in background:', emailErr.message); }
+        })();
         // --------------------------
 
         res.status(201).json({

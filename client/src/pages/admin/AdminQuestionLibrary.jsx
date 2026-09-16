@@ -20,7 +20,6 @@ import {
     FaTrash, 
     FaAngleRight, 
     FaCircleInfo, 
-    FaBolt, 
     FaXmark,
     FaEye,
     FaArrowsRotate
@@ -813,9 +812,6 @@ const AdminQuestionLibrary = () => {
                         <p>{getUIText('pageSubtitle', currentLang)}</p>
                     </div>
                     <div className="ql-header-actions">
-                        <button className="ql-btn ql-btn-reset" onClick={handleResetToStandard} disabled={saving} title="Reset all departments to 60+ standard clinical questions">
-                            <FaBolt /> {getUIText('load12Depts', currentLang)}
-                        </button>
                         <button className="ql-btn ql-btn-refresh" onClick={handleRefresh} disabled={refreshing || loading} title="Refresh library from server">
                             <FaArrowsRotate className={refreshing ? 'refresh-spin' : ''} /> {refreshing ? getUIText('refreshing', currentLang) : getUIText('refresh', currentLang)}
                         </button>

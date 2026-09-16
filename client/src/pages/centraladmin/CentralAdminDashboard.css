@@ -6033,3 +6033,239 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* =======================================================
+   HOSPITAL SECTION: RESPONSIVE FILTER BAR & SCROLL AREA
+   ======================================================= */
+.cad-hospital-section-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-top: 14px;
+}
+
+.cad-hospital-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 10px 16px;
+  box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.05);
+}
+
+.cad-hospital-filter-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 300px;
+}
+
+.cad-hospital-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 360px;
+}
+
+.cad-search-icon {
+  position: absolute;
+  left: 12px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.cad-hospital-search-input {
+  width: 100%;
+  padding: 8px 32px 8px 36px;
+  font-size: 0.85rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #0f172a;
+  outline: none;
+  font-family: inherit;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.cad-hospital-search-input:focus {
+  background: #ffffff;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.cad-search-clear-btn {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 50%;
+  line-height: 1;
+}
+
+.cad-search-clear-btn:hover {
+  color: #0f172a;
+}
+
+.cad-hospital-count-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 5px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.cad-hospital-filter-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cad-filter-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cad-sort-pills-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 0;
+  max-width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.cad-sort-pills-wrap::-webkit-scrollbar {
+  height: 4px;
+}
+
+.cad-sort-pills-wrap::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.cad-sort-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #475569;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.cad-sort-pill:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.cad-sort-pill.active {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: #ffffff;
+  border-color: #0f172a;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2);
+}
+
+.cad-sort-pill-icon {
+  font-size: 0.88rem;
+  display: inline-flex;
+}
+
+/* Dedicated Scroll Area with Sleek Custom Scrollbar */
+.cad-hospital-scroll-area {
+  max-height: 620px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 8px 16px 2px;
+  border-radius: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+  scroll-behavior: smooth;
+}
+
+.cad-hospital-scroll-area .cad-hospitals-grid {
+  margin-top: 4px;
+}
+
+.cad-hospital-scroll-area::-webkit-scrollbar {
+  width: 8px;
+}
+
+.cad-hospital-scroll-area::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 12px;
+  margin: 4px 0;
+}
+
+.cad-hospital-scroll-area::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 12px;
+  border: 2px solid #f1f5f9;
+}
+
+.cad-hospital-scroll-area::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Responsive Queries */
+@media (max-width: 900px) {
+  .cad-hospital-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .cad-hospital-filter-left {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .cad-hospital-search-box {
+    max-width: 100%;
+  }
+  .cad-hospital-filter-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .cad-sort-pills-wrap {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .cad-hospital-scroll-area {
+    max-height: 500px;
+    padding-right: 4px;
+  }
+  .cad-sort-pill {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+}

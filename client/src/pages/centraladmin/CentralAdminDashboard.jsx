@@ -122,6 +122,8 @@ const CentralAdminDashboard = () => {
     // Hospital list
     const [hospitals, setHospitals] = useState([]);
     const [loadingHospitals, setLoadingHospitals] = useState(false);
+    const [hospitalSort, setHospitalSort] = useState('a-z'); // 'a-z' | 'z-a' | 'newest' | 'oldest'
+    const [hospitalSearch, setHospitalSearch] = useState('');
     const [showHospitalForm, setShowHospitalForm] = useState(false);
     const [hospitalForm, setHospitalForm] = useState({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], whiteLabelEnabled: false, brandingSchema: { appName: '', logoUrl: '', customDomain: '', themeColors: { primary: '#14b8a6', secondary: '#0a2647', background: '#ffffff' } } });
     const [editHospital, setEditHospital] = useState(null);
@@ -807,6 +809,7 @@ const CentralAdminDashboard = () => {
                 const res = await hospitalAPI.updateHospital(editHospital._id, payload);
                 if (res.success) {
                     centralAdminCache.hospitals = {};
+                    toast.success(`Hospital "${payload.name || 'Hospital'}" updated successfully!`);
                     setSuccess('Hospital updated!');
                     setEditHospital(null);
                     setShowHospitalForm(false);
@@ -816,13 +819,20 @@ const CentralAdminDashboard = () => {
                 const res = await hospitalAPI.createHospital(payload);
                 if (res.success) {
                     centralAdminCache.hospitals = {};
+                    toast.success(`🎉 Hospital "${payload.name || 'Hospital'}" created successfully!`, {
+                        duration: 4000,
+                    });
                     setSuccess('Hospital created!');
                     setShowHospitalForm(false);
                     setHospitalForm({ name: '', slug: '', customDomain: '', address: '', city: '', state: '', phone: '', email: '', website: '', departments: [], whiteLabelEnabled: false, brandingSchema: { appName: '', logoUrl: '', customDomain: '', themeColors: { primary: '#14b8a6', secondary: '#0a2647', background: '#ffffff' } } });
                     fetchHospitals(plan, true);
                 }
             }
-        } catch (err) { setError(err.response?.data?.message || 'Error saving hospital.'); }
+        } catch (err) { 
+            const errorMsg = err.response?.data?.message || 'Error saving hospital.';
+            setError(errorMsg);
+            toast.error(errorMsg);
+        }
         finally { setSavingHospital(false); }
     };
 
@@ -890,12 +900,17 @@ const CentralAdminDashboard = () => {
                         }
                     } catch { /* avatar upload failure is non-fatal */ }
                 }
+                toast.success(`✅ Hospital Admin account created! Login: ${hospitalAdminForm.email}`, { duration: 4500 });
                 setSuccess(`✅ Hospital Admin account created! Login: ${hospitalAdminForm.email}`);
                 setHospitalAdminForm({ name: '', email: '', password: '', phone: '', hospitalId: '', file: null, age: '', aadhaarNumber: '' });
                 setShowHospitalAdminForm(false);
                 fetchHospitals(getActivePlanName(), true);
             }
-        } catch (err) { setError(err.response?.data?.message || 'Error creating hospital admin.'); }
+        } catch (err) { 
+            const errorMsg = err.response?.data?.message || 'Error creating hospital admin.';
+            setError(errorMsg);
+            toast.error(errorMsg);
+        }
         finally { setCreatingHospitalAdmin(false); }
     };
 
@@ -3173,7 +3188,6 @@ const CentralAdminDashboard = () => {
                                                 <div className="cad-ch-field-group">
                                                     <label className="cad-ch-label">
                                                         Subdomain Prefix <span className="cad-ch-req">*</span>
-                                                        <span className="cad-ch-info-icon" title="Unique subdomain for hospital login and portal access">ⓘ</span>
                                                     </label>
                                                     <input
                                                         type="text"
@@ -3374,7 +3388,7 @@ const CentralAdminDashboard = () => {
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
                                                         <div className="cad-ch-row-2col">
                                                             <div className="cad-ch-field-group">
-                                                                <label className="cad-ch-label">Custom Domain <span className="cad-ch-info-icon" title="e.g. portal.cityhospital.com">ⓘ</span></label>
+                                                                <label className="cad-ch-label">Custom Domain</label>
                                                                 <input
                                                                     type="text"
                                                                     className="cad-ch-input"
@@ -3585,15 +3599,15 @@ const CentralAdminDashboard = () => {
                             loadingHospitals ? (
                                 <div className="loading-message">⏳ Loading hospitals...</div>
                             ) : (() => {
-                                const filteredHospitals = hospitals.filter(h => 
+                                const planHospitals = hospitals.filter(h => 
                                     activeTab === 'multi-speciality' 
                                         ? h.subscriptionPlan === 'multi_speciality_starter' 
                                         : activeTab === 'clinic-basic'
                                             ? h.subscriptionPlan === 'clinic_basic'
                                             : (h.subscriptionPlan !== 'multi_speciality_starter' && h.subscriptionPlan !== 'clinic_basic')
-                                ).sort((a, b) => b._id.localeCompare(a._id));
+                                );
                                 
-                                if (filteredHospitals.length === 0) {
+                                if (planHospitals.length === 0) {
                                     return (
                                         <div className="cad-empty-banner">
                                             <span className="cad-empty-icon">📄</span>
@@ -3602,58 +3616,191 @@ const CentralAdminDashboard = () => {
                                     );
                                 }
 
+                                // Apply search filter
+                                let filtered = [...planHospitals];
+                                if (hospitalSearch.trim()) {
+                                    const q = hospitalSearch.toLowerCase().trim();
+                                    filtered = filtered.filter(h => {
+                                        const name = (h.branding?.appName || h.name || '').toLowerCase();
+                                        const city = (h.city || '').toLowerCase();
+                                        const state = (h.state || '').toLowerCase();
+                                        const email = (h.email || '').toLowerCase();
+                                        const phone = (h.phone || '').toLowerCase();
+                                        const slug = (h.slug || '').toLowerCase();
+                                        const domain = (h.customDomain || '').toLowerCase();
+                                        return name.includes(q) || city.includes(q) || state.includes(q) || email.includes(q) || phone.includes(q) || slug.includes(q) || domain.includes(q);
+                                    });
+                                }
+
+                                // Apply sorting
+                                filtered.sort((a, b) => {
+                                    const nameA = (a.branding?.appName || a.name || '').trim();
+                                    const nameB = (b.branding?.appName || b.name || '').trim();
+
+                                    if (hospitalSort === 'a-z') {
+                                        return nameA.localeCompare(nameB, undefined, { sensitivity: 'base', numeric: true });
+                                    }
+                                    if (hospitalSort === 'z-a') {
+                                        return nameB.localeCompare(nameA, undefined, { sensitivity: 'base', numeric: true });
+                                    }
+                                    if (hospitalSort === 'newest') {
+                                        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                                        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                                        if (dateA && dateB) return dateB - dateA;
+                                        return (b._id || '').localeCompare(a._id || '');
+                                    }
+                                    if (hospitalSort === 'oldest') {
+                                        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                                        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                                        if (dateA && dateB) return dateA - dateB;
+                                        return (a._id || '').localeCompare(b._id || '');
+                                    }
+                                    return 0;
+                                });
+
                                 return (
-                                    <div className="cad-hospitals-grid">
-                                        {filteredHospitals.map(h => (
-                                            <div key={h._id} className="cad-hospital-card" onClick={() => openHospitalDetail(h)}>
-                                                <div className="cad-hospital-card-header">
-                                                    <div className="cad-hospital-logo-box">
-                                                        {h.branding?.logoUrl ? (
-                                                            <img src={h.branding.logoUrl} alt={h.name} />
-                                                        ) : (
-                                                            <span style={{ fontSize: '24px' }}>🏥</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="cad-hospital-info">
-                                                        <h3 className="cad-hospital-name">
-                                                            {h.branding?.appName || h.name}
-                                                        </h3>
-                                                        {h.branding?.tagline && (
-                                                            <p className="cad-hospital-tagline">{h.branding.tagline}</p>
-                                                        )}
-                                                    </div>
+                                    <div className="cad-hospital-section-wrapper">
+                                        {/* Filter & Sort Bar */}
+                                        <div className="cad-hospital-filter-bar">
+                                            <div className="cad-hospital-filter-left">
+                                                <div className="cad-hospital-search-box">
+                                                    <svg className="cad-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <circle cx="11" cy="11" r="8" />
+                                                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                                    </svg>
+                                                    <input
+                                                        type="text"
+                                                        className="cad-hospital-search-input"
+                                                        placeholder="Search hospitals..."
+                                                        value={hospitalSearch}
+                                                        onChange={e => setHospitalSearch(e.target.value)}
+                                                    />
+                                                    {hospitalSearch && (
+                                                        <button 
+                                                            type="button" 
+                                                            className="cad-search-clear-btn" 
+                                                            onClick={() => setHospitalSearch('')} 
+                                                            title="Clear search"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    )}
                                                 </div>
+                                                <span className="cad-hospital-count-badge">
+                                                    {filtered.length} {filtered.length === 1 ? 'Hospital' : 'Hospitals'}
+                                                    {hospitalSearch && ` (${planHospitals.length} total)`}
+                                                </span>
+                                            </div>
 
-                                                <div className="cad-hospital-meta-list">
-                                                    {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
-                                                    {h.phone && <span>📞 {h.phone}</span>}
-                                                    {h.email && <span>✉️ {h.email}</span>}
-
-                                                    <div className="cad-domain-badge-wrap" onClick={e => e.stopPropagation()}>
-                                                        {h.slug && (
-                                                            <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" className="cad-domain-badge">
-                                                                🌐 {h.slug}.{getBaseHost()}
-                                                            </a>
-                                                        )}
-                                                        {h.customDomain && (
-                                                            <a href={`http://${h.customDomain}`} target="_blank" rel="noreferrer" className="cad-domain-badge">
-                                                                🌐 {h.customDomain}
-                                                            </a>
-                                                        )}
-                                                        <WhiteLabelBuilder hospital={h} />
-                                                    </div>
-                                                </div>
-
-                                                <div className="cad-hospital-card-footer">
-                                                    <div className="cad-hospital-click-hint">📊 Click to view full analytics →</div>
-                                                    <div className="cad-hospital-btn-group" onClick={e => e.stopPropagation()}>
-                                                        <button className="cad-btn-sm-branding" onClick={() => setBrandingHospital(h)}>🎨 Branding</button>
-                                                        <button className="cad-btn-sm-edit" onClick={() => openEditHospital(h)}>Edit</button>
-                                                        <button className="cad-btn-sm-delete" onClick={() => setDeleteHospitalConfirm(h._id)}>Delete</button>
-                                                    </div>
+                                            {/* Sort Filters on the side */}
+                                            <div className="cad-hospital-filter-right">
+                                                <span className="cad-filter-label">Sort:</span>
+                                                <div className="cad-sort-pills-wrap">
+                                                    <button
+                                                        type="button"
+                                                        className={`cad-sort-pill ${hospitalSort === 'a-z' ? 'active' : ''}`}
+                                                        onClick={() => setHospitalSort('a-z')}
+                                                        title="Alphabetical A to Z (Default)"
+                                                    >
+                                                        <span className="cad-sort-pill-icon">🔤</span> A → Z
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={`cad-sort-pill ${hospitalSort === 'z-a' ? 'active' : ''}`}
+                                                        onClick={() => setHospitalSort('z-a')}
+                                                        title="Alphabetical Z to A"
+                                                    >
+                                                        <span className="cad-sort-pill-icon">🔤</span> Z → A
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={`cad-sort-pill ${hospitalSort === 'newest' ? 'active' : ''}`}
+                                                        onClick={() => setHospitalSort('newest')}
+                                                        title="Recently added first (New wala)"
+                                                    >
+                                                        <span className="cad-sort-pill-icon">✨</span> Newest
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={`cad-sort-pill ${hospitalSort === 'oldest' ? 'active' : ''}`}
+                                                        onClick={() => setHospitalSort('oldest')}
+                                                        title="Oldest added first (Old wala)"
+                                                    >
+                                                        <span className="cad-sort-pill-icon">⏳</span> Oldest
+                                                    </button>
                                                 </div>
                                             </div>
-                                        ))}
+                                        </div>
+
+                                        {/* Scrollable Container with Custom Scrollbar */}
+                                        {filtered.length === 0 ? (
+                                            <div className="cad-empty-banner" style={{ marginTop: '14px' }}>
+                                                <span className="cad-empty-icon">🔍</span>
+                                                <span>No hospitals match &quot;{hospitalSearch}&quot;.</span>
+                                                <button 
+                                                    className="cad-btn-secondary" 
+                                                    style={{ marginTop: '8px', padding: '6px 14px', fontSize: '12.5px' }}
+                                                    onClick={() => setHospitalSearch('')}
+                                                >
+                                                    Clear Filter
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="cad-hospital-scroll-area">
+                                                <div className="cad-hospitals-grid">
+                                                    {filtered.map(h => (
+                                                        <div key={h._id} className="cad-hospital-card" onClick={() => openHospitalDetail(h)}>
+                                                            <div className="cad-hospital-card-header">
+                                                                <div className="cad-hospital-logo-box">
+                                                                    {h.branding?.logoUrl ? (
+                                                                        <img src={h.branding.logoUrl} alt={h.name} />
+                                                                    ) : (
+                                                                        <span style={{ fontSize: '24px' }}>🏥</span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="cad-hospital-info">
+                                                                    <h3 className="cad-hospital-name">
+                                                                        {h.branding?.appName || h.name}
+                                                                    </h3>
+                                                                    {h.branding?.tagline && (
+                                                                        <p className="cad-hospital-tagline">{h.branding.tagline}</p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="cad-hospital-meta-list">
+                                                                {h.city && <span>📍 {h.city}{h.state ? `, ${h.state}` : ''}</span>}
+                                                                {h.phone && <span>📞 {h.phone}</span>}
+                                                                {h.email && <span>✉️ {h.email}</span>}
+
+                                                                <div className="cad-domain-badge-wrap" onClick={e => e.stopPropagation()}>
+                                                                    {h.slug && (
+                                                                        <a href={`${window.location.protocol}//${h.slug}.${getBaseHost()}`} target="_blank" rel="noreferrer" className="cad-domain-badge">
+                                                                            🌐 {h.slug}.{getBaseHost()}
+                                                                        </a>
+                                                                    )}
+                                                                    {h.customDomain && (
+                                                                        <a href={`http://${h.customDomain}`} target="_blank" rel="noreferrer" className="cad-domain-badge">
+                                                                            🌐 {h.customDomain}
+                                                                        </a>
+                                                                    )}
+                                                                    <WhiteLabelBuilder hospital={h} />
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="cad-hospital-card-footer">
+                                                                <div className="cad-hospital-click-hint">📊 Click to view full analytics →</div>
+                                                                <div className="cad-hospital-btn-group" onClick={e => e.stopPropagation()}>
+                                                                    <button className="cad-btn-sm-branding" onClick={() => setBrandingHospital(h)}>🎨 Branding</button>
+                                                                    <button className="cad-btn-sm-edit" onClick={() => openEditHospital(h)}>Edit</button>
+                                                                    <button className="cad-btn-sm-delete" onClick={() => setDeleteHospitalConfirm(h._id)}>Delete</button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })()

@@ -74,6 +74,54 @@ const HospitalSelect = ({ hospitals, value, onChange }) => {
     );
 };
 
+const compressAvatarImage = async (file, maxWidth = 400, quality = 0.8) => {
+    if (!file || !file.type || !file.type.startsWith('image/')) return file;
+    if (file.size <= 80 * 1024) return file; // Already under 80KB
+
+    return new Promise((resolve) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            const canvas = document.createElement('canvas');
+            let { width, height } = img;
+            if (width > maxWidth || height > maxWidth) {
+                if (width > height) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                } else {
+                    width = Math.round((width * maxWidth) / height);
+                    height = maxWidth;
+                }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+                (blob) => {
+                    if (!blob || blob.size >= file.size) {
+                        resolve(file);
+                    } else {
+                        const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+                            type: 'image/jpeg',
+                            lastModified: Date.now()
+                        });
+                        resolve(compressedFile);
+                    }
+                },
+                'image/jpeg',
+                quality
+            );
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(file);
+        };
+        img.src = objectUrl;
+    });
+};
+
 const Admin = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -517,33 +565,26 @@ const Admin = () => {
         }
 
         if (hospital?.clinicType === 'clinic') {
-            try {
-                const response = await adminAPI.getUsers();
-                if (response.success) {
-                    const staffUsers = response.users || [];
-                    const hasDoc = staffUsers.some(u => {
-                        const rName = (u.role || '').toLowerCase();
-                        return rName === 'clinic doctor' || rName === 'doctor';
-                    });
-                    if (hasDoc) {
-                        toast.error('This clinic already has an assigned Clinic Doctor.');
-                        setClinicDoctorExists(true);
-                        setCreating(false);
-                        return;
-                    }
-                }
-            } catch (err) {
-                console.error("Error checking clinic doctor before submit:", err);
+            const hasDoc = clinicDoctorExists || users.some(u => {
+                const rName = (u.role?.name || u.role || '').toLowerCase();
+                return rName === 'clinic doctor' || rName === 'doctor';
+            });
+            if (hasDoc) {
+                toast.error('This clinic already has an assigned Clinic Doctor.');
+                setClinicDoctorExists(true);
+                setCreating(false);
+                return;
             }
         }
 
         try {
             let avatarUrl = null;
 
-            // 1. Upload Image if selected
+            // 1. Upload Image if selected (optimized with fast client-side compression)
             if (createForm.file) {
+                const fileToUpload = await compressAvatarImage(createForm.file);
                 const formData = new FormData();
-                formData.append('images', createForm.file);
+                formData.append('images', fileToUpload);
                 try {
                     const uploadRes = await uploadAPI.uploadImages(formData);
                     if (uploadRes.success && uploadRes.urls && uploadRes.urls.length > 0) {
@@ -739,8 +780,7 @@ const Admin = () => {
                                     </div>
                                 )}
                                 
-                                <div className="form-group" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                                    <button type="button" onClick={() => setShowCreateForm(false)} className="btn-cancel" style={{ padding: '10px 20px', fontSize: '14px' }}>Cancel</button>
+                                <div className="form-group" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
                                     <button type="submit" disabled={creating} className="primary-btn" style={{ background: 'linear-gradient(135deg, #0d9488, #2563eb)', color: 'white', border: 'none', padding: '10px 24px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}>
                                         {creating ? 'Creating...' : 'Create Staff Account'}
                                     </button>

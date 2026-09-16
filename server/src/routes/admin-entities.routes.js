@@ -82,20 +82,22 @@ router.post('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
 
     await user.save();
 
-    // --- SEND WELCOME EMAIL ---
-    try {
-        let loginUrl = 'https://medical365.in/login';
-        let hName = 'Medical 365';
-        const emailHospId = getHospitalId(req);
-        if (emailHospId) {
-            const emailHosp = await mongoose.model('Hospital').findById(emailHospId).select('name slug customDomain');
-            if (emailHosp) {
-                hName = emailHosp.name || 'Medical 365';
-                loginUrl = emailHosp.customDomain ? `https://${emailHosp.customDomain}/login` : `https://${emailHosp.slug}.medical365.in/login`;
+    // --- SEND WELCOME EMAIL (Dispatched asynchronously in background so response returns instantly) ---
+    (async () => {
+        try {
+            let loginUrl = 'https://medical365.in/login';
+            let hName = 'Medical 365';
+            const emailHospId = getHospitalId(req);
+            if (emailHospId) {
+                const emailHosp = await mongoose.model('Hospital').findById(emailHospId).select('name slug customDomain').lean();
+                if (emailHosp) {
+                    hName = emailHosp.name || 'Medical 365';
+                    loginUrl = emailHosp.customDomain ? `https://${emailHosp.customDomain}/login` : `https://${emailHosp.slug}.medical365.in/login`;
+                }
             }
-        }
-        await sendStaffWelcomeEmail({ email: user.email, password: defaultPassword, name: user.name, role: 'Doctor', hospitalName: hName, loginUrl });
-    } catch (emailErr) { console.error('[admin-entities] Failed to send email:', emailErr.message); }
+            await sendStaffWelcomeEmail({ email: user.email, password: defaultPassword, name: user.name, role: 'Doctor', hospitalName: hName, loginUrl });
+        } catch (emailErr) { console.error('[admin-entities] Failed to send doctor email in background:', emailErr.message); }
+    })();
     // --------------------------
 
     // Ensure availability has proper structure
@@ -337,20 +339,22 @@ router.post('/labs', verifyAdminOrSuperAdmin, async (req, res) => {
 
     await user.save();
 
-    // --- SEND WELCOME EMAIL ---
-    try {
-        let loginUrl = 'https://medical365.in/login';
-        let hName = 'Medical 365';
-        const emailHospId = getHospitalId(req);
-        if (emailHospId) {
-            const emailHosp = await mongoose.model('Hospital').findById(emailHospId).select('name slug customDomain');
-            if (emailHosp) {
-                hName = emailHosp.name || 'Medical 365';
-                loginUrl = emailHosp.customDomain ? `https://${emailHosp.customDomain}/login` : `https://${emailHosp.slug}.medical365.in/login`;
+    // --- SEND WELCOME EMAIL (Dispatched asynchronously in background so response returns instantly) ---
+    (async () => {
+        try {
+            let loginUrl = 'https://medical365.in/login';
+            let hName = 'Medical 365';
+            const emailHospId = getHospitalId(req);
+            if (emailHospId) {
+                const emailHosp = await mongoose.model('Hospital').findById(emailHospId).select('name slug customDomain').lean();
+                if (emailHosp) {
+                    hName = emailHosp.name || 'Medical 365';
+                    loginUrl = emailHosp.customDomain ? `https://${emailHosp.customDomain}/login` : `https://${emailHosp.slug}.medical365.in/login`;
+                }
             }
-        }
-        await sendStaffWelcomeEmail({ email: user.email, password: defaultPassword, name: user.name, role: 'Lab Technician', hospitalName: hName, loginUrl });
-    } catch (emailErr) { console.error('[admin-entities] Failed to send email:', emailErr.message); }
+            await sendStaffWelcomeEmail({ email: user.email, password: defaultPassword, name: user.name, role: 'Lab Technician', hospitalName: hName, loginUrl });
+        } catch (emailErr) { console.error('[admin-entities] Failed to send lab email in background:', emailErr.message); }
+    })();
     // --------------------------
 
     // Ensure availability has proper structure
@@ -487,20 +491,22 @@ router.post('/pharmacies', verifyAdminOrSuperAdmin, async (req, res) => {
 
     await user.save();
 
-    // --- SEND WELCOME EMAIL ---
-    try {
-        let loginUrl = 'https://medical365.in/login';
-        let hName = 'Medical 365';
-        const emailHospId = getHospitalId(req);
-        if (emailHospId) {
-            const emailHosp = await mongoose.model('Hospital').findById(emailHospId).select('name slug customDomain');
-            if (emailHosp) {
-                hName = emailHosp.name || 'Medical 365';
-                loginUrl = emailHosp.customDomain ? `https://${emailHosp.customDomain}/login` : `https://${emailHosp.slug}.medical365.in/login`;
+    // --- SEND WELCOME EMAIL (Dispatched asynchronously in background so response returns instantly) ---
+    (async () => {
+        try {
+            let loginUrl = 'https://medical365.in/login';
+            let hName = 'Medical 365';
+            const emailHospId = getHospitalId(req);
+            if (emailHospId) {
+                const emailHosp = await mongoose.model('Hospital').findById(emailHospId).select('name slug customDomain').lean();
+                if (emailHosp) {
+                    hName = emailHosp.name || 'Medical 365';
+                    loginUrl = emailHosp.customDomain ? `https://${emailHosp.customDomain}/login` : `https://${emailHosp.slug}.medical365.in/login`;
+                }
             }
-        }
-        await sendStaffWelcomeEmail({ email: user.email, password: defaultPassword, name: user.name, role: 'Pharmacist', hospitalName: hName, loginUrl });
-    } catch (emailErr) { console.error('[admin-entities] Failed to send email:', emailErr.message); }
+            await sendStaffWelcomeEmail({ email: user.email, password: defaultPassword, name: user.name, role: 'Pharmacist', hospitalName: hName, loginUrl });
+        } catch (emailErr) { console.error('[admin-entities] Failed to send pharmacy email in background:', emailErr.message); }
+    })();
     // --------------------------
 
     // Ensure availability has proper structure
@@ -637,19 +643,22 @@ router.post('/receptions', verifyAdminOrSuperAdmin, async (req, res) => {
     await user.save();
 
     // --- SEND WELCOME EMAIL ---
-    try {
-        let loginUrl = 'https://medical365.in/login';
-        let hName = 'Medical 365';
-        const emailHospId = getHospitalId(req);
-        if (emailHospId) {
-            const emailHosp = await mongoose.model('Hospital').findById(emailHospId).select('name slug customDomain');
-            if (emailHosp) {
-                hName = emailHosp.name || 'Medical 365';
-                loginUrl = emailHosp.customDomain ? `https://${emailHosp.customDomain}/login` : `https://${emailHosp.slug}.medical365.in/login`;
+    // --- SEND WELCOME EMAIL (Dispatched asynchronously in background so response returns instantly) ---
+    (async () => {
+        try {
+            let loginUrl = 'https://medical365.in/login';
+            let hName = 'Medical 365';
+            const emailHospId = getHospitalId(req);
+            if (emailHospId) {
+                const emailHosp = await mongoose.model('Hospital').findById(emailHospId).select('name slug customDomain').lean();
+                if (emailHosp) {
+                    hName = emailHosp.name || 'Medical 365';
+                    loginUrl = emailHosp.customDomain ? `https://${emailHosp.customDomain}/login` : `https://${emailHosp.slug}.medical365.in/login`;
+                }
             }
-        }
-        await sendStaffWelcomeEmail({ email: user.email, password: defaultPassword, name: user.name, role: 'Receptionist', hospitalName: hName, loginUrl });
-    } catch (emailErr) { console.error('[admin-entities] Failed to send email:', emailErr.message); }
+            await sendStaffWelcomeEmail({ email: user.email, password: defaultPassword, name: user.name, role: 'Receptionist', hospitalName: hName, loginUrl });
+        } catch (emailErr) { console.error('[admin-entities] Failed to send reception email in background:', emailErr.message); }
+    })();
     // --------------------------
 
     // Ensure availability has proper structure
