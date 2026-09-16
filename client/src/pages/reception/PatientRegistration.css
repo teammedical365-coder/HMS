@@ -29,9 +29,17 @@
         var(--bg);
     color: var(--ink);
     min-height: 100vh;
-    width: 100vw;
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
     margin: 0;
     padding: 0;
+}
+
+.reg-page-root *,
+.reg-page-root *::before,
+.reg-page-root *::after {
+    box-sizing: border-box;
 }
 
 /* =========================
@@ -183,6 +191,7 @@
     margin: 0;
     background: linear-gradient(135deg, #0284c7 0%, #4f46e5 50%, #9333ea 100%);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
     text-shadow: 0 2px 14px rgba(79, 70, 229, 0.12);
 }
@@ -773,21 +782,721 @@
     transform: none;
 }
 
-/* Responsive queries */
+/* Policy agreement wrap */
+.reg-policy-agreement-wrap {
+    margin: 16px 20px 0 20px;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+/* Form Footer */
+.reg-form-footer {
+    margin-top: 18px;
+    padding: 16px 24px 20px;
+    border-top: 1px solid #edf2f7;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.reg-footer-info {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 600;
+}
+
+/* =========================================================
+   CAMERA MODAL STYLES (MODERN, RESPONSIVE, DUAL-FACING)
+========================================================= */
+
+.cam-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.82);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+    animation: camFadeIn 0.2s ease-out;
+}
+
+@keyframes camFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.cam-modal-card {
+    background: #ffffff;
+    border-radius: 22px;
+    width: 100%;
+    max-width: 520px;
+    box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: camSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-sizing: border-box;
+}
+
+@keyframes camSlideUp {
+    from { transform: translateY(20px) scale(0.97); opacity: 0; }
+    to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.cam-modal-header {
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #f1f5f9;
+    background: #ffffff;
+}
+
+.cam-modal-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cam-modal-icon {
+    font-size: 20px;
+}
+
+.cam-modal-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.2;
+}
+
+.cam-modal-subtitle {
+    margin: 2px 0 0 0;
+    font-size: 11px;
+    color: #64748b;
+}
+
+.cam-modal-close-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: all 0.2s ease;
+}
+
+.cam-modal-close-btn:hover {
+    background: #fee2e2;
+    color: #dc2626;
+    transform: rotate(90deg);
+}
+
+.cam-viewport-container {
+    padding: 14px;
+    background: #090d16;
+}
+
+.cam-live-frame,
+.cam-preview-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    max-height: 52vh;
+    background: #000000;
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cam-video-element {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.cam-video-mirrored {
+    transform: scaleX(-1);
+}
+
+.cam-preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.cam-preview-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: rgba(16, 185, 129, 0.92);
+    backdrop-filter: blur(4px);
+    color: #ffffff;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.cam-floating-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    color: #ffffff;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 700;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    z-index: 10;
+}
+
+.cam-flip-switch-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    padding: 7px 14px;
+    border-radius: 22px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 10;
+}
+
+.cam-flip-switch-btn:hover {
+    background: #ffffff;
+    transform: scale(1.05);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.cam-flip-switch-btn:active {
+    transform: scale(0.96);
+}
+
+.cam-flip-icon {
+    font-size: 14px;
+    display: inline-block;
+    transition: transform 0.3s ease;
+}
+
+.cam-flip-switch-btn:hover .cam-flip-icon {
+    transform: rotate(180deg);
+}
+
+.cam-face-guide {
+    position: absolute;
+    inset: 12%;
+    border: 2px dashed rgba(255, 255, 255, 0.35);
+    border-radius: 50%;
+    pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.12);
+}
+
+.cam-shutter-container {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+}
+
+.cam-shutter-btn {
+    width: 66px;
+    height: 66px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95);
+    border: 4px solid #14b8a6;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
+    transition: all 0.15s ease;
+    padding: 0;
+}
+
+.cam-shutter-btn:hover {
+    transform: scale(1.08);
+    border-color: #0d9488;
+    box-shadow: 0 8px 26px rgba(20, 184, 166, 0.4);
+}
+
+.cam-shutter-btn:active {
+    transform: scale(0.94);
+}
+
+.cam-shutter-inner {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #14b8a6, #0284c7);
+    transition: transform 0.15s ease;
+}
+
+.cam-shutter-btn:active .cam-shutter-inner {
+    transform: scale(0.85);
+}
+
+.cam-modal-footer {
+    padding: 14px 18px;
+    background: #ffffff;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.cam-btn {
+    padding: 11px 22px;
+    border-radius: 12px;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.cam-btn-retake {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+}
+
+.cam-btn-retake:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.cam-btn-save {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+}
+
+.cam-btn-save:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
+}
+
+.cam-btn-cancel {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
+.cam-btn-cancel:hover {
+    background: #fee2e2;
+    color: #dc2626;
+    border-color: #fca5a5;
+}
+
+/* =========================================================
+   COMPREHENSIVE RESPONSIVE SYSTEM (TABLET & MOBILE)
+========================================================= */
+
 @media (max-width: 1024px) {
+    .reg-main {
+        padding: 0 16px 40px 16px;
+    }
     .reg-workspace {
         grid-template-columns: 1fr;
+        gap: 16px;
     }
     .reg-steps {
         display: none;
     }
-    .reg-main {
-        padding: 0 20px 40px 20px;
-    }
     .reg-page-heading-row {
         grid-template-columns: 1fr auto;
+        margin: 12px 8px 16px 8px;
     }
     .reg-heading-placeholder {
         display: none;
     }
+    .reg-fields {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .reg-address-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .reg-vitals-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
+
+/* Mobile Screens (Phones ≤ 768px) */
+@media (max-width: 768px) {
+    .reg-main {
+        padding: 0 10px 30px 10px;
+    }
+
+    /* Page Heading on Mobile: No cutting off, responsive wrap */
+    .reg-page-heading-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 10px 2px 14px 2px;
+        gap: 8px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .reg-heading-placeholder {
+        display: none;
+    }
+
+    .reg-heading-center {
+        align-items: flex-start;
+        text-align: left;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .reg-title-gradient {
+        font-size: 16px;
+        line-height: 1.25;
+        word-break: break-word;
+        letter-spacing: -0.2px;
+    }
+
+    .reg-title-glow-accent {
+        width: 34px;
+        height: 2.5px;
+        margin-top: 3px;
+    }
+
+    .reg-heading-right-action {
+        flex-shrink: 0;
+    }
+
+    .reg-btn-close-prominent {
+        padding: 6px 10px;
+        font-size: 11.5px;
+        border-radius: 8px;
+        gap: 4px;
+        white-space: nowrap;
+    }
+
+    /* Cards on Mobile */
+    .reg-form-card {
+        border-radius: 16px;
+        margin-bottom: 14px;
+        box-shadow: 0 4px 18px rgba(46, 70, 100, .06);
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .reg-card-head {
+        padding: 12px 14px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .reg-card-title {
+        gap: 10px;
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .reg-card-title h2 {
+        font-size: 14.5px;
+        word-break: break-word;
+    }
+
+    .reg-card-title p {
+        font-size: 11px;
+    }
+
+    .reg-card-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+        border-radius: 9px;
+        flex-shrink: 0;
+    }
+
+    .reg-ai-tag {
+        font-size: 9px;
+        padding: 4px 8px;
+        border-radius: 12px;
+        flex-shrink: 0;
+    }
+
+    .reg-card-body {
+        padding: 14px 12px;
+        box-sizing: border-box;
+    }
+
+    /* Identity & Photo Grid: 1 Column on Mobile, centered photo frame */
+    .reg-identity-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        align-items: stretch;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .reg-photo-box {
+        width: 100%;
+        max-width: 260px;
+        margin: 0 auto;
+        padding: 14px 12px;
+        box-sizing: border-box;
+    }
+
+    .reg-photo-frame {
+        width: 96px;
+        height: 96px;
+    }
+
+    .reg-photo-actions-row {
+        justify-content: center;
+        width: 100%;
+    }
+
+    /* Form Fields: Stack vertically on mobile so nothing cuts off */
+    .reg-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .reg-field {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .reg-address-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .reg-source-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .reg-vitals-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .reg-vital-box {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-width: 0;
+    }
+
+    .reg-vital-box label {
+        font-size: 10.5px;
+        font-weight: 800;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .reg-assign-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .reg-pay-modes {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .reg-pay-chip {
+        padding: 10px 8px;
+        font-size: 12px;
+    }
+
+    .reg-pay-meta-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .reg-input,
+    .reg-select,
+    .reg-textarea {
+        padding: 11px 12px;
+        font-size: 14px;
+        border-radius: 10px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .reg-payment-section-box {
+        padding: 10px 8px !important;
+        border-radius: 10px !important;
+    }
+
+    /* Policy agreement wrap */
+    .reg-policy-agreement-wrap {
+        margin: 12px 0 0 0;
+        padding: 10px 12px;
+        gap: 10px;
+        box-sizing: border-box;
+    }
+
+    .reg-policy-agreement-wrap label {
+        font-size: 11.5px;
+        line-height: 1.45;
+    }
+
+    /* Form Footer on Mobile */
+    .reg-form-footer {
+        padding: 14px 12px 18px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        box-sizing: border-box;
+    }
+
+    .reg-footer-info {
+        text-align: center;
+        font-size: 11px;
+    }
+
+    .reg-actions {
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 10px;
+        margin-top: 0;
+        padding-bottom: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .reg-btn {
+        width: 100%;
+        padding: 12px 16px;
+        font-size: 13.5px;
+        text-align: center;
+        justify-content: center;
+        display: flex;
+        align-items: center;
+    }
+}
+
+/* Extra Small Screens (≤ 480px) */
+@media (max-width: 480px) {
+    .reg-title-gradient {
+        font-size: 15px;
+    }
+
+    .reg-btn-close-prominent {
+        padding: 5px 8px;
+        font-size: 11px;
+    }
+
+    .cam-modal-card {
+        border-radius: 16px;
+    }
+
+    .cam-viewport-container {
+        padding: 8px;
+    }
+
+    .cam-live-frame,
+    .cam-preview-frame {
+        border-radius: 10px;
+        aspect-ratio: 1/1;
+    }
+
+    .cam-floating-badge {
+        top: 8px;
+        left: 8px;
+        padding: 4px 8px;
+        font-size: 10px;
+    }
+
+    .cam-flip-switch-btn {
+        top: 8px;
+        right: 8px;
+        padding: 5px 10px;
+        font-size: 11px;
+        gap: 4px;
+    }
+
+    .cam-flip-label {
+        font-size: 10.5px;
+    }
+
+    .cam-shutter-btn {
+        width: 58px;
+        height: 58px;
+    }
+
+    .cam-shutter-inner {
+        width: 42px;
+        height: 42px;
+    }
+
+    .cam-modal-footer {
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px 14px;
+    }
+
+    .cam-btn {
+        width: 100%;
+        font-size: 13px;
+        padding: 10px 14px;
+    }
+}
+

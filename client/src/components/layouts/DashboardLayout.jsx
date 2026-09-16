@@ -74,7 +74,6 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'My Patients', path: '/doctor/patients', icon: <FiUsers />, prefetchKey: 'doc_patients', prefetchFn: () => import('../../pages/doctors/Patient') },
                 { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity />, prefetchKey: 'doc_ipd', prefetchFn: () => import('../../pages/nurse/IPDCommandCenter') },
                 { label: 'AI Assistant', path: '/doctor/ai-assistant', icon: <FiCpu />, prefetchKey: 'doc_ai', prefetchFn: () => import('../../pages/doctors/AIAssistant') },
-                { label: 'Reports', path: '/lab-reports', icon: <FiFileText />, prefetchKey: 'doc_reports', prefetchFn: () => import('../../pages/user/LabReports') },
             ];
         }
         if (role === 'reception' || role === 'receptionist') {

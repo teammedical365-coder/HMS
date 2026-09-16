@@ -272,10 +272,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const [aadhaarOtp, setAadhaarOtp] = useState('');
     const [hospitalContext, setHospitalContext] = useState(null);
     const [pendingDownload, setPendingDownload] = useState(null);
-    const [followupStatus, setFollowupStatus] = useState(null);
-    const [showCameraModal, setShowCameraModal] = useState(false);
+    const [followupStatus, setFollowupStatus] = useState(null);    const [showCameraModal, setShowCameraModal] = useState(false);
     const [cameraCapturedPreview, setCameraCapturedPreview] = useState(null); // blob URL for preview before saving
     const [cameraCapturedBlob, setCameraCapturedBlob] = useState(null);
+    const [cameraFacingMode, setCameraFacingMode] = useState('user'); // 'user' (front) or 'environment' (back)
+    const [cameraLoading, setCameraLoading] = useState(false);
     const [activeStep, setActiveStep] = useState(1);
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
@@ -319,6 +320,19 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         };
     }, [viewMode, isPatientPortal]);
 
+    // Clean up camera stream on unmount
+    useEffect(() => {
+        return () => {
+            if (activeStreamRef.current) {
+                try {
+                    activeStreamRef.current.getTracks().forEach(track => track.stop());
+                } catch (e) {
+                    console.warn("Cleanup camera error:", e);
+                }
+            }
+        };
+    }, []);
+
     const scrollToStep = (stepNum) => {
         setActiveStep(stepNum);
         const el = document.getElementById(`reg-step-card-${stepNum}`);
@@ -327,30 +341,77 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         }
     };
 
+    const initCameraStream = async (facing = 'user') => {
+        setCameraLoading(true);
+
+        // Stop any active camera tracks before switching
+        if (activeStreamRef.current) {
+            try {
+                activeStreamRef.current.getTracks().forEach(track => track.stop());
+            } catch (e) {
+                console.warn("Track stop error:", e);
+            }
+            activeStreamRef.current = null;
+        }
+        if (videoRef.current && videoRef.current.srcObject) {
+            try {
+                videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+            } catch (e) {
+                console.warn("Video srcObject track stop error:", e);
+            }
+            videoRef.current.srcObject = null;
+        }
+
+        let stream = null;
+        try {
+            // Priority 1: ideal facingMode constraint with high quality
+            stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: { ideal: facing },
+                    width: { ideal: 1280 }, 
+                    height: { ideal: 720 } 
+                } 
+            });
+        } catch (e1) {
+            try {
+                // Priority 2: direct facingMode constraint
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: facing } 
+                });
+            } catch (e2) {
+                try {
+                    // Priority 3: generic video fallback
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                } catch (e3) {
+                    console.error("Camera access error:", e3);
+                    toast.error("Camera access failed. Please ensure camera permissions are allowed.");
+                    setCameraLoading(false);
+                    return;
+                }
+            }
+        }
+
+        activeStreamRef.current = stream;
+        setCameraLoading(false);
+        setTimeout(() => {
+            if (videoRef.current && stream) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.play().catch(e => console.warn("Video play exception:", e));
+            }
+        }, 80);
+    };
+
     const startCamera = async () => {
         setCameraCapturedPreview(null);
         setCameraCapturedBlob(null);
         setShowCameraModal(true);
-        try {
-            let stream = null;
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: { ideal: 1280 }, height: { ideal: 720 } } 
-                });
-            } catch (e1) {
-                stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            }
-            activeStreamRef.current = stream;
-            setTimeout(() => {
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                    videoRef.current.play().catch(e => console.warn("Video play exception:", e));
-                }
-            }, 80);
-        } catch (err) {
-            console.error("Camera access error:", err);
-            toast.error("Camera access failed. Please allow camera permissions or click 'Upload Photo'.");
-        }
+        await initCameraStream(cameraFacingMode);
+    };
+
+    const toggleCameraFacing = async () => {
+        const newFacing = cameraFacingMode === 'user' ? 'environment' : 'user';
+        setCameraFacingMode(newFacing);
+        await initCameraStream(newFacing);
     };
 
     const handleFilePhotoSelect = (e) => {
@@ -364,11 +425,23 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     const capturePhotoFromCamera = () => {
         if (videoRef.current && canvasRef.current) {
-            const context = canvasRef.current.getContext('2d');
-            canvasRef.current.width = videoRef.current.videoWidth || 640;
-            canvasRef.current.height = videoRef.current.videoHeight || 480;
-            context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
-            canvasRef.current.toBlob(blob => {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            const context = canvas.getContext('2d');
+            const vWidth = video.videoWidth || 640;
+            const vHeight = video.videoHeight || 480;
+            canvas.width = vWidth;
+            canvas.height = vHeight;
+
+            // Mirror context for front selfie camera so output matches live mirror preview
+            if (cameraFacingMode === 'user') {
+                context.translate(vWidth, 0);
+                context.scale(-1, 1);
+            }
+            context.drawImage(video, 0, 0, vWidth, vHeight);
+            context.setTransform(1, 0, 0, 1, 0, 0); // reset matrix
+
+            canvas.toBlob(blob => {
                 if (blob) {
                     setCameraCapturedBlob(blob);
                     setCameraCapturedPreview(URL.createObjectURL(blob));
@@ -387,46 +460,30 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             setProfilePhotoPreview(URL.createObjectURL(file));
             toast.success("Photo captured and saved!");
         }
-        setCameraCapturedPreview(null);
-        setCameraCapturedBlob(null);
-        setShowCameraModal(false);
-        if (activeStreamRef.current) {
-            activeStreamRef.current.getTracks().forEach(track => track.stop());
-            activeStreamRef.current = null;
-        }
+        stopCamera();
     };
 
     const retakePhoto = async () => {
         setCameraCapturedPreview(null);
         setCameraCapturedBlob(null);
-        try {
-            let stream = null;
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: { ideal: 1280 }, height: { ideal: 720 } } 
-                });
-            } catch (e1) {
-                stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            }
-            activeStreamRef.current = stream;
-            setTimeout(() => {
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                    videoRef.current.play().catch(e => console.warn("Video play exception:", e));
-                }
-            }, 80);
-        } catch (err) {
-            toast.error("Camera access denied or unavailable.");
-        }
+        await initCameraStream(cameraFacingMode);
     };
 
     const stopCamera = () => {
         if (activeStreamRef.current) {
-            activeStreamRef.current.getTracks().forEach(track => track.stop());
+            try {
+                activeStreamRef.current.getTracks().forEach(track => track.stop());
+            } catch (e) {
+                console.warn("Track stop error:", e);
+            }
             activeStreamRef.current = null;
         }
         if (videoRef.current && videoRef.current.srcObject) {
-            videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+            try {
+                videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+            } catch (e) {
+                console.warn("Video track stop error:", e);
+            }
             videoRef.current.srcObject = null;
         }
         setCameraCapturedPreview(null);
@@ -437,61 +494,100 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const renderCameraModal = () => {
         if (!showCameraModal) return null;
         return (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 999999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{ background: '#fff', padding: '24px', borderRadius: '20px', textAlign: 'center', width: '90%', maxWidth: '580px', boxShadow: '0 25px 70px rgba(0,0,0,0.4)', position: 'relative' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
-                            {cameraCapturedPreview ? '📷 Photo Preview' : '📷 Live Camera Capture'}
-                        </h3>
+            <div className="cam-modal-backdrop">
+                <div className="cam-modal-card">
+                    {/* Header */}
+                    <div className="cam-modal-header">
+                        <div className="cam-modal-title-wrap">
+                            <span className="cam-modal-icon">📷</span>
+                            <div>
+                                <h3 className="cam-modal-title">
+                                    {cameraCapturedPreview ? 'Photo Preview' : 'Capture Patient Photo'}
+                                </h3>
+                                <p className="cam-modal-subtitle">
+                                    {cameraCapturedPreview ? 'Review your captured photo' : 'Position patient face inside the frame'}
+                                </p>
+                            </div>
+                        </div>
                         <button 
-                            type="button"
-                            onClick={stopCamera}
-                            style={{ border: 'none', background: '#f1f5f9', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', display: 'grid', placeItems: 'center' }}
+                            type="button" 
+                            onClick={stopCamera} 
+                            className="cam-modal-close-btn"
+                            title="Close Camera"
                         >
                             ✕
                         </button>
                     </div>
 
-                    <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3', background: '#000', borderRadius: '16px', overflow: 'hidden', marginBottom: '20px' }}>
+                    {/* Viewport / Video Preview */}
+                    <div className="cam-viewport-container">
                         {cameraCapturedPreview ? (
-                            <img src={cameraCapturedPreview} alt="Captured" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <div className="cam-preview-frame">
+                                <img src={cameraCapturedPreview} alt="Captured Patient" className="cam-preview-img" />
+                                <div className="cam-preview-badge">✓ Captured</div>
+                            </div>
                         ) : (
-                            <>
-                                <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay playsInline muted />
+                            <div className="cam-live-frame">
+                                <video 
+                                    ref={videoRef} 
+                                    className={`cam-video-element ${cameraFacingMode === 'user' ? 'cam-video-mirrored' : ''}`}
+                                    autoPlay 
+                                    playsInline 
+                                    muted 
+                                />
                                 <canvas ref={canvasRef} style={{ display: 'none' }} />
-                                <div style={{ position: 'absolute', bottom: '20px', left: '50%', transform: 'translateX(-50%)' }}>
+
+                                {/* Camera Mode Badge */}
+                                <div className="cam-floating-badge">
+                                    {cameraFacingMode === 'user' ? '🤳 Front Camera' : '📸 Back Camera'}
+                                </div>
+
+                                {/* Flip / Switch Camera Button (Front vs Back) */}
+                                <button
+                                    type="button"
+                                    onClick={toggleCameraFacing}
+                                    className="cam-flip-switch-btn"
+                                    title={`Switch to ${cameraFacingMode === 'user' ? 'Back' : 'Front'} Camera`}
+                                    disabled={cameraLoading}
+                                >
+                                    <span className="cam-flip-icon">🔄</span>
+                                    <span className="cam-flip-label">
+                                        {cameraFacingMode === 'user' ? 'Flip to Back' : 'Flip to Front'}
+                                    </span>
+                                </button>
+
+                                {/* Face Guide Ellipse */}
+                                <div className="cam-face-guide" />
+
+                                {/* Bottom Shutter Button */}
+                                <div className="cam-shutter-container">
                                     <button
                                         type="button"
                                         onClick={capturePhotoFromCamera}
-                                        style={{
-                                            width: '64px', height: '64px', borderRadius: '50%',
-                                            background: 'rgba(255,255,255,0.95)', border: '4px solid #16c7c0',
-                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            boxShadow: '0 4px 18px rgba(0,0,0,0.3)', transition: 'transform 0.15s'
-                                        }}
-                                        onMouseOver={e => e.currentTarget.style.transform = 'scale(1.1)'}
-                                        onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                                        className="cam-shutter-btn"
                                         title="Snap Photo"
+                                        disabled={cameraLoading}
                                     >
-                                        <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#16c7c0' }} />
+                                        <div className="cam-shutter-inner" />
                                     </button>
                                 </div>
-                            </>
+                            </div>
                         )}
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+                    {/* Footer Controls */}
+                    <div className="cam-modal-footer">
                         {cameraCapturedPreview ? (
                             <>
-                                <button type="button" onClick={retakePhoto} style={{ padding: '10px 24px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', color: '#475569' }}>
+                                <button type="button" onClick={retakePhoto} className="cam-btn cam-btn-retake">
                                     🔄 Retake
                                 </button>
-                                <button type="button" onClick={saveCapturedPhoto} style={{ padding: '10px 24px', background: 'linear-gradient(135deg, #16c7c0, #4f7cff)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', boxShadow: '0 4px 12px rgba(79,124,255,0.3)' }}>
+                                <button type="button" onClick={saveCapturedPhoto} className="cam-btn cam-btn-save">
                                     ✓ Save Photo
                                 </button>
                             </>
                         ) : (
-                            <button type="button" onClick={stopCamera} style={{ padding: '10px 24px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', color: '#475569' }}>
+                            <button type="button" onClick={stopCamera} className="cam-btn cam-btn-cancel">
                                 Cancel
                             </button>
                         )}
@@ -2628,7 +2724,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                     <span style={{ fontWeight: 600, color: '#15803d', fontSize: '15px' }}>Payment Confirmed — Follow-up Free Visit</span>
                                                 </div>
                                             ) : (
-                                                <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                <div className="reg-payment-section-box" style={{ background: '#ffffff', padding: '14px', borderRadius: '12px', border: '1px solid #e2e8f0', width: '100%', boxSizing: 'border-box' }}>
                                                     <PaymentSection
                                                         splitPayments={intakeForm.splitPayments || []}
                                                         onSplitChange={handleIntakeSplitPaymentChange}
@@ -2776,16 +2872,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     </div>
 
                                     {/* Hospital Policy Agreement Checkbox */}
-                                    <div style={{
-                                        margin: '16px 20px 0 20px',
-                                        padding: '12px 16px',
-                                        background: '#f8fafc',
-                                        borderRadius: '10px',
-                                        border: '1px solid #e2e8f0',
-                                        display: 'flex',
-                                        alignItems: 'flex-start',
-                                        gap: '12px'
-                                    }}>
+                                    <div className="reg-policy-agreement-wrap">
                                         <input
                                             type="checkbox"
                                             id="intakePolicyAgreement"
@@ -4707,59 +4794,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             </div>
 
             {/* Camera Modal */}
-            {showCameraModal && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', textAlign: 'center', width: '90%', maxWidth: '640px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-                        <h3 style={{ marginTop: 0, fontSize: '1.25rem', color: '#0f172a' }}>
-                            {cameraCapturedPreview ? '📷 Photo Preview' : '📷 Capture Patient Photo'}
-                        </h3>
-
-                        <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3', background: '#000', borderRadius: '12px', overflow: 'hidden', marginBottom: '20px' }}>
-                            {cameraCapturedPreview ? (
-                                <img src={cameraCapturedPreview} alt="Captured" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            ) : (
-                                <>
-                                    <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay playsInline muted />
-                                    <canvas ref={canvasRef} style={{ display: 'none' }} />
-                                    <div style={{ position: 'absolute', bottom: '20px', left: '50%', transform: 'translateX(-50%)' }}>
-                                        <button
-                                            onClick={capturePhotoFromCamera}
-                                            style={{
-                                                width: '64px', height: '64px', borderRadius: '50%',
-                                                background: 'rgba(255,255,255,0.9)', border: '4px solid #10b981',
-                                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                boxShadow: '0 4px 15px rgba(0,0,0,0.3)', transition: 'transform 0.15s'
-                                            }}
-                                            onMouseOver={e => e.currentTarget.style.transform = 'scale(1.1)'}
-                                            onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
-                                            title="Capture Photo"
-                                        >
-                                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#10b981' }} />
-                                        </button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '15px' }}>
-                            {cameraCapturedPreview ? (
-                                <>
-                                    <button onClick={retakePhoto} style={{ padding: '12px 28px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', color: '#475569' }}>
-                                        🔄 Retake
-                                    </button>
-                                    <button onClick={saveCapturedPhoto} style={{ padding: '12px 28px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', boxShadow: '0 2px 8px rgba(16,185,129,0.4)' }}>
-                                        ✅ Save Photo
-                                    </button>
-                                </>
-                            ) : (
-                                <button onClick={stopCamera} style={{ padding: '12px 28px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', color: '#475569' }}>
-                                    Cancel
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
+            {renderCameraModal()}
 
             {renderModals()}
         </div>

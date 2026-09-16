@@ -703,7 +703,8 @@
 .erp-page-content:has(.srd-page),
 .erp-page-content:has(.ql-admin-body),
 .erp-page-content:has(.doc-main-dashboard-container),
-.erp-page-content:has(.doc-exact-patients-page) {
+.erp-page-content:has(.doc-exact-patients-page),
+.erp-page-content:has(.upp-container) {
   padding: 0 !important;
   background: transparent !important;
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { patientAPI, receptionAPI, reportAPI, consentAPI } from '../../utils/api';
+import { patientAPI, receptionAPI, reportAPI, consentAPI, doctorAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { 
@@ -105,6 +105,92 @@ const HospitalPatientProfileContent = () => {
         }
     };
     const [currentFollowupStatus, setCurrentFollowupStatus] = useState(null);
+
+    // Vitals Form State
+    const [vitalsForm, setVitalsForm] = useState({
+        weight: '',
+        height: '',
+        bmi: '',
+        bloodPressure: '',
+        pulse: '',
+        temperature: '',
+        spo2: '',
+        respiratoryRate: '',
+        notes: ''
+    });
+    const [savingVitals, setSavingVitals] = useState(false);
+    const [showVitalsForm, setShowVitalsForm] = useState(true);
+
+    // Auto-calculate BMI
+    useEffect(() => {
+        const w = parseFloat(vitalsForm.weight);
+        const h = parseFloat(vitalsForm.height) / 100;
+        if (w > 0 && h > 0) {
+            setVitalsForm(prev => ({ ...prev, bmi: (w / (h * h)).toFixed(1) }));
+        }
+    }, [vitalsForm.weight, vitalsForm.height]);
+
+    // Pre-populate vitalsForm when patientData updates
+    useEffect(() => {
+        if (patientData) {
+            const ev = patientData.fertilityProfile?.vitals || patientData.vitals || {};
+            setVitalsForm(prev => ({
+                ...prev,
+                weight: ev.weight || patientData.weight || '',
+                height: ev.height || patientData.height || '',
+                bmi: ev.bmi || patientData.bmi || '',
+                bloodPressure: ev.bloodPressure || ev.bp || '',
+                pulse: ev.pulse || '',
+                temperature: ev.temperature || '',
+                spo2: ev.spo2 || '',
+                respiratoryRate: ev.respiratoryRate || ''
+            }));
+        }
+    }, [patientData]);
+
+    const handleSaveVitals = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        const targetPatientId = patientData?._id || patientId;
+        if (!targetPatientId) {
+            toast.error('Patient record identifier not found');
+            return;
+        }
+
+        setSavingVitals(true);
+        try {
+            const profileData = {
+                vitals: {
+                    weight: vitalsForm.weight,
+                    height: vitalsForm.height,
+                    bmi: vitalsForm.bmi,
+                    bloodPressure: vitalsForm.bloodPressure,
+                    pulse: vitalsForm.pulse,
+                    temperature: vitalsForm.temperature,
+                    spo2: vitalsForm.spo2,
+                    respiratoryRate: vitalsForm.respiratoryRate,
+                    notes: vitalsForm.notes,
+                    lastRecorded: new Date().toISOString()
+                },
+                height: vitalsForm.height,
+                weight: vitalsForm.weight,
+                bmi: vitalsForm.bmi,
+                historyBp: vitalsForm.bloodPressure,
+                historyPulse: vitalsForm.pulse,
+                temperature: vitalsForm.temperature,
+                spo2: vitalsForm.spo2,
+                respiratoryRate: vitalsForm.respiratoryRate
+            };
+
+            await doctorAPI.updatePatientProfile(targetPatientId, profileData);
+            toast.success('Patient vitals recorded successfully!');
+            await fetchProfile();
+        } catch (err) {
+            console.error('Error saving vitals:', err);
+            toast.error(err.response?.data?.message || 'Failed to save vitals');
+        } finally {
+            setSavingVitals(false);
+        }
+    };
 
     useEffect(() => {
         if (patientId) {
@@ -602,11 +688,6 @@ const HospitalPatientProfileContent = () => {
                 <button className="upp-back-btn" onClick={() => navigate(-1)}>
                     <FiArrowLeft /> Back
                 </button>
-                <div className="upp-breadcrumb">
-                    <span>Dashboard</span>
-                    <span className="upp-breadcrumb-sep">›</span>
-                    <span className="upp-breadcrumb-active">Patient Profile</span>
-                </div>
             </div>
 
             {/* ====== HEADER IDENTITY CARD ====== */}
@@ -654,14 +735,6 @@ const HospitalPatientProfileContent = () => {
                     )}
                     <button className="upp-btn-action upp-btn-download" onClick={handleDownloadPDF} title="Download Patient Profile PDF">
                         <FiDownload /> Download PDF
-                    </button>
-                    {isReception && (
-                        <button className="upp-btn-action upp-btn-new-appt" onClick={() => navigate('/reception/dashboard?view=intake', { state: { patient: patientData, isEditingExisting: false } })} title="Book New Appointment">
-                            <FiPlus /> New Appointment
-                        </button>
-                    )}
-                    <button className="upp-btn-action upp-btn-more" title="More Options" onClick={handleDownloadPDF}>
-                        <FiMoreVertical />
                     </button>
                 </div>
             </div>
@@ -717,28 +790,6 @@ const HospitalPatientProfileContent = () => {
                         <span className="upp-metric-val">₹{metrics.totalPaid.toLocaleString('en-IN')}</span>
                     </div>
                 </div>
-            </div>
-
-            {/* ====== ALLERGIES BAR ====== */}
-            <div className="upp-allergies-bar">
-                <div className="upp-allergies-icon">
-                    <FaHeartbeat />
-                </div>
-                <div>
-                    <span className="upp-allergies-label">Allergies</span>
-                </div>
-                <div className="upp-allergies-pills">
-                    {allergiesList.length > 0 ? (
-                        allergiesList.map((allergy, i) => (
-                            <span key={i} className="upp-allergy-pill">{allergy}</span>
-                        ))
-                    ) : (
-                        <span className="upp-allergies-text">No allergies added</span>
-                    )}
-                </div>
-                <button className="upp-allergy-add-btn">
-                    <FiPlus /> Add Allergy
-                </button>
             </div>
 
             {/* ====== TAB NAVIGATION ====== */}
@@ -1027,34 +1078,210 @@ const HospitalPatientProfileContent = () => {
                                 <h2 className="upp-section-title">
                                     <FaHeartbeat style={{ color: '#ef4444' }} /> Patient Vitals
                                 </h2>
+                                <button 
+                                    type="button"
+                                    className="upp-btn-action upp-btn-edit"
+                                    onClick={() => setShowVitalsForm(!showVitalsForm)}
+                                    style={{ fontSize: '12.5px', padding: '6px 14px' }}
+                                >
+                                    <FiPlus /> {showVitalsForm ? 'Hide Form' : 'Record Vitals'}
+                                </button>
                             </div>
-                            {(() => {
-                                const vitalsHistory = displayTimeline.filter(t => t.data?.vitals && Object.keys(t.data.vitals).length > 0);
-                                if (vitalsHistory.length === 0) {
-                                    return <div className="upp-empty-state">No vitals recorded yet.</div>;
-                                }
-                                return (
-                                    <div className="upp-timeline">
-                                        {vitalsHistory.sort((a, b) => new Date(b.date) - new Date(a.date)).map((item, i) => (
-                                            <div key={i} className="upp-timeline-item" style={{ borderLeftColor: '#ef4444' }}>
-                                                <div className="upp-tl-top">
-                                                    <span className="upp-tl-date">{new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                                                </div>
-                                                <div className="upp-tl-vitals-grid">
-                                                    {item.data.vitals.weight && <span className="upp-vital-pill">Weight: {item.data.vitals.weight} kg</span>}
-                                                    {item.data.vitals.height && <span className="upp-vital-pill">Height: {item.data.vitals.height} cm</span>}
-                                                    {item.data.vitals.bp && <span className="upp-vital-pill">BP: {item.data.vitals.bp}</span>}
-                                                    {item.data.vitals.bloodPressure && <span className="upp-vital-pill">BP: {item.data.vitals.bloodPressure}</span>}
-                                                    {item.data.vitals.pulse && <span className="upp-vital-pill">Pulse: {item.data.vitals.pulse} bpm</span>}
-                                                    {item.data.vitals.temperature && <span className="upp-vital-pill">Temp: {item.data.vitals.temperature}°F</span>}
-                                                    {item.data.vitals.spo2 && <span className="upp-vital-pill">SpO2: {item.data.vitals.spo2}%</span>}
-                                                    {item.data.vitals.bmi && <span className="upp-vital-pill">BMI: {item.data.vitals.bmi}</span>}
-                                                </div>
+
+                            {/* Vitals Entry Form */}
+                            {showVitalsForm && (
+                                <form onSubmit={handleSaveVitals} className="upp-vitals-form-box">
+                                    <div className="upp-vitals-form-title">
+                                        <span>🩺 Record New Patient Vitals</span>
+                                        {vitalsForm.bmi && (
+                                            <span className="upp-vital-pill" style={{ background: '#dbeafe', color: '#1e40af', fontWeight: '700' }}>
+                                                Calculated BMI: {vitalsForm.bmi}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="upp-vitals-inputs-grid">
+                                        <div className="upp-vital-input-wrap">
+                                            <label>Weight (kg)</label>
+                                            <div className="upp-vital-input-with-icon">
+                                                <input 
+                                                    type="number" 
+                                                    step="0.1"
+                                                    placeholder="e.g. 68.5"
+                                                    value={vitalsForm.weight}
+                                                    onChange={e => setVitalsForm({ ...vitalsForm, weight: e.target.value })}
+                                                />
+                                                <span className="upp-vital-unit">kg</span>
                                             </div>
-                                        ))}
+                                        </div>
+
+                                        <div className="upp-vital-input-wrap">
+                                            <label>Height (cm)</label>
+                                            <div className="upp-vital-input-with-icon">
+                                                <input 
+                                                    type="number" 
+                                                    step="0.1"
+                                                    placeholder="e.g. 170"
+                                                    value={vitalsForm.height}
+                                                    onChange={e => setVitalsForm({ ...vitalsForm, height: e.target.value })}
+                                                />
+                                                <span className="upp-vital-unit">cm</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="upp-vital-input-wrap">
+                                            <label>Blood Pressure (BP)</label>
+                                            <div className="upp-vital-input-with-icon">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="e.g. 120/80"
+                                                    value={vitalsForm.bloodPressure}
+                                                    onChange={e => setVitalsForm({ ...vitalsForm, bloodPressure: e.target.value })}
+                                                />
+                                                <span className="upp-vital-unit">mmHg</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="upp-vital-input-wrap">
+                                            <label>Pulse Rate</label>
+                                            <div className="upp-vital-input-with-icon">
+                                                <input 
+                                                    type="number" 
+                                                    placeholder="e.g. 74"
+                                                    value={vitalsForm.pulse}
+                                                    onChange={e => setVitalsForm({ ...vitalsForm, pulse: e.target.value })}
+                                                />
+                                                <span className="upp-vital-unit">bpm</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="upp-vital-input-wrap">
+                                            <label>Body Temperature</label>
+                                            <div className="upp-vital-input-with-icon">
+                                                <input 
+                                                    type="number" 
+                                                    step="0.1"
+                                                    placeholder="e.g. 98.4"
+                                                    value={vitalsForm.temperature}
+                                                    onChange={e => setVitalsForm({ ...vitalsForm, temperature: e.target.value })}
+                                                />
+                                                <span className="upp-vital-unit">°F</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="upp-vital-input-wrap">
+                                            <label>SpO2 (Oxygen)</label>
+                                            <div className="upp-vital-input-with-icon">
+                                                <input 
+                                                    type="number" 
+                                                    placeholder="e.g. 98"
+                                                    value={vitalsForm.spo2}
+                                                    onChange={e => setVitalsForm({ ...vitalsForm, spo2: e.target.value })}
+                                                />
+                                                <span className="upp-vital-unit">%</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="upp-vital-input-wrap">
+                                            <label>Respiratory Rate</label>
+                                            <div className="upp-vital-input-with-icon">
+                                                <input 
+                                                    type="number" 
+                                                    placeholder="e.g. 18"
+                                                    value={vitalsForm.respiratoryRate}
+                                                    onChange={e => setVitalsForm({ ...vitalsForm, respiratoryRate: e.target.value })}
+                                                />
+                                                <span className="upp-vital-unit">bpm</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="upp-vital-input-wrap" style={{ gridColumn: '1 / -1' }}>
+                                            <label>Clinical Notes / Triage Observations</label>
+                                            <input 
+                                                type="text" 
+                                                placeholder="e.g. Patient feels comfortable, vitals stable..."
+                                                value={vitalsForm.notes}
+                                                onChange={e => setVitalsForm({ ...vitalsForm, notes: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="upp-vitals-form-actions">
+                                        <button 
+                                            type="submit" 
+                                            className="upp-btn-save-vitals" 
+                                            disabled={savingVitals}
+                                        >
+                                            <FiCheckCircle /> {savingVitals ? 'Saving Vitals...' : 'Save Patient Vitals'}
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            className="upp-btn-action"
+                                            onClick={() => setVitalsForm({ weight: '', height: '', bmi: '', bloodPressure: '', pulse: '', temperature: '', spo2: '', respiratoryRate: '', notes: '' })}
+                                            style={{ background: '#f1f5f9', color: '#475569' }}
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {/* Current / Active Vitals Display */}
+                            {(() => {
+                                const currentV = patientData?.fertilityProfile?.vitals || patientData?.vitals || {};
+                                const hasAnyCurrent = Object.values(currentV).some(v => v !== '' && v !== null && v !== undefined);
+                                if (!hasAnyCurrent) return null;
+                                return (
+                                    <div className="upp-current-vitals-summary">
+                                        <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#334155', margin: '0 0 10px 0' }}>
+                                            📊 Most Recent Recorded Vitals
+                                        </h4>
+                                        <div className="upp-tl-vitals-grid">
+                                            {currentV.weight && <span className="upp-vital-pill">Weight: <strong>{currentV.weight} kg</strong></span>}
+                                            {currentV.height && <span className="upp-vital-pill">Height: <strong>{currentV.height} cm</strong></span>}
+                                            {currentV.bmi && <span className="upp-vital-pill">BMI: <strong>{currentV.bmi}</strong></span>}
+                                            {(currentV.bloodPressure || currentV.bp) && <span className="upp-vital-pill">BP: <strong>{currentV.bloodPressure || currentV.bp}</strong></span>}
+                                            {currentV.pulse && <span className="upp-vital-pill">Pulse: <strong>{currentV.pulse} bpm</strong></span>}
+                                            {currentV.temperature && <span className="upp-vital-pill">Temp: <strong>{currentV.temperature}°F</strong></span>}
+                                            {currentV.spo2 && <span className="upp-vital-pill">SpO2: <strong>{currentV.spo2}%</strong></span>}
+                                            {(currentV.respiratoryRate || currentV.rr) && <span className="upp-vital-pill">RR: <strong>{currentV.respiratoryRate || currentV.rr}</strong></span>}
+                                        </div>
                                     </div>
                                 );
                             })()}
+
+                            {/* Chronological Vitals History */}
+                            <div style={{ marginTop: '20px' }}>
+                                <h4 style={{ fontSize: '13.5px', fontWeight: '700', color: '#1e293b', margin: '0 0 12px 0' }}>
+                                    📅 Vitals History Timeline
+                                </h4>
+                                {(() => {
+                                    const vitalsHistory = displayTimeline.filter(t => t.data?.vitals && Object.keys(t.data.vitals).length > 0);
+                                    if (vitalsHistory.length === 0) {
+                                        return <div className="upp-empty-state">No previous vitals recordings found. Use the form above to record vitals.</div>;
+                                    }
+                                    return (
+                                        <div className="upp-timeline">
+                                            {vitalsHistory.sort((a, b) => new Date(b.date) - new Date(a.date)).map((item, i) => (
+                                                <div key={i} className="upp-timeline-item" style={{ borderLeftColor: '#ef4444' }}>
+                                                    <div className="upp-tl-top">
+                                                        <span className="upp-tl-date">{new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                                    </div>
+                                                    <div className="upp-tl-vitals-grid">
+                                                        {item.data.vitals.weight && <span className="upp-vital-pill">Weight: {item.data.vitals.weight} kg</span>}
+                                                        {item.data.vitals.height && <span className="upp-vital-pill">Height: {item.data.vitals.height} cm</span>}
+                                                        {item.data.vitals.bp && <span className="upp-vital-pill">BP: {item.data.vitals.bp}</span>}
+                                                        {item.data.vitals.bloodPressure && <span className="upp-vital-pill">BP: {item.data.vitals.bloodPressure}</span>}
+                                                        {item.data.vitals.pulse && <span className="upp-vital-pill">Pulse: {item.data.vitals.pulse} bpm</span>}
+                                                        {item.data.vitals.temperature && <span className="upp-vital-pill">Temp: {item.data.vitals.temperature}°F</span>}
+                                                        {item.data.vitals.spo2 && <span className="upp-vital-pill">SpO2: {item.data.vitals.spo2}%</span>}
+                                                        {item.data.vitals.bmi && <span className="upp-vital-pill">BMI: {item.data.vitals.bmi}</span>}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
                         </div>
                     )}
 
@@ -1457,10 +1684,6 @@ const HospitalPatientProfileContent = () => {
 };
 
 const UnifiedPatientProfile = () => {
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-    if (currentUser?.clinicType === 'clinic') {
-        return <ClinicPatientProfile />;
-    }
     return <HospitalPatientProfileContent />;
 };
 

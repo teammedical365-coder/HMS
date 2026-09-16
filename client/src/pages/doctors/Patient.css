@@ -740,11 +740,11 @@
     font-weight: 700;
 }
 
-/* Card Action Buttons (3 in a row) */
+/* Card Action Buttons (2 in a row: View Profile & Consult) */
 .doc-card-actions-row {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
     margin-top: auto;
 }
 
@@ -760,6 +760,21 @@
     font-weight: 650;
     cursor: pointer;
     transition: all 0.2s ease;
+}
+
+.btn-profile {
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1.5px solid #bfdbfe;
+    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
+}
+
+.btn-profile:hover {
+    background: #dbeafe;
+    color: #1d4ed8;
+    border-color: #93c5fd;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.16);
+    transform: translateY(-1px);
 }
 
 .btn-vitals {

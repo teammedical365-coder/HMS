@@ -47,20 +47,20 @@ const PaymentSection = ({
     const showNoUpiMsg = hasUpi && upiOptions.length === 0;
 
     return (
-        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap', width: '100%', boxSizing: 'border-box' }}>
             {/* LEFT: Payment Methods */}
-            <div style={{ flex: '1 1 400px', minWidth: '300px' }}>
+            <div style={{ flex: '1 1 320px', minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
                 <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569', display: 'block', marginBottom: '10px' }}>
                     {label} <span style={{ color: '#ef4444' }}>*(Total must match: {fmt(totalAmount)})</span>
                 </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
                     {splitPayments.map((split, index) => (
-                        <div key={index} className="payment-inline-inputs" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                        <div key={index} className="payment-inline-inputs" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', width: '100%', boxSizing: 'border-box' }}>
                             <select
                                 value={split.method}
                                 onChange={e => onSplitChange(index, 'method', e.target.value)}
                                 className="payment-mode-select"
-                                style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', minWidth: '150px' }}
+                                style={{ padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: '1 1 120px', minWidth: 0, boxSizing: 'border-box' }}
                             >
                                 {allowCash && <option value="Cash">Cash</option>}
                                 <option value="UPI">UPI</option>
@@ -74,7 +74,7 @@ const PaymentSection = ({
                                 placeholder="Amount"
                                 value={split.amount}
                                 onChange={e => onSplitChange(index, 'amount', e.target.value)}
-                                style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '120px' }}
+                                style={{ padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: '1 1 90px', minWidth: 0, boxSizing: 'border-box' }}
                                 min="1"
                                 required
                             />
@@ -85,11 +85,11 @@ const PaymentSection = ({
 
                             {/* UPI fields */}
                             {split.method === 'UPI' && upiOptions.length > 0 && (
-                                <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                <div style={{ flexBasis: '100%', width: '100%', display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '10px', boxSizing: 'border-box' }}>
                                     <select
                                         value={paymentData?.upiId || upiOptions?.[0]?.upiId || ''}
                                         onChange={e => onPaymentDataChange({ ...paymentData, upiId: e.target.value })}
-                                        style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }}
+                                        style={{ padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: '1 1 200px', minWidth: 0, width: '100%', boxSizing: 'border-box' }}
                                         required
                                     >
                                         <option value="" disabled>Select Department UPI ID</option>
@@ -104,28 +104,28 @@ const PaymentSection = ({
                                         placeholder="Txn Ref (optional)"
                                         value={paymentData?.transactionId || ''}
                                         onChange={e => onPaymentDataChange({ ...paymentData, transactionId: e.target.value })}
-                                        style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }}
+                                        style={{ padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: '1 1 120px', minWidth: 0, width: '100%', boxSizing: 'border-box' }}
                                     />
                                 </div>
                             )}
 
                             {/* No UPI configured message */}
                             {split.method === 'UPI' && upiOptions.length === 0 && (
-                                <div style={{ flexBasis: '100%', marginTop: '10px', padding: '12px 16px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', color: '#92400e', fontSize: '13px' }}>
+                                <div style={{ flexBasis: '100%', width: '100%', marginTop: '10px', padding: '12px 16px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', color: '#92400e', fontSize: '13px', boxSizing: 'border-box' }}>
                                     ⚠️ {noUpiMessage || 'No UPI account has been configured for this department. Please contact Hospital Admin.'}
                                 </div>
                             )}
 
                             {/* Card fields */}
                             {split.method === 'Card' && (
-                                <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                <div style={{ flexBasis: '100%', width: '100%', display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '10px', boxSizing: 'border-box' }}>
                                     <input
                                         type="text"
                                         placeholder="Card (Last 4)"
                                         required
                                         value={paymentData?.cardDetails || ''}
                                         onChange={e => onPaymentDataChange({ ...paymentData, cardDetails: e.target.value })}
-                                        style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }}
+                                        style={{ padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: '1 1 130px', minWidth: 0, width: '100%', boxSizing: 'border-box' }}
                                     />
                                     <input
                                         type="text"
@@ -133,32 +133,32 @@ const PaymentSection = ({
                                         required
                                         value={paymentData?.transactionId || ''}
                                         onChange={e => onPaymentDataChange({ ...paymentData, transactionId: e.target.value })}
-                                        style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }}
+                                        style={{ padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: '1 1 130px', minWidth: 0, width: '100%', boxSizing: 'border-box' }}
                                     />
                                 </div>
                             )}
 
                             {/* Cheque / NEFT fields */}
                             {['Cheque', 'NEFT/RTGS'].includes(split.method) && (
-                                <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
+                                <div style={{ flexBasis: '100%', width: '100%', display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '10px', boxSizing: 'border-box' }}>
                                     <input
                                         type="text"
                                         placeholder="Bank Ref / Cheque No"
                                         required
                                         value={paymentData?.bankReference || ''}
                                         onChange={e => onPaymentDataChange({ ...paymentData, bankReference: e.target.value })}
-                                        style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }}
+                                        style={{ padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1, minWidth: 0, width: '100%', boxSizing: 'border-box' }}
                                     />
                                 </div>
                             )}
 
                             {/* Proof upload — show for non-cash method */}
                             {split.method !== 'Cash' && (
-                                <div className="inline-file-upload" style={{ flexBasis: '100%', display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '10px' }}>
+                                <div className="inline-file-upload" style={{ flexBasis: '100%', width: '100%', display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '10px', boxSizing: 'border-box' }}>
                                     <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>Payment Proof / Screenshot <span style={{ color: '#ef4444' }}>*Required for non-cash</span></label>
-                                    <input type="file" accept="image/*,.pdf" onChange={e => onProofFileChange(e.target.files[0])} style={{ fontSize: '13px', padding: '6px', border: '1px dashed #6366f1', borderRadius: '6px', background: '#fff' }} />
+                                    <input type="file" accept="image/*,.pdf" onChange={e => onProofFileChange(e.target.files[0])} style={{ fontSize: '12.5px', padding: '6px', border: '1px dashed #6366f1', borderRadius: '6px', background: '#fff', width: '100%', boxSizing: 'border-box' }} />
                                     {proofFile && (
-                                        <span style={{ fontSize: '12px', color: '#059669', fontWeight: 600 }}>
+                                        <span style={{ fontSize: '12px', color: '#059669', fontWeight: 600, wordBreak: 'break-all' }}>
                                             ✅ Attached: {proofFile.name}
                                         </span>
                                     )}
@@ -167,7 +167,7 @@ const PaymentSection = ({
                         </div>
                     ))}
 
-                    <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', width: '100%', boxSizing: 'border-box' }}>
                         <button type="button" onClick={onAddSplit} style={{ padding: '8px 16px', background: '#ccfbf1', color: '#0f766e', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>+ Add Payment Method</button>
                         <span style={{ fontSize: '14px', fontWeight: 600, color: totalSplitAmount === Number(totalAmount) ? '#15803d' : '#ef4444' }}>
                             Split Total: {fmt(totalSplitAmount)} / {fmt(totalAmount)}

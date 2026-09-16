@@ -6,79 +6,11 @@ import {
     FiFilter, FiMoreHorizontal, FiPhoneCall, FiMail, 
     FiActivity, FiFolder, FiFileText, FiPlus, FiChevronDown, 
     FiX, FiUploadCloud, FiTrendingUp, FiScissors, FiUserCheck,
-    FiCheck, FiEdit2, FiArrowRight
+    FiCheck, FiEdit2, FiArrowRight, FiUser
 } from 'react-icons/fi';
 import { FaUserMd } from 'react-icons/fa';
 import { doctorAPI, uploadAPI, reportAPI, referralAPI, otAPI } from '../../utils/api';
 import './Patient.css';
-
-// Default mock appointments matching the screenshot if backend data is empty
-const DEFAULT_APPOINTMENTS = [
-    {
-        _id: 'apt-001',
-        appointmentDate: '2026-08-17T12:00:00.000Z',
-        appointmentTime: '12:00',
-        status: 'completed',
-        doctorName: 'Dr. Rashi Khanna',
-        userId: {
-            _id: 'usr-001',
-            name: 'aman sharma',
-            patientId: 'CIT-M365-002',
-            phone: '6666777700',
-            email: 'aman2@test.com',
-            gender: 'Male',
-            age: 28
-        }
-    },
-    {
-        _id: 'apt-002',
-        appointmentDate: '2026-08-18T16:00:00.000Z',
-        appointmentTime: '16:00',
-        status: 'completed',
-        doctorName: 'Dr. Rashi Khanna',
-        userId: {
-            _id: 'usr-002',
-            name: 'aman sharma',
-            patientId: 'CIT-M365-001',
-            phone: '0897879800',
-            email: 'aman@test2.com',
-            gender: 'Male',
-            age: 32
-        }
-    },
-    {
-        _id: 'apt-003',
-        appointmentDate: '2026-08-19T10:30:00.000Z',
-        appointmentTime: '10:30',
-        status: 'completed',
-        doctorName: 'Dr. Rashi Khanna',
-        userId: {
-            _id: 'usr-003',
-            name: 'dfsf',
-            patientId: 'CIT-M365-003',
-            phone: '6765643213',
-            email: 'efsdvd@test.com',
-            gender: 'Female',
-            age: 25
-        }
-    },
-    {
-        _id: 'apt-004',
-        appointmentDate: '2026-08-19T12:30:00.000Z',
-        appointmentTime: '12:30',
-        status: 'confirmed',
-        doctorName: 'Dr. Rashi Khanna',
-        userId: {
-            _id: 'usr-004',
-            name: 'kushal Singh',
-            patientId: 'CIT-M365-005',
-            phone: '8776172736',
-            email: 'kushal@gmail.com',
-            gender: 'Male',
-            age: 40
-        }
-    }
-];
 
 const Patient = () => {
     const navigate = useNavigate();
@@ -86,7 +18,7 @@ const Patient = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState('all'); // 'all' is active by default in the screenshot
+    const [activeTab, setActiveTab] = useState('all'); // 'all' is active by default
     const [statusFilter, setStatusFilter] = useState('all');
     const [sortBy, setSortBy] = useState('latest');
     
@@ -118,47 +50,8 @@ const Patient = () => {
         chiefComplaint: '', notes: ''
     });
     const [saving, setSaving] = useState(false);
-    const [myReferrals, setMyReferrals] = useState([
-        {
-            _id: 'ref-01',
-            patientId: { name: 'Sunita Sharma', mrn: 'CIT-M365-010', phone: '9876543210' },
-            referringDoctorId: { name: 'Dr. Amit Patel' },
-            reason: 'Laparoscopic Evaluation Required',
-            referralDate: '2026-08-20',
-            status: 'REFERRED'
-        }
-    ]);
-    const [mySurgeryPlans, setMySurgeryPlans] = useState([
-        {
-            _id: 'sp-01',
-            planId: 'SURG-101',
-            surgery: 'Diagnostic Laparoscopy & Hysteroscopy',
-            diagnosis: 'Secondary Infertility',
-            patientId: { name: 'Pooja Verma', mrn: 'CIT-M365-012', phone: '9811223344' },
-            referringDoctorId: { name: 'Dr. Neha Gupta' },
-            otRoomId: { name: 'OT 1 - Major' },
-            surgeryDate: '2026-08-22',
-            startTime: '09:00',
-            endTime: '11:00',
-            surgeryCost: 45000,
-            paymentStatus: 'PAID',
-            status: 'SCHEDULED'
-        },
-        {
-            _id: 'sp-02',
-            planId: 'SURG-102',
-            surgery: 'Ovarian Cystectomy',
-            diagnosis: 'Left Endometrioma 5cm',
-            patientId: { name: 'Kavita Roy', mrn: 'CIT-M365-015', phone: '9822334455' },
-            otRoomId: { name: 'OT 2' },
-            surgeryDate: '2026-08-25',
-            startTime: '11:30',
-            endTime: '13:30',
-            surgeryCost: 60000,
-            paymentStatus: 'PARTIALLY PAID',
-            status: 'PLANNED'
-        }
-    ]);
+    const [myReferrals, setMyReferrals] = useState([]);
+    const [mySurgeryPlans, setMySurgeryPlans] = useState([]);
 
     const filterRef = useRef(null);
     const sortRef = useRef(null);
@@ -190,22 +83,28 @@ const Patient = () => {
     const fetchMyReferrals = async () => {
         try {
             const res = await referralAPI.getMyReferrals();
-            if (res.success && res.referrals?.length) {
+            if (res.success && Array.isArray(res.referrals)) {
                 setMyReferrals(res.referrals);
+            } else {
+                setMyReferrals([]);
             }
         } catch (err) {
             console.error("Error fetching referrals:", err);
+            setMyReferrals([]);
         }
     };
 
     const fetchMySurgeryPlans = async () => {
         try {
             const res = await otAPI.getMySurgeryPlans();
-            if (res.success && res.data?.length) {
+            if (res.success && Array.isArray(res.data)) {
                 setMySurgeryPlans(res.data);
+            } else {
+                setMySurgeryPlans([]);
             }
         } catch (err) {
             console.error("Error fetching my surgery plans:", err);
+            setMySurgeryPlans([]);
         }
     };
 
@@ -228,19 +127,34 @@ const Patient = () => {
                 ? await doctorAPI.getAllAppointments()
                 : await doctorAPI.getAppointments();
 
-            if (res.success && res.appointments && res.appointments.length > 0) {
+            if (res.success && Array.isArray(res.appointments)) {
                 setAppointments(res.appointments);
             } else {
-                // Fallback to default demo appointments matching the screenshot
-                setAppointments(DEFAULT_APPOINTMENTS);
+                setAppointments([]);
             }
         } catch (err) {
             console.error('Fetch error:', err);
-            // On network error or empty DB, provide default demo list
-            setAppointments(DEFAULT_APPOINTMENTS);
+            setAppointments([]);
         } finally {
             setLoading(false);
         }
+    };
+
+    // Robust navigation to Patient Profile
+    const handleViewProfile = (apt) => {
+        if (!apt) return;
+        const targetId = (typeof apt.userId === 'object' ? apt.userId?._id || apt.userId?.patientId || apt.userId?.mrn : apt.userId)
+            || (typeof apt.clinicPatientId === 'object' ? apt.clinicPatientId?._id || apt.clinicPatientId?.patientUid : apt.clinicPatientId)
+            || apt.patientId 
+            || apt._id;
+
+        if (!targetId) {
+            toast.error('Patient record identifier not found');
+            return;
+        }
+
+        const dept = apt.department || apt.serviceName || apt.specialization || 'Unassigned';
+        navigate(`/patient/${targetId}/department/${encodeURIComponent(dept)}`);
     };
 
     // Calculate BMI when weight/height change
@@ -735,20 +649,18 @@ const Patient = () => {
                                 const pName = apt.userId?.name || apt.clinicPatientId?.name || 'Walk-in Patient';
                                 const pPhone = apt.userId?.phone || apt.clinicPatientId?.phone || '—';
                                 const pEmail = apt.userId?.email || apt.clinicPatientId?.email || '';
-                                const pId = apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || `CIT-M365-00${index + 1}`;
-                                const dName = (apt.doctorName || 'Dr. Rashi Khanna').replace(/^Dr\.?\s*/i, '');
+                                const pId = apt.userId?.patientId || apt.clinicPatientId?.patientUid || apt.patientId || apt.userId?.mrn || '—';
+                                const dName = (apt.doctorName || apt.doctorId?.name || 'Doctor').replace(/^Dr\.?\s*/i, '');
                                 
-                                const aptDateObj = new Date(apt.appointmentDate);
-                                const dateFormatted = !isNaN(aptDateObj.getTime())
+                                const aptDateObj = apt.appointmentDate ? new Date(apt.appointmentDate) : null;
+                                const dateFormatted = aptDateObj && !isNaN(aptDateObj.getTime())
                                     ? aptDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                                    : '17 Aug 2026';
-                                const timeFormatted = apt.appointmentTime || '12:00';
+                                    : '—';
+                                const timeFormatted = apt.appointmentTime || '--:--';
 
                                 const avatarBg = avatarColors[index % avatarColors.length];
                                 const initial = (pName.trim().charAt(0) || 'P').toUpperCase();
                                 const status = (apt.status || 'confirmed').toLowerCase();
-
-                                const rawId = apt.userId?._id || apt.clinicPatientId?._id || apt.patientId || pId;
 
                                 return (
                                     <div key={apt._id || index} className="doc-exact-card">
@@ -764,7 +676,7 @@ const Patient = () => {
                                                 <div className="doc-card-user-names">
                                                     <h3 
                                                         className="doc-card-patient-name"
-                                                        onClick={() => navigate(`/doctor/patients/${rawId}`)}
+                                                        onClick={() => handleViewProfile(apt)}
                                                         title="Click to view patient profile"
                                                     >
                                                         {pName}
@@ -785,8 +697,8 @@ const Patient = () => {
                                                     <button 
                                                         className="doc-card-more-btn"
                                                         onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setActiveMenuId(activeMenuId === apt._id ? null : apt._id);
+                                                             e.stopPropagation();
+                                                             setActiveMenuId(activeMenuId === apt._id ? null : apt._id);
                                                         }}
                                                         title="More options"
                                                     >
@@ -799,33 +711,11 @@ const Patient = () => {
                                                                 className="doc-card-menu-action"
                                                                 onClick={() => {
                                                                     setActiveMenuId(null);
-                                                                    navigate(`/doctor/patients/${rawId}`);
+                                                                    handleViewProfile(apt);
                                                                 }}
                                                             >
                                                                 <FiUserCheck size={14} />
                                                                 <span>View Full Profile</span>
-                                                            </div>
-
-                                                            <div 
-                                                                className="doc-card-menu-action"
-                                                                onClick={() => {
-                                                                    setActiveMenuId(null);
-                                                                    openVitalsForm(apt);
-                                                                }}
-                                                            >
-                                                                <FiActivity size={14} />
-                                                                <span>Enter Vitals</span>
-                                                            </div>
-
-                                                            <div 
-                                                                className="doc-card-menu-action"
-                                                                onClick={() => {
-                                                                    setActiveMenuId(null);
-                                                                    setUploadPatient(apt);
-                                                                }}
-                                                            >
-                                                                <FiFolder size={14} />
-                                                                <span>Upload Record</span>
                                                             </div>
 
                                                             <div className="doc-card-menu-divider" />
@@ -884,29 +774,22 @@ const Patient = () => {
                                             </div>
                                         </div>
 
-                                        {/* Card Footer (3 Action Buttons) */}
+                                        {/* Card Footer (2 Action Buttons: View Profile & Consult) */}
                                         <div className="doc-card-actions-row">
                                             <button 
-                                                className="doc-action-btn btn-vitals"
-                                                onClick={() => openVitalsForm(apt)}
+                                                className="doc-action-btn btn-profile"
+                                                onClick={() => handleViewProfile(apt)}
+                                                title="View complete patient medical profile"
                                             >
-                                                <FiActivity size={15} />
-                                                <span>Vitals</span>
-                                            </button>
-
-                                            <button 
-                                                className="doc-action-btn btn-upload"
-                                                onClick={() => setUploadPatient(apt)}
-                                            >
-                                                <FiFolder size={15} />
-                                                <span>Upload</span>
+                                                <FiUser size={15} />
+                                                <span>View Profile</span>
                                             </button>
 
                                             <button 
                                                 className="doc-action-btn btn-consult"
                                                 onClick={() => {
                                                     const ptName = (pName || 'Walk-in').replace(/\s+/g, '-');
-                                                    const patientMRN = pId || ptName;
+                                                    const patientMRN = pId && pId !== '—' ? pId : ptName;
                                                     navigate(`/doctor/patient/${patientMRN}`, { state: { appointmentId: apt._id } });
                                                 }}
                                             >
@@ -942,36 +825,44 @@ const Patient = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {myReferrals.map(ref => (
-                                        <tr key={ref._id}>
-                                            <td>
-                                                <div className="font-bold text-slate-800">{ref.patientId?.name || 'Unknown'}</div>
-                                                <div className="text-xs text-slate-500">MRN: {ref.patientId?.mrn || ref.patientId?.patientId || '-'}</div>
-                                            </td>
-                                            <td className="text-slate-700">{ref.referringDoctorId?.name || '-'}</td>
-                                            <td className="text-slate-700">{ref.reason}</td>
-                                            <td className="text-slate-500">{new Date(ref.referralDate).toLocaleDateString()}</td>
-                                            <td>
-                                                <span className="doc-status-pill status-confirmed">
-                                                    {ref.status}
-                                                </span>
-                                            </td>
-                                            <td style={{ textAlign: 'center' }}>
-                                                <button
-                                                    onClick={() => {
-                                                        const pid = ref.patientId?.patientId || ref.patientId?.mrn || ref.patientId?._id;
-                                                        navigate('/doctor/patient/' + (pid || ref._id), {
-                                                            state: { referralId: ref._id, referral: ref }
-                                                        });
-                                                    }}
-                                                    className="doc-action-btn btn-upload"
-                                                    style={{ padding: '6px 14px', fontSize: '0.8rem', display: 'inline-flex' }}
-                                                >
-                                                    Review & Plan
-                                                </button>
+                                    {myReferrals.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="6" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
+                                                No surgery referrals assigned yet.
                                             </td>
                                         </tr>
-                                    ))}
+                                    ) : (
+                                        myReferrals.map(ref => (
+                                            <tr key={ref._id}>
+                                                <td>
+                                                    <div className="font-bold text-slate-800">{ref.patientId?.name || 'Unknown'}</div>
+                                                    <div className="text-xs text-slate-500">MRN: {ref.patientId?.mrn || ref.patientId?.patientId || '-'}</div>
+                                                </td>
+                                                <td className="text-slate-700">{ref.referringDoctorId?.name || '-'}</td>
+                                                <td className="text-slate-700">{ref.reason}</td>
+                                                <td className="text-slate-500">{new Date(ref.referralDate).toLocaleDateString()}</td>
+                                                <td>
+                                                    <span className="doc-status-pill status-confirmed">
+                                                        {ref.status}
+                                                    </span>
+                                                </td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    <button
+                                                        onClick={() => {
+                                                            const pid = ref.patientId?.patientId || ref.patientId?.mrn || ref.patientId?._id;
+                                                            navigate('/doctor/patient/' + (pid || ref._id), {
+                                                                state: { referralId: ref._id, referral: ref }
+                                                            });
+                                                        }}
+                                                        className="doc-action-btn btn-upload"
+                                                        style={{ padding: '6px 14px', fontSize: '0.8rem', display: 'inline-flex' }}
+                                                    >
+                                                        Review & Plan
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -999,36 +890,44 @@ const Patient = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {mySurgeryPlans.map((sp) => (
-                                        <tr key={sp._id}>
-                                            <td>
-                                                <div className="font-bold text-slate-800">{sp.surgery}</div>
-                                                <span className="doc-plan-badge">{sp.planId}</span>
-                                                {sp.diagnosis && <div className="text-xs text-slate-500 mt-1">Dx: {sp.diagnosis}</div>}
-                                            </td>
-                                            <td>
-                                                <div className="font-bold text-slate-800">{sp.patientId?.name || 'Patient'}</div>
-                                                <div className="text-xs text-slate-500">MRN: {sp.patientId?.mrn || '-'}</div>
-                                            </td>
-                                            <td className="text-slate-700">{sp.referringDoctorId?.name || 'Self-Planned'}</td>
-                                            <td>
-                                                <strong>🚪 {sp.otRoomId?.name || 'TBD'}</strong>
-                                                <div className="text-xs text-slate-500">📅 {sp.surgeryDate || 'Flexible'} ({sp.startTime || '--:--'} - {sp.endTime || '--:--'})</div>
-                                            </td>
-                                            <td>
-                                                <span className="doc-status-pill status-completed">{sp.status}</span>
-                                            </td>
-                                            <td style={{ textAlign: 'center' }}>
-                                                <button
-                                                    onClick={() => navigate(`/doctor/patients/${sp.patientId?._id || sp._id}`)}
-                                                    className="doc-action-btn btn-consult"
-                                                    style={{ padding: '6px 14px', fontSize: '0.8rem', display: 'inline-flex' }}
-                                                >
-                                                    View Profile
-                                                </button>
+                                    {mySurgeryPlans.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="6" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
+                                                No surgery plans scheduled yet.
                                             </td>
                                         </tr>
-                                    ))}
+                                    ) : (
+                                        mySurgeryPlans.map((sp) => (
+                                            <tr key={sp._id}>
+                                                <td>
+                                                    <div className="font-bold text-slate-800">{sp.surgery}</div>
+                                                    <span className="doc-plan-badge">{sp.planId}</span>
+                                                    {sp.diagnosis && <div className="text-xs text-slate-500 mt-1">Dx: {sp.diagnosis}</div>}
+                                                </td>
+                                                <td>
+                                                    <div className="font-bold text-slate-800">{sp.patientId?.name || 'Patient'}</div>
+                                                    <div className="text-xs text-slate-500">MRN: {sp.patientId?.mrn || '-'}</div>
+                                                </td>
+                                                <td className="text-slate-700">{sp.referringDoctorId?.name || 'Self-Planned'}</td>
+                                                <td>
+                                                    <strong>🚪 {sp.otRoomId?.name || 'TBD'}</strong>
+                                                    <div className="text-xs text-slate-500">📅 {sp.surgeryDate || 'Flexible'} ({sp.startTime || '--:--'} - {sp.endTime || '--:--'})</div>
+                                                </td>
+                                                <td>
+                                                    <span className="doc-status-pill status-completed">{sp.status}</span>
+                                                </td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    <button
+                                                        onClick={() => handleViewProfile({ userId: sp.patientId, _id: sp._id })}
+                                                        className="doc-action-btn btn-profile"
+                                                        style={{ padding: '6px 14px', fontSize: '0.8rem', display: 'inline-flex' }}
+                                                    >
+                                                        View Profile
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
                                 </tbody>
                             </table>
                         </div>
