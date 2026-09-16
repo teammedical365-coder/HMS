@@ -361,7 +361,16 @@ const HospitalAdminDashboard = () => {
             }
 
             const res = await hospitalAPI.getHospitalStats(hospitalId, queryStart, queryEnd);
-            if (res.success) setHospitalStats(res);
+            if (res.success) {
+                setHospitalStats(res);
+                const sDocs = res.stats?.totalDoctors ?? res.stats?.doctorCount;
+                if (sDocs !== undefined) {
+                    setStats(prev => ({
+                        ...prev,
+                        totalDoctors: Math.max(prev.totalDoctors || 0, sDocs)
+                    }));
+                }
+            }
         } catch (err) {
             console.error('Stats error:', err);
             setHospitalStats(null);
@@ -414,13 +423,18 @@ const HospitalAdminDashboard = () => {
             setLoadingUsers(true);
             const res = await adminAPI.getUsers();
             if (res.success) {
+                const docCount = res.users.filter(u => (u.role || '').toLowerCase().includes('doctor')).length;
                 setUsers(res.users);
-                setStats({
+                setStats(prev => ({
+                    ...prev,
                     totalUsers: res.users.length,
-                    totalDoctors: res.users.filter(u => (u.role || '').toLowerCase().includes('doctor')).length,
+                    totalDoctors: Math.max(
+                        docCount,
+                        hospitalStats?.stats?.totalDoctors ?? hospitalStats?.stats?.doctorCount ?? prev.totalDoctors ?? 0
+                    ),
                     totalPatients: res.users.filter(u => (u.role || '').toLowerCase() === 'patient').length,
-                    totalRoles: 0
-                });
+                    totalRoles: prev.totalRoles || 0
+                }));
             }
         } catch (err) {
             console.error('Error fetching users:', err);
@@ -1954,8 +1968,14 @@ const HospitalAdminDashboard = () => {
                         return (userItem.role || '').toLowerCase() === staffRoleFilter.toLowerCase();
                     });
 
-                    const totalStaffCount = users.length;
-                    const doctorCount = users.filter(u => (u.role || '').toLowerCase().includes('doctor')).length;
+                    const doctorCount = Math.max(
+                        users.filter(u => (u.role || '').toLowerCase().includes('doctor')).length,
+                        hospitalStats?.stats?.totalDoctors ?? hospitalStats?.stats?.doctorCount ?? stats.totalDoctors ?? 0
+                    );
+                    const totalStaffCount = Math.max(
+                        users.length,
+                        (users.filter(u => !(u.role || '').toLowerCase().includes('doctor')).length + doctorCount)
+                    );
                     const activeRolesCount = uniqueRoles.length;
 
                     return (

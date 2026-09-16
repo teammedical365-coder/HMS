@@ -393,16 +393,18 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         const isCentral = req.user.role === 'centraladmin' || req.user.role === 'superadmin';
         const filter = getHospitalFilter(req);
 
+        const excludeDoctors = req.query.excludeDoctors === 'true';
+
         // Exclude system admin roles and patient/user roles from the staff list
         const systemRoles = ['centraladmin', 'superadmin', 'hospitaladmin', 'patient', 'user'];
 
-        // Find Role ObjectIds to exclude (patients, users, and doctors if non-central)
+        // Find Role ObjectIds to exclude (patients, users, and optionally doctors if requested)
         const excludeRoleDocs = await Role.find({
             name: {
                 $in: [
                     /^patient$/i,
                     /^user$/i,
-                    ...(!isCentral ? [/doctor/i, /^clinic doctor$/i] : [])
+                    ...(excludeDoctors ? [/doctor/i, /^clinic doctor$/i] : [])
                 ]
             }
         }).select('_id');
@@ -411,7 +413,7 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         const allExcludedRoles = [
             ...systemRoles,
             ...excludeRoleIds,
-            ...(!isCentral ? ['doctor', 'Doctor', 'clinic doctor', 'Clinic Doctor'] : [])
+            ...(excludeDoctors ? ['doctor', 'Doctor', 'clinic doctor', 'Clinic Doctor'] : [])
         ];
 
         let planFilter = {};
@@ -492,7 +494,7 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         const staffOnly = usersWithRoles.filter(u => {
             const r = (typeof u.role === 'string' ? u.role : (u.role?.name || '')).toLowerCase();
             if (['patient', 'user'].includes(r)) return false;
-            if (!isCentral && r.includes('doctor')) return false;
+            if (excludeDoctors && r.includes('doctor')) return false;
             return true;
         });
 

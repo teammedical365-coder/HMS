@@ -87,20 +87,21 @@ const PaymentSection = ({
                             {split.method === 'UPI' && upiOptions.length > 0 && (
                                 <div style={{ flexBasis: '100%', display: 'flex', gap: '10px', marginTop: '10px' }}>
                                     <select
-                                        value={paymentData?.upiId || ''}
+                                        value={paymentData?.upiId || upiOptions?.[0]?.upiId || ''}
                                         onChange={e => onPaymentDataChange({ ...paymentData, upiId: e.target.value })}
                                         style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }}
                                         required
                                     >
                                         <option value="" disabled>Select Department UPI ID</option>
                                         {upiOptions.map((opt, idx) => (
-                                            <option key={idx} value={opt.upiId}>{opt.label} ({opt.upiId})</option>
+                                            <option key={idx} value={opt.upiId}>
+                                                {opt.label && opt.label.includes(opt.upiId) ? opt.label : `${opt.label} (${opt.upiId})`}
+                                            </option>
                                         ))}
                                     </select>
                                     <input
                                         type="text"
-                                        placeholder="Txn Ref"
-                                        required
+                                        placeholder="Txn Ref (optional)"
                                         value={paymentData?.transactionId || ''}
                                         onChange={e => onPaymentDataChange({ ...paymentData, transactionId: e.target.value })}
                                         style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: 1 }}
@@ -151,11 +152,16 @@ const PaymentSection = ({
                                 </div>
                             )}
 
-                            {/* Proof upload — show once for any non-cash method */}
-                            {split.method !== 'Cash' && !proofFile && (
-                                <div className="inline-file-upload" style={{ flexBasis: '100%', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '10px' }}>
-                                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>Payment Proof <span style={{ color: '#ef4444' }}>*Required once for all non-cash</span></label>
-                                    <input type="file" accept="image/*,.pdf" onChange={e => onProofFileChange(e.target.files[0])} style={{ fontSize: '13px' }} required />
+                            {/* Proof upload — show for non-cash method */}
+                            {split.method !== 'Cash' && (
+                                <div className="inline-file-upload" style={{ flexBasis: '100%', display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '10px' }}>
+                                    <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>Payment Proof / Screenshot <span style={{ color: '#ef4444' }}>*Required for non-cash</span></label>
+                                    <input type="file" accept="image/*,.pdf" onChange={e => onProofFileChange(e.target.files[0])} style={{ fontSize: '13px', padding: '6px', border: '1px dashed #6366f1', borderRadius: '6px', background: '#fff' }} />
+                                    {proofFile && (
+                                        <span style={{ fontSize: '12px', color: '#059669', fontWeight: 600 }}>
+                                            ✅ Attached: {proofFile.name}
+                                        </span>
+                                    )}
                                 </div>
                             )}
                         </div>

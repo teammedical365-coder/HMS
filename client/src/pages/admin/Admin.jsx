@@ -342,10 +342,10 @@ const Admin = () => {
             } else {
                 setLoadingUsers(true);
             }
-            const response = await adminAPI.getUsers(plan, hospitalId, targetPage, limit, search);
+            const userObj = JSON.parse(localStorage.getItem('user') || '{}');
+            const isCentral = ['superadmin', 'centraladmin'].includes(userObj.role);
+            const response = await adminAPI.getUsers(plan, hospitalId, targetPage, limit, search, !isCentral);
             if (response.success) {
-                const userObj = JSON.parse(localStorage.getItem('user') || '{}');
-                const isCentral = ['superadmin', 'centraladmin'].includes(userObj.role);
                 const staffUsers = (response.users || response.data || []).filter(u => {
                     const r = (typeof u.role === 'string' ? u.role : (u.role?.name || '')).toLowerCase();
                     if (['patient', 'user'].includes(r)) return false;

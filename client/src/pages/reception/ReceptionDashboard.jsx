@@ -256,12 +256,12 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
         // Vitals / Payment (Reception Duties)
         height: '', weight: '', bmi: '', bloodGroup: '',
-        consultationFee: '',
+        consultationFee: '500',
 
         // Assignment
         department: '', doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: '',
         referralType: '', reasonForVisit: '', paymentMethod: 'Cash',
-        splitPayments: [{ method: 'Cash', amount: '' }]
+        splitPayments: [{ method: 'Cash', amount: '500' }]
     });
 
     const [profilePhoto, setProfilePhoto] = useState(null);
@@ -525,17 +525,39 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     );
 
     const handleIntakeSplitPaymentChange = (index, field, value) => {
-        const newSplits = [...intakeForm.splitPayments];
+        const newSplits = [...(intakeForm.splitPayments || [])];
+        if (!newSplits[index]) return;
         newSplits[index][field] = value;
         setIntakeForm(prev => ({ ...prev, splitPayments: newSplits }));
     };
 
     const addIntakeSplitPayment = () => {
-        setIntakeForm(prev => ({ ...prev, splitPayments: [...prev.splitPayments, { method: 'Cash', amount: '' }] }));
+        setIntakeForm(prev => {
+            const currentSplits = prev.splitPayments || [];
+            const currentTotal = currentSplits.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+            const totalFee = Number(prev.consultationFee) || 500;
+            const remaining = Math.max(0, totalFee - currentTotal);
+            return {
+                ...prev,
+                splitPayments: [
+                    ...currentSplits,
+                    {
+                        method: currentSplits.some(s => s.method === 'Cash') ? 'UPI' : 'Cash',
+                        amount: remaining > 0 ? String(remaining) : ''
+                    }
+                ]
+            };
+        });
     };
 
     const removeIntakeSplitPayment = (index) => {
-        setIntakeForm(prev => ({ ...prev, splitPayments: prev.splitPayments.filter((_, i) => i !== index) }));
+        setIntakeForm(prev => {
+            const filtered = (prev.splitPayments || []).filter((_, i) => i !== index);
+            return {
+                ...prev,
+                splitPayments: filtered.length > 0 ? filtered : [{ method: 'Cash', amount: String(prev.consultationFee || 500) }]
+            };
+        });
     };
 
     const totalIntakeSplitAmount = (intakeForm.splitPayments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
@@ -549,21 +571,50 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 if (res.success) {
                     setHospitalContext(res.hospital);
                     fetchDoctors(res.hospital._id);
-                    const upiRes = await hospitalAPI.getUpiIds();
-                    if (upiRes.success) {
-                        // Try to fetch department-specific UPI for Reception
+
+                    let options = [];
+                    // 1. Fetch active department-specific UPIs created in Hospital Admin
+                    try {
+                        const deptUpisRes = await hospitalAPI.getDepartmentUpis();
+                        if (deptUpisRes?.success && Array.isArray(deptUpisRes.departmentUpis) && deptUpisRes.departmentUpis.length > 0) {
+                            options = deptUpisRes.departmentUpis
+                                .filter(d => d.isActive !== false)
+                                .map(d => ({
+                                    label: d.label || d.staffRoleName || 'Department UPI',
+                                    upiId: d.upiId
+                                }));
+                        }
+                    } catch (err) {
+                        console.error('Error fetching department UPIs:', err);
+                    }
+
+                    // 2. Fallback: by role 'Reception'
+                    if (options.length === 0) {
                         try {
                             const deptUpiRes = await hospitalAPI.getDepartmentUpiByRole('Reception');
-                            if (deptUpiRes.success && deptUpiRes.departmentUpi) {
+                            if (deptUpiRes?.success && deptUpiRes.departmentUpi) {
                                 const du = deptUpiRes.departmentUpi;
-                                setUpiOptions([{ label: du.label, upiId: du.upiId }]);
-                            } else {
-                                // Fallback to legacy hospital-wide UPI list
-                                setUpiOptions(upiRes.upiIds || []);
+                                options = [{ label: du.label || 'Reception', upiId: du.upiId }];
                             }
-                        } catch {
-                            setUpiOptions(upiRes.upiIds || []);
-                        }
+                        } catch { /* fallback */ }
+                    }
+
+                    // 3. Fallback: hospital-wide legacy UPI list
+                    if (options.length === 0) {
+                        try {
+                            const upiRes = await hospitalAPI.getUpiIds();
+                            if (upiRes?.success && upiRes.upiIds?.length > 0) {
+                                options = upiRes.upiIds;
+                            }
+                        } catch { /* fallback */ }
+                    }
+
+                    setUpiOptions(options);
+                    if (options.length > 0) {
+                        setIntakePaymentData(prev => ({
+                            ...prev,
+                            upiId: prev.upiId || options[0].upiId
+                        }));
                     }
                 }
             } catch (err) { console.error('Error fetching hospital context:', err); }
@@ -737,9 +788,18 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 if (res.success) {
                     setFollowupStatus(res);
                     if (res.active) {
-                        setIntakeForm(prev => ({ ...prev, consultationFee: '0' }));
+                        setIntakeForm(prev => ({
+                            ...prev,
+                            consultationFee: '0',
+                            splitPayments: [{ method: 'Cash', amount: '0' }]
+                        }));
                     } else if (res.fee !== undefined) {
-                        setIntakeForm(prev => ({ ...prev, consultationFee: res.fee.toString() }));
+                        const newFee = res.fee.toString();
+                        setIntakeForm(prev => ({
+                            ...prev,
+                            consultationFee: newFee,
+                            splitPayments: [{ method: prev.splitPayments?.[0]?.method || 'Cash', amount: newFee }]
+                        }));
                     }
                 }
             } catch (err) {
@@ -840,10 +900,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             aadhaar: '', isAadhaarVerified: false, relationToPatient: '', avatar: '',
             partnerTitle: 'Mr.', partnerFirstName: '', partnerLastName: '', partnerMobile: '',
             height: '', weight: '', bmi: '', bloodGroup: '',
-            paymentStatus: 'Pending', consultationFee: hospitalContext?.appointmentFee ?? '500',
+            paymentStatus: 'Pending', consultationFee: String(hospitalContext?.appointmentFee ?? '500'),
             department: '', doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: '',
             referralType: '', reasonForVisit: '', paymentMethod: 'Cash',
-            splitPayments: [{ method: 'Cash', amount: '' }]
+            splitPayments: [{ method: 'Cash', amount: String(hospitalContext?.appointmentFee ?? '500') }]
         });
         setViewMode('intake');
     };
@@ -859,6 +919,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         const p = patient.fertilityProfile || {};
         const getVal = (val) => val || '';
 
+        const defaultFee = String(hospitalContext?.appointmentFee ?? '500');
         setIntakeForm(prev => ({
             ...prev,
             firstName: getVal(patient.name).split(' ')[0],
@@ -880,7 +941,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             bloodGroup: patient.bloodGroup || patient.fertilityProfile?.bloodGroup || '',
             dob: patient.dob || patient.fertilityProfile?.dob || '',
             ...p,
-            consultationFee: hospitalContext?.appointmentFee ?? '500',
+            consultationFee: defaultFee,
+            splitPayments: [{ method: 'Cash', amount: defaultFee }],
             department: '', doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: ''
         }));
         setViewMode('intake');
@@ -1342,7 +1404,12 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         if (name === 'department' && hospitalContext) {
             const defaultFee = hospitalContext.departmentFees?.[value] ?? hospitalContext.appointmentFee ?? 500;
             setIntakeForm(prev => ({
-                ...prev, [name]: value, consultationFee: defaultFee, doctor: '', visitTime: ''
+                ...prev,
+                [name]: value,
+                consultationFee: String(defaultFee),
+                doctor: '',
+                visitTime: '',
+                splitPayments: [{ method: prev.splitPayments?.[0]?.method || 'Cash', amount: String(defaultFee) }]
             }));
             setAvailabilityCheck(prev => ({ ...prev, doctorId: '', bookedSlots: [] }));
             return;
@@ -1638,13 +1705,19 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     } catch { /* non-fatal */ }
                 }
 
+                let txnDetailsNote = '';
+                if (intakePaymentData?.transactionId) txnDetailsNote += ` | Txn: ${intakePaymentData.transactionId}`;
+                if (intakePaymentData?.upiId) txnDetailsNote += ` | UPI: ${intakePaymentData.upiId}`;
+                if (intakePaymentData?.cardDetails) txnDetailsNote += ` | Card: ${intakePaymentData.cardDetails}`;
+                if (intakePaymentData?.bankReference) txnDetailsNote += ` | BankRef: ${intakePaymentData.bankReference}`;
+
                 const bookingRes = await receptionAPI.bookAppointment({
                     patientId: userId,
                     doctorId: intakeForm.doctor,
                     date: intakeForm.visitDate,
                     time: isTokenMode ? undefined : intakeForm.visitTime,
                     department: intakeForm.department,
-                    notes: `Walk-in. Vitals: ${intakeForm.height}cm/${intakeForm.weight}kg. Reason: ${intakeForm.reasonForVisit}${screenshotNote}`,
+                    notes: `Walk-in. Vitals: ${intakeForm.height}cm/${intakeForm.weight}kg. Reason: ${intakeForm.reasonForVisit}${screenshotNote}${txnDetailsNote}`,
                     splitPayments: intakeForm.splitPayments,
                     paymentStatus: 'Paid',
                     amount: intakeForm.consultationFee
@@ -2507,8 +2580,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                     className="reg-input"
                                                     name="consultationFee" 
                                                     value={intakeForm.consultationFee || '500'} 
-                                                    onChange={handleInputChange}
-                                                    style={{ fontWeight: 'bold', color: '#15803d' }}
+                                                    readOnly
+                                                    disabled
+                                                    style={{ backgroundColor: '#f8fafc', fontWeight: 'bold', color: '#15803d', cursor: 'not-allowed' }}
+                                                    title="Consultation fee is fixed by hospital policy"
                                                 />
                                             </div>
                                         </div>
@@ -2547,57 +2622,29 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                 </div>
                                             )}
 
-                                            <div className="reg-payment-box">
-                                                <div className="reg-payment-row">
-                                                    <div className="reg-field">
-                                                        <label>Payment Mode</label>
-                                                        <select 
-                                                            className="reg-select"
-                                                            value={intakeForm.splitPayments?.[0]?.method || 'Cash'}
-                                                            onChange={(e) => handleIntakeSplitPaymentChange(0, 'method', e.target.value)}
-                                                        >
-                                                            <option value="Cash">Cash</option>
-                                                            <option value="UPI">UPI</option>
-                                                            <option value="Card">Card</option>
-                                                            <option value="Online">Online</option>
-                                                        </select>
-                                                    </div>
-
-                                                    <div className="reg-field">
-                                                        <label>Amount</label>
-                                                        <input 
-                                                            className="reg-input"
-                                                            placeholder="Amount"
-                                                            value={intakeForm.splitPayments?.[0]?.amount || intakeForm.consultationFee || '500'}
-                                                            onChange={(e) => handleIntakeSplitPaymentChange(0, 'amount', e.target.value)}
-                                                        />
-                                                    </div>
+                                            {followupStatus?.active ? (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '14px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', justifyContent: 'center' }}>
+                                                    <span style={{ fontSize: '18px' }}>✅</span>
+                                                    <span style={{ fontWeight: 600, color: '#15803d', fontSize: '15px' }}>Payment Confirmed — Follow-up Free Visit</span>
                                                 </div>
-
-                                                {intakeForm.splitPayments?.some(p => p.method !== 'Cash') && (
-                                                    <div style={{ marginTop: '12px' }}>
-                                                        <label style={{ fontSize: '10px', fontWeight: 800, color: '#60738d', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
-                                                            Payment Screenshot / Proof <span style={{ color: '#ef4444' }}>*Required for non-cash</span>
-                                                        </label>
-                                                        <input
-                                                            type="file"
-                                                            accept="image/*,application/pdf"
-                                                            onChange={e => setPaymentScreenshot(e.target.files[0])}
-                                                            style={{ padding: '8px', border: '1.5px dashed #6366f1', borderRadius: '8px', background: '#ffffff', width: '100%', fontSize: '12px' }}
-                                                        />
-                                                        {paymentScreenshot && (
-                                                            <span style={{ fontSize: '12px', color: '#059669', marginTop: '4px', display: 'block' }}>
-                                                                ✅ {paymentScreenshot.name}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                <div className="reg-payment-status">
-                                                    <div className="reg-check-badge">✓</div>
-                                                    Payment Confirmed — Paid
+                                            ) : (
+                                                <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                    <PaymentSection
+                                                        splitPayments={intakeForm.splitPayments || []}
+                                                        onSplitChange={handleIntakeSplitPaymentChange}
+                                                        onAddSplit={addIntakeSplitPayment}
+                                                        onRemoveSplit={removeIntakeSplitPayment}
+                                                        totalAmount={Number(intakeForm.consultationFee) || 500}
+                                                        upiOptions={upiOptions}
+                                                        paymentData={intakePaymentData}
+                                                        onPaymentDataChange={setIntakePaymentData}
+                                                        proofFile={paymentScreenshot}
+                                                        onProofFileChange={setPaymentScreenshot}
+                                                        label="Registration Payment Breakdown"
+                                                        allowCash={true}
+                                                    />
                                                 </div>
-                                            </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
