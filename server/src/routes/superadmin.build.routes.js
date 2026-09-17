@@ -666,11 +666,27 @@ router.post('/:id/build-rn-app', verifyCentralAdmin, async (req, res) => {
         const logoUrl = hospital.branding?.logoUrl || 'default';
         const themeColor = hospital.branding?.primaryColor || '#14b8a6';
 
-        const owner = process.env.GITHUB_OWNER || 'teammedical365-coder';
-        const repo = process.env.GITHUB_RN_REPO || (process.env.GITHUB_REPO && process.env.GITHUB_REPO !== 'HMS' ? process.env.GITHUB_REPO : 'HMS-REACT-NATIVE-APP');
-        const workflowId = 'react-native-build.yml'; 
+        const owner = process.env.GITHUB_RN_OWNER || process.env.GITHUB_OWNER || 'teammedical365-coder';
+        const repo = process.env.GITHUB_RN_REPO;
+        const workflowId = process.env.GITHUB_RN_WORKFLOW || 'react-native-build.yml'; 
         const githubToken = process.env.GITHUB_PAT || process.env.GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GIT_PAT;
         const refBranch = process.env.GITHUB_REF || 'main';
+
+        if (!repo) {
+            const errorMsg = 'GITHUB_RN_REPO is not configured';
+            console.error(`[RN Build System Error] ${errorMsg}`);
+            await Hospital.findByIdAndUpdate(id, {
+                $set: {
+                    'appConfig.rnBuildStatus': 'FAILED',
+                    'appConfig.rnBuildError': errorMsg
+                }
+            });
+            return res.status(500).json({
+                success: false,
+                message: errorMsg,
+                buildStatus: 'FAILED'
+            });
+        }
 
         if (!githubToken) {
             const errorMsg = 'GitHub Token is not configured. Please set GITHUB_PAT or GITHUB_TOKEN in server environment to enable automated GitHub builds.';
@@ -687,6 +703,15 @@ router.post('/:id/build-rn-app', verifyCentralAdmin, async (req, res) => {
                 buildStatus: 'FAILED'
             });
         }
+
+        // Safe diagnostics before dispatch: ONLY log owner, repo, workflowId, tenantId, rnBuildId
+        console.log('[RN Build Dispatch]', {
+            owner,
+            repo,
+            workflowId,
+            tenantId: id.toString(),
+            rnBuildId
+        });
 
         const githubUrl = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`;
         
