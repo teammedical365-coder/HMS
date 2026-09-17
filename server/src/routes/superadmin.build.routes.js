@@ -652,6 +652,13 @@ router.post('/:id/build-rn-app', verifyCentralAdmin, async (req, res) => {
         });
     }
 
+    // Clear logs: DB claimed rnBuildId
+    console.log('[RN Build DB Claimed]', {
+        tenantId: id.toString(),
+        claimedRnBuildId: hospital.appConfig?.rnBuildId,
+        activeDbStatus: hospital.appConfig?.rnBuildStatus
+    });
+
     try {
         const safeAppName = (hospital.brandingSchema?.appName || hospital.branding?.appName || hospital.name || 'City Hospital')
             .replace(/[^a-zA-Z0-9\s]/g, '')
@@ -705,12 +712,12 @@ router.post('/:id/build-rn-app', verifyCentralAdmin, async (req, res) => {
         }
 
         // Safe diagnostics before dispatch: ONLY log owner, repo, workflowId, tenantId, rnBuildId
-        console.log('[RN Build Dispatch]', {
+        console.log('[RN Build Dispatching]', {
             owner,
             repo,
             workflowId,
             tenantId: id.toString(),
-            rnBuildId
+            dispatchedRnBuildId: rnBuildId
         });
 
         const githubUrl = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`;
@@ -892,6 +899,15 @@ router.post('/webhook/github-rn', verifyRNWebhookSecret, async (req, res) => {
 
         const currentStatus = hospital.appConfig.rnBuildStatus;
         const activeBuildId = hospital.appConfig.rnBuildId;
+
+        // Clear logs: webhook received rnBuildId and active DB rnBuildId
+        console.log('[RN Webhook Received]', {
+            tenantId,
+            receivedRnBuildId: rnBuildId,
+            activeDbRnBuildId: activeBuildId || 'NONE',
+            activeDbStatus: currentStatus || 'NONE',
+            status
+        });
 
         // Build correlation is mandatory: every callback must match the active build exactly.
         if (!activeBuildId || rnBuildId !== activeBuildId) {
@@ -1076,15 +1092,15 @@ router.post(
             }
 
             const activeBuildId = hospital.appConfig?.rnBuildId;
-            // Build correlation is mandatory: only the currently active build may finalize artifacts.
-            if (!activeBuildId || rnBuildId !== activeBuildId) {
-                safeDeleteFiles(tempFiles);
-                console.warn(`[RN Upload Webhook] Rejecting upload for rnBuildId '${rnBuildId}' (active build is '${activeBuildId || 'NONE'}').`);
-                return res.status(409).json({
-                    success: false,
-                    message: 'Upload rejected: rnBuildId does not match the active RN build'
-                });
-            }
+            const activeStatus = hospital.appConfig?.rnBuildStatus;
+
+            // Clear logs: webhook received rnBuildId and active DB rnBuildId
+            console.log('[RN Upload Webhook Received]', {
+                tenantId,
+                receivedRnBuildId: rnBuildId,
+                activeDbRnBuildId: activeBuildId || 'NONE',
+                activeDbStatus: activeStatus || 'NONE'
+            });
 
             const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
 
@@ -1097,9 +1113,9 @@ router.post(
             destAab = path.join(aabDir, `${safeName}-rn-release.aab`);
 
             // Idempotency check before attempting transition:
-            // If already COMPLETED and same existing artifacts exist on disk,
+            // If already COMPLETED for the exact rnBuildId and same existing artifacts exist on disk,
             // return success without rewriting files or modifying DB.
-            if (hospital.appConfig?.rnBuildStatus === 'COMPLETED' && fs.existsSync(destApk) && fs.existsSync(destAab)) {
+            if (activeStatus === 'COMPLETED' && activeBuildId === rnBuildId && fs.existsSync(destApk) && fs.existsSync(destAab)) {
                 safeDeleteFiles(tempFiles);
                 return res.json({
                     success: true,
@@ -1109,15 +1125,34 @@ router.post(
                 });
             }
 
+            // Build correlation is mandatory: only the currently active build may finalize artifacts.
+            if (!activeBuildId || rnBuildId !== activeBuildId) {
+                safeDeleteFiles(tempFiles);
+                console.warn(`[RN Upload Webhook] Rejecting upload for rnBuildId '${rnBuildId}' (active build is '${activeBuildId || 'NONE'}').`);
+                return res.status(409).json({
+                    success: false,
+                    message: 'Upload rejected: rnBuildId does not match the active RN build'
+                });
+            }
+
+            // Webhook /upload-build must require exact match:
+            // tenantId + rnBuildId + active build state BUILDING or PROCESSING.
+            if (activeStatus !== 'BUILDING' && activeStatus !== 'PROCESSING') {
+                safeDeleteFiles(tempFiles);
+                console.warn(`[RN Upload Webhook] Rejecting upload for rnBuildId '${rnBuildId}' (active build status is '${activeStatus || 'NOT_BUILT'}', expected BUILDING or PROCESSING).`);
+                return res.status(409).json({
+                    success: false,
+                    message: `Upload rejected: active build status is '${activeStatus || 'NOT_BUILT'}', expected BUILDING or PROCESSING`
+                });
+            }
+
             // Atomic claim transition: BUILDING -> PROCESSING
             // Ensures duplicate concurrent callbacks do not race to process or overwrite.
             const claimQuery = {
                 _id: tenantId,
-                'appConfig.rnBuildStatus': 'BUILDING'
+                'appConfig.rnBuildStatus': 'BUILDING',
+                'appConfig.rnBuildId': rnBuildId
             };
-            if (rnBuildId) {
-                claimQuery['appConfig.rnBuildId'] = rnBuildId;
-            }
 
             const claimedHospital = await Hospital.findOneAndUpdate(
                 claimQuery,
