@@ -36,6 +36,8 @@ router.get('/tenant-config', async (req, res) => {
         }
 
         const Hospital = require('../models/hospital.model');
+        const ADMIN_HOST = (process.env.ADMIN_HOST || 'admin.medical365.in').toLowerCase();
+        const BASE_DOMAIN = (process.env.BASE_DOMAIN || 'medical365.in').toLowerCase();
         let query = {};
         
         if (domain) {
@@ -43,7 +45,7 @@ router.get('/tenant-config', async (req, res) => {
             let cleanDomain = domain.replace(/^https?:\/\//i, '').split('/')[0].split('?')[0].split(':')[0].toLowerCase();
             
             // Intercept Central Admin domain prior to DB lookup
-            if (cleanDomain.includes('admin.medical365.in')) {
+            if (cleanDomain === ADMIN_HOST || cleanDomain.includes(ADMIN_HOST)) {
                 return res.status(200).json({
                     success: true,
                     tenant: {
@@ -51,16 +53,21 @@ router.get('/tenant-config', async (req, res) => {
                         isCentralAdmin: true,
                         name: 'Central Management',
                         slug: 'admin',
-                        customDomain: 'admin.medical365.in',
+                        customDomain: ADMIN_HOST,
                         branding: {},
                         theme: 'admin-default',
                         features: ['ALL_MODULES']
                     }
                 });
             }
+
+            // Platform base domains (medical365.in, www.medical365.in) are NOT tenants
+            if (cleanDomain === BASE_DOMAIN || cleanDomain === `www.${BASE_DOMAIN}` || cleanDomain === `api.${BASE_DOMAIN}`) {
+                return res.status(404).json({ success: false, message: 'Platform domain — not a tenant' });
+            }
             
-            if (cleanDomain.endsWith('.medical365.in')) {
-                query.slug = cleanDomain.replace('.medical365.in', '');
+            if (cleanDomain.endsWith(`.${BASE_DOMAIN}`)) {
+                query.slug = cleanDomain.replace(`.${BASE_DOMAIN}`, '');
             } else if (cleanDomain.endsWith('.localhost')) {
                 query.slug = cleanDomain.replace('.localhost', '');
             } else {
@@ -72,6 +79,9 @@ router.get('/tenant-config', async (req, res) => {
         } else if (slug) {
             query.slug = slug.toLowerCase();
         }
+
+        // Only return active hospitals
+        query.isActive = true;
 
         const hospital = await Hospital.findOne(query)
             .select('name slug customDomain branding subscriptionPlan')

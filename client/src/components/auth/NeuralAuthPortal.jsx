@@ -19,6 +19,7 @@ const NeuralAuthPortal = ({
   portalType = 'admin',
   title = 'Supreme Portal',
   subtitle = 'Access Medical365 central system administration core.',
+  showUnderline = false,
   idLabel = 'ADMIN EMAIL OR ID',
   idPlaceholder = 'Enter admin email or ID',
   idType = 'text',
@@ -40,6 +41,10 @@ const NeuralAuthPortal = ({
   sessionBanner = null,
   extraFooter = null,
 }) => {
+  // Super Admin portal heading must remain exactly as it is (no underline)
+  const isSuperAdminPortal = portalType === 'admin' && (title === 'Supreme Portal' || title === 'Super Admin Portal');
+  const shouldShowUnderline = !isSuperAdminPortal && (showUnderline || title === 'Sign In');
+
   const [credentials, setCredentials] = useState({ id: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -286,9 +291,16 @@ const NeuralAuthPortal = ({
         {/* ── RIGHT SECTION: PRISTINE WHITE GLASS LOGIN CARD ── */}
         <div className="med-right-card-wrapper">
           <div className="med-auth-card">
-            {/* 4. Colorful Portal Header Text (No Top Emblem) */}
+            {/* 4. Colorful Portal Header Text with Clean Minimal Animated Underline */}
             <div className="med-card-header">
-              <h2 className="med-colorful-title">{title}</h2>
+              <div className="med-title-container">
+                <h2 className="med-colorful-title">{title}</h2>
+                {shouldShowUnderline && (
+                  <div className="med-title-underline-wrapper" aria-hidden="true">
+                    <span className="med-title-animated-underline" />
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Banners & Alerts */}

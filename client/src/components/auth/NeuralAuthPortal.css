@@ -475,6 +475,13 @@
   margin-bottom: 30px;
 }
 
+.med-title-container {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
 .med-colorful-title {
   font-size: 28px;
   font-weight: 800;
@@ -485,6 +492,52 @@
   background-clip: text;
   -webkit-text-fill-color: transparent;
   display: inline-block;
+}
+
+/* Clean, Premium Animated Underline for Sign In */
+.med-title-underline-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin-top: 8px;
+  height: 3px;
+  overflow: visible;
+}
+
+.med-title-animated-underline {
+  display: block;
+  width: 54px;
+  height: 2.5px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #0ea5e9 0%, #7c3aed 50%, #0d9488 100%);
+  box-shadow: 0 1px 5px rgba(14, 165, 233, 0.2);
+  animation: medUnderlinePulse 2.4s ease-in-out infinite;
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+
+@keyframes medUnderlinePulse {
+  0% {
+    transform: scaleX(0.5);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(0.5);
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .med-title-animated-underline {
+    animation: none;
+    transform: scaleX(0.85);
+    opacity: 0.9;
+  }
 }
 
 .med-card-header p {

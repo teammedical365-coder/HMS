@@ -31,7 +31,9 @@ import {
     FiUser,
     FiHeart,
     FiDroplet,
-    FiBox
+    FiBox,
+    FiMail,
+    FiUsers
 } from 'react-icons/fi';
 import { FaHeartbeat, FaRupeeSign } from 'react-icons/fa';
 import './UnifiedPatientProfile.css';
@@ -605,6 +607,7 @@ const HospitalPatientProfileContent = () => {
     }
 
     const initials = (patientData.name || 'P').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    const patientPhoto = patientData.avatar || patientData.profilePic || patientData.photo || patientData.image || patientData.userId?.avatar;
 
     // Compute age
     let ageText = 'N/A';
@@ -663,18 +666,17 @@ const HospitalPatientProfileContent = () => {
                          permissions.includes('reception_access') ||
                          permissions.includes('admin_manage_roles');
 
-    // Tab definitions
+    // Tab definitions (Clean icons, no raw emojis, merged clinical history into timeline)
     const tabs = [
-        { key: 'timeline', label: 'Timeline' },
-        { key: 'ipdOrders', label: '🏥 IPD Orders' },
-        { key: 'familyHistory', label: 'Family History' },
-        { key: 'clinical', label: 'Clinical History' },
-        { key: 'vitals', label: 'Vitals' },
-        { key: 'prescriptions', label: 'Prescriptions' },
-        { key: 'reports', label: 'Reports' },
-        { key: 'notes', label: 'Notes' },
-        ...(canViewVials ? [{ key: 'vialManagement', label: '🧪 Vial / Sample Location' }] : []),
-        { key: 'documents', label: 'Documents' },
+        { key: 'timeline', label: 'Timeline', icon: <FiClock /> },
+        { key: 'ipdOrders', label: 'IPD Orders', icon: <FiActivity /> },
+        { key: 'familyHistory', label: 'Family History', icon: <FiUsers /> },
+        { key: 'vitals', label: 'Vitals', icon: <FiHeart /> },
+        { key: 'prescriptions', label: 'Prescriptions', icon: <FiFileText /> },
+        { key: 'reports', label: 'Reports', icon: <FiFolder /> },
+        { key: 'notes', label: 'Notes', icon: <FiMessageSquare /> },
+        ...(canViewVials ? [{ key: 'vialManagement', label: 'Vial / Sample Location', icon: <FiBox /> }] : []),
+        { key: 'documents', label: 'Documents', icon: <FiFile /> },
     ];
 
     // Gender & Blood Group display
@@ -683,29 +685,36 @@ const HospitalPatientProfileContent = () => {
 
     return (
         <div className="upp-container">
-            {/* ====== TOP NAVIGATION ====== */}
-            <div className="upp-top-nav">
-                <button className="upp-back-btn" onClick={() => navigate(-1)}>
-                    <FiArrowLeft /> Back
-                </button>
-            </div>
-
-            {/* ====== HEADER IDENTITY CARD ====== */}
+            {/* ====== HEADER IDENTITY CARD (Clean Healthcare SaaS Banner) ====== */}
             <div className="upp-header-card">
                 <div className="upp-identity-wrapper">
                     <div className="upp-avatar">
-                        {initials}
-                        <span className="upp-avatar-camera"><FiCamera /></span>
+                        {patientPhoto ? (
+                            <img 
+                                src={patientPhoto} 
+                                alt={patientData.name || 'Patient'} 
+                                className="upp-avatar-img"
+                                onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    const fallback = e.target.parentElement?.querySelector('.upp-avatar-initials');
+                                    if (fallback) fallback.style.display = 'flex';
+                                }}
+                            />
+                        ) : null}
+                        <span className="upp-avatar-initials" style={{ display: patientPhoto ? 'none' : 'flex' }}>
+                            {initials}
+                        </span>
                     </div>
                     <div className="upp-header-info">
                         <div className="upp-header-name-row">
-                            <h1>{patientData.name}</h1>
+                            <h1 className="upp-patient-display-name">{patientData.name}</h1>
                             <span className={`upp-status-badge ${currentFollowupStatus?.active ? 'active' : 'inactive'}`}>
                                 {currentFollowupStatus?.active ? 'Active' : 'Inactive'}
                             </span>
                         </div>
-                        <div className="upp-header-tags">
-                            <span className="upp-header-tag" style={{ color: 'var(--upp-primary)', fontWeight: '700', background: 'var(--upp-primary-light)' }}>
+                        {/* Row 1: Clinical Demographics (MRN, Age, Gender, Blood Group) */}
+                        <div className="upp-header-tags upp-tags-row-primary">
+                            <span className="upp-header-tag upp-tag-mrn">
                                 <FiShield /> MRN: {patientData.patientId || patientData.mrn || 'N/A'}
                             </span>
                             <span className="upp-header-tag">
@@ -714,26 +723,64 @@ const HospitalPatientProfileContent = () => {
                             <span className="upp-header-tag">
                                 <FiUser /> {genderDisplay}
                             </span>
-                            <span className="upp-header-tag">
-                                <FiDroplet /> {bloodGroupDisplay}
-                            </span>
+                            {bloodGroupDisplay && bloodGroupDisplay !== 'N/A' && (
+                                <span className="upp-header-tag upp-tag-blood">
+                                    <FiDroplet /> {bloodGroupDisplay}
+                                </span>
+                            )}
                         </div>
+
+                        {/* Row 2: Contact & Location (Phone, Email, Location - Strictly BELOW MRN) */}
+                        {(patientData.phone || patientData.email || patientData.city || fullAddress || allergiesList.length > 0) && (
+                            <div className="upp-header-tags upp-tags-row-secondary">
+                                {patientData.phone && (
+                                    <span className="upp-header-tag upp-tag-phone" title="Phone">
+                                        <FiPhone /> {patientData.phone}
+                                    </span>
+                                )}
+                                {patientData.email && (
+                                    <span className="upp-header-tag upp-tag-email" title="Email">
+                                        <FiMail /> {patientData.email}
+                                    </span>
+                                )}
+                                {(patientData.city || fullAddress) && (
+                                    <span className="upp-header-tag upp-tag-location" title={fullAddress || patientData.city}>
+                                        <FiMapPin /> {patientData.city || fullAddress}
+                                    </span>
+                                )}
+                                {allergiesList.length > 0 && (
+                                    <span className="upp-header-tag upp-tag-allergy" title={`Allergies: ${allergiesList.join(', ')}`}>
+                                        <FiAlertCircle /> Allergies: {allergiesList.join(', ')}
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* Action Buttons */}
+                {/* Action Buttons (Stacked on Right: Back on top, Download PDF below) */}
                 <div className="upp-header-actions">
+                    <button 
+                        className="upp-btn-action upp-btn-back" 
+                        onClick={() => navigate(-1)} 
+                        title="Back to Previous Page"
+                    >
+                        <FiArrowLeft /> Back
+                    </button>
                     {isReception && (
                         <button 
                             className="upp-btn-action upp-btn-edit" 
                             onClick={() => navigate('/reception/dashboard?view=intake', { state: { patient: patientData, isEditingExisting: true } })} 
                             title="Edit Patient Demographics & Profile"
-                            style={{ background: '#f8fafc', color: '#1e293b', border: '1.5px solid #cbd5e1' }}
                         >
                             <FiEdit3 /> Edit Profile
                         </button>
                     )}
-                    <button className="upp-btn-action upp-btn-download" onClick={handleDownloadPDF} title="Download Patient Profile PDF">
+                    <button 
+                        className="upp-btn-action upp-btn-download" 
+                        onClick={handleDownloadPDF} 
+                        title="Download Patient Profile PDF"
+                    >
                         <FiDownload /> Download PDF
                     </button>
                 </div>
@@ -800,20 +847,23 @@ const HospitalPatientProfileContent = () => {
                         className={`upp-tab-btn ${activeTab === tab.key ? 'active' : ''}`}
                         onClick={() => setActiveTab(tab.key)}
                     >
-                        {tab.label}
+                        <span className="upp-tab-icon">{tab.icon}</span>
+                        <span>{tab.label}</span>
                     </button>
                 ))}
             </div>
 
             {/* ====== MAIN CONTENT ====== */}
             {activeTab === 'familyHistory' ? (
-                <div style={{ marginTop: '20px' }}>
+                <div style={{ margin: '0 24px 40px 24px' }}>
                     <FamilyHealthTree patientId={patientData?._id || patientId} patientData={patientData} />
                 </div>
             ) : activeTab === 'vialManagement' ? (
-                <PatientVialsSection patientId={patientData?._id || patientId} patientData={patientData} />
+                <div style={{ margin: '0 24px 40px 24px' }}>
+                    <PatientVialsSection patientId={patientData?._id || patientId} patientData={patientData} />
+                </div>
             ) : activeTab === 'ipdOrders' ? (
-                <div style={{ marginTop: '20px' }}>
+                <div style={{ margin: '0 24px 40px 24px' }}>
                     <DoctorIPDOrdersPanel patientId={patientData?._id || patientId} patient={patientData} />
                 </div>
             ) : (
@@ -821,74 +871,80 @@ const HospitalPatientProfileContent = () => {
                     {/* ---- LEFT PANEL ---- */}
                     <div className="upp-col-left">
 
-                        {/* Timeline Tab Content */}
-                        {activeTab === 'timeline' && (
+                    {/* Timeline & Chronological Clinical History */}
+                    {(activeTab === 'timeline' || activeTab === 'clinical') && (
                         <>
-                            {/* Recent Visit Section */}
+                            {/* Chronological Clinical Visit History */}
                             <div className="upp-section-card">
                                 <div className="upp-section-header">
                                     <h2 className="upp-section-title">
-                                        <FiActivity style={{ color: 'var(--upp-primary)' }} /> Recent Visit
+                                        <FiActivity style={{ color: 'var(--upp-primary)' }} /> Chronological Clinical History & Visits
                                     </h2>
-                                    <div className="upp-visit-filter">
-                                        <select defaultValue="all">
-                                            <option value="all">All Visits</option>
-                                            <option value="completed">Completed</option>
-                                            <option value="pending">Pending</option>
-                                        </select>
-                                    </div>
+                                    <span className="upp-section-count">{displayTimeline.length} records</span>
                                 </div>
 
-                                {recentVisits.length === 0 ? (
+                                {displayTimeline.length === 0 ? (
                                     <div className="upp-empty-state">
-                                        No clinical visits recorded yet.
+                                        No clinical visits or history recorded yet for the {departmentParam || 'Hospital'} department.
                                     </div>
                                 ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                                        {recentVisits.map((item, index) => {
-                                            const visitDate = new Date(item.date || Date.now());
-                                            const dateFormatted = visitDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-                                            const timeStr = item.data?.appointmentTime || item.data?.visitTime || item.data?.time || '';
-                                            const timeFormatted = timeStr || visitDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-                                            const provider = item.data?.doctorName || item.data?.doctorConsultation?.doctorId || item.summary?.doctorSeen || 'Doctor';
-                                            const dept = item.data?.department || item.data?.serviceName || departmentParam || 'General Medicine';
-                                            const titleText = item.summary?.primaryComplaint || item.data?.serviceName || item.data?.title || 'General Consultation';
-                                            const statusText = (item.data?.status || 'Completed').toLowerCase();
-                                            const amt = Number(item.data?.amount || item.data?.totalAmount || item.data?.fee || 0);
+                                    <div className="upp-timeline">
+                                        {displayTimeline.sort((a, b) => new Date(b.date) - new Date(a.date)).map((item, index) => {
+                                            const calendarDateOnly = new Date(item.date || Date.now()).toLocaleDateString('en-IN', {
+                                                day: '2-digit',
+                                                month: 'short',
+                                                year: 'numeric'
+                                            });
+                                            const exactTime = item.data?.appointmentTime || item.data?.visitTime || item.data?.time;
+                                            const dateStr = exactTime ? `${calendarDateOnly} • ${exactTime}` : calendarDateOnly;
+                                            const provider = item.data?.doctorName || item.data?.doctorConsultation?.doctorId || item.summary?.doctorSeen || 'Hospital Provider';
+                                            let titleText = item.summary?.primaryComplaint || item.data?.serviceName || item.data?.title || item.data?.testName || 'Clinical Consult';
+                                            let statusText = item.data?.status || item.data?.paymentStatus || 'Recorded';
 
-                                            const badgeClass = statusText.includes('complete') || statusText.includes('paid') 
-                                                ? 'completed' 
-                                                : statusText.includes('confirm') ? 'confirmed' 
-                                                : statusText.includes('cancel') ? 'cancelled' 
-                                                : 'pending';
+                                            if (item.type === 'labReport') {
+                                                titleText = `Diagnostic Lab Test${item.data?.testNames?.length > 0 ? ': ' + item.data.testNames.join(', ') : ''}`;
+                                                statusText = item.data?.reportStatus === 'UPLOADED' ? 'Completed' : (item.data?.reportStatus || 'Pending');
+                                            } else if (item.type === 'pharmacyOrder') {
+                                                titleText = 'Pharmacy / Prescription Order';
+                                            }
+
+                                            const badgeClass = statusText.toLowerCase().includes('complete') || statusText.toLowerCase().includes('paid') || statusText.toLowerCase() === 'uploaded'
+                                                ? 'upp-badge-completed'
+                                                : statusText.toLowerCase().includes('confirm')
+                                                ? 'upp-badge-confirmed'
+                                                : statusText.toLowerCase().includes('cancel')
+                                                ? 'upp-badge-cancelled'
+                                                : 'upp-badge-pending';
 
                                             return (
-                                                <div key={index} className="upp-visit-card">
-                                                    <div className="upp-visit-date-col">
-                                                        <div className="upp-visit-dot" />
-                                                        <span className="upp-visit-date-text">{dateFormatted}</span>
-                                                        <span className="upp-visit-time-text">{timeFormatted}</span>
-                                                        {index < recentVisits.length - 1 && <div className="upp-visit-line" />}
+                                                <div key={index} className="upp-timeline-item">
+                                                    <div className="upp-tl-top">
+                                                        <div className="upp-tl-meta">
+                                                            <span className="upp-tl-date">{dateStr}</span>
+                                                            <span className="upp-tl-doc">Provider: {provider}</span>
+                                                        </div>
+                                                        <span className={`upp-badge ${badgeClass}`}>{statusText}</span>
                                                     </div>
-                                                    <div className="upp-visit-content">
-                                                        <div className="upp-visit-title-row">
-                                                            <span className="upp-visit-title">{titleText}</span>
-                                                            <span className={`upp-visit-badge ${badgeClass}`}>{statusText.charAt(0).toUpperCase() + statusText.slice(1)}</span>
+
+                                                    <div className="upp-tl-body">
+                                                        <div className="upp-tl-field">
+                                                            <span className="upp-tl-label">Clinical Description / Diagnosis</span>
+                                                            <span className="upp-tl-value">{titleText}</span>
                                                         </div>
-                                                        <div className="upp-visit-details-grid">
-                                                            <div className="upp-visit-detail-item">
-                                                                <FiUser /> <span>Doctor: <strong>{provider}</strong></span>
+
+                                                        {item.summary?.outcome && item.summary.outcome !== 'Processing' && (
+                                                            <div className="upp-tl-field">
+                                                                <span className="upp-tl-label">Outcome / Assessment</span>
+                                                                <span className="upp-tl-value">{item.summary.outcome}</span>
                                                             </div>
-                                                            <div className="upp-visit-detail-item">
-                                                                <FiFileText /> <span>Payment: <strong>₹{amt.toLocaleString('en-IN')}</strong></span>
+                                                        )}
+
+                                                        {item.data?.notes && (
+                                                            <div className="upp-tl-field">
+                                                                <span className="upp-tl-label">Clinical Notes</span>
+                                                                <span className="upp-tl-value">{item.data.notes}</span>
                                                             </div>
-                                                            <div className="upp-visit-detail-item">
-                                                                <FiFolder /> <span>Department: <strong>{dept}</strong></span>
-                                                            </div>
-                                                            <div className="upp-visit-detail-item">
-                                                                <FiCheckCircle /> <span>Status: <strong style={{ color: badgeClass === 'completed' ? '#15803d' : badgeClass === 'pending' ? '#b45309' : '#1d4ed8' }}>{statusText.charAt(0).toUpperCase() + statusText.slice(1)}</strong></span>
-                                                            </div>
-                                                        </div>
+                                                        )}
 
                                                         {item.data?.vitals && Object.keys(item.data.vitals).length > 0 && (
                                                             <div className="upp-tl-vitals-grid">
@@ -954,7 +1010,7 @@ const HospitalPatientProfileContent = () => {
                                     <h3 className="upp-section-title">
                                         <FiFileText style={{ color: '#8b5cf6' }} /> Recent Prescriptions
                                     </h3>
-                                    <button className="upp-view-all-btn">View All</button>
+                                    <button className="upp-view-all-btn" onClick={() => setActiveTab('prescriptions')}>View All</button>
                                 </div>
                                 {medications.length === 0 ? (
                                     <div className="upp-empty-state">
@@ -979,96 +1035,6 @@ const HospitalPatientProfileContent = () => {
                                 )}
                             </div>
                         </>
-                    )}
-
-                    {/* Clinical History Tab */}
-                    {activeTab === 'clinical' && (
-                        <div className="upp-section-card">
-                            <div className="upp-section-header">
-                                <h2 className="upp-section-title">
-                                    <FiActivity style={{ color: 'var(--upp-primary)' }} /> Chronological Visit History
-                                </h2>
-                                <span className="upp-section-count">{displayTimeline.length} records</span>
-                            </div>
-
-                            {displayTimeline.length === 0 ? (
-                                <div className="upp-empty-state">
-                                    No clinical visits or history recorded yet for the {departmentParam || 'Hospital'} department.
-                                </div>
-                            ) : (
-                                <div className="upp-timeline">
-                                    {displayTimeline.sort((a, b) => new Date(b.date) - new Date(a.date)).map((item, index) => {
-                                        const calendarDateOnly = new Date(item.date || Date.now()).toLocaleDateString('en-IN', {
-                                            day: '2-digit',
-                                            month: 'short',
-                                            year: 'numeric'
-                                        });
-                                        const exactTime = item.data?.appointmentTime || item.data?.visitTime || item.data?.time;
-                                        const dateStr = exactTime ? `${calendarDateOnly} • ${exactTime}` : calendarDateOnly;
-                                        const provider = item.data?.doctorName || item.data?.doctorConsultation?.doctorId || item.summary?.doctorSeen || 'Hospital Provider';
-                                        let titleText = item.summary?.primaryComplaint || item.data?.serviceName || item.data?.title || item.data?.testName || 'Clinical Consult';
-                                        let statusText = item.data?.status || item.data?.paymentStatus || 'Recorded';
-
-                                        if (item.type === 'labReport') {
-                                            titleText = `Diagnostic Lab Test${item.data?.testNames?.length > 0 ? ': ' + item.data.testNames.join(', ') : ''}`;
-                                            statusText = item.data?.reportStatus === 'UPLOADED' ? 'Completed' : (item.data?.reportStatus || 'Pending');
-                                        } else if (item.type === 'pharmacyOrder') {
-                                            titleText = 'Pharmacy / Prescription Order';
-                                        }
-
-                                        const badgeClass = statusText.toLowerCase().includes('complete') || statusText.toLowerCase().includes('paid') || statusText.toLowerCase() === 'uploaded'
-                                            ? 'upp-badge-completed'
-                                            : statusText.toLowerCase().includes('confirm')
-                                            ? 'upp-badge-confirmed'
-                                            : statusText.toLowerCase().includes('cancel')
-                                            ? 'upp-badge-cancelled'
-                                            : 'upp-badge-pending';
-
-                                        return (
-                                            <div key={index} className="upp-timeline-item">
-                                                <div className="upp-tl-top">
-                                                    <div className="upp-tl-meta">
-                                                        <span className="upp-tl-date">{dateStr}</span>
-                                                        <span className="upp-tl-doc">Provider: {provider}</span>
-                                                    </div>
-                                                    <span className={`upp-badge ${badgeClass}`}>{statusText}</span>
-                                                </div>
-
-                                                <div className="upp-tl-body">
-                                                    <div className="upp-tl-field">
-                                                        <span className="upp-tl-label">Clinical Description / Diagnosis</span>
-                                                        <span className="upp-tl-value">{titleText}</span>
-                                                    </div>
-
-                                                    {item.summary?.outcome && item.summary.outcome !== 'Processing' && (
-                                                        <div className="upp-tl-field">
-                                                            <span className="upp-tl-label">Outcome / Assessment</span>
-                                                            <span className="upp-tl-value">{item.summary.outcome}</span>
-                                                        </div>
-                                                    )}
-
-                                                    {item.data?.notes && (
-                                                        <div className="upp-tl-field">
-                                                            <span className="upp-tl-label">Clinical Notes</span>
-                                                            <span className="upp-tl-value">{item.data.notes}</span>
-                                                        </div>
-                                                    )}
-
-                                                    {item.data?.vitals && Object.keys(item.data.vitals).length > 0 && (
-                                                        <div className="upp-tl-vitals-grid">
-                                                            {item.data.vitals.weight && <span className="upp-vital-pill">Wt: {item.data.vitals.weight} kg</span>}
-                                                            {item.data.vitals.bp && <span className="upp-vital-pill">BP: {item.data.vitals.bp}</span>}
-                                                            {item.data.vitals.pulse && <span className="upp-vital-pill">Pulse: {item.data.vitals.pulse} bpm</span>}
-                                                            {item.data.vitals.temperature && <span className="upp-vital-pill">Temp: {item.data.vitals.temperature}°F</span>}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
                     )}
 
                     {/* Vitals Tab */}
@@ -1514,169 +1480,8 @@ const HospitalPatientProfileContent = () => {
                             </div>
                         </>
                     )}
-                </div>
-
-                {/* ---- RIGHT SIDEBAR ---- */}
-                <div className="upp-col-right">
-                    {/* Quick Actions Card */}
-                    <div className="upp-section-card">
-                        <div className="upp-section-header">
-                            <h3 className="upp-section-title">⚡ Quick Actions</h3>
-                        </div>
-                        <div className="upp-quick-actions">
-                            <div className="upp-quick-action-item" onClick={() => navigate(`/doctor/patient/${patientId}`)}>
-                                <div className="upp-qa-left">
-                                    <div className="upp-qa-icon blue"><FiFileText /></div>
-                                    <span className="upp-qa-label">Add Prescription</span>
-                                </div>
-                                <FiChevronRight className="upp-qa-arrow" />
-                            </div>
-                            <div className="upp-quick-action-item">
-                                <div className="upp-qa-left">
-                                    <div className="upp-qa-icon amber"><FiMessageSquare /></div>
-                                    <span className="upp-qa-label">Add Note</span>
-                                </div>
-                                <FiChevronRight className="upp-qa-arrow" />
-                            </div>
-                            <div className="upp-quick-action-item" onClick={() => setActiveTab('ipdOrders')}>
-                                <div className="upp-qa-left">
-                                    <div className="upp-qa-icon" style={{ background: '#eff6ff', color: '#2563eb' }}>🏥</div>
-                                    <span className="upp-qa-label">IPD / Admission Orders</span>
-                                </div>
-                                <FiChevronRight className="upp-qa-arrow" />
-                            </div>
-                            {canViewVials && (
-                                <div className="upp-quick-action-item" onClick={() => setActiveTab('vialManagement')}>
-                                    <div className="upp-qa-left">
-                                        <div className="upp-qa-icon" style={{ background: '#e0f2fe', color: '#0284c7' }}><FiBox /></div>
-                                        <span className="upp-qa-label">Sample / Vial Location</span>
-                                    </div>
-                                    <FiChevronRight className="upp-qa-arrow" />
-                                </div>
-                            )}
-                            <div className="upp-quick-action-item" onClick={() => setActiveTab('documents')}>
-                                <div className="upp-qa-left">
-                                    <div className="upp-qa-icon violet"><FiUpload /></div>
-                                    <span className="upp-qa-label">Upload Document</span>
-                                </div>
-                                <FiChevronRight className="upp-qa-arrow" />
-                            </div>
-                            <div className="upp-quick-action-item">
-                                <div className="upp-qa-left">
-                                    <div className="upp-qa-icon emerald"><FiPhone /></div>
-                                    <span className="upp-qa-label">Send Message</span>
-                                </div>
-                                <FiChevronRight className="upp-qa-arrow" />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Recent Payments Card */}
-                    <div className="upp-section-card">
-                        <div className="upp-section-header">
-                            <h3 className="upp-section-title">
-                                <FiDollarSign style={{ color: '#10b981' }} /> Recent Payments
-                            </h3>
-                            <button className="upp-view-all-btn">View All</button>
-                        </div>
-                        {financialTransactions.length === 0 ? (
-                            <div className="upp-empty-state">No payments recorded.</div>
-                        ) : (
-                            <div>
-                                {financialTransactions.slice(0, 4).map((t, i) => {
-                                    const amt = Number(t.data?.amount || t.data?.totalAmount || t.data?.fee || 0);
-                                    const pStatus = (t.data?.paymentStatus || t.data?.status || 'recorded').toLowerCase();
-                                    const isPaid = pStatus.includes('paid') || pStatus.includes('completed');
-                                    return (
-                                        <div key={i} className="upp-payment-item">
-                                            <div>
-                                                <div className="upp-payment-date">{new Date(t.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-                                                <div className="upp-payment-method">{t.data?.paymentMethod || 'Cash'}</div>
-                                            </div>
-                                            <div style={{ textAlign: 'right' }}>
-                                                <div className="upp-payment-amount">₹{amt.toLocaleString('en-IN')}</div>
-                                                <span className={`upp-payment-status ${isPaid ? 'paid' : 'pending'}`}>
-                                                    {isPaid ? 'Paid' : 'Pending'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Documents Card (Sidebar) */}
-                    <div className="upp-section-card">
-                        <div className="upp-section-header">
-                            <h3 className="upp-section-title">
-                                <FiFolder style={{ color: '#6366f1' }} /> Documents
-                            </h3>
-                            <button className="upp-view-all-btn" onClick={() => setActiveTab('documents')}>View All</button>
-                        </div>
-                        {displayDocuments.length === 0 ? (
-                            <div className="upp-empty-state">
-                                <div className="upp-empty-state-icon">📁</div>
-                                <strong>No documents uploaded</strong>
-                                <span>Upload documents to view here</span>
-                                <button className="upp-upload-btn" onClick={() => setActiveTab('documents')}>
-                                    <FiUpload /> Upload Document
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="upp-list-items">
-                                {displayDocuments.slice(0, 3).map((doc, i) => (
-                                    <div key={i} className="upp-list-card">
-                                        <div className="upp-list-info">
-                                            <span className="upp-list-title">{doc.fileName || 'Document'}</span>
-                                            <span className="upp-list-sub">{doc.docType || 'General'}</span>
-                                        </div>
-                                        {doc.url && (
-                                            <a href={doc.url} target="_blank" rel="noopener noreferrer" className="upp-icon-btn" title="View">
-                                                <FiEye />
-                                            </a>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Notes Card (Sidebar) */}
-                    <div className="upp-section-card">
-                        <div className="upp-section-header">
-                            <h3 className="upp-section-title">
-                                <FiMessageSquare style={{ color: '#f59e0b' }} /> Notes
-                            </h3>
-                            <button className="upp-view-all-btn" onClick={() => setActiveTab('notes')}>View All</button>
-                        </div>
-                        {(() => {
-                            const notesItems = displayTimeline.filter(t => t.data?.notes);
-                            if (notesItems.length === 0) {
-                                return (
-                                    <div className="upp-empty-state">
-                                        <strong>No notes added</strong>
-                                        <span>Add notes for this patient</span>
-                                        <div className="upp-note-write-icon">
-                                            <FiEdit3 />
-                                        </div>
-                                    </div>
-                                );
-                            }
-                            return (
-                                <div className="upp-list-items">
-                                    {notesItems.slice(0, 3).sort((a, b) => new Date(b.date) - new Date(a.date)).map((item, i) => (
-                                        <div key={i} className="upp-list-card" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                                            <span className="upp-list-sub">{new Date(item.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
-                                            <span className="upp-list-title" style={{ whiteSpace: 'normal' }}>{item.data.notes.substring(0, 80)}{item.data.notes.length > 80 ? '...' : ''}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            );
-                        })()}
                     </div>
                 </div>
-            </div>
             )}
 
         </div>

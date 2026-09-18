@@ -57,7 +57,8 @@ const HospitalAdminLogin = () => {
     return (
         <NeuralAuthPortal
             portalType="hospital"
-            title="Hospital Portal"
+            title="Sign In"
+            showUnderline={true}
             subtitle="Access dedicated hospital administrator workspace."
             idLabel="Hospital Admin Email"
             idPlaceholder="admin@yourhospital.com"

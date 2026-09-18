@@ -11,6 +11,12 @@ import { useAuth } from '../../store/hooks';
 
 import AppointmentReports from '../../components/AppointmentReports';
 import DoctorIPDOrdersPanel from '../../components/ipd/DoctorIPDOrdersPanel';
+import { 
+    FiArrowLeft, FiBell, FiChevronDown, FiChevronRight, 
+    FiUser, FiCalendar, FiClock, FiCheck, FiCopy, 
+    FiFileText, FiFolder, FiMoreHorizontal, FiPaperclip, 
+    FiSave, FiArrowRight, FiRefreshCw 
+} from 'react-icons/fi';
 
 const doseOptions = [
     'OD – Once Daily',
@@ -99,6 +105,24 @@ const DoctorPatientDetails = () => {
 
     // Follow-up status for Patient
     const [currentFollowupStatus, setCurrentFollowupStatus] = useState(null);
+
+    // New Session Tab & Dropdown States
+    const [activeSessionTab, setActiveSessionTab] = useState('diagnosis');
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const diagnosisInputRef = useRef(null);
+    const notesTextareaRef = useRef(null);
+    const moreMenuRef = useRef(null);
+
+    // Close More menu when clicked outside
+    useEffect(() => {
+        const handleOutsideClick = (e) => {
+            if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) {
+                setShowMoreMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleOutsideClick);
+        return () => document.removeEventListener('mousedown', handleOutsideClick);
+    }, []);
 
     // Tab Scrolling Reference
     const tabsRef = useRef(null);
@@ -990,117 +1014,270 @@ const DoctorPatientDetails = () => {
 
     const allTabs = [...tabs, ...dynamicTabs];
 
+    const doctorName = user?.name || user?.fullName || 'Doctor';
+    const doctorDisplayName = doctorName.toLowerCase().startsWith('dr') ? doctorName : `Dr. ${doctorName}`;
+    const doctorInitials = doctorName
+        .replace(/^dr\.?\s+/i, '')
+        .split(' ')
+        .filter(Boolean)
+        .map(n => n[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase() || 'DR';
+
     return (
-        <div className="dpd-container" style={isJrDoctor ? { gridTemplateColumns: '1fr' } : {}}>
-            <div className="dpd-left">
-                {pendingDownload && (
-                    <div style={{
-                        margin: '12px',
-                        padding: '12px 20px',
-                        background: '#ecfdf5',
-                        border: '1.5px solid #a7f3d0',
-                        borderRadius: '12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        boxShadow: '0 4px 12px rgba(16, 185, 129, 0.05)',
-                        fontFamily: 'var(--font-primary)'
-                    }}>
-                        <span style={{ color: '#065f46', fontWeight: 600, fontSize: '0.9rem' }}>
-                            ✅ {pendingDownload.title || 'Document Generated'} — {pendingDownload.filename} is ready
-                        </span>
-                        <button
-                            onClick={() => {
-                                pendingDownload.doc.save(pendingDownload.filename);
-                                setPendingDownload(null);
-                                if (pendingDownload.navigateOnClose) navigate('/doctor/patients');
-                            }}
-                            style={{
-                                padding: '8px 16px',
-                                background: '#059669',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: '8px',
-                                fontWeight: 700,
-                                fontSize: '0.8rem',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px'
-                            }}
-                        >
-                            📥 Download
-                        </button>
-                    </div>
-                )}
-                {/* Patient Header Card */}
-                <div className="dpd-patient-header">
-                    <button className="dpd-back-link" onClick={() => navigate('/doctor/patients')}>
-                        ← Back
+        <div className="dpd-page-wrapper">
+            {/* Top Navigation Bar (Image 2 style) */}
+            <header className="dpd-top-bar">
+                <button className="dpd-top-back-btn" onClick={() => navigate('/doctor/patients')}>
+                    <FiArrowLeft className="dpd-top-back-icon" />
+                    <span>Back to Patients</span>
+                </button>
+                <div className="dpd-top-right">
+                    <button 
+                        className="dpd-open-ai-top-btn"
+                        onClick={() => navigate('/doctor/ai-assistant', {
+                            state: { patientId: patient._id || id, appointmentId: appointmentId || appointment?._id }
+                        })}
+                        title="Open AI Assistant & Scribe in Sidebar"
+                    >
+                        🤖 Open AI Assistant
                     </button>
-                    <div className="dpd-patient-identity">
-                        <div className="dpd-patient-avatar">
-                            {(patient.name || 'P')[0].toUpperCase()}
+                    <button className="dpd-top-bell-btn" title="Notifications" onClick={() => toast("No new notifications", { icon: "🔔" })}>
+                        <FiBell />
+                        <span className="dpd-bell-dot" />
+                    </button>
+                    <div className="dpd-top-doctor-pill">
+                        <div className="dpd-top-doctor-avatar">
+                            {doctorInitials}
                         </div>
-                        <div className="dpd-patient-meta">
-                            <h2>{patient.name || 'Unknown Patient'}</h2>
-                            <div className="dpd-patient-tags">
-                                <span className="dpd-tag tag-mrn">MRN: {patient.patientId || 'N/A'}</span>
-                                <span className="dpd-tag tag-phone">📱 {patient.phone || '-'}</span>
-                                {profile.age && <span className="dpd-tag tag-age">Age: {profile.age}</span>}
-                                {profile.gender && <span className="dpd-tag tag-gender">{profile.gender}</span>}
-                                {profile.bloodGroup && <span className="dpd-tag tag-blood">{profile.bloodGroup}</span>}
+                        <div className="dpd-top-doctor-info">
+                            <span className="dpd-top-doctor-name">{doctorDisplayName}</span>
+                            <span className="dpd-top-doctor-role">{user?.role ? (typeof user.role === 'string' ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Doctor') : 'Doctor'}</span>
+                        </div>
+                        <FiChevronDown className="dpd-top-doctor-chevron" />
+                    </div>
+                </div>
+            </header>
+
+            {pendingDownload && (
+                <div style={{
+                    margin: '0 0 16px',
+                    padding: '12px 20px',
+                    background: '#ecfdf5',
+                    border: '1.5px solid #a7f3d0',
+                    borderRadius: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.05)',
+                    fontFamily: 'var(--font-primary)'
+                }}>
+                    <span style={{ color: '#065f46', fontWeight: 600, fontSize: '0.9rem' }}>
+                        ✅ {pendingDownload.title || 'Document Generated'} — {pendingDownload.filename} is ready
+                    </span>
+                    <button
+                        onClick={() => {
+                            pendingDownload.doc.save(pendingDownload.filename);
+                            setPendingDownload(null);
+                            if (pendingDownload.navigateOnClose) navigate('/doctor/patients');
+                        }}
+                        style={{
+                            padding: '8px 16px',
+                            background: '#059669',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontWeight: 700,
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}
+                    >
+                        📥 Download
+                    </button>
+                </div>
+            )}
+
+            <div className="dpd-container" style={isJrDoctor ? { gridTemplateColumns: '1fr' } : {}}>
+                <div className="dpd-left">
+                    {/* Patient Card Top (Image 2 style) */}
+                    <div className="dpd-patient-card-top">
+                        <div className="dpd-patient-identity-clean">
+                            <div className="dpd-patient-avatar-clean">
+                                {(patient.name || 'P')[0].toUpperCase()}
+                            </div>
+                            <div className="dpd-patient-name-box">
+                                <h2>{patient.name || 'Unknown Patient'}</h2>
+                                <span className="dpd-active-patient-badge">
+                                    <FiRefreshCw className="dpd-badge-refresh-icon" /> Active Patient
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* 3-Col Key Metrics: MRN, Age, Gender */}
+                        <div className="dpd-clean-stats-row">
+                            <div className="dpd-stat-col">
+                                <span className="dpd-stat-label">MRN</span>
+                                <div className="dpd-stat-value">
+                                    <span>{patient.patientId || 'PCF-M365-001'}</span>
+                                    <button 
+                                        type="button" 
+                                        className="dpd-copy-icon-btn"
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(patient.patientId || '');
+                                            toast.success("MRN copied to clipboard!");
+                                        }}
+                                        title="Copy MRN"
+                                    >
+                                        <FiCopy />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="dpd-stat-col">
+                                <span className="dpd-stat-label">
+                                    <FiUser style={{ fontSize: '11px', color: '#64748b' }} /> Age
+                                </span>
+                                <div className="dpd-stat-value">
+                                    <span>{profile.age || intakeData.age || '-'}</span>
+                                </div>
+                            </div>
+                            <div className="dpd-stat-col">
+                                <span className="dpd-stat-label">
+                                    <span style={{ color: (profile.gender || intakeData.gender) === 'Female' ? '#ec4899' : '#3b82f6', fontWeight: 'bold' }}>♀</span> Gender
+                                </span>
+                                <div className="dpd-stat-value" style={{ color: (profile.gender || intakeData.gender) === 'Female' ? '#db2777' : '#2563eb' }}>
+                                    <span>{profile.gender || intakeData.gender || '-'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Appointment Info Box */}
+                        <div className="dpd-appt-clean-box">
+                            <div className="dpd-appt-clean-item">
+                                <div className="dpd-appt-circle-icon">
+                                    <FiCalendar />
+                                </div>
+                                <div>
+                                    <div className="dpd-appt-clean-val">{new Date(appointment?.appointmentDate || Date.now()).toLocaleDateString('en-IN')}</div>
+                                    <div className="dpd-appt-clean-lbl">Last Visit</div>
+                                </div>
+                            </div>
+
+                            <div className="dpd-appt-clean-item">
+                                <div className="dpd-appt-circle-icon">
+                                    <FiClock />
+                                </div>
+                                <div>
+                                    <div className="dpd-appt-clean-val">{appointment?.appointmentTime || '13:00'}</div>
+                                    <div className="dpd-appt-clean-lbl">Appointment Time</div>
+                                </div>
+                            </div>
+
+                            <div className="dpd-appt-clean-status">
+                                <span className={`dpd-clean-status-pill status-${appointment?.status || 'confirmed'}`}>
+                                    {appointment?.status || 'Confirmed'} {isLocked && '🔒'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Visit Type Row */}
+                        <div className="dpd-visit-type-card" onClick={() => setActiveTab('overview')}>
+                            <div className="dpd-visit-type-left">
+                                <div className="dpd-visit-user-icon">
+                                    <FiUser />
+                                </div>
+                                <div>
+                                    <div className="dpd-visit-type-title">{appointment?.serviceName || 'Walk-in Visit'}</div>
+                                    <div className="dpd-visit-type-sub">
+                                        {patientReferrals?.length > 0 ? `Referred (${patientReferrals.length} pending)` : 'No referral source'}
+                                    </div>
+                                </div>
+                            </div>
+                            <FiChevronRight className="dpd-visit-type-chevron" />
+                        </div>
+
+                        {/* 4 Quick Action Tiles */}
+                        <div className="dpd-quick-tiles-grid">
+                            <button
+                                type="button"
+                                className={`dpd-action-tile-btn ${activeTab === 'overview' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('overview')}
+                            >
+                                <div className="dpd-tile-icon-wrap tile-blue">
+                                    <FiUser />
+                                </div>
+                                <span className="dpd-tile-text">View Profile</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                className="dpd-action-tile-btn"
+                                onClick={() => setShowPrescribeModal(true)}
+                            >
+                                <div className="dpd-tile-icon-wrap tile-purple">
+                                    <FiFileText />
+                                </div>
+                                <span className="dpd-tile-text">Prescription</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                className={`dpd-action-tile-btn ${activeTab === 'reports' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('reports')}
+                            >
+                                <div className="dpd-tile-icon-wrap tile-green">
+                                    <FiFolder />
+                                </div>
+                                <span className="dpd-tile-text">Reports</span>
+                            </button>
+
+                            <div style={{ position: 'relative' }} ref={moreMenuRef}>
+                                <button
+                                    type="button"
+                                    className={`dpd-action-tile-btn ${['ipd_orders', 'history'].includes(activeTab) || showMoreMenu ? 'active' : ''}`}
+                                    onClick={() => setShowMoreMenu(prev => !prev)}
+                                >
+                                    <div className="dpd-tile-icon-wrap tile-gray">
+                                        <FiMoreHorizontal />
+                                    </div>
+                                    <span className="dpd-tile-text">More</span>
+                                </button>
+
+                                {showMoreMenu && (
+                                    <div className="dpd-more-menu-popover">
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setActiveTab('ipd_orders'); setShowMoreMenu(false); }}
+                                            className={activeTab === 'ipd_orders' ? 'active-opt' : ''}
+                                        >
+                                            🏥 IPD / Admission Orders
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setActiveTab('history'); setShowMoreMenu(false); }}
+                                            className={activeTab === 'history' ? 'active-opt' : ''}
+                                        >
+                                            📜 Past Visits & History
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => { 
+                                                navigate('/doctor/ai-assistant', {
+                                                    state: { patientId: patient._id || id, appointmentId: appointmentId || appointment?._id }
+                                                });
+                                                setShowMoreMenu(false);
+                                            }}
+                                        >
+                                            🤖 Open AI Assistant
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
-                    <div className="dpd-appt-info">
-                        <div className="dpd-appt-item">
-                            <span className="dpd-appt-label">Date</span>
-                            <span className="dpd-appt-value">{new Date(appointment.appointmentDate).toLocaleDateString('en-IN')}</span>
-                        </div>
-                        <div className="dpd-appt-item">
-                            <span className="dpd-appt-label">Time</span>
-                            <span className="dpd-appt-value">{appointment.appointmentTime}</span>
-                        </div>
-                        <div className="dpd-appt-item">
-                            <span className="dpd-appt-label">Status</span>
-                            <span className={`dpd-appt-status status-${appointment.status}`}>
-                                {appointment.status} {isLocked && '🔒 Locked'}
-                            </span>
-                        </div>
-                        <div className="dpd-appt-item">
-                            <span className="dpd-appt-label">Service</span>
-                            <span className="dpd-appt-value">{appointment.serviceName || 'Consultation'}</span>
-                        </div>
-                        <div className="dpd-appt-item" style={{ alignSelf: 'center', marginLeft: 'auto' }}>
-                            <button
-                                className="dpd-open-ai-btn"
-                                onClick={() => navigate('/doctor/ai-assistant', {
-                                    state: { patientId: patient._id || id, appointmentId: appointmentId || appointment?._id }
-                                })}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    padding: '7px 14px',
-                                    background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                                    color: '#ffffff',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    fontSize: '0.8rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    boxShadow: '0 2px 8px rgba(79, 70, 229, 0.25)',
-                                    transition: 'all 0.2s ease'
-                                }}
-                                title="Open AI Assistant & Scribe in Sidebar"
-                            >
-                                🤖 Open AI Assistant
-                            </button>
-                        </div>
-                    </div>
-
-                </div>
 
                 {/* Tabs Navigation */}
                 <div className="dpd-tabs-container">
@@ -1501,19 +1678,63 @@ const DoctorPatientDetails = () => {
                 ) : (
                     <>
                         <div className="dpd-right-header">
-                            <div>
-                                <h2>📝 Current Session</h2>
-                                <p className="dpd-right-subtitle">Record diagnosis, notes & prescription</p>
+                            <div className="dpd-session-title-wrap">
+                                <div className="dpd-session-head-icon">
+                                    <FiFileText />
+                                </div>
+                                <div>
+                                    <h2>Current Session</h2>
+                                    <p className="dpd-right-subtitle">Record diagnosis, notes & prescription</p>
+                                </div>
                             </div>
-                            <span className={`dpd-session-status status-${appointment.status}`}>
-                                {appointment.status}
+                            <span className={`dpd-clean-session-status status-${appointment.status}`}>
+                                <FiCheck className="dpd-status-check-icon" /> {appointment.status}
                             </span>
+                        </div>
+
+                        {/* 4 Pill Subnav Bar */}
+                        <div className="dpd-session-pills-bar">
+                            <button
+                                type="button"
+                                className={`dpd-session-pill-tab ${activeSessionTab === 'diagnosis' ? 'active' : ''}`}
+                                onClick={() => {
+                                    setActiveSessionTab('diagnosis');
+                                    diagnosisInputRef.current?.focus();
+                                }}
+                            >
+                                🩺 Diagnosis
+                            </button>
+                            <button
+                                type="button"
+                                className={`dpd-session-pill-tab ${activeSessionTab === 'notes' ? 'active' : ''}`}
+                                onClick={() => {
+                                    setActiveSessionTab('notes');
+                                    notesTextareaRef.current?.focus();
+                                }}
+                            >
+                                📋 Clinical Notes
+                            </button>
+                            <button
+                                type="button"
+                                className="dpd-session-pill-tab"
+                                onClick={() => setShowPrescribeModal(true)}
+                            >
+                                💊 Prescription
+                            </button>
+                            <button
+                                type="button"
+                                className="dpd-session-pill-tab"
+                                onClick={() => setActiveTab('reports')}
+                            >
+                                📎 Attachments
+                            </button>
                         </div>
 
                         <div className="dpd-right-content">
                             <div className="dpd-session-field">
-                                <label>🔍 Diagnosis</label>
+                                <label>🩺 Diagnosis</label>
                                 <input
+                                    ref={diagnosisInputRef}
                                     name="diagnosis"
                                     value={sessionData.diagnosis}
                                     onChange={handleSessionChange}
@@ -1526,6 +1747,7 @@ const DoctorPatientDetails = () => {
                             <div className="dpd-session-field dpd-notes-field">
                                 <label>📋 Clinical Notes</label>
                                 <textarea
+                                    ref={notesTextareaRef}
                                     name="notes"
                                     value={sessionData.notes}
                                     onChange={handleSessionChange}
@@ -1536,39 +1758,45 @@ const DoctorPatientDetails = () => {
                             </div>
 
                             {!isLocked && (
-                                <div className="dpd-session-field" style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '16px' }}>
-                                    {/* Referral Banner for referred doctor */}
-                    {patientReferrals.filter(r => r.status === 'REFERRED' && (r.referredToDoctorId?._id === user?._id || r.referredToDoctorId === user?._id)).length > 0 && (
-                        <div className="referral-banner" style={{ background: 'linear-gradient(135deg, #fef3c7, #fde68a)', padding: '14px', borderRadius: '12px', border: '2px solid #f59e0b', marginBottom: '16px' }}>
-                            <div style={{ fontWeight: '700', color: '#92400e', fontSize: '14px', marginBottom: '8px' }}>📋 Surgery Referral Pending</div>
-                            {patientReferrals.filter(r => r.status === 'REFERRED' && (r.referredToDoctorId?._id === user?._id || r.referredToDoctorId === user?._id)).map(ref => (
-                                <div key={ref._id} style={{ marginBottom: '8px' }}>
-                                    <div style={{ fontSize: '13px', color: '#78350f' }}>
-                                        <strong>From:</strong> {ref.referringDoctorId?.name || 'Unknown'} &nbsp;|&nbsp;
-                                        <strong>Reason:</strong> {ref.reason}
+                                <div className="dpd-operation-card-clean">
+                                    <div className="dpd-op-header-row">
+                                        <div className="dpd-op-header-left">
+                                            <FiChevronRight className="dpd-op-arrow" />
+                                            <FiUser className="dpd-op-icon" />
+                                            <span>Operation Required?</span>
+                                        </div>
+                                        <label className="dpd-switch" title="Toggle Operation Requirement">
+                                            <input
+                                                type="checkbox"
+                                                name="operationRequired"
+                                                checked={operationRequired}
+                                                onChange={e => setOperationRequired(e.target.checked)}
+                                            />
+                                            <span className="dpd-slider"></span>
+                                        </label>
                                     </div>
-                                    <button 
-                                        onClick={() => { setActiveReferralForReview(ref); setShowReferralReviewModal(true); }}
-                                        style={{ marginTop: '6px', padding: '6px 16px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
-                                    >
-                                        Review Referral
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
 
-                    <label style={{ display: 'block', marginBottom: '12px', color: '#1e293b', fontWeight: 'bold' }}>🔪 Operation Required?</label>
-                                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                            <input type="radio" name="operationRequired" checked={!operationRequired} onChange={() => setOperationRequired(false)} />
-                                            <span>No</span>
-                                        </label>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                            <input type="radio" name="operationRequired" checked={operationRequired} onChange={() => setOperationRequired(true)} />
-                                            <span>Yes</span>
-                                        </label>
-                                    </div>
+                                    {/* Referral Banner for referred doctor */}
+                                    {patientReferrals.filter(r => r.status === 'REFERRED' && (r.referredToDoctorId?._id === user?._id || r.referredToDoctorId === user?._id)).length > 0 && (
+                                        <div className="referral-banner" style={{ background: 'linear-gradient(135deg, #fef3c7, #fde68a)', padding: '14px', borderRadius: '12px', border: '2px solid #f59e0b', margin: '12px 0' }}>
+                                            <div style={{ fontWeight: '700', color: '#92400e', fontSize: '14px', marginBottom: '8px' }}>📋 Surgery Referral Pending</div>
+                                            {patientReferrals.filter(r => r.status === 'REFERRED' && (r.referredToDoctorId?._id === user?._id || r.referredToDoctorId === user?._id)).map(ref => (
+                                                <div key={ref._id} style={{ marginBottom: '8px' }}>
+                                                    <div style={{ fontSize: '13px', color: '#78350f' }}>
+                                                        <strong>From:</strong> {ref.referringDoctorId?.name || 'Unknown'} &nbsp;|&nbsp;
+                                                        <strong>Reason:</strong> {ref.reason}
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => { setActiveReferralForReview(ref); setShowReferralReviewModal(true); }}
+                                                        style={{ marginTop: '6px', padding: '6px 16px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
+                                                    >
+                                                        Review Referral
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
                                     {operationRequired && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
                                             <button 
@@ -1581,7 +1809,7 @@ const DoctorPatientDetails = () => {
                                                     }));
                                                     setShowSurgeryPlanModal(true);
                                                 }}
-                                                style={{ padding: '12px 20px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', width: '100%', fontSize: '14px', boxShadow: '0 2px 4px rgba(37,99,235,0.2)' }}
+                                                style={{ padding: '12px 20px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', width: '100%', fontSize: '14px', boxShadow: '0 2px 8px rgba(37,99,235,0.25)' }}
                                             >
                                                 + Create Surgery Plan (Self / Direct)
                                             </button>
@@ -1594,7 +1822,7 @@ const DoctorPatientDetails = () => {
                                                     }));
                                                     setShowReferralModal(true);
                                                 }}
-                                                style={{ padding: '12px 20px', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', width: '100%', fontSize: '14px', boxShadow: '0 2px 4px rgba(124,58,237,0.2)' }}
+                                                style={{ padding: '12px 20px', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', width: '100%', fontSize: '14px', boxShadow: '0 2px 8px rgba(124,58,237,0.25)' }}
                                             >
                                                 🔄 Refer for Surgery (To Another Doctor)
                                             </button>
@@ -1605,19 +1833,19 @@ const DoctorPatientDetails = () => {
 
                             <div className="dpd-session-field">
                                 {!isLocked && (
-                                    <>
+                                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '4px' }}>
                                         <button
                                             type="button"
                                             onClick={() => setShowPrescribeModal(true)}
-                                            style={{ padding: '14px', fontSize: '15px', background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(79, 70, 229, 0.25)', marginTop: '10px' }}
+                                            style={{ flex: 1, minWidth: '200px', padding: '13px 16px', fontSize: '14px', background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 10px rgba(79, 70, 229, 0.22)' }}
                                         >
-                                            💊 / 🧪 Prescribe Medicines & Lab Tests
+                                            💊 Prescribe Medicines & Lab Tests
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setActiveTab('ipd_orders')}
                                             style={{
-                                                padding: '12px',
+                                                padding: '13px 18px',
                                                 fontSize: '14px',
                                                 background: 'linear-gradient(135deg, #0284c7, #0369a1)',
                                                 color: 'white',
@@ -1625,27 +1853,24 @@ const DoctorPatientDetails = () => {
                                                 borderRadius: '10px',
                                                 cursor: 'pointer',
                                                 fontWeight: 'bold',
-                                                boxShadow: '0 4px 10px rgba(2, 132, 199, 0.25)',
-                                                marginTop: '8px',
+                                                boxShadow: '0 3px 10px rgba(2, 132, 199, 0.22)',
                                                 display: 'flex',
                                                 alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '8px',
-                                                width: '100%'
+                                                gap: '6px'
                                             }}
                                         >
-                                            🏥 Hospitalization &amp; IPD Orders
+                                            🏥 IPD Orders
                                         </button>
-                                    </>
+                                    </div>
                                 )}
 
                                 {(sessionData.medicines?.length > 0 || sessionData.labTests || (isLocked && appointment.pharmacy?.length > 0)) && (
-                                    <div style={{ padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '10px', fontSize: '13px', color: '#475569' }}>
+                                    <div style={{ padding: '12px 14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', marginTop: '10px', fontSize: '13px', color: '#475569' }}>
                                         {(sessionData.medicines?.length > 0 || (isLocked && appointment.pharmacy?.length > 0)) && <div style={{ marginBottom: '4px' }}><b>✅ Medicines included ({sessionData.medicines?.length || appointment.pharmacy?.length || 0})</b></div>}
                                         {(sessionData.labTests || (isLocked && appointment.labTests?.length > 0)) && <div><b>✅ Lab Tests included</b></div>}
                                         {!isLocked && (
-                                            <div style={{ marginTop: '8px', fontSize: '12px', color: '#3b82f6', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setShowPrescribeModal(true)}>
-                                                Click above button to view/edit details.
+                                            <div style={{ marginTop: '6px', fontSize: '12px', color: '#3b82f6', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setShowPrescribeModal(true)}>
+                                                Click to view / edit prescription details →
                                             </div>
                                         )}
                                         {isLocked && (
@@ -1662,10 +1887,14 @@ const DoctorPatientDetails = () => {
                             {!isLocked ? (
                                 <>
                                     <button className="dpd-btn-save-draft" onClick={handleSaveProfile} disabled={saving}>
-                                        💾 Save Profile
+                                        <FiSave style={{ marginRight: '6px', fontSize: '16px' }} /> Save Profile
                                     </button>
                                     <button className="dpd-btn-finish" onClick={handleSaveAndMerge} disabled={saving}>
-                                        {saving ? '⏳ Saving...' : '✅ Save & Generate Prescription'}
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                            <span>✨</span>
+                                            <span>{saving ? 'Saving...' : 'Save & Generate Prescription'}</span>
+                                            <FiArrowRight style={{ fontSize: '16px' }} />
+                                        </span>
                                     </button>
                                 </>
                             ) : (
@@ -1686,6 +1915,7 @@ const DoctorPatientDetails = () => {
                 )}
             </div>
             )}
+        </div>
 
             {/* ====== MODALS ====== */}
             {!isJrDoctor && showPrescribeModal && (

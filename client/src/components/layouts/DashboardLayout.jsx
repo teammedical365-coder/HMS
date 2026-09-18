@@ -9,7 +9,7 @@ import {
     FiSettings, FiLogOut, FiPieChart, FiClipboard,
     FiFileText, FiPlusSquare, FiDatabase, FiGrid, FiShield, FiMenu, FiX,
     FiClock, FiBox, FiUserCheck, FiHeart, FiCheckCircle, FiUser,
-    FiChevronDown, FiChevronRight, FiCpu
+    FiChevronDown, FiChevronRight, FiCpu, FiScissors
 } from 'react-icons/fi';
 import GlobalSearch from '../GlobalSearch';
 import './DashboardLayout.css';
@@ -74,6 +74,8 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'My Patients', path: '/doctor/patients', icon: <FiUsers />, prefetchKey: 'doc_patients', prefetchFn: () => import('../../pages/doctors/Patient') },
                 { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity />, prefetchKey: 'doc_ipd', prefetchFn: () => import('../../pages/nurse/IPDCommandCenter') },
                 { label: 'AI Assistant', path: '/doctor/ai-assistant', icon: <FiCpu />, prefetchKey: 'doc_ai', prefetchFn: () => import('../../pages/doctors/AIAssistant') },
+                { label: 'Surgery Referrals', path: '/doctor/surgery-referrals', icon: <FiScissors />, prefetchKey: 'doc_referrals', prefetchFn: () => import('../../pages/doctors/SurgeryReferrals') },
+                { label: 'My Surgery Plans', path: '/doctor/surgery-plans', icon: <FiFileText />, prefetchKey: 'doc_plans', prefetchFn: () => import('../../pages/doctors/MySurgeryPlans') },
             ];
         }
         if (role === 'reception' || role === 'receptionist') {
@@ -151,6 +153,14 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
         if (itemPath === '/my-dashboard' && (currentPath === '/doctor/dashboard' || currentPath === '/my-dashboard')) {
             return true;
         }
+
+        if (itemPath === '/doctor/surgery-referrals' && currentPath.startsWith('/doctor/surgery-referrals')) {
+            return true;
+        }
+
+        if (itemPath === '/doctor/surgery-plans' && currentPath.startsWith('/doctor/surgery-plans')) {
+            return true;
+        }
         
         return currentPath === itemPath;
     };
@@ -202,7 +212,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                             key={item.path || idx} 
                             to={item.path} 
                             end
-                            className={() => `sidebar-link ${active ? 'active' : ''} ${currentThemeClass}`}
+                            className={() => `sidebar-link ${item.isSubItem ? 'sidebar-sub-link' : ''} ${active ? 'active' : ''} ${currentThemeClass}`}
                             onClick={handleNavClick}
                             onMouseEnter={handlePrefetch}
                             onTouchStart={handlePrefetch}
@@ -318,6 +328,8 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
         if (pathname === '/ipd/command-center' || pathname === '/nurse/command-center') return 'IPD Command Center';
         if (pathname === '/doctor/dashboard') return 'Doctor Dashboard';
         if (pathname === '/doctor/patients') return 'My Patients';
+        if (pathname === '/doctor/surgery-referrals') return 'Surgery Referrals';
+        if (pathname === '/doctor/surgery-plans') return 'My Surgery Plans';
         if (pathname.includes('/doctor/patient/')) return 'Patient Consultation Details';
         if (pathname.includes('/patient/')) return 'Patient Profile';
         if (pathname === '/reception/dashboard') return 'Reception Dashboard';
@@ -464,6 +476,8 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
 };
 
 const DashboardLayout = ({ children }) => {
+    const location = useLocation();
+    const isFullBleed = location.pathname.includes('/patient') || location.pathname.includes('/patients');
     const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' ? window.innerWidth > 1024 : true);
 
     useEffect(() => {
@@ -488,7 +502,7 @@ const DashboardLayout = ({ children }) => {
             />
             <div className={`erp-main-area ${sidebarOpen ? 'shifted' : 'full'}`}>
                 <TopBar sidebarOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
-                <main className="erp-page-content">
+                <main className={`erp-page-content ${isFullBleed ? 'erp-fullbleed-content' : ''}`}>
                     {children}
                 </main>
             </div>

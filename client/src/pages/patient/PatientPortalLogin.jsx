@@ -156,7 +156,8 @@ const PatientPortalLogin = () => {
     return (
         <NeuralAuthPortal
             portalType="patient"
-            title="Patient Portal"
+            title="Sign In"
+            showUnderline={true}
             subtitle={`Access personal digital health records for ${hospital?.name || 'our patient network'}.`}
             idLabel="Mobile Number or Email"
             idPlaceholder="Enter registered mobile or email"

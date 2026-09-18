@@ -50,82 +50,28 @@
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* ============ TOP NAV ============ */
+/* ============ TOP NAV (Retired - Back Button Integrated in Banner) ============ */
 .upp-top-nav {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px 0;
-    margin-bottom: 12px;
+    display: none;
 }
 
-.upp-back-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 14px;
-    background: var(--upp-card-bg);
-    border: 1px solid var(--upp-border);
-    border-radius: var(--upp-radius-sm);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--upp-text-muted);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: var(--upp-shadow-xs);
-}
-
-.upp-back-btn:hover {
-    color: var(--upp-primary);
-    border-color: var(--upp-primary);
-    background: var(--upp-primary-light);
-    transform: translateX(-2px);
-}
-
-.upp-breadcrumb {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13.5px;
-    color: var(--upp-text-muted);
-    font-weight: 500;
-}
-
-.upp-breadcrumb-sep {
-    color: #cbd5e1;
-    font-size: 12px;
-}
-
-.upp-breadcrumb-active {
-    color: var(--upp-text-main);
-    font-weight: 700;
-}
-
-/* ============ HEADER IDENTITY CARD ============ */
+/* ============ HEADER IDENTITY CARD (Full-Width Edge-to-Edge Banner) ============ */
 .upp-header-card {
     background: var(--upp-card-bg);
-    border: 1px solid var(--upp-border);
-    border-radius: var(--upp-radius);
-    padding: 24px 28px;
+    border: none;
+    border-bottom: 1px solid var(--upp-border);
+    border-radius: 0;
+    padding: 24px 32px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 24px;
-    margin: 0 16px 16px 16px;
-    box-shadow: var(--upp-shadow-sm);
+    margin: 0 0 20px 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
     position: relative;
     overflow: hidden;
-}
-
-.upp-header-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #2563eb, #7c3aed, #06b6d4);
-    opacity: 0.7;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .upp-identity-wrapper {
@@ -136,71 +82,64 @@
     min-width: 0;
 }
 
-/* Circular Avatar */
+/* Circular Avatar (Image if uploaded, initials fallback, no camera icon) */
 .upp-avatar {
-    width: 88px;
-    height: 88px;
+    width: 86px;
+    height: 86px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    background: linear-gradient(135deg, #1e5daf, #3b82f6);
     color: white;
-    font-size: 36px;
+    font-size: 32px;
     font-weight: 800;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 6px 20px rgba(30, 93, 175, 0.28);
     font-family: 'Outfit', sans-serif;
-    letter-spacing: -1px;
+    letter-spacing: -0.5px;
     position: relative;
+    overflow: hidden;
 }
 
-.upp-avatar-camera {
-    position: absolute;
-    bottom: 2px;
-    right: 2px;
-    width: 26px;
-    height: 26px;
-    background: var(--upp-card-bg);
-    border: 2px solid var(--upp-border);
+.upp-avatar-img {
+    width: 100%;
+    height: 100%;
     border-radius: 50%;
+    object-fit: cover;
+}
+
+.upp-avatar-initials {
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
-    color: var(--upp-text-muted);
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.upp-avatar-camera:hover {
-    background: var(--upp-primary);
-    color: #fff;
-    border-color: var(--upp-primary);
 }
 
 /* Header Info */
 .upp-header-info {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     min-width: 0;
 }
 
 .upp-header-name-row {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
-.upp-header-info h1 {
+.upp-patient-display-name {
     margin: 0;
-    font-size: 24px;
+    font-size: 26px;
     font-weight: 800;
     color: var(--upp-text-main);
     letter-spacing: -0.5px;
     line-height: 1.2;
+    text-transform: capitalize;
 }
 
 .upp-status-badge {
@@ -209,7 +148,7 @@
     gap: 5px;
     padding: 4px 12px;
     border-radius: 20px;
-    font-size: 12px;
+    font-size: 12.5px;
     font-weight: 700;
     white-space: nowrap;
 }
@@ -238,31 +177,81 @@
     50% { opacity: 0.4; }
 }
 
-/* Header Tags / Chips */
-.upp-header-tags {
+/* Header Tags / Chips (Row 1: Demographics, Row 2: Contact/Location) */
+.upp-tags-row-primary {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
+}
+
+.upp-tags-row-secondary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+    margin-top: 1px;
 }
 
 .upp-header-tag {
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 600;
-    color: var(--upp-text-muted);
-    background: var(--upp-border-light);
-    padding: 5px 12px;
-    border-radius: var(--upp-radius-xs);
+    color: #334155;
+    background: #f8fafc;
+    padding: 4.5px 11px;
+    border-radius: 6px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    border: 1px solid var(--upp-border);
+    border: 1px solid #e2e8f0;
     white-space: nowrap;
+    transition: all 0.15s ease;
+    line-height: 1.2;
 }
 
 .upp-header-tag svg {
     font-size: 13px;
-    opacity: 0.7;
+    opacity: 0.8;
+}
+
+.upp-tag-mrn {
+    color: #1d4ed8 !important;
+    background: #eff6ff !important;
+    border-color: #bfdbfe !important;
+    font-weight: 750 !important;
+}
+
+.upp-tag-blood {
+    color: #b91c1c !important;
+    background: #fef2f2 !important;
+    border-color: #fecaca !important;
+}
+
+.upp-tag-phone {
+    color: #0369a1 !important;
+    background: #f0f9ff !important;
+    border-color: #bae6fd !important;
+}
+
+.upp-tag-email {
+    color: #475569 !important;
+    background: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+}
+
+.upp-tag-location {
+    color: #475569 !important;
+    background: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.upp-tag-allergy {
+    color: #b45309 !important;
+    background: #fffbeb !important;
+    border-color: #fde68a !important;
 }
 
 .upp-header-address {
@@ -275,55 +264,70 @@
     line-height: 1.4;
 }
 
-/* Header Action Buttons */
+/* Header Action Buttons (Stacked on Right: Back on top, Download PDF below - Logo Brand Colors) */
 .upp-header-actions {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-end;
     gap: 10px;
     flex-shrink: 0;
-    flex-wrap: wrap;
 }
 
 .upp-btn-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 7px;
-    padding: 10px 18px;
-    border-radius: var(--upp-radius-sm);
-    font-size: 13px;
+    gap: 8px;
+    padding: 9px 18px;
+    border-radius: 9px;
+    font-size: 13.5px;
     font-weight: 700;
     cursor: pointer;
-    border: none;
     transition: all 0.2s ease;
     white-space: nowrap;
+    min-width: 142px;
 }
 
+/* Back Button - Logo Medical Royal Blue (#1e5daf from MEDICAL text) */
+.upp-btn-back {
+    background: #1e5daf;
+    color: #ffffff;
+    border: 1.5px solid #174e96;
+    box-shadow: 0 3px 10px rgba(30, 93, 175, 0.28);
+}
+
+.upp-btn-back:hover {
+    background: #174e96;
+    color: #ffffff;
+    border-color: #174e96;
+    box-shadow: 0 5px 15px rgba(30, 93, 175, 0.38);
+    transform: translateY(-1px);
+}
+
+/* Download PDF Button - Logo Vibrant Teal/Aqua (#14b8a6 from 365 text) */
 .upp-btn-download {
-    background: var(--upp-card-bg);
-    color: var(--upp-text-secondary);
-    border: 1.5px solid var(--upp-border);
-    box-shadow: var(--upp-shadow-xs);
+    background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+    color: #ffffff;
+    border: none;
+    box-shadow: 0 3px 12px rgba(20, 184, 166, 0.35);
 }
 
 .upp-btn-download:hover {
-    border-color: var(--upp-primary);
-    color: var(--upp-primary);
-    background: var(--upp-primary-light);
+    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+    box-shadow: 0 5px 16px rgba(20, 184, 166, 0.45);
     transform: translateY(-1px);
 }
 
 .upp-btn-edit {
-    background: var(--upp-card-bg);
-    color: var(--upp-text-secondary);
-    border: 1.5px solid var(--upp-border);
-    box-shadow: var(--upp-shadow-xs);
+    background: #f0fdfa;
+    color: #0d9488;
+    border: 1.5px solid #99f6e4;
 }
 
 .upp-btn-edit:hover {
-    border-color: var(--upp-primary);
-    color: var(--upp-primary);
-    background: var(--upp-primary-light);
+    background: #0d9488;
+    color: #ffffff;
+    border-color: #0d9488;
     transform: translateY(-1px);
 }
 
@@ -364,19 +368,19 @@
 .upp-metrics {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 16px;
-    margin: 0 16px 16px 16px;
+    gap: 12px;
+    margin: 0 16px 14px 16px;
 }
 
 .upp-metric-card {
     background: var(--upp-card-bg);
     border: 1px solid var(--upp-border);
     border-radius: var(--upp-radius-md);
-    padding: 18px 16px;
+    padding: 14px 16px;
     box-shadow: var(--upp-shadow-xs);
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     position: relative;
     overflow: hidden;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -388,14 +392,14 @@
 }
 
 .upp-metric-icon-circle {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    font-size: 22px;
+    font-size: 20px;
 }
 
 .upp-metric-icon-circle.blue {
@@ -445,11 +449,11 @@
 }
 
 .upp-metric-val {
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 800;
     color: var(--upp-text-main);
+    line-height: 1.1;
     font-family: 'Outfit', sans-serif;
-    line-height: 1.2;
 }
 
 .upp-metric-icon {
@@ -535,13 +539,17 @@
     border-color: #f59e0b;
 }
 
-/* ============ TAB NAVIGATION ============ */
+/* ============ TAB NAVIGATION (Modern Executive Segmented Pills) ============ */
 .upp-tab-nav {
     display: flex;
     align-items: center;
-    gap: 0;
-    border-bottom: 2px solid var(--upp-border);
-    margin: 0 16px 20px 16px;
+    gap: 8px;
+    margin: 0 24px 22px 24px;
+    padding: 6px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -552,50 +560,58 @@
 }
 
 .upp-tab-btn {
-    padding: 12px 20px;
-    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    font-size: 13.5px;
     font-weight: 600;
-    color: var(--upp-text-muted);
+    color: #475569;
     background: transparent;
     border: none;
+    border-radius: 8px;
     cursor: pointer;
-    position: relative;
     white-space: nowrap;
-    transition: all 0.2s;
-    border-bottom: 2.5px solid transparent;
-    margin-bottom: -2px;
+    transition: all 0.2s ease;
+    font-family: inherit;
 }
 
 .upp-tab-btn:hover {
-    color: var(--upp-primary);
+    background: #f1f5f9;
+    color: #0f172a;
 }
 
 .upp-tab-btn.active {
-    color: var(--upp-primary);
+    background: #1e5daf;
+    color: #ffffff;
     font-weight: 700;
-    border-bottom-color: var(--upp-primary);
+    box-shadow: 0 3px 10px rgba(30, 93, 175, 0.28);
 }
 
-/* ============ TWO-COLUMN MAIN LAYOUT ============ */
+.upp-tab-icon {
+    display: flex;
+    align-items: center;
+    font-size: 15px;
+}
+
+.upp-tab-btn.active .upp-tab-icon {
+    color: #ffffff;
+}
+
+/* ============ FULL-WIDTH MAIN LAYOUT ============ */
 .upp-main-layout {
-    display: grid;
-    grid-template-columns: 1fr 340px;
+    display: flex;
+    flex-direction: column;
     gap: 20px;
-    align-items: flex-start;
-    margin: 0 16px;
+    margin: 0 24px;
+    width: auto;
 }
 
 .upp-col-left {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    min-width: 0;
-}
-
-.upp-col-right {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+    width: 100%;
     min-width: 0;
 }
 

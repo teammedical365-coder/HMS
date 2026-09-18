@@ -173,7 +173,8 @@ const HospitalLogin = () => {
     return (
         <NeuralAuthPortal
             portalType="hospital"
-            title={hospital?.name ? `${hospital.name} Portal` : 'Clinical Portal'}
+            title="Sign In"
+            showUnderline={true}
             subtitle={`Access high-performance medical workspace for ${hospital?.name || 'Hospital Portal'}.`}
             idLabel="Staff Email or ID"
             idPlaceholder="Enter your email or ID"

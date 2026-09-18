@@ -5,17 +5,23 @@ const tenantCache = new Map();
 const CACHE_TTL_MS = 1000 * 60 * 5; // 5 minutes
 
 // Reserved base domains that should never be queried as custom domains
+const ADMIN_HOST = (process.env.ADMIN_HOST || 'admin.medical365.in').toLowerCase();
+const BASE_DOMAIN = (process.env.BASE_DOMAIN || 'medical365.in').toLowerCase();
+
 const RESERVED_DOMAINS = new Set([
     'localhost',
     '127.0.0.1',
-    'medical365.in',
-    'www.medical365.in',
-    'api.medical365.in'
+    BASE_DOMAIN,
+    `www.${BASE_DOMAIN}`,
+    `api.${BASE_DOMAIN}`
 ]);
 
 /**
  * Custom Domain Resolution Middleware
  * Maps incoming HTTP Host header to a specific hospital tenant.
+ * 
+ * Now properly validates *.medical365.in subdomains against the database
+ * instead of blindly skipping them.
  */
 const tenantResolver = async (req, res, next) => {
     try {
@@ -31,8 +37,8 @@ const tenantResolver = async (req, res, next) => {
         // ── Central Admin Domain Interception ──────────────────────────────────
         // Requests from admin.medical365.in must NEVER be routed through tenant DB.
         const forwardedHost = req.headers['x-forwarded-host'] || '';
-        const isCentralAdminDomain = hostname === 'admin.medical365.in' 
-            || forwardedHost.includes('admin.medical365.in')
+        const isCentralAdminDomain = hostname === ADMIN_HOST 
+            || forwardedHost.includes(ADMIN_HOST)
             || req.headers['x-app-type'] === 'central-admin';
         
         if (isCentralAdminDomain) {
@@ -41,13 +47,42 @@ const tenantResolver = async (req, res, next) => {
             return next();
         }
 
-        // 1. Skip reserved base platform domains
-        if (RESERVED_DOMAINS.has(hostname) || hostname.endsWith('.medical365.in')) {
+        // 1. Skip exact reserved base platform domains (but NOT subdomains of base domain)
+        if (RESERVED_DOMAINS.has(hostname)) {
             req.tenant = null;
             return next();
         }
 
-        // 2. Check in-memory cache
+        // 2. Handle *.medical365.in subdomains — look up by slug
+        if (hostname.endsWith(`.${BASE_DOMAIN}`)) {
+            const slug = hostname.replace(`.${BASE_DOMAIN}`, '');
+            
+            // Check cache
+            const now = Date.now();
+            const cached = tenantCache.get(hostname);
+            if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
+                req.tenant = cached.tenant;
+                return next();
+            }
+
+            // Look up hospital by slug
+            const hospital = await Hospital.findOne({
+                slug: slug,
+                isActive: true
+            }).select('_id name slug customDomain branding isWhitelabeled appConfig').lean();
+
+            // Cache the result (even null, to prevent repeated DB queries for invalid slugs)
+            tenantCache.set(hostname, {
+                tenant: hospital || null,
+                timestamp: now
+            });
+
+            req.tenant = hospital || null;
+            return next();
+        }
+
+        // 3. Handle non-medical365.in domains (custom hospital domains)
+        // Check in-memory cache
         const now = Date.now();
         const cached = tenantCache.get(hostname);
         if (cached && (now - cached.timestamp < CACHE_TTL_MS)) {
@@ -55,8 +90,7 @@ const tenantResolver = async (req, res, next) => {
             return next();
         }
 
-        // 3. Cache miss: Query Database
-        // Look up by customDomain or slug if they mapped a CNAME exactly to their slug (less common but possible)
+        // 4. Cache miss: Query Database for custom domains
         const hospital = await Hospital.findOne({
             $or: [
                 { customDomain: hostname },
@@ -65,13 +99,13 @@ const tenantResolver = async (req, res, next) => {
             isActive: true
         }).select('_id name slug customDomain branding isWhitelabeled appConfig').lean();
 
-        // 4. Update Cache
+        // 5. Update Cache
         tenantCache.set(hostname, {
             tenant: hospital || null,
             timestamp: now
         });
 
-        // 5. Attach and proceed
+        // 6. Attach and proceed
         req.tenant = hospital || null;
         next();
     } catch (error) {

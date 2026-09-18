@@ -1,32 +1,197 @@
 /* ============================================================
-   Doctor Patient Details — Premium Split-Pane Medical Dashboard
+   Doctor Patient Details — Modern Medical Split-Pane Dashboard
+   Matches Image 2 Specification + Full Responsive Mobile Layout
    ============================================================ */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-/* --- Container --- */
-/* Removed aggressive body overflow:hidden — it was blocking mouse wheel scrolling globally */
+/* --- Page Wrapper --- */
+.dpd-page-wrapper {
+    min-height: calc(100vh - 74px);
+    background: #f4f6fb;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #1e293b;
+    padding: 18px 24px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
 
+/* --- Top Navigation Header Bar --- */
+.dpd-top-bar {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+    padding: 10px 20px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-shrink: 0;
+}
+
+.dpd-top-back-btn {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: #334155;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: inherit;
+    transition: all 0.2s ease;
+}
+
+.dpd-top-back-btn:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    color: #0f172a;
+    transform: translateX(-2px);
+}
+
+.dpd-top-back-icon {
+    font-size: 16px;
+    color: #475569;
+}
+
+.dpd-top-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dpd-open-ai-top-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.dpd-open-ai-top-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+
+.dpd-top-bell-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    color: #475569;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.dpd-top-bell-btn:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.dpd-bell-dot {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    border: 2px solid #ffffff;
+}
+
+.dpd-top-doctor-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #ffffff;
+    padding: 4px 12px 4px 4px;
+    border-radius: 9999px;
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.dpd-top-doctor-pill:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+
+.dpd-top-doctor-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.dpd-top-doctor-info {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+}
+
+.dpd-top-doctor-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.2;
+}
+
+.dpd-top-doctor-role {
+    font-size: 11px;
+    font-weight: 500;
+    color: #94a3b8;
+}
+
+.dpd-top-doctor-chevron {
+    font-size: 13px;
+    color: #64748b;
+}
+
+/* --- Main Grid Layout --- */
 .dpd-container {
     display: grid;
-    grid-template-columns: 45% 55%;
-    height: calc(100vh - 74px);
-    /* Adjusted for Navbar height to prevent bottom cutoff */
-    background: #f0f4ff;
-    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-    color: #1e293b;
-    overflow: hidden;
-    position: relative;
+    grid-template-columns: 400px 1fr;
+    gap: 20px;
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
     box-sizing: border-box;
 }
 
-/* --- Loading --- */
+/* --- Loading Screen --- */
 .dpd-loading {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     height: 100vh;
-    background: #f0f4ff;
+    background: #f4f6fb;
     color: #64748b;
     font-family: 'Inter', system-ui, sans-serif;
     gap: 16px;
@@ -47,233 +212,400 @@
     }
 }
 
-.dpd-back-btn {
-    padding: 10px 24px;
-    background: linear-gradient(135deg, #3b82f6, #6366f1);
-    color: white;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.9rem;
-    font-family: inherit;
-}
-
-/* ============ LEFT PANEL ============ */
+/* ============================================================
+   LEFT PANEL — Patient Profile Card & Quick Actions
+   ============================================================ */
 .dpd-left {
     display: flex;
     flex-direction: column;
-    border-right: 1px solid #e2e8f0;
-    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-    overflow: hidden;
-    min-height: 0;
+    background: linear-gradient(135deg, #ffffff 65%, #eff6ff 100%);
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    padding: 22px 24px;
+    overflow-y: auto;
     height: 100%;
-}
-
-/* Patient Header Card */
-.dpd-patient-header {
-    padding: 20px 24px 16px;
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    color: white;
+    min-height: 0;
+    box-sizing: border-box;
     position: relative;
-    flex-shrink: 0;
 }
 
-.dpd-back-link {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #94a3b8;
-    padding: 6px 14px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.82rem;
-    font-weight: 600;
-    font-family: inherit;
-    margin-bottom: 12px;
-    display: inline-block;
-    transition: all 0.2s;
-}
-
-.dpd-back-link:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: white;
-}
-
-.dpd-patient-identity {
+.dpd-patient-card-top {
     display: flex;
-    align-items: flex-start;
+    flex-direction: column;
     gap: 16px;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
 }
 
-.dpd-patient-avatar {
-    width: 56px;
-    height: 56px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+/* Patient Identity: Avatar + Name + Badge */
+.dpd-patient-identity-clean {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.dpd-patient-avatar-clean {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+    color: #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
-    font-weight: 800;
+    font-size: 24px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
-.dpd-patient-meta h2 {
-    margin: 0 0 8px;
+.dpd-patient-name-box h2 {
     font-size: 1.3rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, #60a5fa, #a78bfa);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 6px 0;
+    line-height: 1.2;
 }
 
-.dpd-patient-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.dpd-tag {
+.dpd-active-patient-badge {
+    background: #ecfdf5;
+    color: #10b981;
+    border: 1px solid #a7f3d0;
+    border-radius: 9999px;
     padding: 3px 10px;
-    border-radius: 6px;
-    font-size: 0.72rem;
+    font-size: 11.5px;
     font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
 }
 
-.tag-mrn {
-    background: rgba(59, 130, 246, 0.15);
-    color: #2563eb;
+.dpd-badge-refresh-icon {
+    font-size: 11px;
 }
 
-.tag-phone {
-    background: rgba(16, 185, 129, 0.15);
-    color: #059669;
-}
-
-.tag-age {
-    background: rgba(245, 158, 11, 0.15);
-    color: #b45309;
-}
-
-.tag-gender {
-    background: rgba(236, 72, 153, 0.15);
-    color: #be185d;
-}
-
-.tag-blood {
-    background: rgba(239, 68, 68, 0.15);
-    color: #dc2626;
-}
-
-.dpd-appt-info {
+/* 3-Column Metrics: MRN, Age, Gender */
+.dpd-clean-stats-row {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 10px;
-    background: #f0f4ff;
-    padding: 12px 14px;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
+    padding: 12px 0;
+    border-top: 1px solid #f1f5f9;
+    border-bottom: 1px solid #f1f5f9;
 }
 
-.dpd-appt-item {
+.dpd-stat-col {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
 }
 
-.dpd-appt-label {
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    color: #94a3b8;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-}
-
-.dpd-appt-value {
-    font-size: 0.88rem;
+.dpd-stat-label {
+    font-size: 11px;
     font-weight: 600;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.dpd-stat-value {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    word-break: break-word;
+}
+
+.dpd-copy-icon-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    transition: color 0.2s;
+    font-size: 13px;
+}
+
+.dpd-copy-icon-btn:hover {
+    color: #2563eb;
+    background: #eff6ff;
+}
+
+/* Appointment Info Box (Date, Time, Status) */
+.dpd-appt-clean-box {
+    background: #ffffff;
+    border: 1px solid #eef2f6;
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
+}
+
+.dpd-appt-clean-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dpd-appt-circle-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #eff6ff;
+    color: #3b82f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.dpd-appt-clean-val {
+    font-size: 12.5px;
+    font-weight: 700;
     color: #1e293b;
 }
 
-.dpd-appt-status {
-    padding: 3px 10px;
-    border-radius: 6px;
-    font-size: 0.78rem;
+.dpd-appt-clean-lbl {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: #94a3b8;
+    margin-top: 1px;
+}
+
+.dpd-clean-status-pill {
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+    border-radius: 9999px;
+    padding: 4px 12px;
+    font-size: 12px;
     font-weight: 700;
     text-transform: capitalize;
     display: inline-block;
-    width: fit-content;
+    white-space: nowrap;
 }
 
-.status-confirmed {
-    background: rgba(34, 197, 94, 0.2);
-    color: #16a34a;
-}
-
-.status-completed {
-    background: rgba(59, 130, 246, 0.2);
-    color: #2563eb;
-}
-
-.status-cancelled {
-    background: rgba(239, 68, 68, 0.2);
-    color: #dc2626;
-}
-
-.status-pending {
-    background: rgba(245, 158, 11, 0.2);
-    color: #b45309;
-}
-
-/* Tabs Container */
-.dpd-tabs-container {
+/* Visit Type / Referral Card */
+.dpd-visit-type-card {
+    background: #ffffff;
+    border: 1px solid #eef2f6;
+    border-radius: 14px;
+    padding: 12px 14px;
     display: flex;
     align-items: center;
-    background: white;
-    border-bottom: 1px solid #e2e8f0;
-    position: relative;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
+}
+
+.dpd-visit-type-card:hover {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+    transform: translateY(-1px);
+}
+
+.dpd-visit-type-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dpd-visit-user-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: #eff6ff;
+    color: #2563eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
     flex-shrink: 0;
 }
 
+.dpd-visit-type-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.dpd-visit-type-sub {
+    font-size: 11.5px;
+    color: #64748b;
+    margin-top: 1px;
+}
+
+.dpd-visit-type-chevron {
+    color: #94a3b8;
+    font-size: 16px;
+}
+
+/* 4 Quick Action Tiles (Grid of 4) */
+.dpd-quick-tiles-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.dpd-action-tile-btn {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 12px 6px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    width: 100%;
+    font-family: inherit;
+}
+
+.dpd-action-tile-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border-color: #93c5fd;
+}
+
+.dpd-action-tile-btn.active {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+.dpd-tile-icon-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.tile-blue {
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+.tile-purple {
+    background: #faf5ff;
+    color: #9333ea;
+}
+
+.tile-green {
+    background: #f0fdf4;
+    color: #16a34a;
+}
+
+.tile-gray {
+    background: #f8fafc;
+    color: #475569;
+}
+
+.dpd-tile-text {
+    font-size: 11px;
+    font-weight: 600;
+    color: #334155;
+    white-space: nowrap;
+}
+
+/* Popover dropdown for More options */
+.dpd-more-menu-popover {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    z-index: 50;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 210px;
+}
+
+.dpd-more-menu-popover button {
+    background: transparent;
+    border: none;
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #334155;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s ease;
+    font-family: inherit;
+}
+
+.dpd-more-menu-popover button:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.dpd-more-menu-popover button.active-opt {
+    background: #eff6ff;
+    color: #2563eb;
+}
+
+/* Tabs Container (Pill Style) */
+.dpd-tabs-container {
+    display: flex;
+    align-items: center;
+    background: transparent;
+    border-bottom: 1px solid #eef2f6;
+    position: relative;
+    flex-shrink: 0;
+    margin: 8px 0 12px;
+}
+
 .dpd-tab-scroll-btn {
-    background: white;
+    background: transparent;
     border: none;
     color: #64748b;
-    font-size: 1.4rem;
+    font-size: 1.3rem;
     font-weight: bold;
     cursor: pointer;
-    padding: 0 16px;
+    padding: 0 8px;
     height: 100%;
-    z-index: 10;
+    z-index: 5;
     transition: all 0.2s;
     user-select: none;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
 }
 
 .dpd-tab-scroll-btn:hover {
-    color: #3b82f6;
-    background: #f8fafc;
-    box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
+    color: #2563eb;
 }
 
-/* Tabs Navigation */
 .dpd-tabs-nav {
     display: flex;
     gap: 6px;
-    padding: 12px 0;
-    /* Padding handled by container now */
+    padding: 6px 0;
     overflow-x: auto;
-    background: white;
     scrollbar-width: none;
     -ms-overflow-style: none;
     flex: 1;
-    scroll-behavior: auto;
-    /* auto allows immediate JS wheel and 2-finger trackpad response */
-    overscroll-behavior-x: contain;
-    /* Prevents swiping back in browser history */
 }
 
 .dpd-tabs-nav::-webkit-scrollbar {
@@ -284,105 +616,71 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 10px 16px;
-    border: none;
-    background: #f1f5f9;
-    border-radius: 8px;
+    padding: 7px 14px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    border-radius: 9999px;
     cursor: pointer;
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #64748b;
-    transition: all 0.25s;
+    transition: all 0.2s;
     white-space: nowrap;
     font-family: inherit;
     flex-shrink: 0;
 }
 
 .dpd-tab-btn:hover {
-    background: #e2e8f0;
-    color: #334155;
+    background: #f8fafc;
+    color: #1e293b;
+    border-color: #cbd5e1;
 }
 
 .dpd-tab-btn.active {
-    background: linear-gradient(135deg, #3b82f6, #6366f1);
-    color: white;
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
 }
 
 .dpd-tab-icon {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
 .dpd-tab-label {
     font-size: 0.78rem;
 }
 
-/* Tab Content Area */
+/* Tab Content Panel */
 .dpd-tab-content {
     flex: 1;
     overflow-y: auto;
-    padding: 20px 24px;
-    overscroll-behavior: contain;
-    height: 100%;
+    padding-right: 4px;
     min-height: 0;
 }
 
-.dpd-tab-content::-webkit-scrollbar {
-    width: 8px;
-}
-
-.dpd-tab-content::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 4px;
-}
-
-.dpd-tab-content::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.4);
-    border-radius: 4px;
-}
-
-.dpd-tab-content::-webkit-scrollbar-thumb:hover {
-    background: rgba(148, 163, 184, 0.8);
-}
-
-.dpd-tab-panel {
-    animation: fadeSlide 0.3s ease-out;
-}
-
-@keyframes fadeSlide {
-    from {
-        opacity: 0;
-        transform: translateY(8px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
 .dpd-panel-title {
-    margin: 0 0 20px;
-    font-size: 1.25rem;
+    margin: 0 0 16px;
+    font-size: 1.15rem;
     font-weight: 800;
     color: #0f172a;
-    border-bottom: 2px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
     padding-bottom: 8px;
 }
 
-/* Overview Grid */
+/* Overview Cards */
 .dpd-overview-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    margin-bottom: 20px;
+    gap: 10px;
+    margin-bottom: 16px;
 }
 
 .dpd-ov-card {
-    background: white;
+    background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
-    padding: 14px 16px;
+    padding: 12px 14px;
     transition: all 0.2s;
 }
 
@@ -393,7 +691,7 @@
 
 .dpd-ov-label {
     display: block;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     text-transform: uppercase;
     color: #94a3b8;
     font-weight: 700;
@@ -403,31 +701,17 @@
 
 .dpd-ov-value {
     display: block;
-    font-size: 0.92rem;
+    font-size: 0.88rem;
     font-weight: 600;
     color: #1e293b;
     word-break: break-word;
-}
-
-.dpd-partner-quick {
-    margin-top: 8px;
-    padding: 16px;
-    background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
-    border-radius: 14px;
-    border: 1px solid #bbf7d0;
-}
-
-.dpd-partner-quick h4 {
-    margin: 0 0 14px;
-    font-size: 0.95rem;
-    color: #166534;
 }
 
 /* Form Grid */
 .dpd-form-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
+    gap: 14px;
     margin-bottom: 16px;
 }
 
@@ -438,11 +722,11 @@
 .dpd-field {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
 }
 
 .dpd-field label {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #475569;
     text-transform: uppercase;
@@ -451,10 +735,10 @@
 
 .dpd-field input,
 .dpd-field select {
-    padding: 10px 14px;
-    border: 2px solid #e2e8f0;
+    padding: 9px 12px;
+    border: 1.5px solid #e2e8f0;
     border-radius: 10px;
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     color: #1e293b;
     font-family: inherit;
     transition: all 0.2s;
@@ -475,25 +759,25 @@
 }
 
 .dpd-field-full {
-    margin-bottom: 16px;
+    margin-bottom: 14px;
 }
 
 .dpd-field-full label {
     display: block;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #475569;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    margin-bottom: 6px;
+    margin-bottom: 5px;
 }
 
 .dpd-field-full input {
     width: 100%;
-    padding: 10px 14px;
-    border: 2px solid #e2e8f0;
+    padding: 9px 12px;
+    border: 1.5px solid #e2e8f0;
     border-radius: 10px;
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     color: #1e293b;
     font-family: inherit;
     transition: all 0.2s;
@@ -509,10 +793,10 @@
 .dpd-field-full textarea {
     width: 100%;
     min-height: 80px;
-    padding: 12px 14px;
-    border: 2px solid #e2e8f0;
-    border-radius: 12px;
-    font-size: 0.92rem;
+    padding: 10px 12px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 0.9rem;
     color: #1e293b;
     font-family: inherit;
     resize: vertical;
@@ -528,24 +812,24 @@
 }
 
 .dpd-sub-title {
-    margin: 20px 0 14px;
-    font-size: 0.95rem;
+    margin: 18px 0 12px;
+    font-size: 0.92rem;
     font-weight: 700;
     color: #334155;
-    padding-top: 16px;
+    padding-top: 14px;
     border-top: 1px solid #e2e8f0;
 }
 
 .dpd-save-section {
     width: 100%;
-    padding: 12px;
+    padding: 11px;
     background: linear-gradient(135deg, #3b82f6, #6366f1);
     color: white;
     border: none;
-    border-radius: 12px;
+    border-radius: 10px;
     cursor: pointer;
     font-weight: 700;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     font-family: inherit;
     transition: all 0.3s;
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
@@ -557,34 +841,15 @@
     box-shadow: 0 6px 20px rgba(59, 130, 246, 0.35);
 }
 
-.dpd-save-section:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-}
-
-/* History List */
-.dpd-empty-hist {
-    text-align: center;
-    padding: 40px;
-    color: #94a3b8;
-    border: 2px dashed #e2e8f0;
-    border-radius: 14px;
-}
-
-.dpd-history-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
+/* History Cards */
 .dpd-history-card {
     background: white;
     border: 1px solid #e2e8f0;
     border-radius: 14px;
-    padding: 16px 18px;
+    padding: 14px 16px;
     transition: all 0.2s;
     position: relative;
+    margin-bottom: 12px;
 }
 
 .dpd-history-card:hover {
@@ -607,7 +872,7 @@
 
 .dpd-hist-date {
     font-weight: 700;
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     color: #1e40af;
 }
 
@@ -620,123 +885,151 @@
 }
 
 .dpd-hist-diagnosis {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     color: #334155;
     margin-bottom: 6px;
 }
 
 .dpd-hist-notes {
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     color: #64748b;
     margin-bottom: 6px;
 }
 
-.dpd-hist-service {
-    display: inline-block;
-    padding: 3px 8px;
-    background: #f1f5f9;
-    border-radius: 6px;
-    font-size: 0.75rem;
-    color: #475569;
-    font-weight: 600;
-}
-
-.dpd-hist-file {
-    margin-top: 6px;
-    font-size: 0.85rem;
-}
-
-.dpd-hist-file a {
-    color: #2563eb;
-    text-decoration: none;
-    font-weight: 600;
-}
-
-.dpd-hist-file a:hover {
-    text-decoration: underline;
-}
-
-.dpd-current-badge {
-    display: inline-block;
-    margin-top: 8px;
-    padding: 3px 10px;
-    background: linear-gradient(135deg, #3b82f6, #6366f1);
-    color: white;
-    border-radius: 6px;
-    font-size: 0.72rem;
-    font-weight: 700;
-}
-
-/* ============ RIGHT PANEL ============ */
+/* ============================================================
+   RIGHT PANEL — Current Session Notepad Workspace
+   ============================================================ */
 .dpd-right {
     display: flex;
     flex-direction: column;
-    background: white;
-    overflow: hidden;
+    background: #ffffff;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
     height: 100%;
     min-height: 0;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 .dpd-right-header {
-    padding: 20px 28px;
+    padding: 20px 24px 16px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid #e2e8f0;
-    background: linear-gradient(135deg, #fafbff, #f5f3ff);
+    border-bottom: 1px solid #f1f5f9;
     flex-shrink: 0;
 }
 
-.dpd-right-header h2 {
+.dpd-session-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dpd-session-head-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: #eff6ff;
+    color: #2563eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    border: 1px solid #dbeafe;
+    flex-shrink: 0;
+}
+
+.dpd-session-title-wrap h2 {
     margin: 0;
-    font-size: 1.2rem;
-    font-weight: 800;
+    font-size: 1.25rem;
+    font-weight: 700;
     color: #0f172a;
+    line-height: 1.2;
 }
 
 .dpd-right-subtitle {
-    font-size: 0.82rem;
-    color: #94a3b8;
-    margin: 4px 0 0;
+    font-size: 12.5px;
+    color: #64748b;
+    margin: 3px 0 0;
 }
 
-.dpd-session-status {
+.dpd-clean-session-status {
     padding: 5px 14px;
-    border-radius: 8px;
-    font-size: 0.82rem;
+    border-radius: 9999px;
+    font-size: 12px;
     font-weight: 700;
     text-transform: capitalize;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
-/* Right Content */
+.dpd-clean-session-status.status-confirmed {
+    background: #ecfdf5;
+    color: #15803d;
+    border: 1px solid #a7f3d0;
+}
+
+.dpd-status-check-icon {
+    font-size: 13px;
+    font-weight: bold;
+}
+
+/* 4-Pill Subnav Tab Bar */
+.dpd-session-pills-bar {
+    padding: 10px 24px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #f1f5f9;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-shrink: 0;
+}
+
+.dpd-session-pills-bar::-webkit-scrollbar {
+    display: none;
+}
+
+.dpd-session-pill-tab {
+    padding: 7px 16px;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+}
+
+.dpd-session-pill-tab:hover {
+    background: #f8fafc;
+    color: #1e293b;
+}
+
+.dpd-session-pill-tab.active {
+    background: #eff6ff;
+    color: #2563eb;
+    border-color: #bfdbfe;
+}
+
+/* Right Content Area */
 .dpd-right-content {
     flex: 1;
     overflow-y: auto;
-    padding: 24px 28px;
+    padding: 20px 24px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    overscroll-behavior: contain;
-    height: 100%;
+    gap: 18px;
     min-height: 0;
-}
-
-.dpd-right-content::-webkit-scrollbar {
-    width: 8px;
-}
-
-.dpd-right-content::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 4px;
-}
-
-.dpd-right-content::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.4);
-    border-radius: 4px;
-}
-
-.dpd-right-content::-webkit-scrollbar-thumb:hover {
-    background: rgba(148, 163, 184, 0.8);
 }
 
 .dpd-session-field {
@@ -747,36 +1040,33 @@
 }
 
 .dpd-session-field label {
-    font-size: 0.85rem;
+    font-size: 13px;
     font-weight: 700;
-    color: #334155;
-}
-
-.dpd-session-field input {
-    padding: 12px 16px;
-    border: 2px solid #e2e8f0;
-    border-radius: 12px;
-    font-size: 0.95rem;
     color: #1e293b;
-    font-family: inherit;
-    transition: all 0.2s;
-}
-
-.dpd-session-field input:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.08);
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .dpd-diag-input {
-    font-weight: 700 !important;
-    font-size: 1.05rem !important;
-    border-color: #bfdbfe !important;
-    background: #eff6ff !important;
+    width: 100%;
+    padding: 14px 18px;
+    border: 1.5px solid #dbeafe;
+    border-radius: 14px;
+    font-size: 14.5px;
+    font-weight: 600;
+    color: #1e293b;
+    background: #f8fafc;
+    box-sizing: border-box;
+    font-family: inherit;
+    transition: all 0.2s ease;
 }
 
 .dpd-diag-input:focus {
-    background: white !important;
+    outline: none;
+    border-color: #3b82f6;
+    background: #ffffff;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
 }
 
 .dpd-notes-field {
@@ -786,75 +1076,144 @@
 }
 
 .dpd-notes-textarea {
-    flex: 1;
-    min-height: 140px;
-    padding: 16px;
-    border: 2px solid #e2e8f0;
-    border-radius: 12px;
-    font-size: 0.95rem;
+    width: 100%;
+    min-height: 130px;
+    padding: 14px 18px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 14px;
+    font-size: 14px;
     color: #1e293b;
     font-family: inherit;
     resize: vertical;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
     line-height: 1.6;
+    box-sizing: border-box;
+    background: #ffffff;
 }
 
 .dpd-notes-textarea:focus {
     outline: none;
     border-color: #3b82f6;
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.08);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
 }
 
-.dpd-prescription-textarea {
-    min-height: 100px;
-    padding: 14px 16px;
-    border: 2px solid #e2e8f0;
-    border-radius: 12px;
-    font-size: 0.95rem;
-    color: #1e293b;
-    font-family: inherit;
-    resize: vertical;
-    transition: all 0.2s;
-    background: #fefce8;
-    border-color: #fde68a;
+/* Operation Required? Card */
+.dpd-operation-card-clean {
+    background: #f8fafc;
+    border: 1px solid #eef2f6;
+    border-radius: 14px;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
-.dpd-prescription-textarea:focus {
-    outline: none;
-    border-color: #f59e0b;
-    background: white;
-    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.08);
+.dpd-op-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dpd-op-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.dpd-op-arrow {
+    font-size: 14px;
+    color: #94a3b8;
+}
+
+.dpd-op-icon {
+    font-size: 14px;
+    color: #64748b;
+}
+
+/* iOS-Style Toggle Switch */
+.dpd-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.dpd-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.dpd-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #cbd5e1;
+    transition: 0.25s ease;
+    border-radius: 26px;
+}
+
+.dpd-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.25s ease;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.dpd-switch input:checked + .dpd-slider {
+    background-color: #2563eb;
+}
+
+.dpd-switch input:checked + .dpd-slider:before {
+    transform: translateX(22px);
 }
 
 /* Right Footer */
 .dpd-right-footer {
-    padding: 16px 20px;
+    padding: 16px 24px;
     display: flex;
-    gap: 12px;
-    border-top: 1px solid #e2e8f0;
-    background: #fafbff;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    border-top: 1px solid #f1f5f9;
+    background: #ffffff;
     flex-wrap: wrap;
-    /* Prevent button overflow horizontally */
     flex-shrink: 0;
 }
 
 .dpd-btn-save-draft {
-    padding: 14px 24px;
-    background: white;
-    border: 2px solid #e2e8f0;
+    padding: 12px 22px;
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
     border-radius: 12px;
     cursor: pointer;
-    font-weight: 700;
-    font-size: 0.9rem;
+    font-weight: 600;
+    font-size: 13.5px;
     color: #475569;
     font-family: inherit;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .dpd-btn-save-draft:hover {
-    border-color: #3b82f6;
-    color: #3b82f6;
-    background: #eff6ff;
+    border-color: #cbd5e1;
+    color: #1e293b;
+    background: #f8fafc;
 }
 
 .dpd-btn-save-draft:disabled {
@@ -864,22 +1223,26 @@
 
 .dpd-btn-finish {
     flex: 1;
-    padding: 14px 24px;
-    background: linear-gradient(135deg, #059669, #10b981);
-    color: white;
+    padding: 13px 28px;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: #ffffff;
     border: none;
     border-radius: 12px;
     cursor: pointer;
     font-weight: 700;
-    font-size: 0.92rem;
+    font-size: 14px;
     font-family: inherit;
-    transition: all 0.3s;
-    box-shadow: 0 4px 15px rgba(5, 150, 105, 0.3);
+    transition: all 0.25s ease;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
 .dpd-btn-finish:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(5, 150, 105, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
 }
 
 .dpd-btn-finish:disabled {
@@ -888,71 +1251,145 @@
     transform: none;
 }
 
-/* Animations */
-
-/* ============ RESPONSIVE ============ */
+/* ============================================================
+   RESPONSIVE LAYOUT (Tablets & Mobile Screens)
+   ============================================================ */
 @media (max-width: 1024px) {
+    .dpd-page-wrapper {
+        padding: 12px;
+    }
+
     .dpd-container {
         display: flex;
         flex-direction: column;
         height: auto;
         min-height: 100vh;
+        gap: 16px;
     }
 
     .dpd-left {
         width: 100%;
-        border-right: none;
-        border-bottom: 2px solid #e2e8f0;
+        height: auto;
+        min-height: auto;
+        border-radius: 18px;
     }
 
     .dpd-right {
         width: 100%;
+        height: auto;
+        min-height: auto;
+        border-radius: 18px;
     }
 
     .dpd-overview-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .dpd-form-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .dpd-grid-4 {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .dpd-appt-info {
         grid-template-columns: repeat(2, 1fr);
     }
 }
 
 @media (max-width: 768px) {
-    .dpd-patient-header {
-        padding: 16px 20px;
+    .dpd-top-bar {
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 10px 14px;
+        gap: 10px;
     }
 
-    .dpd-tabs-nav {
-        padding: 10px 12px;
+    .dpd-top-back-btn {
+        padding: 6px 12px;
+        font-size: 12.5px;
     }
 
-    .dpd-tab-content {
-        padding: 16px 20px;
+    .dpd-top-doctor-role {
+        display: none;
+    }
+
+    .dpd-top-doctor-name {
+        font-size: 12px;
+    }
+
+    .dpd-left {
+        padding: 16px 18px;
+    }
+
+    .dpd-right-header {
+        padding: 16px 18px 12px;
+    }
+
+    .dpd-session-pills-bar {
+        padding: 8px 18px 10px;
     }
 
     .dpd-right-content {
-        padding: 20px;
+        padding: 16px 18px;
     }
 
     .dpd-right-footer {
         flex-direction: column;
-        padding: 12px 20px;
+        padding: 14px 18px;
+        gap: 10px;
+    }
+
+    .dpd-btn-save-draft,
+    .dpd-btn-finish {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .dpd-clean-stats-row {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+
+    .dpd-appt-clean-box {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .dpd-appt-clean-status {
+        align-self: flex-start;
+    }
+
+    .dpd-overview-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .dpd-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .dpd-quick-tiles-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+    }
+
+    .dpd-action-tile-btn {
+        padding: 8px 4px;
+        border-radius: 10px;
+    }
+
+    .dpd-tile-icon-wrap {
+        width: 34px;
+        height: 34px;
+        font-size: 15px;
+        border-radius: 8px;
+    }
+
+    .dpd-tile-text {
+        font-size: 10px;
+    }
+
+    .dpd-clean-stats-row {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .dpd-stat-value {
+        font-size: 12px;
     }
 
     .dpd-overview-grid {
         grid-template-columns: 1fr;
-    }
-
-    .dpd-grid-4 {
-        grid-template-columns: 1fr 1fr;
     }
 }

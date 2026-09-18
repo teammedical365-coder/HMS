@@ -64,7 +64,8 @@ const AdminLogin = () => {
   return (
     <NeuralAuthPortal
       portalType="admin"
-      title="Admin Portal"
+      title="Sign In"
+      showUnderline={true}
       subtitle="Access administrator medical management workspace."
       idLabel="Administrator Email"
       idPlaceholder="admin@medical365.in"

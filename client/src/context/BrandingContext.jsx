@@ -10,6 +10,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { hospitalAPI, publicAPI, baseURL } from '../utils/api';
 import socket from '../utils/socket';
+import { resolveHostnameSync, PORTAL_TYPES } from '../utils/hostnameResolver';
 
 // Default Medical 365 branding (platform defaults)
 const DEFAULT_BRANDING = {
@@ -191,6 +192,21 @@ export const BrandingProvider = ({ children }) => {
             const injectedTenantId = import.meta.env.VITE_APP_TENANT_ID;
             let fetchedFromDomain = false;
 
+            // ── Hostname-aware branding: skip for ADMIN and INVALID portals ──
+            const syncResult = resolveHostnameSync(window.location.hostname);
+            const portalType = syncResult?.type;
+            
+            // ADMIN portals use default Medical365 branding — no hospital branding
+            if (portalType === PORTAL_TYPES.ADMIN) {
+                applyBrandingToCSS(DEFAULT_BRANDING);
+                return;
+            }
+            
+            // INVALID hostnames should NOT load any branding
+            if (portalType === PORTAL_TYPES.INVALID) {
+                return;
+            }
+
             try {
                 let response = null;
                 const domain = window.location.hostname;
@@ -236,9 +252,10 @@ export const BrandingProvider = ({ children }) => {
             }
 
             // Fallback to localStorage if no custom domain branding was fetched
+            // IMPORTANT: Only use cached branding if the hostname is a valid portal
             if (!fetchedFromDomain) {
                 const saved = localStorage.getItem('hospitalBranding');
-                if (saved) {
+                if (saved && portalType !== PORTAL_TYPES.INVALID && portalType !== PORTAL_TYPES.NETWORK_ERROR) {
                     try {
                         const b = JSON.parse(saved);
                         applyBrandingToCSS(b);

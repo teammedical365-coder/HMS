@@ -1,9 +1,12 @@
 export const getSubdomain = () => {
-    // 1. Check for explicit tenant override via query parameters (useful for Electron/Testing)
-    const urlParams = new URLSearchParams(window.location.search);
-    const tenantOverride = urlParams.get('tenant');
-    if (tenantOverride) {
-        return tenantOverride;
+    // 1. Check for explicit tenant override via query parameters
+    //    Only allowed in development mode to prevent production security bypass
+    if (import.meta.env.DEV) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tenantOverride = urlParams.get('tenant');
+        if (tenantOverride) {
+            return tenantOverride;
+        }
     }
 
     const hostname = window.location.hostname;
@@ -13,7 +16,8 @@ export const getSubdomain = () => {
         return null;
     }
 
-    const isBaseDomain = hostname === 'medical365.in' || hostname === 'www.medical365.in';
+    const baseDomain = (import.meta.env.VITE_BASE_DOMAIN || 'medical365.in').toLowerCase();
+    const isBaseDomain = hostname === baseDomain || hostname === `www.${baseDomain}`;
 
     // If it's not the base domain and not localhost, it's either a subdomain of base domain OR a completely custom domain.
     if (!isBaseDomain) {
@@ -25,8 +29,8 @@ export const getSubdomain = () => {
         }
 
         // It is a live domain. If it's a subdomain of medical365.in:
-        if (hostname.endsWith('.medical365.in')) {
-            const subdomain = hostname.replace('.medical365.in', '');
+        if (hostname.endsWith(`.${baseDomain}`)) {
+            const subdomain = hostname.replace(`.${baseDomain}`, '');
             return subdomain === 'www' ? null : subdomain;
         }
 

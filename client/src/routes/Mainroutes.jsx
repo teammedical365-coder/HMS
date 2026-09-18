@@ -11,6 +11,8 @@ import RouteErrorBoundary from '../components/common/RouteErrorBoundary';
 import { useAuth } from '../store/hooks';
 import { getSubdomain } from '../utils/subdomain';
 import { prefetchRoutes } from '../utils/prefetch';
+import { useHostnameResolver, PORTAL_TYPES } from '../utils/hostnameResolver';
+import InvalidPortalPage from '../pages/InvalidPortalPage';
 
 // ============================================================
 // Route-Level Code Splitting (React.lazy)
@@ -36,6 +38,8 @@ const Patient = lazy(() => import('../pages/doctors/Patient'));
 const AdminLabTests = lazy(() => import('../pages/admin/AdminLabTests'));
 const DoctorPatientDetails = lazy(() => import('../pages/doctors/DoctorPatientDetails'));
 const AIAssistant = lazy(() => import('../pages/doctors/AIAssistant'));
+const SurgeryReferrals = lazy(() => import('../pages/doctors/SurgeryReferrals'));
+const MySurgeryPlans = lazy(() => import('../pages/doctors/MySurgeryPlans'));
 const UnifiedPatientProfile = lazy(() => import('../pages/patient/UnifiedPatientProfile'));
 const PatientPortalLogin = lazy(() => import('../pages/patient/PatientPortalLogin'));
 const PatientSignup = lazy(() => import('../pages/patient/PatientSignup'));
@@ -179,8 +183,49 @@ const SubdomainRoleGuard = ({ children }) => {
     return children;
 };
 
+/**
+ * HostnameLoadingScreen — shown while hostname resolution is in progress
+ */
+const HostnameLoadingScreen = () => (
+    <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#030712',
+        color: '#0ea5e9',
+        fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
+    }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            <div style={{
+                width: '40px',
+                height: '40px',
+                border: '3px solid rgba(14, 165, 233, 0.15)',
+                borderTopColor: '#0ea5e9',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite',
+            }} />
+            <span style={{ fontSize: '14px', opacity: 0.7 }}>Verifying portal...</span>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+    </div>
+);
+
+/**
+ * Helper: Determines if the current portal type allows admin routes
+ */
+const isAdminPortal = (portalType) =>
+    portalType === PORTAL_TYPES.ADMIN || portalType === PORTAL_TYPES.DEVELOPMENT;
+
+/**
+ * Helper: Determines if the current portal type allows hospital routes
+ */
+const isHospitalPortal = (portalType) =>
+    portalType === PORTAL_TYPES.HOSPITAL || portalType === PORTAL_TYPES.DEVELOPMENT;
+
 const MainRoutes = () => {
     const { isAuthenticated, user } = useAuth();
+    const { portalType, isResolving } = useHostnameResolver();
 
     // Smart Idle Prefetching of high-probability next pages based on user role
     useEffect(() => {
@@ -229,6 +274,29 @@ const MainRoutes = () => {
             ]);
         }
     }, [isAuthenticated, user]);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HOSTNAME VALIDATION — runs BEFORE any route rendering
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // 1. While hostname is being resolved, show loading (not a login page)
+    if (isResolving) {
+        return <HostnameLoadingScreen />;
+    }
+
+    // 2. Invalid hostname → show Invalid Portal Page for ALL routes
+    if (portalType === PORTAL_TYPES.INVALID) {
+        return <InvalidPortalPage errorType="invalid" />;
+    }
+
+    // 3. Network error → show network error page (NOT admin fallback)
+    if (portalType === PORTAL_TYPES.NETWORK_ERROR) {
+        return <InvalidPortalPage errorType="network" />;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // VALID HOSTNAME — render routes based on portal type + auth state
+    // ═══════════════════════════════════════════════════════════════════════════
     
     return (
         <>
@@ -268,6 +336,8 @@ const MainRoutes = () => {
                                 <Route path="doctor/patients/:id" element={<ProtectedRoute requiredPermissions={[]}><UnifiedPatientProfile /></ProtectedRoute>} />
                                 <Route path="doctor/patient/:id" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><DoctorPatientDetails /></ProtectedRoute>} />
                                 <Route path="doctor/ai-assistant" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><AIAssistant /></ProtectedRoute>} />
+                                <Route path="doctor/surgery-referrals" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><SurgeryReferrals /></ProtectedRoute>} />
+                                <Route path="doctor/surgery-plans" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><MySurgeryPlans /></ProtectedRoute>} />
 
                                 <Route path="admin" element={<ProtectedRoute requiredPermissions={['admin_view_stats', 'admin_manage_roles']}><AdminMainDashboard /></ProtectedRoute>} />
                                 <Route path="admin/users" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><Admin /></ProtectedRoute>} />
@@ -354,48 +424,71 @@ const MainRoutes = () => {
                         </DashboardLayout>
                     ) : (
                         <Routes>
-                            {/* Root & Login routing: On base domain / localhost / admin without hospital subdomain → Supreme Admin login */}
+                            {/* ════════════════════════════════════════════════════════════════
+                                UNAUTHENTICATED ROUTES — hostname-aware login routing
+                                ═══════════════════════════════════════════════════════════════ */}
+
+                            {/* Root route — redirect based on portal type */}
                             <Route path="/" element={(() => {
-                                const sub = getSubdomain();
-                                if (!sub || sub === 'admin' || RESERVED_SUBDOMAINS.includes(sub)) {
+                                if (isAdminPortal(portalType)) {
                                     return <Navigate to="/supremeadmin" replace />;
                                 }
-                                return <Navigate to="/login" replace />;
+                                if (isHospitalPortal(portalType)) {
+                                    return <Navigate to="/login" replace />;
+                                }
+                                // Should never reach here (INVALID/NETWORK_ERROR handled above)
+                                return <InvalidPortalPage />;
                             })()} />
 
-                            {/* Staff Login URL: Redirects to Supreme Admin on base domain, or renders staff login on hospital subdomains */}
+                            {/* Staff Login — only on hospital portals (or dev) */}
                             <Route path="/login" element={(() => {
-                                const sub = getSubdomain();
-                                if (!sub || sub === 'admin' || RESERVED_SUBDOMAINS.includes(sub)) {
+                                if (isAdminPortal(portalType)) {
                                     return <Navigate to="/supremeadmin" replace />;
                                 }
-                                return <Login />;
+                                if (isHospitalPortal(portalType)) {
+                                    return <Login />;
+                                }
+                                return <InvalidPortalPage />;
                             })()} />
                             
-                            {/* Supreme Admin Isolated Login Route */}
-                            <Route path="/supremeadmin" element={<CentralAdminLogin />} />
-                            <Route path="/supremeadmin/login" element={<CentralAdminLogin />} />
+                            {/* Supreme Admin Isolated Login Route — only on admin portal (or dev) */}
+                            <Route path="/supremeadmin" element={
+                                isAdminPortal(portalType) || isHospitalPortal(portalType)
+                                    ? <CentralAdminLogin />
+                                    : <InvalidPortalPage />
+                            } />
+                            <Route path="/supremeadmin/login" element={
+                                isAdminPortal(portalType) || isHospitalPortal(portalType)
+                                    ? <CentralAdminLogin />
+                                    : <InvalidPortalPage />
+                            } />
                             
                             {/* Legacy/Signups routing */}
                             <Route path="/signup" element={<Signup />} />
                             <Route path="/supremeadmin/signup" element={<CentralAdminSignup />} />
                             <Route path="/admin/signup" element={<AdminSignup />} />
                             
-                            {/* Patient Portal UI */}
-                            <Route path="/patient" element={<PatientPortalLogin />} />
+                            {/* Patient Portal UI — valid on hospital portals */}
+                            <Route path="/patient" element={
+                                isHospitalPortal(portalType) || isAdminPortal(portalType)
+                                    ? <PatientPortalLogin />
+                                    : <InvalidPortalPage />
+                            } />
                             <Route path="/patient/signup" element={<PatientSignup />} />
                             <Route path="/patient/forgot-password" element={<PatientForgotPassword />} />
                             <Route path="/patient/reset-password" element={<PatientResetPassword />} />
                             <Route path="/patient/dashboard" element={<PatientProtectedRoute><PatientDashboard /></PatientProtectedRoute>} />
                             <Route path="/patient/book-appointment" element={<PatientProtectedRoute><ReceptionDashboard isPatientPortal={true} /></PatientProtectedRoute>} />
                             
-                            {/* Wildcard: non-hospital subdomains go to Supreme Admin, hospital subdomains to staff Login */}
+                            {/* Wildcard: hostname-aware fallback */}
                             <Route path="*" element={(() => {
-                                const sub = getSubdomain();
-                                if (!sub || sub === 'admin' || RESERVED_SUBDOMAINS.includes(sub)) {
+                                if (isAdminPortal(portalType)) {
                                     return <Navigate to="/supremeadmin" replace />;
                                 }
-                                return <Navigate to="/login" replace />;
+                                if (isHospitalPortal(portalType)) {
+                                    return <Navigate to="/login" replace />;
+                                }
+                                return <InvalidPortalPage />;
                             })()} />
                         </Routes>
                     )}
