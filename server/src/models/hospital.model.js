@@ -75,7 +75,16 @@ const hospitalSchema = new mongoose.Schema({
         lastBuiltAt: { type: Date, default: null },
         buildError: { type: String, default: '' },
         apkUrl: { type: String, default: '' },
-        aabUrl: { type: String, default: '' }
+        aabUrl: { type: String, default: '' },
+
+        // React Native White-Label Build Pipeline
+        rnBuildStatus: { type: String, enum: ['NOT_BUILT', 'BUILDING', 'PROCESSING', 'COMPLETED', 'FAILED'], default: 'NOT_BUILT' },
+        rnBuildId: { type: String, default: '' },
+        rnBuildStartedAt: { type: Date, default: null },
+        rnLastBuiltAt: { type: Date, default: null },
+        rnBuildError: { type: String, default: '' },
+        rnApkUrl: { type: String, default: '' },
+        rnAabUrl: { type: String, default: '' }
     },
     // Hospital-managed UPI configurations
     upiIds: [{ label: { type: String, required: true }, upiId: { type: String, required: true } }],

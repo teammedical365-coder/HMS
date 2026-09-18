@@ -2,12 +2,46 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const axios = require('axios');
 const multer = require('multer');
 
 const Hospital = require('../models/hospital.model');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { triggerMobileBuild } = require('../controllers/mobileBuild.controller');
+
+/**
+ * Validate webhook secret using timing-safe comparison.
+ * In production, GITHUB_WEBHOOK_SECRET must be set in environment;
+ * requests are rejected if the secret is missing or mismatched.
+ */
+function isValidWebhookSecret(providedSecret) {
+    if (!providedSecret || typeof providedSecret !== 'string') {
+        return false;
+    }
+
+    const configuredSecret = process.env.GITHUB_WEBHOOK_SECRET;
+
+    // In production, require GITHUB_WEBHOOK_SECRET to be configured in environment
+    let expectedSecret = configuredSecret;
+    if (!expectedSecret) {
+        if (process.env.NODE_ENV === 'production') {
+            console.error('[Webhook Security] GITHUB_WEBHOOK_SECRET is not configured in server environment. Webhook rejected.');
+            return false;
+        }
+        // In local development / test environments only:
+        expectedSecret = 'dev-secret-123';
+    }
+
+    const providedBuffer = Buffer.from(providedSecret);
+    const expectedBuffer = Buffer.from(expectedSecret);
+
+    if (providedBuffer.length !== expectedBuffer.length) {
+        return false;
+    }
+
+    return crypto.timingSafeEqual(providedBuffer, expectedBuffer);
+}
 
 // Configure multer for APK uploads
 const apkStorage = multer.diskStorage({
@@ -23,7 +57,8 @@ const apkStorage = multer.diskStorage({
             const tenantId = req.body.tenantId;
             const hospital = await Hospital.findById(tenantId);
             const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
-            cb(null, `${safeName}-release.apk`);
+            const isRn = req.originalUrl?.includes('github-rn') || req.path?.includes('github-rn');
+            cb(null, isRn ? `${safeName}-rn-release.apk` : `${safeName}-release.apk`);
         } catch (err) {
             cb(err);
         }
@@ -69,6 +104,15 @@ router.post('/:id/build-app', verifyCentralAdmin, async (req, res) => {
             hospital.appConfig = {};
         }
 
+        // Duplicate build protection: prevent concurrent builds
+        if (hospital.appConfig.buildStatus === 'BUILDING') {
+            return res.status(409).json({
+                success: false,
+                message: 'A build is already in progress.',
+                buildStatus: 'BUILDING'
+            });
+        }
+
         // 1. Rigorous Manual Validation & Sanitization
         // Remove special characters that could break scripts or paths
         const safeAppName = (hospital.brandingSchema?.appName || hospital.branding?.appName || hospital.name || 'City Hospital')
@@ -88,24 +132,29 @@ router.post('/:id/build-app', verifyCentralAdmin, async (req, res) => {
         // 2. Setup GitHub API Call & Configuration
         const owner = process.env.GITHUB_OWNER || 'teammedical365-coder';
         const repo = process.env.GITHUB_REPO || 'HMS';
-        const workflowId = 'white-label-build.yml'; // Must match exactly the filename in .github/workflows/
-        const githubToken = process.env.GITHUB_PAT;
-        const refBranch = 'main';
+        const workflowId = process.env.GITHUB_WORKFLOW || 'white-label-build.yml'; // Must match exactly the filename in .github/workflows/
+        const githubToken = process.env.GITHUB_PAT || process.env.GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GIT_PAT;
+        const refBranch = process.env.GITHUB_REF || 'main';
 
         if (!githubToken) {
-             console.warn('[Build System] GITHUB_PAT is not set. Defaulting to mock local build mode.');
-             hospital.isWhitelabeled = true;
-             hospital.appConfig.buildStatus = 'COMPLETED';
-             hospital.appConfig.lastBuiltAt = new Date();
-             await hospital.save();
-             return res.json({ success: true, message: 'Mock build completed', buildStatus: 'COMPLETED' });
+            const errorMsg = 'GitHub Token is not configured. Please set GITHUB_PAT or GITHUB_TOKEN in server environment to enable automated GitHub builds.';
+            console.error(`[Build System Error] ${errorMsg}`);
+            hospital.appConfig.buildStatus = 'FAILED';
+            hospital.appConfig.buildError = errorMsg;
+            await hospital.save();
+            return res.status(500).json({
+                success: false,
+                message: errorMsg,
+                buildStatus: 'FAILED'
+            });
         }
 
-        // 3. Trigger GitHub Action
+        // 3. Trigger GitHub Action via workflow_dispatch
         const githubUrl = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`;
         
+        let dispatchRes;
         try {
-            await axios.post(githubUrl, {
+            dispatchRes = await axios.post(githubUrl, {
                 ref: refBranch,
                 inputs: {
                     tenantId: id.toString(),
@@ -117,40 +166,69 @@ router.post('/:id/build-app', verifyCentralAdmin, async (req, res) => {
             }, {
                 headers: {
                     'Accept': 'application/vnd.github+json',
-                    'Authorization': `Bearer ${githubToken}`,
+                    'Authorization': `Bearer ${githubToken.trim()}`,
                     'X-GitHub-Api-Version': '2022-11-28'
-                }
+                },
+                timeout: 15000
             });
         } catch (githubErr) {
             // 4. Comprehensive Error Diagnostics & Security
             const statusCode = githubErr.response?.status;
-            
-            if (statusCode === 404) {
-                console.error(`[GitHub Actions Error 404] Failed to trigger workflow. Diagnostic Checklist:
-1) Verify Repository Path: Owner='${owner}', Repo='${repo}'
-2) Verify Workflow File: '${workflowId}' MUST exist on the default branch ('${refBranch}')
-3) Verify Token Scope: The GITHUB_PAT must have 'repo' and 'workflow' permissions.
-Note: GitHub returns 404 instead of 401/403 for missing scopes to prevent repository enumeration.`);
-                throw new Error("Build dispatch failed: Repository or workflow configuration issue (404).");
+            const errorData = githubErr.response?.data;
+            const errorDetails = errorData?.message || githubErr.message;
+            console.error(`[GitHub Actions Dispatch Error ${statusCode || 'Network'}]`, errorDetails);
+
+            let friendlyMessage;
+            if (statusCode === 401) {
+                friendlyMessage = 'GitHub API Error (401): Bad credentials. Check GITHUB_PAT / GITHUB_TOKEN validity.';
+            } else if (statusCode === 403) {
+                friendlyMessage = 'GitHub API Error (403): Forbidden. Token lacks "repo" or "workflow" permissions.';
+            } else if (statusCode === 404) {
+                friendlyMessage = `GitHub API Error (404): Workflow '${workflowId}' not found in '${owner}/${repo}' on branch '${refBranch}'. Verify repository path and workflow filename.`;
+            } else if (statusCode === 422) {
+                friendlyMessage = `GitHub API Error (422): Unprocessable Entity. ${errorDetails}`;
+            } else {
+                friendlyMessage = `GitHub API Error (${statusCode || 'Network'}): ${errorDetails}`;
             }
 
-            // Log generic error but NEVER log the raw config (which contains the Bearer token)
-            console.error(`[GitHub Actions Error ${statusCode || 'Unknown'}]`, githubErr.response?.data?.message || githubErr.message);
-            throw new Error(`Build dispatch failed: ${githubErr.response?.data?.message || 'Internal pipeline error'}`);
+            hospital.appConfig.buildStatus = 'FAILED';
+            hospital.appConfig.buildError = friendlyMessage;
+            await hospital.save();
+
+            return res.status(statusCode || 500).json({
+                success: false,
+                message: friendlyMessage,
+                buildStatus: 'FAILED'
+            });
         }
 
-        // 5. Update Database on Success
-        hospital.isWhitelabeled = true;
-        hospital.appConfig.buildStatus = 'BUILDING';
-        hospital.appConfig.buildStartedAt = new Date();
-        hospital.appConfig.buildError = '';
-        await hospital.save();
+        // 5. Update Database on Success (GitHub returns 204 No Content for successful workflow_dispatch)
+        if (dispatchRes.status === 204 || dispatchRes.status === 200 || dispatchRes.status === 201) {
+            console.log(`[Build System] Successfully dispatched GitHub workflow '${workflowId}' for tenant ${id} (HTTP ${dispatchRes.status}).`);
+            hospital.isWhitelabeled = true;
+            hospital.appConfig.buildStatus = 'BUILDING';
+            hospital.appConfig.buildStartedAt = new Date();
+            hospital.appConfig.buildError = '';
+            await hospital.save();
 
-        return res.json({ 
-            success: true, 
-            message: 'App build started successfully!',
-            buildStatus: 'BUILDING'
-        });
+            return res.json({ 
+                success: true, 
+                message: `App build started successfully on GitHub Actions (HTTP ${dispatchRes.status})`,
+                buildStatus: 'BUILDING'
+            });
+        } else {
+            const unexpectedMsg = `Unexpected response from GitHub: HTTP ${dispatchRes.status}`;
+            console.warn(`[Build System] ${unexpectedMsg}`);
+            hospital.appConfig.buildStatus = 'FAILED';
+            hospital.appConfig.buildError = unexpectedMsg;
+            await hospital.save();
+
+            return res.status(500).json({
+                success: false,
+                message: unexpectedMsg,
+                buildStatus: 'FAILED'
+            });
+        }
 
     } catch (err) {
         // Fallback error handler
@@ -160,6 +238,7 @@ Note: GitHub returns 404 instead of 401/403 for missing scopes to prevent reposi
         try {
             const h = await Hospital.findById(req.params.id);
             if (h) {
+                if (!h.appConfig) h.appConfig = {};
                 h.appConfig.buildStatus = 'FAILED';
                 h.appConfig.buildError = errMessage;
                 await h.save();
@@ -201,9 +280,7 @@ router.post('/:id/reset-build', verifyCentralAdmin, async (req, res) => {
 router.post('/webhook/github', async (req, res) => {
     try {
         const { secret } = req.query;
-        // Verify webhook secret
-        const expectedSecret = process.env.GITHUB_WEBHOOK_SECRET || 'dev-secret-123';
-        if (secret !== expectedSecret) {
+        if (!isValidWebhookSecret(secret)) {
             return res.status(403).json({ success: false, message: 'Unauthorized webhook request' });
         }
 
@@ -221,8 +298,6 @@ router.post('/webhook/github', async (req, res) => {
         if (status === 'COMPLETED') {
             hospital.appConfig.buildStatus = 'COMPLETED';
             hospital.appConfig.lastBuiltAt = new Date();
-            // Assume the APK is uploaded to a predictable URL or passed from GitHub
-            // Alternatively, they are hosted on GitHub releases.
             hospital.appConfig.apkUrl = apkUrl || hospital.appConfig.apkUrl;
             hospital.appConfig.aabUrl = aabUrl || hospital.appConfig.aabUrl;
             hospital.appConfig.buildError = '';
@@ -247,8 +322,7 @@ router.post('/webhook/github', async (req, res) => {
 router.post('/webhook/github/upload', uploadApk.single('apk'), async (req, res) => {
     try {
         const { secret } = req.query;
-        const expectedSecret = process.env.GITHUB_WEBHOOK_SECRET || 'dev-secret-123';
-        if (secret !== expectedSecret) {
+        if (!isValidWebhookSecret(secret)) {
             return res.status(403).json({ success: false, message: 'Unauthorized webhook request' });
         }
 
@@ -297,14 +371,16 @@ router.get('/:id/build-status', verifyCentralAdmin, async (req, res) => {
             aabFile = 'cityhospital-release.aab';
         }
 
+        const buildStatus = hospital.appConfig?.buildStatus || 'NOT_BUILT';
+
         res.json({
             success: true,
-            buildStatus: hospital.appConfig?.buildStatus || 'COMPLETED',
+            buildStatus: buildStatus,
             buildStartedAt: hospital.appConfig?.buildStartedAt,
             lastBuiltAt: hospital.appConfig?.lastBuiltAt,
-            buildError: '',
-            apkUrl: hospital.appConfig?.apkUrl || `/downloads/apks/${apkFile}`,
-            aabUrl: hospital.appConfig?.aabUrl || `/downloads/aabs/${aabFile}`
+            buildError: hospital.appConfig?.buildError || '',
+            apkUrl: buildStatus === 'COMPLETED' ? (hospital.appConfig?.apkUrl || `/downloads/apks/${apkFile}`) : '',
+            aabUrl: buildStatus === 'COMPLETED' ? (hospital.appConfig?.aabUrl || `/downloads/aabs/${aabFile}`) : ''
         });
     } catch (err) {
         console.error('Build status error:', err);
@@ -362,23 +438,228 @@ router.get('/:id/download/aab', async (req, res) => {
     }
 });
 
-module.exports = router;/**
+/**
+ * GET /api/superadmin/hospitals/:id/download/rn-apk
+ */
+router.get('/:id/download/rn-apk', async (req, res) => {
+    try {
+        const hospital = await Hospital.findById(req.params.id);
+        const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
+        
+        let filePath = path.join(__dirname, '../../public/downloads/apks', `${safeName}-rn-release.apk`);
+        if (!fs.existsSync(filePath)) {
+            filePath = path.join(__dirname, '../../public/downloads/apks/cityhospital-rn-release.apk');
+        }
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: "RN APK file not found on server." });
+        }
+
+        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+        res.setHeader('Content-Disposition', `attachment; filename="${hospital?.slug || safeName}-rn-release.apk"`);
+        return res.sendFile(path.resolve(filePath));
+    } catch (err) {
+        console.error('Download RN APK error:', err);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+/**
+ * GET /api/superadmin/hospitals/:id/download/rn-aab
+ */
+router.get('/:id/download/rn-aab', async (req, res) => {
+    try {
+        const hospital = await Hospital.findById(req.params.id);
+        const safeName = hospital?.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
+        
+        let filePath = path.join(__dirname, '../../public/downloads/aabs', `${safeName}-rn-release.aab`);
+        if (!fs.existsSync(filePath)) {
+            filePath = path.join(__dirname, '../../public/downloads/aabs/cityhospital-rn-release.aab');
+        }
+
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ message: "RN AAB binary not found on server." });
+        }
+        
+        res.download(filePath);
+    } catch (err) {
+        console.error('Download RN AAB error:', err);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
+/**
+ * Helper: Safely delete temporary uploaded files
+ */
+function safeDeleteFiles(files) {
+    if (!Array.isArray(files)) return;
+    for (const f of files) {
+        try {
+            if (f && f.path && fs.existsSync(f.path)) {
+                fs.unlinkSync(f.path);
+            }
+        } catch (e) {
+            console.error('[Build System] Error removing temp file:', e.message);
+        }
+    }
+}
+
+/**
+ * Helper: Validate that a file is a valid ZIP archive (APKs and AABs are standard ZIP files)
+ */
+function isValidZipArchive(filePath) {
+    try {
+        if (!fs.existsSync(filePath)) return false;
+        const fd = fs.openSync(filePath, 'r');
+        const buffer = Buffer.alloc(4);
+        const bytesRead = fs.readSync(fd, buffer, 0, 4, 0);
+        fs.closeSync(fd);
+        if (bytesRead < 4) return false;
+        // Standard ZIP local file header begins with 0x50, 0x4B (ASCII 'PK')
+        return buffer[0] === 0x50 && buffer[1] === 0x4B &&
+            (buffer[2] === 0x03 || buffer[2] === 0x05 || buffer[2] === 0x07) &&
+            (buffer[3] === 0x04 || buffer[3] === 0x06 || buffer[3] === 0x08);
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
+ * Middleware: Verify RN Webhook Secret before any upload/multer processing.
+ * Strictly requires GITHUB_WEBHOOK_SECRET in production (no dev-secret fallback).
+ * Uses timing-safe comparison.
+ */
+function verifyRNWebhookSecret(req, res, next) {
+    const providedSecret = req.query.secret;
+    if (!providedSecret || typeof providedSecret !== 'string') {
+        return res.status(403).json({ success: false, message: 'Unauthorized webhook request' });
+    }
+
+    const expectedSecret = process.env.GITHUB_WEBHOOK_SECRET;
+    if (!expectedSecret) {
+        console.error('[RN Webhook Security] GITHUB_WEBHOOK_SECRET is not configured on server. Webhook rejected.');
+        return res.status(403).json({ success: false, message: 'Unauthorized: Webhook secret not configured on server' });
+    }
+
+    const providedBuffer = Buffer.from(providedSecret);
+    const expectedBuffer = Buffer.from(expectedSecret);
+
+    if (providedBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(providedBuffer, expectedBuffer)) {
+        return res.status(403).json({ success: false, message: 'Unauthorized webhook request' });
+    }
+
+    next();
+}
+
+// Temporary storage directory for incoming RN build uploads (independent of multipart body ordering)
+const rnTempDir = path.join(__dirname, '../../public/downloads/temp');
+if (!fs.existsSync(rnTempDir)) {
+    fs.mkdirSync(rnTempDir, { recursive: true });
+}
+
+const rnBuildStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, rnTempDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+        const ext = file.fieldname === 'aab' ? '.aab' : '.apk';
+        cb(null, `rn-build-${uniqueSuffix}${ext}`);
+    }
+});
+
+const ALLOWED_APK_MIMES = [
+    'application/vnd.android.package-archive',
+    'application/octet-stream',
+    'application/zip',
+    'application/x-zip-compressed'
+];
+
+const ALLOWED_AAB_MIMES = [
+    'application/octet-stream',
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/x-authorware-bin'
+];
+
+const uploadRnBuild = multer({
+    storage: rnBuildStorage,
+    limits: {
+        fileSize: 250 * 1024 * 1024, // 250 MB limit per file
+        files: 2
+    },
+    fileFilter: (req, file, cb) => {
+        if (file.fieldname !== 'apk' && file.fieldname !== 'aab') {
+            return cb(new Error(`Unexpected upload field '${file.fieldname}'. Only 'apk' and 'aab' are accepted.`));
+        }
+        const ext = path.extname(file.originalname || '').toLowerCase();
+        if (file.fieldname === 'apk') {
+            if (ext !== '.apk') {
+                return cb(new Error(`Field 'apk' requires a file with .apk extension (received '${ext}')`));
+            }
+            if (!ALLOWED_APK_MIMES.includes(file.mimetype)) {
+                return cb(new Error(`Invalid MIME type '${file.mimetype}' for APK file`));
+            }
+        } else if (file.fieldname === 'aab') {
+            if (ext !== '.aab') {
+                return cb(new Error(`Field 'aab' requires a file with .aab extension (received '${ext}')`));
+            }
+            if (!ALLOWED_AAB_MIMES.includes(file.mimetype)) {
+                return cb(new Error(`Invalid MIME type '${file.mimetype}' for AAB file`));
+            }
+        }
+        cb(null, true);
+    }
+});
+
+/**
  * POST /api/superadmin/hospitals/:id/build-rn-app
  * Triggers the GitHub Actions white-label APK generation pipeline for React Native.
  */
 router.post('/:id/build-rn-app', verifyCentralAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const hospital = await Hospital.findById(id);
+    const { id } = req.params;
 
-        if (!hospital) {
+    // Unique rnBuildId for build correlation & idempotency
+    const rnBuildId = `rn-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+
+    // Atomic claim logic using findOneAndUpdate to prevent duplicate dispatch races
+    const hospital = await Hospital.findOneAndUpdate(
+        {
+            _id: id,
+            'appConfig.rnBuildStatus': { $nin: ['BUILDING', 'PROCESSING'] }
+        },
+        {
+            $set: {
+                isWhitelabeled: true,
+                'appConfig.rnBuildStatus': 'BUILDING',
+                'appConfig.rnBuildStartedAt': new Date(),
+                'appConfig.rnBuildId': rnBuildId,
+                'appConfig.rnBuildError': ''
+            }
+        },
+        { new: true }
+    );
+
+    if (!hospital) {
+        const existing = await Hospital.findById(id);
+        if (!existing) {
             return res.status(404).json({ success: false, message: 'Hospital not found' });
         }
+        return res.status(409).json({
+            success: false,
+            message: 'A mobile build is already in progress.',
+            buildStatus: 'BUILDING'
+        });
+    }
 
-        if (!hospital.appConfig) {
-            hospital.appConfig = {};
-        }
+    // Clear logs: DB claimed rnBuildId
+    console.log('[RN Build DB Claimed]', {
+        tenantId: id.toString(),
+        claimedRnBuildId: hospital.appConfig?.rnBuildId,
+        activeDbStatus: hospital.appConfig?.rnBuildStatus
+    });
 
+    try {
         const safeAppName = (hospital.brandingSchema?.appName || hospital.branding?.appName || hospital.name || 'City Hospital')
             .replace(/[^a-zA-Z0-9\s]/g, '')
             .trim();
@@ -392,71 +673,149 @@ router.post('/:id/build-rn-app', verifyCentralAdmin, async (req, res) => {
         const logoUrl = hospital.branding?.logoUrl || 'default';
         const themeColor = hospital.branding?.primaryColor || '#14b8a6';
 
-        const owner = process.env.GITHUB_OWNER;
-        const repo = process.env.GITHUB_REPO;
-        const workflowId = 'react-native-build.yml'; 
-        const githubToken = process.env.GIT_PAT || process.env.GITHUB_PAT;
-        const refBranch = 'main';
+        const owner = process.env.GITHUB_RN_OWNER || process.env.GITHUB_OWNER || 'teammedical365-coder';
+        const repo = process.env.GITHUB_RN_REPO;
+        const workflowId = process.env.GITHUB_RN_WORKFLOW || 'react-native-build.yml'; 
+        const githubToken = process.env.GITHUB_PAT || process.env.GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GIT_PAT;
+        const refBranch = process.env.GITHUB_REF || 'main';
+
+        if (!repo) {
+            const errorMsg = 'GITHUB_RN_REPO is not configured';
+            console.error(`[RN Build System Error] ${errorMsg}`);
+            await Hospital.findByIdAndUpdate(id, {
+                $set: {
+                    'appConfig.rnBuildStatus': 'FAILED',
+                    'appConfig.rnBuildError': errorMsg
+                }
+            });
+            return res.status(500).json({
+                success: false,
+                message: errorMsg,
+                buildStatus: 'FAILED'
+            });
+        }
 
         if (!githubToken) {
-             console.warn('[Build System] GITHUB_PAT is not set. Defaulting to mock local build mode.');
-             hospital.isWhitelabeled = true;
-             hospital.appConfig.rnBuildStatus = 'COMPLETED';
-             hospital.appConfig.rnLastBuiltAt = new Date();
-             await hospital.save();
-             return res.json({ success: true, message: 'Mock RN build completed', buildStatus: 'COMPLETED' });
+            const errorMsg = 'GitHub Token is not configured. Please set GITHUB_PAT or GITHUB_TOKEN in server environment to enable automated GitHub builds.';
+            console.error(`[RN Build System Error] ${errorMsg}`);
+            await Hospital.findByIdAndUpdate(id, {
+                $set: {
+                    'appConfig.rnBuildStatus': 'FAILED',
+                    'appConfig.rnBuildError': errorMsg
+                }
+            });
+            return res.status(500).json({
+                success: false,
+                message: errorMsg,
+                buildStatus: 'FAILED'
+            });
         }
+
+        // Safe diagnostics before dispatch: ONLY log owner, repo, workflowId, tenantId, rnBuildId
+        console.log('[RN Build Dispatching]', {
+            owner,
+            repo,
+            workflowId,
+            tenantId: id.toString(),
+            dispatchedRnBuildId: rnBuildId
+        });
 
         const githubUrl = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`;
         
+        let dispatchRes;
         try {
-            await axios.post(githubUrl, {
+            dispatchRes = await axios.post(githubUrl, {
                 ref: refBranch,
                 inputs: {
                     tenantId: id.toString(),
                     hospitalName: safeAppName,
                     applicationId: safeApplicationId,
                     logoUrl: logoUrl,
-                    themeColor: themeColor
+                    themeColor: themeColor,
+                    rnBuildId: rnBuildId
                 }
             }, {
                 headers: {
                     'Accept': 'application/vnd.github+json',
-                    'Authorization': `Bearer ${githubToken}`,
+                    'Authorization': `Bearer ${githubToken.trim()}`,
                     'X-GitHub-Api-Version': '2022-11-28'
-                }
+                },
+                timeout: 15000
             });
         } catch (githubErr) {
-            console.error('[GitHub API Error]', githubErr.response?.data || githubErr.message);
-            return res.status(500).json({ success: false, message: githubErr.message });
+            const statusCode = githubErr.response?.status;
+            const errorData = githubErr.response?.data;
+            const errorDetails = errorData?.message || githubErr.message;
+            console.error(`[GitHub Actions RN Dispatch Error ${statusCode || 'Network'}]`, errorDetails);
+
+            let friendlyMessage;
+            if (statusCode === 401) {
+                friendlyMessage = 'GitHub API Error (401): Bad credentials. Check GITHUB_PAT / GITHUB_TOKEN validity.';
+            } else if (statusCode === 403) {
+                friendlyMessage = 'GitHub API Error (403): Forbidden. Token lacks "repo" or "workflow" permissions.';
+            } else if (statusCode === 404) {
+                friendlyMessage = `GitHub API Error (404): Workflow '${workflowId}' not found in '${owner}/${repo}' on branch '${refBranch}'. Verify repository path and workflow filename.`;
+            } else if (statusCode === 422) {
+                friendlyMessage = `GitHub API Error (422): Unprocessable Entity. ${errorDetails}`;
+            } else {
+                friendlyMessage = `GitHub API Error (${statusCode || 'Network'}): ${errorDetails}`;
+            }
+
+            await Hospital.findByIdAndUpdate(id, {
+                $set: {
+                    'appConfig.rnBuildStatus': 'FAILED',
+                    'appConfig.rnBuildError': friendlyMessage
+                }
+            });
+
+            return res.status(statusCode || 500).json({
+                success: false,
+                message: friendlyMessage,
+                buildStatus: 'FAILED'
+            });
         }
 
-        hospital.isWhitelabeled = true;
-        hospital.appConfig.rnBuildStatus = 'BUILDING';
-        hospital.appConfig.rnBuildStartedAt = new Date();
-        hospital.appConfig.rnBuildError = '';
-        await hospital.save();
+        if (dispatchRes.status === 204 || dispatchRes.status === 200 || dispatchRes.status === 201) {
+            console.log(`[Build System] Successfully dispatched GitHub RN workflow '${workflowId}' for tenant ${id} (HTTP ${dispatchRes.status}).`);
+            return res.json({ 
+                success: true, 
+                message: `RN App build started successfully on GitHub Actions (HTTP ${dispatchRes.status})`,
+                buildStatus: 'BUILDING',
+                rnBuildId: rnBuildId
+            });
+        } else {
+            const unexpectedMsg = `Unexpected response from GitHub: HTTP ${dispatchRes.status}`;
+            console.warn(`[Build System] ${unexpectedMsg}`);
+            await Hospital.findByIdAndUpdate(id, {
+                $set: {
+                    'appConfig.rnBuildStatus': 'FAILED',
+                    'appConfig.rnBuildError': unexpectedMsg
+                }
+            });
 
-        return res.json({ 
-            success: true, 
-            message: 'RN App build started successfully!',
-            buildStatus: 'BUILDING'
-        });
+            return res.status(500).json({
+                success: false,
+                message: unexpectedMsg,
+                buildStatus: 'FAILED'
+            });
+        }
 
     } catch (err) {
         const errMessage = err.message || 'Failed to trigger RN build pipeline';
         console.error('[RN Build Orchestrator Error]', errMessage);
         
         try {
-            const h = await Hospital.findById(req.params.id);
-            if (h) {
-                h.appConfig.rnBuildStatus = 'FAILED';
-                h.appConfig.rnBuildError = errMessage;
-                await h.save();
-            }
-        } catch(e) {}
+            await Hospital.findByIdAndUpdate(id, {
+                $set: {
+                    'appConfig.rnBuildStatus': 'FAILED',
+                    'appConfig.rnBuildError': errMessage
+                }
+            });
+        } catch(e) {
+            console.error('Failed to update hospital status after error:', e.message);
+        }
 
-        res.status(500).json({ success: false, message: errMessage });
+        res.status(500).json({ success: false, message: errMessage, buildStatus: 'FAILED' });
     }
 });
 
@@ -470,6 +829,8 @@ router.post('/:id/reset-rn-build', verifyCentralAdmin, async (req, res) => {
         
         if (hospital.appConfig) {
             hospital.appConfig.rnBuildStatus = 'NOT_BUILT';
+            hospital.appConfig.rnBuildId = '';
+            hospital.appConfig.rnBuildError = '';
             await hospital.save();
         }
         return res.json({ success: true, message: 'RN Build status reset successfully' });
@@ -487,8 +848,8 @@ router.get('/:id/build-rn-status', verifyCentralAdmin, async (req, res) => {
         if (!hospital) return res.status(404).json({ success: false, message: 'Not found' });
         
         const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
-        let apkFile = "${safeName}-rn-release.apk";
-        let aabFile = "${safeName}-rn-release.aab";
+        let apkFile = `${safeName}-rn-release.apk`;
+        let aabFile = `${safeName}-rn-release.aab`;
         let targetApkPath = path.join(__dirname, '../../public/downloads/apks', apkFile);
 
         if (!fs.existsSync(targetApkPath)) {
@@ -496,35 +857,35 @@ router.get('/:id/build-rn-status', verifyCentralAdmin, async (req, res) => {
             aabFile = 'cityhospital-rn-release.aab';
         }
 
+        const rnBuildStatus = hospital.appConfig?.rnBuildStatus || 'NOT_BUILT';
+
         res.json({
             success: true,
-            buildStatus: hospital.appConfig?.rnBuildStatus || 'COMPLETED',
+            buildStatus: rnBuildStatus,
+            rnBuildId: hospital.appConfig?.rnBuildId || '',
             buildStartedAt: hospital.appConfig?.rnBuildStartedAt,
             lastBuiltAt: hospital.appConfig?.rnLastBuiltAt,
             buildError: hospital.appConfig?.rnBuildError || '',
-            apkUrl: hospital.appConfig?.rnApkUrl || "/downloads/apks/${apkFile}",
-            aabUrl: hospital.appConfig?.rnAabUrl || "/downloads/aabs/${aabFile}"
+            apkUrl: rnBuildStatus === 'COMPLETED' ? (hospital.appConfig?.rnApkUrl || `/downloads/apks/${apkFile}`) : '',
+            aabUrl: rnBuildStatus === 'COMPLETED' ? (hospital.appConfig?.rnAabUrl || `/downloads/aabs/${aabFile}`) : ''
         });
     } catch (err) {
+        console.error('RN build status error:', err);
         res.status(500).json({ success: false, message: 'Error fetching RN build status' });
     }
 });
+
 /**
  * POST /api/superadmin/hospitals/webhook/github-rn
  * Webhook called by GitHub Actions when a React Native build finishes or fails.
+ * Authenticates before processing and protects COMPLETED builds from late failure callbacks.
  */
-router.post('/webhook/github-rn', async (req, res) => {
+router.post('/webhook/github-rn', verifyRNWebhookSecret, async (req, res) => {
     try {
-        const { secret } = req.query;
-        const expectedSecret = process.env.GITHUB_WEBHOOK_SECRET || 'dev-secret-123';
-        if (secret !== expectedSecret) {
-            return res.status(403).json({ success: false, message: 'Unauthorized webhook request' });
-        }
+        const { tenantId, rnBuildId, status, error } = req.body;
 
-        const { tenantId, status, apkUrl, aabUrl, error } = req.body;
-
-        if (!tenantId || !status) {
-            return res.status(400).json({ success: false, message: 'Missing required payload fields' });
+        if (!tenantId || !status || !rnBuildId) {
+            return res.status(400).json({ success: false, message: 'Missing required payload fields: tenantId, rnBuildId, and status' });
         }
 
         const hospital = await Hospital.findById(tenantId);
@@ -532,15 +893,103 @@ router.post('/webhook/github-rn', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Tenant not found' });
         }
 
+        if (!hospital.appConfig) {
+            hospital.appConfig = {};
+        }
+
+        const currentStatus = hospital.appConfig.rnBuildStatus;
+        const activeBuildId = hospital.appConfig.rnBuildId;
+
+        // Clear logs: webhook received rnBuildId and active DB rnBuildId
+        console.log('[RN Webhook Received]', {
+            tenantId,
+            receivedRnBuildId: rnBuildId,
+            activeDbRnBuildId: activeBuildId || 'NONE',
+            activeDbStatus: currentStatus || 'NONE',
+            status
+        });
+
+        // Build correlation is mandatory: every callback must match the active build exactly.
+        if (!activeBuildId || rnBuildId !== activeBuildId) {
+            console.warn(`[RN Webhook] Rejecting callback for rnBuildId '${rnBuildId}' (active build is '${activeBuildId || 'NONE'}').`);
+            return res.status(409).json({
+                success: false,
+                message: 'Callback rejected: rnBuildId does not match the active RN build'
+            });
+        }
+
         if (status === 'COMPLETED') {
-            hospital.appConfig.rnBuildStatus = 'COMPLETED';
-            hospital.appConfig.rnLastBuiltAt = new Date();
-            hospital.appConfig.rnApkUrl = apkUrl || hospital.appConfig.rnApkUrl;
-            hospital.appConfig.rnAabUrl = aabUrl || hospital.appConfig.rnAabUrl;
-            hospital.appConfig.rnBuildError = '';
+            // Idempotent: return success if already COMPLETED without rewriting
+            if (currentStatus === 'COMPLETED') {
+                return res.json({ success: true, message: 'RN Build is already COMPLETED (idempotent callback)' });
+            }
+            // Phase 2 requires previous phase upload to have succeeded (PROCESSING status)
+            if (currentStatus !== 'PROCESSING') {
+                return res.status(409).json({
+                    success: false,
+                    message: `Invalid build state transition: expected PROCESSING, current is '${currentStatus || 'NOT_BUILT'}'`
+                });
+            }
+            const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
+            const completedHospital = await Hospital.findOneAndUpdate(
+                {
+                    _id: tenantId,
+                    'appConfig.rnBuildStatus': 'PROCESSING',
+                    'appConfig.rnBuildId': rnBuildId
+                },
+                {
+                    $set: {
+                        'appConfig.rnBuildStatus': 'COMPLETED',
+                        'appConfig.rnLastBuiltAt': new Date(),
+                        'appConfig.rnBuildError': '',
+                        'appConfig.rnApkUrl': hospital.appConfig?.rnApkUrl || `/downloads/apks/${safeName}-rn-release.apk`,
+                        'appConfig.rnAabUrl': hospital.appConfig?.rnAabUrl || `/downloads/aabs/${safeName}-rn-release.aab`
+                    }
+                },
+                { new: true }
+            );
+
+            if (!completedHospital) {
+                const currentDoc = await Hospital.findById(tenantId);
+                if (currentDoc?.appConfig?.rnBuildStatus === 'COMPLETED' && currentDoc?.appConfig?.rnBuildId === rnBuildId) {
+                    return res.json({ success: true, message: 'RN Build is already COMPLETED (idempotent callback)' });
+                }
+                return res.status(409).json({
+                    success: false,
+                    message: `Invalid build state transition: expected PROCESSING, current is '${currentDoc?.appConfig?.rnBuildStatus || 'NOT_BUILT'}'`
+                });
+            }
+
+            return res.json({
+                success: true,
+                message: 'RN Build status updated to COMPLETED successfully',
+                rnBuildStatus: 'COMPLETED',
+                apkUrl: completedHospital.appConfig.rnApkUrl,
+                aabUrl: completedHospital.appConfig.rnAabUrl
+            });
         } else if (status === 'FAILED') {
+            // State protection:
+            // - BUILDING -> FAILED is allowed
+            // - PROCESSING -> FAILED must be ignored safely (do not overwrite active artifact finalization)
+            // - COMPLETED -> FAILED must be ignored safely
+            if (currentStatus === 'COMPLETED' || currentStatus === 'PROCESSING') {
+                console.warn(`[RN Webhook] Ignoring late/concurrent FAILED webhook for tenant ${tenantId} as build status is '${currentStatus}'.`);
+                return res.json({ 
+                    success: true, 
+                    message: `Ignored FAILED callback; build status is currently '${currentStatus}'.` 
+                });
+            }
+            if (currentStatus !== 'BUILDING') {
+                console.warn(`[RN Webhook] Ignoring FAILED webhook for tenant ${tenantId} as build status is '${currentStatus || 'NOT_BUILT'}'.`);
+                return res.json({ 
+                    success: true, 
+                    message: `Ignored FAILED callback; build status is '${currentStatus || 'NOT_BUILT'}'.` 
+                });
+            }
             hospital.appConfig.rnBuildStatus = 'FAILED';
             hospital.appConfig.rnBuildError = error || 'GitHub Action pipeline failed';
+        } else {
+            return res.status(400).json({ success: false, message: `Unknown status '${status}'` });
         }
 
         await hospital.save();
@@ -554,39 +1003,348 @@ router.post('/webhook/github-rn', async (req, res) => {
 
 /**
  * POST /api/superadmin/hospitals/webhook/github-rn/upload
- * Webhook for direct RN APK file upload from GitHub Actions
+ * DEPRECATED: Legacy single-file RN upload endpoint.
+ * Authenticates before multer and returns HTTP 410 Gone.
  */
-router.post('/webhook/github-rn/upload', uploadApk.single('apk'), async (req, res) => {
-    try {
-        const { secret } = req.query;
-        const expectedSecret = process.env.GITHUB_WEBHOOK_SECRET || 'dev-secret-123';
-        if (secret !== expectedSecret) {
-            return res.status(403).json({ success: false, message: 'Unauthorized webhook request' });
-        }
-
-        const { tenantId } = req.body;
-        if (!tenantId || !req.file) {
-            return res.status(400).json({ success: false, message: 'Missing tenantId or APK file' });
-        }
-
-        const hospital = await Hospital.findById(tenantId);
-        if (!hospital) {
-            return res.status(404).json({ success: false, message: 'Tenant not found' });
-        }
-
-        hospital.appConfig.rnBuildStatus = 'COMPLETED';
-        hospital.appConfig.rnLastBuiltAt = new Date();
-        hospital.appConfig.rnBuildError = '';
-        
-        const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
-        hospital.appConfig.rnApkUrl = "/downloads/apks/${safeName}-rn-release.apk";
-        
-        await hospital.save();
-        return res.json({ success: true, message: 'RN APK uploaded and build status updated successfully' });
-
-    } catch (err) {
-        console.error('Upload RN webhook error:', err);
-        res.status(500).json({ success: false, message: 'Internal Server Error' });
-    }
+router.post('/webhook/github-rn/upload', verifyRNWebhookSecret, async (req, res) => {
+    return res.status(410).json({
+        success: false,
+        message: 'Endpoint deprecated (410 Gone). Combined APK and AAB upload is required via /webhook/github-rn/upload-build.'
+    });
 });
 
+/**
+ * POST /api/superadmin/hospitals/webhook/github-rn/upload-build
+ * Webhook for combined RN APK and AAB file upload from GitHub Actions.
+ * Authenticates BEFORE multer and resolves tenantId from query parameters before file persistence.
+ */
+router.post(
+    '/webhook/github-rn/upload-build',
+    verifyRNWebhookSecret,
+    (req, res, next) => {
+        uploadRnBuild.fields([
+            { name: 'apk', maxCount: 1 },
+            { name: 'aab', maxCount: 1 }
+        ])(req, res, (err) => {
+            if (err) {
+                const tempFiles = [req.files?.apk?.[0], req.files?.aab?.[0]].filter(Boolean);
+                safeDeleteFiles(tempFiles);
+                return res.status(400).json({ success: false, message: `Upload error: ${err.message}` });
+            }
+            next();
+        });
+    },
+    async (req, res) => {
+        const apkFile = req.files?.apk?.[0];
+        const aabFile = req.files?.aab?.[0];
+        const tempFiles = [apkFile, aabFile].filter(Boolean);
+
+        let destApk = null;
+        let destAab = null;
+        let stageApk = null;
+        let stageAab = null;
+        let backupApk = null;
+        let backupAab = null;
+        let hasBackupApk = false;
+        let hasBackupAab = false;
+
+        try {
+            // Resolve tenantId and rnBuildId from req.query first, then fallback to req.body
+            const tenantId = req.query.tenantId || req.body?.tenantId;
+            const rnBuildId = req.query.rnBuildId || req.body?.rnBuildId;
+
+            if (!tenantId || !rnBuildId) {
+                safeDeleteFiles(tempFiles);
+                return res.status(400).json({ success: false, message: 'Missing tenantId or rnBuildId in query parameters or body' });
+            }
+
+            // Both files must be present
+            if (!apkFile || !aabFile) {
+                safeDeleteFiles(tempFiles);
+                return res.status(400).json({
+                    success: false,
+                    message: 'Missing required build files: both apk and aab are required'
+                });
+            }
+
+            // Explicit extension validation & reject field/extension mismatch
+            const apkExt = path.extname(apkFile.originalname || '').toLowerCase();
+            const aabExt = path.extname(aabFile.originalname || '').toLowerCase();
+            if (apkExt !== '.apk' || aabExt !== '.aab') {
+                safeDeleteFiles(tempFiles);
+                return res.status(400).json({
+                    success: false,
+                    message: 'Field and extension mismatch: apk field requires .apk and aab field requires .aab'
+                });
+            }
+
+            // Explicit MIME type validation
+            if (!ALLOWED_APK_MIMES.includes(apkFile.mimetype)) {
+                safeDeleteFiles(tempFiles);
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid MIME type '${apkFile.mimetype}' for APK file`
+                });
+            }
+            if (!ALLOWED_AAB_MIMES.includes(aabFile.mimetype)) {
+                safeDeleteFiles(tempFiles);
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid MIME type '${aabFile.mimetype}' for AAB file`
+                });
+            }
+
+            // Verify both files are non-empty
+            if (apkFile.size <= 0 || aabFile.size <= 0) {
+                safeDeleteFiles(tempFiles);
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid build files: zero-byte files are not accepted'
+                });
+            }
+
+            // Keep ZIP magic/signature validation
+            if (!isValidZipArchive(apkFile.path)) {
+                safeDeleteFiles(tempFiles);
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid APK file: missing valid ZIP archive header'
+                });
+            }
+            if (!isValidZipArchive(aabFile.path)) {
+                safeDeleteFiles(tempFiles);
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid AAB file: missing valid ZIP archive header'
+                });
+            }
+
+            const hospital = await Hospital.findById(tenantId);
+            if (!hospital) {
+                safeDeleteFiles(tempFiles);
+                return res.status(404).json({ success: false, message: 'Tenant not found' });
+            }
+
+            const activeBuildId = hospital.appConfig?.rnBuildId;
+            const activeStatus = hospital.appConfig?.rnBuildStatus;
+
+            // Clear logs: webhook received rnBuildId and active DB rnBuildId
+            console.log('[RN Upload Webhook Received]', {
+                tenantId,
+                receivedRnBuildId: rnBuildId,
+                activeDbRnBuildId: activeBuildId || 'NONE',
+                activeDbStatus: activeStatus || 'NONE'
+            });
+
+            const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
+
+            const apkDir = path.join(__dirname, '../../public/downloads/apks');
+            const aabDir = path.join(__dirname, '../../public/downloads/aabs');
+            if (!fs.existsSync(apkDir)) fs.mkdirSync(apkDir, { recursive: true });
+            if (!fs.existsSync(aabDir)) fs.mkdirSync(aabDir, { recursive: true });
+
+            destApk = path.join(apkDir, `${safeName}-rn-release.apk`);
+            destAab = path.join(aabDir, `${safeName}-rn-release.aab`);
+
+            // Idempotency check before attempting transition:
+            // If already COMPLETED for the exact rnBuildId and same existing artifacts exist on disk,
+            // return success without rewriting files or modifying DB.
+            if (activeStatus === 'COMPLETED' && activeBuildId === rnBuildId && fs.existsSync(destApk) && fs.existsSync(destAab)) {
+                safeDeleteFiles(tempFiles);
+                return res.json({
+                    success: true,
+                    message: 'RN Build is already COMPLETED with existing artifacts (idempotent callback)',
+                    apkUrl: hospital.appConfig?.rnApkUrl || `/downloads/apks/${safeName}-rn-release.apk`,
+                    aabUrl: hospital.appConfig?.rnAabUrl || `/downloads/aabs/${safeName}-rn-release.aab`
+                });
+            }
+
+            // Build correlation is mandatory: only the currently active build may finalize artifacts.
+            if (!activeBuildId || rnBuildId !== activeBuildId) {
+                safeDeleteFiles(tempFiles);
+                console.warn(`[RN Upload Webhook] Rejecting upload for rnBuildId '${rnBuildId}' (active build is '${activeBuildId || 'NONE'}').`);
+                return res.status(409).json({
+                    success: false,
+                    message: 'Upload rejected: rnBuildId does not match the active RN build'
+                });
+            }
+
+            // Webhook /upload-build must require exact match:
+            // tenantId + rnBuildId + active build state BUILDING or PROCESSING.
+            if (activeStatus !== 'BUILDING' && activeStatus !== 'PROCESSING') {
+                safeDeleteFiles(tempFiles);
+                console.warn(`[RN Upload Webhook] Rejecting upload for rnBuildId '${rnBuildId}' (active build status is '${activeStatus || 'NOT_BUILT'}', expected BUILDING or PROCESSING).`);
+                return res.status(409).json({
+                    success: false,
+                    message: `Upload rejected: active build status is '${activeStatus || 'NOT_BUILT'}', expected BUILDING or PROCESSING`
+                });
+            }
+
+            // Atomic claim transition: BUILDING -> PROCESSING (or maintain PROCESSING)
+            // Ensures duplicate concurrent callbacks do not race to process or overwrite.
+            const claimQuery = {
+                _id: tenantId,
+                'appConfig.rnBuildStatus': { $in: ['BUILDING', 'PROCESSING'] },
+                'appConfig.rnBuildId': rnBuildId
+            };
+
+            const claimedHospital = await Hospital.findOneAndUpdate(
+                claimQuery,
+                {
+                    $set: {
+                        'appConfig.rnBuildStatus': 'PROCESSING'
+                    }
+                },
+                { new: true }
+            );
+
+            if (!claimedHospital) {
+                safeDeleteFiles(tempFiles);
+                // Check if a concurrent callback already completed the build
+                const currentDoc = await Hospital.findById(tenantId);
+                if (currentDoc?.appConfig?.rnBuildStatus === 'COMPLETED' && fs.existsSync(destApk) && fs.existsSync(destAab)) {
+                    return res.json({
+                        success: true,
+                        message: 'RN Build is already COMPLETED with existing artifacts (idempotent callback)',
+                        apkUrl: currentDoc.appConfig?.rnApkUrl || `/downloads/apks/${safeName}-rn-release.apk`,
+                        aabUrl: currentDoc.appConfig?.rnAabUrl || `/downloads/aabs/${safeName}-rn-release.aab`
+                    });
+                }
+                return res.status(409).json({
+                    success: false,
+                    message: `Invalid build state transition: expected status BUILDING, but current status is '${currentDoc?.appConfig?.rnBuildStatus || 'NOT_BUILT'}'`
+                });
+            }
+
+            // --- SAFE REPLACEMENT PIPELINE ---
+            const opTimestamp = Date.now();
+
+            // 1. Stage new APK and AAB first (never touch existing artifacts yet)
+            stageApk = path.join(apkDir, `${safeName}-rn-release.apk.stage-${opTimestamp}`);
+            stageAab = path.join(aabDir, `${safeName}-rn-release.aab.stage-${opTimestamp}`);
+            fs.copyFileSync(apkFile.path, stageApk);
+            fs.copyFileSync(aabFile.path, stageAab);
+
+            // 2. Preserve/backup existing APK/AAB before replacement
+            backupApk = path.join(apkDir, `${safeName}-rn-release.apk.bak-${opTimestamp}`);
+            backupAab = path.join(aabDir, `${safeName}-rn-release.aab.bak-${opTimestamp}`);
+
+            if (fs.existsSync(destApk)) {
+                fs.copyFileSync(destApk, backupApk);
+                hasBackupApk = true;
+            }
+            if (fs.existsSync(destAab)) {
+                fs.copyFileSync(destAab, backupAab);
+                hasBackupAab = true;
+            }
+
+            // 3. Move staged files into destination paths
+            fs.renameSync(stageApk, destApk);
+            stageApk = null; // Successfully moved
+
+            fs.renameSync(stageAab, destAab);
+            stageAab = null; // Successfully moved
+
+            // Clean up temp uploads now that new artifacts are in destination
+            safeDeleteFiles(tempFiles);
+
+            // 4. PHASE 1: Keep rnBuildStatus = PROCESSING in database (DO NOT set COMPLETED yet)
+            const processingHospital = await Hospital.findOneAndUpdate(
+                {
+                    _id: tenantId,
+                    'appConfig.rnBuildStatus': 'PROCESSING',
+                    'appConfig.rnBuildId': rnBuildId
+                },
+                {
+                    $set: {
+                        'appConfig.rnBuildStatus': 'PROCESSING',
+                        'appConfig.rnBuildError': '',
+                        'appConfig.rnApkUrl': `/downloads/apks/${safeName}-rn-release.apk`,
+                        'appConfig.rnAabUrl': `/downloads/aabs/${safeName}-rn-release.aab`
+                    }
+                },
+                { new: true }
+            );
+
+            if (!processingHospital) {
+                throw new Error('Failed to update hospital status for PROCESSING in database');
+            }
+
+            // 5. On success: remove old backups
+            if (hasBackupApk && backupApk && fs.existsSync(backupApk)) {
+                try { fs.unlinkSync(backupApk); } catch (e) {}
+            }
+            if (hasBackupAab && backupAab && fs.existsSync(backupAab)) {
+                try { fs.unlinkSync(backupAab); } catch (e) {}
+            }
+
+            return res.json({
+                success: true,
+                message: 'RN APK and AAB uploaded and staged successfully; build is PROCESSING',
+                rnBuildStatus: 'PROCESSING',
+                apkUrl: processingHospital.appConfig.rnApkUrl,
+                aabUrl: processingHospital.appConfig.rnAabUrl
+            });
+        } catch (err) {
+            safeDeleteFiles(tempFiles);
+
+            // On failure: restore previous artifacts from backup
+            if (hasBackupApk && backupApk && fs.existsSync(backupApk) && destApk) {
+                try {
+                    fs.copyFileSync(backupApk, destApk);
+                    fs.unlinkSync(backupApk);
+                    console.warn(`[Build Safety] Restored previous valid APK from backup: ${destApk}`);
+                } catch (e) {
+                    console.error('[Build Safety] Error restoring APK from backup:', e.message);
+                }
+            } else if (!hasBackupApk && destApk && fs.existsSync(destApk)) {
+                // If there was no previous valid APK, remove partial file
+                try { fs.unlinkSync(destApk); } catch (e) {}
+            }
+
+            if (hasBackupAab && backupAab && fs.existsSync(backupAab) && destAab) {
+                try {
+                    fs.copyFileSync(backupAab, destAab);
+                    fs.unlinkSync(backupAab);
+                    console.warn(`[Build Safety] Restored previous valid AAB from backup: ${destAab}`);
+                } catch (e) {
+                    console.error('[Build Safety] Error restoring AAB from backup:', e.message);
+                }
+            } else if (!hasBackupAab && destAab && fs.existsSync(destAab)) {
+                // If there was no previous valid AAB, remove partial file
+                try { fs.unlinkSync(destAab); } catch (e) {}
+            }
+
+            // Remove any dangling staging files
+            if (stageApk && fs.existsSync(stageApk)) {
+                try { fs.unlinkSync(stageApk); } catch (e) {}
+            }
+            if (stageAab && fs.existsSync(stageAab)) {
+                try { fs.unlinkSync(stageAab); } catch (e) {}
+            }
+
+            // Keep DB state consistent
+            try {
+                const tenantId = req.query.tenantId || req.body?.tenantId;
+                if (tenantId) {
+                    await Hospital.findOneAndUpdate(
+                        { _id: tenantId, 'appConfig.rnBuildStatus': 'PROCESSING', 'appConfig.rnBuildId': rnBuildId },
+                        {
+                            $set: {
+                                'appConfig.rnBuildStatus': 'FAILED',
+                                'appConfig.rnBuildError': `Artifact replacement failed: ${err.message}`
+                            }
+                        }
+                    );
+                }
+            } catch (dbErr) {
+                console.error('[Build Safety] Error updating hospital status after failure:', dbErr.message);
+            }
+
+            console.error('Upload RN combined build webhook error:', err);
+            return res.status(500).json({ success: false, message: 'Internal Server Error' });
+        }
+    }
+);
+
+module.exports = router;
