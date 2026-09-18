@@ -923,16 +923,50 @@ router.post('/webhook/github-rn', verifyRNWebhookSecret, async (req, res) => {
             if (currentStatus === 'COMPLETED') {
                 return res.json({ success: true, message: 'RN Build is already COMPLETED (idempotent callback)' });
             }
-            // Only transition BUILDING or PROCESSING -> COMPLETED for a new build
-            if (currentStatus !== 'BUILDING' && currentStatus !== 'PROCESSING') {
+            // Phase 2 requires previous phase upload to have succeeded (PROCESSING status)
+            if (currentStatus !== 'PROCESSING') {
                 return res.status(409).json({
                     success: false,
-                    message: `Invalid build state transition: expected BUILDING or PROCESSING, current is '${currentStatus || 'NOT_BUILT'}'`
+                    message: `Invalid build state transition: expected PROCESSING, current is '${currentStatus || 'NOT_BUILT'}'`
                 });
             }
-            hospital.appConfig.rnBuildStatus = 'COMPLETED';
-            hospital.appConfig.rnLastBuiltAt = new Date();
-            hospital.appConfig.rnBuildError = '';
+            const safeName = hospital.name ? hospital.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'cityhospital';
+            const completedHospital = await Hospital.findOneAndUpdate(
+                {
+                    _id: tenantId,
+                    'appConfig.rnBuildStatus': 'PROCESSING',
+                    'appConfig.rnBuildId': rnBuildId
+                },
+                {
+                    $set: {
+                        'appConfig.rnBuildStatus': 'COMPLETED',
+                        'appConfig.rnLastBuiltAt': new Date(),
+                        'appConfig.rnBuildError': '',
+                        'appConfig.rnApkUrl': hospital.appConfig?.rnApkUrl || `/downloads/apks/${safeName}-rn-release.apk`,
+                        'appConfig.rnAabUrl': hospital.appConfig?.rnAabUrl || `/downloads/aabs/${safeName}-rn-release.aab`
+                    }
+                },
+                { new: true }
+            );
+
+            if (!completedHospital) {
+                const currentDoc = await Hospital.findById(tenantId);
+                if (currentDoc?.appConfig?.rnBuildStatus === 'COMPLETED' && currentDoc?.appConfig?.rnBuildId === rnBuildId) {
+                    return res.json({ success: true, message: 'RN Build is already COMPLETED (idempotent callback)' });
+                }
+                return res.status(409).json({
+                    success: false,
+                    message: `Invalid build state transition: expected PROCESSING, current is '${currentDoc?.appConfig?.rnBuildStatus || 'NOT_BUILT'}'`
+                });
+            }
+
+            return res.json({
+                success: true,
+                message: 'RN Build status updated to COMPLETED successfully',
+                rnBuildStatus: 'COMPLETED',
+                apkUrl: completedHospital.appConfig.rnApkUrl,
+                aabUrl: completedHospital.appConfig.rnAabUrl
+            });
         } else if (status === 'FAILED') {
             // State protection:
             // - BUILDING -> FAILED is allowed
@@ -1146,11 +1180,11 @@ router.post(
                 });
             }
 
-            // Atomic claim transition: BUILDING -> PROCESSING
+            // Atomic claim transition: BUILDING -> PROCESSING (or maintain PROCESSING)
             // Ensures duplicate concurrent callbacks do not race to process or overwrite.
             const claimQuery = {
                 _id: tenantId,
-                'appConfig.rnBuildStatus': 'BUILDING',
+                'appConfig.rnBuildStatus': { $in: ['BUILDING', 'PROCESSING'] },
                 'appConfig.rnBuildId': rnBuildId
             };
 
@@ -1214,8 +1248,8 @@ router.post(
             // Clean up temp uploads now that new artifacts are in destination
             safeDeleteFiles(tempFiles);
 
-            // 4. Final atomic transition: PROCESSING -> COMPLETED
-            const completedHospital = await Hospital.findOneAndUpdate(
+            // 4. PHASE 1: Keep rnBuildStatus = PROCESSING in database (DO NOT set COMPLETED yet)
+            const processingHospital = await Hospital.findOneAndUpdate(
                 {
                     _id: tenantId,
                     'appConfig.rnBuildStatus': 'PROCESSING',
@@ -1223,8 +1257,7 @@ router.post(
                 },
                 {
                     $set: {
-                        'appConfig.rnBuildStatus': 'COMPLETED',
-                        'appConfig.rnLastBuiltAt': new Date(),
+                        'appConfig.rnBuildStatus': 'PROCESSING',
                         'appConfig.rnBuildError': '',
                         'appConfig.rnApkUrl': `/downloads/apks/${safeName}-rn-release.apk`,
                         'appConfig.rnAabUrl': `/downloads/aabs/${safeName}-rn-release.aab`
@@ -1233,8 +1266,8 @@ router.post(
                 { new: true }
             );
 
-            if (!completedHospital) {
-                throw new Error('Failed to update hospital status from PROCESSING to COMPLETED in database');
+            if (!processingHospital) {
+                throw new Error('Failed to update hospital status for PROCESSING in database');
             }
 
             // 5. On success: remove old backups
@@ -1247,9 +1280,10 @@ router.post(
 
             return res.json({
                 success: true,
-                message: 'RN APK and AAB uploaded and build status updated successfully',
-                apkUrl: completedHospital.appConfig.rnApkUrl,
-                aabUrl: completedHospital.appConfig.rnAabUrl
+                message: 'RN APK and AAB uploaded and staged successfully; build is PROCESSING',
+                rnBuildStatus: 'PROCESSING',
+                apkUrl: processingHospital.appConfig.rnApkUrl,
+                aabUrl: processingHospital.appConfig.rnAabUrl
             });
         } catch (err) {
             safeDeleteFiles(tempFiles);
