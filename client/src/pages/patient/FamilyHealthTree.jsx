@@ -13,36 +13,38 @@ import { confirmToast } from '../../utils/confirmToast';
 import { patientAPI } from '../../utils/api';
 import './FamilyHealthTree.css';
 
-// ── Relationship Config ──────────────────────────────────────────────────────
+// ── Relationship Config (Direct Blood Relatives Only) ────────────────────────
 const RELATIONSHIP_OPTIONS = [
-    { value: 'Father', generation: -1 },
-    { value: 'Mother', generation: -1 },
-    { value: 'Brother', generation: 0 },
-    { value: 'Sister', generation: 0 },
-    { value: 'Son', generation: 1 },
-    { value: 'Daughter', generation: 1 },
-    { value: 'Grandfather (P)', generation: -2 },
-    { value: 'Grandmother (P)', generation: -2 },
-    { value: 'Grandfather (M)', generation: -2 },
-    { value: 'Grandmother (M)', generation: -2 },
-    { value: 'Uncle', generation: -1 },
-    { value: 'Aunt', generation: -1 },
-    { value: 'Spouse', generation: 0 },
-    { value: 'Cousin', generation: 0 },
-    { value: 'Nephew', generation: 1 },
-    { value: 'Niece', generation: 1 },
-    { value: 'Grandson', generation: 2 },
-    { value: 'Granddaughter', generation: 2 },
-    { value: 'Other', generation: 0 },
+    { value: 'Father', label: 'Father (Dad)', generation: -1, gender: 'Male' },
+    { value: 'Mother', label: 'Mother (Mom)', generation: -1, gender: 'Female' },
+    { value: 'Brother', label: 'Brother', generation: 0, gender: 'Male' },
+    { value: 'Sister', label: 'Sister', generation: 0, gender: 'Female' },
+    { value: 'Son', label: 'Son', generation: 1, gender: 'Male' },
+    { value: 'Daughter', label: 'Daughter', generation: 1, gender: 'Female' },
+    { value: 'Grandfather (P)', label: 'Dada (Paternal Grandfather)', generation: -2, gender: 'Male' },
+    { value: 'Grandmother (P)', label: 'Dadi (Paternal Grandmother)', generation: -2, gender: 'Female' },
+    { value: 'Grandfather (M)', label: 'Nana (Maternal Grandfather)', generation: -2, gender: 'Male' },
+    { value: 'Grandmother (M)', label: 'Nani (Maternal Grandmother)', generation: -2, gender: 'Female' },
 ];
+
+const getRelationshipLabel = (rel) => {
+    if (!rel) return '';
+    const match = RELATIONSHIP_OPTIONS.find(r => r.value === rel);
+    if (match) return match.label;
+    if (rel === 'Grandfather (P)') return 'Dada (Paternal Grandfather)';
+    if (rel === 'Grandmother (P)') return 'Dadi (Paternal Grandmother)';
+    if (rel === 'Grandfather (M)') return 'Nana (Maternal Grandfather)';
+    if (rel === 'Grandmother (M)') return 'Nani (Maternal Grandmother)';
+    return rel;
+};
 
 const COMMON_CONDITIONS = ['Diabetes', 'Hypertension', 'Heart Disease', 'Cancer', 'Stroke', 'Asthma', 'Arthritis', 'Thyroid'];
 
 const GENERATION_LABELS = {
-    '-2': 'Grandparents',
-    '-1': 'Parents & Elders',
-    '0': 'Siblings & Patient',
-    '1': 'Children',
+    '-2': 'Grandparents (Dada, Dadi, Nana, Nani)',
+    '-1': 'Parents (Father, Mother)',
+    '0': 'Siblings & Self',
+    '1': 'Children (Son, Daughter)',
     '2': 'Grandchildren',
 };
 
@@ -353,7 +355,7 @@ const FamilyHealthTree = ({ patientId, patientData }) => {
             {isSelf ? (
                 <span className="fht-patient-self-label">Patient (You)</span>
             ) : (
-                <span className="fht-member-relation">{member.relationship}</span>
+                <span className="fht-member-relation">{getRelationshipLabel(member.relationship)}</span>
             )}
             {member.medicalConditions && member.medicalConditions.length > 0 && (
                 <span className="fht-member-conditions">
@@ -456,7 +458,7 @@ const FamilyHealthTree = ({ patientId, patientData }) => {
                     </div>
                     <div className="fht-detail-identity">
                         <h2>{m.name}</h2>
-                        <span className="fht-detail-relation">{m.relationship}</span>
+                        <span className="fht-detail-relation">{getRelationshipLabel(m.relationship)}</span>
                         <div className="fht-detail-meta-row">
                             {m.age && <span className="fht-detail-meta-chip">{m.age} Yrs</span>}
                             {m.gender && <span className="fht-detail-meta-chip">{m.gender}</span>}
@@ -706,10 +708,21 @@ const FamilyHealthTree = ({ patientId, patientData }) => {
                             </div>
                             <div className="fht-form-group">
                                 <label>Relationship <span className="required">*</span></label>
-                                <select value={form.relationship} onChange={e => setForm(p => ({ ...p, relationship: e.target.value }))}>
+                                <select
+                                    value={form.relationship}
+                                    onChange={e => {
+                                        const selectedVal = e.target.value;
+                                        const found = RELATIONSHIP_OPTIONS.find(r => r.value === selectedVal);
+                                        setForm(p => ({
+                                            ...p,
+                                            relationship: selectedVal,
+                                            gender: found?.gender || p.gender
+                                        }));
+                                    }}
+                                >
                                     <option value="">Select Relationship</option>
                                     {RELATIONSHIP_OPTIONS.map(r => (
-                                        <option key={r.value} value={r.value}>{r.value}</option>
+                                        <option key={r.value} value={r.value}>{r.label || r.value}</option>
                                     ))}
                                 </select>
                             </div>

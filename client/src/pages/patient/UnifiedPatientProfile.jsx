@@ -670,12 +670,12 @@ const HospitalPatientProfileContent = () => {
     const tabs = [
         { key: 'timeline', label: 'Timeline', icon: <FiClock /> },
         { key: 'ipdOrders', label: 'IPD Orders', icon: <FiActivity /> },
-        { key: 'familyHistory', label: 'Family History', icon: <FiUsers /> },
+        { key: 'familyHistory', label: 'Family Tree', icon: <FiUsers /> },
         { key: 'vitals', label: 'Vitals', icon: <FiHeart /> },
         { key: 'prescriptions', label: 'Prescriptions', icon: <FiFileText /> },
         { key: 'reports', label: 'Reports', icon: <FiFolder /> },
         { key: 'notes', label: 'Notes', icon: <FiMessageSquare /> },
-        ...(canViewVials ? [{ key: 'vialManagement', label: 'Vial / Sample Location', icon: <FiBox /> }] : []),
+        ...(canViewVials ? [{ key: 'vialManagement', label: 'Vial Location', icon: <FiBox /> }] : []),
         { key: 'documents', label: 'Documents', icon: <FiFile /> },
     ];
 
@@ -793,7 +793,7 @@ const HospitalPatientProfileContent = () => {
                         <FiCalendar />
                     </div>
                     <div className="upp-metric-info">
-                        <span className="upp-metric-label">Total Appointments</span>
+                        <span className="upp-metric-label" title="Total Appointments">Appointments</span>
                         <span className="upp-metric-val">{metrics.totalVisits}</span>
                     </div>
                 </div>
@@ -855,15 +855,15 @@ const HospitalPatientProfileContent = () => {
 
             {/* ====== MAIN CONTENT ====== */}
             {activeTab === 'familyHistory' ? (
-                <div style={{ margin: '0 24px 40px 24px' }}>
+                <div className="upp-tab-content-wrapper">
                     <FamilyHealthTree patientId={patientData?._id || patientId} patientData={patientData} />
                 </div>
             ) : activeTab === 'vialManagement' ? (
-                <div style={{ margin: '0 24px 40px 24px' }}>
+                <div className="upp-tab-content-wrapper">
                     <PatientVialsSection patientId={patientData?._id || patientId} patientData={patientData} />
                 </div>
             ) : activeTab === 'ipdOrders' ? (
-                <div style={{ margin: '0 24px 40px 24px' }}>
+                <div className="upp-tab-content-wrapper">
                     <DoctorIPDOrdersPanel patientId={patientData?._id || patientId} patient={patientData} />
                 </div>
             ) : (
