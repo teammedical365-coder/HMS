@@ -1072,6 +1072,7 @@ export const billingAPI = {
     processPayment: async (data) => (await apiClient.put('/api/billing/pay', data)).data,
     searchPatients: async (query) => (await apiClient.get(`/api/reception/search-patients?query=${query}`)).data,
     searchPatient: async (query) => (await apiClient.get(`/api/reception/search-patients?query=${query}`)).data,
+    getPaymentHistory: async (params) => (await apiClient.get('/api/billing/history', { params })).data,
 };
 
 

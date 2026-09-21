@@ -56,6 +56,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             if (u.clinicType === 'clinic' || u.subscriptionPlan === 'starter') {
                 return [
                     { label: 'Clinic Hub', path: '/hospitaladmin', icon: <FiHome />, prefetchKey: 'ha_clinic', prefetchFn: () => import('../../pages/hospitaladmin/ClinicDashboard') },
+                    { label: 'Billing & Payments', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'ha_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
                     { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox />, prefetchKey: 'ha_vials', prefetchFn: () => import('../../pages/hospitaladmin/VialManagement') },
                 ];
             }
@@ -66,6 +67,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Staff Management', path: '/admin/users', icon: <FiUsers />, prefetchKey: 'ha_users', prefetchFn: () => import('../../pages/admin/Admin') },
                 { label: 'Doctors Feed', path: '/admin/doctors', icon: <FiActivity />, prefetchKey: 'ha_doctors', prefetchFn: () => import('../../pages/admin/AdminDoctors') },
                 { label: 'Pharma Inventory', path: '/pharmacy/inventory', icon: <FiPackage />, prefetchKey: 'ha_pharma', prefetchFn: () => import('../../pages/pharmacy/PharmacyInventory') },
+                { label: 'Billing & Payments', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'ha_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
             ];
         }
         if (role === 'doctor' || role === 'clinic doctor' || role === 'clinicdoctor' || role.includes('doctor')) {

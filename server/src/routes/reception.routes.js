@@ -764,7 +764,24 @@ router.get('/patients/:patientId/followup-status', verifyToken, async (req, res)
 // 7. BOOK APPOINTMENT (NEW: Assign Doctor)
 router.post('/book-appointment', verifyToken, verifyReception, async (req, res) => {
     try {
-        const { patientId, doctorId, date, time, notes, paymentMethod, paymentStatus, amount, department, splitPayments = [] } = req.body;
+        const { 
+            patientId, 
+            doctorId, 
+            date, 
+            time, 
+            notes, 
+            paymentMethod, 
+            paymentStatus, 
+            amount, 
+            department, 
+            splitPayments = [],
+            proofUrl,
+            upiScreenshotUrl,
+            transactionId,
+            upiId,
+            cardDetails,
+            bankReference
+        } = req.body;
 
         if (!patientId || !doctorId || !date) {
             return res.status(400).json({ success: false, message: 'Missing booking details' });
@@ -774,7 +791,7 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
         if (bookingAmount > 0) {
             const totalSplit = splitPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
             if (totalSplit !== bookingAmount) {
-                return res.status(400).json({ success: false, message: `Payment is incomplete. Total paid (,1${totalSplit}) must match the full Consultation Fee (,1${bookingAmount}) before booking.` });
+                return res.status(400).json({ success: false, message: `Payment is incomplete. Total paid (₹${totalSplit}) must match the full Consultation Fee (₹${bookingAmount}) before booking.` });
             }
         }
 
@@ -886,6 +903,19 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
         }
         // --------------------------------------
 
+        const resolvedMethod = splitPayments.length > 0 ? [...new Set(splitPayments.map(p => p.method))].join(' / ') : (paymentMethod || 'Cash');
+        const isUpiInvolved = resolvedMethod.toUpperCase().includes('UPI') || resolvedMethod.toUpperCase().includes('ONLINE') ||
+            (splitPayments && splitPayments.some(p => {
+                const m = (p.method || '').toUpperCase();
+                return m.includes('UPI') || m.includes('ONLINE');
+            }));
+        const isCardInvolved = resolvedMethod.toUpperCase().includes('CARD') ||
+            (splitPayments && splitPayments.some(p => (p.method || '').toUpperCase().includes('CARD')));
+
+        const finalProofUrl = isUpiInvolved ? (upiScreenshotUrl || proofUrl || '') : '';
+        const finalCardRef = (isUpiInvolved || isCardInvolved) ? (transactionId || bankReference || cardDetails || '') : '';
+        const finalUpiId = isUpiInvolved ? (upiId || '') : '';
+
         const newAppointment = new Appointment({
             userId: patient._id,
             hospitalId,
@@ -903,13 +933,41 @@ router.post('/book-appointment', verifyToken, verifyReception, async (req, res) 
             amount: finalAmount,
             status: 'confirmed',
             paymentStatus: finalAmount === 0 ? 'Paid' : (paymentStatus || 'Paid'),
-            paymentMethod: splitPayments.length > 0 ? [...new Set(splitPayments.map(p => p.method))].join(' / ') : (paymentMethod || 'Cash'),
+            paymentMethod: resolvedMethod,
             splitPayments,
-            notes: notes || 'Walk-in created by reception',
+            upiScreenshotUrl: finalProofUrl,
+            cardRef: finalCardRef,
+            notes: (notes && String(notes).trim() !== 'Walk-in created by reception') ? String(notes).trim() : '',
             bookedBy: req.user._id
         });
 
         await newAppointment.save();
+
+        // Create PaymentTransaction for audit and billing history when appointment is paid
+        if (finalAmount > 0 && (newAppointment.paymentStatus === 'Paid' || paymentStatus === 'Paid')) {
+            try {
+                const PaymentTransaction = require('../models/paymentTransaction.model');
+                const pt = new PaymentTransaction({
+                    hospitalId: newAppointment.hospitalId,
+                    patientId: newAppointment.userId,
+                    paymentMode: newAppointment.paymentMethod,
+                    paymentStatus: 'Paid',
+                    amount: newAppointment.amount,
+                    splitPayments: newAppointment.splitPayments,
+                    transactionId: finalCardRef,
+                    upiId: finalUpiId,
+                    cardDetails: isCardInvolved ? (cardDetails || '') : '',
+                    bankReference: (isUpiInvolved || isCardInvolved) ? (bankReference || '') : '',
+                    proofUrl: finalProofUrl,
+                    description: `OPD Consultation Fee - Dr. ${doctor.name}`,
+                    billedItems: { appointments: [newAppointment._id] },
+                    addedBy: req.user._id
+                });
+                await pt.save();
+            } catch (ptErr) {
+                console.error('[book-appointment] PaymentTransaction creation error:', ptErr.message);
+            }
+        }
 
         // [MODULE 5] Automatically complete Hospital Registration by linking PatientAuth to User Profile
         if (req.user.role === 'patient') {

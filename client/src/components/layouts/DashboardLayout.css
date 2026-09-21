@@ -700,6 +700,7 @@
 
 .erp-page-content.erp-fullbleed-content,
 .erp-page-content:has(.centraladmin-page),
+.erp-page-content:has(.ha-billing-page),
 .erp-page-content:has(.rpm-main-wrapper),
 .erp-page-content:has(.consent-hub-wrapper),
 .erp-page-content:has(.srd-page),

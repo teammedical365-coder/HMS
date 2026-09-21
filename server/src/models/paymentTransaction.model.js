@@ -19,6 +19,7 @@ const paymentTransactionSchema = new mongoose.Schema({
     cardDetails: { type: String, default: '' }, // Masked
     bankReference: { type: String, default: '' },
     paymentDate: { type: Date, default: Date.now },
+    appointmentTime: { type: String, default: '' },
     
     // Proof
     proofUrl: { type: String, default: '' },

@@ -683,6 +683,21 @@ const HospitalPatientProfileContent = () => {
     const genderDisplay = patientData.gender || patientData.fertilityProfile?.gender || 'N/A';
     const bloodGroupDisplay = patientData.bloodGroup || patientData.fertilityProfile?.bloodGroup || 'N/A';
 
+    // Helper to sanitize clinical notes (remove legacy concatenated payment proof/UPI strings)
+    const cleanClinicalNotes = (notes) => {
+        if (!notes || typeof notes !== 'string') return '';
+        let cleaned = notes.trim();
+        if (cleaned.includes('| Screenshot:') || cleaned.includes('| UPI:') || cleaned.includes('| Txn:') || cleaned.includes('| Card:') || cleaned.includes('| BankRef:') || cleaned.startsWith('Walk-in.')) {
+            cleaned = cleaned.replace(/\|\s*(Screenshot|UPI|Txn|Card|BankRef):[^\n|]*/gi, '').trim();
+            cleaned = cleaned.replace(/^Walk-in\.\s*Vitals:\s*[^.]*\.\s*Reason:\s*/gi, '').trim();
+            if (cleaned === 'Walk-in created by reception' || cleaned === 'Walk-in.' || cleaned === 'Reason:' || cleaned === '') {
+                return '';
+            }
+        }
+        if (cleaned === 'Walk-in created by reception') return '';
+        return cleaned;
+    };
+
     return (
         <div className="upp-container">
             {/* ====== HEADER IDENTITY CARD (Clean Healthcare SaaS Banner) ====== */}
@@ -730,8 +745,8 @@ const HospitalPatientProfileContent = () => {
                             )}
                         </div>
 
-                        {/* Row 2: Contact & Location (Phone, Email, Location - Strictly BELOW MRN) */}
-                        {(patientData.phone || patientData.email || patientData.city || fullAddress || allergiesList.length > 0) && (
+                        {/* Row 2: Contact (Phone, Email - Strictly Below Demographics) */}
+                        {(patientData.phone || patientData.email) && (
                             <div className="upp-header-tags upp-tags-row-secondary">
                                 {patientData.phone && (
                                     <span className="upp-header-tag upp-tag-phone" title="Phone">
@@ -743,9 +758,15 @@ const HospitalPatientProfileContent = () => {
                                         <FiMail /> {patientData.email}
                                     </span>
                                 )}
-                                {(patientData.city || fullAddress) && (
+                            </div>
+                        )}
+
+                        {/* Row 3: Address & Location (Strictly Below Phone & Email) */}
+                        {(fullAddress || patientData.city || allergiesList.length > 0) && (
+                            <div className="upp-header-tags upp-tags-row-tertiary">
+                                {(fullAddress || patientData.city) && (
                                     <span className="upp-header-tag upp-tag-location" title={fullAddress || patientData.city}>
-                                        <FiMapPin /> {patientData.city || fullAddress}
+                                        <FiMapPin /> {fullAddress || patientData.city}
                                     </span>
                                 )}
                                 {allergiesList.length > 0 && (
@@ -939,12 +960,15 @@ const HospitalPatientProfileContent = () => {
                                                             </div>
                                                         )}
 
-                                                        {item.data?.notes && (
-                                                            <div className="upp-tl-field">
-                                                                <span className="upp-tl-label">Clinical Notes</span>
-                                                                <span className="upp-tl-value">{item.data.notes}</span>
-                                                            </div>
-                                                        )}
+                                                        {(() => {
+                                                            const cleanedNotes = cleanClinicalNotes(item.data?.notes);
+                                                            return cleanedNotes ? (
+                                                                <div className="upp-tl-field">
+                                                                    <span className="upp-tl-label">Clinical Notes</span>
+                                                                    <span className="upp-tl-value">{cleanedNotes}</span>
+                                                                </div>
+                                                            ) : null;
+                                                        })()}
 
                                                         {item.data?.vitals && Object.keys(item.data.vitals).length > 0 && (
                                                             <div className="upp-tl-vitals-grid">

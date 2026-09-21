@@ -106,23 +106,8 @@ const DoctorPatientDetails = () => {
     // Follow-up status for Patient
     const [currentFollowupStatus, setCurrentFollowupStatus] = useState(null);
 
-    // New Session Tab & Dropdown States
-    const [activeSessionTab, setActiveSessionTab] = useState('diagnosis');
-    const [showMoreMenu, setShowMoreMenu] = useState(false);
     const diagnosisInputRef = useRef(null);
     const notesTextareaRef = useRef(null);
-    const moreMenuRef = useRef(null);
-
-    // Close More menu when clicked outside
-    useEffect(() => {
-        const handleOutsideClick = (e) => {
-            if (moreMenuRef.current && !moreMenuRef.current.contains(e.target)) {
-                setShowMoreMenu(false);
-            }
-        };
-        document.addEventListener('mousedown', handleOutsideClick);
-        return () => document.removeEventListener('mousedown', handleOutsideClick);
-    }, []);
 
     // Tab Scrolling Reference
     const tabsRef = useRef(null);
@@ -1027,38 +1012,13 @@ const DoctorPatientDetails = () => {
 
     return (
         <div className="dpd-page-wrapper">
-            {/* Top Navigation Bar (Image 2 style) */}
-            <header className="dpd-top-bar">
+            {/* Top Back Action */}
+            <div className="dpd-top-actions">
                 <button className="dpd-top-back-btn" onClick={() => navigate('/doctor/patients')}>
                     <FiArrowLeft className="dpd-top-back-icon" />
                     <span>Back to Patients</span>
                 </button>
-                <div className="dpd-top-right">
-                    <button 
-                        className="dpd-open-ai-top-btn"
-                        onClick={() => navigate('/doctor/ai-assistant', {
-                            state: { patientId: patient._id || id, appointmentId: appointmentId || appointment?._id }
-                        })}
-                        title="Open AI Assistant & Scribe in Sidebar"
-                    >
-                        🤖 Open AI Assistant
-                    </button>
-                    <button className="dpd-top-bell-btn" title="Notifications" onClick={() => toast("No new notifications", { icon: "🔔" })}>
-                        <FiBell />
-                        <span className="dpd-bell-dot" />
-                    </button>
-                    <div className="dpd-top-doctor-pill">
-                        <div className="dpd-top-doctor-avatar">
-                            {doctorInitials}
-                        </div>
-                        <div className="dpd-top-doctor-info">
-                            <span className="dpd-top-doctor-name">{doctorDisplayName}</span>
-                            <span className="dpd-top-doctor-role">{user?.role ? (typeof user.role === 'string' ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Doctor') : 'Doctor'}</span>
-                        </div>
-                        <FiChevronDown className="dpd-top-doctor-chevron" />
-                    </div>
-                </div>
-            </header>
+            </div>
 
             {pendingDownload && (
                 <div style={{
@@ -1199,84 +1159,6 @@ const DoctorPatientDetails = () => {
                             <FiChevronRight className="dpd-visit-type-chevron" />
                         </div>
 
-                        {/* 4 Quick Action Tiles */}
-                        <div className="dpd-quick-tiles-grid">
-                            <button
-                                type="button"
-                                className={`dpd-action-tile-btn ${activeTab === 'overview' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('overview')}
-                            >
-                                <div className="dpd-tile-icon-wrap tile-blue">
-                                    <FiUser />
-                                </div>
-                                <span className="dpd-tile-text">View Profile</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                className="dpd-action-tile-btn"
-                                onClick={() => setShowPrescribeModal(true)}
-                            >
-                                <div className="dpd-tile-icon-wrap tile-purple">
-                                    <FiFileText />
-                                </div>
-                                <span className="dpd-tile-text">Prescription</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                className={`dpd-action-tile-btn ${activeTab === 'reports' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('reports')}
-                            >
-                                <div className="dpd-tile-icon-wrap tile-green">
-                                    <FiFolder />
-                                </div>
-                                <span className="dpd-tile-text">Reports</span>
-                            </button>
-
-                            <div style={{ position: 'relative' }} ref={moreMenuRef}>
-                                <button
-                                    type="button"
-                                    className={`dpd-action-tile-btn ${['ipd_orders', 'history'].includes(activeTab) || showMoreMenu ? 'active' : ''}`}
-                                    onClick={() => setShowMoreMenu(prev => !prev)}
-                                >
-                                    <div className="dpd-tile-icon-wrap tile-gray">
-                                        <FiMoreHorizontal />
-                                    </div>
-                                    <span className="dpd-tile-text">More</span>
-                                </button>
-
-                                {showMoreMenu && (
-                                    <div className="dpd-more-menu-popover">
-                                        <button 
-                                            type="button"
-                                            onClick={() => { setActiveTab('ipd_orders'); setShowMoreMenu(false); }}
-                                            className={activeTab === 'ipd_orders' ? 'active-opt' : ''}
-                                        >
-                                            🏥 IPD / Admission Orders
-                                        </button>
-                                        <button 
-                                            type="button"
-                                            onClick={() => { setActiveTab('history'); setShowMoreMenu(false); }}
-                                            className={activeTab === 'history' ? 'active-opt' : ''}
-                                        >
-                                            📜 Past Visits & History
-                                        </button>
-                                        <button 
-                                            type="button"
-                                            onClick={() => { 
-                                                navigate('/doctor/ai-assistant', {
-                                                    state: { patientId: patient._id || id, appointmentId: appointmentId || appointment?._id }
-                                                });
-                                                setShowMoreMenu(false);
-                                            }}
-                                        >
-                                            🤖 Open AI Assistant
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
                     </div>
 
                 {/* Tabs Navigation */}
@@ -1690,44 +1572,6 @@ const DoctorPatientDetails = () => {
                             <span className={`dpd-clean-session-status status-${appointment.status}`}>
                                 <FiCheck className="dpd-status-check-icon" /> {appointment.status}
                             </span>
-                        </div>
-
-                        {/* 4 Pill Subnav Bar */}
-                        <div className="dpd-session-pills-bar">
-                            <button
-                                type="button"
-                                className={`dpd-session-pill-tab ${activeSessionTab === 'diagnosis' ? 'active' : ''}`}
-                                onClick={() => {
-                                    setActiveSessionTab('diagnosis');
-                                    diagnosisInputRef.current?.focus();
-                                }}
-                            >
-                                🩺 Diagnosis
-                            </button>
-                            <button
-                                type="button"
-                                className={`dpd-session-pill-tab ${activeSessionTab === 'notes' ? 'active' : ''}`}
-                                onClick={() => {
-                                    setActiveSessionTab('notes');
-                                    notesTextareaRef.current?.focus();
-                                }}
-                            >
-                                📋 Clinical Notes
-                            </button>
-                            <button
-                                type="button"
-                                className="dpd-session-pill-tab"
-                                onClick={() => setShowPrescribeModal(true)}
-                            >
-                                💊 Prescription
-                            </button>
-                            <button
-                                type="button"
-                                className="dpd-session-pill-tab"
-                                onClick={() => setActiveTab('reports')}
-                            >
-                                📎 Attachments
-                            </button>
                         </div>
 
                         <div className="dpd-right-content">

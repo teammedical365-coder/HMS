@@ -1788,7 +1788,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             // 3. Book Appointment (optional when editing existing patient)
             if (intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode)) {
                 // Upload payment screenshot if non-cash and screenshot provided
-                let screenshotNote = '';
+                let screenshotUrl = '';
                 const hasNonCash = intakeForm.splitPayments.some(p => p.method !== 'Cash');
                 if (hasNonCash && paymentScreenshot) {
                     try {
@@ -1796,16 +1796,20 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                         fd.append('images', paymentScreenshot);
                         const upRes = await uploadAPI.uploadImages(fd);
                         if (upRes.success && upRes.files?.length > 0) {
-                            screenshotNote = ` | Screenshot: ${upRes.files[0].url}`;
+                            screenshotUrl = upRes.files[0].url;
                         }
                     } catch { /* non-fatal */ }
                 }
 
-                let txnDetailsNote = '';
-                if (intakePaymentData?.transactionId) txnDetailsNote += ` | Txn: ${intakePaymentData.transactionId}`;
-                if (intakePaymentData?.upiId) txnDetailsNote += ` | UPI: ${intakePaymentData.upiId}`;
-                if (intakePaymentData?.cardDetails) txnDetailsNote += ` | Card: ${intakePaymentData.cardDetails}`;
-                if (intakePaymentData?.bankReference) txnDetailsNote += ` | BankRef: ${intakePaymentData.bankReference}`;
+                // Keep clinical notes strictly for clinical reason/notes (no payment metadata pollution)
+                const cleanNotes = (intakeForm.reasonForVisit || intakeForm.notes || '').trim();
+
+                const isUpiInvolved = intakeForm.paymentMethod === 'UPI' || 
+                    intakeForm.splitPayments?.some(p => (p.method || '').toUpperCase().includes('UPI'));
+                const isCardInvolved = intakeForm.paymentMethod === 'Card' || 
+                    intakeForm.splitPayments?.some(p => (p.method || '').toUpperCase().includes('CARD'));
+                const isOnlineInvolved = intakeForm.paymentMethod === 'Online' || 
+                    intakeForm.splitPayments?.some(p => (p.method || '').toUpperCase().includes('ONLINE'));
 
                 const bookingRes = await receptionAPI.bookAppointment({
                     patientId: userId,
@@ -1813,10 +1817,17 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     date: intakeForm.visitDate,
                     time: isTokenMode ? undefined : intakeForm.visitTime,
                     department: intakeForm.department,
-                    notes: `Walk-in. Vitals: ${intakeForm.height}cm/${intakeForm.weight}kg. Reason: ${intakeForm.reasonForVisit}${screenshotNote}${txnDetailsNote}`,
+                    notes: cleanNotes,
                     splitPayments: intakeForm.splitPayments,
                     paymentStatus: 'Paid',
-                    amount: intakeForm.consultationFee
+                    amount: intakeForm.consultationFee,
+                    paymentMethod: intakeForm.paymentMethod,
+                    proofUrl: (isUpiInvolved || isOnlineInvolved) ? screenshotUrl : '',
+                    upiScreenshotUrl: (isUpiInvolved || isOnlineInvolved) ? screenshotUrl : '',
+                    transactionId: (isUpiInvolved || isCardInvolved || isOnlineInvolved) ? (intakePaymentData?.transactionId || '') : '',
+                    upiId: (isUpiInvolved || isOnlineInvolved) ? (intakePaymentData?.upiId || '') : '',
+                    cardDetails: isCardInvolved ? (intakePaymentData?.cardDetails || '') : '',
+                    bankReference: (isUpiInvolved || isCardInvolved || isOnlineInvolved) ? (intakePaymentData?.bankReference || '') : ''
                 });
 
                 if (bookingRes.success) {

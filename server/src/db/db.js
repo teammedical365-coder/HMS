@@ -1,4 +1,10 @@
 const mongoose = require('mongoose');
+const dns = require('dns');
+
+// Force IPv4 first to avoid Windows IPv6 NAT64 (64:ff9b::) EACCES socket connection drops
+try {
+    dns.setDefaultResultOrder('ipv4first');
+} catch (e) {}
 
 async function connectDB() {
     try {
@@ -19,6 +25,7 @@ async function connectDB() {
 
         // MongoDB connection options optimized for high-concurrency HMS workloads
         const options = {
+            family: 4,
             serverSelectionTimeoutMS: 15000,
             socketTimeoutMS: 45000,
             connectTimeoutMS: 15000,

@@ -198,7 +198,7 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
         };
 
         const [appointments, labReports, pharmacyOrders, facilityCharges, admissions, paymentTransactions, rawSurgeryPlans] = await Promise.all([
-            fetchWithMasterFallback(Appointment, MasterAppointment, { userId: patient._id, ...hFilter }, 'appointmentDate appointmentTime amount paymentStatus serviceName doctorName status createdAt'),
+            fetchWithMasterFallback(Appointment, MasterAppointment, { userId: patient._id, ...hFilter }, 'appointmentDate appointmentTime amount paymentStatus paymentMethod splitPayments upiScreenshotUrl cardRef notes serviceName doctorName status createdAt'),
             fetchWithMasterFallback(LabReport, MasterLabReport, { userId: patient._id, ...hFilter }, 'testNames amount paymentStatus testStatus createdAt'),
             fetchWithMasterFallback(PharmacyOrder, MasterPharmacyOrder, { userId: patient._id, ...hFilter }, 'items totalAmount paymentStatus orderStatus createdAt'),
             fetchWithMasterFallback(FacilityCharge, MasterFacilityCharge, { patientId: patient._id, ...hFilter }, 'facilityName pricePerDay days totalAmount paymentStatus createdAt addedBy collectedBy', null, [{path: 'collectedBy', select: 'name'}, {path: 'addedBy', select: 'name'}]),
@@ -236,6 +236,109 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
                 }
             }
         }
+
+        // Merge any paid appointments that don't have a PaymentTransaction record yet (so their screenshot & UTR show up)
+        const ptApptIds = new Set();
+        paymentTransactions.forEach(pt => {
+            if (pt.billedItems?.appointments) {
+                pt.billedItems.appointments.forEach(id => ptApptIds.add(String(id?._id || id)));
+            }
+        });
+
+        appointments.forEach(apt => {
+            if (['Paid', 'paid'].includes(apt.paymentStatus) && !ptApptIds.has(String(apt._id))) {
+                let proofUrl = apt.upiScreenshotUrl || '';
+                let upiId = '';
+                let txnId = apt.cardRef || '';
+                const pMethod = (apt.paymentMethod || 'Cash').toUpperCase();
+                const isCashOnly = (pMethod === 'CASH' || (pMethod.includes('CASH') && !pMethod.includes('UPI') && !pMethod.includes('ONLINE') && !pMethod.includes('CARD'))) &&
+                    (!apt.splitPayments || !apt.splitPayments.some(sp => {
+                        const m = (sp.method || '').toUpperCase();
+                        return m.includes('UPI') || m.includes('ONLINE') || m.includes('CARD');
+                    }));
+
+                if (!proofUrl && apt.notes && typeof apt.notes === 'string') {
+                    const ssMatch = apt.notes.match(/Screenshot:\s*(https?:\/\/[^\s|]+)/i);
+                    if (ssMatch) proofUrl = ssMatch[1];
+                    if (!isCashOnly) {
+                        const upiMatch = apt.notes.match(/UPI:\s*([^\s|]+)/i);
+                        if (upiMatch) upiId = upiMatch[1];
+                    }
+                    const txnMatch = apt.notes.match(/Txn:\s*([^\s|]+)/i);
+                    if (txnMatch && !isCashOnly) txnId = txnMatch[1];
+                }
+
+                if (isCashOnly) {
+                    upiId = '';
+                    proofUrl = '';
+                    txnId = '';
+                }
+
+                let resolvedPaymentDate = apt.createdAt || apt.appointmentDate;
+                if (apt.appointmentDate) {
+                    try {
+                        const baseDate = new Date(apt.appointmentDate);
+                        const y = baseDate.getFullYear();
+                        const m = baseDate.getMonth();
+                        const d = baseDate.getDate();
+
+                        if (apt.appointmentTime && typeof apt.appointmentTime === 'string') {
+                            const tStr = apt.appointmentTime.trim();
+                            const match12 = tStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+                            const match24 = tStr.match(/^(\d{1,2}):(\d{2})$/);
+                            let hours = 0;
+                            let minutes = 0;
+                            let timeParsed = false;
+
+                            if (match12) {
+                                hours = parseInt(match12[1], 10);
+                                minutes = parseInt(match12[2], 10);
+                                if (match12[3].toUpperCase() === 'PM' && hours < 12) hours += 12;
+                                if (match12[3].toUpperCase() === 'AM' && hours === 12) hours = 0;
+                                timeParsed = true;
+                            } else if (match24) {
+                                hours = parseInt(match24[1], 10);
+                                minutes = parseInt(match24[2], 10);
+                                timeParsed = true;
+                            }
+
+                            if (timeParsed) {
+                                resolvedPaymentDate = new Date(y, m, d, hours, minutes, 0, 0);
+                            } else if (apt.createdAt) {
+                                const cDate = new Date(apt.createdAt);
+                                resolvedPaymentDate = new Date(y, m, d, cDate.getHours(), cDate.getMinutes(), cDate.getSeconds());
+                            }
+                        } else if (apt.createdAt) {
+                            const cDate = new Date(apt.createdAt);
+                            resolvedPaymentDate = new Date(y, m, d, cDate.getHours(), cDate.getMinutes(), cDate.getSeconds());
+                        }
+                    } catch (e) {
+                        resolvedPaymentDate = apt.createdAt || apt.appointmentDate;
+                    }
+                }
+
+                paymentTransactions.push({
+                    _id: `appt_payment_${apt._id}`,
+                    hospitalId: apt.hospitalId,
+                    patientId: patient._id,
+                    paymentMode: apt.paymentMethod || 'Cash',
+                    paymentStatus: 'Paid',
+                    amount: apt.amount || 0,
+                    splitPayments: apt.splitPayments || [],
+                    transactionId: txnId,
+                    upiId: upiId,
+                    proofUrl: proofUrl,
+                    appointmentTime: apt.appointmentTime || '',
+                    paymentDate: resolvedPaymentDate,
+                    createdAt: apt.createdAt || resolvedPaymentDate,
+                    description: `OPD Consultation Fee - Dr. ${apt.doctorName || 'Doctor'}`,
+                    billedItems: { appointments: [apt._id] }
+                });
+            }
+        });
+
+        // Sort payment transactions by date descending
+        paymentTransactions.sort((a, b) => new Date(b.paymentDate || b.createdAt || 0) - new Date(a.paymentDate || a.createdAt || 0));
 
         res.json({
             success: true,
@@ -576,6 +679,309 @@ router.get('/patients', verifyBillingAccess, async (req, res) => {
     } catch (error) {
         console.error('[billing-patients-error]', error);
         res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// 5. Fetch All Hospital Billing / Payment Transactions (Hospital-wide History with search & filters)
+router.get('/history', verifyBillingAccess, async (req, res) => {
+    try {
+        const hospitalId = req.user.hospitalId;
+        const hospitalFilter = hospitalId ? {
+            $or: [
+                { hospitalId },
+                { hospitalId: { $exists: false } },
+                { hospitalId: null }
+            ]
+        } : {};
+
+        const { search, mode, preset, startDate, endDate, limit = 500 } = req.query;
+
+        // Calculate date boundaries
+        const now = new Date();
+        let startD = null;
+        let endD = null;
+
+        if (preset === 'today') {
+            startD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+            endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        } else if (preset === 'yesterday') {
+            const yest = new Date(now);
+            yest.setDate(yest.getDate() - 1);
+            startD = new Date(yest.getFullYear(), yest.getMonth(), yest.getDate(), 0, 0, 0, 0);
+            endD = new Date(yest.getFullYear(), yest.getMonth(), yest.getDate(), 23, 59, 59, 999);
+        } else if (preset === 'this_week') {
+            const day = now.getDay();
+            const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+            startD = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0, 0);
+            endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        } else if (preset === 'this_month') {
+            startD = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+            endD = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        } else if (preset === 'last_month') {
+            startD = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+            endD = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        } else if (startDate || endDate) {
+            if (startDate) {
+                const parts = String(startDate).split('-').map(Number);
+                if (parts.length === 3 && !isNaN(parts[0])) {
+                    startD = new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
+                } else {
+                    startD = new Date(startDate);
+                }
+            }
+            if (endDate) {
+                const parts = String(endDate).split('-').map(Number);
+                if (parts.length === 3 && !isNaN(parts[0])) {
+                    endD = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999);
+                } else {
+                    endD = new Date(endDate);
+                    endD.setHours(23, 59, 59, 999);
+                }
+            }
+        }
+
+        // Cap dates: NEVER allow future dates (only today or previous)
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        if (endD && endD > todayEnd) endD = todayEnd;
+        if (startD && startD > todayEnd) startD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+
+        // Fetch transactions populated with patient and creator using tenant-scoped models
+        const { User, Appointment, PaymentTransaction } = getModels(req);
+        const TxnModel = PaymentTransaction || MasterPaymentTransaction;
+        const ApptModel = Appointment || MasterAppointment;
+
+        let transactions = [];
+        try {
+            transactions = await TxnModel.find(hospitalFilter)
+                .populate('patientId', 'name phone mrn patientId email')
+                .populate('addedBy', 'name role')
+                .sort({ paymentDate: -1, createdAt: -1 })
+                .limit(Number(limit))
+                .lean();
+        } catch (e) {
+            console.error('TxnModel lookup error:', e.message);
+        }
+
+        if (MasterPaymentTransaction && MasterPaymentTransaction !== TxnModel) {
+            try {
+                const masterTxns = await MasterPaymentTransaction.find(hospitalFilter)
+                    .populate('patientId', 'name phone mrn patientId email')
+                    .populate('addedBy', 'name role')
+                    .sort({ paymentDate: -1, createdAt: -1 })
+                    .limit(Number(limit))
+                    .lean();
+                const existingIds = new Set(transactions.map(t => String(t._id)));
+                masterTxns.forEach(mt => {
+                    if (!existingIds.has(String(mt._id))) {
+                        transactions.push(mt);
+                    }
+                });
+            } catch (e) {}
+        }
+
+        // Also fetch any paid appointments that have proof, paymentMethod or cardRef
+        const apptQuery = {
+            ...hospitalFilter,
+            paymentStatus: { $in: ['Paid', 'PAID', 'paid'] }
+        };
+
+        let paidAppointments = [];
+        try {
+            paidAppointments = await ApptModel.find(apptQuery)
+                .populate('userId', 'name phone mrn patientId email')
+                .sort({ appointmentDate: -1, createdAt: -1 })
+                .limit(Number(limit))
+                .lean();
+        } catch (e) {
+            console.error('ApptModel lookup error:', e.message);
+        }
+
+        if (MasterAppointment && MasterAppointment !== ApptModel) {
+            try {
+                const masterAppts = await MasterAppointment.find(apptQuery)
+                    .populate('userId', 'name phone mrn patientId email')
+                    .sort({ appointmentDate: -1, createdAt: -1 })
+                    .limit(Number(limit))
+                    .lean();
+                const existingApptIds = new Set(paidAppointments.map(a => String(a._id)));
+                masterAppts.forEach(ma => {
+                    if (!existingApptIds.has(String(ma._id))) {
+                        paidAppointments.push(ma);
+                    }
+                });
+            } catch (e) {}
+        }
+
+        // Track seen appointments
+        const seenApptIds = new Set();
+        transactions.forEach(t => {
+            if (t.billedItems?.appointments) {
+                t.billedItems.appointments.forEach(id => seenApptIds.add(String(id?._id || id)));
+            }
+        });
+
+        paidAppointments.forEach(apt => {
+            if (!seenApptIds.has(String(apt._id))) {
+                let proofUrl = apt.upiScreenshotUrl || '';
+                let upiId = '';
+                let txnId = apt.cardRef || '';
+                const pMethod = (apt.paymentMethod || 'Cash').toUpperCase();
+                const isCashOnly = (pMethod === 'CASH' || (pMethod.includes('CASH') && !pMethod.includes('UPI') && !pMethod.includes('ONLINE') && !pMethod.includes('CARD'))) &&
+                    (!apt.splitPayments || !apt.splitPayments.some(sp => {
+                        const m = (sp.method || '').toUpperCase();
+                        return m.includes('UPI') || m.includes('ONLINE') || m.includes('CARD');
+                    }));
+
+                if (!proofUrl && apt.notes && typeof apt.notes === 'string') {
+                    const ssMatch = apt.notes.match(/Screenshot:\s*(https?:\/\/[^\s|]+)/i);
+                    if (ssMatch) proofUrl = ssMatch[1];
+                    if (!isCashOnly) {
+                        const upiMatch = apt.notes.match(/UPI:\s*([^\s|]+)/i);
+                        if (upiMatch) upiId = upiMatch[1];
+                    }
+                    const txnMatch = apt.notes.match(/Txn:\s*([^\s|]+)/i);
+                    if (txnMatch && !isCashOnly) txnId = txnMatch[1];
+                }
+
+                if (isCashOnly) {
+                    upiId = '';
+                    proofUrl = '';
+                    txnId = '';
+                }
+
+                // Resolve accurate booking date & time: prefer the actual booking creation timestamp
+                let resolvedPaymentDate = apt.createdAt;
+                if (!resolvedPaymentDate && apt._id) {
+                    try {
+                        const rawHex = String(apt._id).substring(0, 8);
+                        if (/^[0-9a-fA-F]{8}$/.test(rawHex)) {
+                            resolvedPaymentDate = new Date(parseInt(rawHex, 16) * 1000);
+                        }
+                    } catch (e) {}
+                }
+                if (!resolvedPaymentDate) {
+                    resolvedPaymentDate = apt.appointmentDate || new Date();
+                }
+
+                transactions.push({
+                    _id: `appt_payment_${apt._id}`,
+                    hospitalId: apt.hospitalId,
+                    patientId: apt.userId,
+                    paymentMode: apt.paymentMethod || 'Cash',
+                    paymentStatus: 'Paid',
+                    amount: apt.amount || 0,
+                    splitPayments: apt.splitPayments || [],
+                    transactionId: txnId,
+                    upiId: upiId,
+                    proofUrl: proofUrl,
+                    appointmentDate: apt.appointmentDate,
+                    appointmentTime: apt.appointmentTime || '',
+                    paymentDate: resolvedPaymentDate,
+                    createdAt: apt.createdAt || resolvedPaymentDate,
+                    description: apt.serviceName ? `${apt.serviceName}${apt.doctorName ? ` - Dr. ${apt.doctorName.replace(/^Dr\.?\s*/i, '')}` : ''}` : `OPD Consultation Fee - Dr. ${apt.doctorName || 'Doctor'}`,
+                    doctorName: apt.doctorName ? (apt.doctorName.startsWith('Dr.') ? apt.doctorName : `Dr. ${apt.doctorName}`) : '',
+                    billedItems: { appointments: [apt._id] }
+                });
+            }
+        });
+
+        // 1. Accurate Date Filtering
+        if (startD || endD) {
+            const sTime = startD ? startD.getTime() : 0;
+            const eTime = endD ? endD.getTime() : Infinity;
+            transactions = transactions.filter(t => {
+                const itemDate = new Date(t.paymentDate || t.createdAt || 0).getTime();
+                return itemDate >= sTime && itemDate <= eTime;
+            });
+        }
+
+        // 2. Accurate Payment Mode Filtering
+        if (mode && mode !== 'ALL') {
+            const m = mode.trim().toUpperCase();
+            transactions = transactions.filter(t => {
+                const pMode = (t.paymentMode || '').toUpperCase();
+                const hasSplitUpi = t.splitPayments?.some(sp => {
+                    const method = (sp.method || '').toUpperCase();
+                    return method.includes('UPI') || method.includes('ONLINE');
+                });
+                const hasSplitCash = t.splitPayments?.some(sp => (sp.method || '').toUpperCase().includes('CASH'));
+                const hasSplitCard = t.splitPayments?.some(sp => (sp.method || '').toUpperCase().includes('CARD'));
+
+                if (m === 'UPI') {
+                    return pMode.includes('UPI') || pMode.includes('ONLINE') || hasSplitUpi;
+                }
+                if (m === 'CASH') {
+                    return pMode.includes('CASH') || hasSplitCash;
+                }
+                if (m === 'CARD') {
+                    return pMode.includes('CARD') || hasSplitCard;
+                }
+                return pMode.includes(m);
+            });
+        }
+
+        // 3. Accurate Search filtering (across patient name, phone, mrn, patientId, txnId, upiId, description, mode)
+        if (search && search.trim()) {
+            const term = search.trim().toLowerCase();
+            transactions = transactions.filter(t => {
+                const pat = t.patientId || {};
+                const name = (pat.name || '').toLowerCase();
+                const phone = (pat.phone || '').toLowerCase();
+                const mrn = (pat.mrn || pat.patientId || '').toLowerCase();
+                const txn = (t.transactionId || '').toLowerCase();
+                const upi = (t.upiId || '').toLowerCase();
+                const desc = (t.description || '').toLowerCase();
+                const modeStr = (t.paymentMode || '').toLowerCase();
+                return name.includes(term) || phone.includes(term) || mrn.includes(term) || txn.includes(term) || upi.includes(term) || desc.includes(term) || modeStr.includes(term);
+            });
+        }
+
+        // Sort by paymentDate descending
+        transactions.sort((a, b) => new Date(b.paymentDate || b.createdAt || 0) - new Date(a.paymentDate || a.createdAt || 0));
+
+        // Calculate summary metrics accurately for the filtered set
+        let totalCollected = 0;
+        let totalUpi = 0;
+        let totalCash = 0;
+
+        transactions.forEach(t => {
+            const amt = Number(t.amount) || 0;
+            totalCollected += amt;
+            const modeStr = (t.paymentMode || '').toUpperCase();
+
+            if (t.splitPayments && t.splitPayments.length > 0) {
+                t.splitPayments.forEach(sp => {
+                    const spAmt = Number(sp.amount) || 0;
+                    const spMethod = (sp.method || '').toUpperCase();
+                    if (spMethod.includes('UPI') || spMethod.includes('ONLINE')) {
+                        totalUpi += spAmt;
+                    } else if (spMethod.includes('CASH')) {
+                        totalCash += spAmt;
+                    } else {
+                        totalCash += spAmt;
+                    }
+                });
+            } else if (modeStr.includes('UPI') || modeStr.includes('ONLINE')) {
+                totalUpi += amt;
+            } else if (modeStr.includes('CASH')) {
+                totalCash += amt;
+            } else {
+                totalCash += amt;
+            }
+        });
+
+        res.json({
+            success: true,
+            transactions,
+            totalCollected,
+            totalUpi,
+            totalCash,
+            count: transactions.length,
+            dateRange: { startD, endD, preset: preset || 'all' }
+        });
+    } catch (err) {
+        console.error('[billing-history-error]', err);
+        res.status(500).json({ success: false, message: 'Failed to fetch billing history' });
     }
 });
 
