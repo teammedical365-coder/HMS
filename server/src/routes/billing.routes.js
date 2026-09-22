@@ -197,14 +197,63 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
             return results;
         };
 
+        const patientIdList = [
+            patient._id,
+            String(patient._id),
+            ...(patient.patientId ? [patient.patientId] : []),
+            ...(patient.mrn ? [patient.mrn] : [])
+        ];
+
         const [appointments, labReports, pharmacyOrders, facilityCharges, admissions, paymentTransactions, rawSurgeryPlans] = await Promise.all([
-            fetchWithMasterFallback(Appointment, MasterAppointment, { userId: patient._id, ...hFilter }, 'appointmentDate appointmentTime amount paymentStatus paymentMethod splitPayments upiScreenshotUrl cardRef notes serviceName doctorName status createdAt'),
-            fetchWithMasterFallback(LabReport, MasterLabReport, { userId: patient._id, ...hFilter }, 'testNames amount paymentStatus testStatus createdAt'),
-            fetchWithMasterFallback(PharmacyOrder, MasterPharmacyOrder, { userId: patient._id, ...hFilter }, 'items totalAmount paymentStatus orderStatus createdAt'),
-            fetchWithMasterFallback(FacilityCharge, MasterFacilityCharge, { patientId: patient._id, ...hFilter }, 'facilityName pricePerDay days totalAmount paymentStatus createdAt addedBy collectedBy', null, [{path: 'collectedBy', select: 'name'}, {path: 'addedBy', select: 'name'}]),
-            fetchWithMasterFallback(Admission, MasterAdmission, { patientId: patient._id, ...hFilter }, null, { admissionDate: -1 }),
-            fetchWithMasterFallback(PaymentTransaction, MasterPaymentTransaction, { patientId: patient._id, ...hFilter }, null, { paymentDate: -1 }),
-            fetchWithMasterFallback(SurgeryPlan, MasterSurgeryPlan, { patientId: patient._id, ...hFilter }, null, { surgeryDate: -1, createdAt: -1 })
+            fetchWithMasterFallback(Appointment, MasterAppointment, {
+                $or: [
+                    { userId: { $in: [patient._id, String(patient._id)] } },
+                    { patientId: { $in: patientIdList } }
+                ],
+                ...hFilter
+            }, 'appointmentDate appointmentTime amount paymentStatus paymentMethod splitPayments upiScreenshotUrl cardRef notes serviceName doctorName status createdAt'),
+            fetchWithMasterFallback(LabReport, MasterLabReport, {
+                $or: [
+                    { userId: { $in: [patient._id, String(patient._id)] } },
+                    { patientId: { $in: patientIdList } }
+                ],
+                ...hFilter
+            }, 'testNames amount paymentStatus testStatus createdAt'),
+            fetchWithMasterFallback(PharmacyOrder, MasterPharmacyOrder, {
+                $or: [
+                    { userId: { $in: [patient._id, String(patient._id)] } },
+                    { patientId: { $in: patientIdList } }
+                ],
+                ...hFilter
+            }, 'items totalAmount paymentStatus orderStatus createdAt'),
+            fetchWithMasterFallback(FacilityCharge, MasterFacilityCharge, {
+                $or: [
+                    { patientId: { $in: patientIdList } },
+                    { patientId: patient._id }
+                ],
+                ...hFilter
+            }, 'facilityName pricePerDay days totalAmount paymentStatus createdAt addedBy collectedBy', null, [{path: 'collectedBy', select: 'name'}, {path: 'addedBy', select: 'name'}]),
+            fetchWithMasterFallback(Admission, MasterAdmission, {
+                $or: [
+                    { patientId: { $in: patientIdList } },
+                    { patientId: patient._id }
+                ],
+                ...hFilter
+            }, null, { admissionDate: -1 }),
+            fetchWithMasterFallback(PaymentTransaction, MasterPaymentTransaction, {
+                $or: [
+                    { patientId: { $in: [patient._id, String(patient._id)] } },
+                    { patientId: { $in: patientIdList } }
+                ],
+                ...hFilter
+            }, null, { paymentDate: -1 }),
+            fetchWithMasterFallback(SurgeryPlan, MasterSurgeryPlan, {
+                $or: [
+                    { patientId: { $in: patientIdList } },
+                    { patientId: patient._id }
+                ],
+                ...hFilter
+            }, null, { surgeryDate: -1, createdAt: -1 })
         ]);
 
         const surgeryPlans = await populateBillingSurgeryPlans(rawSurgeryPlans);
@@ -745,7 +794,7 @@ router.get('/history', verifyBillingAccess, async (req, res) => {
         if (endD && endD > todayEnd) endD = todayEnd;
         if (startD && startD > todayEnd) startD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 
-        // Fetch transactions populated with patient and creator using tenant-scoped models
+        // Fetch transactions populated with patient, creator, and appointments using tenant-scoped models
         const { User, Appointment, PaymentTransaction } = getModels(req);
         const TxnModel = PaymentTransaction || MasterPaymentTransaction;
         const ApptModel = Appointment || MasterAppointment;
@@ -755,6 +804,10 @@ router.get('/history', verifyBillingAccess, async (req, res) => {
             transactions = await TxnModel.find(hospitalFilter)
                 .populate('patientId', 'name phone mrn patientId email')
                 .populate('addedBy', 'name role')
+                .populate({
+                    path: 'billedItems.appointments',
+                    select: 'appointmentDate appointmentTime createdAt updatedAt serviceName doctorName visitType notes upiScreenshotUrl cardRef'
+                })
                 .sort({ paymentDate: -1, createdAt: -1 })
                 .limit(Number(limit))
                 .lean();
@@ -767,6 +820,10 @@ router.get('/history', verifyBillingAccess, async (req, res) => {
                 const masterTxns = await MasterPaymentTransaction.find(hospitalFilter)
                     .populate('patientId', 'name phone mrn patientId email')
                     .populate('addedBy', 'name role')
+                    .populate({
+                        path: 'billedItems.appointments',
+                        select: 'appointmentDate appointmentTime createdAt updatedAt serviceName doctorName visitType notes upiScreenshotUrl cardRef'
+                    })
                     .sort({ paymentDate: -1, createdAt: -1 })
                     .limit(Number(limit))
                     .lean();
@@ -778,6 +835,20 @@ router.get('/history', verifyBillingAccess, async (req, res) => {
                 });
             } catch (e) {}
         }
+
+        // Reconcile booking timestamps and appointment metadata for existing transactions
+        transactions.forEach(t => {
+            const apt = t.billedItems?.appointments?.[0];
+            if (apt) {
+                if (!t.appointmentDate && apt.appointmentDate) t.appointmentDate = apt.appointmentDate;
+                if (!t.appointmentTime && apt.appointmentTime) t.appointmentTime = apt.appointmentTime;
+                if (apt.createdAt) {
+                    t.bookingCreatedAt = apt.createdAt;
+                    if (!t.paymentDate) t.paymentDate = apt.createdAt;
+                    if (!t.createdAt) t.createdAt = apt.createdAt;
+                }
+            }
+        });
 
         // Also fetch any paid appointments that have proof, paymentMethod or cardRef
         const apptQuery = {
@@ -816,7 +887,10 @@ router.get('/history', verifyBillingAccess, async (req, res) => {
         const seenApptIds = new Set();
         transactions.forEach(t => {
             if (t.billedItems?.appointments) {
-                t.billedItems.appointments.forEach(id => seenApptIds.add(String(id?._id || id)));
+                t.billedItems.appointments.forEach(item => {
+                    const id = item?._id || item;
+                    if (id) seenApptIds.add(String(id));
+                });
             }
         });
 
@@ -876,11 +950,12 @@ router.get('/history', verifyBillingAccess, async (req, res) => {
                     proofUrl: proofUrl,
                     appointmentDate: apt.appointmentDate,
                     appointmentTime: apt.appointmentTime || '',
+                    bookingCreatedAt: apt.createdAt || resolvedPaymentDate,
                     paymentDate: resolvedPaymentDate,
                     createdAt: apt.createdAt || resolvedPaymentDate,
                     description: apt.serviceName ? `${apt.serviceName}${apt.doctorName ? ` - Dr. ${apt.doctorName.replace(/^Dr\.?\s*/i, '')}` : ''}` : `OPD Consultation Fee - Dr. ${apt.doctorName || 'Doctor'}`,
                     doctorName: apt.doctorName ? (apt.doctorName.startsWith('Dr.') ? apt.doctorName : `Dr. ${apt.doctorName}`) : '',
-                    billedItems: { appointments: [apt._id] }
+                    billedItems: { appointments: [apt] }
                 });
             }
         });

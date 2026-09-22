@@ -776,6 +776,8 @@
   .erp-page-content:has(.ql-admin-body),
   .erp-page-content:has(.doc-main-dashboard-container),
   .erp-page-content:has(.doc-exact-patients-page),
+  .erp-page-content:has(.ha-billing-page),
+  .erp-page-content:has(.billing-profile-page),
   .erp-page-content:has(.upp-container) {
     padding: 0 !important;
     background: transparent !important;
@@ -831,6 +833,8 @@
   .erp-page-content:has(.ql-admin-body),
   .erp-page-content:has(.doc-main-dashboard-container),
   .erp-page-content:has(.doc-exact-patients-page),
+  .erp-page-content:has(.ha-billing-page),
+  .erp-page-content:has(.billing-profile-page),
   .erp-page-content:has(.upp-container) {
     padding: 0 !important;
     background: transparent !important;
@@ -1702,5 +1706,46 @@
   margin: 0;
   letter-spacing: -0.2px;
 }
+
+/* Global Print Styles: Hide ERP layout chrome, topbar, hamburger, and sidebars */
+@media print {
+  .erp-topbar,
+  .ca-erp-topbar,
+  .erp-sidebar,
+  .sidebar-toggle,
+  .hamburger,
+  .sidebar-overlay,
+  .sidebar-brand,
+  .sidebar-nav,
+  .ha-sidebar-ai-card {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .erp-layout {
+    display: block !important;
+    background: #ffffff !important;
+  }
+
+  .erp-main-area {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .erp-page-content,
+  .erp-fullbleed-content {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
 
 

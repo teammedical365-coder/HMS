@@ -7,12 +7,22 @@ import {
     FaEye, FaDownload, FaSearch, FaHistory, FaSyncAlt, FaExternalLinkAlt, 
     FaMoneyBillWave, FaQrcode, FaRupeeSign, FaCreditCard, FaFileAlt, 
     FaCheckCircle, FaPlus, FaEllipsisV, FaCopy, FaTimes, FaCalendarAlt, 
-    FaClock, FaChevronLeft, FaChevronRight, FaChevronDown, FaUsers, FaSortAmountDown, FaChartLine
+    FaClock, FaChevronLeft, FaChevronRight, FaChevronDown, FaUsers, FaSortAmountDown, FaChartLine, FaFilter
 } from 'react-icons/fa';
 import PaymentSection from '../../components/PaymentSection';
 import './PatientBillingProfile.css';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(n || 0);
+
+const formatPatientName = (name) => {
+    if (!name || typeof name !== 'string') return '';
+    return name
+        .toLowerCase()
+        .split(' ')
+        .filter(Boolean)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+};
 
 const formatTimeStr = (tStr) => {
     if (!tStr) return '';
@@ -59,82 +69,93 @@ const fmtDate = (d, apptTime = '') => {
 const getBookingDateTime = (t) => {
     if (!t) return { dateStr: '—', timeStr: '' };
 
-    // 1. Determine base calendar date (appointmentDate -> paymentDate -> createdAt)
-    let calendarDate = null;
-    if (t.appointmentDate) {
-        const d = new Date(t.appointmentDate);
-        if (!isNaN(d.getTime())) calendarDate = d;
-    }
-    if (!calendarDate && t.paymentDate) {
-        const d = new Date(t.paymentDate);
-        if (!isNaN(d.getTime())) calendarDate = d;
-    }
-    if (!calendarDate && t.createdAt) {
-        const d = new Date(t.createdAt);
-        if (!isNaN(d.getTime())) calendarDate = d;
-    }
+    // 1. Resolve exact booking/transaction timestamp
+    let dt = null;
+    const candidates = [
+        t.bookingCreatedAt,
+        t.billedItems?.appointments?.[0]?.createdAt,
+        t.paymentDate,
+        t.createdAt,
+        t.appointmentDate
+    ];
 
-    // 2. Extract exact booking creation timestamp (avoiding 05:30 am / 00:00 midnight UTC artifacts)
-    let bookingTimeDate = null;
-
-    if (t.createdAt) {
-        const cd = new Date(t.createdAt);
-        if (!isNaN(cd.getTime())) {
-            const h = cd.getHours();
-            const m = cd.getMinutes();
-            if (!(h === 5 && m === 30) && !(h === 0 && m === 0)) {
-                bookingTimeDate = cd;
+    for (const c of candidates) {
+        if (c) {
+            const d = new Date(c);
+            if (!isNaN(d.getTime())) {
+                // Avoid using midnight UTC artifacts if better candidate exists
+                const h = d.getHours();
+                const m = d.getMinutes();
+                const isMidnight = (h === 5 && m === 30) || (h === 0 && m === 0);
+                if (!isMidnight || !dt) {
+                    dt = d;
+                    if (!isMidnight) break;
+                }
             }
         }
     }
 
-    if (!bookingTimeDate && t.paymentDate) {
-        const pd = new Date(t.paymentDate);
-        if (!isNaN(pd.getTime())) {
-            const h = pd.getHours();
-            const m = pd.getMinutes();
-            if (!(h === 5 && m === 30) && !(h === 0 && m === 0)) {
-                bookingTimeDate = pd;
-            }
-        }
-    }
-
-    // If createdAt was midnight UTC or missing, extract exact epoch from MongoDB ObjectId (first 8 hex chars)
-    if (!bookingTimeDate && t._id) {
+    // 2. Fallback to ObjectId timestamp if needed
+    if (!dt && t._id) {
         const rawId = String(t._id).replace(/^appt_payment_/, '');
         if (/^[0-9a-fA-F]{24}$/.test(rawId)) {
             try {
                 const epoch = parseInt(rawId.substring(0, 8), 16) * 1000;
                 const idDate = new Date(epoch);
                 if (!isNaN(idDate.getTime())) {
-                    bookingTimeDate = idDate;
+                    dt = idDate;
                 }
             } catch (e) {}
         }
     }
 
-    // Format time string
-    let timeStr = '';
-    if (t.appointmentTime && typeof t.appointmentTime === 'string' && t.appointmentTime.trim()) {
-        timeStr = formatTimeStr(t.appointmentTime);
-    } else if (bookingTimeDate) {
-        timeStr = bookingTimeDate.toLocaleTimeString('en-IN', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true
-        });
-    }
+    if (!dt) dt = new Date();
 
-    // Format date string
-    const targetDate = (calendarDate && !isNaN(calendarDate.getTime())) ? calendarDate : (bookingTimeDate || new Date());
-    const dateStr = targetDate.toLocaleDateString('en-GB', {
+    // Format date string (e.g., 16 Sept 2026)
+    const dateStr = dt.toLocaleDateString('en-GB', {
         day: '2-digit',
         month: 'short',
         year: 'numeric'
     });
 
+    // Format exact booking time string (e.g., 12:34 PM, 04:48 PM)
+    const timeStr = dt.toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
+
     return { dateStr, timeStr };
 };
+
+const getTxnTimestamp = (t) => {
+    if (!t) return 0;
+    const candidates = [
+        t.paymentDate,
+        t.bookingCreatedAt,
+        t.billedItems?.appointments?.[0]?.createdAt,
+        t.createdAt,
+        t.appointmentDate
+    ];
+    for (const c of candidates) {
+        if (c) {
+            const d = new Date(c);
+            const tm = d.getTime();
+            if (!isNaN(tm) && tm > 0) return tm;
+        }
+    }
+    if (t._id) {
+        const rawId = String(t._id).replace(/^appt_payment_/, '');
+        if (/^[0-9a-fA-F]{24}$/.test(rawId)) {
+            try {
+                const epoch = parseInt(rawId.substring(0, 8), 16) * 1000;
+                if (!isNaN(epoch) && epoch > 0) return epoch;
+            } catch (e) {}
+        }
+    }
+    return 0;
+};
+
 
 const getAvatarStyle = (name = 'P') => {
     const char = (name.charAt(0) || 'P').toUpperCase();
@@ -152,6 +173,71 @@ const handleCopy = (text) => {
     if (!text || text === '—') return;
     navigator.clipboard.writeText(text);
     toast.success('Transaction ID copied to clipboard!');
+};
+
+const getSurgeryDateTime = (s) => {
+    if (!s) return { dateStr: '—', timeStr: '' };
+    
+    // 1. Resolve date
+    const dateRaw = s.surgeryDate || s.preferredDate || s.createdAt;
+    let baseDate = dateRaw ? new Date(dateRaw) : null;
+    if (!baseDate || isNaN(baseDate.getTime())) baseDate = new Date();
+    
+    const dateStr = baseDate.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+    });
+
+    // 2. Resolve exact booking/scheduled time
+    let timeStr = '';
+    const rawTime = s.startTime || s.preferredTime || s.surgeryTime || s.time;
+    if (rawTime && typeof rawTime === 'string' && rawTime.trim()) {
+        const tTrim = rawTime.trim();
+        const m = tTrim.match(/^(\d{1,2}):(\d{2})(?:\s*(am|pm))?$/i);
+        if (m) {
+            let h = parseInt(m[1], 10);
+            const min = m[2];
+            const ampm = m[3];
+            if (ampm) {
+                timeStr = `${String(h).padStart(2, '0')}:${min} ${ampm.toLowerCase()}`;
+            } else {
+                const suffix = h >= 12 ? 'pm' : 'am';
+                h = h % 12 || 12;
+                timeStr = `${String(h).padStart(2, '0')}:${min} ${suffix}`;
+            }
+        } else {
+            timeStr = tTrim.toLowerCase();
+        }
+    }
+    
+    // If no explicit time or if time is midnight default (05:30 am in IST), use exact booking creation timestamp
+    if (!timeStr && s.createdAt) {
+        const cDate = new Date(s.createdAt);
+        if (!isNaN(cDate.getTime())) {
+            timeStr = cDate.toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            }).toLowerCase();
+        }
+    }
+
+    // Fallback: check if dateRaw had non-midnight time
+    if (!timeStr && dateRaw) {
+        const dObj = new Date(dateRaw);
+        const h = dObj.getHours();
+        const m = dObj.getMinutes();
+        if (!((h === 5 && m === 30) || (h === 0 && m === 0))) {
+            timeStr = dObj.toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            }).toLowerCase();
+        }
+    }
+
+    return { dateStr, timeStr };
 };
 
 const fmtAdmissionDateTime = (dateVal, timeVal, fallbackCreatedAt) => {
@@ -195,18 +281,6 @@ const getPharmacyTotal = (p) => {
     }, 0);
 };
 
-const inspectGrandTotal = (b) => {
-    if (!b) return 0;
-    let t = 0;
-    b.appointments?.forEach(a => t += (Number(a.amount) || 0));
-    b.labReports?.forEach(l => t += (Number(l.amount || l.price) || 0));
-    b.pharmacyOrders?.forEach(p => t += getPharmacyTotal(p));
-    b.facilityCharges?.forEach(f => t += (Number(f.totalAmount) || 0));
-    b.admissions?.forEach(a => t += (Number(a.totalAmount) || 0));
-    b.surgeryPlans?.forEach(s => t += (Number(s.surgeryCost) || 0));
-    return t;
-};
-
 const inspectPaidTotal = (b) => {
     if (!b) return 0;
     let t = 0;
@@ -216,7 +290,27 @@ const inspectPaidTotal = (b) => {
     b.facilityCharges?.filter(f => f.paymentStatus && f.paymentStatus.toLowerCase() === 'paid').forEach(f => t += (Number(f.totalAmount) || 0));
     b.admissions?.forEach(a => t += (Number(a.paidAmount) || (a.paymentStatus && a.paymentStatus.toLowerCase() === 'paid' ? Number(a.totalAmount) : 0) || 0));
     b.surgeryPlans?.forEach(s => t += (Number(s.paidAmount) || (s.paymentStatus === 'PAID' ? Number(s.surgeryCost) : 0) || 0));
-    return t;
+
+    let historyPaid = 0;
+    b.paymentTransactions?.filter(p => {
+        const st = (p.paymentStatus || p.status || 'Paid').toLowerCase();
+        return st === 'paid';
+    }).forEach(p => historyPaid += (Number(p.amount) || 0));
+
+    return Math.max(t, historyPaid);
+};
+
+const inspectGrandTotal = (b) => {
+    if (!b) return 0;
+    let t = 0;
+    b.appointments?.forEach(a => t += (Number(a.amount) || 0));
+    b.labReports?.forEach(l => t += (Number(l.amount || l.price) || 0));
+    b.pharmacyOrders?.forEach(p => t += getPharmacyTotal(p));
+    b.facilityCharges?.forEach(f => t += (Number(f.totalAmount) || 0));
+    b.admissions?.forEach(a => t += (Number(a.totalAmount) || 0));
+    b.surgeryPlans?.forEach(s => t += (Number(s.surgeryCost) || 0));
+    const paid = inspectPaidTotal(b);
+    return Math.max(t, paid);
 };
 
 const PatientBillingProfile = () => {
@@ -259,6 +353,16 @@ const PatientBillingProfile = () => {
     const [userClosedPanel, setUserClosedPanel] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 5;
+    const [showMobileFiltersModal, setShowMobileFiltersModal] = useState(false);
+
+    const activeFilterCount = useMemo(() => {
+        let count = 0;
+        if (historyMode !== 'ALL') count++;
+        if (historyStatus !== 'ALL') count++;
+        if (datePreset !== 'all') count++;
+        if (historySort !== 'newest') count++;
+        return count;
+    }, [historyMode, historyStatus, datePreset, historySort]);
 
     // Calculate today's local date string (YYYY-MM-DD) for capping future calendar dates
     const getTodayDateStr = () => {
@@ -279,7 +383,7 @@ const PatientBillingProfile = () => {
         // 1. Date Filter
         if (datePreset === 'today') {
             list = list.filter(t => {
-                const d = new Date(t.paymentDate || t.createdAt || 0);
+                const d = new Date(getTxnTimestamp(t));
                 const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                 return dStr === todayStr;
             });
@@ -288,7 +392,7 @@ const PatientBillingProfile = () => {
             yest.setDate(yest.getDate() - 1);
             const yestStr = `${yest.getFullYear()}-${String(yest.getMonth() + 1).padStart(2, '0')}-${String(yest.getDate()).padStart(2, '0')}`;
             list = list.filter(t => {
-                const d = new Date(t.paymentDate || t.createdAt || 0);
+                const d = new Date(getTxnTimestamp(t));
                 const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                 return dStr === yestStr;
             });
@@ -298,21 +402,21 @@ const PatientBillingProfile = () => {
             const weekStart = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0, 0);
             const weekEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
             list = list.filter(t => {
-                const time = new Date(t.paymentDate || t.createdAt || 0).getTime();
+                const time = getTxnTimestamp(t);
                 return time >= weekStart.getTime() && time <= weekEnd.getTime();
             });
         } else if (datePreset === 'this_month') {
             const mStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
             const mEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
             list = list.filter(t => {
-                const time = new Date(t.paymentDate || t.createdAt || 0).getTime();
+                const time = getTxnTimestamp(t);
                 return time >= mStart.getTime() && time <= mEnd.getTime();
             });
         } else if (datePreset === 'last_month') {
             const lmStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
             const lmEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
             list = list.filter(t => {
-                const time = new Date(t.paymentDate || t.createdAt || 0).getTime();
+                const time = getTxnTimestamp(t);
                 return time >= lmStart.getTime() && time <= lmEnd.getTime();
             });
         } else if (datePreset === 'custom' && (customStartDate || customEndDate)) {
@@ -326,8 +430,13 @@ const PatientBillingProfile = () => {
                 const parts = customEndDate.split('-').map(Number);
                 eTime = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999).getTime();
             }
+            if (sTime > eTime) {
+                const tmp = sTime;
+                sTime = eTime;
+                eTime = tmp;
+            }
             list = list.filter(t => {
-                const time = new Date(t.paymentDate || t.createdAt || 0).getTime();
+                const time = getTxnTimestamp(t);
                 return time >= sTime && time <= eTime;
             });
         }
@@ -430,6 +539,11 @@ const PatientBillingProfile = () => {
             const parts = customEndDate.split('-').map(Number);
             eTime = new Date(parts[0], parts[1] - 1, parts[2], 23, 59, 59, 999).getTime();
         }
+        if (sTime > eTime) {
+            const tmp = sTime;
+            sTime = eTime;
+            eTime = tmp;
+        }
 
         let totalRevenue = 0;
         let totalCount = 0;
@@ -451,6 +565,8 @@ const PatientBillingProfile = () => {
         let monthCashCount = 0;
         let monthOnlineCount = 0;
 
+        let customRevenue = 0;
+        let customCount = 0;
         let customCashCount = 0;
         let customOnlineCount = 0;
 
@@ -462,14 +578,14 @@ const PatientBillingProfile = () => {
             totalRevenue += amt;
             totalCount++;
 
-            const d = new Date(t.paymentDate || t.createdAt || 0);
-            const tTime = d.getTime();
+            const tTime = getTxnTimestamp(t);
+            const d = new Date(tTime || 0);
             const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
             const isToday = dStr === todayStr;
             const isThisWeek = tTime >= weekStart && tTime <= weekEnd;
             const isThisMonth = tTime >= monthStart && tTime <= monthEnd;
-            const isCustom = tTime >= sTime && tTime <= eTime;
+            const isCustom = (customStartDate || customEndDate) ? (tTime >= sTime && tTime <= eTime) : false;
 
             if (isToday) {
                 todayRevenue += amt;
@@ -482,6 +598,10 @@ const PatientBillingProfile = () => {
             if (isThisMonth) {
                 monthRevenue += amt;
                 monthCount++;
+            }
+            if (isCustom) {
+                customRevenue += amt;
+                customCount++;
             }
 
             const mode = (t.paymentMode || t.paymentMethod || '').toUpperCase();
@@ -526,7 +646,7 @@ const PatientBillingProfile = () => {
         } else if (datePreset === 'custom') {
             activeCashCount = customCashCount;
             activeOnlineCount = customOnlineCount;
-            activePeriodLabel = 'Custom';
+            activePeriodLabel = 'Custom Range';
         }
 
         return {
@@ -538,6 +658,8 @@ const PatientBillingProfile = () => {
             weekCount,
             monthRevenue,
             monthCount,
+            customRevenue,
+            customCount,
             activeCashCount,
             activeOnlineCount,
             activePeriodLabel
@@ -793,10 +915,8 @@ const PatientBillingProfile = () => {
     };
 
     const handleCustomDateChange = (start, end) => {
-        const safeStart = start && start > maxDate ? maxDate : start;
-        const safeEnd = end && end > maxDate ? maxDate : end;
-        setCustomStartDate(safeStart);
-        setCustomEndDate(safeEnd);
+        setCustomStartDate(start || '');
+        setCustomEndDate(end || '');
     };
 
     // Shared fail-safe invoice/statement printing & downloading handler
@@ -1245,11 +1365,13 @@ const PatientBillingProfile = () => {
     };
 
     const openPatientBilling = (txn) => {
-        const pat = txn.patientId;
-        const identifier = pat?.mrn || pat?.patientId || pat?.phone || pat?.name;
+        if (!txn) return;
+        const pat = (typeof txn.patientId === 'object' && txn.patientId !== null) ? txn.patientId : {};
+        const patIdStr = typeof txn.patientId === 'string' ? txn.patientId : (pat._id || '');
+        const identifier = pat.patientId || pat.mrn || patIdStr || pat.phone || txn.patientMrn || txn.patientPhone || pat.name || txn.patientName;
         if (identifier) {
-            setSearchQuery(identifier);
-            loadPatientBilling(identifier);
+            setSearchQuery(pat.name || txn.patientName || identifier);
+            loadPatientBilling(identifier, txn);
             setActiveTab('patient');
         } else {
             toast.error('Patient identifier not found for this transaction');
@@ -1318,21 +1440,60 @@ const PatientBillingProfile = () => {
         fetchUpiOptions();
     }, []);
 
-    const loadPatientBilling = async (identifier) => {
+    const loadPatientBilling = async (identifier, initialTxn = null) => {
         setLoading(true);
         setError('');
-        setPatient(null);
-        setBilling(null);
+        
+        let initialPat = null;
+        if (initialTxn) {
+            const patObj = (typeof initialTxn.patientId === 'object' && initialTxn.patientId !== null) ? initialTxn.patientId : {};
+            initialPat = {
+                _id: patObj._id || (typeof initialTxn.patientId === 'string' ? initialTxn.patientId : ''),
+                name: patObj.name || initialTxn.patientName || 'Patient',
+                mrn: patObj.mrn || patObj.patientId || initialTxn.patientMrn || '',
+                patientId: patObj.patientId || patObj.mrn || initialTxn.patientMrn || '',
+                phone: patObj.phone || initialTxn.patientPhone || '',
+                gender: patObj.gender || '',
+                dob: patObj.dob || ''
+            };
+            setPatient(initialPat);
+            setBilling({
+                appointments: initialTxn.billedItems?.appointments || [],
+                labReports: [],
+                pharmacyOrders: [],
+                facilityCharges: [],
+                admissions: [],
+                surgeryPlans: [],
+                paymentTransactions: [initialTxn]
+            });
+        } else {
+            setPatient(null);
+            setBilling(null);
+        }
+
         setSelected({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [], surgeryPlans: [] });
         setSuccessMsg('');
         try {
             const res = await billingAPI.getPatientBills(identifier);
-            if (res.success) {
-                setPatient(res.patient);
-                setBilling(res.billing);
+            if (res && res.success) {
+                setPatient(res.patient || initialPat);
+                const fetchedBilling = res.billing || {};
+                if (initialTxn) {
+                    fetchedBilling.paymentTransactions = fetchedBilling.paymentTransactions || [];
+                    const hasTxn = fetchedBilling.paymentTransactions.some(p => String(p._id) === String(initialTxn._id));
+                    if (!hasTxn) {
+                        fetchedBilling.paymentTransactions.unshift(initialTxn);
+                    }
+                }
+                setBilling(fetchedBilling);
+            } else if (!initialTxn) {
+                setError('Patient billing data not found');
             }
         } catch (err) {
-            setError(err.response?.data?.message || 'Patient not found');
+            console.error('loadPatientBilling error:', err);
+            if (!initialTxn) {
+                setError(err.response?.data?.message || 'Patient not found');
+            }
         } finally {
             setLoading(false);
         }
@@ -1419,19 +1580,6 @@ const PatientBillingProfile = () => {
         });
         return total;
     };
-
-    const grandTotalBill = () => {
-        if (!billing) return 0;
-        let total = 0;
-        billing.appointments?.forEach(a => total += (Number(a.amount) || 0));
-        billing.labReports?.forEach(l => total += (Number(l.amount || l.price) || 0));
-        billing.pharmacyOrders?.forEach(p => total += getPharmacyTotal(p));
-        billing.facilityCharges?.forEach(f => total += (Number(f.totalAmount) || 0));
-        billing.admissions?.forEach(a => total += (Number(a.totalAmount) || 0));
-        billing.surgeryPlans?.forEach(s => total += (Number(s.surgeryCost) || 0));
-        return total;
-    };
-
     const totalPaidBill = () => {
         if (!billing) return 0;
         
@@ -1444,11 +1592,28 @@ const PatientBillingProfile = () => {
         billing.admissions?.forEach(a => modulePaid += (Number(a.paidAmount) || (isPaid(a.paymentStatus) ? Number(a.totalAmount) : 0) || 0));
         billing.surgeryPlans?.forEach(s => modulePaid += (Number(s.paidAmount) || (s.paymentStatus === 'PAID' ? Number(s.surgeryCost) : 0) || 0));
 
-        // Sum from payment history
+        // Sum from payment history - check both p.paymentStatus and p.status
         let historyPaid = 0;
-        billing.paymentTransactions?.filter(p => isPaid(p.status)).forEach(p => historyPaid += (Number(p.amount) || 0));
+        billing.paymentTransactions?.filter(p => {
+            const st = (p.paymentStatus || p.status || 'Paid').toLowerCase();
+            return st === 'paid';
+        }).forEach(p => historyPaid += (Number(p.amount) || 0));
 
         return Math.max(modulePaid, historyPaid);
+    };
+
+    const grandTotalBill = () => {
+        if (!billing) return 0;
+        let total = 0;
+        billing.appointments?.forEach(a => total += (Number(a.amount) || 0));
+        billing.labReports?.forEach(l => total += (Number(l.amount || l.price) || 0));
+        billing.pharmacyOrders?.forEach(p => total += getPharmacyTotal(p));
+        billing.facilityCharges?.forEach(f => total += (Number(f.totalAmount) || 0));
+        billing.admissions?.forEach(a => total += (Number(a.totalAmount) || 0));
+        billing.surgeryPlans?.forEach(s => total += (Number(s.surgeryCost) || 0));
+
+        const paid = totalPaidBill();
+        return Math.max(total, paid);
     };
 
     const balanceBill = () => Math.max(0, grandTotalBill() - totalPaidBill());
@@ -1547,6 +1712,15 @@ const PatientBillingProfile = () => {
     const activeAdmissions = billing?.admissions?.filter(a => a.status === 'Admitted') || [];
     const pastAdmissions = billing?.admissions?.filter(a => a.status === 'Discharged') || [];
 
+    // Filtered pending lists for Hospital Admin view (view-only pending oversight)
+    const pendingAdmissionsList = activeAdmissions.filter(adm => !isPaid(adm.paymentStatus));
+    const pendingSurgeryPlans = (billing?.surgeryPlans || []).filter(s => s.paymentStatus !== 'PAID');
+    const pendingAppointments = (billing?.appointments || []).filter(a => !isPaid(a.paymentStatus));
+    const pendingFacilityCharges = (billing?.facilityCharges || []).filter(f => !isPaid(f.paymentStatus));
+    const pendingLabReports = (billing?.labReports || []).filter(l => !isPaid(l.paymentStatus));
+    const pendingPharmacyOrders = (billing?.pharmacyOrders || []).filter(p => !isPaid(p.paymentStatus));
+    const pendingPastAdmissions = pastAdmissions.filter(adm => !isPaid(adm.paymentStatus));
+
     const handleSplitPaymentChange = (index, field, value) => {
         const newSplits = [...splitPayments];
         newSplits[index][field] = value;
@@ -1563,31 +1737,54 @@ const PatientBillingProfile = () => {
     const totalSplitAmount = splitPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const balanceRemaining = Math.max(0, totalSelected() - totalSplitAmount);
 
+    const printBookingInfo = useMemo(() => {
+        if (!billing) return { dateStr: fmtDate(new Date()), timeStr: '' };
+        const pt = (billing.paymentTransactions && billing.paymentTransactions.length > 0) ? billing.paymentTransactions[0] : null;
+        if (pt) {
+            const dt = getBookingDateTime(pt);
+            return {
+                dateStr: dt.dateStr || fmtDate(pt.paymentDate || pt.createdAt),
+                timeStr: dt.timeStr || pt.appointmentTime || ''
+            };
+        }
+        const apt = (billing.appointments && billing.appointments.length > 0) ? billing.appointments[0] : null;
+        if (apt) {
+            const dt = getBookingDateTime(apt);
+            return {
+                dateStr: dt.dateStr || fmtDate(apt.appointmentDate || apt.createdAt),
+                timeStr: dt.timeStr || apt.appointmentTime || ''
+            };
+        }
+        return { dateStr: fmtDate(new Date()), timeStr: '' };
+    }, [billing]);
+
     return (
         <div className="billing-profile-page" style={{ maxWidth: '100%', margin: '0', padding: '0' }}>
-            {/* Show top banner ONLY when in individual patient settlement tab */}
-            {activeTab === 'patient' && (
+            {/* Show top banner ONLY when in individual patient settlement tab (hidden for Hospital Admin) */}
+            {activeTab === 'patient' && !isHospitalAdmin && (
                 <div className="billing-header" style={{
                     background: 'linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)',
-                    padding: '16px 24px',
+                    padding: '12px 18px',
                     borderRadius: '12px',
                     color: 'white',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    boxShadow: '0 6px 16px -4px rgba(20, 184, 166, 0.35)',
-                    margin: '18px 24px 20px 24px',
+                    boxShadow: '0 4px 12px -2px rgba(20, 184, 166, 0.25)',
+                    margin: isHospitalAdmin ? '0 0 16px 0' : '18px 24px 20px 24px',
                     backdropFilter: 'blur(10px)',
                     border: '1px solid rgba(255, 255, 255, 0.2)'
                 }}>
                     <div>
-                        <h1 style={{ margin: '0 0 4px 0', fontSize: '1.4rem', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 800 }}>
-                            <span style={{ fontSize: '1.4rem' }}>💳</span> Record & Settle Patient Payment
+                        <h1 style={{ margin: '0 0 2px 0', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}>
+                            <span style={{ fontSize: '1.25rem' }}>💳</span> {isHospitalAdmin ? 'Patient Payment Profile' : 'Record & Settle Patient Payment'}
                         </h1>
-                        <p style={{ margin: 0, fontSize: '0.88rem', opacity: 0.9 }}>Search patient, calculate outstanding dues across OPD, Pharmacy, Lab, and record collections.</p>
+                        <p style={{ margin: 0, fontSize: '0.84rem', opacity: 0.9 }}>
+                            {isHospitalAdmin ? 'View patient billing history, outstanding dues, and settlement details.' : 'Search patient, calculate outstanding dues across OPD, Pharmacy, Lab, and record collections.'}
+                        </p>
                     </div>
                     <button className="btn-back" onClick={() => setActiveTab('history')} style={{
-                        padding: '8px 18px',
+                        padding: '7px 16px',
                         background: 'rgba(255, 255, 255, 0.2)',
                         backdropFilter: 'blur(8px)',
                         border: '1px solid rgba(255, 255, 255, 0.4)',
@@ -1595,7 +1792,7 @@ const PatientBillingProfile = () => {
                         borderRadius: '8px',
                         cursor: 'pointer',
                         fontWeight: 700,
-                        fontSize: '0.88rem',
+                        fontSize: '0.85rem',
                         transition: 'all 0.2s',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                     }}
@@ -1633,134 +1830,257 @@ const PatientBillingProfile = () => {
             )}
 
             {activeTab === 'patient' && (
-                <>
-                    {/* Search */}
-                    <div style={{ position: 'relative', marginBottom: '30px' }} className="billing-search-container">
-                <form className="billing-search-bar" onSubmit={handleSearch} style={{
-                    display: 'flex', gap: '12px', padding: '10px', background: 'white', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)', border: '1px solid #e2e8f0'
-                }}>
-                    <div style={{ flex: 1, position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', fontSize: '1.2rem' }}>🔍</span>
-                        <input
-                            type="text"
-                            placeholder="Search by Phone / MRN / Patient ID..."
-                            value={searchQuery}
-                            onChange={e => handleQueryChange(e.target.value)}
-                            onFocus={() => searchQuery.trim().length >= 2 && setShowSuggestions(true)}
-                            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                            style={{ width: '100%', padding: '16px 16px 16px 48px', border: 'none', borderRadius: '8px', fontSize: '1.1rem', outline: 'none', background: '#f8fafc' }}
-                        />
-                    </div>
-                    <button type="submit" disabled={loading} style={{
-                        padding: '0 32px', background: 'linear-gradient(to right, #0ea5e9, #2563eb)', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.1rem', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.4)', transition: 'transform 0.1s'
-                    }}
-                        onMouseDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
-                        onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
-                    >
-                        {loading ? 'Searching...' : 'Search'}
-                    </button>
-                </form>
+                <div className="billing-patient-view-wrap" style={{ padding: isHospitalAdmin ? '0' : '0 24px 30px 24px' }}>
+                    {loading && (
+                        <div style={{ textAlign: 'center', padding: '60px 20px', background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', marginBottom: '24px' }}>
+                            <FaSyncAlt size={26} className="spin" style={{ color: '#0f766e', marginBottom: '12px' }} />
+                            <p style={{ margin: 0, color: '#475569', fontSize: '1.05rem', fontWeight: 600 }}>Loading patient billing details...</p>
+                        </div>
+                    )}
 
-                {showSuggestions && suggestions.length > 0 && (
-                    <div className="search-suggestions-dropdown" style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        backgroundColor: '#ffffff',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '8px',
-                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                        zIndex: 1000,
-                        maxHeight: '240px',
-                        overflowY: 'auto',
-                        marginTop: '4px'
-                    }}>
-                        {suggestions.map(p => (
-                            <div
-                                key={p._id}
-                                onClick={() => {
-                                    setSearchQuery(p.mrn || p.patientId || p.phone || p.name);
-                                    setShowSuggestions(false);
-                                    loadPatientBilling(p.mrn || p.patientId || p.phone || p.name);
-                                }}
-                                style={{
-                                    padding: '10px 14px',
-                                    borderBottom: '1px solid #f1f5f9',
-                                    cursor: 'pointer',
-                                    fontSize: '0.9rem',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    textAlign: 'left'
-                                }}
-                                className="suggestion-item"
-                                onMouseDown={(e) => e.preventDefault()}
-                            >
-                                <strong style={{ color: '#1e293b' }}>{p.name}</strong>
-                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                    MRN: {p.mrn || 'N/A'} | Phone: {p.phone || 'N/A'}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+                    {error && <div className="billing-error">{error}</div>}
+                    {successMsg && <div className="billing-success">{successMsg}</div>}
 
-            {error && <div className="billing-error">{error}</div>}
-            {successMsg && <div className="billing-success">{successMsg}</div>}
-
-            {patient && billing && (
-                <>
+                    {patient && billing && (
+                        <>
                     {/* Patient Card */}
-                    <div className="patient-info-card">
-                        <div className="patient-avatar">{patient.name?.charAt(0)?.toUpperCase()}</div>
-                        <div className="patient-details">
-                            <h2>{patient.name}</h2>
-                            <div className="patient-meta">
-                                <span>MRN: {patient.mrn || patient.patientId || '—'}</span>
-                                <span>Phone: {patient.phone || '—'}</span>
-                                {patient.gender && <span>Gender: {patient.gender}</span>}
-                                {patient.dob && <span>DOB: {fmtDate(patient.dob)}</span>}
+                    {isHospitalAdmin ? (
+                        <div className="patient-info-card ha-patient-banner-cool no-print" style={{ margin: '0 0 16px 0' }}>
+                            <div className="ha-pat-banner-top">
+                                <div className="ha-pat-banner-left">
+                                    <div className="ha-pat-banner-avatar">
+                                        {patient.name?.charAt(0)?.toUpperCase() || 'P'}
+                                    </div>
+                                    <div className="ha-pat-banner-identity">
+                                        <h2 className="ha-pat-banner-name">
+                                            {formatPatientName(patient.name)}
+                                        </h2>
+                                        <div className="ha-pat-banner-meta">
+                                            <span className="ha-pat-tag">MRN: <strong>{patient.mrn || patient.patientId || '—'}</strong></span>
+                                            <span className="ha-pat-tag">Phone: <strong>{patient.phone || '—'}</strong></span>
+                                            {patient.gender && <span className="ha-pat-tag">Gender: <strong>{patient.gender}</strong></span>}
+                                            {patient.dob && <span className="ha-pat-tag">DOB: <strong>{fmtDate(patient.dob)}</strong></span>}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="ha-pat-banner-right no-print">
+                                    <button
+                                        type="button"
+                                        className="ha-pat-back-btn"
+                                        onClick={() => setActiveTab('history')}
+                                    >
+                                        <span className="ha-btn-text-desktop">&larr; Back to Payment Register</span>
+                                        <span className="ha-btn-text-mobile">&larr; Back</span>
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        onClick={() => window.print()} 
+                                        className="ha-pat-btn-print"
+                                    >
+                                        <span className="ha-btn-text-desktop">🖨️ Print Consolidated Bill</span>
+                                        <span className="ha-btn-text-mobile">📥 Download</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="ha-pat-financial-strip">
+                                <div className="ha-pat-metrics-group">
+                                    <div className="ha-pat-metric-pill total">
+                                        <span className="ha-metric-lbl">Grand Total Bill</span>
+                                        <span className="ha-metric-val">{fmt(grandTotalBill())}</span>
+                                    </div>
+                                    <div className="ha-pat-metric-pill paid">
+                                        <span className="ha-metric-lbl">Total Paid</span>
+                                        <span className="ha-metric-val">{fmt(totalPaidBill())}</span>
+                                    </div>
+                                    <div className="ha-pat-metric-pill balance">
+                                        <span className="ha-metric-lbl">Balance Due</span>
+                                        <span className="ha-metric-val">{fmt(balanceBill())}</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div className="patient-outstanding">
-                            <div className="outstanding-label">Grand Total Bill</div>
-                            <div className="outstanding-amount">{fmt(grandTotalBill())}</div>
-                            <div className="paid-balance-meta">
-                                <span className="meta-paid">Paid: {fmt(totalPaidBill())}</span>
-                                <span className="meta-balance">Balance: {fmt(balanceBill())}</span>
+                    ) : (
+                        <div className="patient-info-card no-print">
+                            <div className="patient-avatar">{patient.name?.charAt(0)?.toUpperCase()}</div>
+                            <div className="patient-details">
+                                <h2 style={{ fontWeight: 600, fontSize: '1.3rem', letterSpacing: '-0.01em', margin: '0 0 6px 0' }}>{patient.name}</h2>
+                                <div className="patient-meta">
+                                    <span>MRN: {patient.mrn || patient.patientId || '—'}</span>
+                                    <span>Phone: {patient.phone || '—'}</span>
+                                    {patient.gender && <span>Gender: {patient.gender}</span>}
+                                    {patient.dob && <span>DOB: {fmtDate(patient.dob)}</span>}
+                                </div>
                             </div>
-                            <button 
-                                onClick={() => window.print()} 
-                                style={{
-                                    marginTop: '12px',
-                                    padding: '8px 12px',
-                                    backgroundColor: '#3b82f6',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer',
-                                    fontWeight: '500',
-                                    width: '100%',
-                                    display: 'flex',
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                    gap: '6px'
-                                }}
-                            >
-                                🖨️ Print Consolidated Bill
-                            </button>
+                            <div className="patient-outstanding">
+                                <div className="outstanding-label">Grand Total Bill</div>
+                                <div className="outstanding-amount">{fmt(grandTotalBill())}</div>
+                                <div className="paid-balance-meta">
+                                    <span className="meta-paid">Paid: {fmt(totalPaidBill())}</span>
+                                    <span className="meta-balance">Balance: {fmt(balanceBill())}</span>
+                                </div>
+                                <button 
+                                    onClick={() => window.print()} 
+                                    style={{
+                                        marginTop: '12px',
+                                        padding: '8px 12px',
+                                        backgroundColor: '#3b82f6',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontWeight: '500',
+                                        width: '100%',
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                >
+                                    🖨️ Print Consolidated Bill
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ====== DEDICATED SIMPLE & CLEAN PRINTABLE BILL / RECEIPT (SHOWN ONLY ON PRINT) ====== */}
+                    <div className="ha-printable-receipt">
+                        <div className="ha-pr-clean-header">
+                            <div className="ha-pr-left-meta">
+                                <h1 className="ha-pr-hospital-name">
+                                    {currentUser?.hospitalId?.name || currentUser?.hospitalName || localStorage.getItem('hospitalName') || 'Pacific Hospital'}
+                                </h1>
+                                <div className="ha-pr-receipt-tag">Official Patient Payment Receipt</div>
+
+                                <div className="ha-pr-aligned-details">
+                                    <div className="ha-pr-row">
+                                        <span className="ha-pr-label">Appointment Date &amp; Time:</span>
+                                        <strong className="ha-pr-val">
+                                            {printBookingInfo.dateStr} {printBookingInfo.timeStr ? `(${printBookingInfo.timeStr})` : ''}
+                                        </strong>
+                                    </div>
+                                    <div className="ha-pr-row">
+                                        <span className="ha-pr-label">Patient Name:</span>
+                                        <strong className="ha-pr-val ha-pr-name">
+                                            {formatPatientName(patient.name)}
+                                        </strong>
+                                    </div>
+                                    <div className="ha-pr-row">
+                                        <span className="ha-pr-label">MRN / Patient ID:</span>
+                                        <span className="ha-pr-val">{patient.mrn || patient.patientId || '—'}</span>
+                                    </div>
+                                    <div className="ha-pr-row">
+                                        <span className="ha-pr-label">Phone Number:</span>
+                                        <span className="ha-pr-val">{patient.phone || '—'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="ha-pr-right-meta">
+                                <div className="ha-pr-badge-paid">✓ PAID &amp; SETTLED</div>
+                                <div className="ha-pr-date-issued">Receipt Date: {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                            </div>
+                        </div>
+
+                        <div className="ha-pr-hr"></div>
+
+                        <div className="ha-pr-section-title">PAYMENT DETAILS</div>
+
+                        <table className="ha-pr-table">
+                            <thead>
+                                <tr>
+                                    <th style={{ width: '35px', textAlign: 'center' }}>#</th>
+                                    <th>Service / Description</th>
+                                    <th>Payment Mode</th>
+                                    <th>Transaction Ref / UTR</th>
+                                    <th>Date &amp; Time</th>
+                                    <th style={{ textAlign: 'center' }}>Status</th>
+                                    <th style={{ textAlign: 'right' }}>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(billing.paymentTransactions && billing.paymentTransactions.length > 0) ? (
+                                    billing.paymentTransactions.map((pt, idx) => {
+                                        const { dateStr, timeStr } = getBookingDateTime(pt);
+                                        return (
+                                            <tr key={pt._id || idx}>
+                                                <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                                                <td>
+                                                    <strong style={{ color: '#0f172a' }}>{pt.description || 'OPD Consultation Fee'}</strong>
+                                                </td>
+                                                <td>{pt.paymentMode || 'Cash'}</td>
+                                                <td><code>{pt.transactionId || pt.upiId || pt.bankReference || '—'}</code></td>
+                                                <td>{dateStr} {timeStr ? `(${timeStr})` : ''}</td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    <span className="ha-pr-status-badge">Paid</span>
+                                                </td>
+                                                <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(pt.amount)}</td>
+                                            </tr>
+                                        );
+                                    })
+                                ) : (billing.appointments && billing.appointments.length > 0) ? (
+                                    billing.appointments.map((apt, idx) => (
+                                        <tr key={apt._id || idx}>
+                                            <td style={{ textAlign: 'center' }}>{idx + 1}</td>
+                                            <td>OPD Consultation Fee - Dr. {apt.doctorName || 'Doctor'}</td>
+                                            <td>{apt.paymentMethod || 'Cash'}</td>
+                                            <td><code>{apt.cardRef || '—'}</code></td>
+                                            <td>{fmtDate(apt.appointmentDate, apt.appointmentTime)}</td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                <span className="ha-pr-status-badge">{apt.paymentStatus || 'Paid'}</span>
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(apt.amount)}</td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="7" style={{ textAlign: 'center', padding: '16px', color: '#64748b' }}>
+                                            No individual transactions recorded.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+
+                        {/* Financial Totals Summary (Aligned Right) */}
+                        <div className="ha-pr-totals-container">
+                            <div className="ha-pr-totals-card">
+                                <div className="ha-pr-totals-row">
+                                    <span>Grand Total Bill:</span>
+                                    <strong>{fmt(grandTotalBill())}</strong>
+                                </div>
+                                <div className="ha-pr-totals-row paid">
+                                    <span>Total Amount Paid:</span>
+                                    <strong style={{ color: '#15803d' }}>{fmt(totalPaidBill())}</strong>
+                                </div>
+                                <div className="ha-pr-totals-row balance">
+                                    <span>Balance Due:</span>
+                                    <strong>{fmt(balanceBill())}</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Official Print Footer */}
+                        <div className="ha-pr-footer">
+                            <div className="ha-pr-footer-note">
+                                • Official receipt issued by {currentUser?.hospitalId?.name || currentUser?.hospitalName || localStorage.getItem('hospitalName') || 'Pacific Hospital'}.<br />
+                                • Valid for insurance, tax deduction, and hospital records.
+                            </div>
+                            <div className="ha-pr-footer-sig">
+                                <div className="ha-pr-sig-line"></div>
+                                <span>Authorized Signature &amp; Stamp</span>
+                            </div>
                         </div>
                     </div>
 
                     {/* Active Admissions */}
-                    {activeAdmissions.length > 0 && (
+                    {(isHospitalAdmin ? pendingAdmissionsList.length > 0 : activeAdmissions.length > 0) && (
                         <div className="billing-section admitted-section">
                             <div className="section-header admitted-header">
                                 <span className="admitted-badge">Currently Admitted</span>
                                 <h3>Active Hospitalization</h3>
                             </div>
-                            {activeAdmissions.map(adm => (
+                            {(isHospitalAdmin ? pendingAdmissionsList : activeAdmissions).map(adm => (
                                 <div key={adm._id} className="admission-card active">
                                     <div className="admission-top">
                                         <div>
@@ -1769,50 +2089,60 @@ const PatientBillingProfile = () => {
                                             {adm.bedNumber && <span className="badge-bed"> Bed: {adm.bedNumber}</span>}
                                         </div>
                                         <div className="admission-actions">
-                                            <label className="check-label">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selected.admissions.includes(adm._id)}
-                                                    onChange={() => toggle('admissions', adm._id)}
-                                                    disabled={isPaid(adm.paymentStatus)}
-                                                />
-                                                {isPaid(adm.paymentStatus) ? (
-                                                    <span className="paid-badge">Paid</span>
-                                                ) : (
-                                                    <span>Mark for payment</span>
-                                                )}
-                                            </label>
-                                            <button
-                                                className="btn-discharge"
-                                                onClick={() => handleDischarge(adm._id)}
-                                                disabled={dischargingId === adm._id}
-                                            >
-                                                {dischargingId === adm._id ? 'Discharging...' : 'Discharge'}
-                                            </button>
+                                            {!isHospitalAdmin ? (
+                                                <>
+                                                    <label className="check-label">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selected.admissions.includes(adm._id)}
+                                                            onChange={() => toggle('admissions', adm._id)}
+                                                            disabled={isPaid(adm.paymentStatus)}
+                                                        />
+                                                        {isPaid(adm.paymentStatus) ? (
+                                                            <span className="paid-badge">Paid</span>
+                                                        ) : (
+                                                            <span>Mark for payment</span>
+                                                        )}
+                                                    </label>
+                                                    <button
+                                                        className="btn-discharge"
+                                                        onClick={() => handleDischarge(adm._id)}
+                                                        disabled={dischargingId === adm._id}
+                                                    >
+                                                        {dischargingId === adm._id ? 'Discharging...' : 'Discharge'}
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <span className="status-badge" style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5', fontWeight: 700 }}>
+                                                    Pending — {fmt(adm.totalAmount)}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                     {adm.selectedFacilities?.length > 0 && (
-                                        <table className="facility-table">
-                                            <thead>
-                                                <tr><th>Facility</th><th>Rate/Day</th><th>Days</th><th>Amount</th></tr>
-                                            </thead>
-                                            <tbody>
-                                                {adm.selectedFacilities.map((f, i) => (
-                                                    <tr key={i}>
-                                                        <td>{f.facilityName}</td>
-                                                        <td>{fmt(f.pricePerDay)}</td>
-                                                        <td>{f.days}</td>
-                                                        <td>{fmt(f.totalAmount)}</td>
+                                        <div className="billing-table-responsive">
+                                            <table className="facility-table">
+                                                <thead>
+                                                    <tr><th>Facility</th><th>Rate/Day</th><th>Days</th><th>Amount</th></tr>
+                                                </thead>
+                                                <tbody>
+                                                    {adm.selectedFacilities.map((f, i) => (
+                                                        <tr key={i}>
+                                                            <td>{f.facilityName}</td>
+                                                            <td>{fmt(f.pricePerDay)}</td>
+                                                            <td>{f.days}</td>
+                                                            <td>{fmt(f.totalAmount)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                                <tfoot>
+                                                    <tr>
+                                                        <td colSpan="3"><strong>Total</strong></td>
+                                                        <td><strong>{fmt(adm.totalAmount)}</strong></td>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                            <tfoot>
-                                                <tr>
-                                                    <td colSpan="3"><strong>Total</strong></td>
-                                                    <td><strong>{fmt(adm.totalAmount)}</strong></td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
+                                                </tfoot>
+                                            </table>
+                                        </div>
                                     )}
                                     {adm.notes && <p className="admission-notes">Notes: {adm.notes}</p>}
                                 </div>
@@ -1821,306 +2151,339 @@ const PatientBillingProfile = () => {
                     )}
 
                     {/* Scheduled Surgeries & OT Procedures */}
-                    {billing.surgeryPlans && billing.surgeryPlans.length > 0 && (
+                    {(isHospitalAdmin ? pendingSurgeryPlans.length > 0 : (billing.surgeryPlans && billing.surgeryPlans.length > 0)) && (
                         <div className="billing-section" style={{ borderLeft: '4px solid #7c3aed' }}>
                             <div className="section-header">
                                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span>🩺</span> Scheduled Surgeries & OT Procedures ({getSectionBadge(billing.surgeryPlans)})
+                                    <span>🩺</span> Scheduled Surgeries & OT Procedures {isHospitalAdmin ? `(${pendingSurgeryPlans.length} pending)` : `(${getSectionBadge(billing.surgeryPlans)})`}
                                 </h3>
-                                {billing.surgeryPlans.some(s => s.paymentStatus !== 'PAID') && (
+                                {!isHospitalAdmin && billing.surgeryPlans.some(s => s.paymentStatus !== 'PAID') && (
                                     <button className="btn-select-all" onClick={() => toggleAll('surgeryPlans', billing.surgeryPlans)}>
                                         {billing.surgeryPlans.filter(s => s.paymentStatus !== 'PAID').every(s => selected.surgeryPlans.includes(s._id)) ? 'Deselect All Surgeries' : 'Select All Surgeries'}
                                     </button>
                                 )}
                             </div>
-                            <table className="billing-table">
-                                <thead>
-                                    <tr>
-                                        <th></th>
-                                        <th>Date & Time</th>
-                                        <th>Surgery & Clinical Context</th>
-                                        <th>Surgical Team</th>
-                                        <th>OT Room</th>
-                                        <th>Status</th>
-                                        <th>Fee / Remaining</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {billing.surgeryPlans.map(s => {
-                                        const isFullyPaid = s.paymentStatus === 'PAID';
-                                        const cost = Number(s.surgeryCost) || 0;
-                                        const paid = Number(s.paidAmount) || 0;
-                                        const remaining = Math.max(0, cost - paid);
-                                        const surgeonName = s.surgeonId?.name ? (s.surgeonId.name).replace(/^Dr\.?\s*/i, '') : 'Surgeon';
-                                        const assistants = s.assistantSurgeonIds || [];
+                            <div className="billing-table-responsive">
+                                <table className="billing-table">
+                                    <thead>
+                                        <tr>
+                                            {!isHospitalAdmin && <th></th>}
+                                            <th>Date &amp; Time</th>
+                                            <th>Surgery &amp; Clinical Context</th>
+                                            <th>Surgical Team</th>
+                                            <th>OT Room</th>
+                                            <th style={{ textAlign: 'center' }}>Status</th>
+                                            <th style={{ textAlign: 'center' }}>Fee / Remaining</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(isHospitalAdmin ? pendingSurgeryPlans : billing.surgeryPlans).map(s => {
+                                            const isFullyPaid = s.paymentStatus === 'PAID';
+                                            const cost = Number(s.surgeryCost) || 0;
+                                            const paid = Number(s.paidAmount) || 0;
+                                            const remaining = Math.max(0, cost - paid);
+                                            const surgeonName = s.surgeonId?.name ? (s.surgeonId.name).replace(/^Dr\.?\s*/i, '') : 'Surgeon';
+                                            const assistants = s.assistantSurgeonIds || [];
+                                            const { dateStr, timeStr } = getSurgeryDateTime(s);
 
-                                        return (
-                                            <tr key={s._id} className={selected.surgeryPlans.includes(s._id) ? 'selected-row' : ''}>
-                                                <td>
-                                                    {isFullyPaid ? (
-                                                        <span className="paid-icon-check">✓</span>
-                                                    ) : (
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selected.surgeryPlans.includes(s._id)}
-                                                            onChange={() => toggle('surgeryPlans', s._id)}
-                                                        />
+                                            return (
+                                                <tr key={s._id} className={!isHospitalAdmin && selected.surgeryPlans.includes(s._id) ? 'selected-row' : ''}>
+                                                    {!isHospitalAdmin && (
+                                                        <td>
+                                                            {isFullyPaid ? (
+                                                                <span className="paid-icon-check">✓</span>
+                                                            ) : (
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selected.surgeryPlans.includes(s._id)}
+                                                                    onChange={() => toggle('surgeryPlans', s._id)}
+                                                                />
+                                                            )}
+                                                        </td>
                                                     )}
-                                                </td>
-                                                <td>
-                                                    {fmtAdmissionDateTime(s.surgeryDate, s.startTime, s.preferredDate || s.createdAt)}
-                                                </td>
-                                                <td>
-                                                    <strong>{s.surgery}</strong>
-                                                    {s.diagnosis && (
-                                                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                                                            Dx: {s.diagnosis}
+                                                    <td>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                            <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.88rem' }}>{dateStr}</span>
+                                                            {timeStr && (
+                                                                <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <span style={{ fontSize: '0.74rem' }}>🕒</span> {timeStr}
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                    {s.planId && (
-                                                        <span style={{ fontSize: '0.72rem', background: '#e0e7ff', color: '#3730a3', padding: '1px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '2px' }}>
-                                                            {s.planId}
+                                                    </td>
+                                                    <td>
+                                                        <strong style={{ color: '#0f172a' }}>{s.surgery}</strong>
+                                                        {s.diagnosis && (
+                                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                                                Dx: {s.diagnosis}
+                                                            </div>
+                                                        )}
+                                                        {s.planId && (
+                                                            <span style={{ fontSize: '0.72rem', background: '#e0e7ff', color: '#3730a3', padding: '1px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '2px', fontWeight: 600 }}>
+                                                                {s.planId}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1e293b' }}>
+                                                            👨‍⚕️ Op: Dr. {surgeonName}
+                                                        </div>
+                                                        {assistants.length > 0 ? (
+                                                            <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
+                                                                🤝 Asst: {assistants.map(a => `Dr. ${(a.name || 'Doctor').replace(/^Dr\.?\s*/i, '')}`).join(', ')}
+                                                            </div>
+                                                        ) : (
+                                                            <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                                                                No assistants
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        <span style={{ padding: '3px 8px', background: '#f1f5f9', borderRadius: '6px', fontSize: '0.82rem', fontWeight: 600, color: '#334155', border: '1px solid #e2e8f0' }}>
+                                                            🚪 {s.otRoomId?.name || 'Assigned OT'}
                                                         </span>
-                                                    )}
-                                                </td>
-                                                <td>
-                                                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1e293b' }}>
-                                                        👨‍⚕️ Op: Dr. {surgeonName}
-                                                    </div>
-                                                    {assistants.length > 0 ? (
-                                                        <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
-                                                            🤝 Asst: {assistants.map(a => `Dr. ${(a.name || 'Doctor').replace(/^Dr\.?\s*/i, '')}`).join(', ')}
-                                                        </div>
-                                                    ) : (
-                                                        <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontStyle: 'italic' }}>
-                                                            No assistants
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td>
-                                                    <span style={{ padding: '2px 8px', background: '#f1f5f9', borderRadius: '4px', fontSize: '0.82rem', fontWeight: 600 }}>
-                                                        🚪 {s.otRoomId?.name || 'Assigned OT'}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span className={`status-badge ${s.paymentStatus === 'PAID' ? 'status-paid' : ''}`} style={{
-                                                        background: s.paymentStatus === 'PAID' ? '#dcfce7' : (s.paymentStatus === 'PARTIALLY PAID' ? '#fef3c7' : '#fee2e2'),
-                                                        color: s.paymentStatus === 'PAID' ? '#15803d' : (s.paymentStatus === 'PARTIALLY PAID' ? '#b45309' : '#b91c1c'),
-                                                        border: `1px solid ${s.paymentStatus === 'PAID' ? '#86efac' : (s.paymentStatus === 'PARTIALLY PAID' ? '#fde68a' : '#fca5a5')}`,
-                                                        fontWeight: 700
-                                                    }}>
-                                                        {s.paymentStatus || 'UNPAID'}
-                                                    </span>
-                                                </td>
-                                                <td className="amount-cell">
-                                                    <div style={{ fontWeight: 700, color: '#0f172a' }}>{fmt(cost)}</div>
-                                                    {paid > 0 && paid < cost && (
-                                                        <div style={{ fontSize: '0.75rem', color: '#16a34a' }}>
-                                                            Paid: {fmt(paid)} (Due: {fmt(remaining)})
-                                                        </div>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                                                    </td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        <span style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            padding: '4px 12px',
+                                                            borderRadius: '20px',
+                                                            fontSize: '0.78rem',
+                                                            fontWeight: 600,
+                                                            letterSpacing: '0.01em',
+                                                            background: isFullyPaid ? '#dcfce7' : (s.paymentStatus === 'PARTIALLY PAID' ? '#fef3c7' : '#fee2e2'),
+                                                            color: isFullyPaid ? '#15803d' : (s.paymentStatus === 'PARTIALLY PAID' ? '#b45309' : '#dc2626'),
+                                                            border: `1px solid ${isFullyPaid ? '#bbf7d0' : (s.paymentStatus === 'PARTIALLY PAID' ? '#fde68a' : '#fecaca')}`,
+                                                        }}>
+                                                            {isFullyPaid ? 'Paid' : (s.paymentStatus === 'PARTIALLY PAID' ? 'Partially Paid' : 'Unpaid')}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem' }}>{fmt(cost)}</div>
+                                                        {paid > 0 && paid < cost && (
+                                                            <div style={{ fontSize: '0.75rem', color: '#16a34a', marginTop: '2px' }}>
+                                                                Paid: {fmt(paid)} (Due: {fmt(remaining)})
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     )}
 
                     {/* Consolidated Billing View (Appointments & Facility Charges) */}
-                    {(billing.appointments?.length > 0 || billing.facilityCharges?.length > 0) && (
+                    {(isHospitalAdmin ? (pendingAppointments.length > 0 || pendingFacilityCharges.length > 0) : (billing.appointments?.length > 0 || billing.facilityCharges?.length > 0)) && (
                         <div className="billing-section">
                             <div className="section-header">
                                 <h3>Consolidated Billing View (Consultations & ICU Charges)</h3>
-                                <div style={{ display: 'flex', gap: '10px' }}>
-                                    {billing.appointments.some(a => !isPaid(a.paymentStatus)) && (
-                                        <button className="btn-select-all" onClick={() => toggleAll('appointments', billing.appointments)}>
-                                            {billing.appointments.filter(a => !isPaid(a.paymentStatus)).every(a => selected.appointments.includes(a._id)) ? 'Deselect All Consults' : 'Select All Consults'}
-                                        </button>
-                                    )}
-                                    {billing.facilityCharges.some(f => !isPaid(f.paymentStatus)) && (
-                                        <button className="btn-select-all" onClick={() => toggleAll('facilityCharges', billing.facilityCharges)}>
-                                            {billing.facilityCharges.filter(f => !isPaid(f.paymentStatus)).every(f => selected.facilityCharges.includes(f._id)) ? 'Deselect All ICU' : 'Select All ICU'}
-                                        </button>
-                                    )}
-                                </div>
+                                {!isHospitalAdmin && (
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        {billing.appointments?.some(a => !isPaid(a.paymentStatus)) && (
+                                            <button className="btn-select-all" onClick={() => toggleAll('appointments', billing.appointments)}>
+                                                {billing.appointments.filter(a => !isPaid(a.paymentStatus)).every(a => selected.appointments.includes(a._id)) ? 'Deselect All Consults' : 'Select All Consults'}
+                                            </button>
+                                        )}
+                                        {billing.facilityCharges?.some(f => !isPaid(f.paymentStatus)) && (
+                                            <button className="btn-select-all" onClick={() => toggleAll('facilityCharges', billing.facilityCharges)}>
+                                                {billing.facilityCharges.filter(f => !isPaid(f.paymentStatus)).every(f => selected.facilityCharges.includes(f._id)) ? 'Deselect All ICU' : 'Select All ICU'}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
-                            <table className="billing-table">
-                                <thead><tr><th></th><th>Date</th><th>Type & Description</th><th>Collected By</th><th>Status</th><th>Amount</th></tr></thead>
-                                <tbody>
-                                    {/* Appointments - Actionable */}
-                                    {billing.appointments.map(a => (
-                                        <tr key={a._id} className={selected.appointments.includes(a._id) ? 'selected-row' : ''}>
-                                            <td>
-                                                {a.paymentStatus === 'Paid' ? (
-                                                    <span className="paid-icon-check">✓</span>
-                                                ) : (
-                                                    <input type="checkbox" checked={selected.appointments.includes(a._id)} onChange={() => toggle('appointments', a._id)} />
+                            <div className="billing-table-responsive">
+                                <table className="billing-table">
+                                    <thead><tr>{!isHospitalAdmin && <th></th>}<th>Date</th><th>Type & Description</th><th>Collected By</th><th>Status</th><th>Amount</th></tr></thead>
+                                    <tbody>
+                                        {/* Appointments */}
+                                        {(isHospitalAdmin ? pendingAppointments : (billing.appointments || [])).map(a => (
+                                            <tr key={a._id} className={!isHospitalAdmin && selected.appointments.includes(a._id) ? 'selected-row' : ''}>
+                                                {!isHospitalAdmin && (
+                                                    <td>
+                                                        {a.paymentStatus === 'Paid' ? (
+                                                            <span className="paid-icon-check">✓</span>
+                                                        ) : (
+                                                            <input type="checkbox" checked={selected.appointments.includes(a._id)} onChange={() => toggle('appointments', a._id)} />
+                                                        )}
+                                                    </td>
                                                 )}
-                                            </td>
-                                            <td>{fmtDate(a.appointmentDate)}{a.appointmentTime && ` ${a.appointmentTime}`}</td>
-                                            <td>
-                                                <strong>Appointment Fee</strong><br />
-                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{a.serviceName || 'Consultation'}</span>
-                                            </td>
-                                            <td>{a.doctorName || '—'}</td>
-                                            <td>
-                                                <span className="status-badge">
-                                                    {a.paymentStatus === 'Paid' ? 'PAID' : 'Pending'}
-                                                </span>
-                                            </td>
-                                            <td className="amount-cell">{fmt(a.amount)}</td>
-                                        </tr>
-                                    ))}
+                                                <td>{fmtDate(a.appointmentDate)}{a.appointmentTime && ` ${a.appointmentTime}`}</td>
+                                                <td>
+                                                    <strong>Appointment Fee</strong><br />
+                                                    <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{a.serviceName || 'Consultation'}</span>
+                                                </td>
+                                                <td>{a.doctorName || '—'}</td>
+                                                <td>
+                                                    <span className="status-badge">
+                                                        {a.paymentStatus === 'Paid' ? 'PAID' : 'Pending'}
+                                                    </span>
+                                                </td>
+                                                <td className="amount-cell">{fmt(a.amount)}</td>
+                                            </tr>
+                                        ))}
 
-                                    {/* Facility / ICU Charges - Actionable */}
-                                    {billing.facilityCharges.map(f => (
-                                        <tr key={f._id} className={selected.facilityCharges.includes(f._id) ? 'selected-row' : ''}>
-                                            <td>
-                                                {isPaid(f.paymentStatus) ? (
-                                                    <span className="paid-icon-check">✓</span>
-                                                ) : (
-                                                    <input type="checkbox" checked={selected.facilityCharges.includes(f._id)} onChange={() => toggle('facilityCharges', f._id)} />
+                                        {/* Facility / ICU Charges */}
+                                        {(isHospitalAdmin ? pendingFacilityCharges : (billing.facilityCharges || [])).map(f => (
+                                            <tr key={f._id} className={!isHospitalAdmin && selected.facilityCharges.includes(f._id) ? 'selected-row' : ''}>
+                                                {!isHospitalAdmin && (
+                                                    <td>
+                                                        {isPaid(f.paymentStatus) ? (
+                                                            <span className="paid-icon-check">✓</span>
+                                                        ) : (
+                                                            <input type="checkbox" checked={selected.facilityCharges.includes(f._id)} onChange={() => toggle('facilityCharges', f._id)} />
+                                                        )}
+                                                    </td>
                                                 )}
-                                            </td>
-                                            <td>{fmtDate(f.createdAt)}</td>
-                                            <td>
-                                                <strong>ICU / Facility Charge</strong><br />
-                                                <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{f.facilityName} ({f.daysUsed || f.days || 1} Days @ {fmt(f.pricePerDay)}/day)</span>
-                                            </td>
-                                            <td>{f.collectedBy?.name || f.addedBy?.name || '—'}</td>
-                                            <td>
-                                                <span className="status-badge">
-                                                    {isPaid(f.paymentStatus) ? 'PAID' : 'Pending'}
-                                                </span>
-                                            </td>
-                                            <td className="amount-cell">{fmt(f.totalAmount)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                                <td>{fmtDate(f.createdAt)}</td>
+                                                <td>
+                                                    <strong>ICU / Facility Charge</strong><br />
+                                                    <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{f.facilityName} ({f.daysUsed || f.days || 1} Days @ {fmt(f.pricePerDay)}/day)</span>
+                                                </td>
+                                                <td>{f.collectedBy?.name || f.addedBy?.name || '—'}</td>
+                                                <td>
+                                                    <span className="status-badge">
+                                                        {isPaid(f.paymentStatus) ? 'PAID' : 'Pending'}
+                                                    </span>
+                                                </td>
+                                                <td className="amount-cell">{fmt(f.totalAmount)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     )}
 
                     {/* Lab Reports */}
-                    {billing.labReports.length > 0 && (
+                    {(isHospitalAdmin ? pendingLabReports.length > 0 : (billing.labReports && billing.labReports.length > 0)) && (
                         <div className="billing-section">
                             <div className="section-header">
-                                <h3>Lab Tests ({getSectionBadge(billing.labReports)})</h3>
-                                {billing.labReports.some(l => !isPaid(l.paymentStatus)) && (
+                                <h3>Lab Tests {isHospitalAdmin ? `(${pendingLabReports.length} pending)` : `(${getSectionBadge(billing.labReports)})`}</h3>
+                                {!isHospitalAdmin && billing.labReports.some(l => !isPaid(l.paymentStatus)) && (
                                     <button className="btn-select-all" onClick={() => toggleAll('labReports', billing.labReports)}>
                                         {billing.labReports.filter(l => !isPaid(l.paymentStatus)).every(l => selected.labReports.includes(l._id)) ? 'Deselect All' : 'Select All'}
                                     </button>
                                 )}
                             </div>
-                            <table className="billing-table">
-                                <thead><tr><th></th><th>Date</th><th>Tests</th><th>Status</th><th>Amount</th></tr></thead>
-                                <tbody>
-                                    {billing.labReports.map(l => (
-                                        <tr key={l._id} className={selected.labReports.includes(l._id) ? 'selected-row' : ''}>
-                                            <td>
-                                                {isPaid(l.paymentStatus) ? (
-                                                    <span className="paid-icon-check">✓</span>
-                                                ) : (
-                                                    <input type="checkbox" checked={selected.labReports.includes(l._id)} onChange={() => toggle('labReports', l._id)} />
+                            <div className="billing-table-responsive">
+                                <table className="billing-table">
+                                    <thead><tr>{!isHospitalAdmin && <th></th>}<th>Date</th><th>Tests</th><th>Status</th><th>Amount</th></tr></thead>
+                                    <tbody>
+                                        {(isHospitalAdmin ? pendingLabReports : billing.labReports).map(l => (
+                                            <tr key={l._id} className={!isHospitalAdmin && selected.labReports.includes(l._id) ? 'selected-row' : ''}>
+                                                {!isHospitalAdmin && (
+                                                    <td>
+                                                        {isPaid(l.paymentStatus) ? (
+                                                            <span className="paid-icon-check">✓</span>
+                                                        ) : (
+                                                            <input type="checkbox" checked={selected.labReports.includes(l._id)} onChange={() => toggle('labReports', l._id)} />
+                                                        )}
+                                                    </td>
                                                 )}
-                                            </td>
-                                            <td>{fmtDate(l.createdAt)}</td>
-                                            <td>{Array.isArray(l.testNames) ? l.testNames.join(', ') : (l.testName || '—')}</td>
-                                            <td>
-                                                <span className="status-badge">
-                                                    {isPaid(l.paymentStatus) ? 'PAID' : 'Pending'}
-                                                </span>
-                                            </td>
-                                            <td className="amount-cell">{fmt(l.amount || l.price)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                                <td>{fmtDate(l.createdAt)}</td>
+                                                <td>{Array.isArray(l.testNames) ? l.testNames.join(', ') : (l.testName || '—')}</td>
+                                                <td>
+                                                    <span className="status-badge">
+                                                        {isPaid(l.paymentStatus) ? 'PAID' : 'Pending'}
+                                                    </span>
+                                                </td>
+                                                <td className="amount-cell">{fmt(l.amount || l.price)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     )}
 
                     {/* Pharmacy Orders */}
-                    {billing.pharmacyOrders.length > 0 && (
+                    {(isHospitalAdmin ? pendingPharmacyOrders.length > 0 : (billing.pharmacyOrders && billing.pharmacyOrders.length > 0)) && (
                         <div className="billing-section">
                             <div className="section-header">
-                                <h3>Pharmacy Orders ({getSectionBadge(billing.pharmacyOrders)})</h3>
-                                {billing.pharmacyOrders.some(p => !isPaid(p.paymentStatus)) && (
+                                <h3>Pharmacy Orders {isHospitalAdmin ? `(${pendingPharmacyOrders.length} pending)` : `(${getSectionBadge(billing.pharmacyOrders)})`}</h3>
+                                {!isHospitalAdmin && billing.pharmacyOrders.some(p => !isPaid(p.paymentStatus)) && (
                                     <button className="btn-select-all" onClick={() => toggleAll('pharmacyOrders', billing.pharmacyOrders)}>
                                         {billing.pharmacyOrders.filter(p => !isPaid(p.paymentStatus)).every(p => selected.pharmacyOrders.includes(p._id)) ? 'Deselect All' : 'Select All'}
                                     </button>
                                 )}
                             </div>
-                            <table className="billing-table">
-                                <thead><tr><th></th><th>Date</th><th>Items</th><th>Order Status</th><th>Amount</th></tr></thead>
-                                <tbody>
-                                    {billing.pharmacyOrders.map(p => (
-                                        <tr key={p._id} className={selected.pharmacyOrders.includes(p._id) ? 'selected-row' : ''}>
-                                            <td>
-                                                {isPaid(p.paymentStatus) ? (
-                                                    <span className="paid-icon-check">✓</span>
-                                                ) : (
-                                                    <input type="checkbox" checked={selected.pharmacyOrders.includes(p._id)} onChange={() => toggle('pharmacyOrders', p._id)} />
+                            <div className="billing-table-responsive">
+                                <table className="billing-table">
+                                    <thead><tr>{!isHospitalAdmin && <th></th>}<th>Date</th><th>Items</th><th>Order Status</th><th>Amount</th></tr></thead>
+                                    <tbody>
+                                        {(isHospitalAdmin ? pendingPharmacyOrders : billing.pharmacyOrders).map(p => (
+                                            <tr key={p._id} className={!isHospitalAdmin && selected.pharmacyOrders.includes(p._id) ? 'selected-row' : ''}>
+                                                {!isHospitalAdmin && (
+                                                    <td>
+                                                        {isPaid(p.paymentStatus) ? (
+                                                            <span className="paid-icon-check">✓</span>
+                                                        ) : (
+                                                            <input type="checkbox" checked={selected.pharmacyOrders.includes(p._id)} onChange={() => toggle('pharmacyOrders', p._id)} />
+                                                        )}
+                                                    </td>
                                                 )}
-                                            </td>
-                                            <td>{fmtDate(p.createdAt)}</td>
-                                            <td>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <span style={{ fontWeight: '500', fontSize: '0.9rem', color: '#334155' }}>
-                                                        📦 {p.items?.length || 0} Items
-                                                    </span>
-                                                    <button
-                                                        onClick={() => toggleExpand(p._id)}
-                                                        style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500', padding: 0 }}
-                                                    >
-                                                        {expandedRows[p._id] ? 'Hide Details ↑' : 'View Details ↓'}
-                                                    </button>
-                                                </div>
-                                                {expandedRows[p._id] && Array.isArray(p.items) && (
-                                                    <div className="bg-gray-50/50 p-2 rounded mt-1" style={{ backgroundColor: '#f8fafc', padding: '8px', borderRadius: '6px', marginTop: '8px', border: '1px solid #e2e8f0' }}>
-                                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.9rem' }}>
-                                                            {p.items.map((item, idx) => {
-                                                                const name = item.medicineName || item.name;
-                                                                const freq = item.frequency ? ` (${item.frequency})` : '';
-                                                                const qty = parseInt(item.quantity) || parseInt(item.duration) || parseInt(item.days) || 1;
-                                                                const itemTotal = (Number(item.price) || 50) * qty;
-                                                                if (!name) return null;
-                                                                const durationText = item.duration ? `${item.duration}` : item.quantity ? `${item.quantity} Qty` : item.days ? `${item.days} Days` : '1 Qty';
-                                                                return (
-                                                                    <li key={idx} style={{ marginBottom: '4px' }}>
-                                                                        <span style={{ color: '#000' }}>{name}{freq}</span>
-                                                                        <span style={{ marginLeft: '6px', color: '#475569', fontSize: '0.85rem' }}>[{durationText}]</span>
-                                                                        <span style={{ marginLeft: '6px', color: '#059669', fontWeight: '600', fontSize: '0.8rem' }}>- ₹{itemTotal}</span>
-                                                                    </li>
-                                                                );
-                                                            })}
-                                                        </ul>
+                                                <td>{fmtDate(p.createdAt)}</td>
+                                                <td>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span style={{ fontWeight: '500', fontSize: '0.9rem', color: '#334155' }}>
+                                                            📦 {p.items?.length || 0} Items
+                                                        </span>
+                                                        <button
+                                                            onClick={() => toggleExpand(p._id)}
+                                                            style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500', padding: 0 }}
+                                                        >
+                                                            {expandedRows[p._id] ? 'Hide Details ↑' : 'View Details ↓'}
+                                                        </button>
                                                     </div>
-                                                )}
-                                            </td>
-                                            <td>
-                                                <span className="status-badge">
-                                                    {isPaid(p.paymentStatus) ? 'PAID' : 'Pending'}
-                                                </span>
-                                            </td>
-                                            <td className="amount-cell">{fmt(getPharmacyTotal(p))}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                                    {expandedRows[p._id] && Array.isArray(p.items) && (
+                                                        <div className="bg-gray-50/50 p-2 rounded mt-1" style={{ backgroundColor: '#f8fafc', padding: '8px', borderRadius: '6px', marginTop: '8px', border: '1px solid #e2e8f0' }}>
+                                                            <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.9rem' }}>
+                                                                {p.items.map((item, idx) => {
+                                                                    const name = item.medicineName || item.name;
+                                                                    const freq = item.frequency ? ` (${item.frequency})` : '';
+                                                                    const qty = parseInt(item.quantity) || parseInt(item.duration) || parseInt(item.days) || 1;
+                                                                    const itemTotal = (Number(item.price) || 50) * qty;
+                                                                    if (!name) return null;
+                                                                    const durationText = item.duration ? `${item.duration}` : item.quantity ? `${item.quantity} Qty` : item.days ? `${item.days} Days` : '1 Qty';
+                                                                    return (
+                                                                        <li key={idx} style={{ marginBottom: '4px' }}>
+                                                                            <span style={{ color: '#000' }}>{name}{freq}</span>
+                                                                            <span style={{ marginLeft: '6px', color: '#475569', fontSize: '0.85rem' }}>[{durationText}]</span>
+                                                                            <span style={{ marginLeft: '6px', color: '#059669', fontWeight: '600', fontSize: '0.8rem' }}>- ₹{itemTotal}</span>
+                                                                        </li>
+                                                                    );
+                                                                })}
+                                                            </ul>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    <span className="status-badge">
+                                                        {isPaid(p.paymentStatus) ? 'PAID' : 'Pending'}
+                                                    </span>
+                                                </td>
+                                                <td className="amount-cell">{fmt(getPharmacyTotal(p))}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     )}
 
-
-
                     {/* Past Admissions */}
-                    {pastAdmissions.length > 0 && (
+                    {(isHospitalAdmin ? pendingPastAdmissions.length > 0 : pastAdmissions.length > 0) && (
                         <div className="billing-section past-admissions">
                             <div className="section-header">
-                                <h3>Past Admissions ({pastAdmissions.length})</h3>
+                                <h3>Past Admissions ({isHospitalAdmin ? pendingPastAdmissions.length : pastAdmissions.length})</h3>
                             </div>
-                            {pastAdmissions.map(adm => (
+                            {(isHospitalAdmin ? pendingPastAdmissions : pastAdmissions).map(adm => (
                                 <div key={adm._id} className="admission-card past">
                                     <div className="admission-top">
                                         <div>
@@ -2145,15 +2508,15 @@ const PatientBillingProfile = () => {
                         </div>
                     )}
 
-                    {/* No items at all */}
-                    {billing.appointments.length === 0 && billing.labReports.length === 0 &&
-                        billing.pharmacyOrders.length === 0 && billing.facilityCharges.length === 0 &&
+                    {/* No items at all (Only for Receptionist if no records found) */}
+                    {!isHospitalAdmin && billing.appointments?.length === 0 && billing.labReports?.length === 0 &&
+                        billing.pharmacyOrders?.length === 0 && billing.facilityCharges?.length === 0 &&
                         activeAdmissions.length === 0 && pastAdmissions.length === 0 && (
                             <div className="no-bills">No billing items found for this patient.</div>
                         )}
 
-                    {/* Payment Panel */}
-                    {pendingTotal() > 0 && (
+                    {/* Payment Panel (Only for Receptionist collection) */}
+                    {!isHospitalAdmin && pendingTotal() > 0 && (
                         <div className="payment-panel">
                             <div className="payment-summary">
                                 <div className="payment-row">
@@ -2205,188 +2568,129 @@ const PatientBillingProfile = () => {
                         </div>
                         {(!billing.paymentTransactions || billing.paymentTransactions.length === 0) ? (
                             <div className="no-bills" style={{ padding: '20px', textAlign: 'center', background: '#f8fafc', borderRadius: '10px', color: '#64748b' }}>
-                                No past payments found for this patient. Select items above and make a payment to see the history here.
+                                {isHospitalAdmin ? 'No past payments recorded for this patient.' : 'No past payments found for this patient. Select items above and make a payment to see the history here.'}
                             </div>
                         ) : (
-                            <table className="billing-table">
-                                <thead><tr><th>Date</th><th>Mode</th><th>Txn ID</th><th>Details</th><th>Amount</th><th>Status</th><th>View</th><th>Download</th></tr></thead>
-                                <tbody>
-                                    {billing.paymentTransactions.map(pt => (
-                                        <tr key={pt._id}>
-                                            <td>{fmtDate(pt.paymentDate)}</td>
-                                            <td>
-                                                {pt.splitPayments && pt.splitPayments.length > 1 ? (
-                                                    pt.splitPayments.map(sp => sp.method).join(' + ')
-                                                ) : (
-                                                    pt.paymentMode
-                                                )}
-                                            </td>
-                                            <td>
-                                                {(() => {
-                                                    const isCash = (pt.paymentMode || '').toUpperCase() === 'CASH' &&
-                                                        (!pt.splitPayments || !pt.splitPayments.some(s => (s.method || '').toUpperCase().includes('UPI')));
-                                                    if (isCash) {
-                                                        return pt.transactionId || pt.bankReference || '—';
-                                                    }
-                                                    return pt.transactionId || pt.upiId || pt.bankReference || '—';
-                                                })()}
-                                            </td>
-                                            <td style={{ maxWidth: '250px' }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                    <span style={{ fontSize: '13px', color: '#475569', fontWeight: '500' }}>{pt.description || 'General Payment'}</span>
-                                                    {pt.billedItems && (
-                                                        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                                                            {pt.billedItems.appointments?.length > 0 && <span style={{ fontSize: '10px', background: '#e0e7ff', color: '#4f46e5', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>Appointment</span>}
-                                                            {pt.billedItems.labReports?.length > 0 && <span style={{ fontSize: '10px', background: '#dbeafe', color: '#2563eb', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>Lab</span>}
-                                                            {pt.billedItems.pharmacyOrders?.length > 0 && <span style={{ fontSize: '10px', background: '#dcfce7', color: '#16a34a', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>Medicine</span>}
-                                                            {pt.billedItems.facilityCharges?.length > 0 && <span style={{ fontSize: '10px', background: '#fef3c7', color: '#d97706', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>Facility</span>}
-                                                            {pt.billedItems.admissions?.length > 0 && <span style={{ fontSize: '10px', background: '#fee2e2', color: '#dc2626', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>ICU/Admission</span>}
-                                                        </div>
+                            <div className="billing-table-responsive">
+                                <table className="billing-table">
+                                    <thead><tr><th>Date</th><th>Mode</th><th>Txn ID</th><th>Details</th><th>Amount</th><th>Status</th><th>View</th><th>Download</th></tr></thead>
+                                    <tbody>
+                                        {billing.paymentTransactions.map(pt => (
+                                            <tr key={pt._id}>
+                                                <td>
+                                                    {(() => {
+                                                        const { dateStr, timeStr } = getBookingDateTime(pt);
+                                                        return (
+                                                            <div className="ha-date-stack">
+                                                                <span className="ha-date-text">{dateStr}</span>
+                                                                {timeStr && <span className="ha-time-text">{timeStr}</span>}
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </td>
+                                                <td>
+                                                    {pt.splitPayments && pt.splitPayments.length > 1 ? (
+                                                        pt.splitPayments.map(sp => sp.method).join(' + ')
+                                                    ) : (
+                                                        pt.paymentMode
                                                     )}
-                                                </div>
-                                            </td>
-                                            <td className="amount-cell">{fmt(pt.amount)}</td>
-                                            <td>
-                                                <span className={pt.paymentStatus === 'Paid' ? 'paid-icon-check' : 'status-badge'}>
-                                                    {pt.paymentStatus}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                {pt.proofUrl ? (
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <div
-                                                            className="proof-table-thumb"
-                                                            onClick={() => setViewProofUrl(pt.proofUrl, { patientName: patient?.name, amount: pt.amount, mode: pt.paymentMode, txnId: pt.transactionId || pt.upiId, date: pt.paymentDate })}
-                                                            title="Click to zoom screenshot"
-                                                        >
-                                                            <img src={pt.proofUrl} alt="Proof" onError={(e) => { e.target.style.display = 'none'; }} />
-                                                        </div>
-                                                        <button
-                                                            onClick={() => setViewProofUrl(pt.proofUrl, { patientName: patient?.name, amount: pt.amount, mode: pt.paymentMode, txnId: pt.transactionId || pt.upiId, date: pt.paymentDate })}
-                                                            className="btn-proof-view"
-                                                            title="View Screenshot / Proof"
-                                                            style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', padding: '5px 8px', cursor: 'pointer', color: '#2563eb', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', fontWeight: 600 }}
-                                                        >
-                                                            <FaEye size={13} /> View
-                                                        </button>
+                                                </td>
+                                                <td>
+                                                    {(() => {
+                                                        const isCash = (pt.paymentMode || '').toUpperCase() === 'CASH' &&
+                                                            (!pt.splitPayments || !pt.splitPayments.some(s => (s.method || '').toUpperCase().includes('UPI')));
+                                                        if (isCash) {
+                                                            return pt.transactionId || pt.bankReference || '—';
+                                                        }
+                                                        return pt.transactionId || pt.upiId || pt.bankReference || '—';
+                                                    })()}
+                                                </td>
+                                                <td style={{ maxWidth: '250px' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        <span style={{ fontSize: '13px', color: '#475569', fontWeight: '500' }}>{pt.description || 'General Payment'}</span>
+                                                        {pt.billedItems && (
+                                                            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                                                                {pt.billedItems.appointments?.length > 0 && <span style={{ fontSize: '10px', background: '#e0e7ff', color: '#4f46e5', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>Appointment</span>}
+                                                                {pt.billedItems.labReports?.length > 0 && <span style={{ fontSize: '10px', background: '#dbeafe', color: '#2563eb', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>Lab</span>}
+                                                                {pt.billedItems.pharmacyOrders?.length > 0 && <span style={{ fontSize: '10px', background: '#dcfce7', color: '#16a34a', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>Medicine</span>}
+                                                                {pt.billedItems.facilityCharges?.length > 0 && <span style={{ fontSize: '10px', background: '#fef3c7', color: '#d97706', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>Facility</span>}
+                                                                {pt.billedItems.admissions?.length > 0 && <span style={{ fontSize: '10px', background: '#fee2e2', color: '#dc2626', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>ICU/Admission</span>}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                ) : (
-                                                    <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>—</span>
-                                                )}
-                                            </td>
-                                            <td>
-                                                {pt.proofUrl ? (
-                                                    <button onClick={() => window.open(pt.proofUrl, '_blank')} className="btn-proof-dl" title="Download Invoice / Proof" style={{background:'none',border:'none',cursor:'pointer',color:'#10b981'}}>
-                                                        <FaDownload size={18} />
-                                                    </button>
-                                                ) : '—'}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                                </td>
+                                                <td className="amount-cell">{fmt(pt.amount)}</td>
+                                                <td>
+                                                    <span className={pt.paymentStatus === 'Paid' ? 'paid-icon-check' : 'status-badge'}>
+                                                        {pt.paymentStatus}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    {pt.proofUrl ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <div
+                                                                className="proof-table-thumb"
+                                                                onClick={() => setViewProofUrl(pt.proofUrl, { patientName: patient?.name, amount: pt.amount, mode: pt.paymentMode, txnId: pt.transactionId || pt.upiId, date: pt.paymentDate })}
+                                                                title="Click to zoom screenshot"
+                                                            >
+                                                                <img src={pt.proofUrl} alt="Proof" onError={(e) => { e.target.style.display = 'none'; }} />
+                                                            </div>
+                                                            <button
+                                                                onClick={() => setViewProofUrl(pt.proofUrl, { patientName: patient?.name, amount: pt.amount, mode: pt.paymentMode, txnId: pt.transactionId || pt.upiId, date: pt.paymentDate })}
+                                                                className="btn-proof-view"
+                                                                title="View Screenshot / Proof"
+                                                                style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', padding: '5px 8px', cursor: 'pointer', color: '#2563eb', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', fontWeight: 600 }}
+                                                            >
+                                                                <FaEye size={13} /> View
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>—</span>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    {pt.proofUrl ? (
+                                                        <button onClick={() => window.open(pt.proofUrl, '_blank')} className="btn-proof-dl" title="Download Invoice / Proof" style={{background:'none',border:'none',cursor:'pointer',color:'#10b981'}}>
+                                                            <FaDownload size={18} />
+                                                        </button>
+                                                    ) : '—'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </div>
                 </>
             )}
 
-            {!patient && !loading && (
-                <div className="billing-empty-prompt">
-                    <div className="empty-prompt-icon">🔍</div>
-                    <h3>Search Patient to View Billing & Past Payments</h3>
-                    <p>Enter a patient's Phone Number, MRN, or Name above to view and settle pending bills, or switch to the <strong>Hospital Billing & Payment History</strong> tab to view all hospital collections and UPI screenshot proofs.</p>
+                    {!patient && !loading && !error && (
+                        <div className="billing-empty-prompt" style={{ margin: '30px 0' }}>
+                            <div className="empty-prompt-icon">💳</div>
+                            <h3>No Patient Selected</h3>
+                            <p>Please select a patient from the <button type="button" onClick={() => setActiveTab('history')} style={{ background: 'none', border: 'none', color: '#0f766e', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>Payment History</button> register to view and settle billing.</p>
+                        </div>
+                    )}
                 </div>
             )}
-        </>
-    )}
 
     {/* ====== TAB 2: HOSPITAL-WIDE PAYMENT & BILLING HISTORY ====== */}
     {activeTab === 'history' && (
         <div className="ha-billing-page">
             {/* 1. Main Header Banner */}
             <div className="ha-main-header">
-                {/* Top Row: Payment History Title on Left, + Record Payment on Right */}
-                <div className="ha-header-top-row">
-                    <div className="ha-header-left">
-                        <div className="ha-title-icon-card">
-                            <FaFileAlt size={22} color="#ffffff" />
-                        </div>
-                        <div className="ha-title-text-group">
-                            <h1 className="ha-page-title">Payment History</h1>
-                            <p className="ha-page-sub">Track and manage all patient payments</p>
-                        </div>
+                <div className="ha-header-left">
+                    <div className="ha-title-icon-card">
+                        <FaFileAlt size={20} color="#ffffff" />
                     </div>
-
-                    {/* Record Payment Button - Placed right opposite Payment History */}
-                    <button
-                        type="button"
-                        className="ha-btn-record-primary"
-                        onClick={() => setActiveTab('patient')}
-                    >
-                        <FaPlus size={13} />
-                        <span>Record Payment</span>
-                    </button>
+                    <div className="ha-title-text-group">
+                        <h1 className="ha-page-title">Payment History</h1>
+                        <p className="ha-page-sub">Track and manage all patient payments</p>
+                    </div>
                 </div>
 
-                {/* Bottom Row: Custom Range, Refresh */}
-                <div className="ha-header-bottom-row">
-                    {/* Custom Range button with dropdown popover */}
-                    <div className="ha-custom-range-wrap">
-                        <button
-                            type="button"
-                            className={`ha-custom-range-btn ${datePreset === 'custom' ? 'active' : ''}`}
-                            onClick={() => setShowCustomRangePicker(prev => !prev)}
-                        >
-                            <FaCalendarAlt size={13} />
-                            <span>Custom Range</span>
-                            <FaChevronDown size={10} className="ha-custom-caret-icon" />
-                        </button>
-
-                        {showCustomRangePicker && (
-                            <div className="ha-custom-date-popover">
-                                <div className="ha-cd-row">
-                                    <label>
-                                        <span>From:</span>
-                                        <input
-                                            type="date"
-                                            max={maxDate}
-                                            value={customStartDate}
-                                            onChange={e => {
-                                                const val = e.target.value;
-                                                if (val > maxDate) return;
-                                                handleCustomDateChange(val, customEndDate);
-                                            }}
-                                        />
-                                    </label>
-                                    <label>
-                                        <span>To:</span>
-                                        <input
-                                            type="date"
-                                            min={customStartDate || undefined}
-                                            max={maxDate}
-                                            value={customEndDate}
-                                            onChange={e => {
-                                                const val = e.target.value;
-                                                if (val > maxDate) return;
-                                                handleCustomDateChange(customStartDate, val);
-                                            }}
-                                        />
-                                    </label>
-                                </div>
-                                <button
-                                    type="button"
-                                    className="ha-cd-apply"
-                                    onClick={() => {
-                                        setDatePreset('custom');
-                                        setShowCustomRangePicker(false);
-                                    }}
-                                >
-                                    Apply Range
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
+                <div className="ha-header-right">
                     {/* Refresh Button */}
                     <button
                         type="button"
@@ -2400,11 +2704,11 @@ const PatientBillingProfile = () => {
                 </div>
             </div>
 
-            {/* 3. 5 Revenue & Collection Summary Cards with Sparklines */}
+            {/* 3. 5 Revenue & Collection Summary Cards */}
             <div className="ha-kpi-grid">
                 {/* Card 1: Total Earnings / Overall (Ab tak ka pura) */}
                 <div
-                    className={`ha-kpi-card clickable ${datePreset === 'all' && historyMode === 'ALL' && !historySearch ? 'active' : ''}`}
+                    className={`ha-kpi-card ha-kpi-blue clickable ${datePreset === 'all' && historyMode === 'ALL' && !historySearch ? 'active' : ''}`}
                     onClick={() => { setDatePreset('all'); setHistoryMode('ALL'); setHistorySearch(''); setHistoryStatus('ALL'); }}
                     title="Click to reset and view all transactions"
                 >
@@ -2418,58 +2722,49 @@ const PatientBillingProfile = () => {
                             <span className="ha-kpi-sub-count">{revenueStats.totalCount} {revenueStats.totalCount === 1 ? 'payment collected' : 'payments collected'}</span>
                         </div>
                     </div>
-                    <div className="ha-kpi-sparkline-wrap">
-                        <svg viewBox="0 0 140 40" preserveAspectRatio="none" className="ha-kpi-sparkline">
-                            <defs>
-                                <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
-                                    <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
-                                </linearGradient>
-                            </defs>
-                            <path d="M 0 35 Q 35 38 70 25 T 140 10" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" />
-                            <path d="M 0 35 Q 35 38 70 25 T 140 10 L 140 40 L 0 40 Z" fill="url(#blueGrad)" />
-                        </svg>
-                    </div>
                 </div>
 
-                {/* Card 2: This Month (Is Mahine Ka) */}
+                {/* Card 2: This Month / Custom Range */}
                 <div
-                    className={`ha-kpi-card clickable ${datePreset === 'this_month' ? 'active' : ''}`}
-                    onClick={() => setDatePreset(prev => prev === 'this_month' ? 'all' : 'this_month')}
-                    title="Click to filter This Month's transactions"
+                    className={`ha-kpi-card ha-kpi-purple clickable ${datePreset === 'this_month' || datePreset === 'custom' ? 'active' : ''}`}
+                    onClick={() => {
+                        if (datePreset === 'custom') {
+                            setShowCustomRangePicker(true);
+                        } else {
+                            setDatePreset(prev => prev === 'this_month' ? 'all' : 'this_month');
+                        }
+                    }}
+                    title={datePreset === 'custom' ? "Custom date range active (Click to modify)" : "Click to filter This Month's transactions"}
                 >
                     <div className="ha-kpi-top">
                         <div className="ha-kpi-icon-box purple">
                             <FaCalendarAlt size={18} />
                         </div>
                         <div className="ha-kpi-meta">
-                            <span className="ha-kpi-label">This Month</span>
-                            <strong className="ha-kpi-value">{fmt(revenueStats.monthRevenue)}</strong>
-                            <span className="ha-kpi-sub-count">{revenueStats.monthCount} {revenueStats.monthCount === 1 ? 'payment this month' : 'payments this month'}</span>
+                            <span className="ha-kpi-label">
+                                {datePreset === 'custom' ? 'Custom Range' : 'This Month'}
+                            </span>
+                            <strong className="ha-kpi-value">
+                                {datePreset === 'custom' ? fmt(revenueStats.customRevenue) : fmt(revenueStats.monthRevenue)}
+                            </strong>
+                            <span className="ha-kpi-sub-count">
+                                {datePreset === 'custom'
+                                    ? `${revenueStats.customCount} ${revenueStats.customCount === 1 ? 'payment in range' : 'payments in range'}`
+                                    : `${revenueStats.monthCount} ${revenueStats.monthCount === 1 ? 'payment this month' : 'payments this month'}`
+                                }
+                            </span>
                         </div>
-                    </div>
-                    <div className="ha-kpi-sparkline-wrap">
-                        <svg viewBox="0 0 140 40" preserveAspectRatio="none" className="ha-kpi-sparkline">
-                            <defs>
-                                <linearGradient id="purpleGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#a855f7" stopOpacity="0.3" />
-                                    <stop offset="100%" stopColor="#a855f7" stopOpacity="0" />
-                                </linearGradient>
-                            </defs>
-                            <path d="M 0 36 Q 35 37 75 22 T 140 12" fill="none" stroke="#a855f7" strokeWidth="2.5" strokeLinecap="round" />
-                            <path d="M 0 36 Q 35 37 75 22 T 140 12 L 140 40 L 0 40 Z" fill="url(#purpleGrad)" />
-                        </svg>
                     </div>
                 </div>
 
-                {/* Card 3: This Week (Is Hafte Ka) */}
+                {/* Card 3: This Week (Is Hafte Ka - Cool Cyan) */}
                 <div
-                    className={`ha-kpi-card clickable ${datePreset === 'this_week' ? 'active' : ''}`}
+                    className={`ha-kpi-card ha-kpi-cyan clickable ${datePreset === 'this_week' ? 'active' : ''}`}
                     onClick={() => setDatePreset(prev => prev === 'this_week' ? 'all' : 'this_week')}
                     title="Click to filter This Week's transactions"
                 >
                     <div className="ha-kpi-top">
-                        <div className="ha-kpi-icon-box amber">
+                        <div className="ha-kpi-icon-box cyan">
                             <FaChartLine size={18} />
                         </div>
                         <div className="ha-kpi-meta">
@@ -2478,23 +2773,11 @@ const PatientBillingProfile = () => {
                             <span className="ha-kpi-sub-count">{revenueStats.weekCount} {revenueStats.weekCount === 1 ? 'payment this week' : 'payments this week'}</span>
                         </div>
                     </div>
-                    <div className="ha-kpi-sparkline-wrap">
-                        <svg viewBox="0 0 140 40" preserveAspectRatio="none" className="ha-kpi-sparkline">
-                            <defs>
-                                <linearGradient id="amberGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.3" />
-                                    <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
-                                </linearGradient>
-                            </defs>
-                            <path d="M 0 36 Q 40 38 80 24 T 140 12" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" />
-                            <path d="M 0 36 Q 40 38 80 24 T 140 12 L 140 40 L 0 40 Z" fill="url(#amberGrad)" />
-                        </svg>
-                    </div>
                 </div>
 
                 {/* Card 4: Today's Collection (Aaj Ka) */}
                 <div
-                    className={`ha-kpi-card clickable ${datePreset === 'today' ? 'active' : ''}`}
+                    className={`ha-kpi-card ha-kpi-green clickable ${datePreset === 'today' ? 'active' : ''}`}
                     onClick={() => setDatePreset(prev => prev === 'today' ? 'all' : 'today')}
                     title="Click to filter Today's transactions"
                 >
@@ -2508,22 +2791,10 @@ const PatientBillingProfile = () => {
                             <span className="ha-kpi-sub-count">{revenueStats.todayCount} {revenueStats.todayCount === 1 ? 'payment today' : 'payments today'}</span>
                         </div>
                     </div>
-                    <div className="ha-kpi-sparkline-wrap">
-                        <svg viewBox="0 0 140 40" preserveAspectRatio="none" className="ha-kpi-sparkline">
-                            <defs>
-                                <linearGradient id="greenGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#22c55e" stopOpacity="0.3" />
-                                    <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
-                                </linearGradient>
-                            </defs>
-                            <path d="M 0 32 Q 40 36 80 20 T 140 8" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" />
-                            <path d="M 0 32 Q 40 36 80 20 T 140 8 L 140 40 L 0 40 Z" fill="url(#greenGrad)" />
-                        </svg>
-                    </div>
                 </div>
 
                 {/* Card 5: Cash & Online Mode Count (Dynamic per selected card/period) */}
-                <div className={`ha-kpi-card ${historyMode !== 'ALL' ? 'active' : ''}`}>
+                <div className={`ha-kpi-card ha-kpi-teal ${historyMode !== 'ALL' ? 'active' : ''}`}>
                     <div className="ha-kpi-top">
                         <div className="ha-kpi-icon-box teal">
                             <FaCreditCard size={18} />
@@ -2555,25 +2826,15 @@ const PatientBillingProfile = () => {
                             </div>
                         </div>
                     </div>
-                    <div className="ha-kpi-sparkline-wrap">
-                        <svg viewBox="0 0 140 40" preserveAspectRatio="none" className="ha-kpi-sparkline">
-                            <defs>
-                                <linearGradient id="tealGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor="#0d9488" stopOpacity="0.3" />
-                                    <stop offset="100%" stopColor="#0d9488" stopOpacity="0" />
-                                </linearGradient>
-                            </defs>
-                            <path d="M 0 35 Q 40 38 80 20 T 140 10" fill="none" stroke="#0d9488" strokeWidth="2.5" strokeLinecap="round" />
-                            <path d="M 0 35 Q 40 38 80 20 T 140 10 L 140 40 L 0 40 Z" fill="url(#tealGrad)" />
-                        </svg>
-                    </div>
                 </div>
             </div>
 
-            {/* 4. Filter Toolbar */}
-            <div className="ha-filter-toolbar">
+            {/* 4. Filter Toolbar (Desktop) */}
+            <div className="ha-filter-toolbar ha-desktop-filter-toolbar">
                 <div className="ha-search-box">
-                    <FaSearch className="ha-search-icon" />
+                    <span className="ha-search-icon-wrap">
+                        <FaSearch className="ha-search-icon" />
+                    </span>
                     <input
                         type="text"
                         className="ha-search-input"
@@ -2606,22 +2867,25 @@ const PatientBillingProfile = () => {
                         >
                             <option value="ALL">All Modes</option>
                             <option value="Cash">Cash</option>
-                            <option value="UPI">UPI</option>
+                            <option value="UPI">UPI / Online</option>
                             <option value="Card">Card</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
                         </select>
                     </div>
 
                     {/* All Status Dropdown */}
                     <div className="ha-drop-wrap">
-                        <FaClock className="ha-drop-icon" />
+                        <FaCheckCircle className="ha-drop-icon" />
                         <select
                             value={historyStatus}
                             onChange={e => setHistoryStatus(e.target.value)}
                             className="ha-drop-select"
                         >
                             <option value="ALL">All Status</option>
-                            <option value="Paid">Paid</option>
-                            <option value="Pending">Pending</option>
+                            <option value="PAID">Paid</option>
+                            <option value="PARTIALLY_PAID">Partially Paid</option>
+                            <option value="REFUNDED">Refunded</option>
                         </select>
                     </div>
 
@@ -2633,19 +2897,22 @@ const PatientBillingProfile = () => {
                             onChange={e => setHistorySort(e.target.value)}
                             className="ha-drop-select"
                         >
-                            <option value="newest">Newest First</option>
-                            <option value="oldest">Oldest First</option>
-                            <option value="amt_high">Amount: High to Low</option>
-                            <option value="amt_low">Amount: Low to High</option>
+                            <option value="desc">Newest First</option>
+                            <option value="asc">Oldest First</option>
+                            <option value="amount_desc">Amount (High → Low)</option>
+                            <option value="amount_asc">Amount (Low → High)</option>
                         </select>
                     </div>
 
                     {/* Date Dropdown */}
-                    <div className="ha-drop-wrap">
+                    <div className="ha-drop-wrap" style={{ position: 'relative' }}>
                         <FaCalendarAlt className="ha-drop-icon" />
                         <select
                             value={datePreset}
-                            onChange={e => handlePresetChange(e.target.value)}
+                            onChange={e => {
+                                const val = e.target.value;
+                                handlePresetChange(val);
+                            }}
                             className="ha-drop-select"
                         >
                             <option value="all">All Dates</option>
@@ -2653,7 +2920,80 @@ const PatientBillingProfile = () => {
                             <option value="yesterday">Yesterday</option>
                             <option value="this_week">This Week</option>
                             <option value="this_month">This Month</option>
+                            <option value="custom">
+                                {datePreset === 'custom' && (customStartDate || customEndDate)
+                                    ? `Custom: ${customStartDate || 'Start'} to ${customEndDate || 'End'}`
+                                    : 'Custom Range'}
+                            </option>
                         </select>
+                        {showCustomRangePicker && (
+                            <div className="ha-custom-date-popover" style={{ top: 'calc(100% + 8px)', right: 0, zIndex: 1100 }}>
+                                <div className="ha-cd-header">
+                                    <span className="ha-cd-title">Select Date Range</span>
+                                    <button
+                                        type="button"
+                                        className="ha-cd-close"
+                                        onClick={() => setShowCustomRangePicker(false)}
+                                        title="Close"
+                                    >
+                                        &times;
+                                    </button>
+                                </div>
+                                <div className="ha-cd-row">
+                                    <label>
+                                        <span>From Date:</span>
+                                        <input
+                                            type="date"
+                                            value={customStartDate}
+                                            onChange={e => setCustomStartDate(e.target.value)}
+                                        />
+                                    </label>
+                                    <label>
+                                        <span>To Date:</span>
+                                        <input
+                                            type="date"
+                                            value={customEndDate}
+                                            onChange={e => setCustomEndDate(e.target.value)}
+                                        />
+                                    </label>
+                                </div>
+                                <div className="ha-cd-actions">
+                                    <button
+                                        type="button"
+                                        className="ha-cd-clear"
+                                        onClick={() => {
+                                            setCustomStartDate('');
+                                            setCustomEndDate('');
+                                            setDatePreset('all');
+                                            setShowCustomRangePicker(false);
+                                            toast.info('Custom date range cleared');
+                                        }}
+                                    >
+                                        Reset
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="ha-cd-apply"
+                                        onClick={() => {
+                                            if (!customStartDate && !customEndDate) {
+                                                toast.error('Please select From Date or To Date');
+                                                return;
+                                            }
+                                            if (customStartDate && customEndDate && customStartDate > customEndDate) {
+                                                const temp = customStartDate;
+                                                setCustomStartDate(customEndDate);
+                                                setCustomEndDate(temp);
+                                            }
+                                            setDatePreset('custom');
+                                            setShowCustomRangePicker(false);
+                                            toast.success('Custom range applied');
+                                        }}
+                                    >
+                                        Apply Range
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Reset Button */}
@@ -2669,14 +3009,213 @@ const PatientBillingProfile = () => {
                 </div>
             </div>
 
-            {/* 5. Sub-Header: Showing Count + Export */}
-            <div className="ha-sub-header">
-                <div className="ha-showing-wrap">
-                    <span className="ha-showing-pulse-dot"></span>
-                    <span className="ha-showing-label">Showing</span>
-                    <span className="ha-showing-count-badge">{displayedTransactions.length}</span>
-                    <span className="ha-showing-unit">{displayedTransactions.length === 1 ? 'Payment Record' : 'Payment Records'}</span>
+            {/* 4b. Mobile Filter Bar (Only shown on mobile screen) */}
+            <div className="ha-mobile-filter-bar">
+                <div className="ha-mobile-search-box">
+                    <span className="ha-search-icon-wrap">
+                        <FaSearch className="ha-search-icon" />
+                    </span>
+                    <input
+                        type="text"
+                        className="ha-search-input"
+                        placeholder="Search patient, MRN, phone..."
+                        value={historySearch}
+                        onChange={e => handleHistorySearchChange(e.target.value)}
+                    />
+                    {historySearch && (
+                        <button
+                            type="button"
+                            className="ha-search-clear"
+                            onClick={() => {
+                                setHistorySearch('');
+                                fetchHospitalHistory('', historyMode, datePreset, customStartDate, customEndDate);
+                            }}
+                        >
+                            &times;
+                        </button>
+                    )}
                 </div>
+                <div className="ha-mobile-filter-actions">
+                    <button
+                        type="button"
+                        className={`ha-mobile-btn-filter ${activeFilterCount > 0 ? 'active' : ''}`}
+                        onClick={() => setShowMobileFiltersModal(true)}
+                        title="Open filters"
+                    >
+                        <FaFilter size={13} />
+                        <span>Filter</span>
+                        {activeFilterCount > 0 && (
+                            <span className="ha-mobile-filter-badge">{activeFilterCount}</span>
+                        )}
+                    </button>
+                    <button
+                        type="button"
+                        className="ha-mobile-btn-reset"
+                        onClick={handleResetFilters}
+                        title="Reset all filters"
+                    >
+                        <FaSyncAlt size={12} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Mobile Filter Popup / Bottom Sheet */}
+            {showMobileFiltersModal && (
+                <div className="modal-overlay ha-mfs-overlay" onClick={() => setShowMobileFiltersModal(false)}>
+                    <div className="modal-content ha-mfs-sheet" onClick={e => e.stopPropagation()}>
+                        <div className="ha-mfs-header">
+                            <div className="ha-mfs-title">
+                                <FaFilter size={16} color="#0284c7" />
+                                <span>Filter Payments</span>
+                            </div>
+                            <button
+                                type="button"
+                                className="ha-mfs-close"
+                                onClick={() => setShowMobileFiltersModal(false)}
+                            >
+                                &times;
+                            </button>
+                        </div>
+
+                        <div className="ha-mfs-body">
+                            {/* Payment Mode */}
+                            <div className="ha-mfs-group">
+                                <label className="ha-mfs-label">Payment Mode</label>
+                                <div className="ha-mfs-chips">
+                                    {[
+                                        { id: 'ALL', label: 'All Modes' },
+                                        { id: 'Cash', label: '💵 Cash' },
+                                        { id: 'UPI', label: '📱 UPI' },
+                                        { id: 'Card', label: '💳 Card' }
+                                    ].map(m => (
+                                        <button
+                                            key={m.id}
+                                            type="button"
+                                            className={`ha-mfs-chip ${historyMode === m.id ? 'active' : ''}`}
+                                            onClick={() => handleHistoryModeChange(m.id)}
+                                        >
+                                            {m.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Status */}
+                            <div className="ha-mfs-group">
+                                <label className="ha-mfs-label">Status</label>
+                                <div className="ha-mfs-chips">
+                                    {[
+                                        { id: 'ALL', label: 'All Status' },
+                                        { id: 'Paid', label: '✓ Paid' },
+                                        { id: 'Pending', label: '⏳ Pending' }
+                                    ].map(st => (
+                                        <button
+                                            key={st.id}
+                                            type="button"
+                                            className={`ha-mfs-chip ${historyStatus === st.id ? 'active' : ''}`}
+                                            onClick={() => setHistoryStatus(st.id)}
+                                        >
+                                            {st.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Sort */}
+                            <div className="ha-mfs-group">
+                                <label className="ha-mfs-label">Sort By</label>
+                                <div className="ha-mfs-chips">
+                                    {[
+                                        { id: 'newest', label: 'Newest First' },
+                                        { id: 'oldest', label: 'Oldest First' },
+                                        { id: 'amt_high', label: 'Amount: High to Low' },
+                                        { id: 'amt_low', label: 'Amount: Low to High' }
+                                    ].map(s => (
+                                        <button
+                                            key={s.id}
+                                            type="button"
+                                            className={`ha-mfs-chip ${historySort === s.id ? 'active' : ''}`}
+                                            onClick={() => setHistorySort(s.id)}
+                                        >
+                                            {s.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Date Presets */}
+                            <div className="ha-mfs-group">
+                                <label className="ha-mfs-label">Date Range</label>
+                                <div className="ha-mfs-chips">
+                                    {[
+                                        { id: 'all', label: 'All Dates' },
+                                        { id: 'today', label: 'Today' },
+                                        { id: 'yesterday', label: 'Yesterday' },
+                                        { id: 'this_week', label: 'This Week' },
+                                        { id: 'this_month', label: 'This Month' },
+                                        { id: 'custom', label: 'Custom Range' }
+                                    ].map(d => (
+                                        <button
+                                            key={d.id}
+                                            type="button"
+                                            className={`ha-mfs-chip ${datePreset === d.id ? 'active' : ''}`}
+                                            onClick={() => handlePresetChange(d.id)}
+                                        >
+                                            {d.label}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {datePreset === 'custom' && (
+                                    <div className="ha-mfs-custom-range">
+                                        <div className="ha-mfs-input-col">
+                                            <span className="ha-mfs-sublabel">From Date</span>
+                                            <input
+                                                type="date"
+                                                className="ha-mfs-date-input"
+                                                value={customStartDate}
+                                                onChange={e => setCustomStartDate(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="ha-mfs-input-col">
+                                            <span className="ha-mfs-sublabel">To Date</span>
+                                            <input
+                                                type="date"
+                                                className="ha-mfs-date-input"
+                                                value={customEndDate}
+                                                onChange={e => setCustomEndDate(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="ha-mfs-footer">
+                            <button
+                                type="button"
+                                className="ha-mfs-btn-reset"
+                                onClick={() => {
+                                    handleResetFilters();
+                                    setShowMobileFiltersModal(false);
+                                }}
+                            >
+                                Reset All
+                            </button>
+                            <button
+                                type="button"
+                                className="ha-mfs-btn-apply"
+                                onClick={() => setShowMobileFiltersModal(false)}
+                            >
+                                Apply ({displayedTransactions.length} Records)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 5. Sub-Header: Export CSV */}
+            <div className="ha-sub-header">
                 <button
                     type="button"
                     className="ha-btn-export"
@@ -2735,7 +3274,7 @@ const PatientBillingProfile = () => {
                                                             {(pat.name || 'P').charAt(0).toUpperCase()}
                                                         </div>
                                                         <div className="ha-pat-info">
-                                                            <strong className="ha-pat-name">{pat.name || 'Walk-in Patient'}</strong>
+                                                            <strong className="ha-pat-name">{formatPatientName(pat.name || 'Walk-in Patient')}</strong>
                                                             <span className="ha-pat-mrn">{pat.mrn || pat.patientId || 'PCF-M365-001'}</span>
                                                             {pat.phone && (
                                                                 <span className="ha-pat-phone">
@@ -2771,8 +3310,8 @@ const PatientBillingProfile = () => {
                                                         <button
                                                             type="button"
                                                             className="ha-btn-view-pill"
-                                                            onClick={() => setSelectedPaymentModal(t)}
-                                                            title="View complete transaction information"
+                                                            onClick={() => openPatientBilling(t)}
+                                                            title="View patient billing & past records"
                                                         >
                                                             <FaEye size={12} />
                                                             <span>View</span>
@@ -2824,208 +3363,6 @@ const PatientBillingProfile = () => {
                 )}
             </div>
 
-            {/* ====== POPUP MODAL: PAYMENT DETAILS (MATCHING IMAGE 2 EXACTLY) ====== */}
-            {selectedPaymentModal && (
-                <div className="ha-modal-backdrop" onClick={() => setSelectedPaymentModal(null)}>
-                    <div className="ha-details-modal" onClick={e => e.stopPropagation()}>
-                        {/* Modal Header */}
-                        <div className="ha-dm-header">
-                            <div>
-                                <h3 className="ha-dm-title">Payment Details</h3>
-                                <p className="ha-dm-sub">Complete transaction information</p>
-                            </div>
-                            <button
-                                type="button"
-                                className="ha-dm-close"
-                                onClick={() => setSelectedPaymentModal(null)}
-                                title="Close"
-                            >
-                                &times;
-                            </button>
-                        </div>
-
-                        {/* Modal Body */}
-                        {(() => {
-                            const pat = selectedPaymentModal.patientId || {};
-                            const isUpi = (selectedPaymentModal.paymentMode || '').toUpperCase().includes('UPI');
-                            const hasProof = !!(selectedPaymentModal.proofUrl || selectedPaymentModal.upiScreenshotUrl);
-                            const proofImg = selectedPaymentModal.proofUrl || selectedPaymentModal.upiScreenshotUrl;
-                            const { dateStr, timeStr } = getBookingDateTime(selectedPaymentModal);
-                            const realUtr = getRealUtr(selectedPaymentModal);
-
-                            // Service & doctor resolution
-                            const { serviceTitle, doctorSubtitle } = parseServiceAndDoctor(selectedPaymentModal);
-
-                            return (
-                                <div className="ha-dm-body">
-                                    {/* Top Patient Card */}
-                                    <div className="ha-dm-patient-card">
-                                        <div className="ha-dm-pat-left">
-                                            <div className="ha-dm-avatar">
-                                                {(pat.name || 'J').charAt(0).toUpperCase()}
-                                            </div>
-                                            <div className="ha-dm-pat-meta">
-                                                <strong className="ha-dm-name">{pat.name || 'Walk-in Patient'}</strong>
-                                                <span className="ha-dm-mrn">MRN: {pat.mrn || pat.patientId || 'PCF-M365-001'}</span>
-                                                {pat.phone && (
-                                                    <span className="ha-dm-phone">
-                                                        <span className="ha-phone-icon">📞</span>
-                                                        <span>{pat.phone}</span>
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="ha-dm-pat-right">
-                                            <span className="ha-dm-status-badge">
-                                                <FaCheckCircle size={13} />
-                                                <span>Paid</span>
-                                            </span>
-                                            <span className="ha-dm-timestamp">{dateStr}, {timeStr}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* 4 Information Cards in 2x2 Grid */}
-                                    <div className="ha-dm-grid">
-                                        {/* Card 1: Service / Description */}
-                                        <div className="ha-dm-card">
-                                            <div className="ha-dm-card-icon blue">
-                                                <FaFileAlt size={16} />
-                                            </div>
-                                            <div className="ha-dm-card-content">
-                                                <span className="ha-dm-card-label">Service / Description</span>
-                                                <strong className="ha-dm-card-val">{serviceTitle}</strong>
-                                                <span className="ha-dm-card-sub">{doctorSubtitle}</span>
-                                            </div>
-                                        </div>
-
-                                        {/* Card 2: Amount */}
-                                        <div className="ha-dm-card">
-                                            <div className="ha-dm-card-icon blue">
-                                                <FaRupeeSign size={16} />
-                                            </div>
-                                            <div className="ha-dm-card-content">
-                                                <span className="ha-dm-card-label">Amount</span>
-                                                <strong className="ha-dm-card-val amount">{fmt(selectedPaymentModal.amount)}</strong>
-                                            </div>
-                                        </div>
-
-                                        {/* Card 3: Payment Mode */}
-                                        <div className="ha-dm-card">
-                                            <div className="ha-dm-card-icon purple">
-                                                <FaCreditCard size={16} />
-                                            </div>
-                                            <div className="ha-dm-card-content">
-                                                <span className="ha-dm-card-label">Payment Mode</span>
-                                                <strong className="ha-dm-card-val">{selectedPaymentModal.paymentMode || 'Cash'}</strong>
-                                            </div>
-                                        </div>
-
-                                        {/* Card 4: UTR / Transaction ID */}
-                                        <div className="ha-dm-card">
-                                            <div className="ha-dm-card-icon blue">
-                                                <FaFileAlt size={16} />
-                                            </div>
-                                            <div className="ha-dm-card-content">
-                                                <span className="ha-dm-card-label">UTR / Transaction ID</span>
-                                                <div className="ha-dm-utr-box">
-                                                    <code className="ha-dm-utr-code">{realUtr}</code>
-                                                    {realUtr !== '—' && (
-                                                        <button
-                                                            type="button"
-                                                            className="ha-dm-copy-btn"
-                                                            onClick={() => handleCopy(realUtr)}
-                                                            title="Copy UTR / Transaction ID"
-                                                        >
-                                                            <FaCopy size={13} />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Bottom 2 Cards: Payment Proof & Bill Details */}
-                                    <div className="ha-dm-bottom-grid">
-                                        {/* Left: Payment Proof */}
-                                        <div className="ha-dm-action-card">
-                                            <span className="ha-dm-card-label">Payment Proof</span>
-                                            {hasProof ? (
-                                                <div className="ha-dm-proof-box">
-                                                    <img
-                                                        src={proofImg}
-                                                        alt="Payment Proof"
-                                                        className="ha-dm-proof-thumb"
-                                                        onClick={() => setViewProofUrl(proofImg, {
-                                                            patientName: pat.name,
-                                                            amount: selectedPaymentModal.amount,
-                                                            mode: selectedPaymentModal.paymentMode,
-                                                            txnId: realUtr,
-                                                            date: selectedPaymentModal.paymentDate || selectedPaymentModal.createdAt
-                                                        })}
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        className="ha-dm-btn-proof"
-                                                        onClick={() => setViewProofUrl(proofImg, {
-                                                            patientName: pat.name,
-                                                            amount: selectedPaymentModal.amount,
-                                                            mode: selectedPaymentModal.paymentMode,
-                                                            txnId: realUtr,
-                                                            date: selectedPaymentModal.paymentDate || selectedPaymentModal.createdAt
-                                                        })}
-                                                    >
-                                                        <FaEye size={12} />
-                                                        <span>View Proof</span>
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <div className="ha-dm-no-proof">
-                                                    No screenshot proof uploaded
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Right: Bill Details */}
-                                        <div className="ha-dm-action-card">
-                                            <span className="ha-dm-card-label">Bill Details</span>
-                                            <div className="ha-dm-bill-box">
-                                                <button
-                                                    type="button"
-                                                    className="ha-dm-btn-bill-view"
-                                                    onClick={() => openPatientBillBreakdown(selectedPaymentModal)}
-                                                >
-                                                    <FaEye size={12} />
-                                                    <span>View Bill</span>
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="ha-dm-btn-bill-download"
-                                                    onClick={() => downloadTransactionReceipt(selectedPaymentModal)}
-                                                    title="Download Official Hospital Bill Receipt"
-                                                >
-                                                    <FaDownload size={12} />
-                                                    <span>Download Bill</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Close Footer Button */}
-                                    <div className="ha-dm-footer">
-                                        <button
-                                            type="button"
-                                            className="ha-dm-btn-close-main"
-                                            onClick={() => setSelectedPaymentModal(null)}
-                                        >
-                                            Close
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })()}
-                    </div>
-                </div>
-            )}
         </div>
     )}
 
@@ -3040,7 +3377,7 @@ const PatientBillingProfile = () => {
                         </h3>
                         {inspectPatientModal.patient && (
                             <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '6px', fontSize: '0.88rem', color: '#475569' }}>
-                                <span><strong>Patient:</strong> {inspectPatientModal.patient.name}</span>
+                                <span><strong>Patient:</strong> {formatPatientName(inspectPatientModal.patient.name)}</span>
                                 <span><strong>Phone:</strong> {inspectPatientModal.patient.phone || '—'}</span>
                                 <span><strong>MRN:</strong> {inspectPatientModal.patient.mrn || inspectPatientModal.patient.patientId || '—'}</span>
                             </div>
