@@ -77,6 +77,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'AI Assistant', path: '/doctor/ai-assistant', icon: <FiCpu />, prefetchKey: 'doc_ai', prefetchFn: () => import('../../pages/doctors/AIAssistant') },
                 { label: 'Surgery Referrals', path: '/doctor/surgery-referrals', icon: <FiScissors />, prefetchKey: 'doc_referrals', prefetchFn: () => import('../../pages/doctors/SurgeryReferrals') },
                 { label: 'My Surgery Plans', path: '/doctor/surgery-plans', icon: <FiFileText />, prefetchKey: 'doc_plans', prefetchFn: () => import('../../pages/doctors/MySurgeryPlans') },
+                { label: 'Real-Time Monitoring', path: '/doctor/real-time-monitoring', icon: <FiActivity />, prefetchKey: 'doc_rtm', prefetchFn: () => import('../../pages/monitoring/RealTimeMonitoring') },
             ];
         }
         if (role === 'reception' || role === 'receptionist') {
@@ -120,6 +121,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'OPD Patient Queue', path: '/nurse/opd-queue', icon: <FiUsers />, prefetchKey: 'nurse_opd', prefetchFn: () => import('../../pages/nurse/NurseOPDQueue') },
                 { label: 'Appointments', path: '/nurse/appointments', icon: <FiCalendar />, prefetchKey: 'nurse_appts', prefetchFn: () => import('../../pages/nurse/NurseAppointments') },
                 { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity />, prefetchKey: 'nurse_ipd', prefetchFn: () => import('../../pages/nurse/IPDCommandCenter') },
+                { label: 'Real-Time Monitoring', path: '/nurse/real-time-monitoring', icon: <FiActivity />, prefetchKey: 'nurse_rtm', prefetchFn: () => import('../../pages/monitoring/RealTimeMonitoring') },
             ];
         }
         if (role === 'billing') {
@@ -322,6 +324,7 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
     };
 
     const getPageTitle = (pathname) => {
+        if (pathname.includes('real-time-monitoring')) return 'Real-Time Monitoring';
         if (pathname === '/nurse/dashboard') return 'Nurse Command Center';
         if (pathname === '/nurse/opd-queue') return 'OPD Patient Queue';
         if (pathname === '/nurse/appointments') return 'Appointments';
@@ -478,7 +481,10 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
 
 const DashboardLayout = ({ children }) => {
     const location = useLocation();
-    const isFullBleed = location.pathname.includes('/patient') || location.pathname.includes('/patients');
+    const isFullBleed = location.pathname.includes('/patient') || 
+                        location.pathname.includes('/patients') || 
+                        location.pathname.includes('/real-time-monitoring') || 
+                        location.pathname.includes('/monitoring');
     const [sidebarOpen, setSidebarOpen] = useState(typeof window !== 'undefined' ? window.innerWidth > 1024 : true);
 
     useEffect(() => {

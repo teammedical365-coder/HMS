@@ -127,6 +127,9 @@ const NurseOPDQueue = lazy(() => import('../pages/nurse/NurseOPDQueue'));
 const NurseAppointments = lazy(() => import('../pages/nurse/NurseAppointments'));
 const IPDCommandCenter = lazy(() => import('../pages/nurse/IPDCommandCenter'));
 
+// Real-Time Monitoring
+const RealTimeMonitoring = lazy(() => import('../pages/monitoring/RealTimeMonitoring'));
+
 // Subdomains reserved for the platform itself — NOT hospital slugs
 const RESERVED_SUBDOMAINS = ['admin', 'www', 'api'];
 
@@ -405,6 +408,10 @@ const MainRoutes = () => {
                                 <Route path="nurse/ipd/patient/:admissionId" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NursePatientWorkspace /></ProtectedRoute>} />
                                 <Route path="ipd/command-center" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'doctor', 'hospitaladmin', 'centraladmin', 'superadmin']}><IPDCommandCenter /></ProtectedRoute>} />
                                 <Route path="nurse/command-center" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'doctor', 'hospitaladmin', 'centraladmin', 'superadmin']}><IPDCommandCenter /></ProtectedRoute>} />
+
+                                {/* Real-Time Monitoring — Doctor + Nurse */}
+                                <Route path="doctor/real-time-monitoring" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'centraladmin', 'superadmin']}><RealTimeMonitoring /></ProtectedRoute>} />
+                                <Route path="nurse/real-time-monitoring" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><RealTimeMonitoring /></ProtectedRoute>} />
 
                                 {/* Accountant / Finance Pages */}
                                 <Route path="accountant/dashboard" element={<ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}><AccountantDashboard /></ProtectedRoute>} />
