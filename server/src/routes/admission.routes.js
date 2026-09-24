@@ -411,8 +411,28 @@ router.get('/active', verifyAdmissionAccess, async (req, res) => {
 router.get('/patient/:patientId', verifyAdmissionAccess, async (req, res) => {
     try {
         const Admission = getAdmission(req);
+        let targetPatientId = req.params.patientId;
+        const mongoose = require('mongoose');
+
+        // Gracefully resolve MRN/customId to User._id if not already a 24-character ObjectId
+        if (!mongoose.Types.ObjectId.isValid(targetPatientId)) {
+            const MasterUser = require('../models/user.model');
+            const pt = await MasterUser.findOne({
+                $or: [
+                    { patientId: targetPatientId },
+                    { mrn: targetPatientId },
+                    { customId: targetPatientId }
+                ]
+            }).select('_id').lean();
+            if (pt) {
+                targetPatientId = pt._id;
+            } else {
+                return res.json({ success: true, admissions: [] });
+            }
+        }
+
         const admissions = await Admission.find({
-            patientId: req.params.patientId,
+            patientId: targetPatientId,
             hospitalId: req.hospitalId || req.user.hospitalId,
         }).sort({ admissionDate: -1, createdAt: -1 }).lean();
 
