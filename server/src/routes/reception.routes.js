@@ -1167,6 +1167,8 @@ router.get('/stats', verifyToken, verifyReception, resolveTenant, async (req, re
             ]
         }).select('amount');
 
+        const yesterdayCollections = paidApptsYesterday.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+
         // 4. Hospitalization & Inpatient Bed Stats
         const Bed = require('../models/bed.model');
         const hospBaseQuery = {};
