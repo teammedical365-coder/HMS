@@ -431,7 +431,29 @@ router.get('/appointments/:id', verifyToken, async (req, res) => {
             departments = ['General'];
         }
 
-        res.json({ success: true, appointment, departments });
+        const assistantPreparation = await require('../models/doctorAssistantPreparation.model')
+            .findOne({ appointmentId: appointment._id })
+            .populate('preparedBy', 'name email phone')
+            .lean();
+
+        if (assistantPreparation) {
+            // Log doctor review event if not already completed
+            const AuditLog = require('../models/auditLog.model');
+            new AuditLog({
+                clinicId: req.user.hospitalId || appointment.hospitalId,
+                userId: req.user.id || req.user.userId,
+                userName: req.user.name || 'Doctor',
+                role: 'Doctor',
+                action: 'DOCTOR_REVIEW_STARTED',
+                targetModel: 'DoctorAssistantPreparation',
+                targetId: assistantPreparation._id,
+                targetLabel: `Doctor reviewing assistant prep for Appt #${appointment._id}`,
+                ip: req.ip || '',
+                userAgent: req.headers['user-agent'] || ''
+            }).save().catch(() => {});
+        }
+
+        res.json({ success: true, appointment, departments, assistantPreparation });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error fetching details' });
     }

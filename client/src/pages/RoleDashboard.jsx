@@ -101,6 +101,8 @@ const RoleDashboard = () => {
             navigate('/supremeadmin', { replace: true });
         } else if (['nurse', 'staffnurse', 'headnurse'].includes((roleName || '').toLowerCase().replace(/\s+/g, ''))) {
             navigate('/nurse/dashboard', { replace: true });
+        } else if ((roleName || '').toLowerCase().includes('assistant')) {
+            navigate('/assistant/dashboard', { replace: true });
         }
     }, [isReception, roleName, navigate]);
 

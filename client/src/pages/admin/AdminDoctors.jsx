@@ -131,7 +131,14 @@ const AdminDoctors = () => {
 
         try {
             if (editingDoctor) {
-                const result = await dispatch(updateDoctor({ id: editingDoctor._id, doctorData: formData }));
+                const doctorData = {
+                    ...formData,
+                    consultationFee: (formData.consultationFee !== '' && formData.consultationFee !== undefined && formData.consultationFee !== null) ? Number(formData.consultationFee) : 0
+                };
+                if (!doctorData.password || doctorData.password.trim() === '') {
+                    delete doctorData.password;
+                }
+                const result = await dispatch(updateDoctor({ id: editingDoctor._id, doctorData }));
                 if (updateDoctor.fulfilled.match(result)) {
                     toast.success('Doctor profile updated successfully!');
                     resetForm();

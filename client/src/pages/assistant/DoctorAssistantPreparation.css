@@ -1,0 +1,325 @@
+/* Doctor Assistant Patient Preparation Workspace Styles */
+
+.dap-container {
+    padding: 24px 28px;
+    background: #f8fafc;
+    min-height: calc(100vh - 64px);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #1e293b;
+}
+
+/* Patient Header Card */
+.dap-patient-header {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 20px 24px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.dap-patient-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.dap-patient-avatar {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: #e0f2fe;
+    color: #0284c7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+.dap-patient-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+}
+
+.dap-patient-meta {
+    font-size: 0.82rem;
+    color: #64748b;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.dap-doctor-tag {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    color: #0369a1;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Checklist Progress Banner */
+.dap-checklist-banner {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 16px 22px;
+    border: 1px solid #e2e8f0;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+
+.dap-checklist-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+.dap-checklist-items {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.dap-chk-item {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.dap-chk-item.done {
+    color: #059669;
+}
+
+/* Tabs Navigation */
+.dap-tabs-bar {
+    display: flex;
+    gap: 8px;
+    border-bottom: 2px solid #e2e8f0;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+.dap-tab-btn {
+    background: transparent;
+    border: none;
+    padding: 10px 16px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.dap-tab-btn:hover {
+    color: #0ea5e9;
+}
+
+.dap-tab-btn.active {
+    color: #0ea5e9;
+    border-bottom-color: #0ea5e9;
+}
+
+/* Main Workspace Form Panels */
+.dap-form-panel {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 24px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    margin-bottom: 24px;
+}
+
+.dap-panel-heading {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dap-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+}
+
+.dap-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.dap-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+}
+
+.dap-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dap-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #334155;
+}
+
+.dap-input, .dap-select, .dap-textarea {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    color: #1e293b;
+    background: #ffffff;
+    outline: none;
+    box-sizing: border-box;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.dap-input:focus, .dap-select:focus, .dap-textarea:focus {
+    border-color: #0ea5e9;
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+.dap-textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+/* Pain Score Rating Bar */
+.dap-pain-bar {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.dap-pain-btn {
+    flex: 1;
+    padding: 8px 4px;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.dap-pain-btn.selected {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+}
+
+/* Draft Notes Banner */
+.dap-draft-banner {
+    background: #fffbeb;
+    border: 1px solid #fef3c7;
+    border-left: 4px solid #f59e0b;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.84rem;
+    color: #92400e;
+    font-weight: 600;
+}
+
+/* Action Footer Bar */
+.dap-footer-bar {
+    position: sticky;
+    bottom: 12px;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 14px 24px;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    z-index: 40;
+}
+
+.dap-footer-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.88rem;
+    color: #475569;
+}
+
+.dap-footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dap-btn-ready {
+    background: #059669;
+    color: #ffffff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dap-btn-ready:hover {
+    background: #047857;
+}
+
+.dap-btn-ready:disabled {
+    background: #94a3b8;
+    cursor: not-allowed;
+    box-shadow: none;
+}

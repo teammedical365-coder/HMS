@@ -218,6 +218,7 @@ app.use('/api/beds', bedRoutes);
 app.use('/api/ot', otRoutes);
 app.use('/api/referrals', referralRoutes);
 app.use('/api/vials', vialRoutes);
+app.use('/api/assistant', require('./routes/assistant.routes'));
 app.use('/api/ipd-clinical', require('./routes/ipdClinical.routes'));
 app.use('/api/ipd-nursing', require('./routes/ipdNursing.routes'));
 app.use('/api/voice-scribe', require('./routes/voiceScribe.routes'));

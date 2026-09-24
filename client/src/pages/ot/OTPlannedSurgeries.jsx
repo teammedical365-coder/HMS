@@ -38,7 +38,7 @@ const OTPlannedSurgeries = () => {
             ]);
 
             if (plannedRes.success) {
-                setPlannedSurgeries(plannedRes.surgeries || []);
+                setPlannedSurgeries(plannedRes.surgeries || plannedRes.plans || plannedRes.data || []);
             }
             if (docsRes.doctors) setDoctorsList(docsRes.doctors);
             if (roomsRes.rooms) setOtRoomsList(roomsRes.rooms);
@@ -57,10 +57,12 @@ const OTPlannedSurgeries = () => {
         const handleUpdate = () => fetchPlannedData();
         socket.on('ot_update', handleUpdate);
         socket.on('ot_surgery_scheduled', handleUpdate);
+        socket.on('surgery_plan_created', handleUpdate);
 
         return () => {
             socket.off('ot_update', handleUpdate);
             socket.off('ot_surgery_scheduled', handleUpdate);
+            socket.off('surgery_plan_created', handleUpdate);
         };
     }, [fetchPlannedData]);
 

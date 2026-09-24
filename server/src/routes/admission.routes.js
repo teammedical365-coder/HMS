@@ -6,17 +6,29 @@ const MasterAdmission = require('../models/admission.model');
 const BedMaster = require('../models/bed.model');
 const { getTenantModels } = require('../db/tenantModels');
 
-// Admission access: reception, accountant, admin
+// Admission access: reception, accountant, admin, doctor, nurse
 const verifyAdmissionAccess = async (req, res, next) => {
     try {
         await verifyToken(req, res, async () => {
             const roleName = (req.user._roleData?.name || String(req.user.role || '')).toLowerCase().replace(/\s+/g, '');
             const perms = req.user._roleData?.permissions || [];
-            const allowed = ['reception', 'receptionist', 'accountant', 'cashier', 'hospitaladmin', 'centraladmin', 'superadmin', 'admin', 'otmanager', 'otstaff', 'nurse', 'staffnurse', 'headnurse'];
+            const allowed = [
+                'reception', 'receptionist', 'accountant', 'cashier',
+                'hospitaladmin', 'centraladmin', 'superadmin', 'admin',
+                'otmanager', 'otstaff', 'nurse', 'staffnurse', 'headnurse',
+                'doctor', 'clinicdoctor', 'clinic doctor', 'surgeon', 'consultant',
+                'doctorassistant', 'assistant', 'physician', 'clinicalassistant'
+            ];
 
             if (allowed.includes(roleName) ||
                 perms.includes('billing_manage') ||
                 perms.includes('admission_manage') ||
+                perms.includes('admission_create') ||
+                perms.includes('admission_view') ||
+                perms.includes('doctor_access') ||
+                perms.includes('clinical_manage') ||
+                perms.includes('ipd_orders_manage') ||
+                perms.includes('ipd_view') ||
                 perms.includes('appointment_manage') ||
                 perms.includes('*')) {
                 await resolveTenant(req, res, next);
@@ -264,15 +276,25 @@ router.post('/', verifyAdmissionAccess, async (req, res) => {
         // Real-time notification via Socket.IO
         const io = req.app.get('io');
         if (io) {
-            io.to(`hospital_${hospitalId}`).emit('admission_created', {
+            const eventPayload = {
                 admissionId: admission._id,
                 patientId,
                 ward: bed.ward,
                 bedNumber: bed.bedNumber,
                 doctorId: validatedDoctorId,
                 timestamp: new Date()
-            });
+            };
+            io.to(`hospital_${hospitalId}`).emit('admission_created', eventPayload);
+            io.to(hospitalId.toString()).emit('admission_created', eventPayload);
             io.to(`hospital_${hospitalId}`).emit('bed_status_changed', {
+                bedId: bed._id,
+                status: 'OCCUPIED',
+                ward: bed.ward,
+                bedNumber: bed.bedNumber,
+                patientId,
+                timestamp: new Date()
+            });
+            io.to(hospitalId.toString()).emit('bed_status_changed', {
                 bedId: bed._id,
                 status: 'OCCUPIED',
                 ward: bed.ward,
@@ -282,7 +304,7 @@ router.post('/', verifyAdmissionAccess, async (req, res) => {
             });
         }
 
-        res.status(201).json({ success: true, message: 'Patient admitted successfully', admission });
+        res.status(201).json({ success: true, message: 'Patient admitted successfully', admission, data: admission });
     } catch (err) {
         console.error('Admit patient error:', err);
         res.status(500).json({ success: false, message: err.message || 'An internal error occurred' });
@@ -296,6 +318,12 @@ router.get('/active', verifyAdmissionAccess, async (req, res) => {
         let queryFilter = {
             hospitalId: req.hospitalId || req.user.hospitalId,
         };
+
+        if (req.query.status) {
+            queryFilter.status = new RegExp(`^${req.query.status}$`, 'i');
+        } else {
+            queryFilter.status = { $in: ['Admitted', 'ADMITTED', 'admitted'] };
+        }
 
         if (req.query.department) {
             const Appointment = require('../models/appointment.model');
@@ -403,6 +431,58 @@ router.get('/patient/:patientId', verifyAdmissionAccess, async (req, res) => {
 
         res.json({ success: true, admissions });
     } catch (err) {
+        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    }
+});
+
+// GET /api/admissions/:id — Single admission details
+router.get('/:id', verifyAdmissionAccess, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const mongoose = require('mongoose');
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid admission ID format' });
+        }
+        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const Admission = getAdmission(req);
+        const admission = await Admission.findOne({ _id: id, hospitalId }).lean();
+        if (!admission) {
+            return res.status(404).json({ success: false, message: 'Admission record not found' });
+        }
+
+        const User = require('../models/user.model');
+        const Appointment = require('../models/appointment.model');
+        const Bed = req.tenantDb ? getTenantModels(req.tenantDb).Bed || BedMaster : BedMaster;
+
+        try {
+            if (admission.patientId) {
+                admission.patientId = await User.findById(admission.patientId).select('name phone patientId mrn gender dob').lean() || admission.patientId;
+            }
+        } catch (err) {}
+        try {
+            if (admission.appointmentId) {
+                admission.appointmentId = await Appointment.findById(admission.appointmentId).select('doctorName department serviceName').lean() || admission.appointmentId;
+            }
+        } catch (err) {}
+        try {
+            if (admission.doctorId) {
+                admission.doctorId = await User.findById(admission.doctorId).select('name phone email specialization department').lean() || admission.doctorId;
+            }
+        } catch (err) {}
+        try {
+            if (admission.bedId) {
+                admission.bedId = await Bed.findById(admission.bedId).select('bedNumber ward bedType status').lean() || admission.bedId;
+            }
+        } catch (err) {}
+
+        if (!admission.wardRatePerDay || admission.wardRatePerDay === 0) {
+            admission.wardRatePerDay = await getWardRate(admission.hospitalId, admission.ward);
+            admission.wardHourlyRate = Math.round((admission.wardRatePerDay / 24) * 100) / 100;
+        }
+
+        res.json({ success: true, admission, data: admission });
+    } catch (err) {
+        console.error('Error fetching admission by ID:', err);
         res.status(500).json({ success: false, message: 'An internal error occurred' });
     }
 });
@@ -550,22 +630,26 @@ router.put('/:id/transfer', verifyAdmissionAccess, async (req, res) => {
         const io = req.app.get('io');
         if (io) {
             const lastTh = admission.transferHistory[admission.transferHistory.length - 1];
-            io.to(`hospital_${hospitalId}`).emit('bed_transferred', {
+            const transferEvent = {
                 admissionId: admission._id,
                 patientId: admission.patientId,
                 fromWard: lastTh?.fromWard,
                 toWard: targetBed.ward,
                 toBedNumber: targetBed.bedNumber,
                 timestamp: new Date()
-            });
-            io.to(`hospital_${hospitalId}`).emit('bed_status_changed', {
+            };
+            const bedEvent = {
                 oldBedId: lastTh?.fromBedId,
                 newBedId: targetBed._id,
                 timestamp: new Date()
-            });
+            };
+            io.to(`hospital_${hospitalId}`).emit('bed_transferred', transferEvent);
+            io.to(hospitalId.toString()).emit('bed_transferred', transferEvent);
+            io.to(`hospital_${hospitalId}`).emit('bed_status_changed', bedEvent);
+            io.to(hospitalId.toString()).emit('bed_status_changed', bedEvent);
         }
 
-        res.json({ success: true, message: 'Patient transferred successfully', admission });
+        res.json({ success: true, message: 'Patient transferred successfully', admission, data: admission });
     } catch (err) {
         console.error('Transfer patient error:', err);
         res.status(500).json({ success: false, message: err.message || 'An internal error occurred during transfer' });
@@ -659,20 +743,24 @@ router.put('/:id/discharge', verifyAdmissionAccess, async (req, res) => {
         // Real-time discharge notification
         const io = req.app.get('io');
         if (io) {
-            io.to(`hospital_${hospitalId}`).emit('patient_discharged', {
+            const disPayload = {
                 admissionId: admission._id,
                 patientId: admission.patientId,
                 bedId: admission.bedId,
                 timestamp: new Date()
-            });
-            io.to(`hospital_${hospitalId}`).emit('bed_status_changed', {
+            };
+            const bedDisPayload = {
                 bedId: admission.bedId,
                 status: 'AVAILABLE',
                 timestamp: new Date()
-            });
+            };
+            io.to(`hospital_${hospitalId}`).emit('patient_discharged', disPayload);
+            io.to(hospitalId.toString()).emit('patient_discharged', disPayload);
+            io.to(`hospital_${hospitalId}`).emit('bed_status_changed', bedDisPayload);
+            io.to(hospitalId.toString()).emit('bed_status_changed', bedDisPayload);
         }
 
-        res.json({ success: true, message: 'Patient discharged successfully', admission });
+        res.json({ success: true, message: 'Patient discharged successfully', admission, data: admission });
     } catch (err) {
         console.error('Discharge patient error:', err);
         res.status(500).json({ success: false, message: err.message || 'An internal error occurred' });

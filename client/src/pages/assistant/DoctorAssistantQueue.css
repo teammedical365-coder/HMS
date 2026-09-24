@@ -1,0 +1,107 @@
+/* Doctor Assistant Patient Queue Styles */
+
+.daq-container {
+    padding: 24px 28px;
+    background: #f8fafc;
+    min-height: calc(100vh - 64px);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #1e293b;
+}
+
+.daq-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.daq-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+}
+
+.daq-subtitle {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+/* Filter Bar */
+.daq-filter-bar {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 16px 20px;
+    border: 1px solid #e2e8f0;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.daq-search-box {
+    position: relative;
+    flex: 1;
+    min-width: 220px;
+}
+
+.daq-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 1rem;
+}
+
+.daq-search-input {
+    width: 100%;
+    padding: 9px 12px 9px 36px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    font-size: 0.88rem;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.daq-search-input:focus {
+    border-color: #0ea5e9;
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+.daq-select {
+    padding: 9px 14px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    font-size: 0.88rem;
+    background: #ffffff;
+    color: #1e293b;
+    outline: none;
+    cursor: pointer;
+}
+
+.daq-date-input {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    font-size: 0.88rem;
+    outline: none;
+    color: #1e293b;
+}
+
+.daq-queue-card {
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    overflow: hidden;
+}

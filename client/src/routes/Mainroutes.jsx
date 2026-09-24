@@ -130,6 +130,12 @@ const IPDCommandCenter = lazy(() => import('../pages/nurse/IPDCommandCenter'));
 // Real-Time Monitoring
 const RealTimeMonitoring = lazy(() => import('../pages/monitoring/RealTimeMonitoring'));
 
+// Doctor Assistant / Clinical Assistant Pages
+const DoctorAssistantDashboard = lazy(() => import('../pages/assistant/DoctorAssistantDashboard'));
+const DoctorAssistantQueue = lazy(() => import('../pages/assistant/DoctorAssistantQueue'));
+const DoctorAssistantQuestionLibrary = lazy(() => import('../pages/assistant/DoctorAssistantQuestionLibrary'));
+const DoctorAssistantPreparation = lazy(() => import('../pages/assistant/DoctorAssistantPreparation'));
+
 // Subdomains reserved for the platform itself — NOT hospital slugs
 const RESERVED_SUBDOMAINS = ['admin', 'www', 'api'];
 
@@ -145,6 +151,11 @@ const SmartDashboardRedirector = () => {
     // Nurse role → dedicated nurse dashboard
     if (roleStr === 'nurse' || roleStr === 'staffnurse' || roleStr === 'headnurse') {
         return <Navigate to="/nurse/dashboard" replace />;
+    }
+
+    // Doctor Assistant / Clinical Assistant role → dedicated assistant dashboard
+    if (roleStr === 'doctor_assistant' || roleStr === 'doctor assistant' || roleStr === 'clinical assistant' || roleStr.includes('assistant')) {
+        return <Navigate to="/assistant/dashboard" replace />;
     }
 
     if (subdomain && !RESERVED_SUBDOMAINS.includes(subdomain)) {
@@ -274,6 +285,13 @@ const MainRoutes = () => {
                 { key: 'nurse_appts', importFn: () => import('../pages/nurse/NurseAppointments') },
                 { key: 'nurse_ws', importFn: () => import('../pages/nurse/NursePatientWorkspace') },
                 { key: 'nurse_ipd', importFn: () => import('../pages/nurse/IPDCommandCenter') },
+            ]);
+        } else if (role === 'doctor_assistant' || role === 'doctor assistant' || role === 'clinical assistant' || role.includes('assistant')) {
+            prefetchRoutes([
+                { key: 'asst_dash', importFn: () => import('../pages/assistant/DoctorAssistantDashboard') },
+                { key: 'asst_queue', importFn: () => import('../pages/assistant/DoctorAssistantQueue') },
+                { key: 'asst_ql', importFn: () => import('../pages/assistant/DoctorAssistantQuestionLibrary') },
+                { key: 'asst_prep', importFn: () => import('../pages/assistant/DoctorAssistantPreparation') },
             ]);
         }
     }, [isAuthenticated, user]);
@@ -412,6 +430,13 @@ const MainRoutes = () => {
                                 {/* Real-Time Monitoring — Doctor + Nurse */}
                                 <Route path="doctor/real-time-monitoring" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'centraladmin', 'superadmin']}><RealTimeMonitoring /></ProtectedRoute>} />
                                 <Route path="nurse/real-time-monitoring" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><RealTimeMonitoring /></ProtectedRoute>} />
+
+                                {/* Doctor Assistant / Clinical Assistant Pages */}
+                                <Route path="assistant/dashboard" element={<ProtectedRoute allowedRoles={['doctor_assistant', 'doctor assistant', 'clinical assistant', 'hospitaladmin', 'centraladmin', 'superadmin']}><DoctorAssistantDashboard /></ProtectedRoute>} />
+                                <Route path="assistant/queue" element={<ProtectedRoute allowedRoles={['doctor_assistant', 'doctor assistant', 'clinical assistant', 'hospitaladmin', 'centraladmin', 'superadmin']}><DoctorAssistantQueue /></ProtectedRoute>} />
+                                <Route path="assistant/question-library" element={<ProtectedRoute allowedRoles={['doctor_assistant', 'doctor assistant', 'clinical assistant', 'hospitaladmin', 'centraladmin', 'superadmin']}><DoctorAssistantQuestionLibrary /></ProtectedRoute>} />
+                                <Route path="assistant/preparation/:appointmentId" element={<ProtectedRoute allowedRoles={['doctor_assistant', 'doctor assistant', 'clinical assistant', 'hospitaladmin', 'centraladmin', 'superadmin']}><DoctorAssistantPreparation /></ProtectedRoute>} />
+                                <Route path="assistant/preparation" element={<ProtectedRoute allowedRoles={['doctor_assistant', 'doctor assistant', 'clinical assistant', 'hospitaladmin', 'centraladmin', 'superadmin']}><DoctorAssistantPreparation /></ProtectedRoute>} />
 
                                 {/* Accountant / Finance Pages */}
                                 <Route path="accountant/dashboard" element={<ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}><AccountantDashboard /></ProtectedRoute>} />

@@ -1502,8 +1502,8 @@ router.get('/my-hospital/staff-for-upi', verifyHospitalAdmin, async (req, res) =
             if (user.role && mongoose.Types.ObjectId.isValid(user.role)) {
                 const roleDoc = await Role.findById(user.role).lean();
                 if (roleDoc) roleName = roleDoc.name;
-                // Skip if the role is patient-related or doctor-related
-                if (roleDoc && (roleDoc.name.toLowerCase() === 'patient' || roleDoc.name.toLowerCase().includes('doctor'))) continue;
+                // Skip if the role is patient-related or doctor-related (allow doctor assistant)
+                if (roleDoc && (roleDoc.name.toLowerCase() === 'patient' || ((roleDoc.name.toLowerCase().includes('doctor') || roleDoc.name.toLowerCase() === 'doctor') && !roleDoc.name.toLowerCase().includes('assistant')))) continue;
             } else if (typeof user.role === 'string') {
                 roleName = user.role;
             }

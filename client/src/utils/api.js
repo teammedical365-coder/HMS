@@ -1081,6 +1081,8 @@ export const admissionAPI = {
     transferBed: async (id, data) => (await apiClient.put(`/api/admissions/${id}/transfer`, data)).data,
     createAdmission: async (data) => (await apiClient.post('/api/admissions', data)).data,
     getActiveAdmissions: async (params = {}) => (await apiClient.get('/api/admissions/active', { params })).data,
+    getAdmissions: async (params = {}) => (await apiClient.get('/api/admissions/active', { params })).data,
+    getAdmissionById: async (id) => (await apiClient.get(`/api/admissions/${id}`)).data,
     getPatientAdmissions: async (patientId) => (await apiClient.get(`/api/admissions/patient/${patientId}`)).data,
     dischargePatient: async (id, data = {}) => (await apiClient.put(`/api/admissions/${id}/discharge`, data)).data,
     markAdmissionPaid: async (id) => (await apiClient.put(`/api/admissions/${id}/pay`, {})).data,
@@ -1596,3 +1598,22 @@ export const voiceScribeAPI = {
     discard: async (id) => (await apiClient.put(`/api/voice-scribe/${id}/discard`)).data,
     getForAppointment: async (appointmentId) => (await apiClient.get(`/api/voice-scribe/appointment/${appointmentId}`)).data,
 };
+
+// ── Doctor Assistant / Clinical Assistant API ──
+export const assistantAPI = {
+    getDashboard: async () => (await apiClient.get('/api/assistant/dashboard')).data,
+    getDoctors: async () => (await apiClient.get('/api/assistant/doctors')).data,
+    getAppointments: async (params = {}) => (await apiClient.get('/api/assistant/appointments', { params })).data,
+    getQuestionLibrary: async (params = {}) => (await apiClient.get('/api/assistant/question-library', { params })).data,
+    getPreparation: async (appointmentId, params = {}) => (await apiClient.get(`/api/assistant/preparation/${appointmentId}`, { params })).data,
+    updateVitals: async (appointmentId, data) => (await apiClient.put(`/api/assistant/preparation/${appointmentId}/vitals`, data)).data,
+    updateHistory: async (appointmentId, data) => (await apiClient.put(`/api/assistant/preparation/${appointmentId}/history`, data)).data,
+    updateQuestionnaire: async (appointmentId, data) => (await apiClient.put(`/api/assistant/preparation/${appointmentId}/questionnaire`, data)).data,
+    uploadReports: async (appointmentId, formData) => (await apiClient.post(`/api/assistant/preparation/${appointmentId}/reports`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    })).data,
+    updateInvestigations: async (appointmentId, data) => (await apiClient.put(`/api/assistant/preparation/${appointmentId}/investigations`, data)).data,
+    updateNotes: async (appointmentId, data) => (await apiClient.put(`/api/assistant/preparation/${appointmentId}/notes`, data)).data,
+    markReady: async (appointmentId) => (await apiClient.post(`/api/assistant/preparation/${appointmentId}/mark-ready`)).data,
+};
+

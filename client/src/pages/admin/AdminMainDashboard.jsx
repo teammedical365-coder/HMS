@@ -35,13 +35,17 @@ const AdminMainDashboard = () => {
             setStats({
                 totalUsers: users.length,
                 totalRoles: roles.length,
-                totalDoctors: users.filter(u => (u.role || '').toLowerCase().includes('doctor')).length,
+                totalDoctors: users.filter(u => {
+                    const r = (u.role || '').toLowerCase();
+                    return (r === 'doctor' || r === 'clinic doctor' || (r.includes('doctor') && !r.includes('assistant')));
+                }).length,
                 totalPatients: users.filter(u => (u.role || '').toLowerCase() === 'patient').length,
             });
             
             setStaffCount(users.filter(u => {
                 const rName = (u.role?.name || u.role || '').toLowerCase();
-                return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+                const isDoc = (rName === 'doctor' || rName === 'clinic doctor' || (rName.includes('doctor') && !rName.includes('assistant')));
+                return !isDoc && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
             }).length);
 
             if (hospitalRes.success && hospitalRes.hospital) {

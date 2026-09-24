@@ -29,6 +29,18 @@ async function seedRoles() {
                     { label: 'Inventory', path: '/pharmacy/inventory' }
                 ],
                 isSystemRole: true
+            },
+            {
+                name: 'Doctor Assistant',
+                description: 'Pre-consultation patient preparation, vitals, and department questionnaires',
+                permissions: ['assistant_access', 'assistant_prepare', 'question_library_view', 'vitals_record'],
+                dashboardPath: '/assistant/dashboard',
+                navLinks: [
+                    { label: 'Dashboard', path: '/assistant/dashboard' },
+                    { label: 'Patient Queue', path: '/assistant/queue' },
+                    { label: 'Question Library', path: '/assistant/question-library' }
+                ],
+                isSystemRole: true
             }
         ];
 

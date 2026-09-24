@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { confirmToast } from '../../utils/confirmToast';
-import { doctorAPI, labTestAPI, questionLibraryAPI, hospitalAPI, patientAPI, receptionAPI, otAPI, adminEntitiesAPI, referralAPI, publicAPI } from '../../utils/api';
+import { doctorAPI, assistantAPI, labTestAPI, questionLibraryAPI, hospitalAPI, patientAPI, receptionAPI, otAPI, adminEntitiesAPI, referralAPI, publicAPI } from '../../utils/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './DoctorPatientDetails.css';
@@ -15,7 +15,7 @@ import {
     FiArrowLeft, FiBell, FiChevronDown, FiChevronRight, 
     FiUser, FiCalendar, FiClock, FiCheck, FiCopy, 
     FiFileText, FiFolder, FiMoreHorizontal, FiPaperclip, 
-    FiSave, FiArrowRight, FiRefreshCw 
+    FiSave, FiArrowRight, FiRefreshCw, FiActivity, FiClipboard, FiFile, FiCheckCircle, FiX 
 } from 'react-icons/fi';
 
 const doseOptions = [
@@ -67,7 +67,11 @@ const DoctorPatientDetails = () => {
     const [hospitalDepartments, setHospitalDepartments] = useState([]);
     const [isLocked, setIsLocked] = useState(false);
     const [hospitalContext, setHospitalContext] = useState(null);
-    const [toast, setToast] = useState({ show: false, message: '', title: '' });
+    const [customBannerToast, setCustomBannerToast] = useState({ show: false, message: '', title: '' });
+
+    // Assistant Preparation State
+    const [assistantPrep, setAssistantPrep] = useState(null);
+    const [showAnswersModal, setShowAnswersModal] = useState(false);
 
     // Modal States
     const [showPrescribeModal, setShowPrescribeModal] = useState(false);
@@ -213,14 +217,26 @@ const DoctorPatientDetails = () => {
                         // Lock if completed
                         if (res.appointment.status === 'completed') {
                             setIsLocked(true);
-                            setToast({
+                            setCustomBannerToast({
                                 show: true,
                                 title: '✅ Session Completed Successfully',
                                 message: 'This consultation has already been completed. This record is now read-only.'
                             });
                             setTimeout(() => {
-                                setToast(prev => ({ ...prev, show: false }));
+                                setCustomBannerToast(prev => ({ ...prev, show: false }));
                             }, 3000);
+                        }
+
+                        // Load Assistant Preparation if available
+                        if (res.assistantPreparation) {
+                            setAssistantPrep(res.assistantPreparation);
+                        } else if (currentApptId) {
+                            try {
+                                const prepRes = await assistantAPI.getPreparation(currentApptId);
+                                if (prepRes?.success && prepRes.preparation) {
+                                    setAssistantPrep(prepRes.preparation);
+                                }
+                            } catch (e) { /* ignore if not present */ }
                         }
 
                         const pId = res.appointment.clinicPatientId?._id || res.appointment.clinicPatientId || res.appointment.userId?._id;
@@ -400,8 +416,6 @@ const DoctorPatientDetails = () => {
         setSessionData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
 
-    
-
     const handleCreateReferral = async (e) => {
         e.preventDefault();
         try {
@@ -451,9 +465,23 @@ const DoctorPatientDetails = () => {
     const handleCreateSurgeryPlan = async (e) => {
         e.preventDefault();
         try {
+            const resolvedPtId = appointment?.userId?._id || 
+                appointment?.clinicPatientId?._id || 
+                (typeof appointment?.clinicPatientId === 'string' ? appointment.clinicPatientId : null) || 
+                (typeof appointment?.userId === 'string' ? appointment.userId : null) || 
+                (typeof id === 'string' && id.match(/^[0-9a-fA-F]{24}$/) ? id : null) || 
+                appointment?.patientId || 
+                intakeData?.userId || 
+                id;
+
+            const resolvedSurgeonId = (typeof surgeryPlanData.surgeonId === 'object' && surgeryPlanData.surgeonId?._id)
+                ? surgeryPlanData.surgeonId._id
+                : (surgeryPlanData.surgeonId || user?._id);
+
             const dataToSubmit = {
                 ...surgeryPlanData,
-                patientId: appointment?.userId?._id || appointment?.patientId || intakeData?.userId,
+                surgeonId: resolvedSurgeonId,
+                patientId: resolvedPtId,
                 appointmentId: appointment?._id,
                 referralId: surgeryPlanData.referralId || undefined,
                 referringDoctorId: surgeryPlanData.referringDoctorId || undefined
@@ -467,11 +495,120 @@ const DoctorPatientDetails = () => {
                 setSurgeryPlanData({
                     surgery: '', diagnosis: '', surgeonId: '', preferredDate: '', preferredTime: '', admissionRequired: false, admissionDate: '', preOpRequired: false, notes: ''
                 });
-                // Re-fetch patient history if needed, but not strictly necessary here.
             }
         } catch(err) {
             toast.error(err.response?.data?.message || 'Error creating surgery plan');
         }
+    };
+
+    // Assistant Intake Handlers
+    const handleAcceptVitals = () => {
+        if (!assistantPrep?.vitals) return;
+        const v = assistantPrep.vitals;
+        setIntakeData(prev => ({
+            ...prev,
+            height: v.height || prev.height,
+            weight: v.weight || prev.weight,
+            bmi: v.bmi || prev.bmi,
+            bp: v.bp || prev.bp,
+            pulse: v.pulse || prev.pulse,
+            temperature: v.temperature || prev.temperature,
+            spo2: v.spo2 || prev.spo2,
+            rr: v.rr || prev.rr,
+            bloodSugar: v.bloodSugar || prev.bloodSugar,
+            painScore: v.painScore || prev.painScore,
+            vitals: {
+                ...(prev.vitals || {}),
+                height: v.height || prev.vitals?.height,
+                weight: v.weight || prev.vitals?.weight,
+                bmi: v.bmi || prev.vitals?.bmi,
+                bloodPressure: v.bp || prev.vitals?.bloodPressure || prev.vitals?.bp,
+                pulse: v.pulse || prev.vitals?.pulse,
+                temperature: v.temperature || prev.vitals?.temperature,
+                spo2: v.spo2 || prev.vitals?.spo2,
+                respiratoryRate: v.rr || prev.vitals?.respiratoryRate || prev.vitals?.rr,
+                bloodSugar: v.bloodSugar || prev.vitals?.bloodSugar,
+                painScale: v.painScore || prev.vitals?.painScale
+            }
+        }));
+        toast.success("Assistant vitals accepted into current session!");
+    };
+
+    const handleImportNotes = () => {
+        const noteContent = assistantPrep?.draftClinicalNotes || assistantPrep?.draftNotes;
+        if (!noteContent) return;
+        setSessionData(prev => {
+            const current = (prev.notes || '').trim();
+            const formattedDraft = `\n\n--- Assistant Pre-Consultation Notes (${assistantPrep.preparedBy?.name || 'Assistant'}) ---\n${noteContent}`;
+            return {
+                ...prev,
+                notes: current ? `${current}${formattedDraft}` : formattedDraft.trim()
+            };
+        });
+        toast.success("Assistant draft notes imported to clinical notes!");
+    };
+
+    const handleAddSuggestedInvestigations = () => {
+        const suggestions = (assistantPrep?.investigationSuggestions && assistantPrep.investigationSuggestions.length > 0)
+            ? assistantPrep.investigationSuggestions
+            : (assistantPrep?.suggestedInvestigations || []);
+        if (suggestions.length === 0) return;
+        
+        const testNames = suggestions.map(s => typeof s === 'string' ? s : s.testName).filter(Boolean);
+        setSessionData(prev => {
+            const currentTests = (prev.labTests || '').split(',').map(t => t.trim()).filter(Boolean);
+            const combined = Array.from(new Set([...currentTests, ...testNames]));
+            return {
+                ...prev,
+                labTests: combined.join(', ')
+            };
+        });
+        toast.success(`Added ${testNames.length} assistant suggested test(s) to orders!`);
+    };
+
+    const handleImportAllIntakeToNotes = () => {
+        if (!assistantPrep) return;
+        const lines = [];
+        lines.push(`--- Assistant Clinical Intake & Questionnaire (${assistantPrep.preparedBy?.name || 'Doctor Assistant'}) ---`);
+        
+        const h = assistantPrep.preparation || {};
+        if (h.chiefComplaint) lines.push(`• Chief Complaint: ${h.chiefComplaint}`);
+        if (h.historyOfPresentIllness) lines.push(`• HPI: ${h.historyOfPresentIllness}`);
+        if (h.allergies) lines.push(`• Allergies: ${h.allergies}`);
+        if (h.currentMedicines) lines.push(`• Current Meds: ${h.currentMedicines}`);
+        if (h.pastMedicalHistory) lines.push(`• Past Medical History: ${h.pastMedicalHistory}`);
+        if (h.pastSurgicalHistory) lines.push(`• Past Surgical History: ${h.pastSurgicalHistory}`);
+        if (h.familyHistory) lines.push(`• Family History: ${h.familyHistory}`);
+        if (h.lifestyle) lines.push(`• Lifestyle: ${h.lifestyle}`);
+        if (h.assistantRemarks) lines.push(`• Assistant Remarks: ${h.assistantRemarks}`);
+
+        // Questionnaire Answers
+        const qAnswers = assistantPrep.questionnaireAnswers || {};
+        const qEntries = Object.entries(qAnswers);
+        if (qEntries.length > 0) {
+            lines.push(`\nDepartment Questionnaire Responses:`);
+            qEntries.forEach(([q, ans]) => {
+                const ansStr = Array.isArray(ans) ? ans.join(', ') : (typeof ans === 'object' ? JSON.stringify(ans) : String(ans));
+                if (ansStr && ansStr.trim()) {
+                    lines.push(`- ${q}: ${ansStr}`);
+                }
+            });
+        }
+
+        const draft = assistantPrep.draftClinicalNotes || assistantPrep.draftNotes;
+        if (draft) {
+            lines.push(`\nDraft Notes: ${draft}`);
+        }
+
+        const formattedIntake = lines.join('\n');
+        setSessionData(prev => {
+            const current = (prev.notes || '').trim();
+            return {
+                ...prev,
+                notes: current ? `${current}\n\n${formattedIntake}` : formattedIntake
+            };
+        });
+        toast.success("Full clinical intake & questionnaire responses imported to notes!");
     };
 
     const handleSaveProfile = async () => {
@@ -943,6 +1080,7 @@ const DoctorPatientDetails = () => {
 
     const tabs = [
         { id: 'overview', label: 'Overview', icon: '📋' },
+        { id: 'assistant_intake', label: 'Assistant Intake & Q&A', icon: '🩺' },
         { id: 'ipd_orders', label: 'IPD / Admission Orders', icon: '🏥' },
         { id: 'history', label: 'Past Visits', icon: '📜' },
         { id: 'reports', label: 'Reports & Files', icon: '📁' },
@@ -1161,6 +1299,222 @@ const DoctorPatientDetails = () => {
 
                     </div>
 
+                    {/* ASSISTANT PREPARATION CARD */}
+                    {assistantPrep && (() => {
+                        const isReady = ['ready', 'ready_for_doctor'].includes(assistantPrep.status);
+                        const isInProgress = ['in_progress', 'preparation_in_progress'].includes(assistantPrep.status);
+                        const v = assistantPrep.vitals || {};
+                        const hasVitals = Object.values(v).some(val => val !== null && val !== undefined && val !== '');
+                        const noteContent = assistantPrep.draftClinicalNotes || assistantPrep.draftNotes;
+                        const suggestions = (assistantPrep.investigationSuggestions && assistantPrep.investigationSuggestions.length > 0)
+                            ? assistantPrep.investigationSuggestions
+                            : (assistantPrep.suggestedInvestigations || []);
+                        const rawAnswers = assistantPrep.questionnaireAnswers || appointment?.questionnaireAnswers || {};
+                        const answers = Array.isArray(rawAnswers)
+                            ? rawAnswers
+                            : Object.entries(rawAnswers).map(([k, val]) => ({ questionId: k, questionText: k, response: val }));
+                        const prepData = assistantPrep.preparation || {};
+                        const hasHistory = prepData.chiefComplaint || prepData.historyOfPresentIllness || prepData.allergies || prepData.currentMedicines;
+
+                        return (
+                            <div className={`dpd-assistant-prep-card status-${isReady ? 'ready' : isInProgress ? 'in_progress' : 'draft'}`}>
+                                <div className="dpd-assistant-prep-header">
+                                    <div className="dpd-assistant-prep-title-wrap">
+                                        <span className="dpd-assistant-prep-icon">🩺</span>
+                                        <div>
+                                            <div className="dpd-assistant-prep-title">
+                                                <span>Assistant Clinical Preparation</span>
+                                                <span className={`dpd-assistant-badge status-${isReady ? 'ready' : isInProgress ? 'in_progress' : 'draft'}`}>
+                                                    {isReady ? '● Ready For Doctor' : isInProgress ? '● In Progress' : '● Draft'}
+                                                </span>
+                                            </div>
+                                            <div className="dpd-assistant-prep-subtitle">
+                                                Prepared by: <strong>{assistantPrep.preparedBy?.name || 'Doctor Assistant'}</strong>
+                                                {(assistantPrep.readyAt || assistantPrep.markedReadyAt) && ` • Ready at ${new Date(assistantPrep.readyAt || assistantPrep.markedReadyAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                                                {assistantPrep.updatedAt && !(assistantPrep.readyAt || assistantPrep.markedReadyAt) && ` • Updated at ${new Date(assistantPrep.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="dpd-assistant-prep-actions">
+                                        {hasVitals && (
+                                            <button 
+                                                type="button" 
+                                                className="dpd-asst-action-btn asst-btn-vitals" 
+                                                onClick={handleAcceptVitals}
+                                                title="Accept and apply assistant-recorded vitals into current session"
+                                            >
+                                                <FiCheck className="btn-icon" /> Accept Vitals
+                                            </button>
+                                        )}
+
+                                        {noteContent && (
+                                            <button 
+                                                type="button" 
+                                                className="dpd-asst-action-btn asst-btn-notes" 
+                                                onClick={handleImportNotes}
+                                                title="Import assistant draft notes into clinical notes"
+                                            >
+                                                <FiFileText className="btn-icon" /> Import Notes
+                                            </button>
+                                        )}
+
+                                        {suggestions.length > 0 && (
+                                            <button 
+                                                type="button" 
+                                                className="dpd-asst-action-btn asst-btn-tests" 
+                                                onClick={handleAddSuggestedInvestigations}
+                                                title="Add suggested tests to lab orders"
+                                            >
+                                                <FiActivity className="btn-icon" /> Add Tests ({suggestions.length})
+                                            </button>
+                                        )}
+
+                                        {(answers.length > 0 || hasHistory) && (
+                                            <button 
+                                                type="button" 
+                                                className="dpd-asst-action-btn asst-btn-answers" 
+                                                onClick={handleImportAllIntakeToNotes}
+                                                title="Import all intake questions and answers into clinical notes"
+                                            >
+                                                <FiClipboard className="btn-icon" /> Import All Q&A
+                                            </button>
+                                        )}
+
+                                        {answers.length > 0 && (
+                                            <button 
+                                                type="button" 
+                                                className="dpd-asst-action-btn asst-btn-answers" 
+                                                onClick={() => setShowAnswersModal(true)}
+                                                title="View department questionnaire responses"
+                                            >
+                                                <FiClipboard className="btn-icon" /> View Dept Answers ({answers.length})
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Vitals Summary Strip */}
+                                {hasVitals && (
+                                    <div className="dpd-assistant-vitals-strip">
+                                        {(v.bp || v.bloodPressure) && (
+                                            <div className="dpd-asst-vital-pill">
+                                                <span className="pill-lbl">BP:</span>
+                                                <span className="pill-val">{v.bp || v.bloodPressure}</span>
+                                            </div>
+                                        )}
+                                        {(v.pulse || v.pulseRate) && (
+                                            <div className="dpd-asst-vital-pill">
+                                                <span className="pill-lbl">Pulse:</span>
+                                                <span className="pill-val">{v.pulse || v.pulseRate} bpm</span>
+                                            </div>
+                                        )}
+                                        {(v.temperature || v.temp) && (
+                                            <div className="dpd-asst-vital-pill">
+                                                <span className="pill-lbl">Temp:</span>
+                                                <span className="pill-val">{v.temperature || v.temp} °F</span>
+                                            </div>
+                                        )}
+                                        {v.spo2 && (
+                                            <div className="dpd-asst-vital-pill">
+                                                <span className="pill-lbl">SpO2:</span>
+                                                <span className="pill-val">{v.spo2}%</span>
+                                            </div>
+                                        )}
+                                        {v.weight && (
+                                            <div className="dpd-asst-vital-pill">
+                                                <span className="pill-lbl">Weight:</span>
+                                                <span className="pill-val">{v.weight} kg</span>
+                                            </div>
+                                        )}
+                                        {v.bmi && (
+                                            <div className="dpd-asst-vital-pill">
+                                                <span className="pill-lbl">BMI:</span>
+                                                <span className="pill-val">{v.bmi}</span>
+                                            </div>
+                                        )}
+                                        {v.bloodSugar && (
+                                            <div className="dpd-asst-vital-pill">
+                                                <span className="pill-lbl">Sugar:</span>
+                                                <span className="pill-val">{v.bloodSugar} mg/dL</span>
+                                            </div>
+                                        )}
+                                        {v.painScore && (
+                                            <div className="dpd-asst-vital-pill">
+                                                <span className="pill-lbl">Pain:</span>
+                                                <span className="pill-val">{v.painScore}/10</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Chief Complaint & Key Intake Strip */}
+                                {(prepData.chiefComplaint || prepData.allergies || prepData.currentMedicines) && (
+                                    <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        {prepData.chiefComplaint && (
+                                            <div>
+                                                <strong style={{ color: '#0f172a' }}>Chief Complaint: </strong>
+                                                <span style={{ color: '#334155' }}>{prepData.chiefComplaint}</span>
+                                            </div>
+                                        )}
+                                        {prepData.allergies && (
+                                            <div>
+                                                <strong style={{ color: '#dc2626' }}>Allergies: </strong>
+                                                <span style={{ color: '#dc2626', fontWeight: 600 }}>{prepData.allergies}</span>
+                                            </div>
+                                        )}
+                                        {prepData.currentMedicines && (
+                                            <div>
+                                                <strong style={{ color: '#0284c7' }}>Current Meds: </strong>
+                                                <span style={{ color: '#334155' }}>{prepData.currentMedicines}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Questionnaire Answers Inline Preview */}
+                                {answers.length > 0 && (
+                                    <div style={{ marginTop: '4px', borderTop: '1px dashed #e2e8f0', paddingTop: '10px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                                📋 Intake Questionnaire Responses ({answers.length})
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveTab('assistant_intake')}
+                                                style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '12px', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                                            >
+                                                Open Full Intake Tab →
+                                            </button>
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
+                                            {answers.slice(0, 5).map((aItem, aIdx) => {
+                                                const respStr = Array.isArray(aItem.response)
+                                                    ? aItem.response.join(', ')
+                                                    : (typeof aItem.response === 'object' ? JSON.stringify(aItem.response) : String(aItem.response || '—'));
+                                                return (
+                                                    <div key={aIdx} style={{ background: '#fff', border: '1px solid #edf2f7', borderRadius: '8px', padding: '8px 12px', fontSize: '12.5px' }}>
+                                                        <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '2px' }}>
+                                                            {aItem.questionText || aItem.questionId}
+                                                        </div>
+                                                        <div style={{ color: '#0369a1', fontWeight: 600 }}>
+                                                            → {respStr}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {answers.length > 5 && (
+                                                <div style={{ textAlign: 'center', fontSize: '11.5px', color: '#64748b' }}>
+                                                    + {answers.length - 5} more questions answered. <button type="button" onClick={() => setActiveTab('assistant_intake')} style={{ background: 'none', border: 'none', color: '#0284c7', fontWeight: 600, cursor: 'pointer' }}>View All</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+
                 {/* Tabs Navigation */}
                 <div className="dpd-tabs-container">
                     <button className="dpd-tab-scroll-btn" onClick={() => scrollTabs('left')} title="Scroll Left">‹</button>
@@ -1359,6 +1713,236 @@ const DoctorPatientDetails = () => {
                         </div>
                     )}
 
+                    {/* ASSISTANT INTAKE & QUESTIONNAIRE TAB */}
+                    {activeTab === 'assistant_intake' && (
+                        <div className="dpd-tab-panel">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                                <div>
+                                    <h3 className="dpd-panel-title" style={{ margin: 0 }}>
+                                        🩺 Assistant Clinical Intake & Questionnaire Responses
+                                    </h3>
+                                    <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '4px 0 0 0' }}>
+                                        Prepared by {assistantPrep?.preparedBy?.name || 'Doctor Assistant'} • Protocol: {assistantPrep?.department || appointment?.department || 'General Medicine'}
+                                    </p>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                        type="button"
+                                        className="dpd-asst-action-btn asst-btn-vitals"
+                                        onClick={handleAcceptVitals}
+                                    >
+                                        <FiCheck className="btn-icon" /> Accept Vitals
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="dpd-asst-action-btn asst-btn-notes"
+                                        onClick={handleImportAllIntakeToNotes}
+                                    >
+                                        <FiFileText className="btn-icon" /> Import All to Notes
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Assistant Vitals Card */}
+                            {assistantPrep?.vitals && (
+                                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px', marginBottom: '20px' }}>
+                                    <h4 style={{ margin: '0 0 12px 0', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span>💓</span> Preliminary Vitals Recorded
+                                    </h4>
+                                    <div className="dpd-overview-grid">
+                                        {assistantPrep.vitals.bp && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Blood Pressure</span>
+                                                <span className="dpd-ov-value">{assistantPrep.vitals.bp}</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.vitals.pulse && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Pulse Rate</span>
+                                                <span className="dpd-ov-value">{assistantPrep.vitals.pulse} bpm</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.vitals.temperature && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Temperature</span>
+                                                <span className="dpd-ov-value">{assistantPrep.vitals.temperature} °F</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.vitals.spo2 && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Oxygen (SpO2)</span>
+                                                <span className="dpd-ov-value">{assistantPrep.vitals.spo2}%</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.vitals.weight && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Weight</span>
+                                                <span className="dpd-ov-value">{assistantPrep.vitals.weight} kg</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.vitals.height && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Height</span>
+                                                <span className="dpd-ov-value">{assistantPrep.vitals.height} cm</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.vitals.bmi && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">BMI</span>
+                                                <span className="dpd-ov-value">{assistantPrep.vitals.bmi}</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.vitals.bloodSugar && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Blood Sugar</span>
+                                                <span className="dpd-ov-value">{assistantPrep.vitals.bloodSugar} mg/dL</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.vitals.painScore && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Pain Scale</span>
+                                                <span className="dpd-ov-value">{assistantPrep.vitals.painScore} / 10</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Clinical History & Complaints */}
+                            {assistantPrep?.preparation && (
+                                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '16px', marginBottom: '20px' }}>
+                                    <h4 style={{ margin: '0 0 12px 0', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span>📝</span> Clinical History & Chief Complaints
+                                    </h4>
+                                    <div className="dpd-overview-grid">
+                                        {assistantPrep.preparation.chiefComplaint && (
+                                            <div className="dpd-ov-card" style={{ gridColumn: '1 / -1' }}>
+                                                <span className="dpd-ov-label">Chief Complaint</span>
+                                                <span className="dpd-ov-value" style={{ fontWeight: 600 }}>{assistantPrep.preparation.chiefComplaint}</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.preparation.historyOfPresentIllness && (
+                                            <div className="dpd-ov-card" style={{ gridColumn: '1 / -1' }}>
+                                                <span className="dpd-ov-label">History of Present Illness (HPI)</span>
+                                                <span className="dpd-ov-value">{assistantPrep.preparation.historyOfPresentIllness}</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.preparation.allergies && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Allergies</span>
+                                                <span className="dpd-ov-value" style={{ color: '#dc2626', fontWeight: 700 }}>{assistantPrep.preparation.allergies}</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.preparation.currentMedicines && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Current Medicines</span>
+                                                <span className="dpd-ov-value">{assistantPrep.preparation.currentMedicines}</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.preparation.pastMedicalHistory && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Past Medical History</span>
+                                                <span className="dpd-ov-value">{assistantPrep.preparation.pastMedicalHistory}</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.preparation.pastSurgicalHistory && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Past Surgical History</span>
+                                                <span className="dpd-ov-value">{assistantPrep.preparation.pastSurgicalHistory}</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.preparation.familyHistory && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Family History</span>
+                                                <span className="dpd-ov-value">{assistantPrep.preparation.familyHistory}</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.preparation.lifestyle && (
+                                            <div className="dpd-ov-card">
+                                                <span className="dpd-ov-label">Lifestyle / Habits</span>
+                                                <span className="dpd-ov-value">{assistantPrep.preparation.lifestyle}</span>
+                                            </div>
+                                        )}
+                                        {assistantPrep.preparation.assistantRemarks && (
+                                            <div className="dpd-ov-card" style={{ gridColumn: '1 / -1' }}>
+                                                <span className="dpd-ov-label">Assistant Remarks</span>
+                                                <span className="dpd-ov-value">{assistantPrep.preparation.assistantRemarks}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Questionnaire Responses Grid */}
+                            {(() => {
+                                const rawAns = assistantPrep?.questionnaireAnswers || appointment?.questionnaireAnswers || {};
+                                const ansList = Array.isArray(rawAns)
+                                    ? rawAns
+                                    : Object.entries(rawAns).map(([k, val]) => ({ questionId: k, questionText: k, response: val }));
+
+                                if (ansList.length === 0) {
+                                    return (
+                                        <div style={{ padding: '32px', textAlign: 'center', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', color: '#64748b' }}>
+                                            <FiClipboard style={{ fontSize: '28px', color: '#94a3b8', marginBottom: '8px' }} />
+                                            <p style={{ margin: 0, fontWeight: 600 }}>No specialty questionnaire responses entered by the assistant yet.</p>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        <h4 style={{ margin: '0 0 4px 0', fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+                                            📋 Specialty Questionnaire Q&A ({ansList.length} Questions Answered)
+                                        </h4>
+                                        {ansList.map((item, idx) => {
+                                            const formattedResp = Array.isArray(item.response)
+                                                ? item.response.join(', ')
+                                                : (typeof item.response === 'object' ? JSON.stringify(item.response) : String(item.response || '—'));
+
+                                            return (
+                                                <div
+                                                    key={idx}
+                                                    style={{
+                                                        background: '#ffffff',
+                                                        border: '1.5px solid #e2e8f0',
+                                                        borderRadius: '12px',
+                                                        padding: '14px 18px',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: '8px'
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb', background: '#eff6ff', padding: '2px 8px', borderRadius: '6px' }}>
+                                                            {item.category || assistantPrep?.department || 'Clinical Question'}
+                                                        </span>
+                                                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>
+                                                            Q{idx + 1}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                                                        {item.questionText || item.questionId}
+                                                    </div>
+                                                    <div style={{
+                                                        fontSize: '13.5px',
+                                                        color: '#1e40af',
+                                                        background: '#f0f9ff',
+                                                        border: '1px solid #bae6fd',
+                                                        borderRadius: '8px',
+                                                        padding: '8px 12px',
+                                                        fontWeight: 600
+                                                    }}>
+                                                        <strong>Recorded Response: </strong> {formattedResp}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    )}
+
                     {/* PAST VISITS HISTORY */}
                     {activeTab === 'history' && (() => {
                         const currentDept = (appointment?.department || appointment?.serviceName || '').toLowerCase();
@@ -1439,14 +2023,18 @@ const DoctorPatientDetails = () => {
                 })()}
 
                     {/* IPD / ADMISSION ORDERS TAB */}
-                    {activeTab === 'ipd_orders' && (
-                        <DoctorIPDOrdersPanel
-                            patientId={id || patient?._id}
-                            patient={patient}
-                            appointment={appointment}
-                            currentUser={user}
-                        />
-                    )}
+                    {activeTab === 'ipd_orders' && (() => {
+                        const resolvedPt = appointment?.userId || appointment?.clinicPatientId || {};
+                        const resolvedPtId = resolvedPt?._id || appointment?.userId?._id || appointment?.clinicPatientId?._id || (typeof appointment?.clinicPatientId === 'string' ? appointment.clinicPatientId : null) || (typeof appointment?.userId === 'string' ? appointment.userId : null) || (typeof id === 'string' && id.match(/^[0-9a-fA-F]{24}$/) ? id : null) || id;
+                        return (
+                            <DoctorIPDOrdersPanel
+                                patientId={resolvedPtId}
+                                patient={resolvedPt}
+                                appointment={appointment}
+                                currentUser={user}
+                            />
+                        );
+                    })()}
 
                     {/* REPORTS & FILES TAB */}
                     {activeTab === 'reports' && (
@@ -2167,7 +2755,66 @@ const DoctorPatientDetails = () => {
                 </div>
             )}
 
-            {toast.show && (
+            {/* Questionnaire Answers Modal */}
+            {showAnswersModal && assistantPrep && (
+                <div className="dpd-modal-overlay" onClick={() => setShowAnswersModal(false)}>
+                    <div className="dpd-modal-card asst-answers-modal" onClick={e => e.stopPropagation()}>
+                        <div className="dpd-modal-header">
+                            <div>
+                                <h3>📋 Department Questionnaire Answers</h3>
+                                <p className="dpd-modal-sub">
+                                    Recorded by {assistantPrep.preparedBy?.name || 'Doctor Assistant'} for {patient.name}
+                                </p>
+                            </div>
+                            <button type="button" className="dpd-modal-close-btn" onClick={() => setShowAnswersModal(false)}>
+                                <FiX />
+                            </button>
+                        </div>
+                        <div className="dpd-modal-body">
+                            {(() => {
+                                const qList = assistantPrep.questionnaireAnswers
+                                    ? (Array.isArray(assistantPrep.questionnaireAnswers)
+                                        ? assistantPrep.questionnaireAnswers
+                                        : Object.entries(assistantPrep.questionnaireAnswers).map(([k, val]) => ({ questionId: k, questionText: k, response: val })))
+                                    : [];
+
+                                if (qList.length === 0) {
+                                    return <div className="dpd-empty-answers">No questionnaire answers recorded for this session.</div>;
+                                }
+
+                                return (
+                                    <div className="dpd-answers-list">
+                                        {qList.map((item, idx) => (
+                                            <div key={idx} className="dpd-answer-row">
+                                                <div className="dpd-answer-header">
+                                                    <span className="dpd-answer-category">{item.category || 'General'}</span>
+                                                    <span className="dpd-answer-index">Q{idx + 1}</span>
+                                                </div>
+                                                <div className="dpd-answer-question">{item.questionText || item.questionId}</div>
+                                                <div className="dpd-answer-response">
+                                                    <strong>Answer:</strong> {typeof item.response === 'object' ? JSON.stringify(item.response) : String(item.response || '—')}
+                                                </div>
+                                                {item.notes && (
+                                                    <div className="dpd-answer-notes">
+                                                        <em>Notes: {item.notes}</em>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                        <div className="dpd-modal-footer">
+                            <button type="button" className="dpd-btn-modal-close" onClick={() => setShowAnswersModal(false)}>
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {customBannerToast.show && (
                 <>
                     <style>{`
                         @keyframes slideIn {
@@ -2194,8 +2841,8 @@ const DoctorPatientDetails = () => {
                         minWidth: '300px',
                         maxWidth: '400px'
                     }}>
-                        <div style={{ fontWeight: '700', color: '#065f46', fontSize: '15px' }}>{toast.title}</div>
-                        <div style={{ fontSize: '13px', color: '#475569', lineHeight: '1.4' }}>{toast.message}</div>
+                        <div style={{ fontWeight: '700', color: '#065f46', fontSize: '15px' }}>{customBannerToast.title}</div>
+                        <div style={{ fontSize: '13px', color: '#475569', lineHeight: '1.4' }}>{customBannerToast.message}</div>
                     </div>
                 </>
             )}

@@ -95,6 +95,7 @@ const userSchema = new mongoose.Schema({
 
     services: [String],
     departments: [{ type: String }],
+    assignedDoctors: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Doctor' }],
 
     // Profile Image
     avatar: { type: String, default: null },

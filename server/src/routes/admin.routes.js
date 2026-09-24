@@ -113,7 +113,8 @@ async function buildUserResponse(user, hospitalCache = null, roleCache = null) {
         dashboardPath: roleData ? roleData.dashboardPath : '/',
         navLinks: roleData ? roleData.navLinks : [],
         avatar: user.avatar || null,
-        departments: user.departments || []
+        departments: user.departments || [],
+        assignedDoctors: user.assignedDoctors || []
     };
 }
 
@@ -404,7 +405,7 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
                 $in: [
                     /^patient$/i,
                     /^user$/i,
-                    ...(excludeDoctors ? [/doctor/i, /^clinic doctor$/i] : [])
+                    ...(excludeDoctors ? [/^doctor$/i, /^clinic doctor$/i] : [])
                 ]
             }
         }).select('_id');
@@ -494,7 +495,7 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         const staffOnly = usersWithRoles.filter(u => {
             const r = (typeof u.role === 'string' ? u.role : (u.role?.name || '')).toLowerCase();
             if (['patient', 'user'].includes(r)) return false;
-            if (excludeDoctors && r.includes('doctor')) return false;
+            if (excludeDoctors && (r === 'doctor' || r === 'clinic doctor' || (r.includes('doctor') && !r.includes('assistant')))) return false;
             return true;
         });
 
@@ -520,7 +521,7 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
 // Create User (by admin) — hospitalId is REQUIRED for all staff
 router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
-        const { name, email, password, phone, roleId, services, avatar, departments } = req.body;
+        const { name, email, password, phone, roleId, services, avatar, departments, assignedDoctors } = req.body;
 
         if (!phone || phone.trim() === '') {
             return res.status(400).json({ success: false, message: 'Phone number is required.' });
@@ -572,8 +573,9 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
                 const assignedRoleNameLower = (roleDoc.name || '').toLowerCase();
                 const subscriptionPlan = hospitalDoc.subscriptionPlan || 'none';
                 
-                // NEW: Reject Doctors from Staff Management
-                if (assignedRoleNameLower.includes('doctor')) {
+                // NEW: Reject Doctors from Staff Management (Allow Doctor Assistant in Staff)
+                const isActualDoctor = (assignedRoleNameLower === 'doctor' || assignedRoleNameLower === 'clinic doctor' || (assignedRoleNameLower.includes('doctor') && !assignedRoleNameLower.includes('assistant')));
+                if (isActualDoctor) {
                     return res.status(403).json({
                         success: false,
                         message: 'Doctors cannot be created from Staff Management. Please use the Doctors Feed.'
@@ -601,14 +603,14 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
                         // Exact same exclusion logic as UI and GET /users
                         if (['patient', 'user', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName)) return;
                         
-                        if (rName.includes('doctor') || rName === 'clinic doctor') {
+                        if ((rName === 'doctor' || rName === 'clinic doctor' || (rName.includes('doctor') && !rName.includes('assistant')))) {
                             doctorCount++;
                         } else {
                             staffCount++;
                         }
                     });
 
-                    const isDoctorRole = assignedRoleNameLower.includes('doctor');
+                    const isDoctorRole = isActualDoctor;
                     if (isDoctorRole) {
                         if (doctorCount >= maxDoctors) {
                             return res.status(403).json({
@@ -673,6 +675,14 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         const existingUser = await User.findOne(checkQuery);
         if (existingUser) return res.status(400).json({ success: false, message: 'User with this email already exists in this hospital' });
 
+        let finalDepartments = departments || [];
+        if (Array.isArray(assignedDoctors) && assignedDoctors.length > 0) {
+            const assignedDocs = await Doctor.find({ _id: { $in: assignedDoctors }, hospitalId: assignedHospitalId }).lean();
+            const derivedDepts = new Set(finalDepartments);
+            assignedDocs.forEach(d => (d.departments || []).forEach(dept => dept && derivedDepts.add(dept)));
+            finalDepartments = Array.from(derivedDepts);
+        }
+
         const user = new User({
             name,
             email: email.toLowerCase(),
@@ -681,7 +691,8 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
             role: roleId,
             hospitalId: assignedHospitalId,
             services: (roleDoc.name || '').toLowerCase() === 'doctor' ? services : [],
-            departments: departments || [],
+            departments: finalDepartments,
+            assignedDoctors: Array.isArray(assignedDoctors) ? assignedDoctors : [],
             avatar: avatar || null
         });
 
@@ -770,7 +781,7 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
 router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
         const { userId } = req.params;
-        const { name, email, phone, roleId, avatar, specialty, departments } = req.body;
+        const { name, email, phone, roleId, avatar, specialty, departments, assignedDoctors } = req.body;
 
         if (phone && phone.trim() !== '') {
             const isDigits = /^\d+$/.test(phone);
@@ -802,6 +813,16 @@ router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
         if (phone) user.phone = phone;
         if (avatar !== undefined) user.avatar = avatar;
         if (departments !== undefined) user.departments = departments;
+
+        if (assignedDoctors !== undefined) {
+            user.assignedDoctors = Array.isArray(assignedDoctors) ? assignedDoctors : [];
+            if (Array.isArray(assignedDoctors) && assignedDoctors.length > 0) {
+                const assignedDocs = await Doctor.find({ _id: { $in: assignedDoctors }, hospitalId: user.hospitalId }).lean();
+                const derivedDepts = new Set(departments !== undefined ? departments : (user.departments || []));
+                assignedDocs.forEach(d => (d.departments || []).forEach(dept => dept && derivedDepts.add(dept)));
+                user.departments = Array.from(derivedDepts);
+            }
+        }
 
         let newRoleName = null;
         let roleChanged = false;

@@ -58,14 +58,22 @@ const getUserRole = (req) => {
     return (req.user._roleData?.name || String(req.user.role || '')).toLowerCase().replace(/\s+/g, '');
 };
 
-const DOCTOR_ROLES = ['doctor', 'physician', 'surgeon', 'hospitaladmin', 'centraladmin', 'superadmin', 'admin'];
-const NURSE_ROLES = ['nurse', 'staffnurse', 'headnurse', 'doctor', 'physician', 'surgeon', 'hospitaladmin', 'centraladmin', 'superadmin', 'admin'];
+const DOCTOR_ROLES = [
+    'doctor', 'clinicdoctor', 'clinic doctor', 'surgeon', 'consultant',
+    'physician', 'doctorassistant', 'assistant', 'clinicalassistant',
+    'hospitaladmin', 'centraladmin', 'superadmin', 'admin'
+];
+const NURSE_ROLES = [
+    'nurse', 'staffnurse', 'headnurse', 'doctor', 'clinicdoctor', 'clinic doctor',
+    'surgeon', 'consultant', 'physician', 'doctorassistant', 'assistant', 'clinicalassistant',
+    'hospitaladmin', 'centraladmin', 'superadmin', 'admin'
+];
 
 // Middleware: verify clinical order write permissions (Doctor & Admin only)
 const requireDoctorAccess = (req, res, next) => {
     const role = getUserRole(req);
     const perms = req.user._roleData?.permissions || [];
-    if (DOCTOR_ROLES.includes(role) || perms.includes('*') || perms.includes('doctor_access') || perms.includes('ipd_orders_manage')) {
+    if (DOCTOR_ROLES.includes(role) || perms.includes('*') || perms.includes('doctor_access') || perms.includes('clinical_manage') || perms.includes('ipd_orders_manage')) {
         return next();
     }
     return res.status(403).json({ success: false, message: 'Doctor clinical order authorization required' });
@@ -75,7 +83,7 @@ const requireDoctorAccess = (req, res, next) => {
 const requireNurseOrDoctorAccess = (req, res, next) => {
     const role = getUserRole(req);
     const perms = req.user._roleData?.permissions || [];
-    if (NURSE_ROLES.includes(role) || perms.includes('*') || perms.includes('nurse_access') || perms.includes('ipd_view')) {
+    if (NURSE_ROLES.includes(role) || perms.includes('*') || perms.includes('nurse_access') || perms.includes('doctor_access') || perms.includes('clinical_manage') || perms.includes('ipd_view')) {
         return next();
     }
     return res.status(403).json({ success: false, message: 'Nursing / Clinical authorization required' });
@@ -111,20 +119,48 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
             return res.status(400).json({ success: false, message: 'patientId and medicineName are required' });
         }
 
-        if (!mongoose.Types.ObjectId.isValid(patientId)) {
-            return res.status(400).json({ success: false, message: 'Invalid patientId format' });
-        }
-
         const { Admission, InpatientOrder, User } = getModels(req);
 
-        // Verify patient belongs to this hospital (either MasterUser or tenant clinic patient)
-        let patientUser = await MasterUser.findOne({ _id: patientId, $or: [{ hospitalId }, { hospitalId: null }] });
-        if (!patientUser && req.tenantDb) {
-            try {
-                patientUser = await req.tenantDb.collection('patients').findOne({ _id: new mongoose.Types.ObjectId(patientId) });
-            } catch {}
+        // Resolve patientId (ObjectId or MRN / UID string)
+        let resolvedPatientId = null;
+        let patientUser = null;
+
+        if (mongoose.Types.ObjectId.isValid(patientId)) {
+            patientUser = await MasterUser.findOne({ _id: patientId, $or: [{ hospitalId }, { hospitalId: null }] });
+            if (!patientUser && req.tenantDb) {
+                try {
+                    patientUser = await req.tenantDb.collection('patients').findOne({ _id: new mongoose.Types.ObjectId(patientId) });
+                } catch {}
+            }
+            if (patientUser) resolvedPatientId = patientUser._id;
         }
-        if (!patientUser) {
+
+        if (!resolvedPatientId) {
+            // Search by patient identifier / MRN / UID / phone
+            patientUser = await MasterUser.findOne({
+                $or: [
+                    { patientId: String(patientId) },
+                    { patientUid: String(patientId) },
+                    { mrn: String(patientId) },
+                    { phone: String(patientId) }
+                ]
+            });
+            if (!patientUser && req.tenantDb) {
+                try {
+                    patientUser = await req.tenantDb.collection('patients').findOne({
+                        $or: [
+                            { patientId: String(patientId) },
+                            { patientUid: String(patientId) },
+                            { mrn: String(patientId) },
+                            { phone: String(patientId) }
+                        ]
+                    });
+                } catch {}
+            }
+            if (patientUser) resolvedPatientId = patientUser._id;
+        }
+
+        if (!patientUser || !resolvedPatientId) {
             return res.status(404).json({ success: false, message: 'Patient not found in this hospital' });
         }
 
@@ -138,16 +174,20 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
             if (!admission) {
                 return res.status(404).json({ success: false, message: 'Admission not found in this hospital' });
             }
-            if (String(admission.patientId) !== String(patientId)) {
+            if (String(admission.patientId) !== String(resolvedPatientId)) {
                 return res.status(400).json({ success: false, message: 'Patient does not match this admission record' });
             }
-            if (admission.status === 'Discharged') {
+            if (String(admission.status).toLowerCase() === 'discharged') {
                 return res.status(400).json({ success: false, message: 'Cannot add clinical orders to a discharged patient' });
             }
             resolvedAdmissionId = admission._id;
         } else {
             // Check if patient currently has an active admission to auto-link
-            const activeAdmission = await Admission.findOne({ hospitalId, patientId, status: 'Admitted' });
+            const activeAdmission = await Admission.findOne({
+                hospitalId,
+                patientId: resolvedPatientId,
+                status: { $in: ['Admitted', 'ADMITTED', 'admitted'] }
+            });
             if (activeAdmission) {
                 resolvedAdmissionId = activeAdmission._id;
             }
@@ -170,7 +210,7 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
             hospitalId,
             admissionId: resolvedAdmissionId,
             appointmentId: appointmentId && mongoose.Types.ObjectId.isValid(appointmentId) ? appointmentId : undefined,
-            patientId,
+            patientId: resolvedPatientId,
             doctorId: orderingDoctorId,
             medicineName: medicineName.trim(),
             dosageValue: Number(dosageVal) || 0,
@@ -191,16 +231,20 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
 
         await order.save();
 
-        // Socket.IO event emission
+        // Socket.IO event emission to both rooms
         const io = req.app.get('io');
         if (io) {
-            io.to(`hospital_${hospitalId}`).emit('inpatient_order_created', {
+            const eventData = {
                 orderId: order._id,
-                admissionId,
-                patientId,
+                admissionId: resolvedAdmissionId,
+                patientId: resolvedPatientId,
                 medicineName: order.medicineName,
                 timestamp: new Date()
-            });
+            };
+            io.to(`hospital_${hospitalId}`).emit('inpatient_order_created', eventData);
+            io.to(hospitalId.toString()).emit('inpatient_order_created', eventData);
+            io.to(`hospital_${hospitalId}`).emit('ipd_update', eventData);
+            io.to(hospitalId.toString()).emit('ipd_update', eventData);
         }
 
         res.status(201).json({ success: true, message: 'Inpatient order created successfully', order, data: order });
@@ -220,8 +264,19 @@ router.get('/admissions/:admissionId/orders', verifyToken, resolveTenant, requir
             return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
         }
 
-        const { InpatientOrder, User } = getModels(req);
-        const orders = await InpatientOrder.find({ admissionId, hospitalId })
+        const { InpatientOrder, Admission, User } = getModels(req);
+        const currentAdmission = await Admission.findById(admissionId).lean();
+        const patientRefId = currentAdmission?.patientId;
+
+        const orderFilter = {
+            hospitalId,
+            $or: [
+                { admissionId },
+                ...(patientRefId ? [{ patientId: patientRefId, admissionId: { $in: [null, undefined, admissionId] } }] : [])
+            ]
+        };
+
+        const orders = await InpatientOrder.find(orderFilter)
             .sort({ createdAt: -1 })
             .lean();
 
@@ -246,12 +301,27 @@ router.get('/patients/:patientId/orders', verifyToken, resolveTenant, requireNur
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const { patientId } = req.params;
 
+        let queryPatientId = patientId;
         if (!mongoose.Types.ObjectId.isValid(patientId)) {
-            return res.status(400).json({ success: false, message: 'Invalid patientId format' });
+            const MasterUser = require('../models/user.model');
+            const foundUser = await MasterUser.findOne({
+                $or: [
+                    { patientId: String(patientId) },
+                    { patientUid: String(patientId) },
+                    { mrn: String(patientId) }
+                ]
+            }).lean();
+            if (foundUser) queryPatientId = foundUser._id;
         }
 
         const { InpatientOrder, User } = getModels(req);
-        const orders = await InpatientOrder.find({ patientId, hospitalId })
+        const orders = await InpatientOrder.find({
+            hospitalId,
+            $or: [
+                { patientId: queryPatientId },
+                ...(mongoose.Types.ObjectId.isValid(patientId) ? [{ patientId }] : [])
+            ]
+        })
             .sort({ createdAt: -1 })
             .lean();
 

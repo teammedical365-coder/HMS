@@ -80,14 +80,22 @@ const getUserRole = (req) => {
     return (req.user._roleData?.name || String(req.user.role || '')).toLowerCase().replace(/\s+/g, '');
 };
 
-const CLINICAL_READ_ROLES = ['nurse', 'staffnurse', 'headnurse', 'doctor', 'physician', 'surgeon', 'hospitaladmin', 'centraladmin', 'superadmin', 'admin', 'otmanager', 'otstaff'];
-const NURSING_WRITE_ROLES = ['nurse', 'staffnurse', 'headnurse', 'doctor', 'physician', 'surgeon', 'hospitaladmin', 'centraladmin', 'superadmin', 'admin'];
+const CLINICAL_READ_ROLES = [
+    'nurse', 'staffnurse', 'headnurse', 'doctor', 'clinicdoctor', 'clinic doctor',
+    'physician', 'surgeon', 'consultant', 'doctorassistant', 'assistant', 'clinicalassistant',
+    'hospitaladmin', 'centraladmin', 'superadmin', 'admin', 'otmanager', 'otstaff'
+];
+const NURSING_WRITE_ROLES = [
+    'nurse', 'staffnurse', 'headnurse', 'doctor', 'clinicdoctor', 'clinic doctor',
+    'physician', 'surgeon', 'consultant', 'doctorassistant', 'assistant', 'clinicalassistant',
+    'hospitaladmin', 'centraladmin', 'superadmin', 'admin'
+];
 
 // Middleware: verify clinical read permissions
 const requireClinicalReadAccess = (req, res, next) => {
     const role = getUserRole(req);
     const perms = req.user._roleData?.permissions || [];
-    if (CLINICAL_READ_ROLES.includes(role) || perms.includes('*') || perms.includes('nurse_access') || perms.includes('doctor_access') || perms.includes('ipd_view')) {
+    if (CLINICAL_READ_ROLES.includes(role) || perms.includes('*') || perms.includes('nurse_access') || perms.includes('doctor_access') || perms.includes('clinical_manage') || perms.includes('ipd_view')) {
         return next();
     }
     return res.status(403).json({ success: false, message: 'Clinical authorization required' });
@@ -97,7 +105,7 @@ const requireClinicalReadAccess = (req, res, next) => {
 const requireNursingWriteAccess = (req, res, next) => {
     const role = getUserRole(req);
     const perms = req.user._roleData?.permissions || [];
-    if (NURSING_WRITE_ROLES.includes(role) || perms.includes('*') || perms.includes('nurse_access') || perms.includes('ipd_clinical_manage')) {
+    if (NURSING_WRITE_ROLES.includes(role) || perms.includes('*') || perms.includes('nurse_access') || perms.includes('doctor_access') || perms.includes('clinical_manage') || perms.includes('ipd_clinical_manage')) {
         return next();
     }
     return res.status(403).json({ success: false, message: 'Clinical nursing write authorization required' });
@@ -122,11 +130,13 @@ const emitSocket = (req, eventName, payload) => {
     const hospitalId = req.hospitalId || req.user.hospitalId;
     const io = req.app.get('io');
     if (io && hospitalId) {
-        io.to(`hospital_${hospitalId}`).emit(eventName, {
+        const fullPayload = {
             ...payload,
             hospitalId,
             timestamp: new Date()
-        });
+        };
+        io.to(`hospital_${hospitalId}`).emit(eventName, fullPayload);
+        io.to(hospitalId.toString()).emit(eventName, fullPayload);
     }
 };
 
@@ -2323,8 +2333,8 @@ router.get('/command-center/flow-board', verifyToken, resolveTenant, requireClin
         const admissionFilter = {
             hospitalId,
             $or: [
-                { status: 'Admitted' },
-                { status: 'Discharged', dischargeDate: { $gte: oneDayAgo } }
+                { status: { $in: ['Admitted', 'ADMITTED', 'admitted'] } },
+                { status: { $in: ['Discharged', 'DISCHARGED', 'discharged'] }, dischargeDate: { $gte: oneDayAgo } }
             ]
         };
 

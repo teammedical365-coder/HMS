@@ -210,22 +210,55 @@ router.get('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
 // Update doctor
 router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
   try {
-    const { name, email, phone, specialty, experience, education, services, availability, successRate, patientsCount, image, bio, consultationFee, departments, gender } = req.body;
+    const { name, email, phone, specialty, experience, education, services, availability, successRate, patientsCount, image, bio, consultationFee, departments, gender, password } = req.body;
 
-    const doctor = await Doctor.findById(req.params.id);
+    let doctor = await Doctor.findById(req.params.id);
+    if (!doctor) {
+      doctor = await Doctor.findOne({ $or: [{ doctorId: req.params.id }, { userId: req.params.id }] });
+    }
     if (!doctor) {
       return res.status(404).json({ success: false, message: 'Doctor not found' });
     }
 
+    // Hospital isolation check for hospitaladmin
+    if (req.user.role === 'hospitaladmin' && req.user.hospitalId && doctor.hospitalId) {
+      if (String(doctor.hospitalId) !== String(req.user.hospitalId)) {
+        return res.status(403).json({ success: false, message: 'Unauthorized: Cannot update doctors from another hospital' });
+      }
+    }
+
+    // Sanitize phone if provided
+    let sanitizedPhone = undefined;
+    if (phone !== undefined && phone !== null) {
+      const cleanPhone = String(phone).replace(/\D/g, '').slice(0, 10);
+      if (cleanPhone.length > 0 && cleanPhone.length !== 10) {
+        return res.status(400).json({ success: false, message: 'Phone number must be exactly 10 digits' });
+      }
+      sanitizedPhone = cleanPhone;
+    }
+
+    // Check email uniqueness if email changed
+    if (email && email.trim().toLowerCase() !== (doctor.email || '').toLowerCase()) {
+      const targetEmail = email.trim().toLowerCase();
+      const existingUser = await User.findOne({
+        email: targetEmail,
+        _id: { $ne: doctor.userId },
+        ...(doctor.hospitalId ? { hospitalId: doctor.hospitalId } : {})
+      });
+      if (existingUser) {
+        return res.status(400).json({ success: false, message: 'Email is already in use by another user' });
+      }
+      doctor.email = targetEmail;
+    }
+
     // Update doctor fields
-    if (name) doctor.name = name;
-    if (email) doctor.email = email.toLowerCase();
-    if (phone !== undefined) doctor.phone = phone;
+    if (name) doctor.name = name.trim();
+    if (sanitizedPhone !== undefined && sanitizedPhone !== '') doctor.phone = sanitizedPhone;
     if (specialty !== undefined) doctor.specialty = specialty;
     if (experience !== undefined) doctor.experience = experience;
     if (education !== undefined) doctor.education = education;
-    if (services !== undefined) doctor.services = services;
-    if (departments !== undefined) doctor.departments = departments;
+    if (services !== undefined) doctor.services = Array.isArray(services) ? services : [];
+    if (departments !== undefined) doctor.departments = Array.isArray(departments) ? departments : [];
     if (availability !== undefined) {
       const defaultAvailability = {
         monday: { available: false, startTime: '09:00', endTime: '17:00' },
@@ -254,7 +287,13 @@ router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     if (patientsCount !== undefined) doctor.patientsCount = patientsCount;
     if (image !== undefined) doctor.image = image;
     if (bio !== undefined) doctor.bio = bio;
-    if (consultationFee !== undefined) doctor.consultationFee = consultationFee;
+    
+    // Safely cast consultationFee to Number to avoid CastError with empty string or invalid input
+    if (consultationFee !== undefined && consultationFee !== null && consultationFee !== '') {
+      doctor.consultationFee = Number(consultationFee) || 0;
+    } else if (consultationFee === '' || consultationFee === null) {
+      doctor.consultationFee = 0;
+    }
 
     await doctor.save();
 
@@ -262,11 +301,15 @@ router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     if (doctor.userId) {
       const user = await User.findById(doctor.userId);
       if (user) {
-        if (name) user.name = name;
-        if (email) user.email = email.toLowerCase();
-        if (phone !== undefined) user.phone = phone;
-        if (services !== undefined) user.services = services;
+        if (name) user.name = name.trim();
+        if (doctor.email) user.email = doctor.email;
+        if (sanitizedPhone !== undefined && sanitizedPhone !== '') user.phone = sanitizedPhone;
+        if (services !== undefined) user.services = Array.isArray(services) ? services : [];
+        if (departments !== undefined) user.departments = Array.isArray(departments) ? departments : [];
         if (gender !== undefined) user.gender = gender;
+        if (password && typeof password === 'string' && password.trim().length >= 6) {
+          user.password = password.trim();
+        }
         await user.save();
       }
     }
@@ -275,7 +318,7 @@ router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     res.json({ success: true, message: 'Doctor updated successfully', doctor: populatedDoctor });
   } catch (error) {
     console.error('Update doctor error:', error);
-    res.status(500).json({ success: false, message: 'Error updating doctor' });
+    res.status(500).json({ success: false, message: error.message || 'Error updating doctor' });
   }
 });
 

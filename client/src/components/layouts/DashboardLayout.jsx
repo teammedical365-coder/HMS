@@ -70,7 +70,14 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Billing & Payments', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'ha_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
             ];
         }
-        if (role === 'doctor' || role === 'clinic doctor' || role === 'clinicdoctor' || role.includes('doctor')) {
+        if (role === 'doctor_assistant' || role === 'doctor assistant' || role === 'clinical assistant' || role.includes('assistant')) {
+            return [
+                { label: 'Assistant Dashboard', path: '/assistant/dashboard', icon: <FiHome />, prefetchKey: 'asst_dash', prefetchFn: () => import('../../pages/assistant/DoctorAssistantDashboard') },
+                { label: 'Patient Queue', path: '/assistant/queue', icon: <FiUsers />, prefetchKey: 'asst_queue', prefetchFn: () => import('../../pages/assistant/DoctorAssistantQueue') },
+                { label: 'Question Library', path: '/assistant/question-library', icon: <FiFileText />, prefetchKey: 'asst_ql', prefetchFn: () => import('../../pages/assistant/DoctorAssistantQuestionLibrary') },
+            ];
+        }
+        if (role === 'doctor' || role === 'clinic doctor' || role === 'clinicdoctor' || (role.includes('doctor') && !role.includes('assistant'))) {
             return [
                 { label: 'Dashboard', path: '/my-dashboard', icon: <FiHome />, prefetchKey: 'doc_dash', prefetchFn: () => import('../../pages/doctors/DoctorDashboard') },
                 { label: 'My Patients', path: '/doctor/patients', icon: <FiUsers />, prefetchKey: 'doc_patients', prefetchFn: () => import('../../pages/doctors/Patient') },

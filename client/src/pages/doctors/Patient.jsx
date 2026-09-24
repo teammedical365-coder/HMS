@@ -917,7 +917,23 @@ const Patient = () => {
                                                  <span className="doc-detail-mini-val font-semibold">{dateFormatted}</span>
                                              </div>
 
-                                             <div className="doc-schedule-status-badge">
+                                             <div className="doc-schedule-status-badge" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                 {['ready_for_doctor', 'ready'].includes(apt.preparationStatus) && (
+                                                     <span style={{
+                                                         background: '#d1fae5',
+                                                         color: '#065f46',
+                                                         border: '1px solid #a7f3d0',
+                                                         padding: '2px 8px',
+                                                         borderRadius: '12px',
+                                                         fontSize: '10.5px',
+                                                         fontWeight: 700,
+                                                         display: 'inline-flex',
+                                                         alignItems: 'center',
+                                                         gap: '4px'
+                                                     }}>
+                                                         🩺 Prepped
+                                                     </span>
+                                                 )}
                                                  <span className={`doc-status-pill status-${status}`}>
                                                      {status === 'completed' ? 'Completed' : status === 'confirmed' ? 'Confirmed' : status === 'pending' ? 'Pending' : status}
                                                  </span>

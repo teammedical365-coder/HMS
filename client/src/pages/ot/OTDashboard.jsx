@@ -71,8 +71,8 @@ const OTDashboard = () => {
                 if (roomsRes.summary) setRoomSummary(roomsRes.summary);
             }
             if (alertsRes.success) setAlerts(alertsRes.alerts || []);
-            if (scheduleRes.success) setTodaySchedule(scheduleRes.schedule || []);
-            if (plannedRes.success) setPlannedSurgeries(plannedRes.surgeries || []);
+            if (scheduleRes.success) setTodaySchedule(scheduleRes.schedule || scheduleRes.surgeries || scheduleRes.data || []);
+            if (plannedRes.success) setPlannedSurgeries(plannedRes.surgeries || plannedRes.plans || plannedRes.data || []);
             if (docsRes.doctors) setDoctorsList(docsRes.doctors);
             if (allRoomsRes.rooms) setOtRoomsList(allRoomsRes.rooms);
 
@@ -90,10 +90,12 @@ const OTDashboard = () => {
         const handleOtUpdate = () => fetchDashboardData();
         socket.on('ot_update', handleOtUpdate);
         socket.on('ot_surgery_scheduled', handleOtUpdate);
+        socket.on('surgery_plan_created', handleOtUpdate);
 
         return () => {
             socket.off('ot_update', handleOtUpdate);
             socket.off('ot_surgery_scheduled', handleOtUpdate);
+            socket.off('surgery_plan_created', handleOtUpdate);
         };
     }, [fetchDashboardData]);
 

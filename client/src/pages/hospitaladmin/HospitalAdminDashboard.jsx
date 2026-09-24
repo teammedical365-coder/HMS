@@ -14,6 +14,17 @@ import './HospitalAdminDashboard.css';
 // Helper for staff role badges & avatar colors
 const getRoleBadgeMeta = (roleName) => {
     const raw = (roleName || '').toLowerCase().trim();
+    if (raw.includes('assistant')) {
+        return {
+            label: roleName || 'Doctor Assistant',
+            icon: '📋',
+            bg: 'rgba(14, 165, 233, 0.12)',
+            color: '#0284c7',
+            border: '#7dd3fc',
+            grad: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
+            type: 'assistant'
+        };
+    }
     if (raw.includes('doctor')) {
         return {
             label: roleName || 'Doctor',
@@ -423,7 +434,10 @@ const HospitalAdminDashboard = () => {
             setLoadingUsers(true);
             const res = await adminAPI.getUsers();
             if (res.success) {
-                const docCount = res.users.filter(u => (u.role || '').toLowerCase().includes('doctor')).length;
+                const docCount = res.users.filter(u => {
+                    const r = (u.role || '').toLowerCase();
+                    return (r === 'doctor' || r === 'clinic doctor' || (r.includes('doctor') && !r.includes('assistant')));
+                }).length;
                 setUsers(res.users);
                 setStats(prev => ({
                     ...prev,
@@ -1969,12 +1983,18 @@ const HospitalAdminDashboard = () => {
                     });
 
                     const doctorCount = Math.max(
-                        users.filter(u => (u.role || '').toLowerCase().includes('doctor')).length,
+                        users.filter(u => {
+                            const r = (u.role || '').toLowerCase();
+                            return (r === 'doctor' || r === 'clinic doctor' || (r.includes('doctor') && !r.includes('assistant')));
+                        }).length,
                         hospitalStats?.stats?.totalDoctors ?? hospitalStats?.stats?.doctorCount ?? stats.totalDoctors ?? 0
                     );
                     const totalStaffCount = Math.max(
                         users.length,
-                        (users.filter(u => !(u.role || '').toLowerCase().includes('doctor')).length + doctorCount)
+                        (users.filter(u => {
+                            const r = (u.role || '').toLowerCase();
+                            return !(r === 'doctor' || r === 'clinic doctor' || (r.includes('doctor') && !r.includes('assistant')));
+                        }).length + doctorCount)
                     );
                     const activeRolesCount = uniqueRoles.length;
 

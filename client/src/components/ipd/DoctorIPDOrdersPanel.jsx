@@ -161,12 +161,20 @@ const DoctorIPDOrdersPanel = ({
         if (!patientId) return;
         setLoadingAdmission(true);
         try {
-            const res = await admissionAPI.getAdmissions({
-                patientId: patientId,
-                status: 'ADMITTED'
-            });
-            const list = res.data?.admissions || res.data || [];
-            const active = list.find(a => a.status === 'ADMITTED' || a.status === 'Admitted');
+            let list = [];
+            try {
+                const ptRes = await admissionAPI.getPatientAdmissions(patientId);
+                list = ptRes.admissions || ptRes.data || [];
+            } catch (ptErr) {
+                const res = await admissionAPI.getActiveAdmissions();
+                list = res.admissions || res.data || [];
+            }
+            const active = list.find(a => {
+                const p = a.patientId?._id || a.patientId;
+                const matchesPatient = String(p) === String(patientId);
+                const isActive = ['ADMITTED', 'Admitted', 'admitted'].includes(a.status);
+                return matchesPatient && isActive;
+            }) || list.find(a => ['ADMITTED', 'Admitted', 'admitted'].includes(a.status));
             setActiveAdmission(active || null);
         } catch (err) {
             console.warn('Could not fetch patient admission status', err);

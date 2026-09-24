@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { adminAPI, uploadAPI, hospitalAPI } from '../../utils/api';
+import { adminAPI, uploadAPI, hospitalAPI, publicAPI } from '../../utils/api';
 import { getSubscriptionLimits } from '../../utils/subscriptionPlans';
 import toast from 'react-hot-toast';
 import '../administration/SuperAdmin.css';
@@ -149,11 +149,12 @@ const Admin = () => {
     // Create Staff Form state
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [createForm, setCreateForm] = useState({
-        name: '', email: '', password: '', phone: '', age: '', aadhaar: '', roleId: '', file: null, department: ''
+        name: '', email: '', password: '', phone: '', age: '', aadhaar: '', roleId: '', file: null, department: '', assignedDoctors: []
     });
     const [creating, setCreating] = useState(false);
     const [clinicDoctorExists, setClinicDoctorExists] = useState(false);
     const [checkingDocLimit, setCheckingDocLimit] = useState(false);
+    const [availableDoctors, setAvailableDoctors] = useState([]);
 
     const [hospitals, setHospitals] = useState([]);
     const [staffHospitalFilter, setStaffHospitalFilter] = useState('');
@@ -239,6 +240,14 @@ const Admin = () => {
         fetchRoles();
         fetchHospital();
         
+        const fetchDocs = async () => {
+            try {
+                const res = await publicAPI.getDoctors();
+                if (res.success) setAvailableDoctors(res.doctors || res.data || []);
+            } catch (err) {}
+        };
+        fetchDocs();
+
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         if (['superadmin', 'centraladmin'].includes(user.role)) {
             fetchHospitals();
@@ -349,7 +358,7 @@ const Admin = () => {
                 const staffUsers = (response.users || response.data || []).filter(u => {
                     const r = (typeof u.role === 'string' ? u.role : (u.role?.name || '')).toLowerCase();
                     if (['patient', 'user'].includes(r)) return false;
-                    if (!isCentral && r.includes('doctor')) return false;
+                    if (!isCentral && (r === 'doctor' || r === 'clinic doctor' || (r.includes('doctor') && !r.includes('assistant')))) return false;
                     return true;
                 });
 
@@ -464,6 +473,8 @@ const Admin = () => {
 
     // Open Edit Modal
     const openEditModal = (userItem) => {
+        const rawAssigned = userItem.assignedDoctors || [];
+        const formattedAssigned = rawAssigned.map(d => typeof d === 'object' ? (d._id || d.id) : String(d));
         setEditForm({
             id: userItem.id || userItem._id,
             name: userItem.name,
@@ -473,7 +484,8 @@ const Admin = () => {
             currentAvatar: userItem.avatar,
             newAvatarFile: null,
             specialty: '', // Ideally fetch specific doctor details if needed, but basic update is fine
-            department: (userItem.departments && userItem.departments.length > 0) ? userItem.departments[0] : ''
+            department: (userItem.departments && userItem.departments.length > 0) ? userItem.departments[0] : '',
+            assignedDoctors: formattedAssigned
         });
         setEditModal(true);
     };
@@ -510,7 +522,8 @@ const Admin = () => {
                 roleId: editForm.roleId,
                 avatar: avatarUrl,
                 specialty: editForm.specialty,
-                departments: editForm.department ? [editForm.department] : []
+                departments: editForm.department ? [editForm.department] : [],
+                assignedDoctors: editForm.assignedDoctors || []
             };
 
             const response = await adminAPI.updateUser(editForm.id, updateData);
@@ -602,6 +615,7 @@ const Admin = () => {
             const userData = {
                 ...createForm,
                 departments: createForm.department ? [createForm.department] : [],
+                assignedDoctors: createForm.assignedDoctors || [],
                 avatar: avatarUrl
             };
 
@@ -647,7 +661,8 @@ const Admin = () => {
                                 const maxStaff = limits.maxStaff;
                                 const staffCount = users.filter(u => {
                                     const rName = (u.role?.name || u.role || '').toLowerCase();
-                                    return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+                                    const isDoc = (rName === 'doctor' || rName === 'clinic doctor' || (rName.includes('doctor') && !rName.includes('assistant')));
+                                    return !isDoc && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
                                 }).length;
                                 const remaining = Math.max(0, maxStaff - staffCount);
 
@@ -669,7 +684,8 @@ const Admin = () => {
                                 const maxStaff = limits.maxStaff;
                                 const staffCount = users.filter(u => {
                                     const rName = (u.role?.name || u.role || '').toLowerCase();
-                                    return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+                                    const isDoc = (rName === 'doctor' || rName === 'clinic doctor' || (rName.includes('doctor') && !rName.includes('assistant')));
+                                    return !isDoc && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
                                 }).length;
                                 isStaffQuotaFull = Math.max(0, maxStaff - staffCount) === 0;
                             }
@@ -748,7 +764,7 @@ const Admin = () => {
                                                 .filter(r => {
                                                     const name = (r.name || '').toLowerCase().trim();
                                                     if (['patient', 'user'].includes(name)) return false;
-                                                    if (name.includes('doctor') || name.includes('doc')) return false;
+                                                    if ((name.includes('doctor') || name.includes('doc')) && !name.includes('assistant')) return false;
                                                     if (name.includes('admin')) return false;
                                                     const isClinic = hospital?.clinicType === 'clinic';
                                                     if (!isClinic && name.includes('clinic')) return false;
@@ -760,6 +776,59 @@ const Admin = () => {
                                         </select>
                                     </div>
                                 </div>
+
+                                {(() => {
+                                    const selectedRole = roles.find(r => r._id === createForm.roleId);
+                                    const roleName = (selectedRole?.name || '').toLowerCase();
+                                    const isAssistant = roleName.includes('assistant');
+
+                                    if (isAssistant) {
+                                        const selectedDocIds = createForm.assignedDoctors || [];
+                                        const derivedDepts = Array.from(new Set(
+                                            availableDoctors
+                                                .filter(d => selectedDocIds.includes(d._id))
+                                                .flatMap(d => d.departments || [d.specialty].filter(Boolean))
+                                        ));
+
+                                        return (
+                                            <div className="form-row" style={{ marginTop: '14px', background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                                    <label className="staff-label" style={{ color: '#0369a1', fontWeight: 700 }}>
+                                                        👨‍⚕️ Assign Responsible Doctors (Doctor Assistant will manage queue & preparation for these doctors)
+                                                    </label>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px', marginTop: '8px' }}>
+                                                        {availableDoctors.map(doc => {
+                                                            const isChecked = selectedDocIds.includes(doc._id);
+                                                            return (
+                                                                <label key={doc._id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', border: `1px solid ${isChecked ? '#0ea5e9' : '#cbd5e1'}`, borderRadius: '6px', background: isChecked ? '#f0f9ff' : '#ffffff', cursor: 'pointer', fontSize: '13px' }}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isChecked}
+                                                                        onChange={(e) => {
+                                                                            const updated = e.target.checked
+                                                                                ? [...selectedDocIds, doc._id]
+                                                                                : selectedDocIds.filter(id => id !== doc._id);
+                                                                            setCreateForm(prev => ({ ...prev, assignedDoctors: updated }));
+                                                                        }}
+                                                                    />
+                                                                    <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                                                                        {doc.name} ({doc.departments?.[0] || doc.specialty || 'General'})
+                                                                    </span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    {derivedDepts.length > 0 && (
+                                                        <div style={{ marginTop: '10px', fontSize: '12px', color: '#059669', fontWeight: 600 }}>
+                                                            ✓ Auto-derived Authorized Departments: {derivedDepts.join(', ')}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })()}
                                 
                                 {hospital && hospital.departments && hospital.departments.length > 0 && (
                                     <div className="form-row" style={{ marginTop: '10px' }}>
@@ -797,7 +866,8 @@ const Admin = () => {
                         const maxStaff = limits.maxStaff;
                         const staffCount = users.filter(u => {
                             const rName = (u.role?.name || u.role || '').toLowerCase();
-                            return !rName.includes('doctor') && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
+                            const isDoc = (rName === 'doctor' || rName === 'clinic doctor' || (rName.includes('doctor') && !rName.includes('assistant')));
+                            return !isDoc && !['patient', 'hospitaladmin', 'centraladmin', 'superadmin'].includes(rName);
                         }).length;
                         const remaining = Math.max(0, maxStaff - staffCount);
                         
@@ -1123,6 +1193,59 @@ const Admin = () => {
                                         </select>
                                     </div>
                                 </div>
+
+                                {(() => {
+                                    const selectedRole = roles.find(r => r._id === editForm.roleId || r.name === editForm.roleId);
+                                    const roleName = (selectedRole?.name || '').toLowerCase();
+                                    const isAssistant = roleName.includes('assistant');
+
+                                    if (isAssistant) {
+                                        const selectedDocIds = editForm.assignedDoctors || [];
+                                        const derivedDepts = Array.from(new Set(
+                                            availableDoctors
+                                                .filter(d => selectedDocIds.includes(d._id))
+                                                .flatMap(d => d.departments || [d.specialty].filter(Boolean))
+                                        ));
+
+                                        return (
+                                            <div className="form-row" style={{ marginTop: '14px', background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                                                    <label className="staff-label" style={{ color: '#0369a1', fontWeight: 700 }}>
+                                                        👨‍⚕️ Assign Responsible Doctors (Doctor Assistant will manage queue & preparation for these doctors)
+                                                    </label>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px', marginTop: '8px' }}>
+                                                        {availableDoctors.map(doc => {
+                                                            const isChecked = selectedDocIds.includes(doc._id);
+                                                            return (
+                                                                <label key={doc._id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', border: `1px solid ${isChecked ? '#0ea5e9' : '#cbd5e1'}`, borderRadius: '6px', background: isChecked ? '#f0f9ff' : '#ffffff', cursor: 'pointer', fontSize: '13px' }}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isChecked}
+                                                                        onChange={(e) => {
+                                                                            const updated = e.target.checked
+                                                                                ? [...selectedDocIds, doc._id]
+                                                                                : selectedDocIds.filter(id => id !== doc._id);
+                                                                            setEditForm(prev => ({ ...prev, assignedDoctors: updated }));
+                                                                        }}
+                                                                    />
+                                                                    <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                                                                        {doc.name} ({doc.departments?.[0] || doc.specialty || 'General'})
+                                                                    </span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    {derivedDepts.length > 0 && (
+                                                        <div style={{ marginTop: '10px', fontSize: '12px', color: '#059669', fontWeight: 600 }}>
+                                                            ✓ Auto-derived Authorized Departments: {derivedDepts.join(', ')}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })()}
 
 
                                 {hospital && hospital.departments && hospital.departments.length > 0 && (
