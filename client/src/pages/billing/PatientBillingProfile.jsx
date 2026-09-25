@@ -1457,19 +1457,10 @@ const PatientBillingProfile = () => {
                 dob: patObj.dob || ''
             };
             setPatient(initialPat);
-            setBilling({
-                appointments: initialTxn.billedItems?.appointments || [],
-                labReports: [],
-                pharmacyOrders: [],
-                facilityCharges: [],
-                admissions: [],
-                surgeryPlans: [],
-                paymentTransactions: [initialTxn]
-            });
         } else {
             setPatient(null);
-            setBilling(null);
         }
+        setBilling(null);
 
         setSelected({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [], surgeryPlans: [] });
         setSuccessMsg('');
@@ -1478,22 +1469,25 @@ const PatientBillingProfile = () => {
             if (res && res.success) {
                 setPatient(res.patient || initialPat);
                 const fetchedBilling = res.billing || {};
-                if (initialTxn) {
-                    fetchedBilling.paymentTransactions = fetchedBilling.paymentTransactions || [];
-                    const hasTxn = fetchedBilling.paymentTransactions.some(p => String(p._id) === String(initialTxn._id));
-                    if (!hasTxn) {
-                        fetchedBilling.paymentTransactions.unshift(initialTxn);
+                if (initialTxn && res?.patient?._id) {
+                    const txnPatId = (typeof initialTxn.patientId === 'object' && initialTxn.patientId !== null)
+                        ? String(initialTxn.patientId._id || '')
+                        : String(initialTxn.patientId || '');
+                    if (txnPatId && txnPatId === String(res.patient._id)) {
+                        fetchedBilling.paymentTransactions = fetchedBilling.paymentTransactions || [];
+                        const hasTxn = fetchedBilling.paymentTransactions.some(p => String(p._id) === String(initialTxn._id));
+                        if (!hasTxn) {
+                            fetchedBilling.paymentTransactions.unshift(initialTxn);
+                        }
                     }
                 }
                 setBilling(fetchedBilling);
-            } else if (!initialTxn) {
-                setError('Patient billing data not found');
+            } else {
+                setError(res?.message || 'Patient billing data not found');
             }
         } catch (err) {
             console.error('loadPatientBilling error:', err);
-            if (!initialTxn) {
-                setError(err.response?.data?.message || 'Patient not found');
-            }
+            setError(err.response?.data?.message || 'Patient not found');
         } finally {
             setLoading(false);
         }
@@ -2278,7 +2272,7 @@ const PatientBillingProfile = () => {
                     )}
 
                     {/* Consolidated Billing View (Appointments & Facility Charges) */}
-                    {(isHospitalAdmin ? (pendingAppointments.length > 0 || pendingFacilityCharges.length > 0) : (billing.appointments?.length > 0 || billing.facilityCharges?.length > 0)) && (
+                    {(billing.appointments?.length > 0 || billing.facilityCharges?.length > 0) && (
                         <div className="billing-section">
                             <div className="section-header">
                                 <h3>Consolidated Billing View (Consultations & ICU Charges)</h3>
@@ -2302,7 +2296,7 @@ const PatientBillingProfile = () => {
                                     <thead><tr>{!isHospitalAdmin && <th></th>}<th>Date</th><th>Type & Description</th><th>Collected By</th><th>Status</th><th>Amount</th></tr></thead>
                                     <tbody>
                                         {/* Appointments */}
-                                        {(isHospitalAdmin ? pendingAppointments : (billing.appointments || [])).map(a => (
+                                        {(billing.appointments || []).map(a => (
                                             <tr key={a._id} className={!isHospitalAdmin && selected.appointments.includes(a._id) ? 'selected-row' : ''}>
                                                 {!isHospitalAdmin && (
                                                     <td>
@@ -2329,7 +2323,7 @@ const PatientBillingProfile = () => {
                                         ))}
 
                                         {/* Facility / ICU Charges */}
-                                        {(isHospitalAdmin ? pendingFacilityCharges : (billing.facilityCharges || [])).map(f => (
+                                        {(billing.facilityCharges || []).map(f => (
                                             <tr key={f._id} className={!isHospitalAdmin && selected.facilityCharges.includes(f._id) ? 'selected-row' : ''}>
                                                 {!isHospitalAdmin && (
                                                     <td>
@@ -2361,10 +2355,10 @@ const PatientBillingProfile = () => {
                     )}
 
                     {/* Lab Reports */}
-                    {(isHospitalAdmin ? pendingLabReports.length > 0 : (billing.labReports && billing.labReports.length > 0)) && (
+                    {(billing.labReports && billing.labReports.length > 0) && (
                         <div className="billing-section">
                             <div className="section-header">
-                                <h3>Lab Tests {isHospitalAdmin ? `(${pendingLabReports.length} pending)` : `(${getSectionBadge(billing.labReports)})`}</h3>
+                                <h3>Lab Tests ({getSectionBadge(billing.labReports)})</h3>
                                 {!isHospitalAdmin && billing.labReports.some(l => !isPaid(l.paymentStatus)) && (
                                     <button className="btn-select-all" onClick={() => toggleAll('labReports', billing.labReports)}>
                                         {billing.labReports.filter(l => !isPaid(l.paymentStatus)).every(l => selected.labReports.includes(l._id)) ? 'Deselect All' : 'Select All'}
@@ -2375,7 +2369,7 @@ const PatientBillingProfile = () => {
                                 <table className="billing-table">
                                     <thead><tr>{!isHospitalAdmin && <th></th>}<th>Date</th><th>Tests</th><th>Status</th><th>Amount</th></tr></thead>
                                     <tbody>
-                                        {(isHospitalAdmin ? pendingLabReports : billing.labReports).map(l => (
+                                        {(billing.labReports || []).map(l => (
                                             <tr key={l._id} className={!isHospitalAdmin && selected.labReports.includes(l._id) ? 'selected-row' : ''}>
                                                 {!isHospitalAdmin && (
                                                     <td>
@@ -2403,10 +2397,10 @@ const PatientBillingProfile = () => {
                     )}
 
                     {/* Pharmacy Orders */}
-                    {(isHospitalAdmin ? pendingPharmacyOrders.length > 0 : (billing.pharmacyOrders && billing.pharmacyOrders.length > 0)) && (
+                    {(billing.pharmacyOrders && billing.pharmacyOrders.length > 0) && (
                         <div className="billing-section">
                             <div className="section-header">
-                                <h3>Pharmacy Orders {isHospitalAdmin ? `(${pendingPharmacyOrders.length} pending)` : `(${getSectionBadge(billing.pharmacyOrders)})`}</h3>
+                                <h3>Pharmacy Orders ({getSectionBadge(billing.pharmacyOrders)})</h3>
                                 {!isHospitalAdmin && billing.pharmacyOrders.some(p => !isPaid(p.paymentStatus)) && (
                                     <button className="btn-select-all" onClick={() => toggleAll('pharmacyOrders', billing.pharmacyOrders)}>
                                         {billing.pharmacyOrders.filter(p => !isPaid(p.paymentStatus)).every(p => selected.pharmacyOrders.includes(p._id)) ? 'Deselect All' : 'Select All'}
@@ -2417,7 +2411,7 @@ const PatientBillingProfile = () => {
                                 <table className="billing-table">
                                     <thead><tr>{!isHospitalAdmin && <th></th>}<th>Date</th><th>Items</th><th>Order Status</th><th>Amount</th></tr></thead>
                                     <tbody>
-                                        {(isHospitalAdmin ? pendingPharmacyOrders : billing.pharmacyOrders).map(p => (
+                                        {(billing.pharmacyOrders || []).map(p => (
                                             <tr key={p._id} className={!isHospitalAdmin && selected.pharmacyOrders.includes(p._id) ? 'selected-row' : ''}>
                                                 {!isHospitalAdmin && (
                                                     <td>
@@ -2478,12 +2472,12 @@ const PatientBillingProfile = () => {
                     )}
 
                     {/* Past Admissions */}
-                    {(isHospitalAdmin ? pendingPastAdmissions.length > 0 : pastAdmissions.length > 0) && (
+                    {pastAdmissions.length > 0 && (
                         <div className="billing-section past-admissions">
                             <div className="section-header">
-                                <h3>Past Admissions ({isHospitalAdmin ? pendingPastAdmissions.length : pastAdmissions.length})</h3>
+                                <h3>Past Admissions ({pastAdmissions.length})</h3>
                             </div>
-                            {(isHospitalAdmin ? pendingPastAdmissions : pastAdmissions).map(adm => (
+                            {pastAdmissions.map(adm => (
                                 <div key={adm._id} className="admission-card past">
                                     <div className="admission-top">
                                         <div>

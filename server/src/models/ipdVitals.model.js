@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const ipdVitalsSchema = new mongoose.Schema({
     hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', required: true, index: true },
-    admissionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admission', required: true, index: true },
+    admissionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admission', required: false, index: true },
     patientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     recordedAt: { type: Date, default: Date.now, index: true },

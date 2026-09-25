@@ -123,22 +123,41 @@ const upload = multer({
 router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res) => {
   try {
     const file = req.file;
-    const { appointmentId } = req.body;
-
-    if (!appointmentId) {
-      return res.status(400).json({ success: false, message: "appointmentId is required in the request body." });
-    }
+    let { appointmentId, patientId, category, reportName, notes } = req.body;
 
     if (!file) {
       return res.status(400).json({ success: false, message: "No report file uploaded." });
     }
 
+    const Appointment = require('../models/appointment.model');
+    const User = require('../models/user.model');
+    let appt = null;
+    let targetPatientId = patientId;
+
+    if (appointmentId) {
+      appt = await Appointment.findById(appointmentId);
+      if (appt && appt.userId) {
+        targetPatientId = appt.userId;
+      }
+    } else if (patientId) {
+      appt = await Appointment.findOne({ userId: patientId }).sort({ createdAt: -1 });
+      if (appt) {
+        appointmentId = appt._id;
+      }
+    }
+
+    if (!appointmentId && !patientId) {
+      return res.status(400).json({ success: false, message: "appointmentId or patientId is required in the request body." });
+    }
+
     // Determine uploader role based on user context
-    let uploaderRole = 'Other';
+    let uploaderRole = 'Staff';
     if (req.user && req.user.role) {
       const roleStr = (req.user._roleData?.name || req.user.role).toString().toLowerCase();
       if (roleStr.includes('doctor')) {
         uploaderRole = 'Doctor';
+      } else if (roleStr.includes('nurse') || roleStr.includes('staffnurse') || roleStr.includes('headnurse')) {
+        uploaderRole = 'Nurse';
       } else if (roleStr.includes('reception')) {
         uploaderRole = 'Receptionist';
       } else if (roleStr.includes('admin')) {
@@ -146,20 +165,18 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
       }
     }
 
-    const Appointment = require('../models/appointment.model');
-    const appt = await Appointment.findById(appointmentId);
-
     const userContext = {
       userId: req.user?._id,
-      userName: req.user?.name || req.user?.username || 'Doctor/Staff',
+      userName: req.user?.name || req.user?.username || (uploaderRole + ' Staff'),
       userRole: uploaderRole.toLowerCase(),
       hospitalId: (appt && appt.hospitalId) ? appt.hospitalId : (req.user ? req.user.hospitalId : undefined),
-      patientId: appt ? appt.userId : null
+      patientId: targetPatientId || (appt ? appt.userId : null)
     };
 
+    const uniqueTag = targetPatientId || appointmentId || 'pt';
     const result = await imagekit.upload({
       file: file.buffer,
-      fileName: `report_${appointmentId}_${Date.now()}_${file.originalname}`,
+      fileName: `report_${uniqueTag}_${Date.now()}_${file.originalname}`,
       folder: "/appointment-reports",
       tags: ['appointment_report', file.mimetype]
     });
@@ -180,8 +197,11 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
     }
 
     const newReport = new Report({
-      appointmentId: appointmentId,
-      fileName: file.originalname,
+      appointmentId: appointmentId || undefined,
+      patientId: targetPatientId || undefined,
+      category: category || 'LAB_REPORT',
+      notes: notes || '',
+      fileName: reportName || file.originalname,
       url: result.url,
       fileId: result.fileId,
       mimeType: file.mimetype,
@@ -200,42 +220,47 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
         if (!Array.isArray(appt.prescriptions)) appt.prescriptions = [];
         appt.prescriptions.push({
           type: 'lab_report',
-          name: file.originalname || 'Medical Report',
+          name: reportName || file.originalname || 'Medical Report',
           url: result.url,
           fileId: result.fileId,
           uploadedAt: new Date()
         });
         await appt.save();
+      }
 
-        const User = require('../models/user.model');
-        let userDoc = null;
-        if (appt.userId) userDoc = await User.findById(appt.userId);
+      let userDoc = null;
+      if (targetPatientId) {
+        userDoc = await User.findById(targetPatientId);
+      }
+      if (!userDoc && appt?.userId) {
+        userDoc = await User.findById(appt.userId);
+      }
+      if (!userDoc && appt && (appt.patientName || appt.patientPhone)) {
+        userDoc = await User.findOne({
+          $or: [
+            { phone: appt.patientPhone },
+            { name: appt.patientName }
+          ]
+        });
+      }
 
-        if (!userDoc && (appt.patientName || appt.patientPhone)) {
-          userDoc = await User.findOne({
-            $or: [
-              { phone: appt.patientPhone },
-              { name: appt.patientName }
-            ]
-          });
+      if (userDoc) {
+        if (!userDoc.fertilityProfile) userDoc.fertilityProfile = {};
+        if (!Array.isArray(userDoc.fertilityProfile.reports)) {
+          userDoc.fertilityProfile.reports = [];
         }
-
-        if (userDoc) {
-          if (!userDoc.fertilityProfile) userDoc.fertilityProfile = {};
-          if (!Array.isArray(userDoc.fertilityProfile.reports)) {
-            userDoc.fertilityProfile.reports = [];
-          }
-          userDoc.fertilityProfile.reports.push({
-            url: result.url,
-            fileId: result.fileId,
-            name: file.originalname,
-            date: new Date(),
-            mimeType: file.mimetype,
-            extractedText: extractedText
-          });
-          userDoc.markModified('fertilityProfile');
-          await userDoc.save();
-        }
+        userDoc.fertilityProfile.reports.push({
+          url: result.url,
+          fileId: result.fileId,
+          name: reportName || file.originalname,
+          category: category || 'LAB_REPORT',
+          notes: notes || '',
+          date: new Date(),
+          mimeType: file.mimetype,
+          extractedText: extractedText
+        });
+        userDoc.markModified('fertilityProfile');
+        await userDoc.save();
       }
     } catch (syncErr) {
       console.error('[Report Profile Auto-Sync Warning]:', syncErr.message);
@@ -246,13 +271,79 @@ router.post('/upload', verifyToken, upload.single('reportFile'), async (req, res
       message: "Report uploaded successfully!",
       report: newReport
     });
-
   } catch (error) {
-    console.error('[Upload Report Route] Error:', error);
+    console.error('[Report Upload Error]:', error);
     res.status(500).json({
       success: false,
-      message: error.message || "Internal server error while uploading report."
+      message: error.message || "Failed to upload report."
     });
+  }
+});
+
+// Route: GET /api/reports/patient/:patientId — Fetch all reports for a patient
+router.get('/patient/:patientId', verifyToken, async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const User = require('../models/user.model');
+    const Appointment = require('../models/appointment.model');
+
+    const [userDoc, directReports, appts] = await Promise.all([
+      User.findById(patientId),
+      Report.find({ patientId }).sort({ uploadedAt: -1 }),
+      Appointment.find({ userId: patientId }).select('_id prescriptions')
+    ]);
+
+    const allReports = [...directReports];
+    const seenUrls = new Set(directReports.map(r => r.url));
+
+    // From user fertility profile
+    if (userDoc?.fertilityProfile?.reports) {
+      userDoc.fertilityProfile.reports.forEach(r => {
+        if (r.url && !seenUrls.has(r.url)) {
+          seenUrls.add(r.url);
+          allReports.push({
+            _id: r.fileId || r._id,
+            fileName: r.name || 'Medical Report',
+            url: r.url,
+            fileId: r.fileId,
+            category: r.category || 'LAB_REPORT',
+            notes: r.notes || '',
+            mimeType: r.mimeType || 'application/pdf',
+            uploadedAt: r.date || new Date(),
+            uploadedByRole: 'Staff'
+          });
+        }
+      });
+    }
+
+    // From appointment prescriptions
+    appts.forEach(a => {
+      if (Array.isArray(a.prescriptions)) {
+        a.prescriptions.forEach(p => {
+          if (p.url && !seenUrls.has(p.url)) {
+            seenUrls.add(p.url);
+            allReports.push({
+              _id: p.fileId || p._id,
+              appointmentId: a._id,
+              fileName: p.name || 'Lab Report',
+              url: p.url,
+              fileId: p.fileId,
+              category: 'LAB_REPORT',
+              uploadedAt: p.uploadedAt || new Date(),
+              uploadedByRole: 'Doctor'
+            });
+          }
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      reports: allReports
+    });
+  } catch (err) {
+    console.error('[Fetch Patient Reports Error]:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch patient reports' });
   }
 });
 

@@ -775,6 +775,10 @@ export const reportAPI = {
         const response = await apiClient.get(`/api/reports/${appointmentId}`);
         return response.data;
     },
+    getReportsByPatient: async (patientId) => {
+        const response = await apiClient.get(`/api/reports/patient/${patientId}`);
+        return response.data;
+    },
     generateAISummary: async (fileUrl, mimeType, fileName) => {
         const response = await apiClient.post('/api/reports/summary', { fileUrl, mimeType, fileName });
         return response.data;
@@ -1570,6 +1574,7 @@ export const ipdNursingAPI = {
     recordNursingClearance: async (admissionId, data) => (await apiClient.post(`/api/ipd-nursing/admissions/${admissionId}/nursing-clearance`, data)).data,
 
     // Operations Dashboard & Alerts
+    getDashboardSummary: async () => (await apiClient.get('/api/ipd-nursing/dashboard-summary')).data,
     getOperationsMetrics: async () => (await apiClient.get('/api/ipd-nursing/operations/metrics')).data,
     getAdmissionAlerts: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/alerts`)).data,
     getHospitalAlerts: async () => (await apiClient.get('/api/ipd-nursing/alerts')).data,

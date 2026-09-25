@@ -28,13 +28,24 @@ const otpLimiter = rateLimit({
     message: { success: false, message: 'Too many OTP requests. Please try again after an hour.' },
 });
 
-// General API — 200 requests per 15 min per IP (DoS protection)
+// General API — generous limit per IP (DoS protection)
+// In development the frontend makes many rapid calls (branding, auth-config, tenant-config, pings etc.)
+// so we keep this high. Public health/config endpoints are skipped entirely.
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 200,
+    max: process.env.NODE_ENV === 'production' ? 500 : 5000,
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Too many requests. Please slow down.' },
+    // Skip rate-limiting for lightweight public config endpoints that the frontend polls frequently
+    skip: (req) => {
+        const skipPaths = [
+            '/api/public/auth-config',
+            '/api/public/branding',
+            '/api/public/tenant-config',
+        ];
+        return skipPaths.some(p => req.originalUrl.startsWith(p));
+    },
 });
 
 // Email OTP send — when OTP is enabled: 5 sends per 15 min; when disabled: acts as login so more generous

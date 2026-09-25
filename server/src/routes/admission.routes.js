@@ -165,34 +165,76 @@ router.post('/', verifyAdmissionAccess, async (req, res) => {
 
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const Bed = req.tenantDb ? getTenantModels(req.tenantDb).Bed || BedMaster : BedMaster;
+        const MasterUser = require('../models/user.model');
+        const MasterDoctor = require('../models/doctor.model');
+        const mongoose = require('mongoose');
 
-        // Optional doctor validation (preserves backward compatibility)
-        let validatedDoctorId = undefined;
-        if (doctorId) {
-            const mongoose = require('mongoose');
-            if (!mongoose.Types.ObjectId.isValid(doctorId)) {
-                return res.status(400).json({ success: false, message: 'Invalid doctorId format' });
-            }
-            const MasterUser = require('../models/user.model');
-            const doctorUser = await MasterUser.findOne({
-                _id: doctorId,
+        // Resolve patientId (ObjectId or patient UID/MRN)
+        let resolvedPatientId = patientId;
+        if (mongoose.Types.ObjectId.isValid(patientId)) {
+            const ptUser = await MasterUser.findOne({
+                _id: patientId,
                 $or: [{ hospitalId }, { hospitalId: null }]
             });
-            if (!doctorUser) {
-                return res.status(400).json({ success: false, message: 'Doctor not found in this hospital' });
+            if (ptUser) resolvedPatientId = ptUser._id;
+        } else {
+            const ptUser = await MasterUser.findOne({
+                $or: [
+                    { patientId: String(patientId) },
+                    { patientUid: String(patientId) },
+                    { mrn: String(patientId) },
+                    { phone: String(patientId) }
+                ]
+            });
+            if (ptUser) resolvedPatientId = ptUser._id;
+        }
+
+        // Optional doctor validation & flexible ID resolution (Doctor collection ID or User collection ID)
+        let validatedDoctorId = undefined;
+        if (doctorId) {
+            if (mongoose.Types.ObjectId.isValid(doctorId)) {
+                // 1. Try finding in Doctor collection
+                const doctorDoc = await MasterDoctor.findOne({
+                    _id: doctorId,
+                    $or: [{ hospitalId }, { hospitalId: null }]
+                }) || await MasterDoctor.findOne({
+                    userId: doctorId,
+                    $or: [{ hospitalId }, { hospitalId: null }]
+                }) || await MasterDoctor.findById(doctorId);
+
+                if (doctorDoc) {
+                    validatedDoctorId = doctorDoc.userId || doctorDoc._id;
+                } else {
+                    // 2. Try finding in User collection
+                    const doctorUser = await MasterUser.findOne({
+                        _id: doctorId,
+                        $or: [{ hospitalId }, { hospitalId: null }]
+                    }) || await MasterUser.findById(doctorId);
+
+                    if (doctorUser) {
+                        validatedDoctorId = doctorUser._id;
+                    } else {
+                        validatedDoctorId = doctorId;
+                    }
+                }
+            } else {
+                const docByName = await MasterDoctor.findOne({
+                    name: String(doctorId),
+                    $or: [{ hospitalId }, { hospitalId: null }]
+                }) || await MasterUser.findOne({
+                    name: String(doctorId),
+                    $or: [{ hospitalId }, { hospitalId: null }]
+                });
+                if (docByName) validatedDoctorId = docByName.userId || docByName._id;
             }
-            if (doctorUser.hospitalId && String(doctorUser.hospitalId) !== String(hospitalId)) {
-                return res.status(400).json({ success: false, message: 'Doctor belongs to a different hospital' });
-            }
-            validatedDoctorId = doctorUser._id;
         }
 
         // Check active admission for this patient
         const Admission = getAdmission(req);
         const existingActive = await Admission.findOne({
             hospitalId,
-            patientId,
-            status: 'Admitted'
+            patientId: resolvedPatientId,
+            status: { $in: ['Admitted', 'ADMITTED', 'admitted'] }
         });
         if (existingActive) {
             return res.status(400).json({
@@ -219,7 +261,7 @@ router.post('/', verifyAdmissionAccess, async (req, res) => {
 
         const admission = new Admission({
             hospitalId,
-            patientId,
+            patientId: resolvedPatientId,
             appointmentId: appointmentId || undefined,
             doctorId: validatedDoctorId,
             admittedBy: req.user._id || req.user.userId,
@@ -440,12 +482,34 @@ router.get('/:id', verifyAdmissionAccess, async (req, res) => {
     try {
         const { id } = req.params;
         const mongoose = require('mongoose');
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({ success: false, message: 'Invalid admission ID format' });
-        }
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const Admission = getAdmission(req);
-        const admission = await Admission.findOne({ _id: id, hospitalId }).lean();
+        let admission = null;
+
+        if (String(id).startsWith('order-pat-')) {
+            const patientId = String(id).replace('order-pat-', '');
+            admission = await Admission.findOne({
+                ...(hospitalId ? { hospitalId } : {}),
+                patientId,
+                status: { $in: ['Admitted', 'ADMITTED', 'admitted'] }
+            }).lean();
+        } else if (mongoose.Types.ObjectId.isValid(id)) {
+            if (hospitalId) {
+                admission = await Admission.findOne({ _id: id, hospitalId }).lean();
+            }
+            if (!admission) {
+                admission = await Admission.findById(id).lean();
+            }
+            if (!admission) {
+                // Check if id is a patientId
+                admission = await Admission.findOne({
+                    ...(hospitalId ? { hospitalId } : {}),
+                    patientId: id,
+                    status: { $in: ['Admitted', 'ADMITTED', 'admitted'] }
+                }).lean();
+            }
+        }
+
         if (!admission) {
             return res.status(404).json({ success: false, message: 'Admission record not found' });
         }

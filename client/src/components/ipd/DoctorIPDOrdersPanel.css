@@ -55,6 +55,21 @@
     border: 1.5px solid #fde68a;
 }
 
+/* Unadmitted Warning Banner */
+.ipd-unadmitted-banner {
+    transition: all 0.2s ease-in-out;
+}
+
+.ipd-btn-hospitalize-now:hover {
+    background: #0369a1 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4) !important;
+}
+
+.ipd-btn-hospitalize-now:active {
+    transform: translateY(0);
+}
+
 /* Sections */
 .ipd-section {
     background: #f8fafc;
@@ -881,4 +896,201 @@
     color: #ffffff;
     cursor: pointer;
 }
+
+/* ── Doctor Nursing Notes Feed Styles ── */
+.ipd-notes-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.ipd-notes-filters {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px 16px;
+}
+
+.ipd-notes-filters .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ipd-notes-filters .filter-group label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #475569;
+}
+
+.ipd-select-sm {
+    padding: 5px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    background-color: #ffffff;
+    color: #1e293b;
+    outline: none;
+    cursor: pointer;
+}
+
+.ipd-select-sm:focus {
+    border-color: #3b82f6;
+}
+
+.filter-count {
+    margin-left: auto;
+    font-size: 0.82rem;
+    color: #64748b;
+}
+
+.filter-count strong {
+    color: #0f172a;
+}
+
+.ipd-notes-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ipd-note-card {
+    display: flex;
+    gap: 14px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #0284c7;
+    border-radius: 10px;
+    padding: 14px 18px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ipd-note-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.ipd-note-card.urgent {
+    border-left-color: #ef4444;
+    background: #fffafa;
+}
+
+.note-card-left {
+    display: flex;
+    align-items: flex-start;
+}
+
+.nurse-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #e0f2fe;
+    color: #0284c7;
+    font-weight: 700;
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid #bae6fd;
+}
+
+.ipd-note-card.urgent .nurse-avatar {
+    background: #fee2e2;
+    color: #dc2626;
+    border-color: #fca5a5;
+}
+
+.note-card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.note-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.nurse-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.nurse-name {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.note-timestamp {
+    font-size: 0.78rem;
+    color: #64748b;
+}
+
+.note-tags {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.badge-category {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #f1f5f9;
+    color: #334155;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.badge-shift {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #f3e8ff;
+    color: #7e22ce;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.badge-priority-urgent {
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #fee2e2;
+    color: #b91c1c;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.note-content-text {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #334155;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #f8fafc;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid #edf2f7;
+}
+
+.ipd-note-card.urgent .note-content-text {
+    background: #ffffff;
+    border-color: #fee2e2;
+}
+
 

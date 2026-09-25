@@ -113,12 +113,37 @@ const requireNursingWriteAccess = (req, res, next) => {
 
 // Helper: validate and find admission with tenant isolation
 const findAdmissionOrFail = async (req, admissionId) => {
-    if (!admissionId || !mongoose.Types.ObjectId.isValid(admissionId)) {
+    if (!admissionId) {
         throw new Error('Invalid admissionId format');
     }
-    const hospitalId = req.hospitalId || req.user.hospitalId;
+    const hospitalId = req.hospitalId || req.user.hospitalId || (req.user.hospital ? (req.user.hospital._id || req.user.hospital) : null);
     const { Admission } = getModels(req);
-    const admission = await Admission.findOne({ _id: admissionId, hospitalId }).lean();
+    let admission = null;
+
+    if (String(admissionId).startsWith('order-pat-')) {
+        const patientId = String(admissionId).replace('order-pat-', '');
+        admission = await Admission.findOne({
+            ...(hospitalId ? { hospitalId } : {}),
+            patientId,
+            status: { $in: ['Admitted', 'ADMITTED', 'admitted'] }
+        }).lean();
+    } else if (mongoose.Types.ObjectId.isValid(admissionId)) {
+        if (hospitalId) {
+            admission = await Admission.findOne({ _id: admissionId, hospitalId }).lean();
+        }
+        if (!admission) {
+            admission = await Admission.findById(admissionId).lean();
+        }
+        if (!admission) {
+            // Check if admissionId is actually a patientId
+            admission = await Admission.findOne({
+                ...(hospitalId ? { hospitalId } : {}),
+                patientId: admissionId,
+                status: { $in: ['Admitted', 'ADMITTED', 'admitted'] }
+            }).lean();
+        }
+    }
+
     if (!admission) {
         throw new Error('Admission not found in current hospital context');
     }
@@ -127,7 +152,7 @@ const findAdmissionOrFail = async (req, admissionId) => {
 
 // Helper: emit socket event after DB write
 const emitSocket = (req, eventName, payload) => {
-    const hospitalId = req.hospitalId || req.user.hospitalId;
+    const hospitalId = req.hospitalId || req.user.hospitalId || (req.user.hospital ? (req.user.hospital._id || req.user.hospital) : null);
     const io = req.app.get('io');
     if (io && hospitalId) {
         const fullPayload = {
@@ -140,6 +165,356 @@ const emitSocket = (req, eventName, payload) => {
     }
 };
 
+const { ensureMARForAdmission, generateMARRecordsForOrder, enrichOrderVirtuals } = require('./ipdClinical.routes');
+
+// ============================================================================
+// SECTION 0: UNIFIED NURSE IPD CARE DASHBOARD SUMMARY
+// ============================================================================
+
+// GET /api/ipd-nursing/dashboard-summary — Unified, high-performance Nurse IPD Care Dashboard
+router.get('/dashboard-summary', verifyToken, resolveTenant, requireClinicalReadAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user.hospitalId || (req.user.hospital ? (req.user.hospital._id || req.user.hospital) : null);
+        const currentUserId = req.user._id || req.user.userId;
+        const { Admission, InpatientOrder, MARRecord, IPDVitals, NursingTask, Bed } = getModels(req);
+
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+        // 1. Fetch only genuine active admissions (hospitalized patients)
+        const queryFilter = {
+            status: { $in: ['Admitted', 'ADMITTED', 'admitted'] }
+        };
+        if (hospitalId) queryFilter.hospitalId = hospitalId;
+
+        const activeAdmissions = await Admission.find(queryFilter)
+            .sort({ admissionDate: -1, createdAt: -1 })
+            .lean();
+
+        // 2. Fetch all active Inpatient Orders for this hospital
+        const ordersQuery = {
+            status: 'ACTIVE'
+        };
+        if (hospitalId) ordersQuery.hospitalId = hospitalId;
+        const allActiveOrders = await InpatientOrder.find(ordersQuery).lean();
+
+        for (let ord of allActiveOrders) {
+            if (enrichOrderVirtuals) enrichOrderVirtuals(ord);
+            if (ord.doctorId && typeof ord.doctorId !== 'object') {
+                try {
+                    ord.doctorId = await MasterUser.findById(ord.doctorId).select('name specialization').lean() || { _id: ord.doctorId, name: 'Doctor' };
+                } catch (e) {
+                    ord.doctorId = { _id: ord.doctorId, name: 'Doctor' };
+                }
+            }
+        }
+
+        // Auto-generate MAR records for all active orders for today
+        if (allActiveOrders.length > 0 && generateMARRecordsForOrder) {
+            await Promise.all(allActiveOrders.map(ord => 
+                generateMARRecordsForOrder(ord, { MARRecord }, now).catch(() => {})
+            ));
+        }
+
+
+
+        // Safely resolve patient, doctor, and appointment references for active admissions
+        const MasterAppointment = require('../models/appointment.model');
+        for (let adm of activeAdmissions) {
+            if (adm.patientId && (!adm.patientId.name || typeof adm.patientId !== 'object')) {
+                try {
+                    adm.patientId = await MasterUser.findById(adm.patientId).select('name age gender patientId mrn phone dob').lean() || { _id: adm.patientId, name: 'Inpatient' };
+                } catch (e) {
+                    adm.patientId = { _id: adm.patientId, name: 'Inpatient' };
+                }
+            }
+            if (adm.doctorId && (!adm.doctorId.name || typeof adm.doctorId !== 'object')) {
+                try {
+                    adm.doctorId = await MasterUser.findById(adm.doctorId).select('name specialization phone email').lean() || { _id: adm.doctorId, name: 'Attending Doctor' };
+                } catch (e) {
+                    adm.doctorId = { _id: adm.doctorId, name: 'Attending Doctor' };
+                }
+            }
+            if (adm.appointmentId && typeof adm.appointmentId !== 'object') {
+                try {
+                    adm.appointmentId = await MasterAppointment.findById(adm.appointmentId).select('doctorName department serviceName').lean() || null;
+                } catch (e) {
+                    adm.appointmentId = null;
+                }
+            }
+        }
+
+        const activeAdmissionIds = activeAdmissions.map(a => a._id);
+        const activePatientIds = activeAdmissions.map(a => a.patientId?._id || a.patientId).filter(Boolean);
+
+        // 3. Fetch today's MAR records
+        const marQuery = {
+            scheduledTime: { $gte: startOfToday, $lte: endOfToday },
+            $or: [
+                { admissionId: { $in: activeAdmissionIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } },
+                ...(activePatientIds.length > 0 ? [{ patientId: { $in: activePatientIds } }] : [])
+            ]
+        };
+        if (hospitalId) marQuery.hospitalId = hospitalId;
+
+        const todayMAR = await MARRecord.find(marQuery).lean();
+        for (let m of todayMAR) {
+            if (m.orderId && typeof m.orderId !== 'object') {
+                try {
+                    const foundOrd = allActiveOrders.find(o => String(o._id) === String(m.orderId));
+                    if (foundOrd) {
+                        m.orderId = foundOrd;
+                    } else {
+                        m.orderId = await InpatientOrder.findById(m.orderId).select('medicineName dosageValue dosageUnit route frequency instructions doctorId').lean() || { _id: m.orderId };
+                    }
+                } catch (e) {
+                    m.orderId = { _id: m.orderId };
+                }
+            }
+        }
+
+        // 5. Fetch latest vitals for all active admissions/patients
+        const vitalsQuery = {
+            $or: [
+                { admissionId: { $in: activeAdmissionIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } },
+                ...(activePatientIds.length > 0 ? [{ patientId: { $in: activePatientIds } }] : [])
+            ]
+        };
+        if (hospitalId) vitalsQuery.hospitalId = hospitalId;
+
+        const vitalsList = await IPDVitals.find(vitalsQuery).sort({ recordedAt: -1 }).lean();
+
+        const latestVitalsMap = {};
+        vitalsList.forEach(v => {
+            const admKey = String(v.admissionId);
+            const patKey = String(v.patientId);
+            if (!latestVitalsMap[admKey]) latestVitalsMap[admKey] = v;
+            if (!latestVitalsMap[patKey]) latestVitalsMap[patKey] = v;
+        });
+
+        // 6. Fetch pending nursing tasks
+        const tasksQuery = {
+            status: { $in: ['PENDING', 'IN_PROGRESS'] },
+            $or: [
+                { admissionId: { $in: activeAdmissionIds.filter(id => mongoose.Types.ObjectId.isValid(id)) } },
+                ...(activePatientIds.length > 0 ? [{ patientId: { $in: activePatientIds } }] : [])
+            ]
+        };
+        if (hospitalId) tasksQuery.hospitalId = hospitalId;
+
+        const pendingTasks = await NursingTask.find(tasksQuery).lean();
+
+        // Helper to format time (e.g. "10:00 AM")
+        const formatTimeStr = (d) => {
+            if (!d) return '';
+            const dt = new Date(d);
+            return dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        };
+
+        // 7. Aggregate patient rows
+        let totalDueNow = 0;
+        let totalOverdue = 0;
+        let totalIVRunning = 0;
+        let totalAssignedToMe = 0;
+
+        const patientCards = activeAdmissions.map(adm => {
+            const admIdStr = String(adm._id);
+            const patient = adm.patientId || {};
+            const patientIdStr = String(patient._id || patient);
+            const doctor = adm.doctorId || {};
+
+            // Check if assigned to logged in nurse
+            const isAssignedToMe = (adm.assignedNurses || []).some(
+                n => String(n.nurseId?._id || n.nurseId) === String(currentUserId) && n.status === 'ACTIVE'
+            );
+            if (isAssignedToMe) totalAssignedToMe++;
+
+            // Admission's MAR records (matched by admissionId OR patientId)
+            const admMars = todayMAR.filter(m => 
+                (m.admissionId && String(m.admissionId) === admIdStr) ||
+                (m.patientId && String(m.patientId) === patientIdStr)
+            );
+            
+            // Overdue MAR (< now - 15m and SCHEDULED/DUE)
+            const overdueMars = admMars.filter(m => 
+                ['SCHEDULED', 'DUE'].includes(m.status) && new Date(m.scheduledTime).getTime() < now.getTime() - 15 * 60 * 1000
+            ).sort((a, b) => new Date(a.scheduledTime) - new Date(b.scheduledTime));
+
+            // Due Now MAR (within [now - 15m, now + 45m] or marked DUE)
+            const dueNowMars = admMars.filter(m => 
+                ['SCHEDULED', 'DUE'].includes(m.status) &&
+                new Date(m.scheduledTime).getTime() >= now.getTime() - 15 * 60 * 1000 &&
+                new Date(m.scheduledTime).getTime() <= now.getTime() + 45 * 60 * 1000
+            ).sort((a, b) => new Date(a.scheduledTime) - new Date(b.scheduledTime));
+
+            // Upcoming MAR (> now + 45m)
+            const upcomingMars = admMars.filter(m => 
+                m.status === 'SCHEDULED' && new Date(m.scheduledTime).getTime() > now.getTime() + 45 * 60 * 1000
+            ).sort((a, b) => new Date(a.scheduledTime) - new Date(b.scheduledTime));
+
+            if (dueNowMars.length > 0) totalDueNow += dueNowMars.length;
+            if (overdueMars.length > 0) totalOverdue += overdueMars.length;
+
+            // Medicine Due display
+            let medicineDue = null;
+            if (overdueMars.length > 0) {
+                const m = overdueMars[0];
+                const ord = m.orderId || {};
+                medicineDue = {
+                    marId: m._id,
+                    name: ord.medicineName || 'Medication',
+                    dose: `${ord.dosageValue ?? ord.dosage?.value ?? ''} ${ord.dosageUnit || ord.dosage?.unit || ''}`.trim(),
+                    route: ord.route || 'Oral',
+                    timeStr: formatTimeStr(m.scheduledTime),
+                    scheduledTime: m.scheduledTime,
+                    isOverdue: true
+                };
+            } else if (dueNowMars.length > 0) {
+                const m = dueNowMars[0];
+                const ord = m.orderId || {};
+                medicineDue = {
+                    marId: m._id,
+                    name: ord.medicineName || 'Medication',
+                    dose: `${ord.dosageValue ?? ord.dosage?.value ?? ''} ${ord.dosageUnit || ord.dosage?.unit || ''}`.trim(),
+                    route: ord.route || 'Oral',
+                    timeStr: formatTimeStr(m.scheduledTime),
+                    scheduledTime: m.scheduledTime,
+                    isOverdue: false
+                };
+            }
+
+            // Next Medicine display
+            let nextMedicine = null;
+            if (upcomingMars.length > 0) {
+                const m = upcomingMars[0];
+                const ord = m.orderId || {};
+                nextMedicine = {
+                    marId: m._id,
+                    name: ord.medicineName || 'Medication',
+                    dose: `${ord.dosageValue ?? ord.dosage?.value ?? ''} ${ord.dosageUnit || ord.dosage?.unit || ''}`.trim(),
+                    route: ord.route || 'Oral',
+                    timeStr: formatTimeStr(m.scheduledTime),
+                    scheduledTime: m.scheduledTime
+                };
+            }
+
+            // IV Fluids for this admission (matched by admissionId OR patientId)
+            const admOrders = allActiveOrders.filter(o => 
+                (o.admissionId && String(o.admissionId) === admIdStr) ||
+                (o.patientId && String(o.patientId) === patientIdStr)
+            );
+            const ivOrders = admOrders.filter(o => {
+                const r = (o.route || '').toLowerCase();
+                const m = (o.medicineName || '').toLowerCase();
+                return r.includes('iv') || r.includes('infusion') || m.includes('saline') || m.includes('dextrose') || m.includes('ringer') || m.includes('rl') || m.includes('fluid');
+            });
+
+            let runningIV = null;
+            if (ivOrders.length > 0) {
+                totalIVRunning++;
+                const firstIV = ivOrders[0];
+                const vol = firstIV.dosageValue || 1000;
+                const unit = firstIV.dosageUnit || 'ml';
+                const rate = 100; // standard 100 ml/hr
+                const start = firstIV.startDate ? new Date(firstIV.startDate) : new Date(firstIV.createdAt || Date.now());
+                const hoursTotal = vol > 0 ? (vol / rate) : 8;
+                const expectedEnd = new Date(start.getTime() + hoursTotal * 60 * 60 * 1000);
+
+                runningIV = {
+                    orderId: firstIV._id,
+                    name: firstIV.medicineName,
+                    volume: `${vol} ${unit}`,
+                    volumeValue: vol,
+                    rate: `${rate} ml/hr`,
+                    rateValue: rate,
+                    route: firstIV.route || 'IV',
+                    startedTime: start,
+                    startedTimeStr: formatTimeStr(start),
+                    expectedEndTime: expectedEnd,
+                    expectedEndTimeStr: formatTimeStr(expectedEnd),
+                    status: 'Running'
+                };
+            }
+
+            // Recent vitals
+            const vitals = latestVitalsMap[admIdStr] || latestVitalsMap[patientIdStr] || null;
+
+            // Determine clinical status
+            let clinicalStatus = 'Stable';
+            const isICU = (adm.ward || '').toLowerCase().includes('icu');
+            const hasCriticalVitals = vitals && (
+                (vitals.spo2 && vitals.spo2 < 90) ||
+                (vitals.systolicBP && (vitals.systolicBP > 180 || vitals.systolicBP < 90)) ||
+                (vitals.pulse && (vitals.pulse > 120 || vitals.pulse < 50))
+            );
+
+            if (isICU || hasCriticalVitals) {
+                clinicalStatus = 'Critical';
+            } else if (overdueMars.length > 0 || dueNowMars.length > 0) {
+                clinicalStatus = 'Medication Due';
+            } else if (runningIV) {
+                clinicalStatus = 'Drip Running';
+            }
+
+            // Tasks for admission
+            const admTasks = pendingTasks.filter(t => 
+                (t.admissionId && String(t.admissionId) === admIdStr) ||
+                (t.patientId && String(t.patientId) === patientIdStr)
+            );
+
+            return {
+                admissionId: adm._id,
+                patientId: patient._id || patient,
+                patientName: patient.name || 'Unknown Patient',
+                patientUid: patient.patientId || patient.mrn || '',
+                age: patient.age || (patient.dob ? Math.floor((Date.now() - new Date(patient.dob)) / (365.25 * 24 * 60 * 60 * 1000)) : ''),
+                gender: patient.gender || '',
+                ward: adm.ward || 'General',
+                bedNumber: adm.bedNumber || '—',
+                attendingDoctor: doctor.name ? `Dr. ${doctor.name}` : (adm.appointmentId?.doctorName ? `Dr. ${adm.appointmentId.doctorName}` : 'Not Assigned'),
+                admissionDate: adm.admissionDate,
+                admissionTime: adm.admissionTime,
+                isAssignedToMe,
+                clinicalStatus,
+                medicineDue,
+                nextMedicine,
+                ivFluid: runningIV,
+                latestVitals: vitals ? {
+                    systolicBP: vitals.systolicBP,
+                    diastolicBP: vitals.diastolicBP,
+                    bp: vitals.systolicBP ? `${vitals.systolicBP}/${vitals.diastolicBP || '—'}` : '—',
+                    pulse: vitals.pulse,
+                    spo2: vitals.spo2,
+                    temperature: vitals.temperature,
+                    respiratoryRate: vitals.respiratoryRate,
+                    recordedAt: vitals.recordedAt
+                } : null,
+                activeOrdersCount: admOrders.length,
+                pendingTasksCount: admTasks.length
+            };
+        });
+
+        const summary = {
+            assignedPatients: totalAssignedToMe > 0 ? totalAssignedToMe : activeAdmissions.length,
+            medicinesDue: totalDueNow,
+            overdue: totalOverdue,
+            ivRunning: totalIVRunning,
+            tasksPending: pendingTasks.length,
+            totalInpatients: activeAdmissions.length
+        };
+
+        res.json({
+            success: true,
+            summary,
+            patients: patientCards
+        });
+    } catch (err) {
+        console.error('Error fetching Nurse Dashboard Summary:', err);
+        res.status(500).json({ success: false, message: 'Error fetching nurse dashboard data' });
+    }
+});
+
 // ============================================================================
 // SECTION 1: NURSING NOTES (Append-only)
 // ============================================================================
@@ -147,7 +522,7 @@ const emitSocket = (req, eventName, payload) => {
 // POST /api/ipd-nursing/admissions/:admissionId/notes
 router.post('/admissions/:admissionId/notes', verifyToken, resolveTenant, requireNursingWriteAccess, async (req, res) => {
     try {
-        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const hospitalId = req.hospitalId || req.user.hospitalId || (req.user.hospital ? (req.user.hospital._id || req.user.hospital) : null);
         const { admissionId } = req.params;
         const { note, noteType, shift, priority } = req.body;
 
@@ -156,30 +531,37 @@ router.post('/admissions/:admissionId/notes', verifyToken, resolveTenant, requir
         }
 
         const admission = await findAdmissionOrFail(req, admissionId);
-        const { NursingNote } = getModels(req);
+        const { NursingNote, User } = getModels(req);
 
         const newNote = new NursingNote({
-            hospitalId,
+            hospitalId: hospitalId || admission.hospitalId,
             admissionId: admission._id,
-            patientId: admission.patientId,
+            patientId: admission.patientId?._id || admission.patientId,
             nurseId: req.user._id || req.user.userId,
             noteType: noteType || 'GENERAL',
             note: String(note).trim(),
-            shift: shift ? String(shift).trim() : '',
+            shift: shift ? String(shift).trim() : 'Morning',
             priority: priority || 'Normal'
         });
 
         await newNote.save();
 
+        let populatedNote = newNote.toObject ? newNote.toObject() : newNote;
+        try {
+            populatedNote.nurseId = await (User || MasterUser).findById(newNote.nurseId).select('name email role specialization').lean() || { _id: newNote.nurseId, name: req.user.name || 'Nurse' };
+        } catch (e) {}
+
         emitSocket(req, 'nursing_note_created', {
             noteId: newNote._id,
             admissionId: admission._id,
-            patientId: admission.patientId,
-            noteType: newNote.noteType
+            patientId: admission.patientId?._id || admission.patientId,
+            noteType: newNote.noteType,
+            note: populatedNote
         });
 
-        res.status(201).json({ success: true, message: 'Nursing note recorded successfully', note: newNote, data: newNote });
+        res.status(201).json({ success: true, message: 'Nursing note recorded successfully', note: populatedNote, data: populatedNote });
     } catch (err) {
+        console.error('Error recording nursing note:', err);
         res.status(err.message.includes('not found') ? 404 : 500).json({ success: false, message: err.message || 'Error recording nursing note' });
     }
 });
@@ -189,21 +571,27 @@ router.get('/admissions/:admissionId/notes', verifyToken, resolveTenant, require
     try {
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const { admissionId } = req.params;
-        await findAdmissionOrFail(req, admissionId);
+        const admission = await findAdmissionOrFail(req, admissionId);
 
         const { NursingNote, User } = getModels(req);
-        const notes = await NursingNote.find({ admissionId, hospitalId })
+        let notes = await NursingNote.find({ admissionId: admission._id })
             .sort({ createdAt: -1 })
             .lean();
 
         for (let n of notes) {
             if (n.nurseId) {
-                n.nurseId = await User.findById(n.nurseId).select('name email role specialization').lean() || n.nurseId;
+                if (typeof n.nurseId === 'object' && n.nurseId.name) continue;
+                try {
+                    n.nurseId = await (User || MasterUser).findById(n.nurseId).select('name email role specialization').lean() || { _id: n.nurseId, name: 'Nurse' };
+                } catch (e) {
+                    n.nurseId = { _id: n.nurseId, name: 'Nurse' };
+                }
             }
         }
 
         res.json({ success: true, notes, data: notes });
     } catch (err) {
+        console.error('Error fetching nursing notes:', err);
         res.status(err.message.includes('not found') ? 404 : 500).json({ success: false, message: err.message || 'Error fetching nursing notes' });
     }
 });

@@ -126,6 +126,7 @@ const NursePatientWorkspace = lazy(() => import('../pages/nurse/NursePatientWork
 const NurseOPDQueue = lazy(() => import('../pages/nurse/NurseOPDQueue'));
 const NurseAppointments = lazy(() => import('../pages/nurse/NurseAppointments'));
 const IPDCommandCenter = lazy(() => import('../pages/nurse/IPDCommandCenter'));
+const NursePatientDocuments = lazy(() => import('../pages/nurse/NursePatientDocuments'));
 
 // Real-Time Monitoring
 const RealTimeMonitoring = lazy(() => import('../pages/monitoring/RealTimeMonitoring'));
@@ -281,6 +282,7 @@ const MainRoutes = () => {
         } else if (role === 'nurse' || role === 'staffnurse' || role === 'headnurse') {
             prefetchRoutes([
                 { key: 'nurse_dash', importFn: () => import('../pages/nurse/NurseDashboard') },
+                { key: 'nurse_docs', importFn: () => import('../pages/nurse/NursePatientDocuments') },
                 { key: 'nurse_opd', importFn: () => import('../pages/nurse/NurseOPDQueue') },
                 { key: 'nurse_appts', importFn: () => import('../pages/nurse/NurseAppointments') },
                 { key: 'nurse_ws', importFn: () => import('../pages/nurse/NursePatientWorkspace') },
@@ -420,6 +422,7 @@ const MainRoutes = () => {
 
                                 {/* Nurse & IPD Command Center Pages */}
                                 <Route path="nurse/dashboard" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NurseDashboard /></ProtectedRoute>} />
+                                <Route path="nurse/patient-documents" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NursePatientDocuments /></ProtectedRoute>} />
                                 <Route path="nurse/opd-queue" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NurseOPDQueue /></ProtectedRoute>} />
                                 <Route path="nurse/appointments" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NurseAppointments /></ProtectedRoute>} />
                                 <Route path="nurse/patient/:admissionId" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NursePatientWorkspace /></ProtectedRoute>} />

@@ -58,6 +58,18 @@ const getUserRole = (req) => {
     return (req.user._roleData?.name || String(req.user.role || '')).toLowerCase().replace(/\s+/g, '');
 };
 
+/**
+ * Enrich a lean order document with the virtual fields that Mongoose strips.
+ * This ensures both flat fields (dosageValue, startDate) and nested fields
+ * (dosage.value, schedule.startDate) are always present in API responses.
+ */
+const enrichOrderVirtuals = (ord) => {
+    if (!ord) return ord;
+    ord.dosage = { value: ord.dosageValue, unit: ord.dosageUnit };
+    ord.schedule = { startDate: ord.startDate, endDate: ord.endDate, duration: ord.duration };
+    return ord;
+};
+
 const DOCTOR_ROLES = [
     'doctor', 'clinicdoctor', 'clinic doctor', 'surgeon', 'consultant',
     'physician', 'doctorassistant', 'assistant', 'clinicalassistant',
@@ -87,6 +99,194 @@ const requireNurseOrDoctorAccess = (req, res, next) => {
         return next();
     }
     return res.status(403).json({ success: false, message: 'Nursing / Clinical authorization required' });
+};
+
+// Helper: parse frequency into daily scheduled time slots (HH:MM)
+const getFrequencyTimeSlots = (frequency, startDateTime) => {
+    const f = String(frequency || 'OD').toUpperCase().trim();
+    if (f === 'OD' || f === 'ONCE DAILY' || f === '1 TIME DAILY' || f === 'DAILY') {
+        return ['10:00'];
+    }
+    if (f === 'BD' || f === 'BID' || f === 'TWICE DAILY' || f === '2 TIMES DAILY' || f.includes('12 HOUR') || f.includes('EVERY 12')) {
+        return ['10:00', '20:00'];
+    }
+    if (f === 'TDS' || f === 'TID' || f === 'THREE TIMES DAILY' || f === '3 TIMES DAILY' || f.includes('8 HOUR') || f.includes('EVERY 8')) {
+        return ['08:00', '14:00', '20:00'];
+    }
+    if (f === 'QID' || f === 'QDS' || f === 'FOUR TIMES DAILY' || f === '4 TIMES DAILY' || f.includes('6 HOUR') || f.includes('EVERY 6')) {
+        return ['06:00', '12:00', '18:00', '22:00'];
+    }
+    if (f.includes('4 HOUR') || f.includes('EVERY 4')) {
+        return ['06:00', '10:00', '14:00', '18:00', '22:00', '02:00'];
+    }
+    if (f === 'STAT' || f === 'ONCE' || f === 'IMMEDIATE') {
+        const d = startDateTime ? new Date(startDateTime) : new Date();
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return [`${hh}:${mm}`];
+    }
+    if (f === 'SOS' || f === 'PRN' || f === 'AS NEEDED') {
+        return ['10:00'];
+    }
+    const match = f.match(/(\d{1,2}):(\d{2})(?:\s*(AM|PM))?/i);
+    if (match) {
+        let h = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10);
+        if (match[3]) {
+            if (match[3].toUpperCase() === 'PM' && h < 12) h += 12;
+            if (match[3].toUpperCase() === 'AM' && h === 12) h = 0;
+        }
+        return [`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`];
+    }
+    return ['10:00'];
+};
+
+// Helper: parse a single time string (e.g. '09:00', '10:00 AM', '20:30') into 'HH:MM'
+const parseSlotToHHMM = (slot) => {
+    if (!slot) return '10:00';
+    const s = String(slot).trim();
+    const match = s.match(/(\d{1,2}):(\d{2})(?:\s*(AM|PM))?/i);
+    if (match) {
+        let h = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10);
+        if (match[3]) {
+            if (match[3].toUpperCase() === 'PM' && h < 12) h += 12;
+            if (match[3].toUpperCase() === 'AM' && h === 12) h = 0;
+        }
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+    return '10:00';
+};
+
+/**
+ * Generate/Ensure MAR records for an InpatientOrder for a specific date (default today)
+ */
+const generateMARRecordsForOrder = async (order, models, targetDate = new Date()) => {
+    try {
+        if (!order || order.status !== 'ACTIVE') return [];
+        const { MARRecord } = models;
+        if (!MARRecord) return [];
+
+        const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0, 0);
+
+        const orderStart = new Date(order.startDate || order.createdAt || Date.now());
+        const orderStartDay = new Date(orderStart.getFullYear(), orderStart.getMonth(), orderStart.getDate(), 0, 0, 0, 0);
+
+        if (startOfDay < orderStartDay) return [];
+
+        if (order.endDate) {
+            const orderEnd = new Date(order.endDate);
+            const orderEndDay = new Date(orderEnd.getFullYear(), orderEnd.getMonth(), orderEnd.getDate(), 23, 59, 59, 999);
+            if (startOfDay > orderEndDay) return [];
+        }
+
+        let timeSlots = [];
+        if (Array.isArray(order.scheduledTimes) && order.scheduledTimes.length > 0) {
+            timeSlots = order.scheduledTimes.map(s => parseSlotToHHMM(s)).filter(Boolean);
+        }
+        if (timeSlots.length === 0) {
+            timeSlots = getFrequencyTimeSlots(order.frequency, order.startDate);
+        }
+        const createdRecords = [];
+
+        for (const slot of timeSlots) {
+            const [hStr, mStr] = slot.split(':');
+            const scheduledTime = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), parseInt(hStr, 10), parseInt(mStr, 10), 0, 0);
+
+            const slotStart = new Date(scheduledTime.getTime() - 45 * 60 * 1000);
+            const slotEnd = new Date(scheduledTime.getTime() + 45 * 60 * 1000);
+
+            const existing = await MARRecord.findOne({
+                hospitalId: order.hospitalId,
+                orderId: order._id,
+                scheduledTime: { $gte: slotStart, $lte: slotEnd }
+            });
+
+            if (!existing) {
+                const newMar = new MARRecord({
+                    hospitalId: order.hospitalId,
+                    orderId: order._id,
+                    admissionId: order.admissionId,
+                    patientId: order.patientId,
+                    scheduledTime,
+                    status: 'SCHEDULED',
+                    notes: order.instructions || ''
+                });
+                await newMar.save();
+                createdRecords.push(newMar);
+            }
+        }
+        return createdRecords;
+    } catch (err) {
+        console.error('Error generating MAR records for order:', err);
+        return [];
+    }
+};
+
+// Helper: safely resolve admissionId and/or patientId from param
+const resolveAdmissionAndPatient = async (paramId, Admission) => {
+    if (!paramId) return { admissionId: null, patientId: null };
+    const str = String(paramId).trim();
+    if (str.startsWith('order-pat-')) {
+        const pid = str.replace('order-pat-', '');
+        return { admissionId: null, patientId: pid };
+    }
+    if (mongoose.Types.ObjectId.isValid(str)) {
+        if (Admission) {
+            try {
+                const adm = await Admission.findById(str).lean();
+                if (adm) {
+                    return { admissionId: adm._id, patientId: adm.patientId };
+                }
+            } catch (e) {}
+        }
+        return { admissionId: null, patientId: str };
+    }
+    return { admissionId: null, patientId: null };
+};
+
+/**
+ * Ensure all active orders for an admission have today's MAR records
+ */
+const ensureMARForAdmission = async (admissionId, hospitalId, models) => {
+    try {
+        const { InpatientOrder, Admission, MARRecord } = models;
+        if (!InpatientOrder) return;
+
+        let patientRefId = null;
+        let validAdmissionId = null;
+
+        if (admissionId) {
+            const resolved = await resolveAdmissionAndPatient(admissionId, Admission);
+            validAdmissionId = resolved.admissionId;
+            patientRefId = resolved.patientId;
+        }
+
+        const query = {
+            ...(hospitalId ? { hospitalId } : {}),
+            status: 'ACTIVE'
+        };
+
+        if (validAdmissionId || patientRefId) {
+            query.$or = [
+                ...(validAdmissionId ? [{ admissionId: validAdmissionId }] : []),
+                ...(patientRefId ? [{ patientId: patientRefId }] : [])
+            ];
+        }
+
+        const activeOrders = await InpatientOrder.find(query);
+
+        const today = new Date();
+        for (const ord of activeOrders) {
+            if (!ord.admissionId && validAdmissionId) {
+                ord.admissionId = validAdmissionId;
+                await ord.save();
+            }
+            await generateMARRecordsForOrder(ord, models, today);
+        }
+    } catch (err) {
+        console.error('Error ensuring MAR for admission:', err);
+    }
 };
 
 // ============================================================================
@@ -164,6 +364,13 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
             return res.status(404).json({ success: false, message: 'Patient not found in this hospital' });
         }
 
+        // Determine ordering doctor upfront (use authenticated user if doctor, or override if admin)
+        let orderingDoctorId = req.user._id || req.user.userId;
+        if (overrideDoctorId && mongoose.Types.ObjectId.isValid(overrideDoctorId)) {
+            const docUser = await (User || MasterUser).findOne({ _id: overrideDoctorId, $or: [{ hospitalId }, { hospitalId: null }] });
+            if (docUser) orderingDoctorId = docUser._id;
+        }
+
         let resolvedAdmissionId = null;
 
         if (admissionId) {
@@ -183,21 +390,19 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
             resolvedAdmissionId = admission._id;
         } else {
             // Check if patient currently has an active admission to auto-link
-            const activeAdmission = await Admission.findOne({
-                hospitalId,
+            let activeAdmission = await Admission.findOne({
+                ...(hospitalId ? { hospitalId } : {}),
                 patientId: resolvedPatientId,
                 status: { $in: ['Admitted', 'ADMITTED', 'admitted'] }
             });
             if (activeAdmission) {
                 resolvedAdmissionId = activeAdmission._id;
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Patient is not currently hospitalized / admitted. Please admit the patient with ward and bed allocation before placing IPD orders.'
+                });
             }
-        }
-
-        // Determine ordering doctor (use authenticated user if doctor, or override if admin)
-        let orderingDoctorId = req.user._id || req.user.userId;
-        if (overrideDoctorId && mongoose.Types.ObjectId.isValid(overrideDoctorId)) {
-            const docUser = await User.findOne({ _id: overrideDoctorId, $or: [{ hospitalId }, { hospitalId: null }] });
-            if (docUser) orderingDoctorId = docUser._id;
         }
 
         const dosageVal = req.body.dosageValue ?? req.body.dosage?.value ?? 0;
@@ -205,6 +410,11 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
         const startDt = req.body.startDate ?? req.body.schedule?.startDate ?? new Date();
         const endDt = req.body.endDate ?? req.body.schedule?.endDate;
         const dur = req.body.duration ?? req.body.schedule?.duration ?? '';
+
+        const scheduledTimes = Array.isArray(req.body.scheduledTimes)
+            ? req.body.scheduledTimes
+            : (req.body.schedule?.scheduledTimes || (req.body.scheduledTimes ? [req.body.scheduledTimes] : []));
+        const inventoryItemId = req.body.inventoryItemId && mongoose.Types.ObjectId.isValid(req.body.inventoryItemId) ? req.body.inventoryItemId : undefined;
 
         const order = new InpatientOrder({
             hospitalId,
@@ -217,6 +427,8 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
             dosageUnit: dosageUn ? String(dosageUn).trim() : '',
             route: route || 'Oral',
             frequency: frequency ? String(frequency).trim() : 'OD',
+            scheduledTimes: scheduledTimes,
+            inventoryItemId: inventoryItemId,
             startDate: startDt ? new Date(startDt) : new Date(),
             endDate: endDt ? new Date(endDt) : undefined,
             duration: dur ? String(dur).trim() : '',
@@ -230,6 +442,14 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
         });
 
         await order.save();
+
+        // Auto-generate scheduled MAR records for today for this new order
+        try {
+            const { MARRecord } = getModels(req);
+            await generateMARRecordsForOrder(order, { MARRecord }, new Date());
+        } catch (marGenErr) {
+            console.warn('Warning generating MAR for new order:', marGenErr.message);
+        }
 
         // Socket.IO event emission to both rooms
         const io = req.app.get('io');
@@ -245,6 +465,7 @@ router.post('/orders', verifyToken, resolveTenant, requireDoctorAccess, async (r
             io.to(hospitalId.toString()).emit('inpatient_order_created', eventData);
             io.to(`hospital_${hospitalId}`).emit('ipd_update', eventData);
             io.to(hospitalId.toString()).emit('ipd_update', eventData);
+            io.to(`hospital_${hospitalId}`).emit('mar_scheduled', eventData);
         }
 
         res.status(201).json({ success: true, message: 'Inpatient order created successfully', order, data: order });
@@ -260,19 +481,18 @@ router.get('/admissions/:admissionId/orders', verifyToken, resolveTenant, requir
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const { admissionId } = req.params;
 
-        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+        const { InpatientOrder, Admission, User } = getModels(req);
+        const { admissionId: validAdmId, patientId: validPtId } = await resolveAdmissionAndPatient(admissionId, Admission);
+
+        if (!validAdmId && !validPtId && !mongoose.Types.ObjectId.isValid(admissionId)) {
             return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
         }
-
-        const { InpatientOrder, Admission, User } = getModels(req);
-        const currentAdmission = await Admission.findById(admissionId).lean();
-        const patientRefId = currentAdmission?.patientId;
 
         const orderFilter = {
             hospitalId,
             $or: [
-                { admissionId },
-                ...(patientRefId ? [{ patientId: patientRefId, admissionId: { $in: [null, undefined, admissionId] } }] : [])
+                ...(validAdmId ? [{ admissionId: validAdmId }] : [{ admissionId }]),
+                ...(validPtId ? [{ patientId: validPtId }] : [])
             ]
         };
 
@@ -281,6 +501,7 @@ router.get('/admissions/:admissionId/orders', verifyToken, resolveTenant, requir
             .lean();
 
         for (let ord of orders) {
+            enrichOrderVirtuals(ord);
             if (ord.doctorId) {
                 ord.doctorId = await User.findById(ord.doctorId).select('name specialization phone email').lean() || ord.doctorId;
             }
@@ -326,6 +547,7 @@ router.get('/patients/:patientId/orders', verifyToken, resolveTenant, requireNur
             .lean();
 
         for (let ord of orders) {
+            enrichOrderVirtuals(ord);
             if (ord.doctorId) {
                 ord.doctorId = await User.findById(ord.doctorId).select('name specialization phone email').lean() || ord.doctorId;
             }
@@ -356,6 +578,7 @@ router.get('/admissions/:admissionId/orders/active', verifyToken, resolveTenant,
             .lean();
 
         for (let ord of orders) {
+            enrichOrderVirtuals(ord);
             if (ord.doctorId) {
                 ord.doctorId = await User.findById(ord.doctorId).select('name specialization phone email').lean() || ord.doctorId;
             }
@@ -455,12 +678,23 @@ router.get('/admissions/:admissionId/mar', verifyToken, resolveTenant, requireNu
         const { admissionId } = req.params;
         const { status, date } = req.query;
 
-        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+        const { MARRecord, InpatientOrder, Admission, User } = getModels(req);
+        const { admissionId: validAdmId, patientId: validPtId } = await resolveAdmissionAndPatient(admissionId, Admission);
+
+        if (!validAdmId && !validPtId && !mongoose.Types.ObjectId.isValid(admissionId)) {
             return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
         }
 
-        const { MARRecord, InpatientOrder, User } = getModels(req);
-        const query = { admissionId, hospitalId };
+        // Ensure active orders for this admission have today's MAR records scheduled
+        await ensureMARForAdmission(admissionId, hospitalId, { InpatientOrder, Admission, MARRecord });
+
+        const query = {
+            hospitalId,
+            $or: [
+                ...(validAdmId ? [{ admissionId: validAdmId }] : [{ admissionId }]),
+                ...(validPtId ? [{ patientId: validPtId }] : [])
+            ]
+        };
 
         if (status) query.status = status;
         if (date) {
@@ -477,7 +711,14 @@ router.get('/admissions/:admissionId/mar', verifyToken, resolveTenant, requireNu
 
         for (let m of marRecords) {
             if (m.orderId) {
-                m.orderId = await InpatientOrder.findById(m.orderId).select('medicineName dosageValue dosageUnit route frequency instructions status').lean() || m.orderId;
+                const ord = await InpatientOrder.findById(m.orderId).select('medicineName dosageValue dosageUnit route frequency instructions status doctorId startDate endDate duration').lean();
+                if (ord) {
+                    enrichOrderVirtuals(ord);
+                    if (ord.doctorId) {
+                        ord.doctorId = await User.findById(ord.doctorId).select('name specialization').lean() || ord.doctorId;
+                    }
+                    m.orderId = ord;
+                }
             }
             if (m.administeredBy) {
                 m.administeredBy = await User.findById(m.administeredBy).select('name').lean() || m.administeredBy;
@@ -496,20 +737,38 @@ router.get('/admissions/:admissionId/mar/due', verifyToken, resolveTenant, requi
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const { admissionId } = req.params;
 
-        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+        const { MARRecord, InpatientOrder, Admission, User } = getModels(req);
+        const { admissionId: validAdmId, patientId: validPtId } = await resolveAdmissionAndPatient(admissionId, Admission);
+
+        if (!validAdmId && !validPtId && !mongoose.Types.ObjectId.isValid(admissionId)) {
             return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
         }
 
-        const { MARRecord, InpatientOrder } = getModels(req);
+        // Ensure active orders for this admission have today's MAR records scheduled
+        await ensureMARForAdmission(admissionId, hospitalId, { InpatientOrder, Admission, MARRecord });
+
         const marRecords = await MARRecord.find({
-            admissionId,
             hospitalId,
-            status: { $in: ['SCHEDULED', 'DUE'] }
+            status: { $in: ['SCHEDULED', 'DUE'] },
+            $or: [
+                ...(validAdmId ? [{ admissionId: validAdmId }] : [{ admissionId }]),
+                ...(validPtId ? [{ patientId: validPtId }] : [])
+            ]
         }).sort({ scheduledTime: 1 }).lean();
 
         for (let m of marRecords) {
             if (m.orderId) {
-                m.orderId = await InpatientOrder.findById(m.orderId).select('medicineName dosageValue dosageUnit route frequency instructions').lean() || m.orderId;
+                const ord = await InpatientOrder.findById(m.orderId).select('medicineName dosageValue dosageUnit route frequency instructions status doctorId startDate endDate duration').lean();
+                if (ord) {
+                    enrichOrderVirtuals(ord);
+                    if (ord.doctorId) {
+                        ord.doctorId = await User.findById(ord.doctorId).select('name specialization').lean() || ord.doctorId;
+                    }
+                    m.orderId = ord;
+                }
+            }
+            if (m.administeredBy) {
+                m.administeredBy = await User.findById(m.administeredBy).select('name').lean() || m.administeredBy;
             }
         }
 
@@ -647,12 +906,20 @@ router.get('/admissions/:admissionId/vitals', verifyToken, resolveTenant, requir
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const { admissionId } = req.params;
 
-        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+        const { IPDVitals, Admission, User } = getModels(req);
+        const { admissionId: validAdmId, patientId: validPtId } = await resolveAdmissionAndPatient(admissionId, Admission);
+
+        if (!validAdmId && !validPtId && !mongoose.Types.ObjectId.isValid(admissionId)) {
             return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
         }
 
-        const { IPDVitals, User } = getModels(req);
-        const vitalsList = await IPDVitals.find({ admissionId, hospitalId })
+        const vitalsList = await IPDVitals.find({
+            hospitalId,
+            $or: [
+                ...(validAdmId ? [{ admissionId: validAdmId }] : [{ admissionId }]),
+                ...(validPtId ? [{ patientId: validPtId }] : [])
+            ]
+        })
             .sort({ recordedAt: -1 })
             .lean();
 
@@ -674,12 +941,20 @@ router.get('/admissions/:admissionId/vitals/latest', verifyToken, resolveTenant,
         const hospitalId = req.hospitalId || req.user.hospitalId;
         const { admissionId } = req.params;
 
-        if (!mongoose.Types.ObjectId.isValid(admissionId)) {
+        const { IPDVitals, Admission, User } = getModels(req);
+        const { admissionId: validAdmId, patientId: validPtId } = await resolveAdmissionAndPatient(admissionId, Admission);
+
+        if (!validAdmId && !validPtId && !mongoose.Types.ObjectId.isValid(admissionId)) {
             return res.status(400).json({ success: false, message: 'Invalid admissionId format' });
         }
 
-        const { IPDVitals, User } = getModels(req);
-        const latest = await IPDVitals.findOne({ admissionId, hospitalId })
+        const latest = await IPDVitals.findOne({
+            hospitalId,
+            $or: [
+                ...(validAdmId ? [{ admissionId: validAdmId }] : [{ admissionId }]),
+                ...(validPtId ? [{ patientId: validPtId }] : [])
+            ]
+        })
             .sort({ recordedAt: -1 })
             .lean();
 
@@ -874,9 +1149,10 @@ router.post('/admissions/:admissionId/orders/:orderId/clarification', verifyToke
         }
 
         const newClarification = {
-            requestedBy: nurseName,
-            nurseId,
-            issueType,
+            requestedBy: mongoose.Types.ObjectId.isValid(nurseId) ? nurseId : undefined,
+            requestedByName: nurseName,
+            nurseId: mongoose.Types.ObjectId.isValid(nurseId) ? nurseId : undefined,
+            issueType: issueType || 'DOSE_QUERY',
             question: String(question).trim(),
             requestedAt: new Date(),
             status: 'OPEN'
@@ -1033,8 +1309,8 @@ router.get('/clarifications/inbox', verifyToken, resolveTenant, requireNurseOrDo
                         doctor: order.doctorId,
                         issueType: clar.issueType,
                         question: clar.question,
-                        requestedBy: clar.requestedBy,
-                        nurseId: clar.nurseId,
+                        requestedBy: clar.requestedByName || (typeof clar.requestedBy === 'string' ? clar.requestedBy : clar.requestedBy?.name) || 'Nurse',
+                        nurseId: clar.nurseId || (typeof clar.requestedBy === 'object' ? clar.requestedBy?._id : clar.requestedBy),
                         requestedAt: clar.requestedAt,
                         responseText: clar.responseText,
                         responseDoctorId: clar.responseDoctorId,
@@ -1246,6 +1522,12 @@ router.get('/admissions/:admissionId/discharge-summary', verifyToken, resolveTen
         res.status(500).json({ success: false, message: err.message || 'Error fetching discharge summary' });
     }
 });
+
+router.ensureMARForAdmission = ensureMARForAdmission;
+router.generateMARRecordsForOrder = generateMARRecordsForOrder;
+router.getFrequencyTimeSlots = getFrequencyTimeSlots;
+router.enrichOrderVirtuals = enrichOrderVirtuals;
+router.resolveAdmissionAndPatient = resolveAdmissionAndPatient;
 
 module.exports = router;
 

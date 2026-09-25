@@ -243,6 +243,8 @@ export const BrandingProvider = ({ children }) => {
                         }
                     } else if (response.status === 404) {
                         console.info(`[Branding] White-label config not found. Using defaults.`);
+                    } else if (response.status === 429) {
+                        // Rate-limited — silently ignore, will retry on next load
                     } else {
                         console.error('[Branding] Failed to fetch custom branding', response.status);
                     }

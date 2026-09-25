@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ipdClinicalAPI, admissionAPI, doctorAPI } from '../../utils/api';
+import { ipdClinicalAPI, admissionAPI, doctorAPI, nursingNoteAPI, pharmacyAPI, bedAPI } from '../../utils/api';
 import socket from '../../utils/socket';
 import { useAuth } from '../../store/hooks';
 import {
@@ -45,6 +45,24 @@ const COMMON_FREQUENCIES = [
     'Every 12 hours'
 ];
 
+const getDefaultScheduledTimes = (freq) => {
+    const f = String(freq || 'OD').toUpperCase().trim();
+    if (f === 'OD' || f === 'ONCE DAILY' || f === 'DAILY' || f === '1 TIME DAILY') return ['10:00 AM'];
+    if (f === 'BD' || f === 'BID' || f === 'TWICE DAILY' || f === '2 TIMES DAILY') return ['10:00 AM', '08:00 PM'];
+    if (f === 'TDS' || f === 'TID' || f === 'THREE TIMES DAILY' || f === '3 TIMES DAILY') return ['08:00 AM', '02:00 PM', '08:00 PM'];
+    if (f === 'QID' || f === 'FOUR TIMES DAILY' || f === '4 TIMES DAILY') return ['06:00 AM', '12:00 PM', '06:00 PM', '10:00 PM'];
+    if (f === 'STAT' || f === 'ONCE' || f === 'IMMEDIATE') {
+        const now = new Date();
+        return [now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })];
+    }
+    if (f === 'SOS' || f === 'PRN') return ['10:00 AM'];
+    if (f.includes('4 HOUR') || f.includes('EVERY 4')) return ['06:00 AM', '10:00 AM', '02:00 PM', '06:00 PM', '10:00 PM', '02:00 AM'];
+    if (f.includes('6 HOUR') || f.includes('EVERY 6')) return ['06:00 AM', '12:00 PM', '06:00 PM', '12:00 AM'];
+    if (f.includes('8 HOUR') || f.includes('EVERY 8')) return ['08:00 AM', '04:00 PM', '12:00 AM'];
+    if (f.includes('12 HOUR') || f.includes('EVERY 12')) return ['10:00 AM', '10:00 PM'];
+    return ['10:00 AM'];
+};
+
 const ADMISSION_REASONS = [
     'Observation & Monitoring',
     'Post-Operative Recovery',
@@ -71,10 +89,12 @@ const DISCHARGE_CONDITIONS = [
 
 const createEmptyMedRow = () => ({
     medicineName: '',
+    inventoryItemId: null,
     dosageValue: '',
     dosageUnit: 'mg',
     route: 'Oral',
     frequency: 'BD',
+    scheduledTimes: ['10:00 AM', '08:00 PM'],
     startDate: new Date().toISOString().split('T')[0],
     duration: '3 days',
     instructions: 'After food'
@@ -107,6 +127,23 @@ const DoctorIPDOrdersPanel = ({
     const [activeAdmission, setActiveAdmission] = useState(null);
     const [loadingAdmission, setLoadingAdmission] = useState(true);
 
+    // Hospitalize Modal State
+    const [hospitalizeModalOpen, setHospitalizeModalOpen] = useState(false);
+    const [availableBeds, setAvailableBeds] = useState([]);
+    const [loadingBeds, setLoadingBeds] = useState(false);
+    const [hospitalizeSaving, setHospitalizingSaving] = useState(false);
+    const [hospitalizeForm, setHospitalizeForm] = useState({
+        ward: '',
+        bedId: '',
+        admissionDate: new Date().toISOString().split('T')[0],
+        admissionTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+        notes: ''
+    });
+
+    // Pharmacy Inventory Catalog
+    const [pharmacyMedicines, setPharmacyMedicines] = useState([]);
+    const [loadingPharmacy, setLoadingPharmacy] = useState(false);
+
     // Form fields for New Clinical Order
     const [admissionReason, setAdmissionReason] = useState('Observation & Monitoring');
     const [customReason, setCustomReason] = useState('');
@@ -137,6 +174,13 @@ const DoctorIPDOrdersPanel = ({
     const [doctorResponseText, setDoctorResponseText] = useState('');
     const [submittingResponse, setSubmittingResponse] = useState(false);
 
+    // ── Nursing Notes State ──
+    const [nursingNotes, setNursingNotes] = useState([]);
+    const [loadingNotes, setLoadingNotes] = useState(false);
+    const [notesFilterCategory, setNotesFilterCategory] = useState('ALL');
+    const [notesFilterShift, setNotesFilterShift] = useState('ALL');
+    const [notesFilterPriority, setNotesFilterPriority] = useState('ALL');
+
     // ── Discharge Summary State ──
     const [dischargeSummary, setDischargeSummary] = useState({
         diagnosis: appointment?.diagnosis || '',
@@ -156,7 +200,7 @@ const DoctorIPDOrdersPanel = ({
     const [savingSummary, setSavingSummary] = useState(false);
     const [summaryDoctorSigned, setSummaryDoctorSigned] = useState(false);
 
-    // Fetch active admission for this patient
+    // Fetch active admission for this specific patient
     const fetchAdmission = useCallback(async () => {
         if (!patientId) return;
         setLoadingAdmission(true);
@@ -174,7 +218,7 @@ const DoctorIPDOrdersPanel = ({
                 const matchesPatient = String(p) === String(patientId);
                 const isActive = ['ADMITTED', 'Admitted', 'admitted'].includes(a.status);
                 return matchesPatient && isActive;
-            }) || list.find(a => ['ADMITTED', 'Admitted', 'admitted'].includes(a.status));
+            });
             setActiveAdmission(active || null);
         } catch (err) {
             console.warn('Could not fetch patient admission status', err);
@@ -183,6 +227,77 @@ const DoctorIPDOrdersPanel = ({
             setLoadingAdmission(false);
         }
     }, [patientId]);
+
+    // Open Hospitalize Modal & Fetch Available Beds
+    const handleOpenHospitalizeModal = async () => {
+        setHospitalizeModalOpen(true);
+        setLoadingBeds(true);
+        setErrorMsg('');
+        setHospitalizeForm({
+            ward: '',
+            bedId: '',
+            admissionDate: new Date().toISOString().split('T')[0],
+            admissionTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+            notes: diagnosis || appointment?.diagnosis || appointment?.department || 'Doctor Inpatient Admission'
+        });
+        try {
+            const res = await bedAPI.getBeds({ status: 'AVAILABLE' });
+            const beds = res.beds || res.data || [];
+            setAvailableBeds(beds);
+            if (beds.length > 0) {
+                const firstWard = beds[0].ward;
+                setHospitalizeForm(prev => ({
+                    ...prev,
+                    ward: firstWard,
+                    bedId: beds[0]._id
+                }));
+            }
+        } catch (err) {
+            console.error('Failed to fetch available beds:', err);
+        } finally {
+            setLoadingBeds(false);
+        }
+    };
+
+    // Submit Hospitalization
+    const handleHospitalizePatient = async (e) => {
+        if (e) e.preventDefault();
+        if (!hospitalizeForm.ward) {
+            setErrorMsg('Please select a Ward for hospitalization.');
+            return;
+        }
+        if (!hospitalizeForm.bedId) {
+            setErrorMsg('Please select an available Bed for hospitalization.');
+            return;
+        }
+        setHospitalizingSaving(true);
+        setErrorMsg('');
+        try {
+            const res = await admissionAPI.createAdmission({
+                patientId: patientId,
+                appointmentId: appointment?._id || undefined,
+                doctorId: activeDoctor?._id || activeDoctor?.userId,
+                ward: hospitalizeForm.ward,
+                bedId: hospitalizeForm.bedId,
+                admissionDate: hospitalizeForm.admissionDate,
+                admissionTime: hospitalizeForm.admissionTime,
+                notes: hospitalizeForm.notes
+            });
+            if (res.success || res.admission) {
+                setSuccessMsg(`🎉 Patient hospitalized successfully to ${hospitalizeForm.ward}! Bed allocated.`);
+                setHospitalizeModalOpen(false);
+                fetchAdmission();
+                fetchOrders();
+            } else {
+                setErrorMsg(res.message || 'Failed to hospitalize patient.');
+            }
+        } catch (err) {
+            console.error('Hospitalize error:', err);
+            setErrorMsg(err.response?.data?.message || err.message || 'Failed to hospitalize patient.');
+        } finally {
+            setHospitalizingSaving(false);
+        }
+    };
 
     // Fetch orders
     const fetchOrders = useCallback(async () => {
@@ -222,6 +337,22 @@ const DoctorIPDOrdersPanel = ({
         }
     }, [activeAdmission]);
 
+    // Fetch nursing clinical notes
+    const fetchNursingNotes = useCallback(async () => {
+        if (!activeAdmission?._id) return;
+        setLoadingNotes(true);
+        try {
+            const res = await nursingNoteAPI.getNotes(activeAdmission._id);
+            if (res.success || res.notes) {
+                setNursingNotes(res.notes || res.data || []);
+            }
+        } catch (err) {
+            console.warn('Could not fetch nursing notes', err);
+        } finally {
+            setLoadingNotes(false);
+        }
+    }, [activeAdmission]);
+
     // Fetch structured discharge summary
     const fetchDischargeSummary = useCallback(async () => {
         if (!activeAdmission?._id) return;
@@ -255,17 +386,33 @@ const DoctorIPDOrdersPanel = ({
         }
     }, [activeAdmission]);
 
+    // Fetch Pharmacy Inventory
+    const fetchPharmacyInventory = useCallback(async () => {
+        try {
+            setLoadingPharmacy(true);
+            const res = await pharmacyAPI.getInventory();
+            const items = res?.data || res?.inventory || [];
+            setPharmacyMedicines(items);
+        } catch (err) {
+            console.warn('Could not fetch pharmacy inventory for auto-complete', err);
+        } finally {
+            setLoadingPharmacy(false);
+        }
+    }, []);
+
     useEffect(() => {
         fetchAdmission();
         fetchOrders();
-    }, [fetchAdmission, fetchOrders]);
+        fetchPharmacyInventory();
+    }, [fetchAdmission, fetchOrders, fetchPharmacyInventory]);
 
     useEffect(() => {
         if (activeAdmission?._id) {
             fetchClarifications();
+            fetchNursingNotes();
             fetchDischargeSummary();
         }
-    }, [activeAdmission, fetchClarifications, fetchDischargeSummary]);
+    }, [activeAdmission, fetchClarifications, fetchNursingNotes, fetchDischargeSummary]);
 
     // Socket.IO real-time event listeners
     useEffect(() => {
@@ -274,6 +421,7 @@ const DoctorIPDOrdersPanel = ({
         const handleOrderEvent = () => {
             fetchOrders();
             fetchClarifications();
+            fetchNursingNotes();
             fetchAdmission();
         };
 
@@ -283,6 +431,7 @@ const DoctorIPDOrdersPanel = ({
             'doctor_order_acknowledged',
             'order_clarification_requested',
             'order_clarification_resolved',
+            'nursing_note_created',
             'discharge_summary_updated'
         ];
 
@@ -291,13 +440,86 @@ const DoctorIPDOrdersPanel = ({
         return () => {
             events.forEach(evt => socket.off(evt, handleOrderEvent));
         };
-    }, [fetchOrders, fetchClarifications, fetchAdmission]);
+    }, [fetchOrders, fetchClarifications, fetchNursingNotes, fetchAdmission]);
 
     // Medicine row management
     const handleMedRowChange = (index, field, value) => {
         setMedicationRows(prev => {
             const updated = [...prev];
-            updated[index] = { ...updated[index], [field]: value };
+            const row = { ...updated[index], [field]: value };
+            if (field === 'frequency') {
+                row.scheduledTimes = getDefaultScheduledTimes(value);
+            }
+            updated[index] = row;
+            return updated;
+        });
+    };
+
+    const handleSelectPharmacyMedicine = (index, medItem) => {
+        if (!medItem) return;
+        setMedicationRows(prev => {
+            const updated = [...prev];
+            const row = { ...updated[index] };
+            row.medicineName = medItem.name;
+            row.inventoryItemId = medItem._id;
+
+            // Auto-extract strength if in name (e.g. "Paracetamol 500mg" or "Ceftriaxone 1g")
+            const doseMatch = medItem.name.match(/(\d+(?:\.\d+)?)\s*(mg|g|mcg|ml|iu|tab|puff|drop)/i);
+            if (doseMatch) {
+                row.dosageValue = doseMatch[1];
+                row.dosageUnit = doseMatch[2].toLowerCase();
+            } else if (medItem.unit) {
+                const u = medItem.unit.toLowerCase();
+                row.dosageUnit = u.includes('tab') ? 'tablet' : (u.includes('inj') ? 'vial' : 'mg');
+            }
+
+            // Infer route
+            const lowerName = medItem.name.toLowerCase();
+            const lowerCat = (medItem.category || '').toLowerCase();
+            if (lowerName.includes('inj') || lowerCat.includes('inject') || lowerName.includes('infusion')) {
+                row.route = 'IV';
+            } else if (lowerName.includes('tab') || lowerName.includes('cap') || lowerName.includes('syr') || lowerCat.includes('tablet')) {
+                row.route = 'Oral';
+            } else if (lowerName.includes('drop') || lowerName.includes('oint') || lowerName.includes('cream')) {
+                row.route = 'Topical';
+            }
+
+            updated[index] = row;
+            return updated;
+        });
+    };
+
+    const handleTimeSlotChange = (medIdx, slotIdx, newTime) => {
+        setMedicationRows(prev => {
+            const updated = [...prev];
+            const row = { ...updated[medIdx] };
+            const times = [...(row.scheduledTimes || [])];
+            times[slotIdx] = newTime;
+            row.scheduledTimes = times;
+            updated[medIdx] = row;
+            return updated;
+        });
+    };
+
+    const handleAddTimeSlot = (medIdx) => {
+        setMedicationRows(prev => {
+            const updated = [...prev];
+            const row = { ...updated[medIdx] };
+            const times = [...(row.scheduledTimes || [])];
+            times.push('12:00 PM');
+            row.scheduledTimes = times;
+            updated[medIdx] = row;
+            return updated;
+        });
+    };
+
+    const handleRemoveTimeSlot = (medIdx, slotIdx) => {
+        setMedicationRows(prev => {
+            const updated = [...prev];
+            const row = { ...updated[medIdx] };
+            const times = (row.scheduledTimes || []).filter((_, i) => i !== slotIdx);
+            row.scheduledTimes = times.length > 0 ? times : ['10:00 AM'];
+            updated[medIdx] = row;
             return updated;
         });
     };
@@ -333,6 +555,11 @@ const DoctorIPDOrdersPanel = ({
         e.preventDefault();
         setErrorMsg('');
         setSuccessMsg('');
+
+        if (!activeAdmission?._id) {
+            setErrorMsg('Patient is not hospitalized / admitted. Please click "Hospitalize / Admit Patient" first before placing IPD orders.');
+            return;
+        }
 
         if (!diagnosis.trim()) {
             setErrorMsg('Clinical Diagnosis is required.');
@@ -395,16 +622,19 @@ const DoctorIPDOrdersPanel = ({
                     admissionReason: resolvedReason,
                     clinicalNotes: compiledNotes.trim(),
                     medicineName: med.medicineName.trim(),
+                    inventoryItemId: med.inventoryItemId || undefined,
                     dosage: {
                         value: Number(med.dosageValue),
                         unit: med.dosageUnit
                     },
                     route: med.route,
                     frequency: med.frequency,
+                    scheduledTimes: med.scheduledTimes || [],
                     schedule: {
                         startDate: startDate,
                         endDate: endDate,
-                        duration: med.duration || '3 days'
+                        duration: med.duration || '3 days',
+                        scheduledTimes: med.scheduledTimes || []
                     },
                     instructions: med.instructions || ''
                 };
@@ -553,6 +783,15 @@ const DoctorIPDOrdersPanel = ({
         return clarifications.filter(c => c.status === 'OPEN').length;
     }, [clarifications]);
 
+    const filteredNotes = useMemo(() => {
+        return nursingNotes.filter(n => {
+            if (notesFilterCategory !== 'ALL' && n.noteType !== notesFilterCategory) return false;
+            if (notesFilterShift !== 'ALL' && n.shift !== notesFilterShift) return false;
+            if (notesFilterPriority !== 'ALL' && n.priority !== notesFilterPriority) return false;
+            return true;
+        });
+    }, [nursingNotes, notesFilterCategory, notesFilterShift, notesFilterPriority]);
+
     return (
         <div className="ipd-orders-panel">
             {/* Header */}
@@ -574,11 +813,11 @@ const DoctorIPDOrdersPanel = ({
                         </span>
                     ) : activeAdmission ? (
                         <span className="ipd-badge-status ipd-badge-admitted">
-                            🟢 Admitted: {activeAdmission.ward} — Bed {activeAdmission.bedId?.bedNumber || 'Assigned'}
+                            🟢 Hospitalized / Admitted: {activeAdmission.ward} — Bed {activeAdmission.bedNumber || activeAdmission.bedId?.bedNumber || 'Assigned'}
                         </span>
                     ) : (
-                        <span className="ipd-badge-status ipd-badge-pending">
-                            🟡 Outpatient / Pre-Admission
+                        <span className="ipd-badge-status ipd-badge-pending" style={{ background: '#fef2f2', color: '#991b1b', borderColor: '#fca5a5' }}>
+                            ⚠️ Not Hospitalized (OPD Patient)
                         </span>
                     )}
                 </div>
@@ -612,6 +851,16 @@ const DoctorIPDOrdersPanel = ({
 
                 <button
                     type="button"
+                    className={`sub-tab-btn ${activeTab === 'notes' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('notes')}
+                >
+                    <FiMessageSquare />
+                    <span>Nursing Notes</span>
+                    <span className="count-pill">{nursingNotes.length}</span>
+                </button>
+
+                <button
+                    type="button"
                     className={`sub-tab-btn ${activeTab === 'discharge' ? 'active' : ''}`}
                     onClick={() => setActiveTab('discharge')}
                 >
@@ -634,6 +883,57 @@ const DoctorIPDOrdersPanel = ({
                 <div className="ipd-alert-msg success">
                     <FiCheckCircle />
                     <span>{successMsg}</span>
+                </div>
+            )}
+
+            {/* Unadmitted Warning & Quick Hospitalize Banner */}
+            {!loadingAdmission && !activeAdmission && (
+                <div className="ipd-unadmitted-banner" style={{
+                    background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                    border: '1.5px solid #fcd34d',
+                    borderRadius: '12px',
+                    padding: '16px 20px',
+                    marginBottom: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '16px',
+                    flexWrap: 'wrap',
+                    boxShadow: '0 2px 10px rgba(245, 158, 11, 0.1)'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <span style={{ fontSize: '2.2rem' }}>🏥</span>
+                        <div>
+                            <h4 style={{ margin: '0 0 4px', fontSize: '1.02rem', color: '#92400e', fontWeight: 800 }}>
+                                Patient Not Hospitalized / Admitted in IPD
+                            </h4>
+                            <p style={{ margin: 0, fontSize: '0.86rem', color: '#78350f', lineHeight: 1.4 }}>
+                                This patient is currently an Outpatient (OPD). Inpatient clinical orders, MAR administration, and nursing care require the patient to be admitted with an assigned ward and bed.
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        className="ipd-btn-hospitalize-now"
+                        onClick={handleOpenHospitalizeModal}
+                        style={{
+                            background: '#0284c7',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '10px 20px',
+                            fontWeight: 700,
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        <FiPlus size={16} /> Hospitalize / Admit Patient
+                    </button>
                 </div>
             )}
 
@@ -706,14 +1006,36 @@ const DoctorIPDOrdersPanel = ({
                                 <div key={idx} className="ipd-med-card">
                                     <div className="ipd-med-row-top">
                                         <div className="ipd-field-group">
-                                            <label>Medicine Name #{idx + 1} <span className="req">*</span></label>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <label>Medicine Name #{idx + 1} <span className="req">*</span></label>
+                                                {pharmacyMedicines.length > 0 && (
+                                                    <span style={{ fontSize: '0.72rem', color: '#0284c7', fontWeight: 600 }}>
+                                                        🏬 Pharmacy Dropdown ({pharmacyMedicines.length})
+                                                    </span>
+                                                )}
+                                            </div>
                                             <input
                                                 type="text"
+                                                list={`pharmacy-med-list-${idx}`}
                                                 className="ipd-input"
-                                                placeholder="e.g. Inj. Ceftriaxone, Tab. Paracetamol"
+                                                placeholder="Select from pharmacy or type custom medicine name..."
                                                 value={med.medicineName}
-                                                onChange={(e) => handleMedRowChange(idx, 'medicineName', e.target.value)}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    handleMedRowChange(idx, 'medicineName', val);
+                                                    const matched = pharmacyMedicines.find(p => p.name.toLowerCase() === val.toLowerCase());
+                                                    if (matched) {
+                                                        handleSelectPharmacyMedicine(idx, matched);
+                                                    }
+                                                }}
                                             />
+                                            <datalist id={`pharmacy-med-list-${idx}`}>
+                                                {pharmacyMedicines.map((item, i) => (
+                                                    <option key={item._id || i} value={item.name}>
+                                                        {item.salt ? `${item.salt} • ` : ''}{item.category || 'General'} (Stock: {item.stock ?? item.quantity ?? 0} {item.unit || ''})
+                                                    </option>
+                                                ))}
+                                            </datalist>
                                         </div>
 
                                         <div className="ipd-field-group">
@@ -799,6 +1121,91 @@ const DoctorIPDOrdersPanel = ({
                                             <FiTrash2 />
                                         </button>
                                     </div>
+
+                                    {/* Manual Administration Timing Selector */}
+                                    <div className="ipd-med-row-timing" style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px dashed #cbd5e1' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <FiClock size={14} style={{ color: '#0284c7' }} />
+                                                Manual Administration Time Slots ({med.frequency || 'OD'}):
+                                            </label>
+                                            <button
+                                                type="button"
+                                                className="ipd-btn-add-time-slot"
+                                                onClick={() => handleAddTimeSlot(idx)}
+                                                style={{
+                                                    fontSize: '0.74rem',
+                                                    fontWeight: 600,
+                                                    color: '#2563eb',
+                                                    background: '#eff6ff',
+                                                    border: '1px solid #bfdbfe',
+                                                    borderRadius: '5px',
+                                                    padding: '3px 10px',
+                                                    cursor: 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                <FiPlus size={12} /> Add Dose Time
+                                            </button>
+                                        </div>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                                            {(med.scheduledTimes || []).map((slot, sIdx) => (
+                                                <div
+                                                    key={sIdx}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        background: '#ffffff',
+                                                        border: '1.5px solid #cbd5e1',
+                                                        borderRadius: '6px',
+                                                        padding: '3px 8px',
+                                                        gap: '6px',
+                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                                    }}
+                                                >
+                                                    <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#64748b' }}>Dose {sIdx + 1}:</span>
+                                                    <input
+                                                        type="text"
+                                                        value={slot}
+                                                        onChange={(e) => handleTimeSlotChange(idx, sIdx, e.target.value)}
+                                                        placeholder="e.g. 10:00 AM or 14:00"
+                                                        style={{
+                                                            width: '95px',
+                                                            border: 'none',
+                                                            background: 'transparent',
+                                                            fontSize: '0.84rem',
+                                                            fontWeight: 700,
+                                                            color: '#0f172a',
+                                                            outline: 'none'
+                                                        }}
+                                                    />
+                                                    {(med.scheduledTimes || []).length > 1 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveTimeSlot(idx, sIdx)}
+                                                            style={{
+                                                                border: 'none',
+                                                                background: 'transparent',
+                                                                color: '#ef4444',
+                                                                cursor: 'pointer',
+                                                                padding: '0 2px',
+                                                                display: 'flex',
+                                                                alignItems: 'center'
+                                                            }}
+                                                            title="Remove time slot"
+                                                        >
+                                                            <FiX size={14} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            <span style={{ fontSize: '0.74rem', color: '#64748b', fontStyle: 'italic' }}>
+                                                (Type any custom time e.g. 09:30 AM or 21:00)
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -845,9 +1252,15 @@ const DoctorIPDOrdersPanel = ({
                             <button
                                 type="submit"
                                 className="ipd-btn-submit"
-                                disabled={submitting}
+                                disabled={submitting || !activeAdmission}
+                                title={!activeAdmission ? 'Please hospitalize the patient first to submit IPD clinical orders' : ''}
+                                style={!activeAdmission ? { background: '#94a3b8', cursor: 'not-allowed', boxShadow: 'none' } : {}}
                             >
-                                {submitting ? 'Placing Orders...' : '🚀 Submit Clinical Orders'}
+                                {!activeAdmission
+                                    ? '⚠️ Hospitalize Patient First to Submit Orders'
+                                    : submitting
+                                    ? 'Placing Orders...'
+                                    : '🚀 Submit Clinical Orders'}
                             </button>
                         </div>
                     </form>
@@ -898,16 +1311,37 @@ const DoctorIPDOrdersPanel = ({
 
                                             return (
                                                 <tr key={order._id}>
-                                                    <td style={{ fontWeight: 600 }}>{order.medicineName}</td>
-                                                    <td>{order.dosage?.value} {order.dosage?.unit}</td>
-                                                    <td>
-                                                        <span className="route-badge">{order.route}</span>
+                                                    <td style={{ fontWeight: 600 }}>
+                                                        <div>{order.medicineName}</div>
+                                                        {order.instructions && (
+                                                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 400, marginTop: '2px' }}>
+                                                                📝 {order.instructions}
+                                                            </div>
+                                                        )}
+                                                        {order.clinicalNotes && (
+                                                            <div style={{ fontSize: '0.72rem', color: '#2563eb', fontWeight: 500, marginTop: '2px', whiteSpace: 'pre-wrap' }}>
+                                                                💬 {order.clinicalNotes}
+                                                            </div>
+                                                        )}
                                                     </td>
-                                                    <td><strong>{order.frequency}</strong></td>
                                                     <td>
-                                                        {order.schedule?.duration || '—'}
+                                                        {order.dosage?.value ?? order.dosageValue ?? '—'} {order.dosage?.unit || order.dosageUnit || ''}
+                                                    </td>
+                                                    <td>
+                                                        <span className="route-badge">{order.route || 'Oral'}</span>
+                                                    </td>
+                                                    <td>
+                                                        <strong>{order.frequency || 'OD'}</strong>
+                                                        {order.scheduledTimes && order.scheduledTimes.length > 0 && (
+                                                            <div style={{ fontSize: '0.72rem', color: '#0284c7', marginTop: '2px', fontWeight: 600 }}>
+                                                                ⏰ {order.scheduledTimes.join(', ')}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        {order.schedule?.duration || order.duration || '—'}
                                                         <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                                                            {order.schedule?.startDate ? new Date(order.schedule.startDate).toLocaleDateString() : ''}
+                                                            {(order.schedule?.startDate || order.startDate) ? new Date(order.schedule?.startDate || order.startDate).toLocaleDateString() : ''}
                                                         </div>
                                                     </td>
                                                     <td>
@@ -981,7 +1415,16 @@ const DoctorIPDOrdersPanel = ({
                         </button>
                     </div>
 
-                    {loadingClarifications ? (
+                    {!activeAdmission ? (
+                        <div className="ipd-empty-state" style={{ padding: '36px 20px', textAlign: 'center' }}>
+                            <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '10px' }}>🏥</span>
+                            <h4 style={{ margin: '0 0 6px', color: '#0f172a', fontWeight: 700 }}>Patient Not Hospitalized</h4>
+                            <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '0.9rem' }}>Nurse clarifications are active only once the patient is admitted to a ward and bed.</p>
+                            <button type="button" onClick={handleOpenHospitalizeModal} className="ipd-btn-hospitalize-now" style={{ margin: '0 auto', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                <FiPlus /> Hospitalize / Admit Patient
+                            </button>
+                        </div>
+                    ) : loadingClarifications ? (
                         <div className="ipd-loading-state">Loading clarification inquiries...</div>
                     ) : clarifications.length === 0 ? (
                         <div className="ipd-empty-state">
@@ -1079,7 +1522,138 @@ const DoctorIPDOrdersPanel = ({
                 </div>
             )}
 
-            {/* ── TAB 3: STRUCTURED DISCHARGE SUMMARY ── */}
+            {/* ── TAB: NURSING CLINICAL NOTES & OBSERVATIONS ── */}
+            {activeTab === 'notes' && (
+                <div className="ipd-notes-panel">
+                    <div className="clar-header-row">
+                        <div>
+                            <h4>Nursing Clinical Notes & Observations</h4>
+                            <p>Shift assessments, bedside vital alerts, wound checks, and clinical notes recorded by nursing staff</p>
+                        </div>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <button
+                                type="button"
+                                className="ipd-btn-refresh-sm"
+                                onClick={fetchNursingNotes}
+                                disabled={loadingNotes}
+                            >
+                                <FiRefreshCw className={loadingNotes ? 'spin' : ''} />
+                                <span>Refresh</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Filter Bar */}
+                    <div className="ipd-notes-filters">
+                        <div className="filter-group">
+                            <label>Category:</label>
+                            <select
+                                value={notesFilterCategory}
+                                onChange={(e) => setNotesFilterCategory(e.target.value)}
+                                className="ipd-select-sm"
+                            >
+                                <option value="ALL">All Categories</option>
+                                <option value="GENERAL">General Care</option>
+                                <option value="HANDOVER">Shift Handover</option>
+                                <option value="OBSERVATION">Clinical Observation</option>
+                                <option value="VITALS_ALERT">Vitals Alert</option>
+                                <option value="WOUND_CARE">Wound Care</option>
+                                <option value="MEDICATION">Medication Reaction</option>
+                            </select>
+                        </div>
+
+                        <div className="filter-group">
+                            <label>Shift:</label>
+                            <select
+                                value={notesFilterShift}
+                                onChange={(e) => setNotesFilterShift(e.target.value)}
+                                className="ipd-select-sm"
+                            >
+                                <option value="ALL">All Shifts</option>
+                                <option value="Morning">Morning Shift</option>
+                                <option value="Evening">Evening Shift</option>
+                                <option value="Night">Night Shift</option>
+                            </select>
+                        </div>
+
+                        <div className="filter-group">
+                            <label>Priority:</label>
+                            <select
+                                value={notesFilterPriority}
+                                onChange={(e) => setNotesFilterPriority(e.target.value)}
+                                className="ipd-select-sm"
+                            >
+                                <option value="ALL">All Priorities</option>
+                                <option value="Normal">Normal</option>
+                                <option value="Urgent">Urgent</option>
+                                <option value="Critical">Critical</option>
+                            </select>
+                        </div>
+
+                        <div className="filter-count">
+                            Showing <strong>{filteredNotes.length}</strong> of {nursingNotes.length} notes
+                        </div>
+                    </div>
+
+                    {!activeAdmission ? (
+                        <div className="ipd-empty-state" style={{ padding: '36px 20px', textAlign: 'center' }}>
+                            <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '10px' }}>📝</span>
+                            <h4 style={{ margin: '0 0 6px', color: '#0f172a', fontWeight: 700 }}>Patient Not Hospitalized</h4>
+                            <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '0.9rem' }}>Nursing shift notes and assessments will be recorded once the patient is admitted.</p>
+                            <button type="button" onClick={handleOpenHospitalizeModal} className="ipd-btn-hospitalize-now" style={{ margin: '0 auto', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                <FiPlus /> Hospitalize / Admit Patient
+                            </button>
+                        </div>
+                    ) : loadingNotes ? (
+                        <div className="ipd-loading-state">Loading nursing clinical notes...</div>
+                    ) : filteredNotes.length === 0 ? (
+                        <div className="ipd-empty-state">
+                            <FiMessageSquare style={{ fontSize: '2.2rem', color: '#94a3b8', marginBottom: '8px' }} />
+                            <div>{nursingNotes.length === 0 ? 'No clinical notes recorded yet by nursing staff for this patient admission.' : 'No notes match the selected filters.'}</div>
+                        </div>
+                    ) : (
+                        <div className="ipd-notes-feed">
+                            {filteredNotes.map((noteItem, idx) => {
+                                const nurseObj = typeof noteItem.nurseId === 'object' ? noteItem.nurseId : null;
+                                const nurseName = nurseObj?.name || (typeof noteItem.nurseId === 'string' && noteItem.nurseId.length < 20 ? noteItem.nurseId : 'Staff Nurse');
+                                const nurseInitials = nurseName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'RN';
+                                const priorityVal = String(noteItem.priority || 'Normal').toLowerCase();
+                                const isUrgent = priorityVal === 'urgent' || priorityVal === 'critical';
+
+                                return (
+                                    <div key={noteItem._id || idx} className={`ipd-note-card ${isUrgent ? 'urgent' : ''}`}>
+                                        <div className="note-card-left">
+                                            <div className="nurse-avatar">{nurseInitials}</div>
+                                        </div>
+                                        <div className="note-card-body">
+                                            <div className="note-card-header">
+                                                <div className="nurse-info">
+                                                    <span className="nurse-name">{nurseName}</span>
+                                                    <span className="note-timestamp">
+                                                        {new Date(noteItem.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} at {new Date(noteItem.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                                    </span>
+                                                </div>
+                                                <div className="note-tags">
+                                                    <span className="badge-category">{noteItem.noteType || 'GENERAL'}</span>
+                                                    <span className="badge-shift">{noteItem.shift || 'Morning'}</span>
+                                                    {isUrgent && (
+                                                        <span className="badge-priority-urgent">{noteItem.priority || 'URGENT'}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="note-content-text">
+                                                {noteItem.note}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── TAB 4: STRUCTURED DISCHARGE SUMMARY ── */}
             {activeTab === 'discharge' && (
                 <div className="ipd-discharge-panel">
                     <div className="discharge-header-row">
@@ -1092,6 +1666,7 @@ const DoctorIPDOrdersPanel = ({
                                 type="button"
                                 className="btn-print-summary"
                                 onClick={handlePrintSummary}
+                                disabled={!activeAdmission}
                             >
                                 <FiPrinter />
                                 <span>Print Summary</span>
@@ -1099,7 +1674,16 @@ const DoctorIPDOrdersPanel = ({
                         </div>
                     </div>
 
-                    {loadingSummary ? (
+                    {!activeAdmission ? (
+                        <div className="ipd-empty-state" style={{ padding: '36px 20px', textAlign: 'center' }}>
+                            <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '10px' }}>📄</span>
+                            <h4 style={{ margin: '0 0 6px', color: '#0f172a', fontWeight: 700 }}>Patient Not Hospitalized</h4>
+                            <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '0.9rem' }}>Structured discharge summaries are generated for admitted inpatients.</p>
+                            <button type="button" onClick={handleOpenHospitalizeModal} className="ipd-btn-hospitalize-now" style={{ margin: '0 auto', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                <FiPlus /> Hospitalize / Admit Patient
+                            </button>
+                        </div>
+                    ) : loadingSummary ? (
                         <div className="ipd-loading-state">Loading discharge documentation...</div>
                     ) : (
                         <div className="discharge-form-container">
@@ -1359,6 +1943,147 @@ const DoctorIPDOrdersPanel = ({
                                 {cancelling ? 'Cancelling...' : 'Confirm Cancel Order'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* HOSPITALIZE / ADMIT PATIENT MODAL */}
+            {hospitalizeModalOpen && (
+                <div className="ipd-modal-backdrop">
+                    <div className="ipd-modal-box" style={{ maxWidth: '540px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1.5px solid #e2e8f0', paddingBottom: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontSize: '1.6rem' }}>🏥</span>
+                                <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#0f172a', fontWeight: 800 }}>
+                                    Hospitalize / Admit Patient
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setHospitalizeModalOpen(false)}
+                                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b' }}
+                            >
+                                <FiX size={20} />
+                            </button>
+                        </div>
+
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.85rem' }}>
+                            Patient: <strong>{patientName}</strong> (MRN: {patientMRN}) &nbsp;|&nbsp; Doctor: <strong>Dr. {activeDoctor?.name || 'Attending'}</strong>
+                        </div>
+
+                        <form onSubmit={handleHospitalizePatient}>
+                            {loadingBeds ? (
+                                <div style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>
+                                    <FiRefreshCw className="spin" style={{ marginRight: '8px' }} /> Loading available hospital beds...
+                                </div>
+                            ) : availableBeds.length === 0 ? (
+                                <div style={{ padding: '16px', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '8px', color: '#991b1b', fontSize: '0.88rem', marginBottom: '16px' }}>
+                                    ⚠️ No available beds found in this hospital. Please create or vacate beds in Bed Management first.
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="ipd-form-grid-2" style={{ marginBottom: '14px' }}>
+                                        <div className="ipd-field-group">
+                                            <label>Select Ward <span className="req">*</span></label>
+                                            <select
+                                                className="ipd-select"
+                                                value={hospitalizeForm.ward}
+                                                onChange={(e) => {
+                                                    const w = e.target.value;
+                                                    const matchBed = availableBeds.find(b => b.ward.toLowerCase() === w.toLowerCase());
+                                                    setHospitalizeForm(prev => ({
+                                                        ...prev,
+                                                        ward: w,
+                                                        bedId: matchBed ? matchBed._id : ''
+                                                    }));
+                                                }}
+                                                required
+                                            >
+                                                <option value="">-- Choose Ward --</option>
+                                                {[...new Set(availableBeds.map(b => b.ward))].map(w => (
+                                                    <option key={w} value={w}>{w}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="ipd-field-group">
+                                            <label>Select Available Bed <span className="req">*</span></label>
+                                            <select
+                                                className="ipd-select"
+                                                value={hospitalizeForm.bedId}
+                                                onChange={(e) => setHospitalizeForm(prev => ({ ...prev, bedId: e.target.value }))}
+                                                required
+                                            >
+                                                <option value="">-- Choose Bed --</option>
+                                                {availableBeds
+                                                    .filter(b => !hospitalizeForm.ward || b.ward.toLowerCase() === hospitalizeForm.ward.toLowerCase())
+                                                    .map(b => (
+                                                        <option key={b._id} value={b._id}>
+                                                            Bed {b.bedNumber} ({b.bedType || 'General'})
+                                                        </option>
+                                                    ))
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="ipd-form-grid-2" style={{ marginBottom: '14px' }}>
+                                        <div className="ipd-field-group">
+                                            <label>Admission Date <span className="req">*</span></label>
+                                            <input
+                                                type="date"
+                                                className="ipd-input"
+                                                value={hospitalizeForm.admissionDate}
+                                                onChange={(e) => setHospitalizeForm(prev => ({ ...prev, admissionDate: e.target.value }))}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="ipd-field-group">
+                                            <label>Admission Time <span className="req">*</span></label>
+                                            <input
+                                                type="text"
+                                                className="ipd-input"
+                                                placeholder="e.g. 10:30 AM"
+                                                value={hospitalizeForm.admissionTime}
+                                                onChange={(e) => setHospitalizeForm(prev => ({ ...prev, admissionTime: e.target.value }))}
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="ipd-field-group" style={{ marginBottom: '18px' }}>
+                                        <label>Admission Indication / Clinical Reason</label>
+                                        <textarea
+                                            className="ipd-textarea"
+                                            rows={2}
+                                            placeholder="e.g. Inpatient monitoring and IV therapy"
+                                            value={hospitalizeForm.notes}
+                                            onChange={(e) => setHospitalizeForm(prev => ({ ...prev, notes: e.target.value }))}
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid #e2e8f0', paddingTop: '14px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setHospitalizeModalOpen(false)}
+                                    className="btn-modal-cancel"
+                                    disabled={hospitalizeSaving}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn-finalize-sign"
+                                    disabled={hospitalizeSaving || availableBeds.length === 0 || !hospitalizeForm.ward || !hospitalizeForm.bedId}
+                                    style={{ margin: 0 }}
+                                >
+                                    {hospitalizeSaving ? 'Hospitalizing...' : '✓ Confirm & Hospitalize Patient'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

@@ -124,10 +124,8 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
         }
         if (role === 'nurse' || role === 'staffnurse' || role === 'headnurse') {
             return [
-                { label: 'Nurse Command Center', path: '/nurse/dashboard', icon: <FiHome />, prefetchKey: 'nurse_dash', prefetchFn: () => import('../../pages/nurse/NurseDashboard') },
-                { label: 'OPD Patient Queue', path: '/nurse/opd-queue', icon: <FiUsers />, prefetchKey: 'nurse_opd', prefetchFn: () => import('../../pages/nurse/NurseOPDQueue') },
-                { label: 'Appointments', path: '/nurse/appointments', icon: <FiCalendar />, prefetchKey: 'nurse_appts', prefetchFn: () => import('../../pages/nurse/NurseAppointments') },
-                { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity />, prefetchKey: 'nurse_ipd', prefetchFn: () => import('../../pages/nurse/IPDCommandCenter') },
+                { label: 'Nurse IPD Care', path: '/nurse/dashboard', icon: <FiHome />, prefetchKey: 'nurse_dash', prefetchFn: () => import('../../pages/nurse/NurseDashboard') },
+                { label: 'Patient Reports & Consents', path: '/nurse/patient-documents', icon: <FiFileText />, prefetchKey: 'nurse_docs', prefetchFn: () => import('../../pages/nurse/NursePatientDocuments') },
                 { label: 'Real-Time Monitoring', path: '/nurse/real-time-monitoring', icon: <FiActivity />, prefetchKey: 'nurse_rtm', prefetchFn: () => import('../../pages/monitoring/RealTimeMonitoring') },
             ];
         }
@@ -332,10 +330,11 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
 
     const getPageTitle = (pathname) => {
         if (pathname.includes('real-time-monitoring')) return 'Real-Time Monitoring';
-        if (pathname === '/nurse/dashboard') return 'Nurse Command Center';
+        if (pathname === '/nurse/dashboard') return 'Nurse IPD Care';
+        if (pathname === '/nurse/patient-documents') return 'Patient Reports & Clinical Consents';
         if (pathname === '/nurse/opd-queue') return 'OPD Patient Queue';
         if (pathname === '/nurse/appointments') return 'Appointments';
-        if (pathname.startsWith('/nurse/patient/') || pathname.startsWith('/nurse/ipd/patient/')) return 'Inpatient Workspace';
+        if (pathname.startsWith('/nurse/patient/') || pathname.startsWith('/nurse/ipd/patient/')) return 'Patient IPD Care';
         if (pathname === '/ipd/command-center' || pathname === '/nurse/command-center') return 'IPD Command Center';
         if (pathname === '/doctor/dashboard') return 'Doctor Dashboard';
         if (pathname === '/doctor/patients') return 'My Patients';
