@@ -380,11 +380,22 @@ router.put('/patients/:patientId/profile', verifyToken, async (req, res) => {
 // 3. START SESSION
 router.post('/session/start', verifyToken, async (req, res) => {
     try {
-        const { patientId } = req.body;
+        let { patientId } = req.body;
         const doctorUserId = req.user.id || req.user.userId;
         const doctor = await Doctor.findOne({ userId: doctorUserId });
 
         if (!doctor) return res.status(404).json({ message: 'Doctor profile not found' });
+
+        const mongoose = require('mongoose');
+        if (patientId && !mongoose.Types.ObjectId.isValid(patientId)) {
+            const MasterUser = require('../models/user.model');
+            const ptUser = await MasterUser.findOne({
+                $or: [{ patientId }, { mrn: patientId }, { customId: patientId }]
+            }).select('_id').lean();
+            if (ptUser) {
+                patientId = ptUser._id;
+            }
+        }
 
         const newSession = new Appointment({
             userId: patientId,
