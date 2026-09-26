@@ -41,6 +41,19 @@ async function seedRoles() {
                     { label: 'Question Library', path: '/assistant/question-library' }
                 ],
                 isSystemRole: true
+            },
+            {
+                name: 'Accountant',
+                description: 'Hospital finance, financial records, refund management, and accounting',
+                permissions: ['finance_view'],
+                dashboardPath: '/accountant/dashboard',
+                navLinks: [
+                    { label: 'Dashboard', path: '/accountant/dashboard' },
+                    { label: 'Financial Records', path: '/accountant/financial-records' },
+                    { label: 'Refunds', path: '/accountant/refunds' },
+                    { label: 'History', path: '/accountant/history' }
+                ],
+                isSystemRole: true
             }
         ];
 

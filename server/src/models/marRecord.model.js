@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const marRecordSchema = new mongoose.Schema({
     hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', required: true, index: true },
     orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'InpatientOrder', required: true, index: true },
-    admissionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admission', required: true, index: true },
+    admissionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admission', required: false, index: true },
     patientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
 
     scheduledTime: { type: Date, required: true, index: true },

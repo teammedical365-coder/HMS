@@ -76,9 +76,15 @@ async function pingServer() {
       } else {
         notifyListeners(true);
       }
-    } else {
-      // Server returned error (502/503/504) — treat as offline
+    } else if (response.status === 429) {
+      // 429 = Server IS alive, just rate-limited. Treat as ONLINE.
+      notifyListeners(true);
+    } else if (response.status >= 500) {
+      // Server error (502/503/504) — treat as offline
       notifyListeners(false);
+    } else {
+      // Other client errors (401, 403, 404) — server is alive
+      notifyListeners(true);
     }
   } catch {
     // Network error or timeout — offline

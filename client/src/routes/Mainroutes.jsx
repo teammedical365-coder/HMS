@@ -116,6 +116,11 @@ const OTReportsPage = lazy(() => import('../pages/ot/OTReportsPage'));
 
 // Accountant / Finance Pages
 const AccountantDashboard = lazy(() => import('../pages/accountant/AccountantDashboard'));
+const AccountantFinancialRecords = lazy(() => import('../pages/accountant/AccountantFinancialRecords'));
+const AccountantRefunds = lazy(() => import('../pages/accountant/AccountantRefunds'));
+const AccountantHistory = lazy(() => import('../pages/accountant/AccountantHistory'));
+const HospitalAdminRefunds = lazy(() => import('../pages/hospitaladmin/HospitalAdminRefunds'));
+const ReceptionRefunds = lazy(() => import('../pages/reception/ReceptionRefunds'));
 
 // Billing Pages
 const PatientBillingProfile = lazy(() => import('../pages/billing/PatientBillingProfile'));
@@ -126,6 +131,7 @@ const NursePatientWorkspace = lazy(() => import('../pages/nurse/NursePatientWork
 const NurseOPDQueue = lazy(() => import('../pages/nurse/NurseOPDQueue'));
 const NurseAppointments = lazy(() => import('../pages/nurse/NurseAppointments'));
 const IPDCommandCenter = lazy(() => import('../pages/nurse/IPDCommandCenter'));
+const NursePatientDocuments = lazy(() => import('../pages/nurse/NursePatientDocuments'));
 
 // Real-Time Monitoring
 const RealTimeMonitoring = lazy(() => import('../pages/monitoring/RealTimeMonitoring'));
@@ -281,6 +287,7 @@ const MainRoutes = () => {
         } else if (role === 'nurse' || role === 'staffnurse' || role === 'headnurse') {
             prefetchRoutes([
                 { key: 'nurse_dash', importFn: () => import('../pages/nurse/NurseDashboard') },
+                { key: 'nurse_docs', importFn: () => import('../pages/nurse/NursePatientDocuments') },
                 { key: 'nurse_opd', importFn: () => import('../pages/nurse/NurseOPDQueue') },
                 { key: 'nurse_appts', importFn: () => import('../pages/nurse/NurseAppointments') },
                 { key: 'nurse_ws', importFn: () => import('../pages/nurse/NursePatientWorkspace') },
@@ -386,6 +393,7 @@ const MainRoutes = () => {
                                 } />
                                 <Route path="hospitaladmin/question-library" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><HospitalAdminQuestionLibrary /></ProtectedRoute>} />
                                 <Route path="hospitaladmin/vials" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><VialManagement /></ProtectedRoute>} />
+                                <Route path="hospitaladmin/refunds" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'centraladmin', 'superadmin']}><HospitalAdminRefunds /></ProtectedRoute>} />
 
                                 <Route path="lab/dashboard" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><LabDashboard /></ProtectedRoute>} />
                                 <Route path="lab/tests" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><AssignedTests /></ProtectedRoute>} />
@@ -417,9 +425,11 @@ const MainRoutes = () => {
                                 {/* Reception Pages */}
                                 <Route path="reception/dashboard" element={<ProtectedRoute requiredPermissions={['appointment_manage']}><ReceptionDashboard /></ProtectedRoute>} />
                                 <Route path="reception/patients" element={<ProtectedRoute requiredPermissions={['appointment_manage']}><ReceptionPatients /></ProtectedRoute>} />
+                                <Route path="reception/refunds" element={<ProtectedRoute allowedRoles={['reception', 'receptionist', 'hospitaladmin', 'centraladmin', 'superadmin', 'accountant']}><ReceptionRefunds /></ProtectedRoute>} />
 
                                 {/* Nurse & IPD Command Center Pages */}
                                 <Route path="nurse/dashboard" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NurseDashboard /></ProtectedRoute>} />
+                                <Route path="nurse/patient-documents" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NursePatientDocuments /></ProtectedRoute>} />
                                 <Route path="nurse/opd-queue" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NurseOPDQueue /></ProtectedRoute>} />
                                 <Route path="nurse/appointments" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NurseAppointments /></ProtectedRoute>} />
                                 <Route path="nurse/patient/:admissionId" element={<ProtectedRoute allowedRoles={['nurse', 'staffnurse', 'headnurse', 'hospitaladmin', 'centraladmin', 'superadmin']}><NursePatientWorkspace /></ProtectedRoute>} />
@@ -440,6 +450,9 @@ const MainRoutes = () => {
 
                                 {/* Accountant / Finance Pages */}
                                 <Route path="accountant/dashboard" element={<ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}><AccountantDashboard /></ProtectedRoute>} />
+                                <Route path="accountant/financial-records" element={<ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}><AccountantFinancialRecords /></ProtectedRoute>} />
+                                <Route path="accountant/refunds" element={<ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}><AccountantRefunds /></ProtectedRoute>} />
+                                <Route path="accountant/history" element={<ProtectedRoute requiredPermissions={['finance_view']} allowedRoles={['accountant', 'centraladmin', 'superadmin', 'hospitaladmin']}><AccountantHistory /></ProtectedRoute>} />
 
                                 {/* Patient Billing Profile — receptionist + accountant + admin */}
                                 <Route path="billing/patient" element={<ProtectedRoute requiredPermissions={['billing_view', 'billing_manage', 'appointment_manage']} allowedRoles={['accountant', 'cashier', 'reception', 'receptionist', 'centraladmin', 'superadmin', 'hospitaladmin']}><PatientBillingProfile /></ProtectedRoute>} />

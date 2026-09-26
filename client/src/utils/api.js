@@ -775,6 +775,10 @@ export const reportAPI = {
         const response = await apiClient.get(`/api/reports/${appointmentId}`);
         return response.data;
     },
+    getReportsByPatient: async (patientId) => {
+        const response = await apiClient.get(`/api/reports/patient/${patientId}`);
+        return response.data;
+    },
     generateAISummary: async (fileUrl, mimeType, fileName) => {
         const response = await apiClient.post('/api/reports/summary', { fileUrl, mimeType, fileName });
         return response.data;
@@ -1075,6 +1079,40 @@ export const billingAPI = {
     getPaymentHistory: async (params) => (await apiClient.get('/api/billing/history', { params })).data,
 };
 
+export const accountantAPI = {
+    getDashboard: async () => (await apiClient.get('/api/accountant/dashboard')).data,
+    getFinancialRecords: async (params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return (await apiClient.get(`/api/accountant/financial-records${query ? '?' + query : ''}`)).data;
+    },
+    getPatientRefundData: async (patientId) => (await apiClient.get(`/api/accountant/refunds/patient/${patientId}`)).data,
+    createRefundRequest: async (data) => (await apiClient.post('/api/accountant/refunds/request', data)).data,
+    getRefunds: async (params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return (await apiClient.get(`/api/accountant/refunds${query ? '?' + query : ''}`)).data;
+    },
+    getRefundById: async (id) => (await apiClient.get(`/api/accountant/refunds/${id}`)).data,
+    processRefund: async (id, data) => (await apiClient.put(`/api/accountant/refunds/${id}/process`, data)).data,
+    getHistory: async (params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return (await apiClient.get(`/api/accountant/history${query ? '?' + query : ''}`)).data;
+    },
+};
+
+export const refundAdminAPI = {
+    getRefunds: async (params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return (await apiClient.get(`/api/refunds/admin/refunds${query ? '?' + query : ''}`)).data;
+    },
+    approveRefund: async (id) => (await apiClient.put(`/api/refunds/admin/refunds/${id}/approve`)).data,
+    rejectRefund: async (id, rejectionReason) => (await apiClient.put(`/api/refunds/admin/refunds/${id}/reject`, { rejectionReason })).data,
+};
+
+export const refundReceptionAPI = {
+    getCashRefunds: async (showCompleted = false) => (await apiClient.get(`/api/refunds/reception/refunds?showCompleted=${showCompleted}`)).data,
+    handOverCash: async (id) => (await apiClient.put(`/api/refunds/reception/refunds/${id}/hand-over`)).data,
+    getRefundHistory: async () => (await apiClient.get('/api/refunds/reception/refund-history')).data,
+};
 
 
 export const admissionAPI = {
@@ -1570,6 +1608,7 @@ export const ipdNursingAPI = {
     recordNursingClearance: async (admissionId, data) => (await apiClient.post(`/api/ipd-nursing/admissions/${admissionId}/nursing-clearance`, data)).data,
 
     // Operations Dashboard & Alerts
+    getDashboardSummary: async () => (await apiClient.get('/api/ipd-nursing/dashboard-summary')).data,
     getOperationsMetrics: async () => (await apiClient.get('/api/ipd-nursing/operations/metrics')).data,
     getAdmissionAlerts: async (admissionId) => (await apiClient.get(`/api/ipd-nursing/admissions/${admissionId}/alerts`)).data,
     getHospitalAlerts: async () => (await apiClient.get('/api/ipd-nursing/alerts')).data,

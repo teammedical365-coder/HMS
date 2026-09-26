@@ -4,8 +4,21 @@ const reportSchema = new mongoose.Schema({
     appointmentId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Appointment',
-        required: true,
+        required: false,
         index: true
+    },
+    patientId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        index: true
+    },
+    category: {
+        type: String,
+        default: 'LAB_REPORT'
+    },
+    notes: {
+        type: String,
+        default: ''
     },
     fileName: {
         type: String,
@@ -23,7 +36,7 @@ const reportSchema = new mongoose.Schema({
     size: Number,
     uploadedByRole: {
         type: String,
-        enum: ['Doctor', 'Receptionist', 'Admin', 'Other'],
+        enum: ['Doctor', 'Nurse', 'Receptionist', 'Admin', 'Staff', 'Patient', 'Other'],
         default: 'Other'
     },
     hospitalId: {

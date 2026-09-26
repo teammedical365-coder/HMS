@@ -2,13 +2,17 @@ const mongoose = require('mongoose');
 
 const nursingTaskSchema = new mongoose.Schema({
     hospitalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospital', required: true, index: true },
-    admissionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admission', required: true, index: true },
+    admissionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admission', required: false, index: true },
     patientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
     taskType: {
         type: String,
-        enum: ['VITALS', 'MEDICATION', 'SAMPLE_COLLECTION', 'PROCEDURE_PREP', 'POST_OP_MONITORING', 'INTAKE_OUTPUT', 'WOUND_CARE', 'OTHER'],
+        enum: [
+            'VITALS', 'VITALS_CHECK', 'MEDICATION', 'IV_CHECK', 'CATHETER_CHECK',
+            'DOCTOR_INSTRUCTION', 'SAMPLE_COLLECTION', 'PROCEDURE_PREP',
+            'POST_OP_MONITORING', 'INTAKE_OUTPUT', 'WOUND_CARE', 'OTHER'
+        ],
         default: 'OTHER',
         index: true
     },

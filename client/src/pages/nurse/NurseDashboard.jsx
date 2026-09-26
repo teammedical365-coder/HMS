@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { admissionAPI, ipdClinicalAPI, ipdNursingAPI } from '../../utils/api';
+import { ipdNursingAPI, admissionAPI } from '../../utils/api';
 import socket from '../../utils/socket';
 import {
     FiSearch,
@@ -9,28 +9,16 @@ import {
     FiAlertTriangle,
     FiUsers,
     FiChevronRight,
-    FiUserCheck,
     FiDroplet,
     FiCheckSquare,
-    FiLogOut,
-    FiPlus,
     FiRefreshCw,
-    FiFilter,
-    FiScissors
+    FiShield,
+    FiCheck,
+    FiPlus,
+    FiUserCheck
 } from 'react-icons/fi';
 import './NurseDashboard.css';
 
-// ── Ward badge classifier ──
-const getWardClass = (ward) => {
-    const w = (ward || '').toLowerCase();
-    if (w.includes('icu')) return 'icu';
-    if (w.includes('private')) return 'private';
-    if (w.includes('semi')) return 'semi';
-    if (w.includes('general')) return 'general';
-    return 'default';
-};
-
-// ── Patient initials ──
 const getInitials = (name) => {
     if (!name) return '?';
     const parts = name.trim().split(/\s+/);
@@ -38,28 +26,12 @@ const getInitials = (name) => {
     return parts[0].slice(0, 2).toUpperCase();
 };
 
-// ── Days since admission ──
-const daysSince = (dateStr) => {
-    if (!dateStr) return 0;
-    const diff = Date.now() - new Date(dateStr).getTime();
-    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-};
-
-// ── Vital status classifier ──
-const getVitalStatus = (vitals) => {
-    if (!vitals) return null;
-    const checks = [];
-    if (vitals.spo2 !== undefined && vitals.spo2 !== null) {
-        checks.push({ label: `SpO₂ ${vitals.spo2}%`, status: vitals.spo2 < 90 ? 'critical' : vitals.spo2 < 95 ? 'warning' : 'normal' });
-    }
-    if (vitals.pulse !== undefined && vitals.pulse !== null) {
-        checks.push({ label: `HR ${vitals.pulse}`, status: vitals.pulse > 120 || vitals.pulse < 50 ? 'critical' : vitals.pulse > 100 || vitals.pulse < 60 ? 'warning' : 'normal' });
-    }
-    if (vitals.systolicBP !== undefined && vitals.systolicBP !== null) {
-        const bp = vitals.systolicBP;
-        checks.push({ label: `BP ${bp}/${vitals.diastolicBP || '?'}`, status: bp > 180 || bp < 90 ? 'critical' : bp > 140 || bp < 100 ? 'warning' : 'normal' });
-    }
-    return checks.length > 0 ? checks : null;
+const getWardBadgeClass = (ward) => {
+    const w = (ward || '').toLowerCase();
+    if (w.includes('icu') || w.includes('ccu') || w.includes('nicu')) return 'icu';
+    if (w.includes('private') || w.includes('deluxe')) return 'private';
+    if (w.includes('semi')) return 'semi';
+    return 'general';
 };
 
 const NurseDashboard = () => {
@@ -68,21 +40,22 @@ const NurseDashboard = () => {
     const userName = user.name || 'Nurse';
     const userId = user._id || user.userId;
 
-    const [admissions, setAdmissions] = useState([]);
-    const [operationsMetrics, setOperationsMetrics] = useState(null);
-    const [hospitalNurses, setHospitalNurses] = useState([]);
+    const [patients, setPatients] = useState([]);
+    const [summary, setSummary] = useState({
+        assignedPatients: 0,
+        medicinesDue: 0,
+        overdue: 0,
+        ivRunning: 0,
+        tasksPending: 0,
+        totalInpatients: 0
+    });
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [searchText, setSearchText] = useState('');
+    const [activeFilter, setActiveFilter] = useState('All'); // 'All' | 'Critical' | 'Medication Due' | 'Drip Running' | 'Stable'
     const [activeWard, setActiveWard] = useState('All');
-    const [workloadFilter, setWorkloadFilter] = useState('ALL');
-    const [vitalsMap, setVitalsMap] = useState({}); // admissionId -> latest vitals
-    const [alertsMap, setAlertsMap] = useState({}); // admissionId -> alerts array
 
-    // Assignment Modal state
-    const [assignModal, setAssignModal] = useState({ open: false, admission: null, nurseId: '', shift: 'Morning', notes: '' });
-    const [submittingAssign, setSubmittingAssign] = useState(false);
     const [toast, setToast] = useState(null);
-
     const toastTimeoutRef = useRef(null);
 
     const showToast = useCallback((message, type = 'success') => {
@@ -91,61 +64,91 @@ const NurseDashboard = () => {
         toastTimeoutRef.current = setTimeout(() => setToast(null), 3500);
     }, []);
 
-    // ── Fetch all active admissions and metrics ──
-    const fetchDashboardData = useCallback(async () => {
+    // ── Fetch Nurse Dashboard Summary & Patient Data ──
+    const fetchDashboardData = useCallback(async (isManualRefresh = false) => {
+        if (!isManualRefresh) setLoading(true);
+        else setRefreshing(true);
+
+        let loadSuccessful = false;
+
+        // 1. Primary: Try unified high-performance IPD summary endpoint
         try {
-            const [admissionsRes, metricsRes, nursesRes] = await Promise.all([
-                admissionAPI.getActiveAdmissions(),
-                ipdNursingAPI.getOperationsMetrics().catch(() => ({ metrics: null })),
-                ipdNursingAPI.getHospitalNurses().catch(() => ({ nurses: [] }))
-            ]);
-
-            const list = admissionsRes.admissions || admissionsRes.data || [];
-            setAdmissions(list);
-            if (metricsRes.metrics || metricsRes.data) {
-                setOperationsMetrics(metricsRes.metrics || metricsRes.data);
+            const res = await ipdNursingAPI.getDashboardSummary();
+            if (res && res.success) {
+                setPatients(res.patients || []);
+                setSummary(res.summary || {
+                    assignedPatients: 0,
+                    medicinesDue: 0,
+                    overdue: 0,
+                    ivRunning: 0,
+                    tasksPending: 0,
+                    totalInpatients: 0
+                });
+                loadSuccessful = true;
             }
-            if (nursesRes.nurses || nursesRes.data) {
-                setHospitalNurses(nursesRes.nurses || nursesRes.data);
-            }
-
-            // Fetch latest vitals and alerts for visible admissions (batched)
-            const batch = list.slice(0, 30);
-            const vitalsPromises = batch.map(adm =>
-                ipdClinicalAPI.getLatestVitals(adm._id)
-                    .then(r => ({ id: adm._id, vitals: r.vitals }))
-                    .catch(() => ({ id: adm._id, vitals: null }))
-            );
-            const alertsPromises = batch.map(adm =>
-                ipdNursingAPI.getAdmissionAlerts(adm._id)
-                    .then(r => ({ id: adm._id, alerts: r.alerts || [] }))
-                    .catch(() => ({ id: adm._id, alerts: [] }))
-            );
-
-            const [vitalsResults, alertsResults] = await Promise.all([
-                Promise.all(vitalsPromises),
-                Promise.all(alertsPromises)
-            ]);
-
-            const vMap = {};
-            vitalsResults.forEach(v => { vMap[v.id] = v.vitals; });
-            setVitalsMap(vMap);
-
-            const aMap = {};
-            alertsResults.forEach(a => { aMap[a.id] = a.alerts; });
-            setAlertsMap(aMap);
-        } catch (err) {
-            console.error('Nurse Dashboard — Error fetching data:', err);
-        } finally {
-            setLoading(false);
+        } catch (apiErr) {
+            console.warn('Nurse Dashboard — Unified summary endpoint fallback to active admissions:', apiErr?.message || apiErr);
         }
-    }, []);
+
+        // 2. Resilient Fallback: If summary endpoint is not yet loaded or errored, fetch active admissions
+        if (!loadSuccessful) {
+            try {
+                const admRes = await admissionAPI.getActiveAdmissions();
+                const list = admRes.admissions || admRes.data || [];
+                const formatted = list.map(a => {
+                    const patient = a.patientId || {};
+                    const doctor = a.doctorId || {};
+                    const appt = a.appointmentId || {};
+                    return {
+                        admissionId: a._id,
+                        patientId: patient._id || patient,
+                        patientName: patient.name || 'Inpatient',
+                        patientUid: patient.patientId || patient.mrn || '',
+                        age: patient.age || (patient.dob ? Math.floor((Date.now() - new Date(patient.dob)) / (365.25 * 24 * 60 * 60 * 1000)) : ''),
+                        gender: patient.gender || '',
+                        ward: a.ward || 'General',
+                        bedNumber: a.bedNumber || '—',
+                        attendingDoctor: doctor.name ? `Dr. ${doctor.name}` : (appt.doctorName ? `Dr. ${appt.doctorName}` : 'Not Assigned'),
+                        admissionDate: a.admissionDate,
+                        clinicalStatus: (a.ward || '').toLowerCase().includes('icu') ? 'Critical' : 'Stable',
+                        medicineDue: null,
+                        nextMedicine: null,
+                        ivFluid: null,
+                        latestVitals: null,
+                        activeOrdersCount: 0,
+                        pendingTasksCount: 0
+                    };
+                });
+                setPatients(formatted);
+                setSummary({
+                    assignedPatients: formatted.length,
+                    medicinesDue: 0,
+                    overdue: 0,
+                    ivRunning: 0,
+                    tasksPending: 0,
+                    totalInpatients: formatted.length
+                });
+                loadSuccessful = true;
+            } catch (fallbackErr) {
+                console.error('Nurse Dashboard — Fallback active admissions also failed:', fallbackErr);
+            }
+        }
+
+        if (loadSuccessful && isManualRefresh) {
+            showToast('IPD care data updated', 'success');
+        } else if (!loadSuccessful) {
+            showToast('Could not refresh IPD care data', 'error');
+        }
+
+        setLoading(false);
+        setRefreshing(false);
+    }, [showToast]);
 
     useEffect(() => {
         fetchDashboardData();
     }, [fetchDashboardData]);
 
-    // ── Socket.IO Real-time synchronization ──
+    // ── Socket.IO Real-time Sync ──
     useEffect(() => {
         const hospitalId = user.hospitalId;
         if (!hospitalId) return;
@@ -155,416 +158,380 @@ const NurseDashboard = () => {
             socket.emit('join_hospital', hospitalId);
         }
 
-        const handleRefresh = () => {
-            fetchDashboardData();
+        const handleLiveUpdate = () => {
+            fetchDashboardData(true);
         };
 
-        socket.on('nurse_assigned', handleRefresh);
-        socket.on('nurse_unassigned', handleRefresh);
-        socket.on('discharge_readiness_changed', handleRefresh);
-        socket.on('admission_created', handleRefresh);
-        socket.on('admission_updated', handleRefresh);
-        socket.on('patient_discharged', handleRefresh);
-        socket.on('bed_status_changed', handleRefresh);
-        socket.on('vitals_recorded', handleRefresh);
-        socket.on('inpatient_order_created', handleRefresh);
-        socket.on('nursing_task_created', handleRefresh);
-        socket.on('nursing_task_updated', handleRefresh);
-        socket.on('intake_output_recorded', handleRefresh);
+        const events = [
+            'inpatient_order_created',
+            'inpatient_order_updated',
+            'mar_administered',
+            'mar_scheduled',
+            'vitals_recorded',
+            'nursing_task_created',
+            'nursing_task_updated',
+            'admission_created',
+            'patient_discharged',
+            'nurse_assigned',
+            'ipd_update'
+        ];
+
+        events.forEach(evt => socket.on(evt, handleLiveUpdate));
 
         return () => {
-            socket.off('nurse_assigned', handleRefresh);
-            socket.off('nurse_unassigned', handleRefresh);
-            socket.off('discharge_readiness_changed', handleRefresh);
-            socket.off('admission_created', handleRefresh);
-            socket.off('admission_updated', handleRefresh);
-            socket.off('patient_discharged', handleRefresh);
-            socket.off('bed_status_changed', handleRefresh);
-            socket.off('vitals_recorded', handleRefresh);
-            socket.off('inpatient_order_created', handleRefresh);
-            socket.off('nursing_task_created', handleRefresh);
-            socket.off('nursing_task_updated', handleRefresh);
-            socket.off('intake_output_recorded', handleRefresh);
+            events.forEach(evt => socket.off(evt, handleLiveUpdate));
         };
     }, [user.hospitalId, fetchDashboardData]);
 
-    // ── Handle Nurse Assignment ──
-    const handleAssignSubmit = async (e) => {
-        e.preventDefault();
-        if (!assignModal.admission || !assignModal.nurseId) {
-            showToast('Please select a nurse', 'error');
-            return;
-        }
-        try {
-            setSubmittingAssign(true);
-            await ipdNursingAPI.assignNurse(assignModal.admission._id, {
-                nurseId: assignModal.nurseId,
-                shift: assignModal.shift,
-                notes: assignModal.notes
-            });
-            setAssignModal({ open: false, admission: null, nurseId: '', shift: 'Morning', notes: '' });
-            showToast('Nurse assigned successfully');
-            fetchDashboardData();
-        } catch (err) {
-            showToast(err.response?.data?.message || 'Error assigning nurse', 'error');
-        } finally {
-            setSubmittingAssign(false);
-        }
-    };
-
-    // ── Unique Wards ──
+    // ── Ward List ──
     const wards = useMemo(() => {
         const set = new Set();
-        admissions.forEach(a => { if (a.ward) set.add(a.ward); });
+        patients.forEach(p => { if (p.ward) set.add(p.ward); });
         return ['All', ...Array.from(set).sort()];
-    }, [admissions]);
+    }, [patients]);
 
-    // ── Filtered Admissions ──
-    const filteredAdmissions = useMemo(() => {
-        return admissions.filter(a => {
-            // 1. Search text
+    // ── Filtered Patients ──
+    const filteredPatients = useMemo(() => {
+        return patients.filter(p => {
+            // Search query filter
             if (searchText) {
                 const q = searchText.toLowerCase();
-                const pName = typeof a.patientId === 'object' ? (a.patientId?.name || '').toLowerCase() : '';
-                const pId = typeof a.patientId === 'object' ? (a.patientId?.patientId || a.patientId?.mrn || '').toLowerCase() : '';
-                const docName = typeof a.doctorId === 'object' ? (a.doctorId?.name || '').toLowerCase() : '';
-                const ward = (a.ward || '').toLowerCase();
-                const bed = String(a.bedNumber || '').toLowerCase();
+                const name = (p.patientName || '').toLowerCase();
+                const uid = (p.patientUid || '').toLowerCase();
+                const doc = (p.attendingDoctor || '').toLowerCase();
+                const ward = (p.ward || '').toLowerCase();
+                const bed = String(p.bedNumber || '').toLowerCase();
 
-                if (!pName.includes(q) && !pId.includes(q) && !docName.includes(q) && !ward.includes(q) && !bed.includes(q)) {
+                if (!name.includes(q) && !uid.includes(q) && !doc.includes(q) && !ward.includes(q) && !bed.includes(q)) {
                     return false;
                 }
             }
 
-            // 2. Ward tab
-            if (activeWard !== 'All' && a.ward !== activeWard) {
+            // Ward filter
+            if (activeWard !== 'All' && p.ward !== activeWard) {
                 return false;
             }
 
-            // 3. Workload filter
-            if (workloadFilter === 'MY_PATIENTS') {
-                const isAssigned = (a.assignedNurses || []).some(
-                    n => String(n.nurseId?._id || n.nurseId) === String(userId) && n.status === 'ACTIVE'
-                );
-                if (!isAssigned) return false;
-            } else if (workloadFilter === 'CRITICAL_VITALS') {
-                const vit = vitalsMap[a._id];
-                const status = getVitalStatus(vit);
-                const hasCritical = status && status.some(s => s.status === 'critical');
-                if (!hasCritical) return false;
-            } else if (workloadFilter === 'DISCHARGE_PENDING') {
-                if (!a.dischargeReadiness?.doctorDischargeOrdered) return false;
-            } else if (workloadFilter === 'ALERTS') {
-                const alerts = alertsMap[a._id] || [];
-                if (alerts.length === 0) return false;
-            }
+            // Clinical Status filter
+            if (activeFilter === 'Critical' && p.clinicalStatus !== 'Critical') return false;
+            if (activeFilter === 'Medication Due' && !p.medicineDue) return false;
+            if (activeFilter === 'Drip Running' && !p.ivFluid) return false;
+            if (activeFilter === 'Stable' && p.clinicalStatus !== 'Stable') return false;
 
             return true;
         });
-    }, [admissions, searchText, activeWard, workloadFilter, vitalsMap, alertsMap, userId]);
-
-    // ── Summary KPI Counts ──
-    const myPatientsCount = useMemo(() => {
-        return admissions.filter(a =>
-            (a.assignedNurses || []).some(n => String(n.nurseId?._id || n.nurseId) === String(userId) && n.status === 'ACTIVE')
-        ).length;
-    }, [admissions, userId]);
-
-    const criticalVitalsCount = useMemo(() => {
-        return Object.values(vitalsMap).filter(v => {
-            const status = getVitalStatus(v);
-            return status && status.some(s => s.status === 'critical');
-        }).length;
-    }, [vitalsMap]);
+    }, [patients, searchText, activeWard, activeFilter]);
 
     return (
-        <div className="nurse-dashboard">
-            {/* ── Top Bar ── */}
-            <div className="nd-header">
-                <div className="nd-header-title">
-                    <span className="nd-header-tag">IPD Clinical Operations</span>
-                    <h1>Nurse Command Center</h1>
-                    <p>Logged in as <strong>{userName}</strong> • {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}</p>
+        <div className="nurse-ipd-container">
+            {/* ── Toast Notification ── */}
+            {toast && (
+                <div className={`nipd-toast ${toast.type}`}>
+                    <span>{toast.message}</span>
                 </div>
-                <div className="nd-header-actions">
-                    <button className="nd-refresh-btn" onClick={fetchDashboardData} disabled={loading}>
-                        <FiRefreshCw size={14} className={loading ? 'spinning' : ''} /> Refresh Live
+            )}
+
+            {/* ── Header ── */}
+            <div className="nipd-header">
+                <div className="nipd-header-left">
+                    <div className="nipd-title-badge">NURSE CLINICAL WORKSPACE</div>
+                    <h1 className="nipd-title">Nurse IPD Care</h1>
+                    <p className="nipd-subtitle">Manage assigned inpatients, medications, IV fluids and clinical tasks.</p>
+                </div>
+                <div className="nipd-header-right">
+                    <div className="nipd-live-badge">
+                        <span className="nipd-pulse-dot" /> LIVE
+                    </div>
+                    <button
+                        className="nipd-refresh-btn"
+                        onClick={() => fetchDashboardData(true)}
+                        disabled={refreshing || loading}
+                        title="Refresh IPD Care status"
+                    >
+                        <FiRefreshCw size={14} className={refreshing ? 'spinning' : ''} />
+                        <span>Refresh</span>
                     </button>
-                </div>
-            </div>
-
-            {/* ── KPI Operations Summary Bar ── */}
-            <div className="nd-stats-row">
-                <div className={`nd-stat-card ${workloadFilter === 'ALL' ? 'active' : ''}`} onClick={() => setWorkloadFilter('ALL')}>
-                    <div className="nd-stat-icon total"><FiUsers size={20} /></div>
-                    <div className="nd-stat-body">
-                        <span className="nd-stat-num">{admissions.length}</span>
-                        <span className="nd-stat-label">Total Inpatients</span>
-                    </div>
-                </div>
-
-                <div className={`nd-stat-card ${workloadFilter === 'MY_PATIENTS' ? 'active' : ''}`} onClick={() => setWorkloadFilter('MY_PATIENTS')}>
-                    <div className="nd-stat-icon my"><FiUserCheck size={20} /></div>
-                    <div className="nd-stat-body">
-                        <span className="nd-stat-num">{myPatientsCount}</span>
-                        <span className="nd-stat-label">Assigned to Me</span>
-                    </div>
-                </div>
-
-                <div className={`nd-stat-card ${workloadFilter === 'CRITICAL_VITALS' ? 'active' : ''}`} onClick={() => setWorkloadFilter('CRITICAL_VITALS')}>
-                    <div className="nd-stat-icon vitals"><FiActivity size={20} /></div>
-                    <div className="nd-stat-body">
-                        <span className="nd-stat-num">{criticalVitalsCount}</span>
-                        <span className="nd-stat-label">Critical Vitals</span>
-                    </div>
-                </div>
-
-                <div className="nd-stat-card">
-                    <div className="nd-stat-icon meds"><FiDroplet size={20} /></div>
-                    <div className="nd-stat-body">
-                        <span className="nd-stat-num">{operationsMetrics?.medsDueCount || 0}</span>
-                        <span className="nd-stat-label">Meds Due</span>
-                    </div>
-                </div>
-
-                <div className="nd-stat-card">
-                    <div className="nd-stat-icon tasks"><FiCheckSquare size={20} /></div>
-                    <div className="nd-stat-body">
-                        <span className="nd-stat-num">{operationsMetrics?.overdueTasksCount || 0}</span>
-                        <span className="nd-stat-label">Overdue Tasks</span>
-                    </div>
-                </div>
-
-                <div className={`nd-stat-card ${workloadFilter === 'DISCHARGE_PENDING' ? 'active' : ''}`} onClick={() => setWorkloadFilter('DISCHARGE_PENDING')}>
-                    <div className="nd-stat-icon discharge"><FiLogOut size={20} /></div>
-                    <div className="nd-stat-body">
-                        <span className="nd-stat-num">{operationsMetrics?.dischargePendingCount || 0}</span>
-                        <span className="nd-stat-label">Discharge Pending</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* ── Filters & Search Toolbar ── */}
-            <div className="nd-toolbar">
-                <div className="nd-search-box">
-                    <FiSearch size={16} className="nd-search-icon" />
-                    <input
-                        type="text"
-                        placeholder="Search patient, UHID, MRN, ward, bed, doctor..."
-                        value={searchText}
-                        onChange={e => setSearchText(e.target.value)}
-                    />
-                </div>
-
-                <div className="nd-ward-tabs">
-                    {wards.map(w => (
-                        <button
-                            key={w}
-                            className={`nd-ward-tab ${activeWard === w ? 'active' : ''}`}
-                            onClick={() => setActiveWard(w)}
-                        >
-                            {w}
-                            {w !== 'All' && (
-                                <span className="nd-ward-count">
-                                    {admissions.filter(a => a.ward === w).length}
-                                </span>
-                            )}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* ── Patient Cards Grid ── */}
-            {loading && admissions.length === 0 ? (
-                <div className="nd-loading">
-                    <div className="nd-spinner" /> Loading active inpatients...
-                </div>
-            ) : filteredAdmissions.length === 0 ? (
-                <div className="nd-empty">
-                    <div className="nd-empty-icon">🏥</div>
-                    <h3>No admitted patients matching criteria</h3>
-                    <p>{searchText || activeWard !== 'All' || workloadFilter !== 'ALL' ? 'Try adjusting your search query or filters.' : 'All beds are currently available.'}</p>
-                </div>
-            ) : (
-                <div className="nd-grid">
-                    {filteredAdmissions.map(adm => {
-                        const patient = adm.patientId || {};
-                        const patientName = typeof patient === 'object' ? (patient.name || 'Unknown Patient') : 'Unknown';
-                        const patientUid = typeof patient === 'object' ? (patient.patientId || patient.mrn || '') : '';
-                        const doctor = adm.doctorId || {};
-                        const doctorName = typeof doctor === 'object' ? (doctor.name || 'Not Assigned') : 'Not Assigned';
-                        const vitals = vitalsMap[adm._id];
-                        const vitalStatus = getVitalStatus(vitals);
-                        const alerts = alertsMap[adm._id] || [];
-                        const days = daysSince(adm.admissionDate);
-                        const wardClass = getWardClass(adm.ward);
-
-                        // Active Assigned Nurse
-                        const activeAssignments = (adm.assignedNurses || []).filter(n => n.status === 'ACTIVE');
-                        const assignedNurseNames = activeAssignments.map(a => {
-                            if (typeof a.nurseId === 'object' && a.nurseId?.name) return a.nurseId.name;
-                            const found = hospitalNurses.find(hn => String(hn._id) === String(a.nurseId));
-                            return found ? found.name : 'Nurse';
-                        });
-
-                        const isDischargeOrdered = !!adm.dischargeReadiness?.doctorDischargeOrdered;
-                        const isNursingCleared = !!adm.dischargeReadiness?.nursingClearance;
-
-                        return (
-                            <div className="nd-card" key={adm._id}>
-                                <div className="nd-card-head">
-                                    <div className="nd-patient-avatar">{getInitials(patientName)}</div>
-                                    <div className="nd-patient-title">
-                                        <h3 onClick={() => navigate(`/nurse/patient/${adm._id}`)}>{patientName}</h3>
-                                        <div className="nd-patient-sub">
-                                            {patientUid && <span>{patientUid}</span>}
-                                            {patient.gender && <span>• {patient.gender}</span>}
-                                            {patient.age && <span>• {patient.age} yrs</span>}
-                                        </div>
-                                    </div>
-                                    <div className="nd-head-badges">
-                                        <span className={`nd-ward-badge ${wardClass}`}>{adm.ward || 'Ward'}</span>
-                                        <span className="nd-bed-badge">🛏️ {adm.bedNumber || '—'}</span>
-                                    </div>
-                                </div>
-
-                                <div className="nd-card-body">
-                                    <div className="nd-info-row">
-                                        <span className="nd-lbl">Attending:</span>
-                                        <span className="nd-val">Dr. {doctorName}</span>
-                                    </div>
-                                    <div className="nd-info-row">
-                                        <span className="nd-lbl">Admitted:</span>
-                                        <span className="nd-val">
-                                            {adm.admissionDate ? new Date(adm.admissionDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}
-                                            <span className="nd-days-badge">({days}d)</span>
-                                        </span>
-                                    </div>
-
-                                    {/* Assigned Nurse Banner */}
-                                    <div className="nd-nurse-row">
-                                        <span className="nd-lbl">Care Nurse:</span>
-                                        {assignedNurseNames.length > 0 ? (
-                                            <span className="nd-nurse-name">
-                                                <FiUserCheck size={12} /> {assignedNurseNames.join(', ')}
-                                            </span>
-                                        ) : (
-                                            <button className="nd-assign-btn" onClick={() => setAssignModal({ open: true, admission: adm, nurseId: '', shift: 'Morning', notes: '' })}>
-                                                + Assign Nurse
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Live Vitals Badges */}
-                                    {vitalStatus && (
-                                        <div className="nd-vitals-row">
-                                            {vitalStatus.map((v, i) => (
-                                                <span key={i} className={`nd-vital-pill ${v.status}`}>{v.label}</span>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* Alerts / Discharge Status Badges */}
-                                    {(alerts.length > 0 || isDischargeOrdered) && (
-                                        <div className="nd-alerts-row">
-                                            {isDischargeOrdered && (
-                                                <span className={`nd-alert-pill discharge ${isNursingCleared ? 'ready' : 'ordered'}`}>
-                                                    {isNursingCleared ? '✓ Ready for Discharge' : '⚠️ Discharge Ordered'}
-                                                </span>
-                                            )}
-                                            {alerts.slice(0, 2).map((alt, idx) => (
-                                                <span key={idx} className={`nd-alert-pill ${alt.severity.toLowerCase()}`}>
-                                                    {alt.title}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="nd-card-foot">
-                                    <button className="nd-assign-link" onClick={() => setAssignModal({ open: true, admission: adm, nurseId: '', shift: 'Morning', notes: '' })}>
-                                        <FiUserCheck size={13} /> {assignedNurseNames.length > 0 ? 'Change Nurse' : 'Assign'}
-                                    </button>
-                                    <button className="nd-action-btn" onClick={() => navigate(`/nurse/patient/${adm._id}`)}>
-                                        Open Workspace <FiChevronRight size={14} />
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-
-            {/* ── Quick Assign Nurse Modal ── */}
-            {assignModal.open && (
-                <div className="nd-modal-overlay" onClick={() => setAssignModal({ open: false, admission: null, nurseId: '', shift: 'Morning', notes: '' })}>
-                    <div className="nd-modal" onClick={e => e.stopPropagation()}>
-                        <div className="nd-modal-header">
-                            <h3>Assign Primary Care Nurse</h3>
+                    <div className="nipd-nurse-profile">
+                        <div className="nipd-nurse-avatar">{getInitials(userName)}</div>
+                        <div className="nipd-nurse-info">
+                            <span className="nipd-nurse-name">{userName}</span>
+                            <span className="nipd-nurse-role">Duty Staff Nurse</span>
                         </div>
-                        <form onSubmit={handleAssignSubmit}>
-                            <div className="nd-modal-body">
-                                <div className="nd-form-group">
-                                    <label>Patient</label>
-                                    <div style={{ fontWeight: 600, color: '#0f172a', padding: '4px 0' }}>
-                                        {typeof assignModal.admission?.patientId === 'object' ? assignModal.admission.patientId?.name : 'Patient'}
-                                        <span style={{ fontSize: '0.8rem', color: '#64748b', marginLeft: '8px' }}>
-                                            ({assignModal.admission?.ward} • Bed {assignModal.admission?.bedNumber})
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="nd-form-group" style={{ marginTop: '12px' }}>
-                                    <label>Select Nurse *</label>
-                                    <select
-                                        value={assignModal.nurseId}
-                                        onChange={e => setAssignModal(p => ({ ...p, nurseId: e.target.value }))}
-                                        required
-                                    >
-                                        <option value="">-- Choose Nurse --</option>
-                                        {hospitalNurses.map(n => (
-                                            <option key={n._id} value={n._id}>
-                                                {n.name} ({n.specialization || n.role || 'Staff Nurse'})
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="nd-form-group" style={{ marginTop: '12px' }}>
-                                    <label>Assigned Shift</label>
-                                    <select
-                                        value={assignModal.shift}
-                                        onChange={e => setAssignModal(p => ({ ...p, shift: e.target.value }))}
-                                    >
-                                        <option value="Morning">Morning Shift</option>
-                                        <option value="Evening">Evening Shift</option>
-                                        <option value="Night">Night Shift</option>
-                                        <option value="All">All Shifts / Primary Incharge</option>
-                                    </select>
-                                </div>
-                                <div className="nd-form-group" style={{ marginTop: '12px' }}>
-                                    <label>Assignment Notes</label>
-                                    <textarea
-                                        placeholder="Special instructions for the assigned nurse..."
-                                        value={assignModal.notes}
-                                        onChange={e => setAssignModal(p => ({ ...p, notes: e.target.value }))}
-                                        rows={2}
-                                    />
-                                </div>
-                            </div>
-                            <div className="nd-modal-footer">
-                                <button type="button" className="nd-btn secondary" onClick={() => setAssignModal({ open: false, admission: null, nurseId: '', shift: 'Morning', notes: '' })}>
-                                    Cancel
-                                </button>
-                                <button type="submit" className="nd-btn primary" disabled={submittingAssign || !assignModal.nurseId}>
-                                    {submittingAssign ? 'Assigning...' : 'Confirm Assignment'}
-                                </button>
-                            </div>
-                        </form>
                     </div>
                 </div>
-            )}
+            </div>
 
-            {/* ── Toast Feedback ── */}
-            {toast && <div className={`nd-toast ${toast.type}`}>{toast.message}</div>}
+            {/* ── Top Summary Cards ── */}
+            <div className="nipd-summary-grid">
+                <div
+                    className={`nipd-summary-card ${activeFilter === 'All' ? 'selected' : ''}`}
+                    onClick={() => setActiveFilter('All')}
+                >
+                    <div className="nipd-summary-icon blue">
+                        <FiUsers size={20} />
+                    </div>
+                    <div className="nipd-summary-data">
+                        <span className="nipd-summary-value">{summary.assignedPatients || patients.length || 0}</span>
+                        <span className="nipd-summary-label">Assigned Patients</span>
+                    </div>
+                </div>
+
+                <div
+                    className={`nipd-summary-card ${activeFilter === 'Medication Due' ? 'selected' : ''}`}
+                    onClick={() => setActiveFilter('Medication Due')}
+                >
+                    <div className="nipd-summary-icon amber">
+                        <FiClock size={20} />
+                    </div>
+                    <div className="nipd-summary-data">
+                        <span className="nipd-summary-value">{summary.medicinesDue || 0}</span>
+                        <span className="nipd-summary-label">Medicines Due</span>
+                    </div>
+                </div>
+
+                <div
+                    className={`nipd-summary-card alert ${summary.overdue > 0 ? 'has-alert' : ''}`}
+                    onClick={() => setActiveFilter('Medication Due')}
+                >
+                    <div className="nipd-summary-icon red">
+                        <FiAlertTriangle size={20} />
+                    </div>
+                    <div className="nipd-summary-data">
+                        <span className="nipd-summary-value">{summary.overdue || 0}</span>
+                        <span className="nipd-summary-label">Overdue</span>
+                    </div>
+                </div>
+
+                <div
+                    className={`nipd-summary-card ${activeFilter === 'Drip Running' ? 'selected' : ''}`}
+                    onClick={() => setActiveFilter('Drip Running')}
+                >
+                    <div className="nipd-summary-icon teal">
+                        <FiDroplet size={20} />
+                    </div>
+                    <div className="nipd-summary-data">
+                        <span className="nipd-summary-value">{summary.ivRunning || 0}</span>
+                        <span className="nipd-summary-label">IV Drips Running</span>
+                    </div>
+                </div>
+
+                <div className="nipd-summary-card">
+                    <div className="nipd-summary-icon purple">
+                        <FiCheckSquare size={20} />
+                    </div>
+                    <div className="nipd-summary-data">
+                        <span className="nipd-summary-value">{summary.tasksPending || 0}</span>
+                        <span className="nipd-summary-label">Tasks Pending</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── Main Section: Patient List ── */}
+            <div className="nipd-patient-section">
+                <div className="nipd-section-header">
+                    <div className="nipd-section-title-wrap">
+                        <h2>MY IPD PATIENTS</h2>
+                        <span className="nipd-patient-count-badge">{filteredPatients.length} Active</span>
+                    </div>
+
+                    {/* Ward Selector */}
+                    <div className="nipd-ward-filter">
+                        {wards.map(w => (
+                            <button
+                                key={w}
+                                className={`nipd-ward-pill ${activeWard === w ? 'active' : ''}`}
+                                onClick={() => setActiveWard(w)}
+                            >
+                                {w}
+                                {w !== 'All' && (
+                                    <span className="nipd-ward-count">
+                                        {patients.filter(p => p.ward === w).length}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Toolbar: Search & Filter Pills */}
+                <div className="nipd-toolbar">
+                    <div className="nipd-search-box">
+                        <FiSearch size={16} className="nipd-search-icon" />
+                        <input
+                            type="text"
+                            placeholder="Search patient, MRN, UHID, ward or bed..."
+                            value={searchText}
+                            onChange={(e) => setSearchText(e.target.value)}
+                        />
+                        {searchText && (
+                            <button className="nipd-search-clear" onClick={() => setSearchText('')}>✕</button>
+                        )}
+                    </div>
+
+                    <div className="nipd-filter-pills">
+                        {['All', 'Critical', 'Medication Due', 'Drip Running', 'Stable'].map(f => (
+                            <button
+                                key={f}
+                                className={`nipd-filter-pill ${activeFilter === f ? 'active' : ''} ${f === 'Critical' ? 'crit' : ''}`}
+                                onClick={() => setActiveFilter(f)}
+                            >
+                                {f === 'Critical' && '● '}
+                                {f}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Patient Cards Grid */}
+                {loading ? (
+                    <div className="nipd-loading-state">
+                        <div className="nipd-spinner" />
+                        <p>Loading assigned IPD care records...</p>
+                    </div>
+                ) : filteredPatients.length === 0 ? (
+                    <div className="nipd-empty-state">
+                        <div className="nipd-empty-icon">🏥</div>
+                        <h3>No IPD patients assigned</h3>
+                        <p>
+                            {searchText || activeFilter !== 'All' || activeWard !== 'All'
+                                ? 'No patients matched your search or active filter criteria.'
+                                : 'You are all caught up! No active IPD care tasks pending right now.'}
+                        </p>
+                        {(searchText || activeFilter !== 'All' || activeWard !== 'All') && (
+                            <button
+                                className="nipd-reset-btn"
+                                onClick={() => { setSearchText(''); setActiveFilter('All'); setActiveWard('All'); }}
+                            >
+                                Reset Filters
+                            </button>
+                        )}
+                    </div>
+                ) : (
+                    <div className="nipd-cards-grid">
+                        {filteredPatients.map(pt => {
+                            const wardClass = getWardBadgeClass(pt.ward);
+                            const isCrit = pt.clinicalStatus === 'Critical';
+
+                            return (
+                                <div className={`nipd-patient-card ${isCrit ? 'critical-border' : ''}`} key={pt.admissionId}>
+                                    {/* Card Top: Patient Details & Status */}
+                                    <div className="nipd-card-top">
+                                        <div className="nipd-patient-primary">
+                                            <div className="nipd-pt-avatar">{getInitials(pt.patientName)}</div>
+                                            <div className="nipd-pt-meta">
+                                                <h3 className="nipd-pt-name" onClick={() => navigate(`/nurse/patient/${pt.admissionId}`)}>
+                                                    {pt.patientName}
+                                                </h3>
+                                                <div className="nipd-pt-sub">
+                                                    {pt.age && <span>{pt.age} Yrs</span>}
+                                                    {pt.gender && <span>• {pt.gender}</span>}
+                                                    {pt.patientUid && <span className="nipd-mrn-tag">MRN: {pt.patientUid}</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="nipd-location-badges">
+                                            <span className={`nipd-ward-badge ${wardClass}`}>{pt.ward}</span>
+                                            <span className="nipd-bed-badge">Bed {pt.bedNumber}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Attending Doctor & Clinical Status Bar */}
+                                    <div className="nipd-card-mid-bar">
+                                        <div className="nipd-doctor-tag">
+                                            <span className="nipd-lbl">Attending:</span>
+                                            <strong>{pt.attendingDoctor}</strong>
+                                        </div>
+                                        <div className={`nipd-status-pill ${pt.clinicalStatus.toLowerCase().replace(/\s+/g, '-')}`}>
+                                            ● {pt.clinicalStatus}
+                                        </div>
+                                    </div>
+
+                                    {/* Clinical Care Status: Med Due, Next, IV Fluid */}
+                                    <div className="nipd-card-clinical-body">
+                                        {/* Medicine Due Now */}
+                                        <div className={`nipd-clinical-row ${pt.medicineDue?.isOverdue ? 'overdue-alert' : pt.medicineDue ? 'due-alert' : ''}`}>
+                                            <div className="nipd-row-label">
+                                                <span className="nipd-dot" />
+                                                <strong>Medicine Due:</strong>
+                                            </div>
+                                            <div className="nipd-row-content">
+                                                {pt.medicineDue ? (
+                                                    <span className="nipd-med-highlight">
+                                                        {pt.medicineDue.name} {pt.medicineDue.dose ? `(${pt.medicineDue.dose})` : ''} — <strong>{pt.medicineDue.timeStr}</strong>
+                                                        {pt.medicineDue.isOverdue && <span className="nipd-overdue-tag">OVERDUE</span>}
+                                                    </span>
+                                                ) : (
+                                                    <span className="nipd-muted-text">None currently due</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Next Medicine */}
+                                        <div className="nipd-clinical-row">
+                                            <div className="nipd-row-label">
+                                                <span className="nipd-dot next" />
+                                                <span>Next:</span>
+                                            </div>
+                                            <div className="nipd-row-content">
+                                                {pt.nextMedicine ? (
+                                                    <span>{pt.nextMedicine.name} {pt.nextMedicine.dose ? `(${pt.nextMedicine.dose})` : ''} — <strong>{pt.nextMedicine.timeStr}</strong></span>
+                                                ) : (
+                                                    <span className="nipd-muted-text">—</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* IV Fluid / Drip Running */}
+                                        <div className="nipd-clinical-row iv">
+                                            <div className="nipd-row-label">
+                                                <span className="nipd-dot iv" />
+                                                <span>IV:</span>
+                                            </div>
+                                            <div className="nipd-row-content">
+                                                {pt.ivFluid ? (
+                                                    <span className="nipd-iv-running-tag">
+                                                        <FiDroplet size={12} /> {pt.ivFluid.name} — <strong>Running ({pt.ivFluid.rate})</strong>
+                                                    </span>
+                                                ) : (
+                                                    <span className="nipd-muted-text">No active IV drip</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Card Footer: Vitals Snippet & Open Patient Action */}
+                                    <div className="nipd-card-footer">
+                                        <div className="nipd-footer-vitals">
+                                            {pt.latestVitals ? (
+                                                <div className="nipd-vitals-pills">
+                                                    {pt.latestVitals.bp && <span className="nipd-v-pill">BP {pt.latestVitals.bp}</span>}
+                                                    {pt.latestVitals.pulse && <span className="nipd-v-pill">HR {pt.latestVitals.pulse}</span>}
+                                                    {pt.latestVitals.spo2 && (
+                                                        <span className={`nipd-v-pill ${pt.latestVitals.spo2 < 95 ? 'spo2-warn' : ''}`}>
+                                                            SpO₂ {pt.latestVitals.spo2}%
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="nipd-no-vitals">Vitals pending</span>
+                                            )}
+                                        </div>
+
+                                        <button
+                                            className="nipd-open-btn"
+                                            onClick={() => navigate(`/nurse/patient/${pt.admissionId}`)}
+                                        >
+                                            <span>Open Patient</span>
+                                            <FiChevronRight size={15} />
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

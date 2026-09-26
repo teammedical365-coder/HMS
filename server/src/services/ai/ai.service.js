@@ -128,21 +128,43 @@ class AIService {
             
             const { parsed, raw } = this._parseJsonResponse(text);
 
+            let reportBasedSuggestions = [];
+
             if (parsed) {
-                return { summary: parsed, usage: billingUsage };
+                const rawSuggestions = parsed.ReportBasedSuggestions || parsed.reportBasedSuggestions || parsed.suggestions || parsed.ReportSuggestions || [];
+                if (Array.isArray(rawSuggestions)) {
+                    reportBasedSuggestions = rawSuggestions
+                        .filter(item => item && typeof item === 'object')
+                        .map(item => ({
+                            finding: (item.finding || item.Finding || item.name || item.parameter || '').trim(),
+                            suggestedStep: (item.suggestedStep || item.SuggestedNextStep || item.suggested_step || item.suggestion || item.nextStep || '').trim(),
+                            why: (item.why || item.Why || item.reason || item.Reason || item.basedOn || item.BasedOn || '').trim()
+                        }))
+                        .filter(item => item.finding || item.suggestedStep)
+                        .slice(0, 5);
+                }
+
+                // Attach sanitized suggestions into summary object as well for backward compatibility
+                parsed.ReportBasedSuggestions = reportBasedSuggestions;
+
+                return { summary: parsed, reportBasedSuggestions, usage: billingUsage };
             }
 
             // Fallback: wrap raw text in a structured response
+            const fallbackSummary = {
+                ContentType: 'General Analysis',
+                ReportType: 'Unknown',
+                OverallSummary: raw || 'Unable to generate a structured summary for this content.',
+                ImportantFindings: [],
+                AbnormalValues: [],
+                VisibleObservations: [],
+                NotableFindings: [],
+                ReportBasedSuggestions: []
+            };
+
             return {
-                summary: {
-                    ContentType: 'General Analysis',
-                    ReportType: 'Unknown',
-                    OverallSummary: raw || 'Unable to generate a structured summary for this content.',
-                    ImportantFindings: [],
-                    AbnormalValues: [],
-                    VisibleObservations: [],
-                    NotableFindings: []
-                },
+                summary: fallbackSummary,
+                reportBasedSuggestions: [],
                 usage: billingUsage
             };
         } catch (err) {

@@ -54,7 +54,8 @@ userSchema.methods.comparePassword = async function (entered) {
 };
 
 const appointmentSchema = new mongoose.Schema({
-    patientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    userId: { type: mongoose.Schema.Types.Mixed, default: null },
+    patientId: { type: mongoose.Schema.Types.Mixed, default: null },
     doctorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     hospitalId: { type: mongoose.Schema.Types.ObjectId },
     date: Date,
@@ -75,7 +76,8 @@ const appointmentSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const labReportSchema = new mongoose.Schema({
-    patientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    userId: { type: mongoose.Schema.Types.Mixed, default: null },
+    patientId: { type: mongoose.Schema.Types.Mixed, default: null },
     testName: String,
     status: { type: String, default: 'Pending' },
     paymentStatus: { type: String, enum: ['Pending', 'Paid', 'Waived'], default: 'Pending' },
@@ -85,7 +87,8 @@ const labReportSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const pharmacyOrderSchema = new mongoose.Schema({
-    patientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    userId: { type: mongoose.Schema.Types.Mixed, default: null },
+    patientId: { type: mongoose.Schema.Types.Mixed, default: null },
     items: [{ name: String, qty: Number, price: Number }],
     totalAmount: { type: Number, default: 0 },
     paymentStatus: { type: String, enum: ['Pending', 'Paid', 'Waived'], default: 'Pending' },
@@ -121,7 +124,7 @@ const transferRecordSchema = new mongoose.Schema({
     fromBedId: { type: mongoose.Schema.Types.ObjectId, ref: 'Bed' },
     toWard: { type: String, required: true },
     toBedNumber: { type: String, required: true },
-    toBedId: { type: mongoose.Schema.Types.ObjectId, ref: 'Bed', required: true },
+    toBedId: { type: mongoose.Schema.Types.ObjectId, ref: 'Bed', required: false },
     transferDate: { type: Date, required: true },
     transferTime: { type: String, default: '' },
     ratePerDay: { type: Number, default: 0 },
@@ -190,9 +193,9 @@ const admissionSchema = new mongoose.Schema({
     dischargeDate: Date,
     dischargeTime: { type: String, default: '' },
     status: { type: String, enum: ['Admitted', 'Discharged'], default: 'Admitted' },
-    ward: { type: String, required: true },
-    bedNumber: { type: String, required: true },
-    bedId: { type: mongoose.Schema.Types.ObjectId, ref: 'Bed', required: true },
+    ward: { type: String, default: 'IPD Ward' },
+    bedNumber: { type: String, default: 'Pending Allocation' },
+    bedId: { type: mongoose.Schema.Types.ObjectId, ref: 'Bed', required: false },
     wardRatePerDay: { type: Number, default: 0 },
     wardHourlyRate: { type: Number, default: 0 },
     transferHistory: [transferRecordSchema],

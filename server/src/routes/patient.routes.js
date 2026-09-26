@@ -368,11 +368,20 @@ router.post('/:id/consent', verifyToken, resolveTenant, consentUpload.single('co
 
         const consentEntry = {
             fileName: req.file.originalname,
+            title: req.body.procedureName || req.body.title || req.file.originalname,
+            consentType: req.body.consentType || 'GENERAL_ADMISSION',
+            procedureName: req.body.procedureName || '',
+            doctorName: req.body.doctorName || '',
+            witnessName: req.body.witnessName || '',
+            witnessRelation: req.body.witnessRelation || 'Self',
+            witnessPhone: req.body.witnessPhone || '',
+            notes: req.body.notes || '',
             url: result.url,
             fileId: result.fileId,
             mimeType: req.file.mimetype,
             uploadedAt: new Date(),
-            uploadedBy: req.user.name || req.user._id
+            uploadedBy: req.user.name || req.user.username || 'Nurse Staff',
+            uploadedByRole: req.user.role || 'Nurse'
         };
 
         if (!user.fertilityProfile) user.fertilityProfile = {};
@@ -383,7 +392,7 @@ router.post('/:id/consent', verifyToken, resolveTenant, consentUpload.single('co
         user.markModified('fertilityProfile');
         await user.save();
 
-        res.json({ success: true, message: 'Consent form uploaded', consent: consentEntry });
+        res.json({ success: true, message: 'Consent form uploaded successfully', consent: consentEntry });
     } catch (error) {
         console.error('[consent-upload]', error.message);
         res.status(500).json({ success: false, message: 'Upload failed' });

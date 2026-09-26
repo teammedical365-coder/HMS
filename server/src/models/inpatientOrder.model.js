@@ -8,22 +8,22 @@ const orderAcknowledgmentSchema = new mongoose.Schema({
 }, { _id: true, timestamps: true });
 
 const orderClarificationSchema = new mongoose.Schema({
-    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    nurseId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    requestedBy: { type: mongoose.Schema.Types.Mixed },
+    requestedByName: { type: String, default: '' },
+    nurseId: { type: mongoose.Schema.Types.Mixed },
     issueType: {
         type: String,
-        enum: ['DOSE_QUERY', 'ROUTE_QUERY', 'FREQUENCY_QUERY', 'PATIENT_CONDITION', 'DRUG_INTERACTION', 'ALLERGY_ALERT', 'OTHER'],
         default: 'DOSE_QUERY'
     },
     question: { type: String, required: true, trim: true },
     requestedAt: { type: Date, default: Date.now },
-    responseDoctorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    responseDoctorId: { type: mongoose.Schema.Types.Mixed },
     responseText: { type: String, default: '', trim: true },
     respondedAt: { type: Date },
     status: {
         type: String,
-        enum: ['PENDING', 'RESOLVED'],
-        default: 'PENDING'
+        enum: ['OPEN', 'PENDING', 'RESOLVED', 'CLOSED'],
+        default: 'OPEN'
     }
 }, { _id: true, timestamps: true });
 
@@ -49,6 +49,8 @@ const inpatientOrderSchema = new mongoose.Schema({
         default: 'Oral'
     },
     frequency: { type: String, default: 'OD', trim: true }, // STAT, OD, BD, TDS, QID, Q4H, Q6H, Q8H, SOS
+    scheduledTimes: [{ type: String, trim: true }], // Custom manual admin times e.g. ['09:00', '14:00', '21:00'] or ['10:00 AM', '08:00 PM']
+    inventoryItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Inventory', required: false },
     startDate: { type: Date, default: Date.now },
     endDate: { type: Date },
     duration: { type: String, default: '', trim: true }, // e.g. "5 days", "STAT", "Continuous"

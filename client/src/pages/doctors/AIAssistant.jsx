@@ -71,6 +71,7 @@ const AIAssistant = () => {
 
     // ── AI Summary State ──
     const [summary, setSummary] = useState(null);
+    const [reportSuggestions, setReportSuggestions] = useState(null);
     const [isSummaryLoading, setIsSummaryLoading] = useState(false);
     const [summaryError, setSummaryError] = useState(null);
 
@@ -277,6 +278,8 @@ const AIAssistant = () => {
             } else {
                 setReports([]);
                 setSelectedReport(null);
+                setSummary(null);
+                setReportSuggestions(null);
                 setCompareReport1('');
                 setCompareReport2('');
             }
@@ -284,6 +287,8 @@ const AIAssistant = () => {
             console.warn("Error loading patient documents:", err?.message);
             setReports([]);
             setSelectedReport(null);
+            setSummary(null);
+            setReportSuggestions(null);
         } finally {
             setIsReportsLoading(false);
         }
@@ -318,10 +323,20 @@ const AIAssistant = () => {
             }
         };
         setSelectedPatient(patientObj);
+        setSelectedReport(null);
         setSearchQuery('');
         setSearchResults([]);
         setSummary(null);
+        setReportSuggestions(null);
         loadPatientDocuments(p._id);
+    };
+
+    // Report selection handler with clean isolation
+    const handleSelectReport = (r) => {
+        setSelectedReport(r);
+        setSummary(null);
+        setReportSuggestions(null);
+        setSummaryError(null);
     };
 
     // Generate Summary handler
@@ -329,6 +344,7 @@ const AIAssistant = () => {
         if (!selectedReport || isExhausted) return;
         setIsSummaryLoading(true);
         setSummaryError(null);
+        setReportSuggestions(null);
 
         try {
             const fileUrl = selectedReport.url || selectedReport.fileUrl;
@@ -358,6 +374,10 @@ const AIAssistant = () => {
                     }
                     setSummary(formatted.trim());
                 }
+
+                // Extract and store report-based suggestions
+                const suggestions = res.reportBasedSuggestions || (typeof s === 'object' && s?.ReportBasedSuggestions) || [];
+                setReportSuggestions(Array.isArray(suggestions) ? suggestions : []);
 
                 if (res.wallet) setWallet(prev => ({ ...prev, ...res.wallet }));
                 else if (res.usage?.wallet) setWallet(prev => ({ ...prev, ...res.usage.wallet }));
@@ -796,7 +816,7 @@ const AIAssistant = () => {
                                         <div 
                                             key={r._id || i}
                                             className={`cca-report-item ${isSelected ? 'active' : ''}`}
-                                            onClick={() => setSelectedReport(r)}
+                                            onClick={() => handleSelectReport(r)}
                                         >
                                             <div className="cca-report-icon-box">
                                                 {isImageMime(r.mimeType, r.url || r.fileUrl) ? (
@@ -821,7 +841,7 @@ const AIAssistant = () => {
                                                 ) : (
                                                     <button 
                                                         className="cca-btn-select-report"
-                                                        onClick={() => setSelectedReport(r)}
+                                                        onClick={() => handleSelectReport(r)}
                                                     >
                                                         Select
                                                     </button>
@@ -882,28 +902,82 @@ const AIAssistant = () => {
                             )}
 
                             {!isSummaryLoading && summary && (
-                                <div className="cca-exact-summary-markdown-box ai-markdown-body">
-                                    <ReactMarkdown 
-                                        remarkPlugins={[remarkGfm]}
-                                        components={{
-                                            table: ({ node, ...props }) => (
-                                                <div className="ai-markdown-table-wrapper">
-                                                    <table className="ai-markdown-table" {...props} />
-                                                </div>
-                                            ),
-                                            th: ({ node, ...props }) => <th className="ai-table-th" {...props} />,
-                                            td: ({ node, ...props }) => <td className="ai-table-td" {...props} />,
-                                            h1: ({ node, ...props }) => <h3 className="ai-md-h1" {...props} />,
-                                            h2: ({ node, ...props }) => <h4 className="ai-md-h2" {...props} />,
-                                            h3: ({ node, ...props }) => <h5 className="ai-md-h3" {...props} />,
-                                            ul: ({ node, ...props }) => <ul className="ai-md-ul" {...props} />,
-                                            ol: ({ node, ...props }) => <ol className="ai-md-ol" {...props} />,
-                                            li: ({ node, ...props }) => <li className="ai-md-li" {...props} />
-                                        }}
-                                    >
-                                        {summary}
-                                    </ReactMarkdown>
-                                </div>
+                                <>
+                                    <div className="cca-exact-summary-markdown-box ai-markdown-body">
+                                        <ReactMarkdown 
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                                table: ({ node, ...props }) => (
+                                                    <div className="ai-markdown-table-wrapper">
+                                                        <table className="ai-markdown-table" {...props} />
+                                                    </div>
+                                                ),
+                                                th: ({ node, ...props }) => <th className="ai-table-th" {...props} />,
+                                                td: ({ node, ...props }) => <td className="ai-table-td" {...props} />,
+                                                h1: ({ node, ...props }) => <h3 className="ai-md-h1" {...props} />,
+                                                h2: ({ node, ...props }) => <h4 className="ai-md-h2" {...props} />,
+                                                h3: ({ node, ...props }) => <h5 className="ai-md-h3" {...props} />,
+                                                ul: ({ node, ...props }) => <ul className="ai-md-ul" {...props} />,
+                                                ol: ({ node, ...props }) => <ol className="ai-md-ol" {...props} />,
+                                                li: ({ node, ...props }) => <li className="ai-md-li" {...props} />
+                                            }}
+                                        >
+                                            {summary}
+                                        </ReactMarkdown>
+                                    </div>
+
+                                    {/* ── Report-Based Suggestions Section ── */}
+                                    <div className="cca-report-suggestions-container">
+                                        <div className="cca-report-suggestions-header">
+                                            <div className="cca-report-suggestions-title-row">
+                                                <span className="cca-report-suggestions-badge-icon">💡</span>
+                                                <h4 className="cca-report-suggestions-heading">Report-Based Suggestions</h4>
+                                            </div>
+                                            <span className="cca-report-suggestions-count-badge">
+                                                {Array.isArray(reportSuggestions) && reportSuggestions.length > 0 
+                                                    ? `${reportSuggestions.length} Clinical Context Note${reportSuggestions.length > 1 ? 's' : ''}` 
+                                                    : 'Clinical Review'}
+                                            </span>
+                                        </div>
+
+                                        {Array.isArray(reportSuggestions) && reportSuggestions.length > 0 ? (
+                                            <div className="cca-report-suggestions-cards">
+                                                {reportSuggestions.map((item, idx) => (
+                                                    <div key={idx} className="cca-suggestion-card">
+                                                        <div className="cca-suggestion-card-header">
+                                                            <span className="cca-suggestion-idx-pill">{idx + 1}</span>
+                                                            <h5 className="cca-suggestion-finding-title">{item.finding || 'Abnormal Observation'}</h5>
+                                                        </div>
+                                                        <div className="cca-suggestion-card-body">
+                                                            <div className="cca-suggestion-field">
+                                                                <span className="cca-suggestion-field-label step-label">Suggested Next Step:</span>
+                                                                <p className="cca-suggestion-field-value step-value">{item.suggestedStep || 'Doctor se clinical correlation discuss karein.'}</p>
+                                                            </div>
+                                                            <div className="cca-suggestion-field">
+                                                                <span className="cca-suggestion-field-label reason-label">Based on:</span>
+                                                                <p className="cca-suggestion-field-value reason-value">{item.why || 'Report me observed findings.'}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="cca-report-suggestions-empty">
+                                                <span className="cca-report-suggestions-empty-icon">ℹ️</span>
+                                                <p className="cca-report-suggestions-empty-text">
+                                                    No specific report-based suggestions could be generated from the available findings. Clinical review is recommended.
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        <div className="cca-report-suggestions-safety-note">
+                                            <span className="cca-safety-note-icon">⚕️</span>
+                                            <span className="cca-safety-note-text">
+                                                <strong>Medical Safety Notice:</strong> AI suggestions are purely advisory and based strictly on the selected document's visible parameters. They do not constitute a confirmed diagnosis or prescription. Treating doctor should exercise independent clinical judgment.
+                                            </span>
+                                        </div>
+                                    </div>
+                                </>
                             )}
 
                             {!isSummaryLoading && !summary && (

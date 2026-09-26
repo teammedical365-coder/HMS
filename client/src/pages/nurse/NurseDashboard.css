@@ -1,803 +1,787 @@
-/* ========================================================================
-   NURSE DASHBOARD — Premium Medical Command Center
-   Color Palette: Deep Teal (#0f766e) / Mint (#14b8a6) / Slate (#0f172a)
-   ======================================================================== */
+/* ── Medical365 Nurse IPD Care Dashboard Styles ── */
 
-.nurse-dashboard {
-    --nd-primary: #0d9488;
-    --nd-primary-dark: #0f766e;
-    --nd-primary-light: #14b8a6;
-    --nd-primary-subtle: #f0fdfa;
-    --nd-accent: #0284c7;
-    --nd-danger: #ef4444;
-    --nd-danger-bg: #fef2f2;
-    --nd-danger-border: #fecaca;
-    --nd-warning: #f59e0b;
-    --nd-warning-bg: #fffbeb;
-    --nd-warning-border: #fde68a;
-    --nd-success: #10b981;
-    --nd-success-bg: #ecfdf5;
-    --nd-success-border: #a7f3d0;
-    --nd-info: #3b82f6;
-    --nd-info-bg: #eff6ff;
-    --nd-dark: #0f172a;
-    --nd-gray-50: #f8fafc;
-    --nd-gray-100: #f1f5f9;
-    --nd-gray-200: #e2e8f0;
-    --nd-gray-300: #cbd5e1;
-    --nd-gray-400: #94a3b8;
-    --nd-gray-500: #64748b;
-    --nd-gray-600: #475569;
-    --nd-gray-700: #334155;
-    --nd-gray-800: #1e293b;
-    
-    --nd-radius-sm: 8px;
-    --nd-radius-md: 12px;
-    --nd-radius-lg: 16px;
-    --nd-radius-xl: 20px;
-    --nd-shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-    --nd-shadow-md: 0 4px 14px rgba(15,23,42,0.06), 0 2px 6px rgba(15,23,42,0.04);
-    --nd-shadow-lg: 0 12px 32px rgba(15,23,42,0.08), 0 4px 12px rgba(15,23,42,0.04);
-
-    min-height: 100vh;
-    background: #f8fafc;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    padding: 24px 32px 40px;
-    color: var(--nd-dark);
+.nurse-ipd-container {
+    padding: 16px 22px 36px;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    min-height: calc(100vh - 70px);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #1e293b;
 }
 
-/* ── Top Bar Header ── */
-.nd-header {
+/* ── Toast Alert (Centered) ── */
+.nipd-toast {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10001;
+    padding: 14px 28px;
+    border-radius: 12px;
+    font-size: 14.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    box-shadow: 0 14px 35px -5px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: nipdSlideCenter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: 24px;
-    gap: 16px;
-    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    max-width: 90vw;
+    text-align: center;
+    pointer-events: auto;
+}
+.nipd-toast.success {
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.nipd-toast.error {
+    background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+@keyframes nipdSlideCenter {
+    from { opacity: 0; transform: translate(-50%, -20px) scale(0.96); }
+    to { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
-.nd-header-tag {
+/* ── Header ── */
+.nipd-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    gap: 20px;
+}
+
+.nipd-title-badge {
     display: inline-block;
-    background: #ccfbf1;
-    color: #0f766e;
-    font-size: 0.72rem;
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #0284c7;
+    background: #e0f2fe;
     padding: 3px 10px;
-    border-radius: 50px;
+    border-radius: 6px;
     margin-bottom: 6px;
 }
 
-.nd-header-title h1 {
-    font-size: 1.75rem;
+.nipd-title {
+    font-size: 26px;
     font-weight: 800;
-    color: var(--nd-dark);
-    margin: 0 0 4px;
-    letter-spacing: -0.4px;
+    color: #0f172a;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.02em;
 }
 
-.nd-header-title p {
-    font-size: 0.88rem;
-    color: var(--nd-gray-500);
+.nipd-subtitle {
+    font-size: 14px;
+    color: #64748b;
     margin: 0;
 }
 
-.nd-refresh-btn {
-    display: inline-flex;
+.nipd-header-right {
+    display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 9px 18px;
-    background: #fff;
-    border: 1.5px solid var(--nd-gray-200);
-    border-radius: var(--nd-radius-md);
-    color: var(--nd-gray-700);
-    font-size: 0.84rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: var(--nd-shadow-sm);
+    gap: 14px;
 }
 
-.nd-refresh-btn:hover {
-    border-color: var(--nd-primary);
-    color: var(--nd-primary);
-    background: var(--nd-primary-subtle);
+.nipd-live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #15803d;
+    background: #dcfce7;
+    border: 1px solid #bbf7d0;
+}
+
+.nipd-pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+    animation: nipdPulse 2s infinite;
+}
+
+@keyframes nipdPulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+.nipd-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.nipd-refresh-btn:hover:not(:disabled) {
+    background: #f1f5f9;
+    color: #0f172a;
+    border-color: #cbd5e1;
+}
+.nipd-refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .spinning {
-    animation: spin 1s linear infinite;
+    animation: spin 0.8s linear infinite;
 }
-
 @keyframes spin {
-    from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
 
-/* ── KPI Operations Summary Row ── */
-.nd-stats-row {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 14px;
-    margin-bottom: 24px;
+.nipd-nurse-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
 }
 
-.nd-stat-card {
-    background: #fff;
-    border: 1.5px solid var(--nd-gray-200);
-    border-radius: var(--nd-radius-lg);
+.nipd-nurse-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nipd-nurse-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.nipd-nurse-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.nipd-nurse-role {
+    font-size: 11px;
+    color: #64748b;
+}
+
+/* ── Summary Cards Grid ── */
+.nipd-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    margin-bottom: 28px;
+}
+
+.nipd-summary-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
     padding: 16px 18px;
     display: flex;
     align-items: center;
     gap: 14px;
     cursor: pointer;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: var(--nd-shadow-sm);
-    position: relative;
-    user-select: none;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
-
-.nd-stat-card:hover {
+.nipd-summary-card:hover {
     transform: translateY(-2px);
-    border-color: var(--nd-primary-light);
-    box-shadow: var(--nd-shadow-md);
+    box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.08);
+    border-color: #cbd5e1;
+}
+.nipd-summary-card.selected {
+    border-color: #0284c7;
+    background: #f0f9ff;
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
+}
+.nipd-summary-card.has-alert {
+    border-color: #fecaca;
+    background: #fef2f2;
 }
 
-.nd-stat-card.active {
-    border-color: var(--nd-primary);
-    background: linear-gradient(135deg, #f0fdfa 0%, #fff 100%);
-    box-shadow: 0 0 0 2px var(--nd-primary);
-}
-
-.nd-stat-icon {
+.nipd-summary-icon {
     width: 44px;
     height: 44px;
-    border-radius: var(--nd-radius-md);
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
 }
+.nipd-summary-icon.blue { background: #e0f2fe; color: #0284c7; }
+.nipd-summary-icon.amber { background: #fef3c7; color: #d97706; }
+.nipd-summary-icon.red { background: #fee2e2; color: #dc2626; }
+.nipd-summary-icon.teal { background: #ccfbf1; color: #0d9488; }
+.nipd-summary-icon.purple { background: #f3e8ff; color: #7c3aed; }
 
-.nd-stat-icon.total { background: #e0f2fe; color: #0284c7; }
-.nd-stat-icon.my { background: #ccfbf1; color: #0f766e; }
-.nd-stat-icon.vitals { background: #fee2e2; color: #dc2626; }
-.nd-stat-icon.meds { background: #fef3c7; color: #d97706; }
-.nd-stat-icon.tasks { background: #f3e8ff; color: #9333ea; }
-.nd-stat-icon.discharge { background: #dcfce7; color: #16a34a; }
-
-.nd-stat-body {
+.nipd-summary-data {
     display: flex;
     flex-direction: column;
 }
 
-.nd-stat-num {
-    font-size: 1.5rem;
+.nipd-summary-value {
+    font-size: 22px;
     font-weight: 800;
-    color: var(--nd-dark);
+    color: #0f172a;
     line-height: 1.1;
 }
 
-.nd-stat-label {
-    font-size: 0.74rem;
+.nipd-summary-label {
+    font-size: 12px;
     font-weight: 600;
-    color: var(--nd-gray-500);
-    margin-top: 3px;
-    text-transform: capitalize;
+    color: #64748b;
+    margin-top: 2px;
 }
 
-/* ── Filters & Search Toolbar ── */
-.nd-toolbar {
+/* ── Patient Section ── */
+.nipd-patient-section {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.nipd-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+
+.nipd-section-title-wrap {
     display: flex;
     align-items: center;
+    gap: 12px;
+}
+
+.nipd-section-title-wrap h2 {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+.nipd-patient-count-badge {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0284c7;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    padding: 2px 10px;
+    border-radius: 12px;
+}
+
+/* Ward filter pills */
+.nipd-ward-filter {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.nipd-ward-pill {
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.nipd-ward-pill:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+.nipd-ward-pill.active {
+    background: #0f172a;
+    color: #ffffff;
+    border-color: #0f172a;
+}
+
+.nipd-ward-count {
+    background: rgba(255, 255, 255, 0.3);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+}
+.nipd-ward-pill.active .nipd-ward-count {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+
+/* ── Toolbar: Search & Filters ── */
+.nipd-toolbar {
+    display: flex;
     justify-content: space-between;
+    align-items: center;
     gap: 16px;
     margin-bottom: 24px;
     flex-wrap: wrap;
 }
 
-.nd-search-box {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: #fff;
-    border: 1.5px solid var(--nd-gray-200);
-    border-radius: var(--nd-radius-md);
-    padding: 10px 16px;
+.nipd-search-box {
+    position: relative;
     flex: 1;
-    max-width: 440px;
-    transition: all 0.2s ease;
-    box-shadow: var(--nd-shadow-sm);
+    min-width: 280px;
+    max-width: 480px;
 }
 
-.nd-search-box:focus-within {
-    border-color: var(--nd-primary);
-    box-shadow: 0 0 0 3px rgba(13,148,136,0.12);
+.nipd-search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
 }
 
-.nd-search-icon {
-    color: var(--nd-gray-400);
-    flex-shrink: 0;
-}
-
-.nd-search-box input {
-    border: none;
-    outline: none;
-    background: transparent;
-    font-size: 0.88rem;
-    color: var(--nd-dark);
+.nipd-search-box input {
     width: 100%;
+    padding: 10px 36px 10px 38px;
+    border-radius: 10px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    font-size: 13px;
+    color: #0f172a;
+    outline: none;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+.nipd-search-box input:focus {
+    background: #ffffff;
+    border-color: #0284c7;
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
 }
 
-.nd-search-box input::placeholder {
-    color: var(--nd-gray-400);
+.nipd-search-clear {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    font-size: 12px;
+    color: #94a3b8;
+    cursor: pointer;
 }
 
-.nd-ward-tabs {
+.nipd-filter-pills {
     display: flex;
-    align-items: center;
     gap: 8px;
     flex-wrap: wrap;
 }
 
-.nd-ward-tab {
-    padding: 8px 16px;
-    border-radius: 50px;
-    font-size: 0.82rem;
+.nipd-filter-pill {
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 13px;
     font-weight: 600;
-    border: 1.5px solid var(--nd-gray-200);
-    background: #fff;
-    color: var(--nd-gray-600);
+    color: #475569;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     cursor: pointer;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    box-shadow: var(--nd-shadow-sm);
+    transition: all 0.15s ease;
 }
-
-.nd-ward-tab:hover {
-    border-color: var(--nd-primary-light);
-    color: var(--nd-primary);
-    background: var(--nd-primary-subtle);
+.nipd-filter-pill:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
 }
-
-.nd-ward-tab.active {
-    background: var(--nd-primary);
-    color: #fff;
-    border-color: var(--nd-primary);
+.nipd-filter-pill.active {
+    background: #0284c7;
+    color: #ffffff;
+    border-color: #0284c7;
 }
-
-.nd-ward-count {
-    font-size: 0.72rem;
-    padding: 1px 7px;
-    border-radius: 20px;
-    background: rgba(0,0,0,0.08);
-    font-weight: 700;
-}
-
-.nd-ward-tab.active .nd-ward-count {
-    background: rgba(255,255,255,0.25);
-    color: #fff;
+.nipd-filter-pill.crit.active {
+    background: #dc2626;
+    border-color: #dc2626;
 }
 
 /* ── Patient Cards Grid ── */
-.nd-grid {
+.nipd-cards-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 18px;
 }
 
-.nd-card {
-    background: #fff;
-    border: 1.5px solid var(--nd-gray-200);
-    border-radius: var(--nd-radius-lg);
-    box-shadow: var(--nd-shadow-sm);
+.nipd-patient-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 18px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    gap: 14px;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
-
-.nd-card:hover {
-    border-color: var(--nd-primary-light);
-    box-shadow: var(--nd-shadow-lg);
+.nipd-patient-card:hover {
     transform: translateY(-3px);
+    box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.08);
+    border-color: #cbd5e1;
+}
+.nipd-patient-card.critical-border {
+    border-left: 4px solid #ef4444;
 }
 
-.nd-card-head {
-    padding: 16px 18px 12px;
+/* Card Top */
+.nipd-card-top {
     display: flex;
+    justify-content: space-between;
     align-items: flex-start;
     gap: 12px;
-    border-bottom: 1px solid var(--nd-gray-100);
 }
 
-.nd-patient-avatar {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #ccfbf1, #99f6e4);
-    color: #0f766e;
-    font-size: 1.05rem;
+.nipd-patient-primary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.nipd-pt-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #0f766e, #0d9488);
+    color: #ffffff;
     font-weight: 800;
+    font-size: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    border: 2px solid #e0f2fe;
 }
 
-.nd-patient-title {
-    flex: 1;
-    min-width: 0;
+.nipd-pt-meta {
+    display: flex;
+    flex-direction: column;
 }
 
-.nd-patient-title h3 {
+.nipd-pt-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: #0f172a;
     margin: 0;
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--nd-dark);
     cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     transition: color 0.15s ease;
 }
-
-.nd-patient-title h3:hover {
-    color: var(--nd-primary);
+.nipd-pt-name:hover {
+    color: #0284c7;
+    text-decoration: underline;
 }
 
-.nd-patient-sub {
-    font-size: 0.76rem;
-    color: var(--nd-gray-500);
+.nipd-pt-sub {
+    font-size: 12px;
+    color: #64748b;
     margin-top: 2px;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
 }
 
-.nd-head-badges {
+.nipd-mrn-tag {
+    color: #0284c7;
+    font-weight: 600;
+    background: #f0f9ff;
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.nipd-location-badges {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     gap: 4px;
 }
 
-.nd-ward-badge {
-    font-size: 0.68rem;
+.nipd-ward-badge {
+    font-size: 11px;
     font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
     text-transform: uppercase;
-    padding: 3px 8px;
-    border-radius: 6px;
-    letter-spacing: 0.3px;
 }
+.nipd-ward-badge.icu { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+.nipd-ward-badge.private { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.nipd-ward-badge.semi { background: #f3e8ff; color: #6b21a8; border: 1px solid #e9d5ff; }
+.nipd-ward-badge.general { background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; }
 
-.nd-ward-badge.icu { background: #fee2e2; color: #dc2626; }
-.nd-ward-badge.private { background: #f3e8ff; color: #9333ea; }
-.nd-ward-badge.semi { background: #fef3c7; color: #d97706; }
-.nd-ward-badge.general { background: #dbeafe; color: #2563eb; }
-.nd-ward-badge.default { background: #e0f2fe; color: #0284c7; }
-
-.nd-bed-badge {
-    font-size: 0.74rem;
+.nipd-bed-badge {
+    font-size: 11px;
     font-weight: 700;
-    color: var(--nd-gray-700);
-    background: var(--nd-gray-100);
-    padding: 2px 7px;
+    color: #0f172a;
+    background: #f1f5f9;
+    padding: 2px 8px;
     border-radius: 6px;
+    border: 1px solid #e2e8f0;
 }
 
-/* ── Card Body ── */
-.nd-card-body {
-    padding: 14px 18px;
-    flex: 1;
+/* Mid Bar: Doctor & Status */
+.nipd-card-mid-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.nipd-doctor-tag .nipd-lbl {
+    color: #64748b;
+    margin-right: 4px;
+}
+.nipd-doctor-tag strong {
+    color: #1e293b;
+}
+
+.nipd-status-pill {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+}
+.nipd-status-pill.critical { background: #fee2e2; color: #dc2626; }
+.nipd-status-pill.medication-due { background: #fef3c7; color: #d97706; }
+.nipd-status-pill.drip-running { background: #ccfbf1; color: #0d9488; }
+.nipd-status-pill.stable { background: #dcfce7; color: #15803d; }
+
+/* Clinical Body */
+.nipd-card-clinical-body {
     display: flex;
     flex-direction: column;
-    gap: 9px;
+    gap: 8px;
+    background: #ffffff;
+    border: 1px solid #f1f5f9;
+    border-radius: 10px;
+    padding: 10px 12px;
 }
 
-.nd-info-row {
+.nipd-clinical-row {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 0.82rem;
+    align-items: baseline;
+    font-size: 12.5px;
+    gap: 8px;
 }
-
-.nd-lbl {
-    color: var(--nd-gray-500);
-    font-weight: 500;
-}
-
-.nd-val {
-    color: var(--nd-gray-800);
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.nd-days-badge {
-    font-size: 0.74rem;
-    color: var(--nd-gray-400);
-    font-weight: 500;
-}
-
-.nd-nurse-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: var(--nd-primary-subtle);
-    padding: 6px 10px;
-    border-radius: var(--nd-radius-sm);
-    font-size: 0.8rem;
-}
-
-.nd-nurse-name {
-    color: var(--nd-primary-dark);
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.nd-assign-btn {
-    background: transparent;
-    border: none;
-    color: var(--nd-primary);
-    font-size: 0.78rem;
-    font-weight: 700;
-    cursor: pointer;
-    padding: 0;
-}
-
-.nd-assign-btn:hover {
-    text-decoration: underline;
-}
-
-/* ── Vitals & Alerts Rows ── */
-.nd-vitals-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-    padding-top: 4px;
-}
-
-.nd-vital-pill {
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 6px;
-    border: 1px solid transparent;
-}
-
-.nd-vital-pill.normal {
-    background: #ecfdf5;
-    color: #059669;
-    border-color: #a7f3d0;
-}
-
-.nd-vital-pill.warning {
+.nipd-clinical-row.due-alert {
     background: #fffbeb;
-    color: #b45309;
-    border-color: #fde68a;
-}
-
-.nd-vital-pill.critical {
-    background: #fef2f2;
-    color: #dc2626;
-    border-color: #fecaca;
-    animation: pulseCritical 2s infinite;
-}
-
-@keyframes pulseCritical {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.65; }
-}
-
-.nd-alerts-row {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-top: 2px;
-}
-
-.nd-alert-pill {
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 4px 9px;
+    padding: 4px 6px;
     border-radius: 6px;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
+}
+.nipd-clinical-row.overdue-alert {
+    background: #fef2f2;
+    padding: 4px 6px;
+    border-radius: 6px;
 }
 
-.nd-alert-pill.discharge.ordered {
-    background: #fef3c7;
-    color: #b45309;
-    border: 1px solid #fde68a;
-}
-
-.nd-alert-pill.discharge.ready {
-    background: #dcfce7;
-    color: #15803d;
-    border: 1px solid #86efac;
-}
-
-.nd-alert-pill.critical {
-    background: #fee2e2;
-    color: #dc2626;
-}
-
-.nd-alert-pill.high {
-    background: #ffedd5;
-    color: #c2410c;
-}
-
-.nd-alert-pill.medium {
-    background: #fef9c3;
-    color: #a16207;
-}
-
-/* ── Card Footer ── */
-.nd-card-foot {
-    padding: 12px 18px;
-    background: var(--nd-gray-50);
-    border-top: 1px solid var(--nd-gray-100);
+.nipd-row-label {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-}
-
-.nd-assign-link {
-    background: transparent;
-    border: none;
-    color: var(--nd-gray-600);
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
     gap: 5px;
-    padding: 4px 8px;
-    border-radius: var(--nd-radius-sm);
-    transition: all 0.15s ease;
+    width: 95px;
+    flex-shrink: 0;
+    color: #475569;
+    font-size: 12px;
+}
+.nipd-row-label strong {
+    color: #0f172a;
 }
 
-.nd-assign-link:hover {
-    background: var(--nd-gray-200);
-    color: var(--nd-dark);
+.nipd-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #d97706;
+}
+.nipd-dot.next { background: #94a3b8; }
+.nipd-dot.iv { background: #0d9488; }
+
+.nipd-row-content {
+    flex: 1;
+    color: #1e293b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.nd-action-btn {
-    background: var(--nd-primary);
-    color: #fff;
-    border: none;
-    font-size: 0.82rem;
-    font-weight: 700;
-    padding: 7px 14px;
-    border-radius: var(--nd-radius-sm);
-    cursor: pointer;
+.nipd-med-highlight {
+    color: #0f172a;
+    font-weight: 500;
+}
+
+.nipd-overdue-tag {
+    font-size: 10px;
+    font-weight: 800;
+    color: #dc2626;
+    background: #fee2e2;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: 6px;
+}
+
+.nipd-iv-running-tag {
+    color: #0d9488;
+    font-weight: 600;
     display: inline-flex;
     align-items: center;
+    gap: 4px;
+}
+
+.nipd-muted-text {
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* Card Footer */
+.nipd-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.nipd-vitals-pills {
+    display: flex;
     gap: 6px;
+}
+
+.nipd-v-pill {
+    font-size: 11px;
+    font-weight: 600;
+    color: #334155;
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.nipd-v-pill.spo2-warn {
+    color: #dc2626;
+    background: #fee2e2;
+}
+
+.nipd-no-vitals {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.nipd-open-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 7px 14px;
+    background: #0284c7;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
     transition: all 0.2s ease;
 }
-
-.nd-action-btn:hover {
-    background: var(--nd-primary-dark);
-    transform: translateX(2px);
+.nipd-open-btn:hover {
+    background: #0369a1;
+    box-shadow: 0 4px 10px -2px rgba(2, 132, 199, 0.4);
 }
 
-/* ── Loading / Empty States ── */
-.nd-loading, .nd-empty {
-    text-align: center;
+/* ── States ── */
+.nipd-loading-state,
+.nipd-empty-state {
     padding: 60px 20px;
-    background: #fff;
-    border-radius: var(--nd-radius-lg);
-    border: 1.5px dashed var(--nd-gray-200);
-}
-
-.nd-spinner {
-    width: 36px;
-    height: 36px;
-    border: 3px solid var(--nd-gray-200);
-    border-top-color: var(--nd-primary);
-    border-radius: 50%;
-    margin: 0 auto 12px;
-    animation: spin 0.8s linear infinite;
-}
-
-.nd-empty-icon {
-    font-size: 2.5rem;
-    margin-bottom: 8px;
-}
-
-.nd-empty h3 {
-    margin: 0 0 6px;
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: var(--nd-gray-700);
-}
-
-.nd-empty p {
-    margin: 0;
-    font-size: 0.85rem;
-    color: var(--nd-gray-400);
-}
-
-/* ── Modal ── */
-.nd-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(15, 23, 42, 0.55);
-    backdrop-filter: blur(4px);
+    text-align: center;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
-    padding: 20px;
 }
 
-.nd-modal {
-    background: #fff;
-    border-radius: var(--nd-radius-xl);
-    width: 100%;
-    max-width: 480px;
-    box-shadow: var(--nd-shadow-lg);
-    overflow: hidden;
-    animation: modalIn 0.25s ease-out;
+.nipd-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid #e2e8f0;
+    border-top-color: #0284c7;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 14px;
 }
 
-@keyframes modalIn {
-    from { opacity: 0; transform: scale(0.96) translateY(10px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
+.nipd-empty-icon {
+    font-size: 44px;
+    margin-bottom: 12px;
 }
 
-.nd-modal-header {
-    padding: 18px 24px;
-    background: var(--nd-gray-50);
-    border-bottom: 1px solid var(--nd-gray-200);
+.nipd-empty-state h3 {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 6px 0;
 }
 
-.nd-modal-header h3 {
-    margin: 0;
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--nd-dark);
+.nipd-empty-state p {
+    font-size: 14px;
+    color: #64748b;
+    margin: 0 0 16px 0;
+    max-width: 440px;
 }
 
-.nd-modal-body {
-    padding: 20px 24px;
-}
-
-.nd-form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.nd-form-group label {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--nd-gray-700);
-}
-
-.nd-form-group select,
-.nd-form-group textarea {
-    width: 100%;
-    padding: 9px 12px;
-    border: 1.5px solid var(--nd-gray-200);
-    border-radius: var(--nd-radius-md);
-    font-size: 0.88rem;
-    color: var(--nd-dark);
-    background: #fff;
-    outline: none;
-    font-family: inherit;
-    transition: border-color 0.2s ease;
-}
-
-.nd-form-group select:focus,
-.nd-form-group textarea:focus {
-    border-color: var(--nd-primary);
-    box-shadow: 0 0 0 3px rgba(13,148,136,0.12);
-}
-
-.nd-modal-footer {
-    padding: 14px 24px;
-    background: var(--nd-gray-50);
-    border-top: 1px solid var(--nd-gray-200);
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-}
-
-.nd-btn {
-    padding: 9px 18px;
-    border-radius: var(--nd-radius-md);
-    font-size: 0.84rem;
-    font-weight: 700;
-    cursor: pointer;
+.nipd-reset-btn {
+    padding: 8px 16px;
+    background: #0f172a;
+    color: #ffffff;
     border: none;
-    transition: all 0.2s ease;
-}
-
-.nd-btn.secondary {
-    background: #fff;
-    border: 1.5px solid var(--nd-gray-200);
-    color: var(--nd-gray-700);
-}
-
-.nd-btn.secondary:hover {
-    background: var(--nd-gray-100);
-}
-
-.nd-btn.primary {
-    background: var(--nd-primary);
-    color: #fff;
-}
-
-.nd-btn.primary:hover:not(:disabled) {
-    background: var(--nd-primary-dark);
-}
-
-.nd-btn.primary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-/* ── Toast ── */
-.nd-toast {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    padding: 12px 20px;
-    border-radius: var(--nd-radius-md);
-    font-size: 0.86rem;
+    border-radius: 8px;
+    font-size: 13px;
     font-weight: 600;
-    color: #fff;
-    background: var(--nd-dark);
-    box-shadow: var(--nd-shadow-lg);
-    z-index: 2000;
-    animation: toastIn 0.3s ease-out;
-}
-
-.nd-toast.success { background: #059669; }
-.nd-toast.error { background: #dc2626; }
-
-@keyframes toastIn {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: translateY(0); }
+    cursor: pointer;
 }
 
 /* ── Responsive ── */
 @media (max-width: 1200px) {
-    .nd-stats-row {
+    .nipd-summary-grid {
         grid-template-columns: repeat(3, 1fr);
     }
 }
-
 @media (max-width: 768px) {
-    .nurse-dashboard {
+    .nurse-ipd-container {
         padding: 16px;
     }
-    .nd-stats-row {
+    .nipd-header {
+        flex-direction: column;
+    }
+    .nipd-header-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+    .nipd-summary-grid {
         grid-template-columns: repeat(2, 1fr);
     }
-    .nd-toolbar {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .nd-search-box {
-        max-width: 100%;
-    }
-    .nd-grid {
+    .nipd-cards-grid {
         grid-template-columns: 1fr;
     }
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { confirmToast } from '../../utils/confirmToast';
-import { billingAPI, admissionAPI, patientAPI, uploadAPI, hospitalAPI } from '../../utils/api';
+import { billingAPI, admissionAPI, patientAPI, uploadAPI, hospitalAPI, refundAdminAPI, refundReceptionAPI, accountantAPI } from '../../utils/api';
 import { 
     FaEye, FaDownload, FaSearch, FaHistory, FaSyncAlt, FaExternalLinkAlt, 
     FaMoneyBillWave, FaQrcode, FaRupeeSign, FaCreditCard, FaFileAlt, 
@@ -880,6 +880,157 @@ const PatientBillingProfile = () => {
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [upiOptions, setUpiOptions] = useState([]);
+    
+    // Refund action states & handlers for Hospital Admin, Accountant & Reception
+    const [showPatientRefundModal, setShowPatientRefundModal] = useState(false);
+    const [newRefundForm, setNewRefundForm] = useState({ refundAmount: '', refundMode: 'CASH', reason: '', originalPaymentId: '' });
+    const [submittingRefund, setSubmittingRefund] = useState(false);
+    const [refundActionLoading, setRefundActionLoading] = useState(false);
+    const [patientRefundData, setPatientRefundData] = useState(null);
+    const [loadingRefundData, setLoadingRefundData] = useState(false);
+
+    const openCreateRefundModal = async () => {
+        if (!patient?._id) return toast.error('No patient selected');
+        setShowPatientRefundModal(true);
+        setLoadingRefundData(true);
+        try {
+            const res = await accountantAPI.getPatientRefundData(patient._id);
+            if (res.success) {
+                setPatientRefundData(res.data);
+                if (res.data.payments?.length > 0) {
+                    const firstPayment = res.data.payments[0];
+                    const mode = (firstPayment.paymentMode || 'Cash').toUpperCase();
+                    const targetMode = mode.includes('UPI') ? 'UPI' : (mode.includes('BANK') || mode.includes('CARD') || mode.includes('ONLINE')) ? 'BANK_TRANSFER' : 'CASH';
+                    setNewRefundForm({
+                        originalPaymentId: firstPayment._id,
+                        refundAmount: String(Math.min(firstPayment.amount, res.data.refundableAmount)),
+                        refundMode: targetMode,
+                        reason: ''
+                    });
+                } else {
+                    setNewRefundForm({
+                        originalPaymentId: '',
+                        refundAmount: res.data.refundableAmount > 0 ? String(res.data.refundableAmount) : '',
+                        refundMode: 'CASH',
+                        reason: ''
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load patient refund data:', e);
+            toast.error('Failed to calculate patient refundable balance');
+        } finally {
+            setLoadingRefundData(false);
+        }
+    };
+
+    const handleCreatePatientRefund = async () => {
+        if (!patient?._id) return toast.error('No patient selected');
+        const amt = parseFloat(newRefundForm.refundAmount);
+        if (isNaN(amt) || amt <= 0) return toast.error('Please enter a valid refund amount');
+        if (patientRefundData && amt > patientRefundData.refundableAmount) {
+            return toast.error(`Refund amount cannot exceed ₹${patientRefundData.refundableAmount}`);
+        }
+
+        try {
+            setSubmittingRefund(true);
+            const res = await accountantAPI.createRefundRequest({
+                patientId: patient._id,
+                refundAmount: amt,
+                refundMode: newRefundForm.refundMode,
+                reason: newRefundForm.reason,
+                originalPaymentId: newRefundForm.originalPaymentId || undefined
+            });
+            if (res.success) {
+                toast.success('Refund request submitted! Ready for approval.');
+                setShowPatientRefundModal(false);
+                setNewRefundForm({ refundAmount: '', refundMode: 'CASH', reason: '', originalPaymentId: '' });
+                loadPatientBilling(patient.patientId || patient.mrn || patient._id);
+            }
+        } catch (err) {
+            console.error('Create refund error:', err);
+            toast.error(err.response?.data?.message || 'Failed to create refund request');
+        } finally {
+            setSubmittingRefund(false);
+        }
+    };
+
+    const handleApproveRefund = async (refundId) => {
+        try {
+            setRefundActionLoading(true);
+            const res = await refundAdminAPI.approveRefund(refundId);
+            if (res.success) {
+                toast.success('Refund request approved successfully!');
+                if (patient) {
+                    loadPatientBilling(patient.patientId || patient.mrn || patient._id);
+                }
+            }
+        } catch (err) {
+            console.error('Approve refund error:', err);
+            toast.error(err.response?.data?.message || 'Failed to approve refund');
+        } finally {
+            setRefundActionLoading(false);
+        }
+    };
+
+    const handleRejectRefund = async (refundId) => {
+        const reason = window.prompt('Please enter the reason for rejecting this refund request:');
+        if (reason === null) return;
+        try {
+            setRefundActionLoading(true);
+            const res = await refundAdminAPI.rejectRefund(refundId, reason.trim());
+            if (res.success) {
+                toast.success('Refund request rejected');
+                if (patient) {
+                    loadPatientBilling(patient.patientId || patient.mrn || patient._id);
+                }
+            }
+        } catch (err) {
+            console.error('Reject refund error:', err);
+            toast.error(err.response?.data?.message || 'Failed to reject refund');
+        } finally {
+            setRefundActionLoading(false);
+        }
+    };
+
+    const handleHandoverCashRefund = async (refundId, amount) => {
+        if (!window.confirm(`Confirm cash handover of ${fmt(amount)} to patient?`)) return;
+        try {
+            setRefundActionLoading(true);
+            const res = await refundReceptionAPI.handOverCash(refundId);
+            if (res.success) {
+                toast.success(`Cash refund of ${fmt(amount)} marked as handed over!`);
+                if (patient) {
+                    loadPatientBilling(patient.patientId || patient.mrn || patient._id);
+                }
+            }
+        } catch (err) {
+            console.error('Handover cash error:', err);
+            toast.error(err.response?.data?.message || 'Failed to complete cash handover');
+        } finally {
+            setRefundActionLoading(false);
+        }
+    };
+
+    const handleProcessOnlineRefund = async (refundId, amount) => {
+        const utr = window.prompt(`Enter UTR / Transaction ID for ${fmt(amount)} refund:`);
+        if (!utr || !utr.trim()) return;
+        try {
+            setRefundActionLoading(true);
+            const res = await accountantAPI.processRefund(refundId, { refundTransactionId: utr.trim() });
+            if (res.success) {
+                toast.success('Refund marked as completed!');
+                if (patient) {
+                    loadPatientBilling(patient.patientId || patient.mrn || patient._id);
+                }
+            }
+        } catch (err) {
+            console.error('Process online refund error:', err);
+            toast.error(err.response?.data?.message || 'Failed to process refund');
+        } finally {
+            setRefundActionLoading(false);
+        }
+    };
 
     const fetchHospitalHistory = async () => {
         try {
@@ -1379,23 +1530,22 @@ const PatientBillingProfile = () => {
     };
 
     useEffect(() => {
-        if (isHospitalAdmin) {
-            setActiveTab('history');
-            fetchHospitalHistory(historySearch, historyMode, datePreset, customStartDate, customEndDate);
-        }
-    }, [isHospitalAdmin]);
-
-    useEffect(() => {
         const params = new URLSearchParams(location.search);
         const q = params.get('q');
         const tab = params.get('tab');
-        if (tab === 'history' || isHospitalAdmin) {
-            setActiveTab('history');
-        }
+
         if (q && q.trim()) {
             setSearchQuery(q.trim());
             loadPatientBilling(q.trim());
-            if (!isHospitalAdmin) setActiveTab('patient');
+            setActiveTab('patient');
+        } else if (tab === 'patient') {
+            setActiveTab('patient');
+        } else if (tab === 'history') {
+            setActiveTab('history');
+            fetchHospitalHistory(historySearch, historyMode, datePreset, customStartDate, customEndDate);
+        } else if (isHospitalAdmin && !patient) {
+            setActiveTab('history');
+            fetchHospitalHistory(historySearch, historyMode, datePreset, customStartDate, customEndDate);
         }
     }, [location.search, isHospitalAdmin]);
 
@@ -1457,19 +1607,10 @@ const PatientBillingProfile = () => {
                 dob: patObj.dob || ''
             };
             setPatient(initialPat);
-            setBilling({
-                appointments: initialTxn.billedItems?.appointments || [],
-                labReports: [],
-                pharmacyOrders: [],
-                facilityCharges: [],
-                admissions: [],
-                surgeryPlans: [],
-                paymentTransactions: [initialTxn]
-            });
         } else {
             setPatient(null);
-            setBilling(null);
         }
+        setBilling(null);
 
         setSelected({ appointments: [], labReports: [], pharmacyOrders: [], facilityCharges: [], admissions: [], surgeryPlans: [] });
         setSuccessMsg('');
@@ -1478,22 +1619,25 @@ const PatientBillingProfile = () => {
             if (res && res.success) {
                 setPatient(res.patient || initialPat);
                 const fetchedBilling = res.billing || {};
-                if (initialTxn) {
-                    fetchedBilling.paymentTransactions = fetchedBilling.paymentTransactions || [];
-                    const hasTxn = fetchedBilling.paymentTransactions.some(p => String(p._id) === String(initialTxn._id));
-                    if (!hasTxn) {
-                        fetchedBilling.paymentTransactions.unshift(initialTxn);
+                if (initialTxn && res?.patient?._id) {
+                    const txnPatId = (typeof initialTxn.patientId === 'object' && initialTxn.patientId !== null)
+                        ? String(initialTxn.patientId._id || '')
+                        : String(initialTxn.patientId || '');
+                    if (txnPatId && txnPatId === String(res.patient._id)) {
+                        fetchedBilling.paymentTransactions = fetchedBilling.paymentTransactions || [];
+                        const hasTxn = fetchedBilling.paymentTransactions.some(p => String(p._id) === String(initialTxn._id));
+                        if (!hasTxn) {
+                            fetchedBilling.paymentTransactions.unshift(initialTxn);
+                        }
                     }
                 }
                 setBilling(fetchedBilling);
-            } else if (!initialTxn) {
-                setError('Patient billing data not found');
+            } else {
+                setError(res?.message || 'Patient billing data not found');
             }
         } catch (err) {
             console.error('loadPatientBilling error:', err);
-            if (!initialTxn) {
-                setError(err.response?.data?.message || 'Patient not found');
-            }
+            setError(err.response?.data?.message || 'Patient not found');
         } finally {
             setLoading(false);
         }
@@ -1802,32 +1946,30 @@ const PatientBillingProfile = () => {
                 </div>
             )}
 
-            {/* Navigation Tabs (Only for Reception / Cashier staff, hidden for Hospital Admin) */}
-            {!isHospitalAdmin && (
-                <div className="billing-nav-tabs">
-                    <button
-                        type="button"
-                        className={`billing-nav-tab-btn ${activeTab === 'patient' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('patient')}
-                    >
-                        <span className="bnt-icon">💳</span>
-                        <span className="bnt-title">Individual Patient Billing</span>
-                        {patient && <span className="bnt-badge">{patient.name}</span>}
-                    </button>
-                    <button
-                        type="button"
-                        className={`billing-nav-tab-btn ${activeTab === 'history' ? 'active' : ''}`}
-                        onClick={() => {
-                            setActiveTab('history');
-                            fetchHospitalHistory(historySearch, historyMode, datePreset, customStartDate, customEndDate);
-                        }}
-                    >
-                        <span className="bnt-icon">📜</span>
-                        <span className="bnt-title">Hospital Billing & Payment History</span>
-                        <span className="bnt-badge count">{historyMetrics.count || historyTransactions.length}</span>
-                    </button>
-                </div>
-            )}
+            {/* Navigation Tabs (Available for all roles, including Hospital Admin & Reception) */}
+            <div className="billing-nav-tabs" style={{ margin: isHospitalAdmin ? '12px 0 16px 0' : '0 24px 20px 24px' }}>
+                <button
+                    type="button"
+                    className={`billing-nav-tab-btn ${activeTab === 'patient' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('patient')}
+                >
+                    <span className="bnt-icon">💳</span>
+                    <span className="bnt-title">Individual Patient Billing & Refunds</span>
+                    {patient && <span className="bnt-badge">{patient.name}</span>}
+                </button>
+                <button
+                    type="button"
+                    className={`billing-nav-tab-btn ${activeTab === 'history' ? 'active' : ''}`}
+                    onClick={() => {
+                        setActiveTab('history');
+                        fetchHospitalHistory(historySearch, historyMode, datePreset, customStartDate, customEndDate);
+                    }}
+                >
+                    <span className="bnt-icon">📜</span>
+                    <span className="bnt-title">Hospital Billing & Payment History</span>
+                    <span className="bnt-badge count">{historyMetrics.count || historyTransactions.length}</span>
+                </button>
+            </div>
 
             {activeTab === 'patient' && (
                 <div className="billing-patient-view-wrap" style={{ padding: isHospitalAdmin ? '0' : '0 24px 30px 24px' }}>
@@ -2278,7 +2420,7 @@ const PatientBillingProfile = () => {
                     )}
 
                     {/* Consolidated Billing View (Appointments & Facility Charges) */}
-                    {(isHospitalAdmin ? (pendingAppointments.length > 0 || pendingFacilityCharges.length > 0) : (billing.appointments?.length > 0 || billing.facilityCharges?.length > 0)) && (
+                    {(billing.appointments?.length > 0 || billing.facilityCharges?.length > 0) && (
                         <div className="billing-section">
                             <div className="section-header">
                                 <h3>Consolidated Billing View (Consultations & ICU Charges)</h3>
@@ -2302,7 +2444,7 @@ const PatientBillingProfile = () => {
                                     <thead><tr>{!isHospitalAdmin && <th></th>}<th>Date</th><th>Type & Description</th><th>Collected By</th><th>Status</th><th>Amount</th></tr></thead>
                                     <tbody>
                                         {/* Appointments */}
-                                        {(isHospitalAdmin ? pendingAppointments : (billing.appointments || [])).map(a => (
+                                        {(billing.appointments || []).map(a => (
                                             <tr key={a._id} className={!isHospitalAdmin && selected.appointments.includes(a._id) ? 'selected-row' : ''}>
                                                 {!isHospitalAdmin && (
                                                     <td>
@@ -2329,7 +2471,7 @@ const PatientBillingProfile = () => {
                                         ))}
 
                                         {/* Facility / ICU Charges */}
-                                        {(isHospitalAdmin ? pendingFacilityCharges : (billing.facilityCharges || [])).map(f => (
+                                        {(billing.facilityCharges || []).map(f => (
                                             <tr key={f._id} className={!isHospitalAdmin && selected.facilityCharges.includes(f._id) ? 'selected-row' : ''}>
                                                 {!isHospitalAdmin && (
                                                     <td>
@@ -2361,10 +2503,10 @@ const PatientBillingProfile = () => {
                     )}
 
                     {/* Lab Reports */}
-                    {(isHospitalAdmin ? pendingLabReports.length > 0 : (billing.labReports && billing.labReports.length > 0)) && (
+                    {(billing.labReports && billing.labReports.length > 0) && (
                         <div className="billing-section">
                             <div className="section-header">
-                                <h3>Lab Tests {isHospitalAdmin ? `(${pendingLabReports.length} pending)` : `(${getSectionBadge(billing.labReports)})`}</h3>
+                                <h3>Lab Tests ({getSectionBadge(billing.labReports)})</h3>
                                 {!isHospitalAdmin && billing.labReports.some(l => !isPaid(l.paymentStatus)) && (
                                     <button className="btn-select-all" onClick={() => toggleAll('labReports', billing.labReports)}>
                                         {billing.labReports.filter(l => !isPaid(l.paymentStatus)).every(l => selected.labReports.includes(l._id)) ? 'Deselect All' : 'Select All'}
@@ -2375,7 +2517,7 @@ const PatientBillingProfile = () => {
                                 <table className="billing-table">
                                     <thead><tr>{!isHospitalAdmin && <th></th>}<th>Date</th><th>Tests</th><th>Status</th><th>Amount</th></tr></thead>
                                     <tbody>
-                                        {(isHospitalAdmin ? pendingLabReports : billing.labReports).map(l => (
+                                        {(billing.labReports || []).map(l => (
                                             <tr key={l._id} className={!isHospitalAdmin && selected.labReports.includes(l._id) ? 'selected-row' : ''}>
                                                 {!isHospitalAdmin && (
                                                     <td>
@@ -2403,10 +2545,10 @@ const PatientBillingProfile = () => {
                     )}
 
                     {/* Pharmacy Orders */}
-                    {(isHospitalAdmin ? pendingPharmacyOrders.length > 0 : (billing.pharmacyOrders && billing.pharmacyOrders.length > 0)) && (
+                    {(billing.pharmacyOrders && billing.pharmacyOrders.length > 0) && (
                         <div className="billing-section">
                             <div className="section-header">
-                                <h3>Pharmacy Orders {isHospitalAdmin ? `(${pendingPharmacyOrders.length} pending)` : `(${getSectionBadge(billing.pharmacyOrders)})`}</h3>
+                                <h3>Pharmacy Orders ({getSectionBadge(billing.pharmacyOrders)})</h3>
                                 {!isHospitalAdmin && billing.pharmacyOrders.some(p => !isPaid(p.paymentStatus)) && (
                                     <button className="btn-select-all" onClick={() => toggleAll('pharmacyOrders', billing.pharmacyOrders)}>
                                         {billing.pharmacyOrders.filter(p => !isPaid(p.paymentStatus)).every(p => selected.pharmacyOrders.includes(p._id)) ? 'Deselect All' : 'Select All'}
@@ -2417,7 +2559,7 @@ const PatientBillingProfile = () => {
                                 <table className="billing-table">
                                     <thead><tr>{!isHospitalAdmin && <th></th>}<th>Date</th><th>Items</th><th>Order Status</th><th>Amount</th></tr></thead>
                                     <tbody>
-                                        {(isHospitalAdmin ? pendingPharmacyOrders : billing.pharmacyOrders).map(p => (
+                                        {(billing.pharmacyOrders || []).map(p => (
                                             <tr key={p._id} className={!isHospitalAdmin && selected.pharmacyOrders.includes(p._id) ? 'selected-row' : ''}>
                                                 {!isHospitalAdmin && (
                                                     <td>
@@ -2478,12 +2620,12 @@ const PatientBillingProfile = () => {
                     )}
 
                     {/* Past Admissions */}
-                    {(isHospitalAdmin ? pendingPastAdmissions.length > 0 : pastAdmissions.length > 0) && (
+                    {pastAdmissions.length > 0 && (
                         <div className="billing-section past-admissions">
                             <div className="section-header">
-                                <h3>Past Admissions ({isHospitalAdmin ? pendingPastAdmissions.length : pastAdmissions.length})</h3>
+                                <h3>Past Admissions ({pastAdmissions.length})</h3>
                             </div>
-                            {(isHospitalAdmin ? pendingPastAdmissions : pastAdmissions).map(adm => (
+                            {pastAdmissions.map(adm => (
                                 <div key={adm._id} className="admission-card past">
                                     <div className="admission-top">
                                         <div>
@@ -2657,6 +2799,260 @@ const PatientBillingProfile = () => {
                                                 </td>
                                             </tr>
                                         ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Patient Refund History & Admin Approvals (Requirement 5) */}
+                    <div className="billing-section refund-history-section" style={{ marginTop: '24px' }}>
+                        <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                            <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                                <FaRupeeSign color="#dc2626" /> Patient Refund History &amp; Admin Approvals
+                            </h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                {billing?.refundRequests?.some(r => (r.status || '').toUpperCase().includes('PENDING')) && (
+                                    <span style={{ fontSize: '0.82rem', background: '#fef3c7', color: '#b45309', padding: '4px 10px', borderRadius: '12px', fontWeight: 800, border: '1px solid #fde68a' }}>
+                                        ⚠️ Action Required: Pending Approval
+                                    </span>
+                                )}
+                                {billing?.refundRequests?.length > 0 && (
+                                    <span style={{ fontSize: '0.82rem', background: '#fee2e2', color: '#b91c1c', padding: '4px 10px', borderRadius: '12px', fontWeight: 700 }}>
+                                        {billing.refundRequests.length} Refund{billing.refundRequests.length > 1 ? 's' : ''}
+                                    </span>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={openCreateRefundModal}
+                                    style={{
+                                        background: '#dc2626',
+                                        color: '#fff',
+                                        border: 'none',
+                                        padding: '7px 14px',
+                                        borderRadius: '8px',
+                                        fontSize: '0.85rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 2px 4px rgba(220, 38, 38, 0.25)'
+                                    }}
+                                >
+                                    <FaPlus size={12} /> + Request Refund
+                                </button>
+                            </div>
+                        </div>
+
+                        {(!billing?.refundRequests || billing.refundRequests.length === 0) ? (
+                            <div className="no-bills" style={{ padding: '24px', textAlign: 'center', background: '#f8fafc', borderRadius: '10px', color: '#64748b', fontSize: '0.9rem' }}>
+                                <p style={{ margin: '0 0 10px', fontWeight: 600 }}>No refund records found for this patient.</p>
+                                <button
+                                    type="button"
+                                    onClick={openCreateRefundModal}
+                                    style={{
+                                        background: '#059669',
+                                        color: '#fff',
+                                        border: 'none',
+                                        padding: '6px 14px',
+                                        borderRadius: '6px',
+                                        fontSize: '0.85rem',
+                                        fontWeight: 600,
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Initiate Refund For This Patient
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="billing-table-responsive" style={{ marginTop: '12px' }}>
+                                <table className="billing-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Date &amp; Time</th>
+                                            <th>Refund Amount</th>
+                                            <th>Mode</th>
+                                            <th>Status</th>
+                                            <th>Processed / Handed Over By</th>
+                                            <th>Txn Ref / UTR</th>
+                                            <th>Reason / Notes</th>
+                                            <th style={{ textAlign: 'right' }}>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {billing.refundRequests.map(rf => {
+                                            const rawSt = (rf.status || '').toUpperCase().trim();
+                                            const isPending = rawSt === 'PENDING_APPROVAL' || rawSt === 'PENDING' || rawSt.includes('PENDING');
+                                            const isApproved = rawSt === 'APPROVED';
+                                            const isRefunded = rawSt === 'REFUNDED' || rawSt === 'COMPLETED';
+                                            const isRejected = rawSt === 'REJECTED';
+
+                                            return (
+                                                <tr key={rf._id} style={{ background: isPending ? '#fffdf7' : 'transparent' }}>
+                                                    <td>
+                                                        <div className="ha-date-stack">
+                                                            <span className="ha-date-text">{fmtDate(rf.processedAt || rf.handedOverAt || rf.approvedAt || rf.createdAt)}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span style={{ fontWeight: 800, color: '#dc2626', fontSize: '0.95rem' }}>
+                                                            {fmt(rf.refundAmount)}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span style={{
+                                                            padding: '3px 8px',
+                                                            borderRadius: '6px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 700,
+                                                            background: rf.refundMode === 'CASH' ? '#fef3c7' : '#e0e7ff',
+                                                            color: rf.refundMode === 'CASH' ? '#92400e' : '#3730a3'
+                                                        }}>
+                                                            {rf.refundMode}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span style={{
+                                                            padding: '4px 9px',
+                                                            borderRadius: '6px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 700,
+                                                            background:
+                                                                isRefunded ? '#dcfce7' :
+                                                                isApproved ? '#dbeafe' :
+                                                                isPending ? '#fef3c7' : '#fee2e2',
+                                                            color:
+                                                                isRefunded ? '#15803d' :
+                                                                isApproved ? '#1e40af' :
+                                                                isPending ? '#b45309' : '#b91c1c'
+                                                        }}>
+                                                            {isPending ? '⏳ AWAITING APPROVAL' : isApproved ? '✓ APPROVED' : isRefunded ? '✓ REFUNDED' : '✕ REJECTED'}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}>
+                                                            {rf.handedOverByName || rf.processedByName || rf.approvedByName || rf.requestedByName || '—'}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                                                            {rf.handedOverByName ? 'Cash Handover' : rf.processedByName ? 'Bank/UPI Processed' : isApproved ? `Approved by ${rf.approvedByName}` : `Requested by ${rf.requestedByName || 'Staff'}`}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: '#475569' }}>
+                                                            {rf.refundTransactionId || rf.originalTransactionId || '—'}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ maxWidth: '200px' }}>
+                                                        <div style={{ fontSize: '0.82rem', color: '#475569' }}>
+                                                            {rf.reason || rf.processingNotes || '—'}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                        {isPending && (
+                                                            <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleApproveRefund(rf._id)}
+                                                                    disabled={refundActionLoading}
+                                                                    style={{
+                                                                        background: '#059669',
+                                                                        color: '#fff',
+                                                                        border: 'none',
+                                                                        borderRadius: '6px',
+                                                                        padding: '6px 14px',
+                                                                        fontSize: '0.82rem',
+                                                                        fontWeight: 700,
+                                                                        cursor: 'pointer',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '4px',
+                                                                        boxShadow: '0 2px 4px rgba(5, 150, 105, 0.25)'
+                                                                    }}
+                                                                    title="Authorize & Approve Refund"
+                                                                >
+                                                                    ✓ Approve
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRejectRefund(rf._id)}
+                                                                    disabled={refundActionLoading}
+                                                                    style={{
+                                                                        background: '#fee2e2',
+                                                                        color: '#dc2626',
+                                                                        border: '1px solid #fecaca',
+                                                                        borderRadius: '6px',
+                                                                        padding: '6px 10px',
+                                                                        fontSize: '0.82rem',
+                                                                        fontWeight: 600,
+                                                                        cursor: 'pointer'
+                                                                    }}
+                                                                    title="Reject Refund"
+                                                                >
+                                                                    ✕ Reject
+                                                                </button>
+                                                            </div>
+                                                        )}
+
+                                                        {isApproved && rf.refundMode === 'CASH' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleHandoverCashRefund(rf._id, rf.refundAmount)}
+                                                                disabled={refundActionLoading}
+                                                                style={{
+                                                                    background: '#10b981',
+                                                                    color: '#fff',
+                                                                    border: 'none',
+                                                                    borderRadius: '6px',
+                                                                    padding: '6px 14px',
+                                                                    fontSize: '0.82rem',
+                                                                    fontWeight: 700,
+                                                                    cursor: 'pointer',
+                                                                    boxShadow: '0 2px 4px rgba(16, 185, 129, 0.25)'
+                                                                }}
+                                                                title="Hand Over Cash to Patient"
+                                                            >
+                                                                💵 Disburse Cash
+                                                            </button>
+                                                        )}
+
+                                                        {isApproved && ['UPI', 'BANK_TRANSFER'].includes(rf.refundMode) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleProcessOnlineRefund(rf._id, rf.refundAmount)}
+                                                                disabled={refundActionLoading}
+                                                                style={{
+                                                                    background: '#2563eb',
+                                                                    color: '#fff',
+                                                                    border: 'none',
+                                                                    borderRadius: '6px',
+                                                                    padding: '6px 14px',
+                                                                    fontSize: '0.82rem',
+                                                                    fontWeight: 700,
+                                                                    cursor: 'pointer',
+                                                                    boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)'
+                                                                }}
+                                                                title="Enter UTR & Mark Processed"
+                                                            >
+                                                                ⚡ Enter UTR
+                                                            </button>
+                                                        )}
+
+                                                        {isRefunded && (
+                                                            <span style={{ color: '#059669', fontSize: '0.82rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                                ✓ Disbursed
+                                                            </span>
+                                                        )}
+
+                                                        {isRejected && (
+                                                            <span style={{ color: '#dc2626', fontSize: '0.82rem', fontWeight: 600 }}>
+                                                                ✕ Declined
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
@@ -3594,6 +3990,173 @@ const PatientBillingProfile = () => {
                         Close
                     </button>
                 </div>
+            </div>
+        </div>
+    )}
+    {/* Create Patient Refund Modal */}
+    {showPatientRefundModal && (
+        <div className="modal-overlay" onClick={() => setShowPatientRefundModal(false)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px', padding: '24px', borderRadius: '14px', background: '#fff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FaRupeeSign color="#dc2626" /> Create Refund Request
+                    </h3>
+                    <button onClick={() => setShowPatientRefundModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
+                </div>
+
+                <div style={{ marginBottom: '14px', background: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a' }}>{patient?.name}</div>
+                    <div style={{ fontSize: '0.82rem', color: '#64748b' }}>MRN: {patient?.mrn || patient?.patientId || '—'} | Phone: {patient?.phone || '—'}</div>
+                </div>
+
+                {loadingRefundData ? (
+                    <div style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+                        Calculating refundable balance...
+                    </div>
+                ) : (
+                    <>
+                        {patientRefundData && (
+                            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#166534', marginBottom: '4px' }}>
+                                    <span>Total Collected From Patient:</span>
+                                    <strong>{fmt(patientRefundData.totalPaid)}</strong>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#166534', marginBottom: '4px' }}>
+                                    <span>Already Refunded:</span>
+                                    <span>{fmt(patientRefundData.alreadyRefunded)}</span>
+                                </div>
+                                {patientRefundData.pendingRefundAmount > 0 && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#d97706', marginBottom: '4px' }}>
+                                        <span>Pending Approval:</span>
+                                        <span>{fmt(patientRefundData.pendingRefundAmount)}</span>
+                                    </div>
+                                )}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', fontWeight: 800, color: '#15803d', borderTop: '1px dashed #86efac', paddingTop: '6px', marginTop: '4px' }}>
+                                    <span>Max Available Refundable:</span>
+                                    <span>{fmt(patientRefundData.refundableAmount)}</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {patientRefundData?.refundableAmount <= 0 ? (
+                            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px', color: '#991b1b', fontSize: '0.85rem', marginBottom: '16px' }}>
+                                No refundable balance available for this patient. All payments have either been refunded or are currently pending approval.
+                            </div>
+                        ) : (
+                            <>
+                                {/* Quick payment selector if transactions exist */}
+                                {patientRefundData?.payments?.length > 0 && (
+                                    <div style={{ marginBottom: '14px' }}>
+                                        <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                                            Select Payment to Refund (Optional):
+                                        </label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '110px', overflowY: 'auto' }}>
+                                            {patientRefundData.payments.slice(0, 4).map(p => {
+                                                const isSel = newRefundForm.originalPaymentId === p._id;
+                                                const mode = (p.paymentMode || 'Cash').toUpperCase();
+                                                const targetMode = mode.includes('UPI') ? 'UPI' : (mode.includes('BANK') || mode.includes('CARD') || mode.includes('ONLINE')) ? 'BANK_TRANSFER' : 'CASH';
+                                                return (
+                                                    <div
+                                                        key={p._id}
+                                                        onClick={() => {
+                                                            setNewRefundForm(f => ({
+                                                                ...f,
+                                                                originalPaymentId: isSel ? '' : p._id,
+                                                                refundAmount: isSel ? '' : String(Math.min(p.amount, patientRefundData.refundableAmount)),
+                                                                refundMode: isSel ? f.refundMode : targetMode
+                                                            }));
+                                                        }}
+                                                        style={{
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'center',
+                                                            padding: '6px 10px',
+                                                            borderRadius: '6px',
+                                                            border: isSel ? '2px solid #059669' : '1px solid #e2e8f0',
+                                                            background: isSel ? '#ecfdf5' : '#f8fafc',
+                                                            cursor: 'pointer',
+                                                            fontSize: '0.82rem'
+                                                        }}
+                                                    >
+                                                        <div>
+                                                            <strong>{fmt(p.amount)}</strong>
+                                                            <span style={{ marginLeft: '8px', background: '#e2e8f0', padding: '1px 6px', borderRadius: '4px', fontSize: '0.72rem' }}>{p.paymentMode || 'Cash'}</span>
+                                                            {p.transactionId && <span style={{ marginLeft: '6px', color: '#64748b', fontSize: '0.72rem' }}>#{p.transactionId}</span>}
+                                                        </div>
+                                                        <span style={{ color: isSel ? '#059669' : '#64748b', fontWeight: isSel ? 700 : 500 }}>
+                                                            {isSel ? '✓ Selected' : 'Use'}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                        Refund Amount (₹) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max={patientRefundData?.refundableAmount}
+                                        value={newRefundForm.refundAmount}
+                                        onChange={e => setNewRefundForm(f => ({ ...f, refundAmount: e.target.value }))}
+                                        placeholder={`Max ${fmt(patientRefundData?.refundableAmount || 0)}`}
+                                        style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', outline: 'none' }}
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                        Refund Mode *
+                                    </label>
+                                    <select
+                                        value={newRefundForm.refundMode}
+                                        onChange={e => setNewRefundForm(f => ({ ...f, refundMode: e.target.value }))}
+                                        style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', background: '#fff' }}
+                                    >
+                                        <option value="CASH">Cash (Handed over at Reception counter)</option>
+                                        <option value="UPI">UPI (Processed by Accounts via UTR)</option>
+                                        <option value="BANK_TRANSFER">Bank Transfer (Processed by Accounts)</option>
+                                    </select>
+                                </div>
+
+                                <div style={{ marginBottom: '16px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                        Reason for Refund
+                                    </label>
+                                    <textarea
+                                        rows={2}
+                                        value={newRefundForm.reason}
+                                        onChange={e => setNewRefundForm(f => ({ ...f, reason: e.target.value }))}
+                                        placeholder="Reason for refund (e.g. consultation cancelled, billing adjustment)..."
+                                        style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem', outline: 'none', resize: 'vertical' }}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPatientRefundModal(false)}
+                                        style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontWeight: 600 }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleCreatePatientRefund}
+                                        disabled={submittingRefund}
+                                        style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: '#dc2626', color: '#fff', cursor: 'pointer', fontWeight: 700 }}
+                                    >
+                                        {submittingRefund ? 'Submitting...' : 'Submit Refund Request'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </>
+                )}
             </div>
         </div>
     )}

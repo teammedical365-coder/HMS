@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { resolveTenant } = require('../middleware/tenantMiddleware');
 const { getTenantModels } = require('../db/tenantModels');
@@ -97,27 +98,20 @@ const populateBillingSurgeryPlans = async (plans) => {
     });
 };
 
-// Billing access middleware — receptionist also gets billing view
-const verifyBillingAccess = async (req, res, next) => {
-    try {
-        await verifyToken(req, res, async () => {
-            const roleIdStr = String(req.user.role || '').toLowerCase();
-            const roleData = req.user._roleData;
-            const roleName = (roleData?.name || '').toLowerCase();
-            const perms = roleData?.permissions || [];
+// Billing access middleware — receptionist, cashier, admin also get billing view
+const verifyBillingAccess = (req, res, next) => {
+    const roleIdStr = String(req.user?.role || '').toLowerCase();
+    const roleData = req.user?._roleData;
+    const roleName = (roleData?.name || '').toLowerCase();
+    const perms = roleData?.permissions || [];
 
-            if (['cashier', 'accountant', 'reception', 'receptionist', 'centraladmin', 'superadmin', 'hospitaladmin'].includes(roleIdStr) ||
-                ['cashier', 'accountant', 'reception', 'receptionist', 'centraladmin', 'superadmin', 'hospitaladmin'].includes(roleName) ||
-                perms.includes('billing_view') || perms.includes('billing_manage') ||
-                perms.includes('appointment_manage') || perms.includes('*')) {
-                await resolveTenant(req, res, next);
-            } else {
-                return res.status(403).json({ success: false, message: 'Billing access required' });
-            }
-        });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'An internal error occurred' });
+    if (['cashier', 'accountant', 'reception', 'receptionist', 'centraladmin', 'superadmin', 'hospitaladmin', 'admin'].includes(roleIdStr) ||
+        ['cashier', 'accountant', 'reception', 'receptionist', 'centraladmin', 'superadmin', 'hospitaladmin', 'admin'].includes(roleName) ||
+        perms.includes('billing_view') || perms.includes('billing_manage') ||
+        perms.includes('appointment_manage') || perms.includes('*')) {
+        return next();
     }
+    return res.status(403).json({ success: false, message: 'Billing access required' });
 };
 
 // Helper: get models scoped to tenant or master
@@ -136,7 +130,7 @@ const getModels = (req) => {
 };
 
 // 1. Search Patient & Fetch All Bills (pending + paid summary) — tenant-scoped
-router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
+router.get('/patient/:identifier', verifyToken, verifyBillingAccess, resolveTenant, async (req, res) => {
     try {
         const identifier = (req.params.identifier || '').trim();
         const { User, Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission, PaymentTransaction, SurgeryPlan } = getModels(req);
@@ -181,6 +175,53 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
             ]
         } : {};
 
+        // Find all matching patient user records (handles duplicate user records with same phone, MRN, or patientId)
+        const patientMatchOr = [
+            { _id: patient._id }
+        ];
+        if (patient.phone && String(patient.phone).trim()) {
+            patientMatchOr.push({ phone: patient.phone });
+        }
+        if (patient.mrn && String(patient.mrn).trim()) {
+            patientMatchOr.push({ mrn: patient.mrn });
+        }
+        if (patient.patientId && String(patient.patientId).trim()) {
+            patientMatchOr.push({ patientId: patient.patientId });
+        }
+
+        let allPatientUsers = [patient];
+        try {
+            allPatientUsers = await User.find({
+                $and: [
+                    hFilter,
+                    { $or: patientMatchOr }
+                ]
+            }).lean();
+            if ((!allPatientUsers || allPatientUsers.length === 0) && User !== MasterUser) {
+                allPatientUsers = await MasterUser.find({
+                    $and: [
+                        hFilter,
+                        { $or: patientMatchOr }
+                    ]
+                }).lean();
+            }
+        } catch (e) {
+            allPatientUsers = [patient];
+        }
+
+        const allPatientUserIds = Array.from(new Set([
+            String(patient._id),
+            ...allPatientUsers.map(u => String(u._id))
+        ])).filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
+
+        const stringIdentifiers = Array.from(new Set([
+            patient.patientId,
+            patient.mrn,
+            ...allPatientUsers.map(u => u.patientId),
+            ...allPatientUsers.map(u => u.mrn),
+            ...allPatientUserIds.map(id => String(id))
+        ].filter(id => id && String(id).trim().length > 0)));
+
         const fetchWithMasterFallback = async (Model, MasterModel, query, selectFields, sortFields = null, populateArgs = null) => {
             let q1 = sortFields ? Model.find(query).sort(sortFields) : Model.find(query).select(selectFields);
             if (populateArgs) q1 = q1.populate(populateArgs);
@@ -197,62 +238,62 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
             return results;
         };
 
-        const patientIdList = [
-            patient._id,
-            String(patient._id),
-            ...(patient.patientId ? [patient.patientId] : []),
-            ...(patient.mrn ? [patient.mrn] : [])
-        ];
+        const patientFilter = {
+            $or: [
+                { userId: { $in: allPatientUserIds } },
+                { patientId: { $in: stringIdentifiers } }
+            ]
+        };
+
+        const patientDocFilter = {
+            $or: [
+                { patientId: { $in: allPatientUserIds } },
+                { patientId: { $in: stringIdentifiers } }
+            ]
+        };
 
         const [appointments, labReports, pharmacyOrders, facilityCharges, admissions, paymentTransactions, rawSurgeryPlans] = await Promise.all([
             fetchWithMasterFallback(Appointment, MasterAppointment, {
-                $or: [
-                    { userId: { $in: [patient._id, String(patient._id)] } },
-                    { patientId: { $in: patientIdList } }
-                ],
-                ...hFilter
+                $and: [
+                    hFilter,
+                    patientFilter
+                ]
             }, 'appointmentDate appointmentTime amount paymentStatus paymentMethod splitPayments upiScreenshotUrl cardRef notes serviceName doctorName status createdAt'),
             fetchWithMasterFallback(LabReport, MasterLabReport, {
-                $or: [
-                    { userId: { $in: [patient._id, String(patient._id)] } },
-                    { patientId: { $in: patientIdList } }
-                ],
-                ...hFilter
+                $and: [
+                    hFilter,
+                    patientFilter
+                ]
             }, 'testNames amount paymentStatus testStatus createdAt'),
             fetchWithMasterFallback(PharmacyOrder, MasterPharmacyOrder, {
-                $or: [
-                    { userId: { $in: [patient._id, String(patient._id)] } },
-                    { patientId: { $in: patientIdList } }
-                ],
-                ...hFilter
+                $and: [
+                    hFilter,
+                    patientFilter
+                ]
             }, 'items totalAmount paymentStatus orderStatus createdAt'),
             fetchWithMasterFallback(FacilityCharge, MasterFacilityCharge, {
-                $or: [
-                    { patientId: { $in: patientIdList } },
-                    { patientId: patient._id }
-                ],
-                ...hFilter
+                $and: [
+                    hFilter,
+                    { patientId: { $in: allPatientUserIds } }
+                ]
             }, 'facilityName pricePerDay days totalAmount paymentStatus createdAt addedBy collectedBy', null, [{path: 'collectedBy', select: 'name'}, {path: 'addedBy', select: 'name'}]),
             fetchWithMasterFallback(Admission, MasterAdmission, {
-                $or: [
-                    { patientId: { $in: patientIdList } },
-                    { patientId: patient._id }
-                ],
-                ...hFilter
+                $and: [
+                    hFilter,
+                    { patientId: { $in: allPatientUserIds } }
+                ]
             }, null, { admissionDate: -1 }),
             fetchWithMasterFallback(PaymentTransaction, MasterPaymentTransaction, {
-                $or: [
-                    { patientId: { $in: [patient._id, String(patient._id)] } },
-                    { patientId: { $in: patientIdList } }
-                ],
-                ...hFilter
+                $and: [
+                    hFilter,
+                    { patientId: { $in: allPatientUserIds } }
+                ]
             }, null, { paymentDate: -1 }),
             fetchWithMasterFallback(SurgeryPlan, MasterSurgeryPlan, {
-                $or: [
-                    { patientId: { $in: patientIdList } },
-                    { patientId: patient._id }
-                ],
-                ...hFilter
+                $and: [
+                    hFilter,
+                    { patientId: { $in: allPatientUserIds } }
+                ]
             }, null, { surgeryDate: -1, createdAt: -1 })
         ]);
 
@@ -389,6 +430,17 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
         // Sort payment transactions by date descending
         paymentTransactions.sort((a, b) => new Date(b.paymentDate || b.createdAt || 0) - new Date(a.paymentDate || a.createdAt || 0));
 
+        // Fetch refund history for patient
+        let refundRequests = [];
+        try {
+            const RefundRequest = require('../models/refundRequest.model');
+            refundRequests = await RefundRequest.find({
+                patientId: { $in: allPatientUserIds }
+            }).sort({ createdAt: -1 }).lean();
+        } catch (rErr) {
+            console.warn('[billing-refunds-fetch-error]', rErr.message);
+        }
+
         res.json({
             success: true,
             patient: {
@@ -400,17 +452,17 @@ router.get('/patient/:identifier', verifyBillingAccess, async (req, res) => {
                 gender: patient.gender,
                 dob: patient.dob,
             },
-            billing: { appointments, labReports, pharmacyOrders, facilityCharges, admissions, surgeryPlans, paymentTransactions }
+            billing: { appointments, labReports, pharmacyOrders, facilityCharges, admissions, surgeryPlans, paymentTransactions, refundRequests }
         });
 
     } catch (error) {
         console.error('[patient-billing-error]', error);
-        res.status(500).json({ success: false, message: 'An internal error occurred' });
+        res.status(500).json({ success: false, message: error.message || 'An internal error occurred', stack: error.stack });
     }
 });
 
 // 2. Add Facility Charge — saves to tenant DB
-router.post('/facility-charge', verifyBillingAccess, async (req, res) => {
+router.post('/facility-charge', verifyToken, verifyBillingAccess, resolveTenant, async (req, res) => {
     try {
         const { patientId, facilityName, pricePerDay, days } = req.body;
         if (!patientId || !facilityName || !pricePerDay || !days) {
@@ -438,7 +490,7 @@ router.post('/facility-charge', verifyBillingAccess, async (req, res) => {
 });
 
 // 3. Mark items as paid — updates tenant DB
-router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req, res) => {
+router.put('/pay', verifyToken, verifyBillingAccess, resolveTenant, auditLog('CONFIRM_PAYMENT'), async (req, res) => {
     try {
         const {
             appointmentIds = [],
@@ -624,7 +676,7 @@ router.put('/pay', verifyBillingAccess, auditLog('CONFIRM_PAYMENT'), async (req,
 });
 
 // 4. Fetch All Patients with their Billing Metrics (pending + paid dues) — tenant-scoped
-router.get('/patients', verifyBillingAccess, async (req, res) => {
+router.get('/patients', verifyToken, verifyBillingAccess, resolveTenant, async (req, res) => {
     try {
         const { User, Appointment, LabReport, PharmacyOrder, FacilityCharge, Admission } = getModels(req);
         
@@ -732,7 +784,7 @@ router.get('/patients', verifyBillingAccess, async (req, res) => {
 });
 
 // 5. Fetch All Hospital Billing / Payment Transactions (Hospital-wide History with search & filters)
-router.get('/history', verifyBillingAccess, async (req, res) => {
+router.get('/history', verifyToken, verifyBillingAccess, resolveTenant, async (req, res) => {
     try {
         const hospitalId = req.user.hospitalId;
         const hospitalFilter = hospitalId ? {

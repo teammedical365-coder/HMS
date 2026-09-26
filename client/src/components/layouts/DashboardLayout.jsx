@@ -9,7 +9,7 @@ import {
     FiSettings, FiLogOut, FiPieChart, FiClipboard,
     FiFileText, FiPlusSquare, FiDatabase, FiGrid, FiShield, FiMenu, FiX,
     FiClock, FiBox, FiUserCheck, FiHeart, FiCheckCircle, FiUser,
-    FiChevronDown, FiChevronRight, FiCpu, FiScissors
+    FiChevronDown, FiChevronRight, FiCpu, FiScissors, FiDollarSign
 } from 'react-icons/fi';
 import GlobalSearch from '../GlobalSearch';
 import './DashboardLayout.css';
@@ -57,6 +57,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 return [
                     { label: 'Clinic Hub', path: '/hospitaladmin', icon: <FiHome />, prefetchKey: 'ha_clinic', prefetchFn: () => import('../../pages/hospitaladmin/ClinicDashboard') },
                     { label: 'Billing & Payments', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'ha_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
+                    { label: 'Refund Approvals', path: '/hospitaladmin/refunds', icon: <FiDollarSign />, prefetchKey: 'ha_refunds', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminRefunds') },
                     { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox />, prefetchKey: 'ha_vials', prefetchFn: () => import('../../pages/hospitaladmin/VialManagement') },
                 ];
             }
@@ -68,6 +69,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Doctors Feed', path: '/admin/doctors', icon: <FiActivity />, prefetchKey: 'ha_doctors', prefetchFn: () => import('../../pages/admin/AdminDoctors') },
                 { label: 'Pharma Inventory', path: '/pharmacy/inventory', icon: <FiPackage />, prefetchKey: 'ha_pharma', prefetchFn: () => import('../../pages/pharmacy/PharmacyInventory') },
                 { label: 'Billing & Payments', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'ha_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
+                { label: 'Refund Approvals', path: '/hospitaladmin/refunds', icon: <FiDollarSign />, prefetchKey: 'ha_refunds', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminRefunds') },
             ];
         }
         if (role === 'doctor_assistant' || role === 'doctor assistant' || role === 'clinical assistant' || role.includes('assistant')) {
@@ -92,6 +94,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Reception Dashboard', path: '/reception/dashboard', icon: <FiHome />, prefetchKey: 'rec_dash', prefetchFn: () => import('../../pages/reception/ReceptionDashboard') },
                 { label: 'Patient Registration', path: '/reception/dashboard?view=intake', icon: <FiPlusSquare />, prefetchKey: 'rec_intake', prefetchFn: () => import('../../pages/reception/ReceptionDashboard') },
                 { label: 'Patient Billing', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'rec_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
+                { label: 'Cash Refunds', path: '/reception/refunds', icon: <FiDollarSign />, prefetchKey: 'rec_refunds', prefetchFn: () => import('../../pages/reception/ReceptionRefunds') },
             ];
         }
         if (role === 'lab') {
@@ -114,7 +117,10 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
 
         if (role === 'accountant') {
             return [
-                { label: 'Finance Dashboard', path: '/accountant/dashboard', icon: <FiPieChart />, prefetchKey: 'acc_dash', prefetchFn: () => import('../../pages/accountant/AccountantDashboard') },
+                { label: 'Dashboard', path: '/accountant/dashboard', icon: <FiPieChart />, prefetchKey: 'acc_dash', prefetchFn: () => import('../../pages/accountant/AccountantDashboard') },
+                { label: 'Financial Records', path: '/accountant/financial-records', icon: <FiFileText />, prefetchKey: 'acc_records', prefetchFn: () => import('../../pages/accountant/AccountantFinancialRecords') },
+                { label: 'Refunds', path: '/accountant/refunds', icon: <FiDollarSign />, prefetchKey: 'acc_refunds', prefetchFn: () => import('../../pages/accountant/AccountantRefunds') },
+                { label: 'History', path: '/accountant/history', icon: <FiClock />, prefetchKey: 'acc_hist', prefetchFn: () => import('../../pages/accountant/AccountantHistory') },
             ];
         }
         if (role === 'cashier') {
@@ -124,10 +130,8 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
         }
         if (role === 'nurse' || role === 'staffnurse' || role === 'headnurse') {
             return [
-                { label: 'Nurse Command Center', path: '/nurse/dashboard', icon: <FiHome />, prefetchKey: 'nurse_dash', prefetchFn: () => import('../../pages/nurse/NurseDashboard') },
-                { label: 'OPD Patient Queue', path: '/nurse/opd-queue', icon: <FiUsers />, prefetchKey: 'nurse_opd', prefetchFn: () => import('../../pages/nurse/NurseOPDQueue') },
-                { label: 'Appointments', path: '/nurse/appointments', icon: <FiCalendar />, prefetchKey: 'nurse_appts', prefetchFn: () => import('../../pages/nurse/NurseAppointments') },
-                { label: 'IPD Command Center', path: '/ipd/command-center', icon: <FiActivity />, prefetchKey: 'nurse_ipd', prefetchFn: () => import('../../pages/nurse/IPDCommandCenter') },
+                { label: 'Nurse IPD Care', path: '/nurse/dashboard', icon: <FiHome />, prefetchKey: 'nurse_dash', prefetchFn: () => import('../../pages/nurse/NurseDashboard') },
+                { label: 'Patient Reports & Consents', path: '/nurse/patient-documents', icon: <FiFileText />, prefetchKey: 'nurse_docs', prefetchFn: () => import('../../pages/nurse/NursePatientDocuments') },
                 { label: 'Real-Time Monitoring', path: '/nurse/real-time-monitoring', icon: <FiActivity />, prefetchKey: 'nurse_rtm', prefetchFn: () => import('../../pages/monitoring/RealTimeMonitoring') },
             ];
         }
@@ -332,10 +336,11 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
 
     const getPageTitle = (pathname) => {
         if (pathname.includes('real-time-monitoring')) return 'Real-Time Monitoring';
-        if (pathname === '/nurse/dashboard') return 'Nurse Command Center';
+        if (pathname === '/nurse/dashboard') return 'Nurse IPD Care';
+        if (pathname === '/nurse/patient-documents') return 'Patient Reports & Clinical Consents';
         if (pathname === '/nurse/opd-queue') return 'OPD Patient Queue';
         if (pathname === '/nurse/appointments') return 'Appointments';
-        if (pathname.startsWith('/nurse/patient/') || pathname.startsWith('/nurse/ipd/patient/')) return 'Inpatient Workspace';
+        if (pathname.startsWith('/nurse/patient/') || pathname.startsWith('/nurse/ipd/patient/')) return 'Patient IPD Care';
         if (pathname === '/ipd/command-center' || pathname === '/nurse/command-center') return 'IPD Command Center';
         if (pathname === '/doctor/dashboard') return 'Doctor Dashboard';
         if (pathname === '/doctor/patients') return 'My Patients';
