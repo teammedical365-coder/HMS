@@ -265,10 +265,26 @@ router.get('/branding', async (req, res) => {
             return res.status(404).json({ error: 'Branding not found' });
         }
 
-        const brandingData = hospital.brandingSchema || hospital.branding || {};
+        // Prioritize actual saved hospital.branding over empty default brandingSchema
+        const rawB = hospital.branding?.toObject ? hospital.branding.toObject() : (hospital.branding || {});
+        const rawBS = hospital.brandingSchema?.toObject ? hospital.brandingSchema.toObject() : (hospital.brandingSchema || {});
+        
+        // Merge with priority: hospital.branding overrides empty fields in brandingSchema
+        const brandingData = { ...rawBS, ...rawB };
+        for (const key of Object.keys(rawB)) {
+            if (rawB[key] !== undefined && rawB[key] !== '' && rawB[key] !== null) {
+                brandingData[key] = rawB[key];
+            }
+        }
+        if (!brandingData.appName && rawBS.appName) brandingData.appName = rawBS.appName;
+        if (!brandingData.logoUrl && rawBS.logoUrl) brandingData.logoUrl = rawBS.logoUrl;
+        if (!brandingData.primaryColor && (rawBS.primaryColor || rawBS.themeColors?.primary)) {
+            brandingData.primaryColor = rawBS.primaryColor || rawBS.themeColors?.primary;
+        }
+
         res.json({ 
             success: true,
-            hospitalName: hospital.name,
+            hospitalName: brandingData.appName || hospital.name,
             hospitalId: hospital._id,
             branding: brandingData 
         });

@@ -130,9 +130,12 @@ exports.verifyToken = async (req, res, next) => {
                     });
                 }
 
-                if (roleData && typeof user.save === 'function') {
-                    user.role = roleData._id;
-                    await user.save();
+                if (roleData) {
+                    const newRoleId = roleData._id;
+                    user.role = newRoleId;
+                    User.updateOne({ _id: user._id }, { $set: { role: newRoleId } }).catch(saveErr => {
+                        console.warn(`[verifyToken] Non-fatal: could not persist role migration for user ${user._id}:`, saveErr.message);
+                    });
                 }
             }
 
