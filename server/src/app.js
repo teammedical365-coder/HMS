@@ -222,6 +222,8 @@ app.use('/api/assistant', require('./routes/assistant.routes'));
 app.use('/api/ipd-clinical', require('./routes/ipdClinical.routes'));
 app.use('/api/ipd-nursing', require('./routes/ipdNursing.routes'));
 app.use('/api/voice-scribe', require('./routes/voiceScribe.routes'));
+app.use('/api/accountant', require('./routes/accountant.routes'));
+app.use('/api/refunds', require('./routes/refund.routes'));
 
 // ── Serve Frontend in Production (if client/dist exists) ──────────────────────
 const clientDistPath = path.join(__dirname, '../../client/dist');

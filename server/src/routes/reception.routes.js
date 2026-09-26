@@ -32,10 +32,10 @@ const verifyReception = (req, res, next) => {
         if (isAllowedPath) return next();
     }
 
-    // Allow cross-department roles to search for patients (e.g., pharmacy, doctor, lab)
+    // Allow cross-department roles to search for patients (e.g., pharmacy, doctor, lab, accountant, cashier)
     if (req.path.startsWith('/search-patients') || req.path.startsWith('/patients')) {
-        const CROSS_DEPT_ROLES = new Set(['doctor', 'pharmacist', 'pharmacy', 'lab', 'technician']);
-        if (CROSS_DEPT_ROLES.has(roleStr) || CROSS_DEPT_ROLES.has(dynRoleStr)) return next();
+        const CROSS_DEPT_ROLES = new Set(['doctor', 'pharmacist', 'pharmacy', 'lab', 'technician', 'accountant', 'cashier']);
+        if (CROSS_DEPT_ROLES.has(roleStr) || CROSS_DEPT_ROLES.has(dynRoleStr) || permissions.includes('finance_view') || permissions.includes('billing_view')) return next();
     }
 
     return res.status(403).json({ success: false, message: 'Access denied: Reception access only' });
@@ -327,7 +327,7 @@ router.get('/search-patients', verifyToken, verifyReception, async (req, res) =>
             queryFilter.hospitalId = req.user.hospitalId;
         }
 
-        const patients = await User.find(queryFilter).select('name phone email patientId fertilityProfile createdAt').lean();
+        const patients = await User.find(queryFilter).select('name phone email patientId mrn mrnNo fertilityProfile createdAt').lean();
 
         // Resolve doctor names and appointment status
         const patientIds = patients.map(p => p._id);

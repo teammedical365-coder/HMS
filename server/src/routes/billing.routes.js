@@ -430,6 +430,17 @@ router.get('/patient/:identifier', verifyToken, verifyBillingAccess, resolveTena
         // Sort payment transactions by date descending
         paymentTransactions.sort((a, b) => new Date(b.paymentDate || b.createdAt || 0) - new Date(a.paymentDate || a.createdAt || 0));
 
+        // Fetch refund history for patient
+        let refundRequests = [];
+        try {
+            const RefundRequest = require('../models/refundRequest.model');
+            refundRequests = await RefundRequest.find({
+                patientId: { $in: allPatientUserIds }
+            }).sort({ createdAt: -1 }).lean();
+        } catch (rErr) {
+            console.warn('[billing-refunds-fetch-error]', rErr.message);
+        }
+
         res.json({
             success: true,
             patient: {
@@ -441,7 +452,7 @@ router.get('/patient/:identifier', verifyToken, verifyBillingAccess, resolveTena
                 gender: patient.gender,
                 dob: patient.dob,
             },
-            billing: { appointments, labReports, pharmacyOrders, facilityCharges, admissions, surgeryPlans, paymentTransactions }
+            billing: { appointments, labReports, pharmacyOrders, facilityCharges, admissions, surgeryPlans, paymentTransactions, refundRequests }
         });
 
     } catch (error) {

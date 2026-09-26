@@ -243,6 +243,30 @@ const AppointmentReports = ({ appointmentId, prescriptions = [] }) => {
                                         </div>
                                     )}
 
+                                    {/* Report-Based Suggestions */}
+                                    {aiSummaries[i].ReportBasedSuggestions && aiSummaries[i].ReportBasedSuggestions.length > 0 && (
+                                        <div style={{ marginTop: '12px', borderTop: '1px solid #ede9fe', paddingTop: '10px' }}>
+                                            <strong style={{ fontSize: '13px', color: '#6366f1', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '8px' }}>
+                                                💡 Report-Based Suggestions:
+                                            </strong>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                {aiSummaries[i].ReportBasedSuggestions.map((sug, sIdx) => (
+                                                    <div key={sIdx} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderLeft: '3px solid #6366f1', borderRadius: '6px', padding: '8px 10px', fontSize: '12px' }}>
+                                                        <div style={{ fontWeight: 700, color: '#1e293b', marginBottom: '3px' }}>
+                                                            {sIdx + 1}. {sug.finding}
+                                                        </div>
+                                                        <div style={{ color: '#4338ca', marginBottom: '3px', lineHeight: '1.4' }}>
+                                                            <strong>Suggested Next Step:</strong> {sug.suggestedStep}
+                                                        </div>
+                                                        <div style={{ color: '#64748b', fontSize: '11px', lineHeight: '1.4' }}>
+                                                            <strong>Based on:</strong> {sug.why}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Medical Disclaimer */}
                                     {aiSummaries[i].Disclaimer && (
                                         <div style={{ marginTop: '10px', padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '11px', color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>

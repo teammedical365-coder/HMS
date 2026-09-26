@@ -426,11 +426,12 @@ router.post('/summary', verifyToken, async (req, res) => {
     const base64Data = buffer.toString('base64');
     
     // 4. Generate AI Summary with content-aware prompt routing and atomic wallet deduction
-    const { summary, usage } = await aiService.generateReportSummary(base64Data, validation.mimeType, userContext, fileName || '');
+    const { summary, reportBasedSuggestions = [], usage } = await aiService.generateReportSummary(base64Data, validation.mimeType, userContext, fileName || '');
 
     res.status(200).json({
       success: true,
       summary,
+      reportBasedSuggestions,
       usage,
       wallet: usage.wallet || null
     });

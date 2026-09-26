@@ -1,92 +1,55 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { financeAPI, billingAPI } from '../../utils/api';
+import { accountantAPI, billingAPI } from '../../utils/api';
+import { FiDollarSign, FiCalendar, FiClock, FiTrendingUp, FiArrowDownCircle, FiSearch, FiRefreshCw, FiUser, FiHash } from 'react-icons/fi';
+import socket from '../../utils/socket';
 import './AccountantDashboard.css';
+
+const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(amount || 0);
+const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const AccountantDashboard = () => {
     const navigate = useNavigate();
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-
     const [stats, setStats] = useState(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-
-    // Quick billing search
     const [billingSearch, setBillingSearch] = useState('');
     const [billingSearching, setBillingSearching] = useState(false);
     const [billingError, setBillingError] = useState('');
 
-    // Filters
-    const [datePreset, setDatePreset] = useState('all');
-    const [customStartDate, setCustomStartDate] = useState('');
-    const [customEndDate, setCustomEndDate] = useState('');
-
-    useEffect(() => {
-        // Validate access
-        const role = currentUser?.role ? currentUser.role.toLowerCase() : '';
-        const permissions = currentUser?.permissions || [];
-        const hasAccess = ['accountant', 'centraladmin', 'superadmin', 'hospitaladmin'].includes(role) || permissions.includes('finance_view');
-
-        if (!hasAccess) {
-            navigate('/dashboard');
-        } else {
-            fetchStats('all');
-        }
-    }, [navigate, currentUser]);
-
-    const fetchStats = async (preset = datePreset, start = customStartDate, end = customEndDate) => {
+    const loadDashboard = useCallback(async () => {
         try {
             setLoading(true);
             setError('');
-
-            let queryStart = '';
-            let queryEnd = '';
-
-            if (preset !== 'all' && preset !== 'custom') {
-                const now = new Date();
-                const endD = new Date(now);
-                const startD = new Date(now);
-
-                if (preset === 'today') {
-                    startD.setHours(0, 0, 0, 0);
-                    endD.setHours(23, 59, 59, 999);
-                } else if (preset === '30') {
-                    startD.setDate(startD.getDate() - 30);
-                } else if (preset === '60') {
-                    startD.setDate(startD.getDate() - 60);
-                } else if (preset === '90') {
-                    startD.setDate(startD.getDate() - 90);
-                }
-
-                queryStart = startD.toISOString();
-                queryEnd = endD.toISOString();
-            } else if (preset === 'custom') {
-                if (start) queryStart = new Date(start).toISOString();
-                if (end) queryEnd = new Date(end).toISOString();
-            }
-
-            const res = await financeAPI.getDashboardStats(queryStart, queryEnd);
-            if (res.success) {
-                setStats(res.data);
-            }
+            const res = await accountantAPI.getDashboard();
+            if (res.success) setStats(res.data);
         } catch (err) {
-            console.error(err);
-            setError('Error fetching financial statistics');
+            console.error('Dashboard load error:', err);
+            setError('Failed to load dashboard data');
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const handleDatePresetChange = (preset) => {
-        setDatePreset(preset);
-        if (preset !== 'custom') {
-            fetchStats(preset, customStartDate, customEndDate);
-        }
-    };
+    useEffect(() => {
+        loadDashboard();
+    }, [loadDashboard]);
 
-    const handleApplyCustomDate = () => {
-        fetchStats('custom', customStartDate, customEndDate);
-    };
+    // Real-time updates
+    useEffect(() => {
+        const handleRefundUpdate = () => loadDashboard();
+        socket.on('refund_requested', handleRefundUpdate);
+        socket.on('refund_approved', handleRefundUpdate);
+        socket.on('refund_completed', handleRefundUpdate);
+        socket.on('refund_rejected', handleRefundUpdate);
+        return () => {
+            socket.off('refund_requested', handleRefundUpdate);
+            socket.off('refund_approved', handleRefundUpdate);
+            socket.off('refund_completed', handleRefundUpdate);
+            socket.off('refund_rejected', handleRefundUpdate);
+        };
+    }, [loadDashboard]);
 
     const handleBillingSearch = async (e) => {
         e.preventDefault();
@@ -105,133 +68,152 @@ const AccountantDashboard = () => {
         }
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-        navigate('/login');
+    const getStatusBadge = (status) => {
+        const map = {
+            'Paid': 'acc-badge-paid', 'paid': 'acc-badge-paid', 'PAID': 'acc-badge-paid',
+            'Pending': 'acc-badge-pending', 'pending': 'acc-badge-pending', 'PENDING': 'acc-badge-pending',
+            'Partial': 'acc-badge-partial',
+        };
+        return <span className={`acc-badge ${map[status] || 'acc-badge-default'}`}>{status}</span>;
     };
 
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            minimumFractionDigits: 0
-        }).format(amount || 0);
-    };
+    if (loading) {
+        return (
+            <div className="acc-loading">
+                <div className="acc-loading-spinner" />
+                <p>Loading financial data...</p>
+            </div>
+        );
+    }
 
     return (
-        <div className="accountant-dashboard">
-            <header className="acc-header">
-                <div>
-                    <h1>Finance & Accounting Dashboard</h1>
-                    <p>Track revenues, costs, and profits across operations</p>
+        <div className="acc-dashboard">
+            {/* Header */}
+            <div className="acc-header-section">
+                <div className="acc-header-text">
+                    <h1>
+                        Accountant Dashboard
+                        <span className="acc-header-tag">Live Treasury</span>
+                    </h1>
+                    <p>Hospital financial overview &amp; real-time collections</p>
                 </div>
-                <div className="acc-user-info">
-                    <span>👋 {currentUser.name} (Accountant)</span>
-                    <button className="logout-btn" onClick={handleLogout}>Logout</button>
-                </div>
-            </header>
+                <button className="acc-refresh-btn" onClick={loadDashboard} title="Refresh Data">
+                    <FiRefreshCw size={15} className={loading ? 'acc-spinning' : ''} /> Refresh
+                </button>
+            </div>
 
-            {/* Patient Billing Quick Access */}
-            <div className="admin-card" style={{ marginBottom: '20px', padding: '20px' }}>
-                <h3 style={{ margin: '0 0 14px', fontSize: '1rem', fontWeight: 700 }}>🧾 Patient Billing Profile</h3>
-                <form onSubmit={handleBillingSearch} style={{ display: 'flex', gap: '10px' }}>
+            {error && <div className="acc-error-banner">{error}</div>}
+
+            {/* KPI Cards */}
+            {stats && (
+                <div className="acc-kpi-row">
+                    <div className="acc-kpi acc-kpi-green" onClick={() => navigate('/accountant/financial-records')}>
+                        <div className="acc-kpi-icon-wrap"><FiDollarSign size={24} /></div>
+                        <div className="acc-kpi-data">
+                            <span className="acc-kpi-value">{formatCurrency(stats.todayCollection)}</span>
+                            <span className="acc-kpi-label">Today's Collection</span>
+                            <span className="acc-kpi-sub">{stats.todayCount} transactions</span>
+                        </div>
+                    </div>
+
+                    <div className="acc-kpi acc-kpi-blue" onClick={() => navigate('/accountant/financial-records')}>
+                        <div className="acc-kpi-icon-wrap"><FiCalendar size={24} /></div>
+                        <div className="acc-kpi-data">
+                            <span className="acc-kpi-value">{formatCurrency(stats.monthCollection)}</span>
+                            <span className="acc-kpi-label">This Month</span>
+                            <span className="acc-kpi-sub">{stats.monthCount} transactions</span>
+                        </div>
+                    </div>
+
+                    <div className="acc-kpi acc-kpi-amber">
+                        <div className="acc-kpi-icon-wrap"><FiClock size={24} /></div>
+                        <div className="acc-kpi-data">
+                            <span className="acc-kpi-value">{formatCurrency(stats.pendingAmount)}</span>
+                            <span className="acc-kpi-label">Pending Amount</span>
+                            <span className="acc-kpi-sub">{stats.pendingCount} pending</span>
+                        </div>
+                    </div>
+
+                    <div className="acc-kpi acc-kpi-purple">
+                        <div className="acc-kpi-icon-wrap"><FiTrendingUp size={24} /></div>
+                        <div className="acc-kpi-data">
+                            <span className="acc-kpi-value">{formatCurrency(stats.totalCollection)}</span>
+                            <span className="acc-kpi-label">Total Collection</span>
+                        </div>
+                    </div>
+
+                    <div className="acc-kpi acc-kpi-red" onClick={() => navigate('/accountant/refunds')}>
+                        <div className="acc-kpi-icon-wrap"><FiArrowDownCircle size={24} /></div>
+                        <div className="acc-kpi-data">
+                            <span className="acc-kpi-value">{formatCurrency(stats.totalRefunded)}</span>
+                            <span className="acc-kpi-label">Refunds</span>
+                            {stats.pendingRefunds > 0 && <span className="acc-kpi-sub acc-kpi-alert">₹{stats.pendingRefunds.toLocaleString()} pending</span>}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Quick Billing Search */}
+            <div className="acc-card acc-search-card">
+                <h3><FiSearch size={18} /> Patient Billing Lookup</h3>
+                <form onSubmit={handleBillingSearch} className="acc-search-form">
                     <input
                         type="text"
                         placeholder="Search by Phone / MRN / Patient ID..."
                         value={billingSearch}
                         onChange={e => { setBillingSearch(e.target.value); setBillingError(''); }}
-                        style={{ flex: 1, padding: '10px 14px', border: '2px solid #e2e8f0', borderRadius: '8px', fontSize: '0.95rem', outline: 'none' }}
+                        className="acc-search-input"
                     />
-                    <button type="submit" disabled={billingSearching} style={{ padding: '10px 22px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '0.95rem' }}>
+                    <button type="submit" disabled={billingSearching} className="acc-btn acc-btn-primary">
                         {billingSearching ? 'Searching...' : 'View Bills'}
                     </button>
-                    <button type="button" onClick={() => navigate('/billing/patient')} style={{ padding: '10px 18px', background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '0.95rem' }}>
+                    <button type="button" onClick={() => navigate('/billing/patient')} className="acc-btn acc-btn-outline">
                         Open Billing
                     </button>
                 </form>
-                {billingError && <p style={{ color: '#dc2626', marginTop: '8px', fontSize: '0.88rem' }}>{billingError}</p>}
+                {billingError && <p className="acc-search-error">{billingError}</p>}
             </div>
 
-            <div className="admin-card date-filter-card">
-                <h3>📅 Analytics Timeframe</h3>
-                <div className="date-filter-controls">
-                    <div className="preset-buttons">
-                        <button className={datePreset === 'all' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('all')}>All Time</button>
-                        <button className={datePreset === 'today' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('today')}>Today</button>
-                        <button className={datePreset === '30' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('30')}>Last 30 Days</button>
-                        <button className={datePreset === '60' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('60')}>Last 60 Days</button>
-                        <button className={datePreset === '90' ? 'preset-btn active' : 'preset-btn'} onClick={() => handleDatePresetChange('90')}>Last 90 Days</button>
+            {/* Recent Payments Table */}
+            {stats?.recentPayments?.length > 0 && (
+                <div className="acc-card">
+                    <div className="acc-card-header">
+                        <h3>Financial Records</h3>
+                        <button className="acc-btn acc-btn-sm" onClick={() => navigate('/accountant/financial-records')}>View All</button>
                     </div>
-                    <div className="custom-date-inputs">
-                        <input type="date" className="date-input" value={customStartDate} onChange={(e) => { setDatePreset('custom'); setCustomStartDate(e.target.value); }} />
-                        <span>to</span>
-                        <input type="date" className="date-input" value={customEndDate} onChange={(e) => { setDatePreset('custom'); setCustomEndDate(e.target.value); }} />
-                        <button className="btn-save" onClick={handleApplyCustomDate}>Apply Custom</button>
+                    <div className="acc-table-wrap">
+                        <table className="acc-table">
+                            <thead>
+                                <tr>
+                                    <th>Patient</th>
+                                    <th>MRN</th>
+                                    <th>Amount</th>
+                                    <th>Mode</th>
+                                    <th>Status</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {stats.recentPayments.map((p, i) => (
+                                    <tr key={p._id || i}>
+                                        <td>
+                                            <div className="acc-patient-cell">
+                                                <FiUser size={14} />
+                                                <span>{p.patientId?.name || '—'}</span>
+                                            </div>
+                                        </td>
+                                        <td><span className="acc-mrn"><FiHash size={12} />{p.patientId?.patientId || p.patientId?.mrn || '—'}</span></td>
+                                        <td className="acc-amount">{formatCurrency(p.amount)}</td>
+                                        <td>{p.paymentMode || '—'}</td>
+                                        <td>{getStatusBadge(p.paymentStatus)}</td>
+                                        <td>{formatDateTime(p.paymentDate)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-            </div>
-
-            {error && <div className="error-message">⚠️ {error}</div>}
-
-            {loading ? (
-                <div className="loading-message">⏳ Loading financial data...</div>
-            ) : stats ? (
-                <>
-                    <h2 className="section-title">📊 Overall Financials</h2>
-                    <div className="acc-kpi-grid overall-kpi">
-                        <div className="acc-kpi-card acc-kpi-green">
-                            <div className="acc-kpi-icon">💰</div>
-                            <div className="acc-kpi-value">{formatCurrency(stats.totalRevenue)}</div>
-                            <div className="acc-kpi-label">Total Revenue</div>
-                            <div className="acc-kpi-sub">Gross income received</div>
-                        </div>
-                        <div className="acc-kpi-card acc-kpi-blue">
-                            <div className="acc-kpi-icon">📉</div>
-                            <div className="acc-kpi-value">{formatCurrency(stats.medicines.cost)}</div>
-                            <div className="acc-kpi-label">Total Costs</div>
-                            <div className="acc-kpi-sub">Medicine purchase cost</div>
-                        </div>
-                        <div className="acc-kpi-card acc-kpi-purple">
-                            <div className="acc-kpi-icon">📈</div>
-                            <div className="acc-kpi-value">{formatCurrency(stats.totalProfit)}</div>
-                            <div className="acc-kpi-label">Net Profit</div>
-                            <div className="acc-kpi-sub">Revenue - Internal Costs</div>
-                        </div>
-                    </div>
-
-                    <h2 className="section-title">🏥 Department Segmentation</h2>
-                    <div className="acc-kpi-grid">
-                        <div className="acc-kpi-card acc-kpi-teal">
-                            <div className="acc-kpi-icon">👨‍⚕️</div>
-                            <div className="acc-kpi-value">{formatCurrency(stats.consultations.revenue)}</div>
-                            <div className="acc-kpi-label">Consultations</div>
-                            <div className="acc-kpi-sub">{stats.consultations.count} Paid Appointments</div>
-                        </div>
-
-                        <div className="acc-kpi-card acc-kpi-pink">
-                            <div className="acc-kpi-icon">🧪</div>
-                            <div className="acc-kpi-value">{formatCurrency(stats.labTests.revenue)}</div>
-                            <div className="acc-kpi-label">Lab Tests</div>
-                            <div className="acc-kpi-sub">{stats.labTests.count} Paid Reports</div>
-                        </div>
-
-                        <div className="acc-kpi-card acc-kpi-orange">
-                            <div className="acc-kpi-icon">💊</div>
-                            <div className="acc-kpi-value">{formatCurrency(stats.medicines.revenue)}</div>
-                            <div className="acc-kpi-label">Pharmacy Gross</div>
-                            <div className="acc-kpi-sub">{stats.medicines.count} Prescriptions Sold</div>
-                        </div>
-
-                        <div className="acc-kpi-card acc-kpi-magenta" style={{ background: 'linear-gradient(135deg, #10b981, #047857)' }}>
-                            <div className="acc-kpi-icon">💸</div>
-                            <div className="acc-kpi-value">{formatCurrency(stats.medicines.profit)}</div>
-                            <div className="acc-kpi-label">Pharmacy Net Margin</div>
-                            <div className="acc-kpi-sub">Medicine profit after buy-cost</div>
-                        </div>
-                    </div>
-                </>
-            ) : null}
+            )}
         </div>
     );
 };
