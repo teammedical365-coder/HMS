@@ -22,7 +22,8 @@ import {
     FaCircleInfo, 
     FaXmark,
     FaEye,
-    FaArrowsRotate
+    FaArrowsRotate,
+    FaBolt
 } from 'react-icons/fa6';
 import LanguageSelector from '../../components/common/LanguageSelector';
 import { 
