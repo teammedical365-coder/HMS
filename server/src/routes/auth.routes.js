@@ -48,7 +48,8 @@ async function buildUserResponse(user) {
     hospitalId: user.hospitalId || null,
     permissions: roleData ? roleData.permissions : [],
     dashboardPath: roleData ? roleData.dashboardPath : '/',
-    navLinks: roleData ? roleData.navLinks : []
+    navLinks: roleData ? roleData.navLinks : [],
+    lastLogin: user.lastLogin || null,
   };
 }
 
@@ -367,6 +368,9 @@ router.post('/login', loginLimiter, async (req, res) => {
       } catch (_) {}
     }
 
+    const now = new Date();
+    await User.findByIdAndUpdate(user._id, { $set: { lastLogin: now } });
+
     const userData = {
       id: user._id,
       name: user.name,
@@ -380,7 +384,8 @@ router.post('/login', loginLimiter, async (req, res) => {
       subscriptionPlan,
       permissions: roleData.permissions || [],
       dashboardPath: roleData.dashboardPath || '/',
-      navLinks: roleData.navLinks || []
+      navLinks: roleData.navLinks || [],
+      lastLogin: now,
     };
 
     res.json({

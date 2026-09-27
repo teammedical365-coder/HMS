@@ -313,9 +313,51 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const handleLogout = () => {
+    const handleLogout = (e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        setDropdownOpen(false);
+        try {
+            localStorage.removeItem('loginTime');
+        } catch (_) {}
         dispatch(logout());
         navigate('/login');
+    };
+
+    // Helper to format last login time dynamically
+    const formatLastLogin = (timestamp) => {
+        let dateVal = timestamp;
+        if (!dateVal && typeof window !== 'undefined') {
+            dateVal = localStorage.getItem('loginTime');
+            if (!dateVal) {
+                dateVal = new Date().toISOString();
+                try {
+                    localStorage.setItem('loginTime', dateVal);
+                } catch (_) {}
+            }
+        }
+        const date = new Date(dateVal);
+        if (isNaN(date.getTime())) return 'Recently Active';
+
+        const now = new Date();
+        const isToday = date.toDateString() === now.toDateString();
+        
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+        const isYesterday = date.toDateString() === yesterday.toDateString();
+
+        const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+        if (isToday) {
+            return `Today, ${timeStr}`;
+        } else if (isYesterday) {
+            return `Yesterday, ${timeStr}`;
+        } else {
+            const dateStr = date.toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
+            return `${dateStr}, ${timeStr}`;
+        }
     };
 
     // Helper to get initials
@@ -382,26 +424,31 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
             </div>
 
             <div className="topbar-right">
-                <div className="ca-topbar-actions" ref={dropdownRef}>
+                <div className="ca-topbar-actions">
                     <GlobalSearch />
 
-                    <div 
-                        className={`ca-user-profile-circle-btn ${dropdownOpen ? 'active' : ''}`}
-                        onClick={() => setDropdownOpen(prev => !prev)}
-                        title={user?.name ? `${user.name} (${user.role || 'User'})` : 'Account & Profile'}
-                    >
-                        <div className="ca-avatar-wrapper">
-                            <div className="ca-avatar-circle">
-                                {user?.avatar ? (
-                                    <img src={user.avatar} alt={user.name} />
-                                ) : (
-                                    <span>{getInitials(user?.name) || 'PH'}</span>
-                                )}
+                    {/* Profile Dropdown Container */}
+                    <div className="ca-profile-dropdown-container" ref={dropdownRef}>
+                        <button 
+                            type="button"
+                            className={`ca-user-profile-circle-btn ${dropdownOpen ? 'active' : ''}`}
+                            onClick={() => setDropdownOpen(prev => !prev)}
+                            title={user?.name ? `${user.name} (${user.role || 'User'})` : 'Account & Profile'}
+                            aria-label="Account & Profile"
+                        >
+                            <div className="ca-avatar-wrapper">
+                                <div className="ca-avatar-circle">
+                                    {user?.avatar ? (
+                                        <img src={user.avatar} alt={user.name} />
+                                    ) : (
+                                        <span>{getInitials(user?.name) || 'PH'}</span>
+                                    )}
+                                </div>
+                                <div className="ca-avatar-online" />
                             </div>
-                            <div className="ca-avatar-online" />
-                        </div>
+                        </button>
 
-                        {/* Dropdown Modal Card (Compact & Clean) */}
+                        {/* Dropdown Modal Card (Separate sibling, stationary & smooth) */}
                         {dropdownOpen && (
                             <div className="ca-profile-dropdown-card" onClick={(e) => e.stopPropagation()}>
                                 {/* Speech Bubble Pointer Arrow */}
@@ -473,12 +520,16 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
                                     </div>
                                     <div className="ca-login-texts">
                                         <span className="ca-login-label">Last Login</span>
-                                        <span className="ca-login-value">Today, 09:42 AM</span>
+                                        <span className="ca-login-value">{formatLastLogin(user?.lastLogin)}</span>
                                     </div>
                                 </div>
 
                                 {/* Logout Session Button */}
-                                <button onClick={handleLogout} className="ca-drop-logout-btn">
+                                <button 
+                                    type="button" 
+                                    onClick={handleLogout} 
+                                    className="ca-drop-logout-btn"
+                                >
                                     <FiLogOut size={15} />
                                     <span>Logout</span>
                                 </button>

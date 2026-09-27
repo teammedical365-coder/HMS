@@ -84,6 +84,7 @@ async function buildLoginUserData(user, roleData) {
         permissions: roleData.permissions || [],
         dashboardPath: roleData.dashboardPath || '/',
         navLinks: roleData.navLinks || [],
+        lastLogin: user.lastLogin || null,
     };
 
     return { userData, tenant };
@@ -129,6 +130,8 @@ async function createSessionAndToken(user, roleData, req) {
     const { browser, os } = parseUserAgent(req.headers['user-agent']);
     const ipAddress = req.ip || req.connection?.remoteAddress || '';
 
+    const now = new Date();
+
     // Create session record
     await Session.create({
         userId: user._id,
@@ -137,10 +140,14 @@ async function createSessionAndToken(user, roleData, req) {
         browser,
         os,
         ipAddress,
-        loginTime: new Date(),
-        lastActive: new Date(),
+        loginTime: now,
+        lastActive: now,
         isActive: true,
     });
+
+    // Update user's lastLogin in database
+    await User.findByIdAndUpdate(user._id, { $set: { lastLogin: now } });
+    user.lastLogin = now;
 
     // Generate JWT with sessionId
     const token = jwt.sign(

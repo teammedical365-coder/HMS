@@ -106,6 +106,9 @@ const userSchema = new mongoose.Schema({
 
     // Increment to invalidate all outstanding tokens for this user (revoke-all-sessions)
     tokenVersion: { type: Number, default: 0 },
+
+    // Last login timestamp
+    lastLogin: { type: Date, default: null },
 }, { timestamps: true });
 
 // Scoped compound indexes for multi-tenant isolation per hospital

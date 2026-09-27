@@ -1,6 +1,16 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { authAPI, adminAPI, hospitalAdminAPI } from '../../utils/api';
 
+const persistAuthSession = (token, user) => {
+  if (token) localStorage.setItem('token', token);
+  if (user) {
+    const loginTime = user.lastLogin || new Date().toISOString();
+    const updatedUser = { ...user, lastLogin: loginTime };
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+    localStorage.setItem('loginTime', loginTime);
+  }
+};
+
 // ══════════════════════════════════════════════════════════════════════════════
 // OTP-Based Login Thunks
 // ══════════════════════════════════════════════════════════════════════════════
@@ -14,8 +24,7 @@ export const sendOtp = createAsyncThunk(
       if (response.success) {
         // When OTP is bypassed and no active session, login is complete — persist to localStorage
         if (response.otpBypassed && !response.activeSessionExists && response.token) {
-          localStorage.setItem('token', response.token);
-          localStorage.setItem('user', JSON.stringify(response.user));
+          persistAuthSession(response.token, response.user);
         }
         return response;
       }
@@ -38,8 +47,7 @@ export const verifyOtp = createAsyncThunk(
       if (response.success) {
         // If no active session → login is complete (token + user returned)
         if (!response.activeSessionExists && response.token) {
-          localStorage.setItem('token', response.token);
-          localStorage.setItem('user', JSON.stringify(response.user));
+          persistAuthSession(response.token, response.user);
         }
         return response;
       }
@@ -76,8 +84,7 @@ export const forceLogin = createAsyncThunk(
     try {
       const response = await authAPI.forceLogin(preAuthToken);
       if (response.success) {
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
+        persistAuthSession(response.token, response.user);
         return response;
       }
       return rejectWithValue(response.message || 'Failed to complete login');
@@ -97,8 +104,7 @@ export const loginUser = createAsyncThunk(
     try {
       const response = await authAPI.login(email, password, hospitalId);
       if (response.success) {
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
+        persistAuthSession(response.token, response.user);
         return response;
       }
       return rejectWithValue(response.message || 'Login failed');
@@ -114,8 +120,7 @@ export const signupUser = createAsyncThunk(
     try {
       const response = await authAPI.signup(name, email, password, phone);
       if (response.success) {
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
+        persistAuthSession(response.token, response.user);
         return response;
       }
       return rejectWithValue(response.message || 'Signup failed');
@@ -131,8 +136,7 @@ export const loginAdmin = createAsyncThunk(
     try {
       const response = await adminAPI.login(email, password);
       if (response.success) {
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
+        persistAuthSession(response.token, response.user);
         return response;
       }
       return rejectWithValue(response.message || 'Login failed');
@@ -148,8 +152,7 @@ export const loginHospitalAdmin = createAsyncThunk(
     try {
       const response = await hospitalAdminAPI.login(email, password);
       if (response.success) {
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
+        persistAuthSession(response.token, response.user);
         return response;
       }
       return rejectWithValue(response.message || 'Login failed');
@@ -165,8 +168,7 @@ export const signupAdmin = createAsyncThunk(
     try {
       const response = await adminAPI.signup(name, email, password, phone);
       if (response.success) {
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
+        persistAuthSession(response.token, response.user);
         return response;
       }
       return rejectWithValue(response.message || 'Signup failed');
@@ -184,7 +186,11 @@ const loadInitialState = () => {
   try {
     const token = localStorage.getItem('token');
     const userStr = localStorage.getItem('user');
-    const user = userStr ? JSON.parse(userStr) : null;
+    let user = userStr ? JSON.parse(userStr) : null;
+    const loginTime = localStorage.getItem('loginTime');
+    if (user && !user.lastLogin && loginTime) {
+      user.lastLogin = loginTime;
+    }
 
     return {
       user,
@@ -238,6 +244,7 @@ const authSlice = createSlice({
       state.sessionExpiredMessage = null;
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      localStorage.removeItem('loginTime');
     },
     clearError: (state) => {
       state.error = null;

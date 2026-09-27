@@ -1175,6 +1175,13 @@
   border: 2px solid #ffffff;
 }
 
+/* Container for dropdown positioning */
+.ca-profile-dropdown-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 .ca-user-profile-circle-btn {
   display: flex;
   align-items: center;
@@ -1184,21 +1191,22 @@
   border: none;
   cursor: pointer;
   position: relative;
-  transition: transform 0.15s ease;
   outline: none;
+  border-radius: 50%;
 }
 
-.ca-user-profile-circle-btn:hover {
-  transform: scale(1.06);
+.ca-user-profile-circle-btn:hover .ca-avatar-circle {
+  transform: scale(1.05);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25), 0 4px 14px rgba(99, 102, 241, 0.35);
 }
 
-.ca-user-profile-circle-btn:active {
-  transform: scale(0.95);
+.ca-user-profile-circle-btn:active .ca-avatar-circle {
+  transform: scale(0.96);
 }
 
 .ca-user-profile-circle-btn.active .ca-avatar-circle {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35), 0 6px 18px rgba(99, 102, 241, 0.45);
-  transform: scale(1.05);
+  transform: scale(1.04);
 }
 
 .ca-avatar-wrapper {
@@ -1247,6 +1255,7 @@
   top: calc(100% + 10px);
   right: 0;
   width: 315px;
+  max-width: calc(100vw - 20px);
   background: #ffffff;
   border-radius: 18px;
   border: 1px solid #cbd5e1;
@@ -1552,12 +1561,12 @@
   color: #5b21b6;
 }
 
-/* Compact Logout Button (High Contrast) */
+/* Compact Logout Button (High Contrast & Rock-Solid Click) */
 .ca-drop-logout-btn {
   width: 100%;
-  padding: 9px 12px;
+  padding: 10px 14px;
   background: #fff5f5;
-  border: 1px solid #fecaca;
+  border: 1.5px solid #fecaca;
   border-radius: 12px;
   color: #dc2626;
   font-weight: 800;
@@ -1565,25 +1574,29 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
   font-family: inherit;
+  user-select: none;
+  outline: none;
 }
 
 .ca-drop-logout-btn:hover {
   background: #fee2e2;
   border-color: #f87171;
   color: #b91c1c;
-  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+}
+
+.ca-drop-logout-btn:active {
+  background: #fecaca;
+  transform: scale(0.98);
 }
 
 .ca-drop-logout-btn svg {
-  transition: transform 0.15s ease;
-}
-
-.ca-drop-logout-btn:hover svg {
-  transform: translateX(3px);
+  flex-shrink: 0;
+  pointer-events: none;
 }
 
 @media (max-width: 768px) {
@@ -1667,6 +1680,17 @@
   .global-search-mobile-btn {
     width: 32px !important;
     height: 32px !important;
+  }
+
+  /* Responsive profile dropdown on mobile devices */
+  .ca-profile-dropdown-card {
+    right: -4px;
+    width: min(305px, calc(100vw - 16px));
+    padding: 12px;
+  }
+
+  .ca-dropdown-pointer {
+    right: 16px;
   }
 }
 
