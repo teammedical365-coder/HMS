@@ -52,7 +52,8 @@ async function buildUserResponse(user, hospitalCache = null, roleCache = null) {
         }
         if (!roleData) {
             // Legacy string fallback - find role by name scoped to the user's hospital
-            const query = { name: { $regex: new RegExp(`^${user.role}$`, 'i') } };
+            const escapedRole = String(user.role).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const query = { name: { $regex: new RegExp(`^${escapedRole}$`, 'i') } };
             if (user.hospitalId) query.hospitalId = user.hospitalId;
             roleData = await Role.findOne(query);
             
@@ -60,13 +61,16 @@ async function buildUserResponse(user, hospitalCache = null, roleCache = null) {
             if (!roleData && user.hospitalId) {
                 roleData = await Role.findOne({
                     hospitalId: null,
-                    name: { $regex: new RegExp(`^${user.role}$`, 'i') }
+                    name: { $regex: new RegExp(`^${escapedRole}$`, 'i') }
                 });
             }
 
             if (roleData) {
-                user.role = roleData._id;
-                await user.save();
+                const newRoleId = roleData._id;
+                user.role = newRoleId;
+                User.updateOne({ _id: user._id }, { $set: { role: newRoleId } }).catch(saveErr => {
+                    console.warn(`[buildUserResponse] Non-fatal: could not persist role migration for user ${user._id}:`, saveErr.message);
+                });
                 if (roleCache) roleCache.set(roleKey, roleData);
             }
         }
@@ -125,17 +129,24 @@ async function buildUserResponse(user, hospitalCache = null, roleCache = null) {
  * - others: scoped to their hospitalId
  */
 function getHospitalFilter(req) {
-    const role = req.user.role;
-    const isCentral = role === 'centraladmin' || role === 'superadmin';
+    const userRoleName = (
+        typeof req.user?.role === 'string'
+            ? req.user.role
+            : (req.user?._roleData?.name || '')
+    ).toLowerCase().trim();
+    const isCentral = userRoleName === 'centraladmin' || userRoleName === 'superadmin';
 
     if (isCentral) {
         // Central admin can optionally filter by ?hospitalId=xxx
         const qHospitalId = req.query.hospitalId;
+        if (qHospitalId && mongoose.Types.ObjectId.isValid(qHospitalId)) {
+            return { hospitalId: new mongoose.Types.ObjectId(qHospitalId) };
+        }
         return qHospitalId ? { hospitalId: qHospitalId } : {};
     }
 
     // Hospital admin or staff — always scoped
-    const hid = req.user.hospitalId;
+    const hid = req.user?.hospitalId;
     return hid ? { hospitalId: hid } : { hospitalId: null };
 }
 
@@ -391,7 +402,12 @@ router.post('/login', async (req, res) => {
 // Get all users — scoped by hospital, excluding patients and admin roles with optional server-side pagination & search
 router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
-        const isCentral = req.user.role === 'centraladmin' || req.user.role === 'superadmin';
+        const userRoleName = (
+            typeof req.user?.role === 'string'
+                ? req.user.role
+                : (req.user?._roleData?.name || '')
+        ).toLowerCase().trim();
+        const isCentral = userRoleName === 'centraladmin' || userRoleName === 'superadmin';
         const filter = getHospitalFilter(req);
 
         const excludeDoctors = req.query.excludeDoctors === 'true';
@@ -488,9 +504,32 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
         // Build full response with request-level caching to prevent N+1 queries
         const hospitalCache = new Map();
         const roleCache = new Map();
-        const usersWithRoles = await Promise.all(users.map(async (u) => {
-            return await buildUserResponse(u, hospitalCache, roleCache);
-        }));
+        const usersWithRoles = (await Promise.all(users.map(async (u) => {
+            try {
+                return await buildUserResponse(u, hospitalCache, roleCache);
+            } catch (userErr) {
+                console.error(`[buildUserResponse] Fallback for user ${u?._id}:`, userErr.message);
+                return {
+                    id: u._id,
+                    name: u.name || 'Staff User',
+                    email: u.email || '',
+                    phone: u.phone || '',
+                    role: typeof u.role === 'string' ? u.role : (u.role?.name || 'Staff'),
+                    roleId: u.role,
+                    patientId: u.patientId || null,
+                    hospitalId: u.hospitalId || null,
+                    hospitalName: null,
+                    subscriptionPlan: null,
+                    plan: null,
+                    permissions: [],
+                    dashboardPath: '/',
+                    navLinks: [],
+                    avatar: u.avatar || null,
+                    departments: u.departments || [],
+                    assignedDoctors: u.assignedDoctors || []
+                };
+            }
+        }))).filter(Boolean);
 
         const staffOnly = usersWithRoles.filter(u => {
             const r = (typeof u.role === 'string' ? u.role : (u.role?.name || '')).toLowerCase();
@@ -513,7 +552,7 @@ router.get('/users', verifyAdminOrSuperAdmin, async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Error fetching users:', error);
+        console.error('Error fetching users:', error.stack || error);
         res.status(500).json({ success: false, message: 'Error fetching users' });
     }
 });
