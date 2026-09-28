@@ -20,6 +20,13 @@ exports.verifyToken = async (req, res, next) => {
         const token = authHeader.split(' ')[1];
         decoded = jwt.verify(token, JWT_SECRET);
     } catch (jwtErr) {
+        if (jwtErr.name === 'TokenExpiredError') {
+            return res.status(401).json({ 
+                success: false, 
+                sessionExpired: true, 
+                message: 'jwt expired. Please login again.' 
+            });
+        }
         return res.status(401).json({ success: false, message: 'Invalid token' });
     }
 

@@ -17,10 +17,11 @@ if (!secret || secret.trim().length < 32) {
     }
 }
 
-// Set JWT_EXPIRES_IN to 10 years for indefinite sessions until explicit logout
-const defaultExpiry = '3650d';
+// Set JWT_EXPIRES_IN to 7 days
+const defaultExpiry = '7d';
 
 module.exports = {
     JWT_SECRET: secret,
     JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || defaultExpiry,
 };
+

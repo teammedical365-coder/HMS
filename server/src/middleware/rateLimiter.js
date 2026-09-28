@@ -33,7 +33,7 @@ const otpLimiter = rateLimit({
 // so we keep this high. Public health/config endpoints are skipped entirely.
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: process.env.NODE_ENV === 'production' ? 500 : 5000,
+    max: process.env.NODE_ENV === 'production' ? 2500 : 5000,
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Too many requests. Please slow down.' },

@@ -71,7 +71,12 @@ apiClient.interceptors.response.use(
 
             // ONLY force logout on genuine session expiration or explicitly revoked/invalidated token
             // NEVER logout on transient 'No token provided' or sub-resource auth errors
-            const shouldLogout = isSessionExpired || errMsg.includes('session') || errMsg.includes('revoked') || errMsg.includes('invalidated') || errMsg.includes('jwt expired');
+            const shouldLogout = isSessionExpired || 
+                                 errMsg.includes('session') || 
+                                 errMsg.includes('revoked') || 
+                                 errMsg.includes('invalidated') || 
+                                 errMsg.includes('jwt expired') ||
+                                 errMsg.includes('invalid token');
 
             if (shouldLogout) {
                 localStorage.removeItem('token');
