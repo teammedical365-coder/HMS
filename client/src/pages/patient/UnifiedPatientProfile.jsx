@@ -624,8 +624,20 @@ const HospitalPatientProfileContent = () => {
     }
 
     let fullAddress = patientData.address || '';
-    if (!fullAddress) {
-        fullAddress = [patientData.houseNo, patientData.street, patientData.city, patientData.state, patientData.zipCode]
+    const extraAddressParts = [
+        patientData.city,
+        patientData.state,
+        patientData.pincode || patientData.zipCode
+    ].map(s => String(s || '').trim()).filter(Boolean);
+
+    if (fullAddress) {
+        const lowerAddr = fullAddress.toLowerCase();
+        const missing = extraAddressParts.filter(p => !lowerAddr.includes(p.toLowerCase()));
+        if (missing.length > 0) {
+            fullAddress = `${fullAddress}, ${missing.join(', ')}`;
+        }
+    } else {
+        fullAddress = [patientData.houseNo, patientData.street, patientData.city, patientData.state, patientData.pincode || patientData.zipCode]
             .map(s => String(s || '').trim())
             .filter(Boolean)
             .join(', ');
@@ -668,15 +680,15 @@ const HospitalPatientProfileContent = () => {
 
     // Tab definitions (Clean icons, no raw emojis, merged clinical history into timeline)
     const tabs = [
-        { key: 'timeline', label: 'Timeline', icon: <FiClock /> },
+        { key: 'timeline', label: 'Timeline', icon: <FiClock />, count: displayTimeline?.length },
         { key: 'ipdOrders', label: 'IPD Orders', icon: <FiActivity /> },
         { key: 'familyHistory', label: 'Family Tree', icon: <FiUsers /> },
         { key: 'vitals', label: 'Vitals', icon: <FiHeart /> },
-        { key: 'prescriptions', label: 'Prescriptions', icon: <FiFileText /> },
-        { key: 'reports', label: 'Reports', icon: <FiFolder /> },
+        { key: 'prescriptions', label: 'Prescriptions', icon: <FiFileText />, count: medications?.length },
+        { key: 'reports', label: 'Reports', icon: <FiFolder />, count: recentLabs?.length },
         { key: 'notes', label: 'Notes', icon: <FiMessageSquare /> },
         ...(canViewVials ? [{ key: 'vialManagement', label: 'Vial Location', icon: <FiBox /> }] : []),
-        { key: 'documents', label: 'Documents', icon: <FiFile /> },
+        { key: 'documents', label: 'Documents', icon: <FiFile />, count: displayDocuments?.length },
     ];
 
     // Gender & Blood Group display
@@ -765,8 +777,9 @@ const HospitalPatientProfileContent = () => {
                         {(fullAddress || patientData.city || allergiesList.length > 0) && (
                             <div className="upp-header-tags upp-tags-row-tertiary">
                                 {(fullAddress || patientData.city) && (
-                                    <span className="upp-header-tag upp-tag-location" title={fullAddress || patientData.city}>
-                                        <FiMapPin /> {fullAddress || patientData.city}
+                                    <span className="upp-header-tag upp-tag-location" title={`Address: ${fullAddress || patientData.city}`}>
+                                        <FiMapPin style={{ flexShrink: 0, color: '#0284c7', fontSize: '13.5px' }} />
+                                        <span className="upp-tag-location-text">{fullAddress || patientData.city}</span>
                                     </span>
                                 )}
                                 {allergiesList.length > 0 && (
@@ -861,17 +874,28 @@ const HospitalPatientProfileContent = () => {
             </div>
 
             {/* ====== TAB NAVIGATION ====== */}
-            <div className="upp-tab-nav">
-                {tabs.map(tab => (
-                    <button
-                        key={tab.key}
-                        className={`upp-tab-btn ${activeTab === tab.key ? 'active' : ''}`}
-                        onClick={() => setActiveTab(tab.key)}
-                    >
-                        <span className="upp-tab-icon">{tab.icon}</span>
-                        <span>{tab.label}</span>
-                    </button>
-                ))}
+            <div className="upp-tab-nav-wrapper">
+                <div className="upp-tab-nav">
+                    {tabs.map(tab => {
+                        const isActive = activeTab === tab.key;
+                        return (
+                            <button
+                                key={tab.key}
+                                className={`upp-tab-btn ${isActive ? 'active' : ''}`}
+                                onClick={() => setActiveTab(tab.key)}
+                                type="button"
+                            >
+                                <span className="upp-tab-icon">{tab.icon}</span>
+                                <span className="upp-tab-label">{tab.label}</span>
+                                {tab.count !== undefined && tab.count > 0 && (
+                                    <span className={`upp-tab-counter ${isActive ? 'active' : ''}`}>
+                                        {tab.count}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
 
             {/* ====== MAIN CONTENT ====== */}

@@ -118,11 +118,6 @@ const DoctorDashboard = () => {
             {/* 1. HERO BANNER SECTION (Full Width, Sleek Dark Navy Theme, Seamlessly Blended Doctor AI Graphic) */}
             <div className="doc-hero-banner">
                 <div className="doc-hero-content">
-                    <div className="doc-hero-badge">
-                        <span className="doc-hero-wave">👋</span>
-                        <span>WELCOME BACK, DOCTOR</span>
-                    </div>
-
                     <h1 className="doc-hero-heading">
                         {greeting}
                         <span className="doc-hero-name-highlight">

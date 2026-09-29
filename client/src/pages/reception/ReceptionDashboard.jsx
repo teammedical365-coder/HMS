@@ -21,6 +21,7 @@ import { useBranding } from '../../context/BrandingContext';
 import { TopBar } from '../../components/layouts/DashboardLayout';
 import './ReceptionDashboard.css';
 import './PatientRegistration.css';
+import CustomSelect from '../../components/common/CustomSelect';
 
 const timeSlots = [
     '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
@@ -256,12 +257,12 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
         // Vitals / Payment (Reception Duties)
         height: '', weight: '', bmi: '', bloodGroup: '',
-        consultationFee: '500',
+        consultationFee: '',
 
         // Assignment
         department: '', doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: '',
         referralType: '', reasonForVisit: '', paymentMethod: 'Cash',
-        splitPayments: [{ method: 'Cash', amount: '500' }]
+        splitPayments: [{ method: 'Cash', amount: '' }]
     });
 
     const [profilePhoto, setProfilePhoto] = useState(null);
@@ -621,26 +622,73 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     );
 
     const handleIntakeSplitPaymentChange = (index, field, value) => {
-        const newSplits = [...(intakeForm.splitPayments || [])];
-        if (!newSplits[index]) return;
-        newSplits[index][field] = value;
-        setIntakeForm(prev => ({ ...prev, splitPayments: newSplits }));
+        setIntakeForm(prev => {
+            const totalFee = Number(prev.consultationFee) || 0;
+            const newSplits = (prev.splitPayments || []).map(sp => ({ ...sp }));
+            if (!newSplits[index]) return prev;
+
+            if (field === 'method') {
+                newSplits[index].method = value;
+                return { ...prev, splitPayments: newSplits };
+            }
+
+            if (field === 'amount') {
+                if (newSplits.length <= 1) {
+                    newSplits[0].amount = String(totalFee);
+                    return { ...prev, splitPayments: newSplits };
+                }
+
+                if (newSplits.length === 2) {
+                    const otherIndex = index === 0 ? 1 : 0;
+                    if (value === '') {
+                        newSplits[index].amount = '';
+                        newSplits[otherIndex].amount = String(totalFee);
+                    } else {
+                        const parsed = Math.max(0, Number(value) || 0);
+                        const clamped = Math.min(totalFee, parsed);
+                        newSplits[index].amount = String(clamped);
+                        newSplits[otherIndex].amount = String(Math.max(0, totalFee - clamped));
+                    }
+                    return { ...prev, splitPayments: newSplits };
+                }
+
+                if (value === '') {
+                    newSplits[index].amount = '';
+                } else {
+                    const parsed = Math.max(0, Number(value) || 0);
+                    newSplits[index].amount = String(parsed);
+                    if (index !== newSplits.length - 1) {
+                        const otherSum = newSplits.reduce((acc, p, i) => {
+                            if (i === newSplits.length - 1) return acc;
+                            return acc + (Number(p.amount) || 0);
+                        }, 0);
+                        newSplits[newSplits.length - 1].amount = String(Math.max(0, totalFee - otherSum));
+                    }
+                }
+                return { ...prev, splitPayments: newSplits };
+            }
+
+            return prev;
+        });
     };
 
     const addIntakeSplitPayment = () => {
         setIntakeForm(prev => {
             const currentSplits = prev.splitPayments || [];
-            const currentTotal = currentSplits.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-            const totalFee = Number(prev.consultationFee) || 500;
-            const remaining = Math.max(0, totalFee - currentTotal);
+            // STRICT LIMIT: Maximum 2 payment methods allowed
+            if (currentSplits.length >= 2) {
+                return prev;
+            }
+            const totalFee = Number(prev.consultationFee) || 0;
+            const firstMethod = currentSplits[0]?.method || 'Cash';
+            const secondMethod = firstMethod === 'Cash' ? 'UPI' : 'Cash';
+            const half = Math.floor(totalFee / 2);
+            const remaining = Math.max(0, totalFee - half);
             return {
                 ...prev,
                 splitPayments: [
-                    ...currentSplits,
-                    {
-                        method: currentSplits.some(s => s.method === 'Cash') ? 'UPI' : 'Cash',
-                        amount: remaining > 0 ? String(remaining) : ''
-                    }
+                    { method: firstMethod, amount: String(half) },
+                    { method: secondMethod, amount: String(remaining) }
                 ]
             };
         });
@@ -648,11 +696,21 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     const removeIntakeSplitPayment = (index) => {
         setIntakeForm(prev => {
+            const totalFee = Number(prev.consultationFee) || 0;
             const filtered = (prev.splitPayments || []).filter((_, i) => i !== index);
-            return {
-                ...prev,
-                splitPayments: filtered.length > 0 ? filtered : [{ method: 'Cash', amount: String(prev.consultationFee || 500) }]
-            };
+            if (filtered.length <= 1) {
+                return {
+                    ...prev,
+                    splitPayments: [{ method: filtered[0]?.method || 'Cash', amount: String(totalFee) }]
+                };
+            }
+            if (filtered.length === 2) {
+                const firstAmt = Math.min(totalFee, Number(filtered[0].amount) || 0);
+                filtered[0].amount = String(firstAmt);
+                filtered[1].amount = String(Math.max(0, totalFee - firstAmt));
+                return { ...prev, splitPayments: filtered };
+            }
+            return { ...prev, splitPayments: filtered };
         });
     };
 
@@ -996,10 +1054,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             aadhaar: '', isAadhaarVerified: false, relationToPatient: '', avatar: '',
             partnerTitle: 'Mr.', partnerFirstName: '', partnerLastName: '', partnerMobile: '',
             height: '', weight: '', bmi: '', bloodGroup: '',
-            paymentStatus: 'Pending', consultationFee: String(hospitalContext?.appointmentFee ?? '500'),
+            paymentStatus: 'Pending', consultationFee: '',
             department: '', doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: '',
             referralType: '', reasonForVisit: '', paymentMethod: 'Cash',
-            splitPayments: [{ method: 'Cash', amount: String(hospitalContext?.appointmentFee ?? '500') }]
+            splitPayments: [{ method: 'Cash', amount: '' }]
         });
         setViewMode('intake');
     };
@@ -1497,8 +1555,20 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
 
-        if (name === 'department' && hospitalContext) {
-            const defaultFee = hospitalContext.departmentFees?.[value] ?? hospitalContext.appointmentFee ?? 500;
+        if (name === 'department') {
+            if (!value) {
+                setIntakeForm(prev => ({
+                    ...prev,
+                    department: '',
+                    consultationFee: '',
+                    doctor: '',
+                    visitTime: '',
+                    splitPayments: [{ method: 'Cash', amount: '' }]
+                }));
+                setAvailabilityCheck(prev => ({ ...prev, doctorId: '', bookedSlots: [] }));
+                return;
+            }
+            const defaultFee = hospitalContext?.departmentFees?.[value] ?? hospitalContext?.defaultFee ?? hospitalContext?.appointmentFee ?? 500;
             setIntakeForm(prev => ({
                 ...prev,
                 [name]: value,
@@ -1675,8 +1745,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             .join(', ');
         intakeForm.address = fullAddress || intakeForm.address || '';
 
-        const hasNonCash = intakeForm.splitPayments.some(p => p.method !== 'Cash');
-        if (intakeForm.doctor && intakeForm.visitTime && hasNonCash && !paymentScreenshot && !followupStatus?.active) {
+        const hasNonCash = (intakeForm.splitPayments || []).some(p => p.method !== 'Cash');
+        if ((intakeForm.doctor || intakeForm.department) && hasNonCash && !paymentScreenshot && !followupStatus?.active) {
             toast.error(`Please upload a payment screenshot/proof for non-cash payment before booking.`);
             setSaving(false); return;
         }
@@ -1684,10 +1754,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         const isTokenMode = hospitalContext?.appointmentMode === 'token';
         const isBooking = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
         
-        if (isBooking && Number(intakeForm.consultationFee) > 0) {
-            const totalSplit = intakeForm.splitPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-            if (totalSplit !== Number(intakeForm.consultationFee)) {
-                toast.error(`Payment is incomplete. Total paid (₹${totalSplit}) must match the full Consultation Fee (₹${intakeForm.consultationFee}) before booking.`);
+        const requiredFee = Number(intakeForm.consultationFee) || 0;
+        if (!followupStatus?.active && (intakeForm.department || isBooking) && requiredFee > 0) {
+            const totalSplit = (intakeForm.splitPayments || []).reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+            if (totalSplit !== requiredFee) {
+                toast.error(`Payment breakdown total (₹${totalSplit}) must exactly match the full Consultation Fee (₹${requiredFee}) before booking.`);
                 setSaving(false); return;
             }
         }
@@ -1821,7 +1892,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     splitPayments: intakeForm.splitPayments,
                     paymentStatus: 'Paid',
                     amount: intakeForm.consultationFee,
-                    paymentMethod: intakeForm.paymentMethod,
+                    paymentMethod: (intakeForm.splitPayments || []).length > 1 
+                        ? (intakeForm.splitPayments || []).map(p => `${p.method} (${p.amount})`).join(' + ') 
+                        : (intakeForm.splitPayments?.[0]?.method || intakeForm.paymentMethod || 'Cash'),
                     proofUrl: (isUpiInvolved || isOnlineInvolved) ? screenshotUrl : '',
                     upiScreenshotUrl: (isUpiInvolved || isOnlineInvolved) ? screenshotUrl : '',
                     transactionId: (isUpiInvolved || isCardInvolved || isOnlineInvolved) ? (intakePaymentData?.transactionId || '') : '',
@@ -2050,46 +2123,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     </div>
                                 )}
 
-                                {/* Payment Section (when follow-up is NOT active) */}
-                                {!followupStatus?.active && (
-                                    <div style={{ marginBottom: '20px' }}>
-                                        <div className="field" style={{ flexBasis: '100%' }}>
-                                            <PaymentSection
-                                                splitPayments={intakeForm.splitPayments}
-                                                onSplitChange={handleIntakeSplitPaymentChange}
-                                                onAddSplit={addIntakeSplitPayment}
-                                                onRemoveSplit={removeIntakeSplitPayment}
-                                                totalAmount={Number(intakeForm.consultationFee) || 0}
-                                                upiOptions={upiOptions}
-                                                paymentData={intakePaymentData}
-                                                onPaymentDataChange={setIntakePaymentData}
-                                                proofFile={paymentScreenshot}
-                                                onProofFileChange={setPaymentScreenshot}
-                                                allowCash={true}
-                                            />
-                                        </div>
-                                        {intakeForm.splitPayments.some(p => p.method !== 'Cash') && (
-                                            <div style={{ marginTop: '8px' }}>
-                                                <label>Payment Screenshot / Proof <span style={{ color: '#ef4444', fontSize: '12px' }}>*Required for non-cash payment</span></label>
-                                                <input
-                                                    type="file"
-                                                    accept="image/*,application/pdf"
-                                                    onChange={e => setPaymentScreenshot(e.target.files[0])}
-                                                    style={{ padding: '8px', border: '2px dashed #6366f1', borderRadius: '8px', background: '#f5f3ff', width: '100%' }}
-                                                />
-                                                {paymentScreenshot && (
-                                                    <span style={{ fontSize: '12px', color: '#059669', marginTop: '4px', display: 'block' }}>
-                                                        ✅ {paymentScreenshot.name}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Assign to Doctor/Counselor */}
-                                <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
-                                    <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px', borderBottom: '2px solid #bfdbfe', paddingBottom: '10px' }}>Assign to Doctor/Counselor</h4>
+                                {/* 1. Assign to Doctor/Counselor */}
+                                <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '12px', border: '1px solid #bfdbfe', marginBottom: '20px' }}>
+                                    <h4 style={{ color: '#1e40af', fontSize: '0.875rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px', borderBottom: '2px solid #bfdbfe', paddingBottom: '10px' }}>Assign to Doctor / Counselor</h4>
                                     <div className="form-row">
                                         <div className="field">
                                             <label>Department {followupStatus?.active && '(Read Only)'}</label>
@@ -2163,6 +2199,33 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         )
                                     )}
                                 </div>
+
+                                {/* 2. Payment Section (when follow-up is NOT active) */}
+                                {!followupStatus?.active && (
+                                    <div style={{ marginBottom: '20px' }}>
+                                        {!intakeForm.department ? (
+                                            <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #cbd5e1', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                                                ⚕️ Please select a Department & Specialist above to calculate registration fee.
+                                            </div>
+                                        ) : (
+                                            <div className="field" style={{ flexBasis: '100%' }}>
+                                                <PaymentSection
+                                                    splitPayments={intakeForm.splitPayments}
+                                                    onSplitChange={handleIntakeSplitPaymentChange}
+                                                    onAddSplit={addIntakeSplitPayment}
+                                                    onRemoveSplit={removeIntakeSplitPayment}
+                                                    totalAmount={Number(intakeForm.consultationFee) || 0}
+                                                    upiOptions={upiOptions}
+                                                    paymentData={intakePaymentData}
+                                                    onPaymentDataChange={setIntakePaymentData}
+                                                    proofFile={paymentScreenshot}
+                                                    onProofFileChange={setPaymentScreenshot}
+                                                    allowCash={true}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Hospital Policy Acceptance Checkbox */}
@@ -2197,7 +2260,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             </div>
 
                             <div className="form-footer">
-                                <button type="submit" className="btn-save" disabled={saving}>
+                                <button
+                                    type="submit"
+                                    className="btn-save"
+                                    disabled={saving || (!followupStatus?.active && Number(intakeForm.consultationFee) > 0 && totalIntakeSplitAmount !== Number(intakeForm.consultationFee))}
+                                >
                                     {saving
                                         ? 'Booking...'
                                         : (() => {
@@ -2297,23 +2364,23 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             <div className={`reg-step ${activeStep === 4 ? 'active' : ''}`} onClick={() => scrollToStep(4)}>
                                 <div className="reg-step-num">04</div>
                                 <div className="reg-step-text">
-                                    <strong>Vitals</strong>
-                                    <span>Health measurements</span>
+                                    <strong>Assignment</strong>
+                                    <span>Doctor & department</span>
                                 </div>
                             </div>
 
                             <div className={`reg-step ${activeStep === 5 ? 'active' : ''}`} onClick={() => scrollToStep(5)}>
                                 <div className="reg-step-num">05</div>
                                 <div className="reg-step-text">
-                                    <strong>Assignment</strong>
-                                    <span>Doctor & consultant</span>
+                                    <strong>Payment</strong>
+                                    <span>Registration fee</span>
                                 </div>
                             </div>
 
                             <div className="reg-steps-ai">
                                 <div className="reg-scan">
                                     <div className="reg-scan-icon">✦</div>
-                                    AI Verification
+                                    Verification
                                 </div>
                                 <div className="reg-scan-line"></div>
                             </div>
@@ -2491,7 +2558,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
                                                 <div className="reg-field">
                                                     <label>Relation To Patient</label>
-                                                    <select 
+                                                    <CustomSelect 
                                                         className="reg-select"
                                                         name="relationToPatient" 
                                                         value={intakeForm.relationToPatient || ''} 
@@ -2507,7 +2574,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                         <option value="Sister">Sister</option>
                                                         <option value="Son">Son</option>
                                                         <option value="Others">Others</option>
-                                                    </select>
+                                                    </CustomSelect>
                                                 </div>
 
                                                 <div className="reg-field">
@@ -2612,7 +2679,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     <div className="reg-card-body">
                                         <div className="reg-field">
                                             <label>Referral Type</label>
-                                            <select 
+                                            <CustomSelect 
                                                 className="reg-select"
                                                 name="referralType" 
                                                 value={intakeForm.referralType || ''} 
@@ -2627,138 +2694,14 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                 <option value="Google/Website">Google Search / Website</option>
                                                 <option value="Friend/Relative">Friend / Relative</option>
                                                 <option value="Other">Other</option>
-                                            </select>
+                                            </CustomSelect>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* CARD 4: VITALS */}
-                                <div className="reg-form-card" id="reg-step-card-4">
-                                    <div className="reg-card-head">
-                                        <div className="reg-card-title">
-                                            <div className="reg-card-icon">♥</div>
-                                            <div>
-                                                <h2>Vitals</h2>
-                                                <p>Initial patient measurements</p>
-                                            </div>
-                                        </div>
-                                        <div className="reg-ai-tag">SMART MONITOR</div>
-                                    </div>
-
-                                    <div className="reg-card-body">
-                                        <div className="reg-vitals-grid">
-                                            <div className="reg-vital-box">
-                                                <label>Height (cm)</label>
-                                                <input 
-                                                    className="reg-input"
-                                                    name="height" 
-                                                    placeholder="Height"
-                                                    value={intakeForm.height} 
-                                                    onChange={handleInputChange} 
-                                                />
-                                            </div>
-
-                                            <div className="reg-vital-box">
-                                                <label>Weight (kg)</label>
-                                                <input 
-                                                    className="reg-input"
-                                                    name="weight" 
-                                                    placeholder="Weight"
-                                                    value={intakeForm.weight} 
-                                                    onChange={handleInputChange} 
-                                                />
-                                            </div>
-
-                                            <div className="reg-vital-box">
-                                                <label>BMI</label>
-                                                <input 
-                                                    className="reg-input"
-                                                    name="bmi" 
-                                                    placeholder="BMI"
-                                                    value={intakeForm.bmi} 
-                                                    readOnly 
-                                                    style={{ backgroundColor: '#f8fafc', fontWeight: 'bold' }}
-                                                />
-                                            </div>
-
-                                            <div className="reg-vital-box">
-                                                <label>Consultation Fee</label>
-                                                <input 
-                                                    className="reg-input"
-                                                    name="consultationFee" 
-                                                    value={intakeForm.consultationFee || '500'} 
-                                                    readOnly
-                                                    disabled
-                                                    style={{ backgroundColor: '#f8fafc', fontWeight: 'bold', color: '#15803d', cursor: 'not-allowed' }}
-                                                    title="Consultation fee is fixed by hospital policy"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* CARD 5: PAYMENT */}
+                                {/* CARD 4: ASSIGN TO DOCTOR / COUNSELLOR */}
                                 {!isEditingProfileOnly && (
-                                    <div className="reg-form-card" id="reg-step-card-5-payment">
-                                        <div className="reg-card-head">
-                                            <div className="reg-card-title">
-                                                <div className="reg-card-icon">₹</div>
-                                                <div>
-                                                    <h2>Payment</h2>
-                                                    <p>Registration payment details</p>
-                                                </div>
-                                            </div>
-                                            <div className="reg-ai-tag">SECURE</div>
-                                        </div>
-
-                                        <div className="reg-card-body">
-                                            {followupStatus && followupStatus.lastConsultation && (
-                                                <div style={{
-                                                    padding: '12px 16px', borderRadius: '12px', border: '1px solid',
-                                                    backgroundColor: followupStatus.active ? '#f0fdf4' : '#fef2f2',
-                                                    borderColor: followupStatus.active ? '#bbf7d0' : '#fecaca',
-                                                    color: followupStatus.active ? '#15803d' : '#b91c1c',
-                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px'
-                                                }}>
-                                                    <div style={{ fontWeight: 'bold', fontSize: '13px' }}>
-                                                        {followupStatus.active ? '✅ Follow-up Visit - Payment Not Required' : '🔴 Follow-up Expired'}
-                                                    </div>
-                                                    <div style={{ fontSize: '12px' }}>
-                                                        Fee: <strong>₹{followupStatus.active ? '0' : (followupStatus.fee || intakeForm.consultationFee)}</strong>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {followupStatus?.active ? (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '14px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', justifyContent: 'center' }}>
-                                                    <span style={{ fontSize: '18px' }}>✅</span>
-                                                    <span style={{ fontWeight: 600, color: '#15803d', fontSize: '15px' }}>Payment Confirmed — Follow-up Free Visit</span>
-                                                </div>
-                                            ) : (
-                                                <div className="reg-payment-section-box" style={{ background: '#ffffff', padding: '14px', borderRadius: '12px', border: '1px solid #e2e8f0', width: '100%', boxSizing: 'border-box' }}>
-                                                    <PaymentSection
-                                                        splitPayments={intakeForm.splitPayments || []}
-                                                        onSplitChange={handleIntakeSplitPaymentChange}
-                                                        onAddSplit={addIntakeSplitPayment}
-                                                        onRemoveSplit={removeIntakeSplitPayment}
-                                                        totalAmount={Number(intakeForm.consultationFee) || 500}
-                                                        upiOptions={upiOptions}
-                                                        paymentData={intakePaymentData}
-                                                        onPaymentDataChange={setIntakePaymentData}
-                                                        proofFile={paymentScreenshot}
-                                                        onProofFileChange={setPaymentScreenshot}
-                                                        label="Registration Payment Breakdown"
-                                                        allowCash={true}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* CARD 6: ASSIGN TO DOCTOR / COUNSELLOR */}
-                                {!isEditingProfileOnly && (
-                                    <div className="reg-form-card" id="reg-step-card-5">
+                                    <div className="reg-form-card" id="reg-step-card-4">
                                         <div className="reg-card-head">
                                             <div className="reg-card-title">
                                                 <div className="reg-card-icon">⚕</div>
@@ -2773,7 +2716,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             <div className="reg-assign-grid">
                                                 <div className="reg-field">
                                                     <label>Department {followupStatus?.active && '(Read Only)'}</label>
-                                                    <select 
+                                                    <CustomSelect 
                                                         className="reg-select"
                                                         name="department" 
                                                         value={intakeForm.department} 
@@ -2785,7 +2728,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                         {[...new Set([...(hospitalContext?.departments || []), ...doctorsList.flatMap(d => d.departments || [])])].filter(Boolean).map(dept => (
                                                             <option key={dept} value={dept}>{dept}</option>
                                                         ))}
-                                                    </select>
+                                                    </CustomSelect>
                                                 </div>
 
                                                 <div className="reg-field">
@@ -2857,6 +2800,86 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     </div>
                                 )}
 
+                                {/* CARD 5: PAYMENT */}
+                                {!isEditingProfileOnly && (
+                                    <div className="reg-form-card" id="reg-step-card-5">
+                                        <div className="reg-card-head">
+                                            <div className="reg-card-title">
+                                                <div className="reg-card-icon">₹</div>
+                                                <div>
+                                                    <h2>Payment</h2>
+                                                    <p>Registration & consultation payment details</p>
+                                                </div>
+                                            </div>
+                                            <div className="reg-ai-tag">SECURE</div>
+                                        </div>
+
+                                        <div className="reg-card-body">
+                                            {!intakeForm.department ? (
+                                                <div style={{
+                                                    padding: '28px 20px',
+                                                    textAlign: 'center',
+                                                    background: '#f8fafc',
+                                                    borderRadius: '12px',
+                                                    border: '1.5px dashed #cbd5e1',
+                                                    margin: '6px 0'
+                                                }}>
+                                                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>⚕️</div>
+                                                    <div style={{ fontWeight: 700, color: '#334155', fontSize: '15px' }}>
+                                                        Please Select Department & Specialist First
+                                                    </div>
+                                                    <div style={{ color: '#64748b', fontSize: '13px', marginTop: '6px', maxWidth: '420px', margin: '6px auto 0' }}>
+                                                        Choose a department and specialist in Step 04 above. The registration & consultation fee will automatically display and calculate here.
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    {followupStatus && followupStatus.lastConsultation && (
+                                                        <div style={{
+                                                            padding: '12px 16px', borderRadius: '12px', border: '1px solid',
+                                                            backgroundColor: followupStatus.active ? '#f0fdf4' : '#fef2f2',
+                                                            borderColor: followupStatus.active ? '#bbf7d0' : '#fecaca',
+                                                            color: followupStatus.active ? '#15803d' : '#b91c1c',
+                                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px'
+                                                        }}>
+                                                            <div style={{ fontWeight: 'bold', fontSize: '13px' }}>
+                                                                {followupStatus.active ? '✅ Follow-up Visit - Payment Not Required' : '🔴 Follow-up Expired'}
+                                                            </div>
+                                                            <div style={{ fontSize: '12px' }}>
+                                                                Fee: <strong>₹{followupStatus.active ? '0' : (followupStatus.fee || intakeForm.consultationFee)}</strong>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {followupStatus?.active ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '14px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', justifyContent: 'center' }}>
+                                                            <span style={{ fontSize: '18px' }}>✅</span>
+                                                            <span style={{ fontWeight: 600, color: '#15803d', fontSize: '15px' }}>Payment Confirmed — Follow-up Free Visit</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="reg-payment-section-box" style={{ background: '#ffffff', padding: '14px', borderRadius: '12px', border: '1px solid #e2e8f0', width: '100%', boxSizing: 'border-box' }}>
+                                                            <PaymentSection
+                                                                splitPayments={intakeForm.splitPayments || []}
+                                                                onSplitChange={handleIntakeSplitPaymentChange}
+                                                                onAddSplit={addIntakeSplitPayment}
+                                                                onRemoveSplit={removeIntakeSplitPayment}
+                                                                totalAmount={Number(intakeForm.consultationFee) || 0}
+                                                                upiOptions={upiOptions}
+                                                                paymentData={intakePaymentData}
+                                                                onPaymentDataChange={setIntakePaymentData}
+                                                                proofFile={paymentScreenshot}
+                                                                onProofFileChange={setPaymentScreenshot}
+                                                                label="Registration Payment Breakdown"
+                                                                allowCash={true}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* CARD 7: PATIENT NOTES & FOOTER */}
                                 <div className="reg-form-card" id="reg-step-card-notes">
                                     <div className="reg-card-head">
@@ -2921,7 +2944,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             <button 
                                                 type="submit" 
                                                 className="reg-btn reg-btn-save" 
-                                                disabled={saving}
+                                                disabled={saving || (!isEditingProfileOnly && !followupStatus?.active && Number(intakeForm.consultationFee) > 0 && totalIntakeSplitAmount !== Number(intakeForm.consultationFee))}
                                             >
                                                 {saving
                                                     ? 'Saving...'
@@ -3338,9 +3361,14 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         )}
                                     </div>
                                 ))}
-                                <button type="button" onClick={() => {
-                                    setPaymentModal(p => ({ ...p, splitPayments: [...(p.splitPayments || []), { method: 'Cash', amount: '' }] }));
-                                }} style={{ alignSelf: 'flex-start', padding: '6px 12px', background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>+ Add Payment Method</button>
+                                {(paymentModal.splitPayments || []).length < 2 && (
+                                    <button type="button" onClick={() => {
+                                        setPaymentModal(p => {
+                                            if ((p.splitPayments || []).length >= 2) return p;
+                                            return { ...p, splitPayments: [...(p.splitPayments || []), { method: 'Cash', amount: '' }] };
+                                        });
+                                    }} style={{ alignSelf: 'flex-start', padding: '6px 12px', background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}>+ Add Payment Method</button>
+                                )}
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: '10px' }}>

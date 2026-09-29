@@ -1866,17 +1866,89 @@ const PatientBillingProfile = () => {
     const pendingPastAdmissions = pastAdmissions.filter(adm => !isPaid(adm.paymentStatus));
 
     const handleSplitPaymentChange = (index, field, value) => {
-        const newSplits = [...splitPayments];
-        newSplits[index][field] = value;
-        if (field === 'method' && value === 'Cash') {
-            setPaymentModal({ open: false, data: {} });
-            setProofFile(null);
-        }
-        setSplitPayments(newSplits);
+        const totalFee = totalSelected();
+        setSplitPayments(prev => {
+            const newSplits = prev.map(sp => ({ ...sp }));
+            if (!newSplits[index]) return prev;
+
+            if (field === 'method') {
+                newSplits[index].method = value;
+                if (value === 'Cash') {
+                    setPaymentModal({ open: false, data: {} });
+                    setProofFile(null);
+                }
+                return newSplits;
+            }
+
+            if (field === 'amount') {
+                if (newSplits.length <= 1) {
+                    newSplits[0].amount = String(totalFee);
+                    return newSplits;
+                }
+
+                if (newSplits.length === 2) {
+                    const otherIndex = index === 0 ? 1 : 0;
+                    if (value === '') {
+                        newSplits[index].amount = '';
+                        newSplits[otherIndex].amount = String(totalFee);
+                    } else {
+                        const parsed = Math.max(0, Number(value) || 0);
+                        const clamped = Math.min(totalFee, parsed);
+                        newSplits[index].amount = String(clamped);
+                        newSplits[otherIndex].amount = String(Math.max(0, totalFee - clamped));
+                    }
+                    return newSplits;
+                }
+
+                if (value === '') {
+                    newSplits[index].amount = '';
+                } else {
+                    const parsed = Math.max(0, Number(value) || 0);
+                    newSplits[index].amount = String(parsed);
+                    if (index !== newSplits.length - 1) {
+                        const otherSum = newSplits.reduce((acc, p, i) => {
+                            if (i === newSplits.length - 1) return acc;
+                            return acc + (Number(p.amount) || 0);
+                        }, 0);
+                        newSplits[newSplits.length - 1].amount = String(Math.max(0, totalFee - otherSum));
+                    }
+                }
+                return newSplits;
+            }
+            return prev;
+        });
     };
 
-    const addSplitPayment = () => setSplitPayments([...splitPayments, { method: 'Cash', amount: '' }]);
-    const removeSplitPayment = (index) => setSplitPayments(splitPayments.filter((_, i) => i !== index));
+    const addSplitPayment = () => {
+        const totalFee = totalSelected();
+        setSplitPayments(prev => {
+            if (prev.length >= 2) return prev;
+            const firstMethod = prev[0]?.method || 'Cash';
+            const secondMethod = firstMethod === 'Cash' ? 'UPI' : 'Cash';
+            const half = Math.floor(totalFee / 2);
+            return [
+                { method: firstMethod, amount: String(half) },
+                { method: secondMethod, amount: String(totalFee - half) }
+            ];
+        });
+    };
+
+    const removeSplitPayment = (index) => {
+        const totalFee = totalSelected();
+        setSplitPayments(prev => {
+            const filtered = prev.filter((_, i) => i !== index);
+            if (filtered.length <= 1) {
+                return [{ method: filtered[0]?.method || 'Cash', amount: String(totalFee) }];
+            }
+            if (filtered.length === 2) {
+                const firstAmt = Math.min(totalFee, Number(filtered[0].amount) || 0);
+                filtered[0].amount = String(firstAmt);
+                filtered[1].amount = String(Math.max(0, totalFee - firstAmt));
+                return filtered;
+            }
+            return filtered;
+        });
+    };
 
     const totalSplitAmount = splitPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const balanceRemaining = Math.max(0, totalSelected() - totalSplitAmount);

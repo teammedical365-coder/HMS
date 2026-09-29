@@ -11,6 +11,7 @@ import OfflineBanner from './components/OfflineBanner'
 import { initOfflineDb, clearAll as clearOfflineDb } from './utils/offlineDb'
 import { startNetworkMonitoring, stopNetworkMonitoring } from './utils/networkStatus'
 import { startSyncEngine, stopSyncEngine } from './utils/syncEngine'
+import { initModalScrollLock, hasActiveModal } from './utils/modalScrollLock'
 
 const App = () => {
   const { user, isAuthenticated } = useAuth();
@@ -87,6 +88,14 @@ const App = () => {
     return () => { socket.disconnect(); };
   }, [isAuthenticated, user, dispatch]);
 
+  // Initialize Global Modal Scroll Lock (detects any modal in DOM and freezes background)
+  useEffect(() => {
+    const cleanup = initModalScrollLock();
+    return () => {
+      cleanup();
+    };
+  }, []);
+
   // Smooth scrolling with official Lenis setup
   useEffect(() => {
     const lenis = new Lenis({
@@ -99,8 +108,18 @@ const App = () => {
       touchMultiplier: 1.5,
       prevent: (node) => {
         if (!node || typeof node.closest !== 'function') return false;
-        // Prevent Lenis from intercepting scroll on custom dropdowns, lists, selects, modals or any element marked with data-lenis-prevent
-        if (node.closest('[data-lenis-prevent], .lenis-prevent, select, textarea, .ql-lang-list, .ql-lang-dropdown-menu, .modal-content, .modal-body, .custom-select-menu, .custom-dropdown-list, [role="listbox"], [role="menu"], [role="dialog"]')) {
+        // Never allow Lenis to scroll background when ANY modal or popup is active
+        if (document.body.classList.contains('modal-open') || hasActiveModal()) {
+          return true;
+        }
+        // Prevent Lenis from intercepting scroll on custom dropdowns, lists, modals or elements marked with data-lenis-prevent
+        if (node.closest('[data-lenis-prevent], .lenis-prevent, .ql-lang-list, .ql-lang-dropdown-menu, .modal-content, .modal-body, .custom-select-menu, .custom-dropdown-list, [role="listbox"], [role="menu"], [role="dialog"], [class*="modal"]')) {
+          return true;
+        }
+
+        // Only prevent for an active, editable textarea that actually has overflowing text to scroll
+        const activeTextarea = node.closest('textarea:not([disabled])');
+        if (activeTextarea && activeTextarea.scrollHeight > activeTextarea.clientHeight) {
           return true;
         }
         // Auto-detect any scrollable container with overflow-y auto/scroll
@@ -123,6 +142,8 @@ const App = () => {
       },
     });
 
+    window.__lenis = lenis;
+
     let animId;
     function raf(time) {
       lenis.raf(time);
@@ -133,6 +154,7 @@ const App = () => {
 
     return () => {
       cancelAnimationFrame(animId);
+      window.__lenis = null;
       lenis.destroy();
     };
   }, []);

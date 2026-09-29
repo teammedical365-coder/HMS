@@ -55,9 +55,9 @@ const Patient = () => {
         const searchParams = new URLSearchParams(location.search);
         const tab = searchParams.get('tab');
         if (tab === 'referrals') {
-            navigate('/doctor/surgery-referrals', { replace: true });
+            navigate('/doctor/surgeries?tab=referrals', { replace: true });
         } else if (tab === 'surgery_plans') {
-            navigate('/doctor/surgery-plans', { replace: true });
+            navigate('/doctor/surgeries?tab=plans', { replace: true });
         }
     }, [location.search, navigate]);
 

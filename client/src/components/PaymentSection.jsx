@@ -69,15 +69,50 @@ const PaymentSection = ({
                                 <option value="NEFT/RTGS">NEFT / RTGS</option>
                             </select>
 
-                            <input
-                                type="number"
-                                placeholder="Amount"
-                                value={split.amount}
-                                onChange={e => onSplitChange(index, 'amount', e.target.value)}
-                                style={{ padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', flex: '1 1 90px', minWidth: 0, boxSizing: 'border-box' }}
-                                min="1"
-                                required
-                            />
+                            <div style={{ position: 'relative', flex: '1 1 120px', minWidth: 0, boxSizing: 'border-box' }}>
+                                <input
+                                    type="number"
+                                    placeholder="Amount"
+                                    value={splitPayments.length === 1 ? (totalAmount || 0) : split.amount}
+                                    onChange={e => {
+                                        if (splitPayments.length === 1) return;
+                                        onSplitChange(index, 'amount', e.target.value);
+                                    }}
+                                    style={{
+                                        padding: splitPayments.length === 1 ? '8px 55px 8px 10px' : '8px 10px',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: '6px',
+                                        width: '100%',
+                                        boxSizing: 'border-box',
+                                        backgroundColor: splitPayments.length === 1 ? '#f1f5f9' : '#ffffff',
+                                        cursor: splitPayments.length === 1 ? 'not-allowed' : 'text',
+                                        fontWeight: splitPayments.length === 1 ? 'bold' : 'normal',
+                                        color: splitPayments.length === 1 ? '#0f172a' : 'inherit'
+                                    }}
+                                    readOnly={splitPayments.length === 1}
+                                    title={splitPayments.length === 1 ? "Amount is fixed to full consultation fee. Click '+ Add Payment Method' to split." : "Enter amount"}
+                                    min="0"
+                                    max={totalAmount}
+                                    required
+                                />
+                                {splitPayments.length === 1 && (
+                                    <span style={{
+                                        position: 'absolute',
+                                        right: '6px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        fontSize: '10.5px',
+                                        color: '#64748b',
+                                        background: '#e2e8f0',
+                                        padding: '2px 6px',
+                                        borderRadius: '4px',
+                                        fontWeight: 600,
+                                        pointerEvents: 'none'
+                                    }}>
+                                        🔒 Fixed
+                                    </span>
+                                )}
+                            </div>
 
                             {splitPayments.length > 1 && (
                                 <button type="button" onClick={() => onRemoveSplit(index)} style={{ padding: '8px 12px', background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
@@ -168,9 +203,22 @@ const PaymentSection = ({
                     ))}
 
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', width: '100%', boxSizing: 'border-box' }}>
-                        <button type="button" onClick={onAddSplit} style={{ padding: '8px 16px', background: '#ccfbf1', color: '#0f766e', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>+ Add Payment Method</button>
-                        <span style={{ fontSize: '14px', fontWeight: 600, color: totalSplitAmount === Number(totalAmount) ? '#15803d' : '#ef4444' }}>
-                            Split Total: {fmt(totalSplitAmount)} / {fmt(totalAmount)}
+                        {splitPayments.length < 2 && (
+                            <button type="button" onClick={onAddSplit} style={{ padding: '8px 16px', background: '#ccfbf1', color: '#0f766e', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>+ Add Payment Method</button>
+                        )}
+                        <span style={{
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            background: totalSplitAmount === Number(totalAmount) ? '#dcfce7' : '#fee2e2',
+                            color: totalSplitAmount === Number(totalAmount) ? '#15803d' : '#dc2626',
+                            border: `1px solid ${totalSplitAmount === Number(totalAmount) ? '#86efac' : '#fca5a5'}`
+                        }}>
+                            {totalSplitAmount === Number(totalAmount)
+                                ? `✓ Split Total: ${fmt(totalSplitAmount)} / ${fmt(totalAmount)} (Matched)`
+                                : `⚠️ Split Total: ${fmt(totalSplitAmount)} / ${fmt(totalAmount)} (Mismatch: ${fmt(Math.abs(totalSplitAmount - totalAmount))})`
+                            }
                         </span>
                     </div>
                 </div>

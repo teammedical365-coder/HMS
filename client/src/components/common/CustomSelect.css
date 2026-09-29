@@ -1,0 +1,162 @@
+/* ============================================================
+   MEDICAL365 - Custom Select with Max 3 Items Visible & Scroll
+   ============================================================ */
+
+.custom-select-container {
+    position: relative;
+    box-sizing: border-box;
+    font-family: inherit;
+    user-select: none;
+    width: 100%;
+}
+
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 12px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 13.5px;
+    color: #1e293b;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.custom-select-trigger:hover {
+    border-color: #94a3b8;
+}
+
+.custom-select-trigger.open,
+.custom-select-trigger:focus-visible {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.custom-select-display {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 8px;
+    font-weight: 500;
+}
+
+.custom-select-chevron {
+    font-size: 11px;
+    color: #64748b;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.custom-select-chevron.rotate {
+    transform: rotate(180deg);
+}
+
+/* Dropdown Menu - Capped at exactly 3 items (~114px) with smooth scrolling */
+.custom-select-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15), 0 8px 10px -6px rgba(15, 23, 42, 0.1);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: 99999;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+    animation: customSelectFadeIn 0.15s ease;
+}
+
+.custom-select-dropdown.upward {
+    top: auto;
+    bottom: calc(100% + 4px);
+}
+
+@keyframes customSelectFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.custom-select-dropdown::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-select-dropdown::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-select-dropdown::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 4px;
+}
+
+.custom-select-dropdown::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8;
+}
+
+.custom-select-option {
+    height: 38px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 13.5px;
+    color: #334155;
+    cursor: pointer;
+    box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background-color 0.12s ease;
+}
+
+.custom-select-option:hover {
+    background-color: #f1f5f9;
+    color: #0f172a;
+}
+
+.custom-select-option.selected {
+    background-color: #eff6ff;
+    color: #2563eb;
+    font-weight: 600;
+}
+
+.custom-select-option.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f8fafc;
+}
+
+.custom-select-container.disabled .custom-select-trigger {
+    background-color: #f8fafc;
+    color: #94a3b8;
+    cursor: not-allowed;
+    border-color: #e2e8f0;
+}
+
+/* Modal and form input compatibility */
+.custom-select-container.ql-modal-input,
+.custom-select-container.ipd-select,
+.custom-select-container.form-select,
+.custom-select-container.reg-select,
+.custom-select-container.staff-input,
+.custom-select-container.pkg-form-select,
+.custom-select-container.pkg-filter-select {
+    padding: 0;
+    border: none;
+    background: transparent;
+}

@@ -1661,3 +1661,30 @@ export const assistantAPI = {
     markReady: async (appointmentId) => (await apiClient.post(`/api/assistant/preparation/${appointmentId}/mark-ready`)).data,
 };
 
+// ── Package Management API ────────────────────────────────────────────────────
+export const packageAPI = {
+    // Package CRUD
+    getPackages: async (params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return (await apiClient.get(`/api/packages${query ? '?' + query : ''}`)).data;
+    },
+    getPackage: async (id) => (await apiClient.get(`/api/packages/${id}`)).data,
+    createPackage: async (data) => (await apiClient.post('/api/packages', data)).data,
+    updatePackage: async (id, data) => (await apiClient.put(`/api/packages/${id}`, data)).data,
+    togglePackage: async (id) => (await apiClient.patch(`/api/packages/${id}/toggle`)).data,
+    deletePackage: async (id) => (await apiClient.delete(`/api/packages/${id}`)).data,
+
+    // Assignment
+    assignPackage: async (data) => (await apiClient.post('/api/packages/assign', data)).data,
+    getAssignments: async (params = {}) => {
+        const query = new URLSearchParams(params).toString();
+        return (await apiClient.get(`/api/packages/assignments/all${query ? '?' + query : ''}`)).data;
+    },
+    getPatientAssignments: async (patientId) => (await apiClient.get(`/api/packages/assignments/patient/${patientId}`)).data,
+    getAssignment: async (assignmentId) => (await apiClient.get(`/api/packages/assignments/${assignmentId}`)).data,
+    logUsage: async (assignmentId, data) => (await apiClient.post(`/api/packages/assignments/${assignmentId}/usage`, data)).data,
+    cancelAssignment: async (assignmentId, data) => (await apiClient.patch(`/api/packages/assignments/${assignmentId}/cancel`, data)).data,
+
+    // Stats
+    getDashboardStats: async () => (await apiClient.get('/api/packages/stats/dashboard')).data,
+};

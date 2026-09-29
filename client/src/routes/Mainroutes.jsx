@@ -40,6 +40,7 @@ const DoctorPatientDetails = lazy(() => import('../pages/doctors/DoctorPatientDe
 const AIAssistant = lazy(() => import('../pages/doctors/AIAssistant'));
 const SurgeryReferrals = lazy(() => import('../pages/doctors/SurgeryReferrals'));
 const MySurgeryPlans = lazy(() => import('../pages/doctors/MySurgeryPlans'));
+const DoctorSurgeries = lazy(() => import('../pages/doctors/DoctorSurgeries'));
 const UnifiedPatientProfile = lazy(() => import('../pages/patient/UnifiedPatientProfile'));
 const PatientPortalLogin = lazy(() => import('../pages/patient/PatientPortalLogin'));
 const PatientSignup = lazy(() => import('../pages/patient/PatientSignup'));
@@ -73,6 +74,7 @@ const ClinicDashboard = lazy(() => import('../pages/hospitaladmin/ClinicDashboar
 const HospitalLogin = lazy(() => import('../pages/hospitaladmin/HospitalLogin'));
 const HospitalAdminQuestionLibrary = lazy(() => import('../pages/hospitaladmin/HospitalAdminQuestionLibrary'));
 const VialManagement = lazy(() => import('../pages/hospitaladmin/VialManagement'));
+const PackageManagement = lazy(() => import('../pages/hospitaladmin/PackageManagement'));
 
 // Cashier Routing
 const CashierDashboard = lazy(() => import('../pages/cashier/CashierDashboard'));
@@ -268,6 +270,7 @@ const MainRoutes = () => {
                 { key: 'hosp_doctors', importFn: () => import('../pages/admin/AdminDoctors') },
                 { key: 'hosp_ql', importFn: () => import('../pages/hospitaladmin/HospitalAdminQuestionLibrary') },
                 { key: 'hosp_vials', importFn: () => import('../pages/hospitaladmin/VialManagement') },
+                { key: 'hosp_packages', importFn: () => import('../pages/hospitaladmin/PackageManagement') },
                 { key: 'hosp_pharmacy', importFn: () => import('../pages/pharmacy/PharmacyInventory') },
                 { key: 'hosp_ipd', importFn: () => import('../pages/nurse/IPDCommandCenter') },
                 { key: 'hosp_ot', importFn: () => import('../pages/ot/OTDashboard') },
@@ -364,8 +367,9 @@ const MainRoutes = () => {
                                 <Route path="doctor/patients/:id" element={<ProtectedRoute requiredPermissions={[]}><UnifiedPatientProfile /></ProtectedRoute>} />
                                 <Route path="doctor/patient/:id" element={<ProtectedRoute requiredPermissions={['visit_diagnose']} allowedRoles={['doctor', 'clinic doctor']}><DoctorPatientDetails /></ProtectedRoute>} />
                                 <Route path="doctor/ai-assistant" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><AIAssistant /></ProtectedRoute>} />
-                                <Route path="doctor/surgery-referrals" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><SurgeryReferrals /></ProtectedRoute>} />
-                                <Route path="doctor/surgery-plans" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><MySurgeryPlans /></ProtectedRoute>} />
+                                <Route path="doctor/surgeries" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><DoctorSurgeries /></ProtectedRoute>} />
+                                <Route path="doctor/surgery-referrals" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><DoctorSurgeries defaultTab="referrals" /></ProtectedRoute>} />
+                                <Route path="doctor/surgery-plans" element={<ProtectedRoute allowedRoles={['doctor', 'clinic doctor', 'clinicdoctor', 'hospitaladmin', 'superadmin', 'centraladmin']}><DoctorSurgeries defaultTab="plans" /></ProtectedRoute>} />
 
                                 <Route path="admin" element={<ProtectedRoute requiredPermissions={['admin_view_stats', 'admin_manage_roles']}><AdminMainDashboard /></ProtectedRoute>} />
                                 <Route path="admin/users" element={<ProtectedRoute requiredPermissions={['admin_manage_roles']}><Admin /></ProtectedRoute>} />
@@ -394,6 +398,7 @@ const MainRoutes = () => {
                                 <Route path="hospitaladmin/question-library" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><HospitalAdminQuestionLibrary /></ProtectedRoute>} />
                                 <Route path="hospitaladmin/vials" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><VialManagement /></ProtectedRoute>} />
                                 <Route path="hospitaladmin/refunds" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'centraladmin', 'superadmin']}><HospitalAdminRefunds /></ProtectedRoute>} />
+                                <Route path="hospitaladmin/packages" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'centraladmin', 'superadmin']}><PackageManagement /></ProtectedRoute>} />
 
                                 <Route path="lab/dashboard" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><LabDashboard /></ProtectedRoute>} />
                                 <Route path="lab/tests" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><AssignedTests /></ProtectedRoute>} />

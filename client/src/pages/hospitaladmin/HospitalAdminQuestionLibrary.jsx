@@ -26,6 +26,7 @@ import {
     FaArrowsRotate
 } from 'react-icons/fa6';
 import LanguageSelector from '../../components/common/LanguageSelector';
+import CustomSelect from '../../components/common/CustomSelect';
 import { 
     getUIText, 
     getTranslatedDepartment, 
@@ -507,7 +508,10 @@ const HospitalAdminQuestionLibrary = () => {
             inputHtml = (
                 <div className='ql-checkbox-grid'>
                     {(item.options || []).map(opt => (
-                        <label key={opt}><input type='checkbox' disabled /> {getTranslatedClinicalText(opt, currentLang)}</label>
+                        <label key={opt} className="ql-checkbox-item">
+                            <input type='checkbox' disabled />
+                            <span className="ql-checkbox-text">{getTranslatedClinicalText(opt, currentLang)}</span>
+                        </label>
                     ))}
                 </div>
             );
@@ -518,7 +522,10 @@ const HospitalAdminQuestionLibrary = () => {
                 <div className='ql-complex-group'>
                     {(item.options || []).map(opt => (
                         <div className="ql-complex-row" key={opt}>
-                            <label><input type='checkbox' disabled /> {getTranslatedClinicalText(opt, currentLang)}</label>
+                            <label className="ql-checkbox-item">
+                                <input type='checkbox' disabled />
+                                <span className="ql-checkbox-text">{getTranslatedClinicalText(opt, currentLang)}</span>
+                            </label>
                             {opt !== 'None' && <input type={item.type === 'checkbox-date-group' ? 'date' : 'text'} disabled placeholder={getUIText('inputPlaceholder', currentLang)} style={{ width: '120px', padding: '4px 8px', marginLeft: '10px', fontSize: '0.78rem' }} />}
                         </div>
                     ))}
@@ -534,28 +541,33 @@ const HospitalAdminQuestionLibrary = () => {
 
         return (
             <div className="ql-question-card" key={index}>
-                <div className="ql-question-top">
-                    <div className="ql-question-info">
-                        <span className="q-icon">❓</span>
-                        <strong>{getTranslatedClinicalText(item.q, currentLang)}</strong>
-                        <span className="ql-question-type-badge">{getTypeLabel(item.type)}</span>
+                <div className="ql-question-header">
+                    <div className="ql-q-badge" title={`Question ${index + 1}`}>
+                        <span className="ql-q-number">Q{index + 1}</span>
                     </div>
-                    <div className="ql-question-actions">
-                        <button className="ql-btn-edit-q" onClick={() => handleEditQuestion(index)}>
-                            <FaPenToSquare /> {getUIText('edit', currentLang)}
-                        </button>
-                        <button className="ql-btn-del-q" onClick={() => handleDeleteQuestion(cat, index)}>
-                            <FaTrash /> {getUIText('delete', currentLang)}
-                        </button>
+                    <div className="ql-question-main">
+                        <h4 className="ql-question-text">{getTranslatedClinicalText(item.q, currentLang)}</h4>
+                        <div className="ql-question-meta">
+                            <span className="ql-question-type-badge">{getTypeLabel(item.type)}</span>
+                            {item.parentQ && (
+                                <span className="ql-condition-badge">
+                                    <FaBolt /> {getUIText('onlyShownIf', currentLang).replace('{parentQ}', getTranslatedClinicalText(item.parentQ, currentLang)).replace('{condition}', item.condition)}
+                                </span>
+                            )}
+                        </div>
+                        <div className="ql-input-preview">
+                            {inputHtml}
+                        </div>
                     </div>
                 </div>
-                {item.parentQ && (
-                    <div className="ql-condition-badge">
-                        <span><FaBolt /> {getUIText('onlyShownIf', currentLang).replace('{parentQ}', getTranslatedClinicalText(item.parentQ, currentLang)).replace('{condition}', item.condition)}</span>
-                    </div>
-                )}
-                <div className="ql-input-preview">
-                    {inputHtml}
+
+                <div className="ql-question-footer">
+                    <button type="button" className="ql-btn-edit-q" onClick={() => handleEditQuestion(index)}>
+                        <FaPenToSquare /> {getUIText('edit', currentLang)}
+                    </button>
+                    <button type="button" className="ql-btn-del-q" onClick={() => handleDeleteQuestion(cat, index)}>
+                        <FaTrash /> {getUIText('delete', currentLang)}
+                    </button>
                 </div>
             </div>
         );
@@ -754,7 +766,7 @@ const HospitalAdminQuestionLibrary = () => {
                         
                         <div style={{ marginTop: '16px' }}>
                             <label className="ql-modal-label">{getUIText('selectPredefined', currentLang)}</label>
-                            <select 
+                            <CustomSelect 
                                 className="ql-modal-input"
                                 value={selectedDept} 
                                 onChange={(e) => {
@@ -766,7 +778,7 @@ const HospitalAdminQuestionLibrary = () => {
                                 {predefinedDepartments.map(d => (
                                     <option key={d} value={d}>{getTranslatedDepartment(d, currentLang)} ({d})</option>
                                 ))}
-                            </select>
+                            </CustomSelect>
                         </div>
 
                         <div className="ql-modal-divider">{getUIText('or', currentLang)}</div>
@@ -817,7 +829,7 @@ const HospitalAdminQuestionLibrary = () => {
 
                         <div style={{ marginTop: '12px' }}>
                             <label className="ql-modal-label">{getUIText('questionType', currentLang)}</label>
-                            <select 
+                            <CustomSelect 
                                 className="ql-modal-input" 
                                 value={newQ.type} 
                                 onChange={(e) => setNewQ({ ...newQ, type: e.target.value })}
@@ -831,7 +843,7 @@ const HospitalAdminQuestionLibrary = () => {
                                 <option value="checkbox-group">{getUIText('type_checkbox_group', currentLang)}</option>
                                 <option value="checkbox-text-group">{getUIText('type_checkbox_text_group', currentLang)}</option>
                                 <option value="checkbox-date-group">{getUIText('type_checkbox_date_group', currentLang)}</option>
-                            </select>
+                            </CustomSelect>
                         </div>
 
                         {['select', 'checkbox-group', 'checkbox-date-group', 'checkbox-text-group'].includes(newQ.type) && (
@@ -929,10 +941,10 @@ const HospitalAdminQuestionLibrary = () => {
                                                         <option>{getUIText('no', currentLang)}</option>
                                                     </select>
                                                 ) : q.type === 'select' ? (
-                                                    <select style={{ width: '160px', padding: '6px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}>
+                                                    <CustomSelect style={{ width: '160px' }}>
                                                         <option>{getUIText('selectOption', currentLang)}</option>
                                                         {(q.options || []).map(o => <option key={o}>{getTranslatedClinicalText(o, currentLang)}</option>)}
-                                                    </select>
+                                                    </CustomSelect>
                                                 ) : q.type === 'checkbox-group' ? (
                                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '4px' }}>
                                                         {(q.options || []).map(opt => (

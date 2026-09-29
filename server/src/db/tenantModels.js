@@ -367,6 +367,8 @@ function getTenantModels(tenantDb) {
     const { nurseHandoverSchema } = require('../models/nurseHandover.model');
     const { hospitalPolicySchema } = require('../models/hospitalPolicy.model');
     const { policyAcceptanceSchema } = require('../models/policyAcceptance.model');
+    const { hospitalPackageSchema } = require('../models/hospitalPackage.model');
+    const { patientPackageAssignmentSchema } = require('../models/patientPackageAssignment.model');
 
     return {
         User: model('User', userSchema),
@@ -394,6 +396,8 @@ function getTenantModels(tenantDb) {
         NurseHandover: model('NurseHandover', nurseHandoverSchema),
         HospitalPolicy: model('HospitalPolicy', hospitalPolicySchema),
         PolicyAcceptance: model('PolicyAcceptance', policyAcceptanceSchema),
+        HospitalPackage: model('HospitalPackage', hospitalPackageSchema),
+        PatientPackageAssignment: model('PatientPackageAssignment', patientPackageAssignmentSchema),
     };
 }
 

@@ -59,6 +59,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                     { label: 'Billing & Payments', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'ha_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
                     { label: 'Refund Approvals', path: '/hospitaladmin/refunds', icon: <FiDollarSign />, prefetchKey: 'ha_refunds', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminRefunds') },
                     { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox />, prefetchKey: 'ha_vials', prefetchFn: () => import('../../pages/hospitaladmin/VialManagement') },
+                    { label: 'Package Management', path: '/hospitaladmin/packages', icon: <FiGrid />, prefetchKey: 'ha_packages', prefetchFn: () => import('../../pages/hospitaladmin/PackageManagement') },
                 ];
             }
             return [
@@ -70,6 +71,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Pharma Inventory', path: '/pharmacy/inventory', icon: <FiPackage />, prefetchKey: 'ha_pharma', prefetchFn: () => import('../../pages/pharmacy/PharmacyInventory') },
                 { label: 'Billing & Payments', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'ha_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
                 { label: 'Refund Approvals', path: '/hospitaladmin/refunds', icon: <FiDollarSign />, prefetchKey: 'ha_refunds', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminRefunds') },
+                { label: 'Package Management', path: '/hospitaladmin/packages', icon: <FiGrid />, prefetchKey: 'ha_packages', prefetchFn: () => import('../../pages/hospitaladmin/PackageManagement') },
             ];
         }
         if (role === 'doctor_assistant' || role === 'doctor assistant' || role === 'clinical assistant' || role.includes('assistant')) {
@@ -84,8 +86,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Dashboard', path: '/my-dashboard', icon: <FiHome />, prefetchKey: 'doc_dash', prefetchFn: () => import('../../pages/doctors/DoctorDashboard') },
                 { label: 'My Patients', path: '/doctor/patients', icon: <FiUsers />, prefetchKey: 'doc_patients', prefetchFn: () => import('../../pages/doctors/Patient') },
                 { label: 'AI Assistant', path: '/doctor/ai-assistant', icon: <FiCpu />, prefetchKey: 'doc_ai', prefetchFn: () => import('../../pages/doctors/AIAssistant') },
-                { label: 'Surgery Referrals', path: '/doctor/surgery-referrals', icon: <FiScissors />, prefetchKey: 'doc_referrals', prefetchFn: () => import('../../pages/doctors/SurgeryReferrals') },
-                { label: 'My Surgery Plans', path: '/doctor/surgery-plans', icon: <FiFileText />, prefetchKey: 'doc_plans', prefetchFn: () => import('../../pages/doctors/MySurgeryPlans') },
+                { label: 'Surgeries', path: '/doctor/surgeries', icon: <FiScissors />, prefetchKey: 'doc_surgeries', prefetchFn: () => import('../../pages/doctors/DoctorSurgeries') },
                 { label: 'Real-Time Monitoring', path: '/doctor/real-time-monitoring', icon: <FiActivity />, prefetchKey: 'doc_rtm', prefetchFn: () => import('../../pages/monitoring/RealTimeMonitoring') },
             ];
         }
@@ -168,11 +169,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             return true;
         }
 
-        if (itemPath === '/doctor/surgery-referrals' && currentPath.startsWith('/doctor/surgery-referrals')) {
-            return true;
-        }
-
-        if (itemPath === '/doctor/surgery-plans' && currentPath.startsWith('/doctor/surgery-plans')) {
+        if (itemPath === '/doctor/surgeries' && (currentPath.startsWith('/doctor/surgeries') || currentPath.startsWith('/doctor/surgery-referrals') || currentPath.startsWith('/doctor/surgery-plans'))) {
             return true;
         }
         
@@ -386,8 +383,7 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
         if (pathname === '/ipd/command-center' || pathname === '/nurse/command-center') return 'IPD Command Center';
         if (pathname === '/doctor/dashboard') return 'Doctor Dashboard';
         if (pathname === '/doctor/patients') return 'My Patients';
-        if (pathname === '/doctor/surgery-referrals') return 'Surgery Referrals';
-        if (pathname === '/doctor/surgery-plans') return 'My Surgery Plans';
+        if (pathname === '/doctor/surgeries' || pathname === '/doctor/surgery-referrals' || pathname === '/doctor/surgery-plans') return 'Surgeries';
         if (pathname.includes('/doctor/patient/')) return 'Patient Consultation Details';
         if (pathname.includes('/patient/')) return 'Patient Profile';
         if (pathname === '/reception/dashboard') return 'Reception Dashboard';

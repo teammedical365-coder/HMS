@@ -19,10 +19,11 @@ import {
     FiSave,
     FiSend,
     FiTrash2,
-    FiUserCheck,
+    FiMapPin,
     FiX
 } from 'react-icons/fi';
 import './DoctorIPDOrdersPanel.css';
+import CustomSelect from '../common/CustomSelect';
 
 const COMMON_UNITS = [
     'mg', 'g', 'mcg', 'ml', 'tablet', 'capsule', 'vial', 'ampoule', 'drop', 'puff', 'patch', 'other'
@@ -61,6 +62,47 @@ const getDefaultScheduledTimes = (freq) => {
     if (f.includes('8 HOUR') || f.includes('EVERY 8')) return ['08:00 AM', '04:00 PM', '12:00 AM'];
     if (f.includes('12 HOUR') || f.includes('EVERY 12')) return ['10:00 AM', '10:00 PM'];
     return ['10:00 AM'];
+};
+
+const getFrequencyDisplay = (freq, scheduledTimes) => {
+    if (!freq) {
+        if (scheduledTimes && scheduledTimes.length > 0) {
+            return {
+                title: `${scheduledTimes.length} Times`,
+                count: `${scheduledTimes.length} times a day`
+            };
+        }
+        return { title: '—', count: '' };
+    }
+
+    const norm = String(freq).trim().toUpperCase();
+    if (norm === 'BD' || norm === 'BID' || norm === 'TWICE DAILY' || norm.includes('12 HOUR')) {
+        return { title: 'BD', count: '2 times a day' };
+    }
+    if (norm === 'TDS' || norm === 'TID' || norm === 'THREE TIMES DAILY' || norm.includes('8 HOUR')) {
+        return { title: 'TDS', count: '3 times a day' };
+    }
+    if (norm === 'QID' || norm === 'FOUR TIMES DAILY' || norm.includes('6 HOUR')) {
+        return { title: 'QID', count: '4 times a day' };
+    }
+    if (norm === 'ONCE DAILY' || norm === 'OD' || norm === 'DAILY') {
+        return { title: 'OD', count: '1 time a day' };
+    }
+    if (norm.includes('4 HOUR')) {
+        return { title: 'Q4H', count: '6 times a day' };
+    }
+    if (norm === 'SOS' || norm === 'PRN') {
+        return { title: 'SOS', count: 'As needed' };
+    }
+    if (norm === 'STAT' || norm === 'ONCE' || norm === 'IMMEDIATE') {
+        return { title: 'STAT', count: '1 time (Immediate)' };
+    }
+
+    if (scheduledTimes && scheduledTimes.length > 0) {
+        return { title: freq, count: `${scheduledTimes.length} times a day` };
+    }
+
+    return { title: freq, count: '' };
 };
 
 const ADMISSION_REASONS = [
@@ -794,31 +836,54 @@ const DoctorIPDOrdersPanel = ({
 
     return (
         <div className="ipd-orders-panel">
-            {/* Header */}
-            <div className="ipd-header">
-                <div>
-                    <h3>
-                        <span>🏥</span> IPD Clinical Care & Doctor Orders
-                    </h3>
-                    <div className="ipd-header-meta">
-                        Patient: <strong>{patientName}</strong> (MRN: {patientMRN}) &nbsp;|&nbsp; 
-                        Attending: <strong>Dr. {activeDoctor?.name || 'Physician'}</strong>
+            {/* ====== EXECUTIVE IPD HEADER BANNER ====== */}
+            <div className="ipd-header-banner">
+                <div className="ipd-banner-left">
+                    <div className="ipd-banner-icon-badge">
+                        <FiActivity className="ipd-banner-icon" />
+                    </div>
+                    <div className="ipd-banner-info">
+                        <div className="ipd-banner-title-row">
+                            <h3 className="ipd-banner-title">IPD Clinical Care &amp; Doctor Orders</h3>
+                            <span className="ipd-banner-tag">Inpatient Care Unit</span>
+                        </div>
                     </div>
                 </div>
 
-                <div>
+                <div className="ipd-banner-right">
                     {loadingAdmission ? (
-                        <span className="ipd-badge-status ipd-badge-checking">
-                            Checking Admission...
-                        </span>
+                        <div className="ipd-status-card checking">
+                            <span className="ipd-pulse-dot amber"></span>
+                            <div className="ipd-status-card-text">
+                                <span className="ipd-status-card-title">Admission Status</span>
+                                <span className="ipd-status-card-val">Checking Records...</span>
+                            </div>
+                        </div>
                     ) : activeAdmission ? (
-                        <span className="ipd-badge-status ipd-badge-admitted">
-                            🟢 Hospitalized / Admitted: {activeAdmission.ward} — Bed {activeAdmission.bedNumber || activeAdmission.bedId?.bedNumber || 'Assigned'}
-                        </span>
+                        <div className="ipd-status-card admitted">
+                            <span className="ipd-pulse-dot green"></span>
+                            <div className="ipd-status-card-text">
+                                <div className="ipd-status-badge-row">
+                                    <span className="ipd-status-live-badge">Hospitalized / Admitted</span>
+                                </div>
+                                <div className="ipd-status-location-row">
+                                    <span className="ipd-ward-pill">
+                                        <FiMapPin /> {activeAdmission.ward || 'General Ward'}
+                                    </span>
+                                    <span className="ipd-bed-pill">
+                                        Bed {activeAdmission.bedNumber || activeAdmission.bedId?.bedNumber || 'Assigned'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     ) : (
-                        <span className="ipd-badge-status ipd-badge-pending" style={{ background: '#fef2f2', color: '#991b1b', borderColor: '#fca5a5' }}>
-                            ⚠️ Not Hospitalized (OPD Patient)
-                        </span>
+                        <div className="ipd-status-card opd">
+                            <span className="ipd-pulse-dot amber"></span>
+                            <div className="ipd-status-card-text">
+                                <span className="ipd-status-card-title">Outpatient Record</span>
+                                <span className="ipd-status-card-val">⚠️ Not Hospitalized (OPD Patient)</span>
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>
@@ -942,17 +1007,25 @@ const DoctorIPDOrdersPanel = ({
                 <div>
                     {/* Orders Creation Form */}
                     <form onSubmit={handleSubmitOrders}>
+                        {/* Section 1: Clinical Admission Indication */}
                         <div className="ipd-section">
-                            <h4 className="ipd-section-title">
-                                <FiActivity /> Clinical Admission Indication
-                            </h4>
+                            <div className="ipd-section-header">
+                                <div className="ipd-section-title-wrapper">
+                                    <h4 className="ipd-section-title">
+                                        <span className="ipd-sec-icon">🩺</span> Clinical Admission Indication
+                                    </h4>
+                                    <span className="ipd-sec-subtitle">
+                                        Primary diagnosis and clinical justification for hospital inpatient stay
+                                    </span>
+                                </div>
+                            </div>
                             <div className="ipd-form-grid-2">
                                 <div className="ipd-field-group">
                                     <label>Clinical Diagnosis <span className="req">*</span></label>
                                     <input
                                         type="text"
                                         className="ipd-input"
-                                        placeholder="e.g. Acute Appendicitis, Severe Sepsis"
+                                        placeholder="e.g. Acute Appendicitis, Severe Sepsis, Left Femur Fracture"
                                         value={diagnosis}
                                         onChange={(e) => setDiagnosis(e.target.value)}
                                         required
@@ -961,7 +1034,7 @@ const DoctorIPDOrdersPanel = ({
 
                                 <div className="ipd-field-group">
                                     <label>Primary Admission Indication</label>
-                                    <select
+                                    <CustomSelect
                                         className="ipd-select"
                                         value={admissionReason}
                                         onChange={(e) => setAdmissionReason(e.target.value)}
@@ -969,13 +1042,13 @@ const DoctorIPDOrdersPanel = ({
                                         {ADMISSION_REASONS.map(r => (
                                             <option key={r} value={r}>{r}</option>
                                         ))}
-                                    </select>
+                                    </CustomSelect>
                                 </div>
                             </div>
 
                             {admissionReason === 'Other Clinical Indication' && (
-                                <div className="ipd-field-group" style={{ marginTop: '12px' }}>
-                                    <label>Specify Indication</label>
+                                <div className="ipd-field-group" style={{ marginTop: '14px' }}>
+                                    <label>Specify Indication <span className="req">*</span></label>
                                     <input
                                         type="text"
                                         className="ipd-input"
@@ -987,55 +1060,78 @@ const DoctorIPDOrdersPanel = ({
                             )}
                         </div>
 
-                        {/* Medications Section */}
+                        {/* Section 2: Inpatient Medications */}
                         <div className="ipd-section">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                <h4 className="ipd-section-title" style={{ margin: 0 }}>
-                                    💊 Inpatient Medication Orders (MAR Linked)
-                                </h4>
+                            <div className="ipd-section-header">
+                                <div className="ipd-section-title-wrapper">
+                                    <h4 className="ipd-section-title">
+                                        <span className="ipd-sec-icon">💊</span> Inpatient Medication Orders (MAR Linked)
+                                    </h4>
+                                    <span className="ipd-sec-subtitle">
+                                        Physician electronic prescriptions synchronized with Nurse eMAR schedule
+                                    </span>
+                                </div>
                                 <button
                                     type="button"
-                                    className="ipd-btn-add-row-sm"
+                                    className="ipd-btn-add-drug"
                                     onClick={addMedRow}
+                                    title="Add another medicine"
                                 >
-                                    <FiPlus /> Add Drug
+                                    <FiPlus /> Add Medicine
                                 </button>
                             </div>
 
                             {medicationRows.map((med, idx) => (
                                 <div key={idx} className="ipd-med-card">
-                                    <div className="ipd-med-row-top">
+                                    <div className="ipd-med-card-header">
+                                        <div className="ipd-med-badge-group">
+                                            <span className="ipd-med-number-badge">Medication #{idx + 1}</span>
+                                            {med.medicineName && (
+                                                <span className="ipd-med-name-preview">{med.medicineName}</span>
+                                            )}
+                                            {pharmacyMedicines.length > 0 && (
+                                                <span className="ipd-pharmacy-pill">
+                                                    🏬 Pharmacy Catalog ({pharmacyMedicines.length})
+                                                </span>
+                                            )}
+                                        </div>
+                                        {medicationRows.length > 1 && (
+                                            <button
+                                                type="button"
+                                                className="ipd-btn-remove-drug"
+                                                onClick={() => removeMedRow(idx)}
+                                                title="Remove Medication"
+                                            >
+                                                <FiTrash2 /> Remove
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="ipd-med-grid-top">
                                         <div className="ipd-field-group">
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <label>Medicine Name #{idx + 1} <span className="req">*</span></label>
-                                                {pharmacyMedicines.length > 0 && (
-                                                    <span style={{ fontSize: '0.72rem', color: '#0284c7', fontWeight: 600 }}>
-                                                        🏬 Pharmacy Dropdown ({pharmacyMedicines.length})
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <input
-                                                type="text"
-                                                list={`pharmacy-med-list-${idx}`}
-                                                className="ipd-input"
-                                                placeholder="Select from pharmacy or type custom medicine name..."
-                                                value={med.medicineName}
+                                            <label>Medicine Name #{idx + 1} <span className="req">*</span></label>
+                                            <CustomSelect
+                                                className="ipd-select"
+                                                value={med.medicineName || ''}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
                                                     handleMedRowChange(idx, 'medicineName', val);
-                                                    const matched = pharmacyMedicines.find(p => p.name.toLowerCase() === val.toLowerCase());
+                                                    const matched = pharmacyMedicines.find(p => p.name === val);
                                                     if (matched) {
                                                         handleSelectPharmacyMedicine(idx, matched);
                                                     }
                                                 }}
-                                            />
-                                            <datalist id={`pharmacy-med-list-${idx}`}>
+                                            >
+                                                <option value="">Select Medicine</option>
+                                                {med.medicineName && !pharmacyMedicines.some(p => p.name === med.medicineName) && (
+                                                    <option value={med.medicineName}>{med.medicineName} (Selected)</option>
+                                                )}
                                                 {pharmacyMedicines.map((item, i) => (
                                                     <option key={item._id || i} value={item.name}>
-                                                        {item.salt ? `${item.salt} • ` : ''}{item.category || 'General'} (Stock: {item.stock ?? item.quantity ?? 0} {item.unit || ''})
+                                                        {item.name} {item.salt ? `(${item.salt})` : ''} — {item.category || 'General'} (Stock: {item.stock ?? item.quantity ?? 0} {item.unit || ''})
                                                     </option>
                                                 ))}
-                                            </datalist>
+                                            </CustomSelect>
                                         </div>
 
                                         <div className="ipd-field-group">
@@ -1076,10 +1172,10 @@ const DoctorIPDOrdersPanel = ({
                                         </div>
                                     </div>
 
-                                    <div className="ipd-med-row-bottom">
+                                    <div className="ipd-med-grid-bottom">
                                         <div className="ipd-field-group">
                                             <label>Frequency</label>
-                                            <select
+                                            <CustomSelect
                                                 className="ipd-select"
                                                 value={med.frequency}
                                                 onChange={(e) => handleMedRowChange(idx, 'frequency', e.target.value)}
@@ -1087,7 +1183,7 @@ const DoctorIPDOrdersPanel = ({
                                                 {COMMON_FREQUENCIES.map(f => (
                                                     <option key={f} value={f}>{f}</option>
                                                 ))}
-                                            </select>
+                                            </CustomSelect>
                                         </div>
 
                                         <div className="ipd-field-group">
@@ -1111,98 +1207,48 @@ const DoctorIPDOrdersPanel = ({
                                                 onChange={(e) => handleMedRowChange(idx, 'instructions', e.target.value)}
                                             />
                                         </div>
-
-                                        <button
-                                            type="button"
-                                            className="ipd-btn-remove"
-                                            onClick={() => removeMedRow(idx)}
-                                            title="Remove Row"
-                                        >
-                                            <FiTrash2 />
-                                        </button>
                                     </div>
 
                                     {/* Manual Administration Timing Selector */}
-                                    <div className="ipd-med-row-timing" style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px dashed #cbd5e1' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <FiClock size={14} style={{ color: '#0284c7' }} />
+                                    <div className="ipd-med-timing-box">
+                                        <div className="ipd-timing-header">
+                                            <label className="ipd-timing-label">
+                                                <FiClock size={14} className="ipd-timing-icon" />
                                                 Manual Administration Time Slots ({med.frequency || 'OD'}):
                                             </label>
                                             <button
                                                 type="button"
                                                 className="ipd-btn-add-time-slot"
                                                 onClick={() => handleAddTimeSlot(idx)}
-                                                style={{
-                                                    fontSize: '0.74rem',
-                                                    fontWeight: 600,
-                                                    color: '#2563eb',
-                                                    background: '#eff6ff',
-                                                    border: '1px solid #bfdbfe',
-                                                    borderRadius: '5px',
-                                                    padding: '3px 10px',
-                                                    cursor: 'pointer',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '4px'
-                                                }}
                                             >
                                                 <FiPlus size={12} /> Add Dose Time
                                             </button>
                                         </div>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                                        <div className="ipd-timing-slots-row">
                                             {(med.scheduledTimes || []).map((slot, sIdx) => (
-                                                <div
-                                                    key={sIdx}
-                                                    style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        background: '#ffffff',
-                                                        border: '1.5px solid #cbd5e1',
-                                                        borderRadius: '6px',
-                                                        padding: '3px 8px',
-                                                        gap: '6px',
-                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                                                    }}
-                                                >
-                                                    <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#64748b' }}>Dose {sIdx + 1}:</span>
+                                                <div key={sIdx} className="ipd-time-slot-pill">
+                                                    <span className="ipd-slot-prefix">Dose {sIdx + 1}:</span>
                                                     <input
                                                         type="text"
                                                         value={slot}
                                                         onChange={(e) => handleTimeSlotChange(idx, sIdx, e.target.value)}
                                                         placeholder="e.g. 10:00 AM or 14:00"
-                                                        style={{
-                                                            width: '95px',
-                                                            border: 'none',
-                                                            background: 'transparent',
-                                                            fontSize: '0.84rem',
-                                                            fontWeight: 700,
-                                                            color: '#0f172a',
-                                                            outline: 'none'
-                                                        }}
+                                                        className="ipd-slot-input"
                                                     />
                                                     {(med.scheduledTimes || []).length > 1 && (
                                                         <button
                                                             type="button"
                                                             onClick={() => handleRemoveTimeSlot(idx, sIdx)}
-                                                            style={{
-                                                                border: 'none',
-                                                                background: 'transparent',
-                                                                color: '#ef4444',
-                                                                cursor: 'pointer',
-                                                                padding: '0 2px',
-                                                                display: 'flex',
-                                                                alignItems: 'center'
-                                                            }}
+                                                            className="ipd-btn-remove-slot"
                                                             title="Remove time slot"
                                                         >
-                                                            <FiX size={14} />
+                                                            <FiX size={13} />
                                                         </button>
                                                     )}
                                                 </div>
                                             ))}
-                                            <span style={{ fontSize: '0.74rem', color: '#64748b', fontStyle: 'italic' }}>
-                                                (Type any custom time e.g. 09:30 AM or 21:00)
+                                            <span className="ipd-timing-helper-text">
+                                                (Type custom time e.g. 09:30 AM or 21:00)
                                             </span>
                                         </div>
                                     </div>
@@ -1210,40 +1256,59 @@ const DoctorIPDOrdersPanel = ({
                             ))}
                         </div>
 
-                        {/* Special Directives */}
+                        {/* Section 3: Special Directives */}
                         <div className="ipd-section">
-                            <h4 className="ipd-section-title">
-                                📋 Additional Nursing Directives & Advice
-                            </h4>
+                            <div className="ipd-section-header">
+                                <div className="ipd-section-title-wrapper">
+                                    <h4 className="ipd-section-title">
+                                        <span className="ipd-sec-icon">📋</span> Additional Nursing Directives &amp; Clinical Orders
+                                    </h4>
+                                    <span className="ipd-sec-subtitle">
+                                        Standing instructions for laboratory investigations, surgical preparation, and shift nursing care
+                                    </span>
+                                </div>
+                            </div>
                             <div className="ipd-form-grid-3">
-                                <div className="ipd-field-group">
-                                    <label>Lab / Diagnostic Advice</label>
+                                <div className="ipd-field-group ipd-directive-card">
+                                    <label className="ipd-directive-title">
+                                        <span>🔬 Lab / Diagnostic Advice</span>
+                                    </label>
                                     <textarea
                                         className="ipd-textarea"
-                                        placeholder="e.g. CBC, Serum Creatinine, Chest X-Ray stat"
+                                        placeholder="e.g. CBC, Serum Creatinine, Chest X-Ray stat..."
                                         value={investigationNotes}
                                         onChange={(e) => setInvestigationNotes(e.target.value)}
+                                        rows={3}
                                     />
+                                    <span className="ipd-dir-hint">Pathology, radiology, and urgent bedside tests</span>
                                 </div>
 
-                                <div className="ipd-field-group">
-                                    <label>Procedure / OT Advice</label>
+                                <div className="ipd-field-group ipd-directive-card">
+                                    <label className="ipd-directive-title">
+                                        <span>🏥 Procedure / OT Advice</span>
+                                    </label>
                                     <textarea
                                         className="ipd-textarea"
-                                        placeholder="e.g. NPO from midnight, prep for Laparoscopy"
+                                        placeholder="e.g. NPO from midnight, prep for Laparoscopy, consent signed..."
                                         value={procedureNotes}
                                         onChange={(e) => setProcedureNotes(e.target.value)}
+                                        rows={3}
                                     />
+                                    <span className="ipd-dir-hint">Surgical prep, fasting guidelines, consent orders</span>
                                 </div>
 
-                                <div className="ipd-field-group">
-                                    <label>General Nursing Orders</label>
+                                <div className="ipd-field-group ipd-directive-card">
+                                    <label className="ipd-directive-title">
+                                        <span>🩺 General Nursing Orders</span>
+                                    </label>
                                     <textarea
                                         className="ipd-textarea"
-                                        placeholder="e.g. Strict I/O charting, continuous SpO2 monitoring"
+                                        placeholder="e.g. Strict I/O charting, continuous SpO2 monitoring, elevate head..."
                                         value={clinicalNotes}
                                         onChange={(e) => setClinicalNotes(e.target.value)}
+                                        rows={3}
                                     />
+                                    <span className="ipd-dir-hint">Vitals monitoring frequency, position, nursing alerts</span>
                                 </div>
                             </div>
                         </div>
@@ -1298,6 +1363,7 @@ const DoctorIPDOrdersPanel = ({
                                             const isCancelled = order.status === 'CANCELLED';
                                             const isCompleted = order.status === 'COMPLETED';
                                             const isActive = order.status === 'ACTIVE';
+                                            const freqInfo = getFrequencyDisplay(order.frequency, order.scheduledTimes);
 
                                             let badgeClass = 'ipd-status-active';
                                             if (isCancelled) badgeClass = 'ipd-status-cancelled';
@@ -1311,43 +1377,45 @@ const DoctorIPDOrdersPanel = ({
 
                                             return (
                                                 <tr key={order._id}>
-                                                    <td style={{ fontWeight: 600 }}>
-                                                        <div>{order.medicineName}</div>
+                                                    <td className="ipd-td-med">
+                                                        <div className="ipd-med-title" title={order.clinicalNotes || undefined}>{order.medicineName}</div>
                                                         {order.instructions && (
-                                                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 400, marginTop: '2px' }}>
+                                                            <div className="ipd-med-inst">
                                                                 📝 {order.instructions}
                                                             </div>
                                                         )}
-                                                        {order.clinicalNotes && (
-                                                            <div style={{ fontSize: '0.72rem', color: '#2563eb', fontWeight: 500, marginTop: '2px', whiteSpace: 'pre-wrap' }}>
-                                                                💬 {order.clinicalNotes}
-                                                            </div>
-                                                        )}
                                                     </td>
-                                                    <td>
-                                                        {order.dosage?.value ?? order.dosageValue ?? '—'} {order.dosage?.unit || order.dosageUnit || ''}
+                                                    <td className="ipd-td-dose">
+                                                        <span className="ipd-dose-val">
+                                                            {order.dosage?.value ?? order.dosageValue ?? '—'} {order.dosage?.unit || order.dosageUnit || ''}
+                                                        </span>
                                                     </td>
-                                                    <td>
+                                                    <td className="ipd-td-route">
                                                         <span className="route-badge">{order.route || 'Oral'}</span>
                                                     </td>
-                                                    <td>
-                                                        <strong>{order.frequency || 'OD'}</strong>
-                                                        {order.scheduledTimes && order.scheduledTimes.length > 0 && (
-                                                            <div style={{ fontSize: '0.72rem', color: '#0284c7', marginTop: '2px', fontWeight: 600 }}>
-                                                                ⏰ {order.scheduledTimes.join(', ')}
+                                                    <td 
+                                                        className="ipd-td-freq"
+                                                        title={order.scheduledTimes?.length ? `Administration Times: ${order.scheduledTimes.join(', ')}` : undefined}
+                                                    >
+                                                        <div className="ipd-freq-title">{freqInfo.title}</div>
+                                                        {freqInfo.count && (
+                                                            <span className="ipd-freq-pill">
+                                                                {freqInfo.count}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="ipd-td-duration">
+                                                        <div className="ipd-dur-val">{order.schedule?.duration || order.duration || '—'}</div>
+                                                        {(order.schedule?.startDate || order.startDate) && (
+                                                            <div className="ipd-dur-date">
+                                                                {new Date(order.schedule?.startDate || order.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                             </div>
                                                         )}
                                                     </td>
-                                                    <td>
-                                                        {order.schedule?.duration || order.duration || '—'}
-                                                        <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                                                            {(order.schedule?.startDate || order.startDate) ? new Date(order.schedule?.startDate || order.startDate).toLocaleDateString() : ''}
-                                                        </div>
-                                                    </td>
-                                                    <td>
+                                                    <td className="ipd-td-ack">
                                                         {hasAck ? (
                                                             <span className="ack-pill acknowledged">
-                                                                <FiCheck /> Ack ({lastAck.shift || 'Shift'})
+                                                                <FiCheck size={12} /> Ack ({lastAck.shift || 'Shift'})
                                                             </span>
                                                         ) : (
                                                             <span className="ack-pill pending">
@@ -1355,7 +1423,7 @@ const DoctorIPDOrdersPanel = ({
                                                             </span>
                                                         )}
                                                     </td>
-                                                    <td>
+                                                    <td className="ipd-td-clar">
                                                         {openClar ? (
                                                             <span
                                                                 className="clar-badge open-badge"
@@ -1372,10 +1440,10 @@ const DoctorIPDOrdersPanel = ({
                                                             <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>—</span>
                                                         )}
                                                     </td>
-                                                    <td>
+                                                    <td className="ipd-td-status">
                                                         <span className={badgeClass}>{order.status}</span>
                                                     </td>
-                                                    <td>
+                                                    <td className="ipd-td-action">
                                                         {isActive && (
                                                             <button
                                                                 type="button"
@@ -1403,7 +1471,7 @@ const DoctorIPDOrdersPanel = ({
                     <div className="clar-header-row">
                         <div>
                             <h4>Doctor ↔ Nurse Clinical Clarifications</h4>
-                            <p>Direct communication channel for drug contraindications, dosage double-checks, and clinical inquiries</p>
+                            <p>Direct communication channel for medication contraindications, dosage double-checks, and clinical inquiries</p>
                         </div>
                         <button
                             type="button"

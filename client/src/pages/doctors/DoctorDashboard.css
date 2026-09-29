@@ -296,10 +296,11 @@
 }
 
 .doc-quick-desc {
-  font-size: 0.84rem;
-  font-weight: 500;
-  color: #64748b;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #0f172a;
   margin: 0;
+  line-height: 1.45;
 }
 
 .doc-quick-art-wrapper {
@@ -317,8 +318,8 @@
   height: 100%;
   object-fit: cover;
   object-position: right center;
-  mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.25) 25%, rgba(0, 0, 0, 0.9) 70%);
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.25) 25%, rgba(0, 0, 0, 0.9) 70%);
+  mask-image: linear-gradient(90deg, transparent 0%, transparent 35%, rgba(0, 0, 0, 0.25) 55%, rgba(0, 0, 0, 0.9) 85%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, transparent 35%, rgba(0, 0, 0, 0.25) 55%, rgba(0, 0, 0, 0.9) 85%);
 }
 
 /* --- 4. YOUR PERMISSIONS (Display-Only / Non-Clickable Badges) --- */

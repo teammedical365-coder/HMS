@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import LanguageSelector from './common/LanguageSelector';
+import CustomSelect from './common/CustomSelect';
 import { getUIText, getTranslatedCategory, getTranslatedClinicalText } from '../utils/questionLibraryI18n';
 
 const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeData, readOnly = false }) => {
@@ -122,7 +123,7 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
 
                             {/* Select */}
                             {item.type === 'select' && (
-                                <select
+                                <CustomSelect
                                     value={savedVal}
                                     onChange={(e) => handleAnswer(item.q, e.target.value)}
                                     disabled={readOnly}
@@ -134,12 +135,12 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                             {getTranslatedClinicalText(o, currentLang)}
                                         </option>
                                     ))}
-                                </select>
+                                </CustomSelect>
                             )}
 
                             {/* Yes/No */}
                             {item.type === 'yes-no' && (
-                                <select
+                                <CustomSelect
                                     value={savedVal}
                                     onChange={(e) => handleAnswer(item.q, e.target.value)}
                                     disabled={readOnly}
@@ -148,7 +149,7 @@ const DynamicQuestionForm = ({ categoryName, questions, intakeData, setIntakeDat
                                     <option value="">{getUIText('selectShort', currentLang)}</option>
                                     <option value="Yes">{getUIText('yes', currentLang)}</option>
                                     <option value="No">{getUIText('no', currentLang)}</option>
-                                </select>
+                                </CustomSelect>
                             )}
 
                             {/* Textarea */}
