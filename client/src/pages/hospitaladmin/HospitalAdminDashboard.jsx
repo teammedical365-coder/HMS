@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { confirmToast } from '../../utils/confirmToast';
@@ -136,8 +136,21 @@ const HospitalAdminDashboard = () => {
     const [creating, setCreating] = useState(false);
     const [editModal, setEditModal] = useState(false);
     const [editForm, setEditForm] = useState({
-        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: '', department: ''
+        id: '', name: '', email: '', phone: '', roleId: '', roleName: '', currentAvatar: '', newAvatarFile: null, specialty: '', department: ''
     });
+    const [initialEditForm, setInitialEditForm] = useState(null);
+
+    const isStaffModified = useMemo(() => {
+        if (!initialEditForm) return false;
+        return (
+            (editForm.name || '').trim() !== (initialEditForm.name || '').trim() ||
+            (editForm.email || '').trim().toLowerCase() !== (initialEditForm.email || '').trim().toLowerCase() ||
+            (editForm.phone || '').trim() !== (initialEditForm.phone || '').trim() ||
+            (editForm.department || '') !== (initialEditForm.department || '') ||
+            (editForm.specialty || '') !== (initialEditForm.specialty || '') ||
+            Boolean(editForm.newAvatarFile)
+        );
+    }, [editForm, initialEditForm]);
     const [updating, setUpdating] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
     const [staffSearchQuery, setStaffSearchQuery] = useState('');
@@ -511,9 +524,17 @@ const HospitalAdminDashboard = () => {
 
     const handleUpdateUser = async (e) => {
         e.preventDefault();
+
+        if (!isStaffModified) {
+            toast('No changes detected.', { icon: 'ℹ️' });
+            setEditModal(false);
+            return;
+        }
+
         setUpdating(true);
 
-        if (editForm.phone && editForm.phone.length !== 10) {
+        const cleanPhone = (editForm.phone || '').replace(/\D/g, '').slice(0, 10);
+        if (cleanPhone && cleanPhone.length !== 10) {
             toast.error('Mobile number must be exactly 10 digits.');
             setUpdating(false);
             return;
@@ -528,18 +549,42 @@ const HospitalAdminDashboard = () => {
                 if (uploadRes.success && uploadRes.files.length > 0) avatarUrl = uploadRes.files[0].url;
             }
             const updateData = {
-                name: editForm.name, email: editForm.email, phone: editForm.phone,
-                roleId: editForm.roleId, avatar: avatarUrl, specialty: editForm.specialty,
+                name: (editForm.name || '').trim(),
+                email: (editForm.email || '').trim(),
+                phone: cleanPhone,
+                avatar: avatarUrl,
+                specialty: editForm.specialty,
                 departments: editForm.department ? [editForm.department] : []
             };
             const res = await adminAPI.updateUser(editForm.id, updateData);
             if (res.success) {
-                toast.success('User updated successfully!');
+                toast.success('Staff details updated successfully!');
                 setEditModal(false);
-                fetchUsers();
+
+                // Optimistically update local users state immediately
+                const updated = res.user || {
+                    ...updateData,
+                    id: editForm.id,
+                    _id: editForm.id,
+                    role: editForm.roleName
+                };
+                setUsers(prev => prev.map(u => (String(u.id || u._id) === String(editForm.id) ? { ...u, ...updated } : u)));
+
+                // Sync self authentication state if logged-in user edited themselves
+                if (currentUser && String(currentUser.id || currentUser._id) === String(editForm.id)) {
+                    dispatch(updateUserAction({
+                        name: updateData.name,
+                        email: updateData.email,
+                        phone: updateData.phone,
+                        avatar: updateData.avatar
+                    }));
+                }
+
+                // Fresh re-fetch from database to guarantee persistence
+                await fetchUsers();
             }
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Error updating user.');
+            toast.error(err.response?.data?.message || 'Error updating staff details.');
         } finally {
             setUpdating(false);
         }
@@ -560,13 +605,20 @@ const HospitalAdminDashboard = () => {
     };
 
     const openEditModal = (userItem) => {
-        setEditForm({
+        const initData = {
             id: userItem.id || userItem._id,
-            name: userItem.name, email: userItem.email, phone: userItem.phone || '',
+            name: userItem.name || '',
+            email: userItem.email || '',
+            phone: userItem.phone || '',
             roleId: userItem.roleId || userItem.role,
-            currentAvatar: userItem.avatar, newAvatarFile: null, specialty: userItem.specialty || '',
+            roleName: userItem.role || 'Staff',
+            currentAvatar: userItem.avatar || null,
+            newAvatarFile: null,
+            specialty: userItem.specialty || '',
             department: (userItem.departments && userItem.departments.length > 0) ? userItem.departments[0] : ''
-        });
+        };
+        setEditForm(initData);
+        setInitialEditForm(initData);
         setEditModal(true);
     };
 
@@ -3305,7 +3357,7 @@ const HospitalAdminDashboard = () => {
                                 </div>
                                 <div className="form-row">
                                     <div className="form-group">
-                                        <label className="staff-label">Mobile Phone (10 Digits) *</label>
+                                        <label className="staff-label">Mobile Phone (10 Digits)</label>
                                         <input
                                             type="text"
                                             placeholder="e.g. 9876543210"
@@ -3314,20 +3366,20 @@ const HospitalAdminDashboard = () => {
                                                 const cleanVal = e.target.value.replace(/\D/g, '').slice(0, 10);
                                                 setEditForm({ ...editForm, phone: cleanVal });
                                             }}
-                                            required
                                             title="Phone number must be exactly 10 digits"
                                             className="staff-input"
-                                            maxLength="10" pattern="\d{10}" />
+                                            maxLength="10"
+                                            pattern="\d{10}" />
                                     </div>
                                     <div className="form-group">
                                         <label className="staff-label">Role Access</label>
-                                        <select value={editForm.roleId} onChange={e => setEditForm({ ...editForm, roleId: e.target.value })} required disabled className="staff-input" style={{ opacity: 0.7, cursor: 'not-allowed' }}>
-                                            {roles
-                                                .filter(role => !role.name.toLowerCase().includes('clinic'))
-                                                .map(role => (
-                                                    <option key={role._id} value={role._id}>{role.name}</option>
-                                                ))}
-                                        </select>
+                                        <input
+                                            type="text"
+                                            value={(editForm.roleName || 'Staff').toUpperCase()}
+                                            disabled
+                                            className="staff-input"
+                                            style={{ opacity: 0.75, cursor: 'not-allowed', background: '#f8fafc', fontWeight: 600 }}
+                                        />
                                     </div>
                                 </div>
 
@@ -3350,7 +3402,17 @@ const HospitalAdminDashboard = () => {
                                 )}
 
                                 <div className="modal-buttons" style={{ marginTop: '20px' }}>
-                                    <button type="submit" disabled={updating} className="btn-save ha-btn-modal-submit" style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}>
+                                    <button 
+                                        type="submit" 
+                                        disabled={updating || !isStaffModified} 
+                                        className="btn-save ha-btn-modal-submit" 
+                                        style={{ 
+                                            background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                                            opacity: (!isStaffModified || updating) ? 0.6 : 1,
+                                            cursor: (!isStaffModified || updating) ? 'not-allowed' : 'pointer'
+                                        }}
+                                        title={!isStaffModified ? 'No changes detected' : ''}
+                                    >
                                         {updating ? 'Saving...' : '✓ Save Changes'}
                                     </button>
                                     <button type="button" onClick={() => setEditModal(false)} className="btn-cancel">Cancel</button>

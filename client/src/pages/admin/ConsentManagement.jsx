@@ -1,22 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { consentAPI } from '../../utils/api';
 import confirmToast, { toast } from '../../utils/confirmToast';
-import { 
-    FaPlus, 
-    FaFolderPlus, 
-    FaFileCirclePlus, 
-    FaFileShield, 
-    FaWandMagicSparkles, 
-    FaMicrochip, 
-    FaCloudArrowUp, 
-    FaTrash, 
+import {
+    FaPlus,
+    FaFolderPlus,
+    FaFileCirclePlus,
+    FaFileShield,
+    FaWandMagicSparkles,
+    FaMicrochip,
+    FaCloudArrowUp,
+    FaTrash,
     FaCheck,
-    FaCheckDouble, 
-    FaMagnifyingGlass, 
-    FaCircleInfo, 
-    FaFolderTree, 
-    FaShieldHalved, 
-    FaFileLines, 
+    FaCheckDouble,
+    FaMagnifyingGlass,
+    FaCircleInfo,
+    FaFolderTree,
+    FaShieldHalved,
+    FaFileLines,
     FaFileWord,
     FaFilePdf,
     FaDownload,
@@ -38,13 +38,13 @@ const ConsentManagement = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
     const [pingStat, setPingStat] = useState('12ms');
-    
+
     // Modals & Forms State
     const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
     const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState(null);
     const [editingTemplate, setEditingTemplate] = useState(null);
-    
+
     const [categoryForm, setCategoryForm] = useState({ name: '', description: '', sortOrder: 0, isActive: true });
     const [templateForm, setTemplateForm] = useState({ name: '', categoryId: '', description: '', isActive: true, file: null });
 
@@ -124,7 +124,7 @@ const ConsentManagement = () => {
             if (sparkPoints.length > 0) {
                 const leadX = sparkPoints.length - 1;
                 const leadY = sparkPoints[sparkPoints.length - 1];
-                
+
                 // Outer Pulse Ring
                 sparkCtx.beginPath();
                 sparkCtx.arc(leadX, leadY, 5, 0, Math.PI * 2);
@@ -203,8 +203,8 @@ const ConsentManagement = () => {
     // -------------------------------------------------------------
     const autoCategory = () => {
         const suggestions = [
-            "Critical Care Interventions", 
-            "Minimally Invasive Diagnostics", 
+            "Critical Care Interventions",
+            "Minimally Invasive Diagnostics",
             "Cardio-Thoracic Operations",
             "Robotic Surgical Procedures",
             "Pediatric Anesthesia Protocol",
@@ -226,8 +226,8 @@ const ConsentManagement = () => {
 
     const autoConsentName = () => {
         const titles = [
-            "Advanced Robotic Coronary Bypass Agreement", 
-            "Emergency Pediatric Treatment Authorization", 
+            "Advanced Robotic Coronary Bypass Agreement",
+            "Emergency Pediatric Treatment Authorization",
             "High-Risk Neurosurgery Disclosure",
             "Laparoscopic Cholecystectomy Protocol",
             "Endoscopic Spine Decompression Agreement",
@@ -366,12 +366,12 @@ const ConsentManagement = () => {
             const apiBase = import.meta.env.VITE_API_URL || '';
             const url = `${apiBase}/api/consent/templates/${id}/download`;
             const token = JSON.parse(localStorage.getItem('user'))?.token || localStorage.getItem('token') || '';
-            
+
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!response.ok) throw new Error('Download failed');
-            
+
             const blob = await response.blob();
             const blobUrl = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -400,11 +400,11 @@ const ConsentManagement = () => {
 
     // Filtered templates
     const filteredTemplates = templates.filter(t => {
-        const matchesSearch = !searchQuery.trim() || 
-            t.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        const matchesSearch = !searchQuery.trim() ||
+            t.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             t.originalFileName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             t.description?.toLowerCase().includes(searchQuery.toLowerCase());
-        
+
         const catId = t.categoryId?._id || t.categoryId;
         const matchesCat = !categoryFilter || catId === categoryFilter;
 
@@ -417,7 +417,7 @@ const ConsentManagement = () => {
     return (
         <div className="consent-hub-wrapper">
             <div className="consent-hub-inner">
-                
+
                 {/* HERO BANNER */}
                 <div className="dash-title-banner">
                     <div className="dash-banner-left">
@@ -427,21 +427,21 @@ const ConsentManagement = () => {
                         <p>Create document categories and register compliance consent templates with automated parsing, HIPAA verification, and smart contextual scope generation.</p>
                     </div>
                     <div className="dash-banner-animated-actions">
-                        <button 
+                        <button
                             className={`banner-animated-btn ${activeTab === 'addCategory' ? 'active' : ''}`}
                             onClick={() => setActiveTab('addCategory')}
                         >
                             <FaFolderPlus className="btn-icon" />
                             <span>+ Add Category</span>
                         </button>
-                        <button 
+                        <button
                             className={`banner-animated-btn ${activeTab === 'addConsent' ? 'active' : ''}`}
                             onClick={() => setActiveTab('addConsent')}
                         >
                             <FaFileCirclePlus className="btn-icon" />
                             <span>+ Add Consent Template</span>
                         </button>
-                        <button 
+                        <button
                             className={`banner-animated-btn ${activeTab === 'allCategories' ? 'active' : ''}`}
                             onClick={() => setActiveTab('allCategories')}
                         >
@@ -453,7 +453,7 @@ const ConsentManagement = () => {
 
                 {/* MAIN DASHBOARD GRID */}
                 <div className="dashboard-grid">
-                    
+
                     {/* LEFT PANEL: FORMS & CATEGORY VIEWS */}
                     <div>
                         {/* TAB 1: ADD CATEGORY */}
@@ -461,7 +461,7 @@ const ConsentManagement = () => {
                             <div className="card-box">
                                 <h3>
                                     <span className="card-box-header-left">
-                                        <FaFolderTree style={{ color: 'var(--brand-green)' }} /> 
+                                        <FaFolderTree style={{ color: 'var(--brand-green)' }} />
                                         <span>Create Consent Category</span>
                                     </span>
                                     <span className="badge-header">
@@ -479,12 +479,12 @@ const ConsentManagement = () => {
                                                 <FaWandMagicSparkles /> Auto-Suggest
                                             </span>
                                         </label>
-                                        <input 
-                                            type="text" 
-                                            placeholder="e.g. Surgical Consent, Pediatric Authorization" 
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. Surgical Consent, Pediatric Authorization"
                                             value={categoryForm.name}
                                             onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                                            required 
+                                            required
                                         />
                                     </div>
 
@@ -497,79 +497,32 @@ const ConsentManagement = () => {
                                                 <FaWandMagicSparkles /> Generate Scope
                                             </span>
                                         </label>
-                                        <textarea 
-                                            placeholder="Enter brief guidelines or description about this category (optional)..." 
+                                        <textarea
+                                            placeholder="Enter brief guidelines or description about this category (optional)..."
                                             value={categoryForm.description}
                                             onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
                                         ></textarea>
                                     </div>
 
                                     <div className="form-checkbox-row">
-                                        <input 
-                                            type="checkbox" 
-                                            id="catActiveCheck" 
-                                            checked={categoryForm.isActive} 
-                                            onChange={(e) => setCategoryForm({ ...categoryForm, isActive: e.target.checked })} 
+                                        <input
+                                            type="checkbox"
+                                            id="catActiveCheck"
+                                            checked={categoryForm.isActive}
+                                            onChange={(e) => setCategoryForm({ ...categoryForm, isActive: e.target.checked })}
                                         />
                                         <label htmlFor="catActiveCheck">Active Category</label>
                                     </div>
 
-                                    <button 
-                                        type="submit" 
-                                        className="btn-custom" 
+                                    <button
+                                        type="submit"
+                                        className="btn-custom"
                                         style={{ width: '100%', justifyContent: 'center' }}
                                         disabled={isSubmitting}
                                     >
                                         <FaPlus /> {isSubmitting ? 'Saving...' : 'Save Category'}
                                     </button>
                                 </form>
-
-                                {/* QUICK CATEGORIES PREVIEW LIST */}
-                                <div className="categories-quick-list">
-                                    <div className="quick-list-header">
-                                        <h4>Created Categories ({categories.length})</h4>
-                                        <button 
-                                            type="button" 
-                                            className="quick-view-all-btn"
-                                            onClick={() => setActiveTab('allCategories')}
-                                        >
-                                            View Directory &rarr;
-                                        </button>
-                                    </div>
-                                    <div className="quick-cat-chips-grid">
-                                        {categories.map(c => (
-                                            <div key={c._id} className={`quick-cat-chip ${c.isActive ? 'active' : 'inactive'}`}>
-                                                <div className="chip-info">
-                                                    <span className="chip-name">{c.name}</span>
-                                                    {c.description && <span className="chip-desc">{c.description}</span>}
-                                                </div>
-                                                <div className="chip-actions">
-                                                    <button 
-                                                        type="button" 
-                                                        className="chip-action-btn edit" 
-                                                        onClick={() => openEditCategory(c)} 
-                                                        title="Edit Category"
-                                                    >
-                                                        <FaPenToSquare />
-                                                    </button>
-                                                    <button 
-                                                        type="button" 
-                                                        className="chip-action-btn delete" 
-                                                        onClick={() => handleDeleteCategory(c._id, c.name)} 
-                                                        title="Delete Category"
-                                                    >
-                                                        <FaTrash />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        {categories.length === 0 && (
-                                            <div className="no-cat-placeholder">
-                                                No categories created yet. Fill the form above to add your first category.
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
                             </div>
                         )}
 
@@ -578,7 +531,7 @@ const ConsentManagement = () => {
                             <div className="card-box">
                                 <h3>
                                     <span className="card-box-header-left">
-                                        <FaCloudArrowUp style={{ color: 'var(--brand-green)' }} /> 
+                                        <FaCloudArrowUp style={{ color: 'var(--brand-green)' }} />
                                         <span>Upload New Consent Document</span>
                                     </span>
                                 </h3>
@@ -593,12 +546,12 @@ const ConsentManagement = () => {
                                                 <FaWandMagicSparkles /> Title Gen
                                             </span>
                                         </label>
-                                        <input 
-                                            type="text" 
-                                            placeholder="e.g. Robotic Surgery Agreement, General Treatment" 
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. Robotic Surgery Agreement, General Treatment"
                                             value={templateForm.name}
                                             onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
-                                            required 
+                                            required
                                         />
                                     </div>
 
@@ -608,7 +561,7 @@ const ConsentManagement = () => {
                                                 Choose Category <span className="req-star">*</span>
                                             </span>
                                         </label>
-                                        <select 
+                                        <select
                                             value={templateForm.categoryId}
                                             onChange={(e) => setTemplateForm({ ...templateForm, categoryId: e.target.value })}
                                             required
@@ -627,8 +580,8 @@ const ConsentManagement = () => {
                                                 Description &amp; Key Clauses
                                             </span>
                                         </label>
-                                        <textarea 
-                                            placeholder="Enter details, procedure notes, or scope regarding this consent form (optional)..." 
+                                        <textarea
+                                            placeholder="Enter details, procedure notes, or scope regarding this consent form (optional)..."
                                             value={templateForm.description}
                                             onChange={(e) => setTemplateForm({ ...templateForm, description: e.target.value })}
                                         ></textarea>
@@ -640,7 +593,7 @@ const ConsentManagement = () => {
                                                 Upload Document File (.docx) <span className="req-star">*</span>
                                             </span>
                                         </label>
-                                        <div 
+                                        <div
                                             className={`compact-animated-upload-wrapper ${isDraggingFile ? 'is-dragging' : ''}`}
                                             onDragOver={(e) => { e.preventDefault(); setIsDraggingFile(true); }}
                                             onDragLeave={() => setIsDraggingFile(false)}
@@ -652,19 +605,19 @@ const ConsentManagement = () => {
                                                 }
                                             }}
                                         >
-                                            <input 
-                                                type="file" 
+                                            <input
+                                                type="file"
                                                 id="consentFileInput"
                                                 ref={fileInputRef}
-                                                style={{ display: 'none' }} 
-                                                accept=".docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
+                                                style={{ display: 'none' }}
+                                                accept=".docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                                                 onChange={(e) => {
                                                     const file = e.target.files[0];
                                                     if (file) setTemplateForm({ ...templateForm, file });
                                                 }}
                                             />
-                                            <label 
-                                                htmlFor="consentFileInput" 
+                                            <label
+                                                htmlFor="consentFileInput"
                                                 className="compact-upload-animated-btn"
                                             >
                                                 <FaCloudArrowUp className="upload-btn-icon" />
@@ -713,18 +666,18 @@ const ConsentManagement = () => {
                                     </div>
 
                                     <div className="form-checkbox-row">
-                                        <input 
-                                            type="checkbox" 
-                                            id="tmpActiveCheck" 
-                                            checked={templateForm.isActive} 
-                                            onChange={(e) => setTemplateForm({ ...templateForm, isActive: e.target.checked })} 
+                                        <input
+                                            type="checkbox"
+                                            id="tmpActiveCheck"
+                                            checked={templateForm.isActive}
+                                            onChange={(e) => setTemplateForm({ ...templateForm, isActive: e.target.checked })}
                                         />
                                         <label htmlFor="tmpActiveCheck">Active Template (Available for doctors &amp; receptionists)</label>
                                     </div>
 
-                                    <button 
-                                        type="submit" 
-                                        className="btn-custom" 
+                                    <button
+                                        type="submit"
+                                        className="btn-custom"
                                         style={{ marginTop: '8px', width: '100%', justifyContent: 'center' }}
                                         disabled={isSubmitting}
                                     >
@@ -739,11 +692,11 @@ const ConsentManagement = () => {
                             <div className="card-box">
                                 <h3>
                                     <span className="card-box-header-left">
-                                        <FaFolderTree style={{ color: 'var(--brand-green)' }} /> 
+                                        <FaFolderTree style={{ color: 'var(--brand-green)' }} />
                                         <span>Categories Directory ({categories.length})</span>
                                     </span>
-                                    <button 
-                                        className="btn-custom" 
+                                    <button
+                                        className="btn-custom"
                                         style={{ padding: '6px 14px', fontSize: '12px' }}
                                         onClick={() => setActiveTab('addCategory')}
                                     >
@@ -778,22 +731,22 @@ const ConsentManagement = () => {
                                                     </td>
                                                     <td style={{ textAlign: 'right' }}>
                                                         <div className="table-actions-cell">
-                                                            <button 
-                                                                className="btn-tbl-action" 
+                                                            <button
+                                                                className="btn-tbl-action"
                                                                 onClick={() => handleToggleCategory(c._id)}
                                                                 title={c.isActive ? "Deactivate" : "Activate"}
                                                             >
                                                                 {c.isActive ? <FaToggleOn style={{ color: 'var(--brand-green)' }} /> : <FaToggleOff />}
                                                             </button>
-                                                            <button 
-                                                                className="btn-tbl-action edit" 
+                                                            <button
+                                                                className="btn-tbl-action edit"
                                                                 onClick={() => openEditCategory(c)}
                                                                 title="Edit"
                                                             >
                                                                 <FaPenToSquare />
                                                             </button>
-                                                            <button 
-                                                                className="btn-tbl-action delete" 
+                                                            <button
+                                                                className="btn-tbl-action delete"
                                                                 onClick={() => handleDeleteCategory(c._id, c.name)}
                                                                 title="Delete"
                                                             >
@@ -820,32 +773,14 @@ const ConsentManagement = () => {
                     {/* RIGHT SIDE: TELEMETRY & STATS PANEL */}
                     <div className="telemetry-panel">
                         <div className="telemetry-title">
-                            <span><FaMicrochip style={{ color: 'var(--brand-green)', marginRight: '6px' }} /> Node Telemetry</span>
+                            <span><FaMicrochip style={{ color: 'var(--brand-green)', marginRight: '6px' }} /> Real-Time Registry Activity </span>
                             <span className="badge-header">LIVE</span>
                         </div>
 
-                        <div className="stats-grid-telemetry">
-                            <div className="stat-mini-box">
-                                <div className="stat-mini-num">99.9%</div>
-                                <div className="stat-mini-lbl">Confidence Score</div>
-                            </div>
-                            <div className="stat-mini-box" style={{ background: 'var(--pastel-blue)', borderColor: '#bae6fd' }}>
-                                <div className="stat-mini-num" style={{ color: '#0369a1' }}>{pingStat}</div>
-                                <div className="stat-mini-lbl">Node Ping</div>
-                            </div>
-                            <div className="stat-mini-box">
-                                <div className="stat-mini-num">{totalTemplatesCount}</div>
-                                <div className="stat-mini-lbl">Total Templates</div>
-                            </div>
-                            <div className="stat-mini-box" style={{ background: 'var(--pastel-blue)', borderColor: '#bae6fd' }}>
-                                <div className="stat-mini-num" style={{ color: '#0369a1' }}>{totalCategoriesCount}</div>
-                                <div className="stat-mini-lbl">Categories</div>
-                            </div>
-                        </div>
 
                         <div>
                             <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
-                                Real-Time Registry Activity
+
                             </label>
                             <div className="wave-box">
                                 <canvas id="activitySparkline" ref={sparkCanvasRef}></canvas>
@@ -864,15 +799,15 @@ const ConsentManagement = () => {
                         </div>
 
                         <div className="table-filter-bar">
-                            <input 
-                                type="text" 
-                                className="table-search-input" 
-                                placeholder="🔍 Search templates..." 
+                            <input
+                                type="text"
+                                className="table-search-input"
+                                placeholder="🔍 Search templates..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
-                            <select 
-                                value={categoryFilter} 
+                            <select
+                                value={categoryFilter}
                                 onChange={(e) => setCategoryFilter(e.target.value)}
                             >
                                 <option value="">All Categories ({categories.length})</option>
@@ -927,22 +862,22 @@ const ConsentManagement = () => {
                                         </td>
                                         <td style={{ textAlign: 'right' }}>
                                             <div className="table-actions-cell">
-                                                <button 
-                                                    className="btn-tbl-action download" 
+                                                <button
+                                                    className="btn-tbl-action download"
                                                     onClick={() => handleDownloadTemplate(t._id, t.originalFileName)}
                                                     title="Download File"
                                                 >
                                                     <FaDownload />
                                                 </button>
-                                                <button 
-                                                    className="btn-tbl-action edit" 
+                                                <button
+                                                    className="btn-tbl-action edit"
                                                     onClick={() => openEditTemplate(t)}
                                                     title="Edit Template"
                                                 >
                                                     <FaPenToSquare />
                                                 </button>
-                                                <button 
-                                                    className="btn-tbl-action delete" 
+                                                <button
+                                                    className="btn-tbl-action delete"
                                                     onClick={() => handleDeleteTemplate(t._id, t.name)}
                                                     title="Delete Template"
                                                 >
@@ -979,29 +914,33 @@ const ConsentManagement = () => {
                         <form onSubmit={handleCategorySubmit}>
                             <div className="modal-body-custom">
                                 <div className="form-group-custom">
-                                    <label>Category Name <span style={{ color: '#ef4444' }}>*</span></label>
-                                    <input 
-                                        type="text" 
-                                        value={categoryForm.name} 
-                                        onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value })} 
-                                        required 
+                                    <label>
+                                        <span className="label-title-wrap">
+                                            Category Name <span className="req-star">*</span>
+                                        </span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={categoryForm.name}
+                                        onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value })}
+                                        required
                                     />
                                 </div>
                                 <div className="form-group-custom">
                                     <label>Description</label>
-                                    <textarea 
-                                        rows="3" 
+                                    <textarea
+                                        rows="3"
                                         placeholder="Enter description (optional)..."
-                                        value={categoryForm.description} 
+                                        value={categoryForm.description}
                                         onChange={e => setCategoryForm({ ...categoryForm, description: e.target.value })}
                                     ></textarea>
                                 </div>
                                 <div className="form-checkbox-row" style={{ marginTop: '12px', marginBottom: '8px' }}>
-                                    <input 
-                                        type="checkbox" 
-                                        id="modalCatActive" 
-                                        checked={categoryForm.isActive} 
-                                        onChange={e => setCategoryForm({ ...categoryForm, isActive: e.target.checked })} 
+                                    <input
+                                        type="checkbox"
+                                        id="modalCatActive"
+                                        checked={categoryForm.isActive}
+                                        onChange={e => setCategoryForm({ ...categoryForm, isActive: e.target.checked })}
                                     />
                                     <label htmlFor="modalCatActive">Active Category</label>
                                 </div>
@@ -1032,19 +971,27 @@ const ConsentManagement = () => {
                         <form onSubmit={handleTemplateSubmit}>
                             <div className="modal-body-custom">
                                 <div className="form-group-custom">
-                                    <label>Template Name *</label>
-                                    <input 
-                                        type="text" 
-                                        value={templateForm.name} 
-                                        onChange={e => setTemplateForm({ ...templateForm, name: e.target.value })} 
-                                        required 
+                                    <label>
+                                        <span className="label-title-wrap">
+                                            Template Name <span className="req-star">*</span>
+                                        </span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={templateForm.name}
+                                        onChange={e => setTemplateForm({ ...templateForm, name: e.target.value })}
+                                        required
                                     />
                                 </div>
                                 <div className="form-group-custom">
-                                    <label>Category *</label>
-                                    <select 
-                                        value={templateForm.categoryId} 
-                                        onChange={e => setTemplateForm({ ...templateForm, categoryId: e.target.value })} 
+                                    <label>
+                                        <span className="label-title-wrap">
+                                            Category <span className="req-star">*</span>
+                                        </span>
+                                    </label>
+                                    <select
+                                        value={templateForm.categoryId}
+                                        onChange={e => setTemplateForm({ ...templateForm, categoryId: e.target.value })}
                                         required
                                     >
                                         <option value="">Select a category</option>
@@ -1055,29 +1002,29 @@ const ConsentManagement = () => {
                                 </div>
                                 <div className="form-group-custom">
                                     <label>Description</label>
-                                    <textarea 
-                                        rows="2" 
-                                        value={templateForm.description} 
+                                    <textarea
+                                        rows="2"
+                                        value={templateForm.description}
                                         onChange={e => setTemplateForm({ ...templateForm, description: e.target.value })}
                                     ></textarea>
                                 </div>
                                 <div className="form-group-custom">
                                     <label>Replace Document File (.docx) (Optional)</label>
-                                    <input 
-                                        type="file" 
-                                        accept=".docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
+                                    <input
+                                        type="file"
+                                        accept=".docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                                         onChange={e => {
                                             const file = e.target.files[0];
                                             if (file) setTemplateForm({ ...templateForm, file });
-                                        }} 
+                                        }}
                                     />
                                 </div>
                                 <div className="form-checkbox-row">
-                                    <input 
-                                        type="checkbox" 
-                                        id="modalTmpActive" 
-                                        checked={templateForm.isActive} 
-                                        onChange={e => setTemplateForm({ ...templateForm, isActive: e.target.checked })} 
+                                    <input
+                                        type="checkbox"
+                                        id="modalTmpActive"
+                                        checked={templateForm.isActive}
+                                        onChange={e => setTemplateForm({ ...templateForm, isActive: e.target.checked })}
                                     />
                                     <label htmlFor="modalTmpActive">Active Template</label>
                                 </div>

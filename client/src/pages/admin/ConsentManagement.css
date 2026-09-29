@@ -376,7 +376,7 @@
 }
 
 .wave-box {
-  height: 84px;
+  height: 110px;
   width: 100%;
   background: #022c22;
   border: 1px solid rgba(52, 211, 153, 0.35);
@@ -400,8 +400,8 @@
 
 .form-group-custom label {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 4px;
   font-size: 12px;
   font-weight: 700;
   color: var(--text-heading);
@@ -413,7 +413,7 @@
 .label-title-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 
 .req-star {
@@ -421,9 +421,11 @@
   font-weight: 800;
   font-size: 14px;
   line-height: 1;
+  margin-left: 2px;
 }
 
 .assist-hint {
+  margin-left: auto;
   font-size: 11px;
   font-weight: 700;
   color: #0369a1;
@@ -851,23 +853,27 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(6, 78, 59, 0.45);
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
+  cursor: pointer;
 }
 
 .modal-content-custom {
   background: #ffffff;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border-light);
+  border: 1px solid rgba(226, 232, 240, 0.9);
   width: 500px;
   max-width: 95vw;
-  box-shadow: 0 20px 40px -10px rgba(5, 150, 105, 0.25);
+  box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.8);
   overflow: hidden;
   animation: modalScaleUp 0.18s ease-out;
+  cursor: default;
 }
 
 @keyframes modalScaleUp {
@@ -913,6 +919,8 @@
   padding: 20px 22px;
   max-height: 70vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-footer-custom {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { questionLibraryAPI } from '../../utils/api';
 import confirmToast, { promptToast, toast } from '../../utils/confirmToast';
 import { 
@@ -69,6 +69,30 @@ const HospitalAdminQuestionLibrary = () => {
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [editIndex, setEditIndex] = useState(null);
+    const [initialQ, setInitialQ] = useState(null);
+    const [savedLibrarySnapshot, setSavedLibrarySnapshot] = useState('');
+
+    const [newQ, setNewQ] = useState({
+        q: '',
+        type: 'text',
+        options: '',
+        extra: '',
+        parentQ: '',
+        condition: ''
+    });
+
+    const isQuestionModified = useMemo(() => {
+        if (editIndex === null) return true;
+        if (!initialQ) return false;
+        return (
+            (newQ.q || '').trim() !== (initialQ.q || '').trim() ||
+            newQ.type !== initialQ.type ||
+            (newQ.options || '').trim() !== (initialQ.options || '').trim() ||
+            (newQ.extra || '').trim() !== (initialQ.extra || '').trim() ||
+            (newQ.parentQ || '').trim() !== (initialQ.parentQ || '').trim() ||
+            (newQ.condition || '').trim() !== (initialQ.condition || '').trim()
+        );
+    }, [editIndex, initialQ, newQ]);
 
     // Department Modal State
     const [showDeptModal, setShowDeptModal] = useState(false);
@@ -84,15 +108,6 @@ const HospitalAdminQuestionLibrary = () => {
 
     const [showPreview, setShowPreview] = useState(false);
     const [previewIntake, setPreviewIntake] = useState({});
-
-    const [newQ, setNewQ] = useState({
-        q: '',
-        type: 'text',
-        options: '',
-        extra: '',
-        parentQ: '',
-        condition: ''
-    });
 
     useEffect(() => {
         fetchLibrary();
@@ -115,6 +130,7 @@ const HospitalAdminQuestionLibrary = () => {
             cachedAllowedDepartments = allowed;
 
             setLibraryData(data);
+            setSavedLibrarySnapshot(JSON.stringify(data));
             setAllowedDepartments(allowed);
 
             const allDeptKeys = Object.keys(data);
@@ -164,11 +180,18 @@ const HospitalAdminQuestionLibrary = () => {
     };
 
     const handleSave = async () => {
+        const currentSnapshot = JSON.stringify(libraryData);
+        if (savedLibrarySnapshot && currentSnapshot === savedLibrarySnapshot) {
+            toast('No changes detected to save.', { icon: 'ℹ️' });
+            return;
+        }
+
         setSaving(true);
         try {
             const res = await questionLibraryAPI.updateLibrary(libraryData);
             if (res.success || res._offline) {
                 cachedQuestionLibraryData = libraryData;
+                setSavedLibrarySnapshot(JSON.stringify(libraryData));
                 toast.success('Question Library updated & synced with all doctor workflows successfully!');
             }
         } catch (err) {
@@ -374,6 +397,7 @@ const HospitalAdminQuestionLibrary = () => {
     const resetModalState = () => {
         setShowAddModal(false);
         setEditIndex(null);
+        setInitialQ(null);
         setNewQ({ q: '', type: 'text', options: '', extra: '', parentQ: '', condition: '' });
     };
 
@@ -381,6 +405,12 @@ const HospitalAdminQuestionLibrary = () => {
         const qText = newQ.q.trim();
         if (!qText) {
             toast.error("Please enter a question.");
+            return;
+        }
+
+        if (editIndex !== null && !isQuestionModified) {
+            toast('No changes detected.', { icon: 'ℹ️' });
+            resetModalState();
             return;
         }
 
@@ -437,14 +467,16 @@ const HospitalAdminQuestionLibrary = () => {
         const cat = activeCat;
         const qToEdit = libraryData[dept]?.[cat]?.[index] || currentCategories[cat]?.[index];
         if (!qToEdit) return;
-        setNewQ({
+        const initData = {
             q: qToEdit.q || '',
             type: qToEdit.type || 'text',
             options: qToEdit.options ? qToEdit.options.join(', ') : '',
             extra: qToEdit.extra || '',
             parentQ: qToEdit.parentQ || '',
             condition: qToEdit.condition || ''
-        });
+        };
+        setNewQ(initData);
+        setInitialQ(initData);
         setEditIndex(index);
         setShowAddModal(true);
     };
@@ -896,7 +928,13 @@ const HospitalAdminQuestionLibrary = () => {
 
                         <div className="ql-modal-actions">
                             <button className="ql-modal-btn ql-modal-btn-cancel" onClick={resetModalState}>{getUIText('cancel', currentLang)}</button>
-                            <button className="ql-modal-btn ql-modal-btn-submit" onClick={handleAddQuestion}>
+                            <button 
+                                className="ql-modal-btn ql-modal-btn-submit" 
+                                onClick={handleAddQuestion}
+                                disabled={editIndex !== null && !isQuestionModified}
+                                style={editIndex !== null && !isQuestionModified ? { opacity: 0.55, cursor: 'not-allowed' } : {}}
+                                title={editIndex !== null && !isQuestionModified ? 'No changes detected' : ''}
+                            >
                                 {editIndex !== null ? getUIText('updateQuestion', currentLang) : getUIText('addQuestion', currentLang)}
                             </button>
                         </div>

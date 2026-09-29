@@ -12,6 +12,7 @@ import { initOfflineDb, clearAll as clearOfflineDb } from './utils/offlineDb'
 import { startNetworkMonitoring, stopNetworkMonitoring } from './utils/networkStatus'
 import { startSyncEngine, stopSyncEngine } from './utils/syncEngine'
 import { initModalScrollLock, hasActiveModal } from './utils/modalScrollLock'
+import { ConfirmModalHost } from './utils/confirmToast'
 
 const App = () => {
   const { user, isAuthenticated } = useAuth();
@@ -191,6 +192,7 @@ const App = () => {
           },
         }}
       />
+      <ConfirmModalHost />
       <MainRoutes />
     </div>
   )

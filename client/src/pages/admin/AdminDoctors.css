@@ -542,6 +542,16 @@
   margin-top: 6px;
 }
 
+.ad-input-control.ad-input-error {
+  border-color: #ef4444 !important;
+  background-color: #fef2f2 !important;
+}
+
+.ad-input-control.ad-input-error:focus {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+}
+
 .ad-btn-create {
   display: inline-flex;
   align-items: center;
@@ -558,9 +568,17 @@
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.ad-btn-create:hover {
+.ad-btn-create:hover:not(:disabled) {
   transform: translateY(-2px) scale(1.02);
   box-shadow: 0 6px 20px rgba(6, 182, 212, 0.45);
+}
+
+.ad-btn-create:disabled {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+  filter: grayscale(0.2);
 }
 
 .ad-btn-cancel-plain {

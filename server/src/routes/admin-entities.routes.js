@@ -45,6 +45,15 @@ router.post('/doctors', verifyAdminOrSuperAdmin, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Name and email are required' });
     }
 
+    // Validate experience (realistic limit 0-70 years)
+    if (experience !== undefined && experience !== null && String(experience).trim() !== '') {
+      const expMatch = String(experience).match(/\d+/);
+      const expYears = expMatch ? parseInt(expMatch[0], 10) : NaN;
+      if (isNaN(expYears) || expYears < 0 || expYears > 70) {
+        return res.status(400).json({ success: false, message: 'Experience must be a realistic number between 0 and 70 years' });
+      }
+    }
+
     // Check if email already exists in this hospital
     const targetHospitalId = getHospitalId(req);
     const checkUserQuery = { email: email.toLowerCase() };
@@ -224,6 +233,15 @@ router.put('/doctors/:id', verifyAdminOrSuperAdmin, async (req, res) => {
     if (req.user.role === 'hospitaladmin' && req.user.hospitalId && doctor.hospitalId) {
       if (String(doctor.hospitalId) !== String(req.user.hospitalId)) {
         return res.status(403).json({ success: false, message: 'Unauthorized: Cannot update doctors from another hospital' });
+      }
+    }
+
+    // Validate experience (realistic limit 0-70 years)
+    if (experience !== undefined && experience !== null && String(experience).trim() !== '') {
+      const expMatch = String(experience).match(/\d+/);
+      const expYears = expMatch ? parseInt(expMatch[0], 10) : NaN;
+      if (isNaN(expYears) || expYears < 0 || expYears > 70) {
+        return res.status(400).json({ success: false, message: 'Experience must be a realistic number between 0 and 70 years' });
       }
     }
 

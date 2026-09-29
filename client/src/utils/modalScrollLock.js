@@ -20,6 +20,8 @@ const MODAL_SELECTORS = [
   '.ha-modal-backdrop',
   '.modal-overlay',
   '.modal-backdrop',
+  '.modal-overlay-custom',
+  '.confirm-modal-overlay',
   '.modal',
   '[role="dialog"]',
   '[aria-modal="true"]'
@@ -113,7 +115,7 @@ export const initModalScrollLock = () => {
 
     // Check if target is inside a scrollable modal container
     const scrollableModal = e.target.closest(
-      '.pkg-modal-body, .pkg-modal, .vm-modal-body, .vm-modal, .ha-bed-modal-box, .modal-body, .modal-content, .ipd-modal-box, .acc-modal-body, .acc-modal, .ql-modal-body, .ql-modal-content, [role="dialog"], [data-scrollable="true"]'
+      '.pkg-modal-body, .pkg-modal, .vm-modal-body, .vm-modal, .ha-bed-modal-box, .modal-body, .modal-content, .modal-content-custom, .modal-body-custom, .confirm-modal-card, .confirm-modal-message, .ipd-modal-box, .acc-modal-body, .acc-modal, .ql-modal-body, .ql-modal-content, [role="dialog"], [data-scrollable="true"]'
     );
 
     // If mouse is directly on the blurred backdrop or non-scrollable area outside modal, stop scroll completely
@@ -150,7 +152,7 @@ export const initModalScrollLock = () => {
     if (innerScrollable) return;
 
     const scrollableModal = e.target.closest(
-      '.pkg-modal-body, .vm-modal-body, .ha-bed-modal-box, .modal-body, .modal-content, .ipd-modal-box, .acc-modal-body, .ql-modal-body, [role="dialog"]'
+      '.pkg-modal-body, .vm-modal-body, .ha-bed-modal-box, .modal-body, .modal-content, .modal-content-custom, .modal-body-custom, .confirm-modal-card, .confirm-modal-message, .ipd-modal-box, .acc-modal-body, .ql-modal-body, [role="dialog"]'
     );
     if (!scrollableModal) {
       e.preventDefault();

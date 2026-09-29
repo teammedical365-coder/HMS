@@ -817,14 +817,15 @@ router.post('/users', verifyAdminOrSuperAdmin, async (req, res) => {
 });
 
 // Update user details
+// Update user details
 router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
     try {
         const { userId } = req.params;
         const { name, email, phone, roleId, avatar, specialty, departments, assignedDoctors } = req.body;
 
         if (phone && phone.trim() !== '') {
-            const isDigits = /^\d+$/.test(phone);
-            if (!isDigits || phone.length !== 10) {
+            const isDigits = /^\d+$/.test(phone.trim());
+            if (!isDigits || phone.trim().length !== 10) {
                 return res.status(400).json({ success: false, message: 'Mobile number must be exactly 10 digits and contain digits only.' });
             }
         }
@@ -842,76 +843,103 @@ router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
             return res.status(403).json({ success: false, message: 'Cannot modify Central Admin accounts' });
         }
 
-        // Role is permanent after creation — reject any attempt to change it
-        if (roleId && String(roleId) !== String(user.role)) {
-            return res.status(403).json({ success: false, message: 'Role cannot be changed after creation' });
+        // Apply updated user fields
+        if (name !== undefined && name !== null && String(name).trim() !== '') {
+            user.name = String(name).trim();
         }
 
-        if (name) user.name = name;
-        if (email) user.email = email;
-        if (phone) user.phone = phone;
+        if (email !== undefined && email !== null && String(email).trim() !== '') {
+            const cleanNewEmail = String(email).trim().toLowerCase();
+            if (cleanNewEmail !== user.email) {
+                const query = { email: cleanNewEmail, _id: { $ne: user._id } };
+                if (user.hospitalId) query.hospitalId = user.hospitalId;
+                const existingEmailUser = await User.findOne(query);
+                if (existingEmailUser) {
+                    return res.status(400).json({ success: false, message: 'Email is already in use by another user' });
+                }
+                user.email = cleanNewEmail;
+            }
+        }
+
+        if (phone !== undefined && phone !== null && String(phone).trim() !== '') {
+            let sanitizedPhone = String(phone).trim();
+            if (sanitizedPhone.startsWith('+91') && sanitizedPhone.length > 10) sanitizedPhone = sanitizedPhone.substring(3);
+            else if (sanitizedPhone.startsWith('91') && sanitizedPhone.length > 10) sanitizedPhone = sanitizedPhone.substring(2);
+            else if (sanitizedPhone.startsWith('0') && sanitizedPhone.length > 10) sanitizedPhone = sanitizedPhone.substring(1);
+            sanitizedPhone = sanitizedPhone.replace(/\D/g, '').slice(0, 10);
+
+            if (sanitizedPhone.length !== 10) {
+                return res.status(400).json({ success: false, message: 'Mobile number must be exactly 10 digits and contain digits only.' });
+            }
+
+            if (sanitizedPhone !== user.phone) {
+                const query = { phone: sanitizedPhone, _id: { $ne: user._id } };
+                if (user.hospitalId) query.hospitalId = user.hospitalId;
+                const existingPhoneUser = await User.findOne(query);
+                if (existingPhoneUser) {
+                    return res.status(400).json({ success: false, message: 'Mobile number is already in use by another user' });
+                }
+                user.phone = sanitizedPhone;
+            }
+        }
+
         if (avatar !== undefined) user.avatar = avatar;
-        if (departments !== undefined) user.departments = departments;
+        if (specialty !== undefined) user.specialty = specialty;
+        if (departments !== undefined) {
+            user.departments = Array.isArray(departments) ? departments : [departments].filter(Boolean);
+        }
 
         if (assignedDoctors !== undefined) {
             user.assignedDoctors = Array.isArray(assignedDoctors) ? assignedDoctors : [];
             if (Array.isArray(assignedDoctors) && assignedDoctors.length > 0) {
                 const assignedDocs = await Doctor.find({ _id: { $in: assignedDoctors }, hospitalId: user.hospitalId }).lean();
-                const derivedDepts = new Set(departments !== undefined ? departments : (user.departments || []));
+                const derivedDepts = new Set(user.departments || []);
                 assignedDocs.forEach(d => (d.departments || []).forEach(dept => dept && derivedDepts.add(dept)));
                 user.departments = Array.from(derivedDepts);
             }
         }
 
+        // Safely resolve role name without triggering CastErrors on string roles
         let newRoleName = null;
-        let roleChanged = false;
         if (user.role && !['centraladmin', 'superadmin', 'hospitaladmin'].includes(user.role)) {
-            const roleDoc = await Role.findById(user.role);
-            newRoleName = (roleDoc && typeof roleDoc.name === 'string') ? roleDoc.name.toLowerCase() : null;
+            if (mongoose.Types.ObjectId.isValid(user.role)) {
+                const roleDoc = await Role.findById(user.role);
+                newRoleName = (roleDoc && typeof roleDoc.name === 'string') ? roleDoc.name.toLowerCase() : null;
+            } else {
+                newRoleName = String(user.role).toLowerCase();
+            }
         }
 
         await user.save();
 
-        // Update linked entity profiles
+        // Update linked entity profiles if present
         try {
             const hospitalId = user.hospitalId;
-            if (newRoleName === 'doctor') {
+            const cleanName = user.name;
+            const cleanEmail = user.email;
+            const cleanPhone = user.phone;
+            const cleanDepts = user.departments;
+
+            const isDoctor = newRoleName === 'doctor' || (newRoleName && newRoleName.includes('doctor') && !newRoleName.includes('assistant'));
+            if (isDoctor) {
                 let doctorProfile = await Doctor.findOne({ userId: user._id });
-                if (!doctorProfile && roleChanged) {
-                    let doctorId = nanoid(10);
-                    while (await Doctor.findOne({ doctorId })) doctorId = nanoid(10);
-                    doctorProfile = new Doctor({
-                        doctorId, userId: user._id, hospitalId,
-                        availability: {
-                            monday: { available: false, startTime: '09:00', endTime: '17:00' },
-                            tuesday: { available: false, startTime: '09:00', endTime: '17:00' },
-                            wednesday: { available: false, startTime: '09:00', endTime: '17:00' },
-                            thursday: { available: false, startTime: '09:00', endTime: '17:00' },
-                            friday: { available: false, startTime: '09:00', endTime: '17:00' },
-                            saturday: { available: false, startTime: '09:00', endTime: '17:00' },
-                            sunday: { available: false, startTime: '09:00', endTime: '17:00' }
-                        }
-                    });
-                }
                 if (doctorProfile) {
-                    if (name) doctorProfile.name = name;
-                    if (email) doctorProfile.email = email;
-                    if (phone) doctorProfile.phone = phone;
-                    if (specialty) doctorProfile.specialty = specialty;
-                    if (departments !== undefined) doctorProfile.departments = departments;
-                    doctorProfile.hospitalId = hospitalId;
+                    if (cleanName) doctorProfile.name = cleanName;
+                    if (cleanEmail) doctorProfile.email = cleanEmail;
+                    if (cleanPhone) doctorProfile.phone = cleanPhone;
+                    if (specialty !== undefined) doctorProfile.specialty = specialty;
+                    if (cleanDepts !== undefined) doctorProfile.departments = cleanDepts;
                     await doctorProfile.save();
                 }
             }
-            if (['lab', 'lab technician'].includes(newRoleName)) {
-                await Lab.findOneAndUpdate({ userId: user._id }, { name, email, phone, hospitalId }, { upsert: true });
+            if (newRoleName && ['lab', 'lab technician'].includes(newRoleName)) {
+                await Lab.findOneAndUpdate({ userId: user._id }, { name: cleanName, email: cleanEmail, phone: cleanPhone, hospitalId }, { upsert: false });
             }
-            if (['pharmacy', 'pharmacist'].includes(newRoleName)) {
-                await Pharmacy.findOneAndUpdate({ userId: user._id }, { name, email, phone, hospitalId }, { upsert: true });
+            if (newRoleName && ['pharmacy', 'pharmacist'].includes(newRoleName)) {
+                await Pharmacy.findOneAndUpdate({ userId: user._id }, { name: cleanName, email: cleanEmail, phone: cleanPhone, hospitalId }, { upsert: false });
             }
-            if (['reception', 'receptionist'].includes(newRoleName)) {
-                const rec = await Reception.findOne({ userId: user._id });
-                if (!rec && roleChanged) await Reception.create({ userId: user._id, hospitalId });
+            if (newRoleName && ['reception', 'receptionist'].includes(newRoleName)) {
+                await Reception.findOneAndUpdate({ userId: user._id }, { name: cleanName, email: cleanEmail, phone: cleanPhone, hospitalId }, { upsert: false });
             }
         } catch (profileError) {
             console.error('Error updating linked profile:', profileError);
@@ -920,7 +948,8 @@ router.put('/users/:userId', verifyAdminOrSuperAdmin, async (req, res) => {
         const updatedUser = await buildUserResponse(user);
         res.json({ success: true, message: 'User updated successfully', user: updatedUser });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error updating user' });
+        console.error('Error in PUT /api/admin/users/:userId:', error);
+        res.status(500).json({ success: false, message: 'Error updating user: ' + error.message });
     }
 });
 

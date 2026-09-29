@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { adminAPI, uploadAPI, hospitalAPI, publicAPI } from '../../utils/api';
 import { getSubscriptionLimits } from '../../utils/subscriptionPlans';
@@ -139,8 +139,22 @@ const Admin = () => {
 
     const [editModal, setEditModal] = useState(false);
     const [editForm, setEditForm] = useState({
-        id: '', name: '', email: '', phone: '', roleId: '', currentAvatar: '', newAvatarFile: null, specialty: '', department: ''
+        id: '', name: '', email: '', phone: '', roleId: '', roleName: '', currentAvatar: '', newAvatarFile: null, specialty: '', department: '', assignedDoctors: []
     });
+    const [initialEditForm, setInitialEditForm] = useState(null);
+
+    const isStaffModified = useMemo(() => {
+        if (!initialEditForm) return false;
+        const doctorsMatch = JSON.stringify(editForm.assignedDoctors || []) === JSON.stringify(initialEditForm.assignedDoctors || []);
+        return (
+            (editForm.name || '').trim() !== (initialEditForm.name || '').trim() ||
+            (editForm.email || '').trim().toLowerCase() !== (initialEditForm.email || '').trim().toLowerCase() ||
+            (editForm.phone || '').trim() !== (initialEditForm.phone || '').trim() ||
+            (editForm.department || '') !== (initialEditForm.department || '') ||
+            !doctorsMatch ||
+            Boolean(editForm.newAvatarFile)
+        );
+    }, [editForm, initialEditForm]);
     const [updating, setUpdating] = useState(false);
 
     const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -475,27 +489,38 @@ const Admin = () => {
     const openEditModal = (userItem) => {
         const rawAssigned = userItem.assignedDoctors || [];
         const formattedAssigned = rawAssigned.map(d => typeof d === 'object' ? (d._id || d.id) : String(d));
-        setEditForm({
+        const initData = {
             id: userItem.id || userItem._id,
-            name: userItem.name,
-            email: userItem.email,
+            name: userItem.name || '',
+            email: userItem.email || '',
             phone: userItem.phone || '',
-            roleId: userItem.roleId || userItem.role, // role might be name or ID depending on populate
-            currentAvatar: userItem.avatar,
+            roleId: userItem.roleId || userItem.role,
+            roleName: userItem.role || 'Staff',
+            currentAvatar: userItem.avatar || null,
             newAvatarFile: null,
-            specialty: '', // Ideally fetch specific doctor details if needed, but basic update is fine
+            specialty: '',
             department: (userItem.departments && userItem.departments.length > 0) ? userItem.departments[0] : '',
             assignedDoctors: formattedAssigned
-        });
+        };
+        setEditForm(initData);
+        setInitialEditForm(initData);
         setEditModal(true);
     };
 
     // Update User Logic
     const handleUpdateUser = async (e) => {
         e.preventDefault();
+
+        if (!isStaffModified) {
+            toast('No changes detected.', { icon: 'ℹ️' });
+            setEditModal(false);
+            return;
+        }
+
         setUpdating(true);
 
-        if (editForm.phone && editForm.phone.length !== 10) {
+        const cleanPhone = (editForm.phone || '').replace(/\D/g, '').slice(0, 10);
+        if (cleanPhone && cleanPhone.length !== 10) {
             toast.error('Mobile number must be exactly 10 digits.');
             setUpdating(false);
             return;
@@ -516,10 +541,9 @@ const Admin = () => {
 
             // 2. Prepare Update Data
             const updateData = {
-                name: editForm.name,
-                email: editForm.email,
-                phone: editForm.phone,
-                roleId: editForm.roleId,
+                name: (editForm.name || '').trim(),
+                email: (editForm.email || '').trim(),
+                phone: cleanPhone,
                 avatar: avatarUrl,
                 specialty: editForm.specialty,
                 departments: editForm.department ? [editForm.department] : [],
@@ -530,10 +554,22 @@ const Admin = () => {
             if (response.success) {
                 toast.success('User updated successfully!');
                 setEditModal(false);
-                fetchUsers(staffPlanFilter, staffHospitalFilter, currentPage, pageSize, staffSearchQuery);
+                const updated = response.user || {
+                    ...updateData,
+                    id: editForm.id,
+                    _id: editForm.id,
+                    role: editForm.roleName
+                };
+                setUsers(prev => prev.map(u => (String(u.id || u._id) === String(editForm.id) ? { ...u, ...updated } : u)));
+                try {
+                    await fetchUsers(staffPlanFilter, staffHospitalFilter, page, PAGE_SIZE, staffSearchQuery, false);
+                } catch (fetchErr) {
+                    console.error('Error refreshing staff list:', fetchErr);
+                }
             }
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Error updating user.');
+            console.error('Error updating user:', err);
+            toast.error(err.response?.data?.message || err.message || 'Error updating user.');
         } finally {
             setUpdating(false);
         }
@@ -546,14 +582,19 @@ const Admin = () => {
             const response = await adminAPI.deleteUser(userId);
             if (response.status === 200 || response.success === true) {
                 toast.success('User deleted successfully!');
-                const targetPage = (users.length === 1 && currentPage > 1) ? currentPage - 1 : currentPage;
-                setCurrentPage(targetPage);
-                fetchUsers(staffPlanFilter, staffHospitalFilter, targetPage, pageSize, staffSearchQuery);
+                const targetPage = (users.length === 1 && page > 1) ? page - 1 : page;
+                setPage(targetPage);
+                try {
+                    await fetchUsers(staffPlanFilter, staffHospitalFilter, targetPage, PAGE_SIZE, staffSearchQuery, false);
+                } catch (fetchErr) {
+                    console.error('Error refreshing staff list:', fetchErr);
+                }
             } else {
                 toast.error('Failed to delete user.');
             }
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Error deleting user.');
+            console.error('Error deleting user:', err);
+            toast.error(err.response?.data?.message || err.message || 'Error deleting user.');
         } finally {
             setDeletingId(null);
             setDeleteConfirm(null);
@@ -1268,7 +1309,16 @@ const Admin = () => {
                                 )}
 
                                 <div className="modal-buttons" style={{ marginTop: '20px' }}>
-                                    <button type="submit" disabled={updating} className="btn-save">
+                                    <button 
+                                        type="submit" 
+                                        disabled={updating || !isStaffModified} 
+                                        className="btn-save"
+                                        style={{
+                                            opacity: (!isStaffModified || updating) ? 0.6 : 1,
+                                            cursor: (!isStaffModified || updating) ? 'not-allowed' : 'pointer'
+                                        }}
+                                        title={!isStaffModified ? 'No changes detected' : ''}
+                                    >
                                         {updating ? 'Saving...' : 'Save Changes'}
                                     </button>
                                     <button type="button" onClick={() => setEditModal(false)} className="btn-cancel">Cancel</button>

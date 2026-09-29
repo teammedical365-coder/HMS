@@ -1,284 +1,266 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import { FaTriangleExclamation, FaPenToSquare } from 'react-icons/fa6';
+import { FaTriangleExclamation, FaTrash, FaCheck, FaPenToSquare, FaXmark } from 'react-icons/fa6';
 
 export { toast, Toaster };
 
 /**
- * Super-fast, ultra-clean confirmation toast popup using react-hot-toast.
+ * Global reactive modal state for confirm and prompt dialogs
+ */
+let currentModalState = null;
+const modalListeners = new Set();
+
+const notifyModalListeners = () => {
+  modalListeners.forEach((listener) => listener(currentModalState));
+};
+
+/**
+ * Premium Confirmation Modal (replaces browser confirm and hot-toast confirm)
+ * Features: Full-screen dimmed & blurred backdrop, focused modal card, keyboard shortcuts (Esc/Enter),
+ * and complete scroll locking of the background page.
  *
  * Usage:
- *   if (!(await confirmToast('Are you sure you want to delete this?'))) return;
+ *   if (!(await confirmToast('Are you sure you want to delete this category?', { title: 'Delete Category' }))) return;
  */
 export const confirmToast = (message, options = {}) => {
   return new Promise((resolve) => {
     const onConfirmCb = typeof options === 'function' ? options : options.onConfirm;
     const confirmLabel = (typeof options === 'object' && options.confirmText) || 'Delete';
     const cancelLabel = (typeof options === 'object' && options.cancelText) || 'Cancel';
-    const title = (typeof options === 'object' && options.title) || 'Please Confirm';
     const isDanger = typeof options === 'object' && options.danger !== undefined ? options.danger : true;
+    const title = (typeof options === 'object' && options.title) || (isDanger ? 'Confirm Deletion' : 'Please Confirm');
 
-    toast.custom(
-      (t) => (
-        <div
-          style={{
-            minWidth: '320px',
-            maxWidth: '430px',
-            width: '100%',
-            background: '#ffffff',
-            boxShadow: '0 20px 45px -10px rgba(15, 23, 42, 0.28), 0 4px 15px rgba(0,0,0,0.06)',
-            borderRadius: '18px',
-            border: '1px solid #e2e8f0',
-            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            padding: '18px 20px',
-            pointerEvents: 'auto',
-            transform: t.visible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(-8px)',
-            opacity: t.visible ? 1 : 0,
-            transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-            zIndex: 999999,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '16px' }}>
-            <div
-              style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: '12px',
-                background: isDanger ? '#fef2f2' : '#f0fdf4',
-                border: `1.5px solid ${isDanger ? '#fecaca' : '#bbf7d0'}`,
-                color: isDanger ? '#ef4444' : '#059669',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '18px',
-                flexShrink: 0,
-              }}
-            >
-              <FaTriangleExclamation />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <h4 style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
-                {title}
-              </h4>
-              <p style={{ margin: 0, fontSize: '13px', color: '#475569', lineHeight: 1.45 }}>
-                {message}
-              </p>
-            </div>
-          </div>
+    const handleConfirm = () => {
+      currentModalState = null;
+      notifyModalListeners();
+      if (onConfirmCb) onConfirmCb();
+      resolve(true);
+    };
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <button
-              type="button"
-              onClick={() => {
-                toast.dismiss(t.id);
-                if (typeof options === 'object' && options.onCancel) options.onCancel();
-                resolve(false);
-              }}
-              style={{
-                padding: '7px 15px',
-                borderRadius: '10px',
-                border: '1.5px solid #cbd5e1',
-                background: '#f8fafc',
-                color: '#334155',
-                fontSize: '13px',
-                fontWeight: 650,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
-            >
-              {cancelLabel}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                toast.dismiss(t.id);
-                if (onConfirmCb) onConfirmCb();
-                resolve(true);
-              }}
-              style={{
-                padding: '7px 18px',
-                borderRadius: '10px',
-                border: 'none',
-                background: isDanger
-                  ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
-                  : 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                color: '#ffffff',
-                fontSize: '13px',
-                fontWeight: 750,
-                cursor: 'pointer',
-                boxShadow: isDanger
-                  ? '0 4px 12px rgba(239, 68, 68, 0.3)'
-                  : '0 4px 12px rgba(5, 150, 105, 0.3)',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
-            >
-              {confirmLabel}
-            </button>
-          </div>
-        </div>
-      ),
-      {
-        duration: 12000,
-        position: 'top-center',
-      }
-    );
+    const handleCancel = () => {
+      currentModalState = null;
+      notifyModalListeners();
+      if (typeof options === 'object' && options.onCancel) options.onCancel();
+      resolve(false);
+    };
+
+    currentModalState = {
+      id: Date.now() + Math.random().toString(36).substring(2, 7),
+      type: 'confirm',
+      title,
+      message,
+      confirmLabel,
+      cancelLabel,
+      isDanger,
+      onConfirm: handleConfirm,
+      onCancel: handleCancel,
+    };
+
+    notifyModalListeners();
   });
 };
 
 /**
- * Super-fast, sleek prompt toast popup to replace window.prompt()
+ * Premium Prompt Modal (replaces window.prompt)
  *
  * Usage:
- *   const newName = await promptToast('Enter new name for category:', { defaultValue: oldName, title: 'Rename Category' });
+ *   const newName = await promptToast('Enter new category name:', { defaultValue: oldName, title: 'Rename Category' });
  *   if (!newName) return;
  */
-export const promptToast = (message, options = {}) => {
+export const promptToast = (message, defaultValOrOptions = {}, maybeOptions = {}) => {
   return new Promise((resolve) => {
+    let options = {};
+    let defaultValue = '';
+
+    if (typeof defaultValOrOptions === 'string') {
+      defaultValue = defaultValOrOptions;
+      options = maybeOptions || {};
+    } else if (typeof defaultValOrOptions === 'object') {
+      options = defaultValOrOptions || {};
+      defaultValue = options.defaultValue || '';
+    }
+
     const title = options.title || 'Edit Information';
-    const defaultValue = options.defaultValue || '';
     const placeholder = options.placeholder || 'Type here...';
     const confirmLabel = options.confirmText || 'Save';
     const cancelLabel = options.cancelText || 'Cancel';
 
-    toast.custom(
-      (t) => {
-        let currentValue = defaultValue;
+    const handleConfirm = (value) => {
+      currentModalState = null;
+      notifyModalListeners();
+      resolve(value);
+    };
 
-        return (
+    const handleCancel = () => {
+      currentModalState = null;
+      notifyModalListeners();
+      resolve(null);
+    };
+
+    currentModalState = {
+      id: Date.now() + Math.random().toString(36).substring(2, 7),
+      type: 'prompt',
+      title,
+      message,
+      defaultValue,
+      placeholder,
+      confirmLabel,
+      cancelLabel,
+      onConfirm: handleConfirm,
+      onCancel: handleCancel,
+    };
+
+    notifyModalListeners();
+  });
+};
+
+/**
+ * Host component that renders the premium modal overlay in App root
+ */
+export const ConfirmModalHost = () => {
+  const [modal, setModal] = useState(currentModalState);
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    const handleUpdate = (state) => {
+      setModal(state);
+      if (state && state.type === 'prompt') {
+        setInputValue(state.defaultValue || '');
+      }
+    };
+    modalListeners.add(handleUpdate);
+    return () => modalListeners.delete(handleUpdate);
+  }, []);
+
+  useEffect(() => {
+    if (!modal) return;
+
+    if (modal.type === 'prompt' && inputRef.current) {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        modal.onCancel();
+      } else if (e.key === 'Enter' && modal.type !== 'prompt') {
+        e.preventDefault();
+        modal.onConfirm();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modal]);
+
+  if (!modal) return null;
+
+  const isDelete =
+    modal.isDanger &&
+    (modal.confirmLabel?.toLowerCase().includes('delete') ||
+      modal.title?.toLowerCase().includes('delete') ||
+      modal.message?.toLowerCase().includes('delete'));
+
+  return (
+    <div
+      className="confirm-modal-overlay modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      onClick={modal.onCancel}
+    >
+      <div
+        className="confirm-modal-card"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          className="confirm-modal-close-btn"
+          onClick={modal.onCancel}
+          title="Close (Esc)"
+        >
+          <FaXmark />
+        </button>
+
+        <div className="confirm-modal-header">
           <div
-            style={{
-              minWidth: '340px',
-              maxWidth: '440px',
-              width: '100%',
-              background: '#ffffff',
-              boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.32), 0 4px 18px rgba(0,0,0,0.08)',
-              borderRadius: '18px',
-              border: '1.5px solid #cbd5e1',
-              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-              padding: '20px',
-              pointerEvents: 'auto',
-              transform: t.visible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(-8px)',
-              opacity: t.visible ? 1 : 0,
-              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-              zIndex: 999999,
+            className={`confirm-modal-icon-wrap ${
+              modal.type === 'prompt' ? 'prompt' : modal.isDanger ? 'danger' : 'success'
+            }`}
+          >
+            {modal.type === 'prompt' ? (
+              <FaPenToSquare />
+            ) : isDelete ? (
+              <FaTrash />
+            ) : modal.isDanger ? (
+              <FaTriangleExclamation />
+            ) : (
+              <FaCheck />
+            )}
+          </div>
+          <div className="confirm-modal-content">
+            <h3 className="confirm-modal-title">{modal.title}</h3>
+            {modal.message && <p className="confirm-modal-message">{modal.message}</p>}
+          </div>
+        </div>
+
+        {modal.type === 'prompt' && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              modal.onConfirm(inputValue);
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-              <div
-                style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '10px',
-                  background: '#eff6ff',
-                  border: '1.5px solid #bfdbfe',
-                  color: '#2563eb',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '16px',
-                  flexShrink: 0,
-                }}
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              placeholder={modal.placeholder}
+              onChange={(e) => setInputValue(e.target.value)}
+              className="confirm-modal-input"
+            />
+            <div className="confirm-modal-actions">
+              <button
+                type="button"
+                className="confirm-btn-cancel"
+                onClick={modal.onCancel}
               >
-                <FaPenToSquare />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
-                  {title}
-                </h4>
-                {message && (
-                  <p style={{ margin: '2px 0 0', fontSize: '12.5px', color: '#64748b' }}>
-                    {message}
-                  </p>
-                )}
-              </div>
+                {modal.cancelLabel}
+              </button>
+              <button type="submit" className="confirm-btn-primary">
+                {modal.confirmLabel}
+              </button>
             </div>
+          </form>
+        )}
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                toast.dismiss(t.id);
-                resolve(currentValue);
-              }}
+        {modal.type !== 'prompt' && (
+          <div className="confirm-modal-actions">
+            <button
+              type="button"
+              className="confirm-btn-cancel"
+              onClick={modal.onCancel}
             >
-              <input
-                type="text"
-                autoFocus
-                defaultValue={defaultValue}
-                placeholder={placeholder}
-                onChange={(e) => { currentValue = e.target.value; }}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  border: '1.5px solid #94a3b8',
-                  borderRadius: '10px',
-                  fontSize: '14px',
-                  color: '#0f172a',
-                  boxSizing: 'border-box',
-                  outline: 'none',
-                  marginBottom: '16px',
-                  transition: 'border-color 0.2s',
-                  background: '#ffffff',
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = '#2563eb';
-                  e.target.select();
-                }}
-                onBlur={(e) => { e.target.style.borderColor = '#94a3b8'; }}
-              />
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    toast.dismiss(t.id);
-                    resolve(null);
-                  }}
-                  style={{
-                    padding: '7px 15px',
-                    borderRadius: '10px',
-                    border: '1.5px solid #cbd5e1',
-                    background: '#f8fafc',
-                    color: '#334155',
-                    fontSize: '13px',
-                    fontWeight: 650,
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#f1f5f9'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
-                >
-                  {cancelLabel}
-                </button>
-                <button
-                  type="submit"
-                  style={{
-                    padding: '7px 18px',
-                    borderRadius: '10px',
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                    color: '#ffffff',
-                    fontSize: '13px',
-                    fontWeight: 750,
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
-                  }}
-                >
-                  {confirmLabel}
-                </button>
-              </div>
-            </form>
+              {modal.cancelLabel}
+            </button>
+            <button
+              type="button"
+              className={modal.isDanger ? 'confirm-btn-danger' : 'confirm-btn-primary'}
+              onClick={modal.onConfirm}
+              autoFocus
+            >
+              {isDelete && <FaTrash style={{ fontSize: '12px' }} />}
+              {modal.confirmLabel}
+            </button>
           </div>
-        );
-      },
-      {
-        duration: 60000,
-        position: 'top-center',
-      }
-    );
-  });
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default confirmToast;

@@ -79,8 +79,35 @@ const AdminDoctors = () => {
     };
 
     const [formData, setFormData] = useState(initialFormState);
+    const [initialDoctorForm, setInitialDoctorForm] = useState(null);
+    const [experienceError, setExperienceError] = useState('');
     const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
     const isHospitalAdmin = user?.role === 'hospitaladmin';
+
+    // Track whether any field changed in edit mode (same UX as Question Library)
+    const isDoctorModified = useMemo(() => {
+        if (!editingDoctor) return true;
+        if (!initialDoctorForm) return false;
+
+        if (formData.password && formData.password.trim().length > 0) return true;
+        if ((formData.name || '').trim() !== (initialDoctorForm.name || '').trim()) return true;
+        if ((formData.email || '').trim().toLowerCase() !== (initialDoctorForm.email || '').trim().toLowerCase()) return true;
+        if ((formData.phone || '').trim() !== (initialDoctorForm.phone || '').trim()) return true;
+        if ((formData.gender || '').trim() !== (initialDoctorForm.gender || '').trim()) return true;
+        if ((formData.specialty || '').trim() !== (initialDoctorForm.specialty || '').trim()) return true;
+        if (String(formData.experience ?? '').trim() !== String(initialDoctorForm.experience ?? '').trim()) return true;
+        if ((formData.education || '').trim() !== (initialDoctorForm.education || '').trim()) return true;
+        if ((formData.bio || '').trim() !== (initialDoctorForm.bio || '').trim()) return true;
+        if (String(formData.consultationFee ?? '').trim() !== String(initialDoctorForm.consultationFee ?? '').trim()) return true;
+        if ((formData.successRate || '').trim() !== (initialDoctorForm.successRate || '').trim()) return true;
+        if ((formData.patientsCount || '').trim() !== (initialDoctorForm.patientsCount || '').trim()) return true;
+        if ((formData.image || '').trim() !== (initialDoctorForm.image || '').trim()) return true;
+        if (JSON.stringify(formData.services || []) !== JSON.stringify(initialDoctorForm.services || [])) return true;
+        if (JSON.stringify(formData.departments || []) !== JSON.stringify(initialDoctorForm.departments || [])) return true;
+        if (JSON.stringify(formData.availability || {}) !== JSON.stringify(initialDoctorForm.availability || {})) return true;
+
+        return false;
+    }, [editingDoctor, initialDoctorForm, formData]);
 
     useEffect(() => {
         if (!user || !['admin', 'hospitaladmin'].includes(user.role)) {
@@ -112,6 +139,22 @@ const AdminDoctors = () => {
         setFormData({ ...formData, [name]: value });
     };
 
+    const handleExperienceChange = (e) => {
+        const val = e.target.value;
+        if (val === '') {
+            setExperienceError('');
+            setFormData(prev => ({ ...prev, experience: '' }));
+            return;
+        }
+        const expNum = Number(val);
+        if (isNaN(expNum) || !Number.isInteger(expNum) || expNum < 0 || expNum > 70) {
+            setExperienceError('Experience must be a realistic number between 0 and 70 years.');
+        } else {
+            setExperienceError('');
+        }
+        setFormData(prev => ({ ...prev, experience: val }));
+    };
+
     const handleAvailabilityChange = (day, field, value) => {
         setFormData(prev => ({
             ...prev,
@@ -127,12 +170,37 @@ const AdminDoctors = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // 1. Validate realistic experience range (0 - 70 years)
+        if (formData.experience !== '' && formData.experience !== undefined && formData.experience !== null) {
+            const expNum = Number(formData.experience);
+            if (isNaN(expNum) || !Number.isInteger(expNum) || expNum < 0 || expNum > 70) {
+                toast.error('Experience must be a realistic number between 0 and 70 years.');
+                setExperienceError('Experience must be a realistic number between 0 and 70 years.');
+                return;
+            }
+        }
+
+        // 2. Prevent update if no changes were made (matching Question Library behavior)
+        if (editingDoctor && !isDoctorModified) {
+            toast('No changes detected.', { icon: 'ℹ️' });
+            return;
+        }
+
         setLoading(true);
+
+        const expNum = (formData.experience !== '' && formData.experience !== undefined && formData.experience !== null)
+            ? parseInt(formData.experience, 10)
+            : null;
+        const formattedExp = (expNum !== null && !isNaN(expNum))
+            ? `${expNum} ${expNum === 1 ? 'Year' : 'Years'}`
+            : '';
 
         try {
             if (editingDoctor) {
                 const doctorData = {
                     ...formData,
+                    experience: formattedExp,
                     consultationFee: (formData.consultationFee !== '' && formData.consultationFee !== undefined && formData.consultationFee !== null) ? Number(formData.consultationFee) : 0
                 };
                 if (!doctorData.password || doctorData.password.trim() === '') {
@@ -160,6 +228,7 @@ const AdminDoctors = () => {
 
                 const doctorData = {
                     ...formData,
+                    experience: formattedExp,
                     consultationFee: formData.consultationFee ? Number(formData.consultationFee) : 0
                 };
 
@@ -199,6 +268,7 @@ const AdminDoctors = () => {
 
     const handleEdit = (doctor) => {
         setEditingDoctor(doctor);
+        setExperienceError('');
 
         const mergedAvailability = { ...defaultAvailability };
         if (doctor.availability) {
@@ -209,24 +279,31 @@ const AdminDoctors = () => {
             });
         }
 
-        setFormData({
+        const rawExp = doctor.experience !== undefined && doctor.experience !== null ? String(doctor.experience) : '';
+        const expMatch = rawExp.match(/\d+/);
+        const normalizedExp = expMatch ? expMatch[0] : '';
+
+        const initialData = {
             name: doctor.name || doctor.userId?.name || '',
             email: doctor.email || doctor.userId?.email || '',
             phone: doctor.phone || doctor.userId?.phone || '',
             password: '',
             gender: doctor.gender || doctor.userId?.gender || '',
             specialty: doctor.specialty || '',
-            experience: doctor.experience || '',
+            experience: normalizedExp,
             education: doctor.education || '',
-            services: doctor.services || [],
-            departments: doctor.departments || [],
-            availability: mergedAvailability,
+            services: Array.isArray(doctor.services) ? [...doctor.services] : [],
+            departments: Array.isArray(doctor.departments) ? [...doctor.departments] : [],
+            availability: JSON.parse(JSON.stringify(mergedAvailability)),
             successRate: doctor.successRate || '90%',
             patientsCount: doctor.patientsCount || '100+',
             image: doctor.image || '👨‍⚕️',
             bio: doctor.bio || '',
-            consultationFee: doctor.consultationFee || ''
-        });
+            consultationFee: (doctor.consultationFee !== undefined && doctor.consultationFee !== null) ? String(doctor.consultationFee) : ''
+        };
+
+        setInitialDoctorForm(initialData);
+        setFormData(initialData);
         setShowForm(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -240,7 +317,9 @@ const AdminDoctors = () => {
 
     const resetForm = () => {
         setFormData(initialFormState);
+        setInitialDoctorForm(null);
         setEditingDoctor(null);
+        setExperienceError('');
         setShowForm(false);
     };
 
@@ -506,7 +585,12 @@ const AdminDoctors = () => {
 
                         {/* 6. Experience */}
                         <div className="ad-field-group">
-                            <label className="ad-field-label">Experience</label>
+                            <label className="ad-field-label">
+                                Experience
+                                <span style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 500, marginLeft: '6px' }}>
+                                    (0 – 70 Years)
+                                </span>
+                            </label>
                             <div className="ad-input-wrapper">
                                 <div className="ad-input-icon-box icon-amber">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -514,14 +598,33 @@ const AdminDoctors = () => {
                                     </svg>
                                 </div>
                                 <input
-                                    type="text"
+                                    type="number"
                                     name="experience"
+                                    min="0"
+                                    max="70"
+                                    step="1"
                                     value={formData.experience}
-                                    onChange={handleChange}
-                                    placeholder="e.g. 10 Years"
-                                    className="ad-input-control"
+                                    onChange={handleExperienceChange}
+                                    onKeyDown={(e) => {
+                                        if (['-', '+', 'e', 'E', '.'].includes(e.key)) {
+                                            e.preventDefault();
+                                        }
+                                    }}
+                                    placeholder="e.g. 10 (0–70 yrs)"
+                                    className={`ad-input-control ${experienceError ? 'ad-input-error' : ''}`}
                                 />
+                                {formData.experience !== '' && !experienceError && (
+                                    <span style={{ paddingRight: '8px', fontSize: '12px', color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                        {parseInt(formData.experience, 10) === 1 ? 'Year' : 'Years'}
+                                    </span>
+                                )}
                             </div>
+                            {experienceError && (
+                                <div className="ad-field-error-msg" style={{ color: '#ef4444', fontSize: '12px', marginTop: '5px', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 500 }}>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    <span>{experienceError}</span>
+                                </div>
+                            )}
                         </div>
 
                         {/* 7. Specialty */}
@@ -688,8 +791,10 @@ const AdminDoctors = () => {
                         <div className="ad-form-actions-row">
                             <button
                                 type="submit"
-                                disabled={loading}
+                                disabled={loading || (editingDoctor && !isDoctorModified) || !!experienceError}
                                 className="ad-btn-create"
+                                style={(editingDoctor && !isDoctorModified) ? { opacity: 0.55, cursor: 'not-allowed' } : {}}
+                                title={editingDoctor && !isDoctorModified ? 'No changes detected' : ''}
                             >
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                     <line x1="12" y1="5" x2="12" y2="19" />
@@ -709,6 +814,13 @@ const AdminDoctors = () => {
                                 </svg>
                                 <span>Cancel</span>
                             </button>
+
+                            {editingDoctor && !isDoctorModified && (
+                                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#94a3b8' }}></span>
+                                    No changes detected
+                                </span>
+                            )}
                         </div>
                     </form>
 
@@ -836,7 +948,7 @@ const AdminDoctors = () => {
                                         )}
                                         {doctor.experience && (
                                             <span className="ad-dept-badge" style={{ background: '#fffbeb', color: '#d97706', borderColor: '#fde68a' }}>
-                                                ★ {doctor.experience}
+                                                ★ {doctor.experience.toString().toLowerCase().includes('year') ? doctor.experience : `${doctor.experience} Years`}
                                             </span>
                                         )}
                                     </div>
