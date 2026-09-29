@@ -9,6 +9,7 @@ const multer = require('multer');
 const Hospital = require('../models/hospital.model');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { triggerMobileBuild } = require('../controllers/mobileBuild.controller');
+const { generateApplicationId } = require('../utils/applicationId.util');
 
 /**
  * Validate webhook secret using timing-safe comparison.
@@ -114,17 +115,18 @@ router.post('/:id/build-app', verifyCentralAdmin, async (req, res) => {
         }
 
         // 1. Rigorous Manual Validation & Sanitization
-        // Remove special characters that could break scripts or paths
-        const safeAppName = (hospital.brandingSchema?.appName || hospital.branding?.appName || hospital.name || 'City Hospital')
-            .replace(/[^a-zA-Z0-9\s]/g, '')
-            .trim();
+        // Preserve visible app name (e.g. "Krishna IVF & Fertility")
+        const safeAppName = (hospital.brandingSchema?.appName || hospital.branding?.appName || hospital.name || 'City Hospital').trim();
         
-        // Use derived hospital code for applicationId, fallback to id
-        let safeCode = hospital.hospitalCode;
-        if (!safeCode) {
-            safeCode = id.substring(0, 8);
+        // Deterministic, valid Android applicationId complying with com.medical365.<lowercase-segment>
+        let safeApplicationId = generateApplicationId(hospital, { tenantId: id.toString() });
+        const existingWithAppId = await Hospital.findOne({
+            _id: { $ne: hospital._id },
+            'appConfig.androidPackageId': safeApplicationId
+        });
+        if (existingWithAppId) {
+            safeApplicationId = generateApplicationId(hospital, { tenantId: id.toString(), disambiguate: true });
         }
-        const safeApplicationId = `com.medical365.${safeCode.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
         
         const logoUrl = hospital.branding?.logoUrl || 'default';
         const themeColor = hospital.branding?.primaryColor || '#14b8a6';
@@ -208,6 +210,7 @@ router.post('/:id/build-app', verifyCentralAdmin, async (req, res) => {
             hospital.isWhitelabeled = true;
             hospital.appConfig.buildStatus = 'BUILDING';
             hospital.appConfig.buildStartedAt = new Date();
+            hospital.appConfig.androidPackageId = safeApplicationId;
             hospital.appConfig.buildError = '';
             await hospital.save();
 
@@ -660,15 +663,18 @@ router.post('/:id/build-rn-app', verifyCentralAdmin, async (req, res) => {
     });
 
     try {
-        const safeAppName = (hospital.brandingSchema?.appName || hospital.branding?.appName || hospital.name || 'City Hospital')
-            .replace(/[^a-zA-Z0-9\s]/g, '')
-            .trim();
+        // Preserve visible app name (e.g. "Krishna IVF & Fertility")
+        const safeAppName = (hospital.brandingSchema?.appName || hospital.branding?.appName || hospital.name || 'City Hospital').trim();
         
-        let safeCode = hospital.hospitalCode;
-        if (!safeCode) {
-            safeCode = id.substring(0, 8);
+        // Deterministic, valid Android applicationId complying with com.medical365.<lowercase-segment>
+        let safeApplicationId = generateApplicationId(hospital, { tenantId: id.toString() });
+        const existingWithAppId = await Hospital.findOne({
+            _id: { $ne: hospital._id },
+            'appConfig.androidPackageId': safeApplicationId
+        });
+        if (existingWithAppId) {
+            safeApplicationId = generateApplicationId(hospital, { tenantId: id.toString(), disambiguate: true });
         }
-        const safeApplicationId = `com.medical365.${safeCode.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`;
         
         const logoUrl = hospital.branding?.logoUrl || 'default';
         const themeColor = hospital.branding?.primaryColor || '#14b8a6';
@@ -777,6 +783,11 @@ router.post('/:id/build-rn-app', verifyCentralAdmin, async (req, res) => {
 
         if (dispatchRes.status === 204 || dispatchRes.status === 200 || dispatchRes.status === 201) {
             console.log(`[Build System] Successfully dispatched GitHub RN workflow '${workflowId}' for tenant ${id} (HTTP ${dispatchRes.status}).`);
+            await Hospital.findByIdAndUpdate(id, {
+                $set: {
+                    'appConfig.androidPackageId': safeApplicationId
+                }
+            });
             return res.json({ 
                 success: true, 
                 message: `RN App build started successfully on GitHub Actions (HTTP ${dispatchRes.status})`,
