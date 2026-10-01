@@ -20,11 +20,6 @@ const OTHeader = ({
         { label: 'Planned Surgeries', path: '/ot/planned', icon: <FiClock />, badge: badgeCounts.planned || null },
         { label: 'OT Schedule', path: '/ot/schedule', icon: <FiCalendar />, badge: badgeCounts.today || null },
         { label: 'OT Rooms', path: '/ot/rooms', icon: <FiBox />, badge: badgeCounts.roomsInUse ? `${badgeCounts.roomsInUse} in OT` : null },
-        { label: 'Pre-Op', path: '/ot/pre-op', icon: <FiUserCheck />, badge: badgeCounts.preOp || null },
-        { label: 'In OT', path: '/ot/in-progress', altPath: '/ot/in-ot', icon: <FiActivity />, badge: badgeCounts.inOt || null, isPulse: badgeCounts.inOt > 0 },
-        { label: 'Post-Op', path: '/ot/post-op', icon: <FiHeart />, badge: badgeCounts.postOp || null },
-        { label: 'Completed', path: '/ot/completed', icon: <FiCheckCircle />, badge: badgeCounts.completed || null },
-        { label: 'Surgeons', path: '/ot/surgeons', icon: <FiUser />, badge: null },
         { label: 'Reports', path: '/ot/reports', icon: <FiFileText />, badge: null },
     ];
 
@@ -127,59 +122,6 @@ const OTHeader = ({
                         )}
                     </div>
                 )}
-            </div>
-
-            {/* Quick OT Module Navigation Tabs */}
-            <div style={{
-                display: 'flex',
-                gap: '8px',
-                overflowX: 'auto',
-                paddingBottom: '8px',
-                scrollbarWidth: 'thin'
-            }}>
-                {navItems.map((item, idx) => {
-                    const isActive = location.pathname === item.path || (item.altPath && location.pathname === item.altPath);
-                    return (
-                        <NavLink
-                            key={idx}
-                            to={item.path}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                padding: '9px 16px',
-                                borderRadius: '10px',
-                                fontSize: '0.85rem',
-                                fontWeight: 700,
-                                textDecoration: 'none',
-                                whiteSpace: 'nowrap',
-                                transition: 'all 0.2s ease',
-                                background: isActive ? '#3b82f6' : '#ffffff',
-                                color: isActive ? '#ffffff' : '#475569',
-                                border: isActive ? '1px solid #2563eb' : '1px solid #e2e8f0',
-                                boxShadow: isActive ? '0 4px 12px rgba(59,130,246,0.25)' : '0 1px 3px rgba(0,0,0,0.04)'
-                            }}
-                        >
-                            <span style={{ fontSize: '1rem', display: 'flex', alignItems: 'center' }}>
-                                {item.icon}
-                            </span>
-                            <span>{item.label}</span>
-                            {item.badge !== null && item.badge !== undefined && (
-                                <span style={{
-                                    fontSize: '0.72rem',
-                                    fontWeight: 800,
-                                    padding: '2px 7px',
-                                    borderRadius: '12px',
-                                    background: isActive ? 'rgba(255,255,255,0.25)' : (item.isPulse ? '#fee2e2' : '#f1f5f9'),
-                                    color: isActive ? '#ffffff' : (item.isPulse ? '#dc2626' : '#1e293b'),
-                                    border: isActive ? 'none' : '1px solid #e2e8f0'
-                                }}>
-                                    {item.badge}
-                                </span>
-                            )}
-                        </NavLink>
-                    );
-                })}
             </div>
         </div>
     );

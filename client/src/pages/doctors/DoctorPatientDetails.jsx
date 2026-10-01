@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { confirmToast } from '../../utils/confirmToast';
@@ -8,14 +8,15 @@ import autoTable from 'jspdf-autotable';
 import './DoctorPatientDetails.css';
 import DynamicQuestionForm from '../../components/DynamicQuestionForm';
 import { useAuth } from '../../store/hooks';
+import { MASTER_DEFAULT_QUESTION_LIBRARY, resolveDepartmentKey, DEPARTMENT_ICONS } from '../../config/masterQuestionLibrary';
 
 import AppointmentReports from '../../components/AppointmentReports';
-import DoctorIPDOrdersPanel from '../../components/ipd/DoctorIPDOrdersPanel';
 import { 
     FiArrowLeft, FiBell, FiChevronDown, FiChevronRight, 
     FiUser, FiCalendar, FiClock, FiCheck, FiCopy, 
     FiFileText, FiFolder, FiMoreHorizontal, FiPaperclip, 
-    FiSave, FiArrowRight, FiRefreshCw, FiActivity, FiClipboard, FiFile, FiCheckCircle, FiX 
+    FiSave, FiArrowRight, FiRefreshCw, FiActivity, FiClipboard, FiFile, FiCheckCircle, FiX,
+    FiSearch, FiTrash2, FiPlus
 } from 'react-icons/fi';
 
 const doseOptions = [
@@ -44,6 +45,42 @@ const timingOptions = [
     'At Bedtime (HS)'
 ];
 
+const COMMON_LAB_PRESETS = [
+    { label: 'CBC', name: 'Complete Blood Count (CBC)', category: 'Hematology' },
+    { label: 'Lipid Profile', name: 'Lipid Profile', category: 'Biochemistry' },
+    { label: 'LFT', name: 'Liver Function Test (LFT)', category: 'Biochemistry' },
+    { label: 'KFT', name: 'Kidney Function Test (KFT)', category: 'Biochemistry' },
+    { label: 'HbA1c', name: 'HbA1c Glycated Hemoglobin', category: 'Diabetes' },
+    { label: 'Thyroid', name: 'Thyroid Profile (T3, T4, TSH)', category: 'Endocrinology' },
+    { label: 'Urine R/M', name: 'Urine Routine & Microscopy', category: 'Pathology' },
+    { label: 'Chest X-Ray', name: 'Chest X-Ray (PA View)', category: 'Radiology' },
+    { label: 'USG Abdomen', name: 'Ultrasound Abdomen & Pelvis', category: 'Radiology' },
+    { label: '12-Lead ECG', name: '12-Lead Electrocardiogram (ECG)', category: 'Cardiology' },
+    { label: 'Serum Creatinine', name: 'Serum Creatinine & Urea', category: 'Biochemistry' },
+    { label: 'Serum Electrolytes', name: 'Serum Electrolytes (Na+, K+, Cl-)', category: 'Biochemistry' },
+    { label: 'Vitamin D3', name: 'Vitamin D3 (25-OH)', category: 'Immunoassay' },
+    { label: 'Vitamin B12', name: 'Vitamin B12', category: 'Immunoassay' },
+    { label: 'Dengue Serology', name: 'Dengue NS1 Antigen & IgG/IgM', category: 'Serology' },
+    { label: 'Blood Glucose', name: 'Blood Glucose (Fasting & PP)', category: 'Diabetes' },
+    { label: 'CRP', name: 'C-Reactive Protein (CRP)', category: 'Biochemistry' },
+    { label: 'ESR', name: 'Erythrocyte Sedimentation Rate (ESR)', category: 'Hematology' },
+    { label: 'CT Scan Brain', name: 'CT Scan Brain (Plain)', category: 'Radiology' },
+    { label: 'MRI Spine', name: 'MRI Lumbar Spine', category: 'Radiology' }
+];
+
+const QUICK_LAB_CHIPS = [
+    { label: 'CBC', name: 'Complete Blood Count (CBC)' },
+    { label: 'Lipid Profile', name: 'Lipid Profile' },
+    { label: 'LFT', name: 'Liver Function Test (LFT)' },
+    { label: 'KFT', name: 'Kidney Function Test (KFT)' },
+    { label: 'HbA1c', name: 'HbA1c Glycated Hemoglobin' },
+    { label: 'Thyroid', name: 'Thyroid Profile (T3, T4, TSH)' },
+    { label: 'Urine R/M', name: 'Urine Routine & Microscopy' },
+    { label: 'Chest X-Ray', name: 'Chest X-Ray (PA View)' },
+    { label: 'USG Abdomen', name: 'Ultrasound Abdomen & Pelvis' },
+    { label: '12-Lead ECG', name: '12-Lead Electrocardiogram (ECG)' }
+];
+
 const DoctorPatientDetails = () => {
     const { id } = useParams();
     const location = useLocation();
@@ -56,6 +93,7 @@ const DoctorPatientDetails = () => {
     const roleName = user?._roleData?.name?.toLowerCase() || (typeof user?.role === 'string' ? user.role.toLowerCase() : '');
     const isJrDoctor = roleName.includes('jr') && roleName.includes('doctor');
     const [medSearch, setMedSearch] = useState('');
+    const [labSearch, setLabSearch] = useState('');
 
     const [appointment, setAppointment] = useState(null);
     const [history, setHistory] = useState([]);
@@ -65,6 +103,7 @@ const DoctorPatientDetails = () => {
     const [catalogMedicines, setCatalogMedicines] = useState([]);
     const [dynamicLibrary, setDynamicLibrary] = useState(null);
     const [hospitalDepartments, setHospitalDepartments] = useState([]);
+    const [selectedDeptOverride, setSelectedDeptOverride] = useState('');
     const [isLocked, setIsLocked] = useState(false);
     const [hospitalContext, setHospitalContext] = useState(null);
     const [customBannerToast, setCustomBannerToast] = useState({ show: false, message: '', title: '' });
@@ -81,10 +120,11 @@ const DoctorPatientDetails = () => {
     const [operationRequired, setOperationRequired] = useState(false);
     const [showSurgeryPlanModal, setShowSurgeryPlanModal] = useState(false);
     const [surgeonsList, setSurgeonsList] = useState([]);
+    const [patientSurgeryPlans, setPatientSurgeryPlans] = useState([]);
+    const [loadingSurgeryPlans, setLoadingSurgeryPlans] = useState(false);
     const [surgeryPlanData, setSurgeryPlanData] = useState({
         surgery: '', diagnosis: '', surgeonId: '', preferredDate: '', preferredTime: '', admissionRequired: false, admissionDate: '', preOpRequired: false, notes: ''
     });
-
 
     // Referral States
     const [showReferralModal, setShowReferralModal] = useState(false);
@@ -93,8 +133,8 @@ const DoctorPatientDetails = () => {
     const [showReferralReviewModal, setShowReferralReviewModal] = useState(false);
     const [activeReferralForReview, setActiveReferralForReview] = useState(null);
 
-    // Tab State for Left Panel
-    const [activeTab, setActiveTab] = useState('overview');
+    // Tab State (Default to Doctor Consultation & Rx)
+    const [activeTab, setActiveTab] = useState('session');
 
     // Time Machine Feature State
     const [viewingPastSession, setViewingPastSession] = useState(null);
@@ -103,6 +143,39 @@ const DoctorPatientDetails = () => {
     const [sessionData, setSessionData] = useState({
         diagnosis: '', notes: '', medicines: [], labTests: ''
     });
+
+    const availableLabTests = useMemo(() => {
+        const list = [...COMMON_LAB_PRESETS];
+        if (catalogTests && catalogTests.length > 0) {
+            catalogTests.forEach(ct => {
+                const name = ct.name || ct.testName || ct.title;
+                if (name && !list.some(item => item.name.toLowerCase() === name.toLowerCase())) {
+                    list.push({ label: name, name: name, category: ct.category || 'Diagnostic Test' });
+                }
+            });
+        }
+        return list;
+    }, [catalogTests]);
+
+    const handleAddLabTest = (testNameToAdd) => {
+        const name = (testNameToAdd || labSearch).trim();
+        if (!name) return;
+        const currentList = (sessionData.labTests || '').split(',').map(s => s.trim()).filter(Boolean);
+        if (!currentList.some(item => item.toLowerCase() === name.toLowerCase())) {
+            const updatedList = [...currentList, name];
+            setSessionData(prev => ({ ...prev, labTests: updatedList.join(', ') }));
+        }
+        setLabSearch('');
+    };
+
+    const handleRemoveLabTest = (testNameToRemove) => {
+        const updated = (sessionData.labTests || '')
+            .split(',')
+            .map(s => s.trim())
+            .filter(s => s && s.toLowerCase() !== testNameToRemove.toLowerCase())
+            .join(', ');
+        setSessionData(prev => ({ ...prev, labTests: updated }));
+    };
 
     // Patient Intake Profile (Left Panel - Editable by Doctor)
     const [intakeData, setIntakeData] = useState({});
@@ -116,10 +189,72 @@ const DoctorPatientDetails = () => {
     // Tab Scrolling Reference
     const tabsRef = useRef(null);
 
+    // Merged Library from Master Defaults + Dynamic DB Question Library
+    const mergedLibrary = useMemo(() => {
+        const base = { ...MASTER_DEFAULT_QUESTION_LIBRARY };
+        if (dynamicLibrary && typeof dynamicLibrary === 'object') {
+            Object.keys(dynamicLibrary).forEach(dept => {
+                if (dynamicLibrary[dept] && typeof dynamicLibrary[dept] === 'object' && Object.keys(dynamicLibrary[dept]).length > 0) {
+                    base[dept] = {
+                        ...(base[dept] || {}),
+                        ...dynamicLibrary[dept]
+                    };
+                }
+            });
+        }
+        return base;
+    }, [dynamicLibrary]);
+
+    const availableDepts = useMemo(() => Object.keys(mergedLibrary), [mergedLibrary]);
+
+    const docDept = user?.department || user?._roleData?.department || user?.specialty || user?.specialization || '';
+    const apptDept = appointment?.department || appointment?.serviceName || appointment?.doctorDepartment || '';
+    const patientDept = appointment?.clinicPatientId?.department || appointment?.userId?.department || intakeData?.department || '';
+    const asstDept = assistantPrep?.department || '';
+
+    const detectedDept = useMemo(() => {
+        return resolveDepartmentKey([selectedDeptOverride, apptDept, docDept, asstDept, patientDept], availableDepts);
+    }, [selectedDeptOverride, apptDept, docDept, asstDept, patientDept, availableDepts]);
+
+    const activeDeptKey = selectedDeptOverride || detectedDept || 'General Medicine';
+
+    // Dynamic Form Tabs for the active department
+    const dynamicTabs = useMemo(() => {
+        const dTabs = [];
+        if (activeDeptKey && mergedLibrary[activeDeptKey]) {
+            const deptObj = mergedLibrary[activeDeptKey];
+            if (typeof deptObj === 'object') {
+                Object.keys(deptObj).forEach((catKey, i) => {
+                    const qData = deptObj[catKey];
+                    if (Array.isArray(qData) && qData.length > 0) {
+                        dTabs.push({
+                            id: `dyn_${activeDeptKey.replace(/[^a-zA-Z0-9]/g, '')}_${i}`,
+                            label: `${activeDeptKey}: ${catKey}`,
+                            shortLabel: catKey,
+                            categoryName: catKey,
+                            deptName: activeDeptKey,
+                            icon: DEPARTMENT_ICONS[activeDeptKey] || '📋',
+                            theme: 'purple',
+                            data: qData
+                        });
+                    }
+                });
+            }
+        }
+        return dTabs;
+    }, [activeDeptKey, mergedLibrary]);
+
+    const allTabs = useMemo(() => [
+        { id: 'session', label: 'Doctor Consultation', icon: '🩺', theme: 'blue' },
+        { id: 'surgery', label: 'Operation & Surgery Plan', icon: '🏥', theme: 'orange' },
+        { id: 'history', label: 'Vitals & History', icon: '📊', theme: 'emerald' },
+        ...dynamicTabs,
+        { id: 'assistant_intake', label: 'Assistant Intake & Q&A', icon: '📝', theme: 'amber' },
+        { id: 'reports', label: 'Reports & Files', icon: '📁', theme: 'rose' },
+    ], [dynamicTabs]);
+
     const handleTabsWheel = (e) => {
         if (tabsRef.current) {
-            // Only convert pure vertical scrolling to horizontal scrolling (mouse wheels)
-            // Allow native 2-finger horizontal trackpad scrolling to pass through naturally
             if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
                 e.preventDefault();
                 tabsRef.current.scrollBy({ left: e.deltaY, behavior: 'auto' });
@@ -144,133 +279,137 @@ const DoctorPatientDetails = () => {
         };
     }, []);
 
-    useEffect(() => {
-        const fetchDetails = async () => {
+    const [refreshing, setRefreshing] = useState(false);
+
+    const fetchDetails = async (isManualRefresh = false) => {
+        if (isManualRefresh) {
+            setRefreshing(true);
+        } else {
             setLoading(true);
-            try {
-                let currentApptId = appointmentId || location.state?.appointmentId;
-                let refObj = location.state?.referral || null;
+        }
+        try {
+            let currentApptId = appointmentId || location.state?.appointmentId;
+            let refObj = location.state?.referral || null;
 
-                // 1. If referralId is passed, fetch referral data
-                if (location.state?.referralId && !refObj) {
-                    try {
-                        const refRes = await referralAPI.getById(location.state.referralId);
-                        if (refRes.success && refRes.referral) {
-                            refObj = refRes.referral;
-                        }
-                    } catch(e) { console.error("Error fetching referral by ID", e); }
-                }
-
-                if (refObj) {
-                    setActiveReferralForReview(refObj);
-                    if (!currentApptId && refObj.appointmentId) {
-                        currentApptId = typeof refObj.appointmentId === 'object' ? refObj.appointmentId._id : refObj.appointmentId;
+            // 1. If referralId is passed, fetch referral data
+            if (location.state?.referralId && !refObj) {
+                try {
+                    const refRes = await referralAPI.getById(location.state.referralId);
+                    if (refRes.success && refRes.referral) {
+                        refObj = refRes.referral;
                     }
-                    setSurgeryPlanData(prev => ({
-                        ...prev,
-                        surgery: refObj.reason || prev.surgery,
-                        diagnosis: refObj.notes || prev.diagnosis
-                    }));
-                }
+                } catch(e) { console.error("Error fetching referral by ID", e); }
+            }
 
-                // 2. If no appointmentId yet, search across all appointments in the hospital
-                if (!currentApptId && id) {
-                    try {
-                        const apptsRes = await doctorAPI.getAllAppointments().catch(() => null) || await doctorAPI.getAppointments().catch(() => null);
-                        if (apptsRes && apptsRes.success) {
-                            const ptAppts = (apptsRes.appointments || []).filter(a => 
-                                a.userId?.patientId === id || 
-                                a.clinicPatientId?.patientUid === id || 
-                                a.patientId === id ||
-                                (a.userId?._id && a.userId._id.toString() === id.toString()) ||
-                                (a.userId?.name || '').replace(/\s+/g, '-') === id ||
-                                (a.clinicPatientId?.name || '').replace(/\s+/g, '-') === id ||
-                                a._id === id
-                            );
-                            if (ptAppts.length > 0) {
-                                currentApptId = ptAppts[0]._id;
-                                setAppointmentId(currentApptId);
-                            }
+            if (refObj) {
+                setActiveReferralForReview(refObj);
+                if (!currentApptId && refObj.appointmentId) {
+                    currentApptId = typeof refObj.appointmentId === 'object' ? refObj.appointmentId._id : refObj.appointmentId;
+                }
+                setSurgeryPlanData(prev => ({
+                    ...prev,
+                    surgery: refObj.reason || prev.surgery,
+                    diagnosis: refObj.notes || prev.diagnosis
+                }));
+            }
+
+            // 2. If no appointmentId yet, search across all appointments in the hospital
+            if (!currentApptId && id) {
+                try {
+                    const apptsRes = await doctorAPI.getAllAppointments().catch(() => null) || await doctorAPI.getAppointments().catch(() => null);
+                    if (apptsRes && apptsRes.success) {
+                        const ptAppts = (apptsRes.appointments || []).filter(a => 
+                            a.userId?.patientId === id || 
+                            a.clinicPatientId?.patientUid === id || 
+                            a.patientId === id ||
+                            (a.userId?._id && a.userId._id.toString() === id.toString()) ||
+                            (a.userId?.name || '').replace(/\s+/g, '-') === id ||
+                            (a.clinicPatientId?.name || '').replace(/\s+/g, '-') === id ||
+                            a._id === id
+                        );
+                        if (ptAppts.length > 0) {
+                            currentApptId = ptAppts[0]._id;
+                            setAppointmentId(currentApptId);
                         }
-                    } catch(e) { console.error("Error finding appointment", e); }
-                }
+                    }
+                } catch(e) { console.error("Error finding appointment", e); }
+            }
 
-                // 3. If we have an appointment ID, fetch full appointment details
-                if (currentApptId) {
-                    const res = await doctorAPI.getAppointmentDetails(currentApptId);
-                    if (res.success && res.appointment) {
-                        setAppointment(res.appointment);
-                        const cp = res.appointment.clinicPatientId || {};
-                        const fert = res.appointment.userId?.fertilityProfile || {};
-                        setIntakeData({
-                            ...cp,
-                            ...fert,
-                            ...(cp.vitals || {}),
-                            age: cp.age || fert.age || res.appointment.userId?.age || '',
-                            gender: cp.gender || fert.gender || res.appointment.userId?.gender || '',
-                            bloodGroup: cp.bloodGroup || fert.bloodGroup || '',
-                            address: cp.address || fert.address || '',
-                            allergies: cp.allergies || fert.allergies || '',
-                            chronicConditions: cp.chronicConditions || fert.chronicConditions || ''
+            // 3. If we have an appointment ID, fetch full appointment details
+            if (currentApptId) {
+                const res = await doctorAPI.getAppointmentDetails(currentApptId).catch(() => null);
+                if (res?.success && res.appointment) {
+                    setAppointment(res.appointment);
+                    const cp = res.appointment.clinicPatientId || {};
+                    const fert = res.appointment.userId?.fertilityProfile || {};
+                    setIntakeData({
+                        ...cp,
+                        ...fert,
+                        ...(cp.vitals || {}),
+                        age: cp.age || fert.age || res.appointment.userId?.age || '',
+                        gender: cp.gender || fert.gender || res.appointment.userId?.gender || '',
+                        bloodGroup: cp.bloodGroup || fert.bloodGroup || '',
+                        address: cp.address || fert.address || '',
+                        allergies: cp.allergies || fert.allergies || '',
+                        chronicConditions: cp.chronicConditions || fert.chronicConditions || ''
+                    });
+                    
+                    // Lock if completed
+                    if (res.appointment.status === 'completed') {
+                        setIsLocked(true);
+                        setCustomBannerToast({
+                            show: true,
+                            title: '✅ Session Completed Successfully',
+                            message: 'This consultation has already been completed. This record is now read-only.'
                         });
-                        
-                        // Lock if completed
-                        if (res.appointment.status === 'completed') {
-                            setIsLocked(true);
-                            setCustomBannerToast({
-                                show: true,
-                                title: '✅ Session Completed Successfully',
-                                message: 'This consultation has already been completed. This record is now read-only.'
-                            });
-                            setTimeout(() => {
-                                setCustomBannerToast(prev => ({ ...prev, show: false }));
-                            }, 3000);
-                        }
+                        setTimeout(() => {
+                            setCustomBannerToast(prev => ({ ...prev, show: false }));
+                        }, 3000);
+                    }
 
-                        // Load Assistant Preparation if available
-                        if (res.assistantPreparation) {
-                            setAssistantPrep(res.assistantPreparation);
-                        } else if (currentApptId) {
-                            try {
-                                const prepRes = await assistantAPI.getPreparation(currentApptId);
-                                if (prepRes?.success && prepRes.preparation) {
-                                    setAssistantPrep(prepRes.preparation);
-                                }
-                            } catch (e) { /* ignore if not present */ }
-                        }
+                    // Load Assistant Preparation if available
+                    if (res.assistantPreparation) {
+                        setAssistantPrep(res.assistantPreparation);
+                    } else if (currentApptId) {
+                        try {
+                            const prepRes = await assistantAPI.getPreparation(currentApptId);
+                            if (prepRes?.success && prepRes.preparation) {
+                                setAssistantPrep(prepRes.preparation);
+                            }
+                        } catch (e) { /* ignore if not present */ }
+                    }
 
-                        const pId = res.appointment.clinicPatientId?._id || res.appointment.clinicPatientId || res.appointment.userId?._id;
-                        const deptContext = res.appointment.department || res.appointment.serviceName || 'Unassigned';
-                        if (pId) {
+                    const pId = res.appointment.clinicPatientId?._id || res.appointment.clinicPatientId || res.appointment.userId?._id;
+                    const deptContext = res.appointment.department || res.appointment.serviceName || 'Unassigned';
+                    if (pId) {
+                        try {
                             const histRes = await doctorAPI.getPatientHistory(pId, deptContext);
                             if (histRes.success) setHistory(histRes.history || histRes.data || []);
-                            
-                            try {
-                                const fRes = await receptionAPI.getFollowupStatus(pId, 'auto');
-                                if (fRes.success) setCurrentFollowupStatus(fRes);
-                            } catch(e) { console.error("Error fetching follow-up", e); }
-                        }
-
-                        setSessionData({
-                            diagnosis: res.appointment.diagnosis || '',
-                            notes: res.appointment.doctorNotes || '',
-                            medicines: (res.appointment.pharmacy || []).map(p => ({
-                                medicineName: p.medicineName || '',
-                                saltName: p.saltName || '',
-                                dose: p.frequency || '',
-                                days: p.duration || ''
-                            })),
-                            labTests: (res.appointment.labTests || []).join(', ')
-                        });
+                        } catch(e) {}
                         
-                        if (res.departments) {
-                            setHospitalDepartments(res.departments);
-                        }
-                        setLoading(false);
-                        return;
+                        try {
+                            const fRes = await receptionAPI.getFollowupStatus(pId, 'auto');
+                            if (fRes.success) setCurrentFollowupStatus(fRes);
+                        } catch(e) { console.error("Error fetching follow-up", e); }
+                    }
+
+                    setSessionData({
+                        diagnosis: res.appointment.diagnosis || '',
+                        notes: res.appointment.doctorNotes || '',
+                        medicines: (res.appointment.pharmacy || []).map(p => ({
+                            medicineName: p.medicineName || '',
+                            saltName: p.saltName || '',
+                            dose: p.frequency || '',
+                            days: p.duration || ''
+                        })),
+                        labTests: (res.appointment.labTests || []).join(', ')
+                    });
+                    
+                    if (res.departments) {
+                        setHospitalDepartments(res.departments);
                     }
                 }
-
+            } else {
                 // 4. Fallback if no appointment is found (e.g. direct referral review or patient MRN)
                 const targetPatientId = refObj?.patientId?._id || (typeof refObj?.patientId === 'string' ? refObj.patientId : null) || id;
                 if (targetPatientId) {
@@ -307,39 +446,50 @@ const DoctorPatientDetails = () => {
                             if (profRes.appointments) {
                                 setHistory(profRes.appointments);
                             }
-                            setLoading(false);
-                            return;
                         }
                     } catch(e) { console.error("Error loading fallback profile", e); }
                 }
-            } catch (err) { console.error(err); }
-            finally {
-                setLoading(false);
             }
 
-            try {
-                const testRes = await labTestAPI.getLabTests();
-                if (testRes.success) {
-                    setCatalogTests(testRes.data || []);
-                }
-            } catch (err) { console.error("Error fetching lab test catalog", err); }
+            if (isManualRefresh) {
+                toast.success("Patient record refreshed successfully!");
+            }
+        } catch (err) {
+            console.error("Error in fetchDetails:", err);
+            if (isManualRefresh) {
+                toast.error("Failed to refresh patient details");
+            }
+        }
 
-            try {
-                const medRes = await doctorAPI.getMedicines();
-                if (medRes.success) {
-                    setCatalogMedicines(medRes.medicines || []);
-                }
-            } catch (err) { console.error("Error fetching pharmacy inventory", err); }
+        // ALWAYS fetch lab tests, medicines, and dynamic question library without skipping
+        try {
+            const [testRes, medRes, libRes] = await Promise.allSettled([
+                labTestAPI.getLabTests().catch(() => null),
+                doctorAPI.getMedicines().catch(() => null),
+                questionLibraryAPI.getLibrary().catch(() => null)
+            ]);
 
-            try {
-                const libRes = await questionLibraryAPI.getLibrary();
-                if (libRes.success && libRes.data && libRes.data.data) {
-                    setDynamicLibrary(libRes.data.data);
+            if (testRes.status === 'fulfilled' && testRes.value?.success) {
+                setCatalogTests(testRes.value.data || []);
+            }
+            if (medRes.status === 'fulfilled' && medRes.value?.success) {
+                setCatalogMedicines(medRes.value.medicines || []);
+            }
+            if (libRes.status === 'fulfilled' && libRes.value) {
+                const rawData = libRes.value.data?.data || libRes.value.data || libRes.value.library?.data || libRes.value.library;
+                if (rawData && typeof rawData === 'object' && Object.keys(rawData).length > 0) {
+                    setDynamicLibrary(rawData);
                 }
-            } catch (err) { console.error("Error fetching dynamic question library", err); }
+            }
+        } catch (err) {
+            console.error("Error fetching ancillary catalogs:", err);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
 
-            finally { setLoading(false); }
-        };
+    useEffect(() => {
         fetchDetails();
 
         // Fetch hospital context for PDF branding
@@ -383,6 +533,34 @@ const DoctorPatientDetails = () => {
         fetchSurgeons();
     }, [appointmentId, user, appointment?.hospitalId]);
 
+    const fetchPatientSurgeryPlans = useCallback(async (targetPtId) => {
+        try {
+            const pid = targetPtId || 
+                appointment?.clinicPatientId?._id || 
+                appointment?.userId?._id || 
+                (typeof appointment?.clinicPatientId === 'string' ? appointment.clinicPatientId : null) || 
+                (typeof appointment?.userId === 'string' ? appointment.userId : null) || 
+                (typeof id === 'string' && id.match(/^[0-9a-fA-F]{24}$/) ? id : null) || 
+                appointment?.patientId || 
+                intakeData?.userId || 
+                id;
+            if (!pid) return;
+            setLoadingSurgeryPlans(true);
+            const res = await otAPI.getPatientSurgeryPlans(pid);
+            if (res.success) {
+                const plans = res.plans || res.surgeries || res.data || [];
+                setPatientSurgeryPlans(plans);
+                if (plans.length > 0) {
+                    setOperationRequired(true);
+                }
+            }
+        } catch (err) {
+            console.error('fetchPatientSurgeryPlans error:', err);
+        } finally {
+            setLoadingSurgeryPlans(false);
+        }
+    }, [appointment, id, intakeData]);
+
     useEffect(() => {
         const fetchPatientReferrals = async () => {
             try {
@@ -392,8 +570,11 @@ const DoctorPatientDetails = () => {
                 if (res.success) setPatientReferrals(res.referrals || []);
             } catch (err) { /* ignore */ }
         };
-        if (appointment) fetchPatientReferrals();
-    }, [appointment]);
+        if (appointment) {
+            fetchPatientReferrals();
+            fetchPatientSurgeryPlans();
+        }
+    }, [appointment, fetchPatientSurgeryPlans]);
 
     const handleIntakeChange = (e) => {
         const { name, value } = e.target;
@@ -462,6 +643,34 @@ const DoctorPatientDetails = () => {
         }
     };
 
+    const openCreateSurgeryModal = () => {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const defaultDate = tomorrow.toISOString().split('T')[0];
+        
+        setSurgeryPlanData(prev => ({
+            ...prev,
+            diagnosis: sessionData.diagnosis || prev.diagnosis || '',
+            surgeonId: prev.surgeonId || user?._id || user?.id || '',
+            preferredDate: prev.preferredDate || defaultDate,
+            preferredTime: prev.preferredTime || '10:00'
+        }));
+        setShowSurgeryPlanModal(true);
+    };
+
+    const handleCancelSurgeryPlan = async (planId) => {
+        if (!(await confirmToast('Are you sure you want to cancel this surgery plan?', { title: 'Cancel Surgery Plan' }))) return;
+        try {
+            const res = await otAPI.cancelSurgery(planId);
+            if (res.success) {
+                toast.success('Surgery plan cancelled');
+                fetchPatientSurgeryPlans();
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Error cancelling surgery plan');
+        }
+    };
+
     const handleCreateSurgeryPlan = async (e) => {
         e.preventDefault();
         try {
@@ -488,9 +697,10 @@ const DoctorPatientDetails = () => {
             };
             const res = await otAPI.createSurgeryPlan(dataToSubmit);
             if(res.success) {
-                toast.success('Surgery Plan created successfully!');
+                toast.success('Surgery Plan created & pushed to OT Dashboard!');
                 setShowSurgeryPlanModal(false);
-                setOperationRequired(false);
+                setOperationRequired(true);
+                fetchPatientSurgeryPlans(resolvedPtId);
                 // Reset form
                 setSurgeryPlanData({
                     surgery: '', diagnosis: '', surgeonId: '', preferredDate: '', preferredTime: '', admissionRequired: false, admissionDate: '', preOpRequired: false, notes: ''
@@ -680,14 +890,9 @@ const DoctorPatientDetails = () => {
                 }
             }));
 
-            // 3. Stage Prescription PDF for manual download
-            const pdf = generatePrescriptionPDF(false);
-            setPendingDownload({
-                doc: pdf.doc,
-                filename: pdf.filename,
-                title: 'Prescription',
-                navigateOnClose: true
-            });
+            // 3. Generate & download official Prescription PDF with toast notification
+            generatePrescriptionPDF(true);
+            toast.success("Official Prescription PDF downloaded successfully!", { duration: 3000 });
         } catch (err) {
             toast.error("Error: " + (err.response?.data?.message || err.message));
         } finally { setSaving(false); }
@@ -982,7 +1187,7 @@ const DoctorPatientDetails = () => {
             doc.text(contact, 105, y, { align: 'center' }); y += 5;
         }
         doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(41, 128, 185);
-        doc.text('Consultation Receipt', 105, y, { align: 'center' }); y += 5;
+        doc.text('Consultation & Clinical Receipt', 105, y, { align: 'center' }); y += 5;
         doc.setDrawColor(41, 128, 185); doc.setLineWidth(0.5);
         doc.line(14, y, 196, y); y += 8;
         doc.setTextColor(0); doc.setFont('helvetica', 'normal');
@@ -992,27 +1197,87 @@ const DoctorPatientDetails = () => {
         autoTable(doc, {
             startY: y,
             body: [
-                ['Patient Name', pt.name || '-'],
-                ['MRN / ID', pt.patientId || 'N/A'],
-                ['Phone', pt.phone || '-'],
-                ['Doctor', `Dr. ${appointment?.doctorName || user?.name || '-'}`],
-                ['Date & Time', `${dateDisplay} @ ${appointment?.appointmentTime || '-'}`],
-                ['Service', appointment?.serviceName || 'Consultation'],
-                ['Consultation Fee', `Rs. ${Number(appointment?.amount || 0).toLocaleString('en-IN')}`],
-                ['Payment Method', appointment?.paymentMethod || 'Cash'],
-                ['Payment Status', (appointment?.paymentStatus || 'Paid').toUpperCase() + ' \u2713'],
+                ['Patient Name', pt.name || '-', 'MRN / ID', pt.patientId || 'N/A'],
+                ['Phone', pt.phone || '-', 'Date & Time', `${dateDisplay} @ ${appointment?.appointmentTime || '-'}`],
+                ['Consulting Doctor', `Dr. ${appointment?.doctorName || user?.name || '-'}`, 'Department', appointment?.department || activeDeptKey || 'General'],
+                ['Service', appointment?.serviceName || 'Consultation', 'Consultation Fee', `Rs. ${Number(appointment?.amount || 0).toLocaleString('en-IN')}`],
+                ['Payment Method', appointment?.paymentMethod || 'Cash', 'Payment Status', (appointment?.paymentStatus || 'Paid').toUpperCase() + ' \u2713'],
             ],
             theme: 'grid',
-            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 52 } },
-            bodyStyles: { fontSize: 10 },
+            columnStyles: { 
+                0: { fontStyle: 'bold', cellWidth: 42 },
+                2: { fontStyle: 'bold', cellWidth: 42 }
+            },
+            bodyStyles: { fontSize: 9.5 },
             alternateRowStyles: { fillColor: [245, 249, 255] },
         });
 
-        y = doc.lastAutoTable.finalY + 10;
+        y = doc.lastAutoTable.finalY + 8;
+
+        // Clinical Diagnosis & Notes in Receipt
+        const diagText = sessionData.diagnosis || appointment?.diagnosis || '';
+        const notesText = sessionData.notes || appointment?.doctorNotes || '';
+
+        if (diagText || notesText) {
+            if (y > 220) { doc.addPage(); y = 20; }
+            doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
+            doc.text("Clinical Assessment & Doctor Notes", 14, y); y += 6;
+
+            const clinicalRows = [];
+            if (diagText) clinicalRows.push(['Primary Diagnosis', diagText]);
+            if (notesText) clinicalRows.push(['Doctor Notes & Advice', notesText]);
+
+            autoTable(doc, {
+                startY: y,
+                body: clinicalRows,
+                theme: 'grid',
+                columnStyles: { 0: { fontStyle: 'bold', cellWidth: 48 } },
+                bodyStyles: { fontSize: 9, cellPadding: 4 },
+                alternateRowStyles: { fillColor: [250, 250, 250] }
+            });
+            y = doc.lastAutoTable.finalY + 8;
+        }
+
+        // Prescriptions Summary in Receipt (if prescribed)
+        const rxItems = sessionData.medicines?.length > 0
+            ? sessionData.medicines.filter(m => m.medicineName?.trim())
+            : (appointment?.pharmacy || []).filter(p => p.medicineName?.trim());
+
+        if (rxItems.length > 0) {
+            if (y > 230) { doc.addPage(); y = 20; }
+            doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
+            doc.text("Prescribed Medicines Summary", 14, y); y += 6;
+
+            autoTable(doc, {
+                startY: y,
+                head: [['#', 'Medicine Name', 'Dosage / Timing', 'Duration']],
+                body: rxItems.map((m, i) => [i + 1, m.medicineName || '-', `${m.dose || m.frequency || '-'} (${m.saltName || 'As directed'})`, m.days || m.duration || '-']),
+                theme: 'striped',
+                headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+                bodyStyles: { fontSize: 9 },
+                columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 70 }, 2: { cellWidth: 70 }, 3: { cellWidth: 32 } }
+            });
+            y = doc.lastAutoTable.finalY + 8;
+        }
+
+        // Lab tests Summary in Receipt (if ordered)
+        const labItems = sessionData.labTests
+            ? sessionData.labTests.split(',').map(t => t.trim()).filter(Boolean)
+            : (appointment?.labTests || []);
+
+        if (labItems.length > 0) {
+            if (y > 240) { doc.addPage(); y = 20; }
+            doc.setFontSize(10.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(33, 37, 41);
+            doc.text("Ordered Diagnostic Tests: " + labItems.join(', '), 14, y);
+            y += 8;
+        }
+
+        // Footer
+        if (y > 260) { doc.addPage(); y = 20; }
         doc.setDrawColor(200); doc.line(14, y, 196, y); y += 6;
         doc.setFontSize(8); doc.setTextColor(120);
-        doc.text(`Doctor: Dr. ${appointment?.doctorName || user?.name || 'N/A'}`, 14, y);
-        doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 196, y, { align: 'right' });
+        doc.text(`Attending Physician: Dr. ${appointment?.doctorName || user?.name || 'N/A'}`, 14, y);
+        doc.text(`Receipt Generated: ${new Date().toLocaleString('en-IN')}`, 196, y, { align: 'right' });
         y += 5;
         doc.text(`Thank you for choosing ${hName}`, 105, y, { align: 'center' });
 
@@ -1078,64 +1343,7 @@ const DoctorPatientDetails = () => {
         chronicConditions: clinicPatient.chronicConditions || rawProfile.chronicConditions || '-'
     };
 
-    const tabs = [
-        { id: 'overview', label: 'Overview', icon: '📋' },
-        { id: 'assistant_intake', label: 'Assistant Intake & Q&A', icon: '🩺' },
-        { id: 'ipd_orders', label: 'IPD / Admission Orders', icon: '🏥' },
-        { id: 'history', label: 'Past Visits', icon: '📜' },
-        { id: 'reports', label: 'Reports & Files', icon: '📁' },
-    ];
 
-    // Dynamic Form Tabs Injection
-    let dynamicTabs = [];
-    if (dynamicLibrary) {
-        const docDept = user?.department || user?._roleData?.department || '';
-        const apptDept = appointment?.department || appointment?.serviceName || '';
-        let targetDept = docDept || apptDept || '';
-        const normalizedTarget = targetDept.toLowerCase().trim();
-
-        const isGeneral = !normalizedTarget || 
-                         normalizedTarget.includes('general') || 
-                         normalizedTarget === 'unassigned';
-
-        let allowedDepts = [];
-
-        if (isGeneral) {
-            const generalMatch = Object.keys(dynamicLibrary).find(d => d.toLowerCase() === 'general' || d.toLowerCase() === 'general medicine');
-            if (generalMatch) allowedDepts.push(generalMatch);
-        } else {
-            const exactMatch = Object.keys(dynamicLibrary).find(d => d.toLowerCase() === normalizedTarget);
-            if (exactMatch) {
-                allowedDepts.push(exactMatch);
-            } else {
-                const partialMatch = Object.keys(dynamicLibrary).find(d => 
-                    d.toLowerCase().includes(normalizedTarget) || normalizedTarget.includes(d.toLowerCase())
-                );
-                if (partialMatch) allowedDepts.push(partialMatch);
-            }
-            
-            // If specialty has no specific tabs in library, fallback to General
-            if (allowedDepts.length === 0) {
-                const generalMatch = Object.keys(dynamicLibrary).find(d => d.toLowerCase() === 'general' || d.toLowerCase() === 'general medicine');
-                if (generalMatch) allowedDepts.push(generalMatch);
-            }
-        }
-        
-        allowedDepts.forEach(dept => {
-            if (dynamicLibrary[dept]) {
-                Object.keys(dynamicLibrary[dept]).forEach((catKey, i) => {
-                    dynamicTabs.push({ 
-                        id: `dyn_${dept.replace(/\s/g, '')}_${i}`, 
-                        label: `${dept} - ${catKey}`, 
-                        icon: '📋', 
-                        data: dynamicLibrary[dept][catKey] 
-                    });
-                });
-            }
-        });
-    }
-
-    const allTabs = [...tabs, ...dynamicTabs];
 
     const doctorName = user?.name || user?.fullName || 'Doctor';
     const doctorDisplayName = doctorName.toLowerCase().startsWith('dr') ? doctorName : `Dr. ${doctorName}`;
@@ -1150,379 +1358,113 @@ const DoctorPatientDetails = () => {
 
     return (
         <div className="dpd-page-wrapper">
-            {/* Top Back Action */}
-            <div className="dpd-top-actions">
-                <button className="dpd-top-back-btn" onClick={() => navigate('/doctor/patients')}>
-                    <FiArrowLeft className="dpd-top-back-icon" />
-                    <span>Back to Patients</span>
-                </button>
+
+
+            {/* ====== TOP PATIENT SUMMARY BANNER ====== */}
+            <div className="dpd-patient-banner">
+                <div className="dpd-patient-banner-left">
+                    <div className="dpd-patient-avatar-large">
+                        {(patient.name || 'P')[0].toUpperCase()}
+                    </div>
+                    <div className="dpd-patient-main-info">
+                        <div className="dpd-patient-name-row">
+                            <h2 className="dpd-patient-name-text">{patient.name || 'Unknown Patient'}</h2>
+                            <span className={`dpd-clean-status-pill status-${appointment?.status || 'confirmed'}`}>
+                                {appointment?.status || 'Confirmed'} {isLocked && '🔒'}
+                            </span>
+                            {patientReferrals?.length > 0 && (
+                                <span className="dpd-ref-pill">
+                                    🔄 Referral ({patientReferrals.length})
+                                </span>
+                            )}
+                        </div>
+                        <div className="dpd-patient-subtags">
+                            <span className="dpd-tag-chip">
+                                <strong>Age:</strong> {profile.age || intakeData.age || '-'}
+                            </span>
+                            <span className="dpd-tag-chip">
+                                <strong>Gender:</strong> <span style={{ color: (profile.gender || intakeData.gender) === 'Female' ? '#db2777' : '#2563eb' }}>{profile.gender || intakeData.gender || '-'}</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Banner Action Buttons */}
+                <div className="dpd-patient-banner-actions">
+                    <button 
+                        type="button" 
+                        className="dpd-banner-btn-secondary dpd-banner-refresh-btn" 
+                        onClick={() => fetchDetails(true)} 
+                        disabled={refreshing || loading}
+                        title="Refresh Patient Details & Vitals"
+                    >
+                        <FiRefreshCw className={refreshing ? 'dpd-spin' : ''} /> {refreshing ? 'Refreshing...' : 'Refresh'}
+                    </button>
+
+                    {!isLocked ? (
+                        <>
+                            <button 
+                                type="button" 
+                                className="dpd-banner-btn-secondary" 
+                                onClick={() => navigate('/doctor/patients')} 
+                                title="Back to Patients Queue"
+                            >
+                                <FiArrowLeft /> Back
+                            </button>
+                            <button 
+                                type="button" 
+                                className="dpd-banner-btn-secondary" 
+                                onClick={handleSaveProfile} 
+                                disabled={saving}
+                                title="Save current intake profile"
+                            >
+                                <FiSave /> {saving ? 'Saving...' : 'Save Draft'}
+                            </button>
+                            <button 
+                                type="button" 
+                                className="dpd-banner-btn-primary" 
+                                onClick={handleSaveAndMerge} 
+                                disabled={saving}
+                                title="Save consultation & finish session"
+                            >
+                                <span>✨</span> {saving ? 'Finishing...' : 'Finish Consultation'} <FiArrowRight />
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button 
+                                type="button" 
+                                className="dpd-banner-btn-secondary" 
+                                onClick={generatePrescriptionPDF}
+                                title="Download official prescription PDF"
+                            >
+                                📥 Download Prescription
+                            </button>
+                            <button 
+                                type="button" 
+                                className="dpd-banner-btn-secondary" 
+                                onClick={() => navigate('/doctor/patients')} 
+                                title="Return to doctor patient queue"
+                            >
+                                ← Back to Queue
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
 
-            {pendingDownload && (
-                <div style={{
-                    margin: '0 0 16px',
-                    padding: '12px 20px',
-                    background: '#ecfdf5',
-                    border: '1.5px solid #a7f3d0',
-                    borderRadius: '14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.05)',
-                    fontFamily: 'var(--font-primary)'
-                }}>
-                    <span style={{ color: '#065f46', fontWeight: 600, fontSize: '0.9rem' }}>
-                        ✅ {pendingDownload.title || 'Document Generated'} — {pendingDownload.filename} is ready
-                    </span>
-                    <button
-                        onClick={() => {
-                            pendingDownload.doc.save(pendingDownload.filename);
-                            setPendingDownload(null);
-                            if (pendingDownload.navigateOnClose) navigate('/doctor/patients');
-                        }}
-                        style={{
-                            padding: '8px 16px',
-                            background: '#059669',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '8px',
-                            fontWeight: 700,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                        }}
-                    >
-                        📥 Download
-                    </button>
-                </div>
-            )}
 
-            <div className="dpd-container" style={isJrDoctor ? { gridTemplateColumns: '1fr' } : {}}>
-                <div className="dpd-left">
-                    {/* Patient Card Top (Image 2 style) */}
-                    <div className="dpd-patient-card-top">
-                        <div className="dpd-patient-identity-clean">
-                            <div className="dpd-patient-avatar-clean">
-                                {(patient.name || 'P')[0].toUpperCase()}
-                            </div>
-                            <div className="dpd-patient-name-box">
-                                <h2>{patient.name || 'Unknown Patient'}</h2>
-                                <span className="dpd-active-patient-badge">
-                                    <FiRefreshCw className="dpd-badge-refresh-icon" /> Active Patient
-                                </span>
-                            </div>
-                        </div>
 
-                        {/* 3-Col Key Metrics: MRN, Age, Gender */}
-                        <div className="dpd-clean-stats-row">
-                            <div className="dpd-stat-col">
-                                <span className="dpd-stat-label">MRN</span>
-                                <div className="dpd-stat-value">
-                                    <span>{patient.patientId || 'PCF-M365-001'}</span>
-                                    <button 
-                                        type="button" 
-                                        className="dpd-copy-icon-btn"
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(patient.patientId || '');
-                                            toast.success("MRN copied to clipboard!");
-                                        }}
-                                        title="Copy MRN"
-                                    >
-                                        <FiCopy />
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="dpd-stat-col">
-                                <span className="dpd-stat-label">
-                                    <FiUser style={{ fontSize: '11px', color: '#64748b' }} /> Age
-                                </span>
-                                <div className="dpd-stat-value">
-                                    <span>{profile.age || intakeData.age || '-'}</span>
-                                </div>
-                            </div>
-                            <div className="dpd-stat-col">
-                                <span className="dpd-stat-label">
-                                    <span style={{ color: (profile.gender || intakeData.gender) === 'Female' ? '#ec4899' : '#3b82f6', fontWeight: 'bold' }}>♀</span> Gender
-                                </span>
-                                <div className="dpd-stat-value" style={{ color: (profile.gender || intakeData.gender) === 'Female' ? '#db2777' : '#2563eb' }}>
-                                    <span>{profile.gender || intakeData.gender || '-'}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Appointment Info Box */}
-                        <div className="dpd-appt-clean-box">
-                            <div className="dpd-appt-clean-item">
-                                <div className="dpd-appt-circle-icon">
-                                    <FiCalendar />
-                                </div>
-                                <div>
-                                    <div className="dpd-appt-clean-val">{new Date(appointment?.appointmentDate || Date.now()).toLocaleDateString('en-IN')}</div>
-                                    <div className="dpd-appt-clean-lbl">Last Visit</div>
-                                </div>
-                            </div>
-
-                            <div className="dpd-appt-clean-item">
-                                <div className="dpd-appt-circle-icon">
-                                    <FiClock />
-                                </div>
-                                <div>
-                                    <div className="dpd-appt-clean-val">{appointment?.appointmentTime || '13:00'}</div>
-                                    <div className="dpd-appt-clean-lbl">Appointment Time</div>
-                                </div>
-                            </div>
-
-                            <div className="dpd-appt-clean-status">
-                                <span className={`dpd-clean-status-pill status-${appointment?.status || 'confirmed'}`}>
-                                    {appointment?.status || 'Confirmed'} {isLocked && '🔒'}
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Visit Type Row */}
-                        <div className="dpd-visit-type-card" onClick={() => setActiveTab('overview')}>
-                            <div className="dpd-visit-type-left">
-                                <div className="dpd-visit-user-icon">
-                                    <FiUser />
-                                </div>
-                                <div>
-                                    <div className="dpd-visit-type-title">{appointment?.serviceName || 'Walk-in Visit'}</div>
-                                    <div className="dpd-visit-type-sub">
-                                        {patientReferrals?.length > 0 ? `Referred (${patientReferrals.length} pending)` : 'No referral source'}
-                                    </div>
-                                </div>
-                            </div>
-                            <FiChevronRight className="dpd-visit-type-chevron" />
-                        </div>
-
-                    </div>
-
-                    {/* ASSISTANT PREPARATION CARD */}
-                    {assistantPrep && (() => {
-                        const isReady = ['ready', 'ready_for_doctor'].includes(assistantPrep.status);
-                        const isInProgress = ['in_progress', 'preparation_in_progress'].includes(assistantPrep.status);
-                        const v = assistantPrep.vitals || {};
-                        const hasVitals = Object.values(v).some(val => val !== null && val !== undefined && val !== '');
-                        const noteContent = assistantPrep.draftClinicalNotes || assistantPrep.draftNotes;
-                        const suggestions = (assistantPrep.investigationSuggestions && assistantPrep.investigationSuggestions.length > 0)
-                            ? assistantPrep.investigationSuggestions
-                            : (assistantPrep.suggestedInvestigations || []);
-                        const rawAnswers = assistantPrep.questionnaireAnswers || appointment?.questionnaireAnswers || {};
-                        const answers = Array.isArray(rawAnswers)
-                            ? rawAnswers
-                            : Object.entries(rawAnswers).map(([k, val]) => ({ questionId: k, questionText: k, response: val }));
-                        const prepData = assistantPrep.preparation || {};
-                        const hasHistory = prepData.chiefComplaint || prepData.historyOfPresentIllness || prepData.allergies || prepData.currentMedicines;
-
-                        return (
-                            <div className={`dpd-assistant-prep-card status-${isReady ? 'ready' : isInProgress ? 'in_progress' : 'draft'}`}>
-                                <div className="dpd-assistant-prep-header">
-                                    <div className="dpd-assistant-prep-title-wrap">
-                                        <span className="dpd-assistant-prep-icon">🩺</span>
-                                        <div>
-                                            <div className="dpd-assistant-prep-title">
-                                                <span>Assistant Clinical Preparation</span>
-                                                <span className={`dpd-assistant-badge status-${isReady ? 'ready' : isInProgress ? 'in_progress' : 'draft'}`}>
-                                                    {isReady ? '● Ready For Doctor' : isInProgress ? '● In Progress' : '● Draft'}
-                                                </span>
-                                            </div>
-                                            <div className="dpd-assistant-prep-subtitle">
-                                                Prepared by: <strong>{assistantPrep.preparedBy?.name || 'Doctor Assistant'}</strong>
-                                                {(assistantPrep.readyAt || assistantPrep.markedReadyAt) && ` • Ready at ${new Date(assistantPrep.readyAt || assistantPrep.markedReadyAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-                                                {assistantPrep.updatedAt && !(assistantPrep.readyAt || assistantPrep.markedReadyAt) && ` • Updated at ${new Date(assistantPrep.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="dpd-assistant-prep-actions">
-                                        {hasVitals && (
-                                            <button 
-                                                type="button" 
-                                                className="dpd-asst-action-btn asst-btn-vitals" 
-                                                onClick={handleAcceptVitals}
-                                                title="Accept and apply assistant-recorded vitals into current session"
-                                            >
-                                                <FiCheck className="btn-icon" /> Accept Vitals
-                                            </button>
-                                        )}
-
-                                        {noteContent && (
-                                            <button 
-                                                type="button" 
-                                                className="dpd-asst-action-btn asst-btn-notes" 
-                                                onClick={handleImportNotes}
-                                                title="Import assistant draft notes into clinical notes"
-                                            >
-                                                <FiFileText className="btn-icon" /> Import Notes
-                                            </button>
-                                        )}
-
-                                        {suggestions.length > 0 && (
-                                            <button 
-                                                type="button" 
-                                                className="dpd-asst-action-btn asst-btn-tests" 
-                                                onClick={handleAddSuggestedInvestigations}
-                                                title="Add suggested tests to lab orders"
-                                            >
-                                                <FiActivity className="btn-icon" /> Add Tests ({suggestions.length})
-                                            </button>
-                                        )}
-
-                                        {(answers.length > 0 || hasHistory) && (
-                                            <button 
-                                                type="button" 
-                                                className="dpd-asst-action-btn asst-btn-answers" 
-                                                onClick={handleImportAllIntakeToNotes}
-                                                title="Import all intake questions and answers into clinical notes"
-                                            >
-                                                <FiClipboard className="btn-icon" /> Import All Q&A
-                                            </button>
-                                        )}
-
-                                        {answers.length > 0 && (
-                                            <button 
-                                                type="button" 
-                                                className="dpd-asst-action-btn asst-btn-answers" 
-                                                onClick={() => setShowAnswersModal(true)}
-                                                title="View department questionnaire responses"
-                                            >
-                                                <FiClipboard className="btn-icon" /> View Dept Answers ({answers.length})
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Vitals Summary Strip */}
-                                {hasVitals && (
-                                    <div className="dpd-assistant-vitals-strip">
-                                        {(v.bp || v.bloodPressure) && (
-                                            <div className="dpd-asst-vital-pill">
-                                                <span className="pill-lbl">BP:</span>
-                                                <span className="pill-val">{v.bp || v.bloodPressure}</span>
-                                            </div>
-                                        )}
-                                        {(v.pulse || v.pulseRate) && (
-                                            <div className="dpd-asst-vital-pill">
-                                                <span className="pill-lbl">Pulse:</span>
-                                                <span className="pill-val">{v.pulse || v.pulseRate} bpm</span>
-                                            </div>
-                                        )}
-                                        {(v.temperature || v.temp) && (
-                                            <div className="dpd-asst-vital-pill">
-                                                <span className="pill-lbl">Temp:</span>
-                                                <span className="pill-val">{v.temperature || v.temp} °F</span>
-                                            </div>
-                                        )}
-                                        {v.spo2 && (
-                                            <div className="dpd-asst-vital-pill">
-                                                <span className="pill-lbl">SpO2:</span>
-                                                <span className="pill-val">{v.spo2}%</span>
-                                            </div>
-                                        )}
-                                        {v.weight && (
-                                            <div className="dpd-asst-vital-pill">
-                                                <span className="pill-lbl">Weight:</span>
-                                                <span className="pill-val">{v.weight} kg</span>
-                                            </div>
-                                        )}
-                                        {v.bmi && (
-                                            <div className="dpd-asst-vital-pill">
-                                                <span className="pill-lbl">BMI:</span>
-                                                <span className="pill-val">{v.bmi}</span>
-                                            </div>
-                                        )}
-                                        {v.bloodSugar && (
-                                            <div className="dpd-asst-vital-pill">
-                                                <span className="pill-lbl">Sugar:</span>
-                                                <span className="pill-val">{v.bloodSugar} mg/dL</span>
-                                            </div>
-                                        )}
-                                        {v.painScore && (
-                                            <div className="dpd-asst-vital-pill">
-                                                <span className="pill-lbl">Pain:</span>
-                                                <span className="pill-val">{v.painScore}/10</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Chief Complaint & Key Intake Strip */}
-                                {(prepData.chiefComplaint || prepData.allergies || prepData.currentMedicines) && (
-                                    <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                        {prepData.chiefComplaint && (
-                                            <div>
-                                                <strong style={{ color: '#0f172a' }}>Chief Complaint: </strong>
-                                                <span style={{ color: '#334155' }}>{prepData.chiefComplaint}</span>
-                                            </div>
-                                        )}
-                                        {prepData.allergies && (
-                                            <div>
-                                                <strong style={{ color: '#dc2626' }}>Allergies: </strong>
-                                                <span style={{ color: '#dc2626', fontWeight: 600 }}>{prepData.allergies}</span>
-                                            </div>
-                                        )}
-                                        {prepData.currentMedicines && (
-                                            <div>
-                                                <strong style={{ color: '#0284c7' }}>Current Meds: </strong>
-                                                <span style={{ color: '#334155' }}>{prepData.currentMedicines}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Questionnaire Answers Inline Preview */}
-                                {answers.length > 0 && (
-                                    <div style={{ marginTop: '4px', borderTop: '1px dashed #e2e8f0', paddingTop: '10px' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                            <span style={{ fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                                                📋 Intake Questionnaire Responses ({answers.length})
-                                            </span>
-                                            <button
-                                                type="button"
-                                                onClick={() => setActiveTab('assistant_intake')}
-                                                style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '12px', fontWeight: 600, cursor: 'pointer', padding: 0 }}
-                                            >
-                                                Open Full Intake Tab →
-                                            </button>
-                                        </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
-                                            {answers.slice(0, 5).map((aItem, aIdx) => {
-                                                const respStr = Array.isArray(aItem.response)
-                                                    ? aItem.response.join(', ')
-                                                    : (typeof aItem.response === 'object' ? JSON.stringify(aItem.response) : String(aItem.response || '—'));
-                                                return (
-                                                    <div key={aIdx} style={{ background: '#fff', border: '1px solid #edf2f7', borderRadius: '8px', padding: '8px 12px', fontSize: '12.5px' }}>
-                                                        <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '2px' }}>
-                                                            {aItem.questionText || aItem.questionId}
-                                                        </div>
-                                                        <div style={{ color: '#0369a1', fontWeight: 600 }}>
-                                                            → {respStr}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                            {answers.length > 5 && (
-                                                <div style={{ textAlign: 'center', fontSize: '11.5px', color: '#64748b' }}>
-                                                    + {answers.length - 5} more questions answered. <button type="button" onClick={() => setActiveTab('assistant_intake')} style={{ background: 'none', border: 'none', color: '#0284c7', fontWeight: 600, cursor: 'pointer' }}>View All</button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })()}
-
-                {/* Tabs Navigation */}
+            {/* ====== FULL-WIDTH TABS WORKSPACE ====== */}
+            <div className="dpd-full-tabs-wrapper">
+                {/* Tabs Bar */}
                 <div className="dpd-tabs-container">
                     <button className="dpd-tab-scroll-btn" onClick={() => scrollTabs('left')} title="Scroll Left">‹</button>
                     <div className="dpd-tabs-nav" ref={tabsRef}>
                         {allTabs.map(tab => (
                             <button
                                 key={tab.id}
-                                className={`dpd-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+                                className={`dpd-tab-btn tab-theme-${tab.theme || 'blue'} ${activeTab === tab.id ? 'active' : ''}`}
                                 onClick={() => setActiveTab(tab.id)}
                             >
                                 <span className="dpd-tab-icon">{tab.icon}</span>
@@ -1533,187 +1475,852 @@ const DoctorPatientDetails = () => {
                     <button className="dpd-tab-scroll-btn" onClick={() => scrollTabs('right')} title="Scroll Right">›</button>
                 </div>
 
-                {/* Tab Content */}
-                <div className="dpd-tab-content">
-                    {/* OVERVIEW */}
-                    {activeTab === 'overview' && (
+                {/* Tab Content Panels */}
+                <div className="dpd-tab-content full-width">
+                    {/* ====== TAB 1: DOCTOR CONSULTATION & RX ====== */}
+                    {activeTab === 'session' && (
                         <div className="dpd-tab-panel">
-                            <h3 className="dpd-panel-title">📋 Patient Overview</h3>
-                            <div className="dpd-overview-grid">
-                                <div className="dpd-ov-card">
-                                    <span className="dpd-ov-label">Full Name</span>
-                                    <span className="dpd-ov-value">{patient.name || '-'}</span>
-                                </div>
-                                <div className="dpd-ov-card">
-                                    <span className="dpd-ov-label">Phone</span>
-                                    <span className="dpd-ov-value">{patient.phone || '-'}</span>
-                                </div>
-                                <div className="dpd-ov-card">
-                                    <span className="dpd-ov-label">Email</span>
-                                    <span className="dpd-ov-value">{patient.email || '-'}</span>
-                                </div>
-                                <div className="dpd-ov-card">
-                                    <span className="dpd-ov-label">Age</span>
-                                    <span className="dpd-ov-value">{profile.age || intakeData.age || '-'}</span>
-                                </div>
-                                <div className="dpd-ov-card">
-                                    <span className="dpd-ov-label">Gender</span>
-                                    <span className="dpd-ov-value">{profile.gender || intakeData.gender || '-'}</span>
-                                </div>
-                                <div className="dpd-ov-card">
-                                    <span className="dpd-ov-label">Blood Group</span>
-                                    <span className="dpd-ov-value">{profile.bloodGroup || intakeData.bloodGroup || '-'}</span>
-                                </div>
-                                {(() => {
-                                    const apptVitals = appointment?.vitals || {};
-                                    const vitalsInfo = {
-                                        height: apptVitals.height || profile.height || intakeData.height || intakeData.vitals?.height,
-                                        weight: apptVitals.weight || profile.weight || intakeData.weight || intakeData.vitals?.weight,
-                                        bmi: apptVitals.bmi || profile.bmi || intakeData.bmi || intakeData.vitals?.bmi,
-                                        bp: apptVitals.bp || profile.bp || profile.bloodPressure || profile.historyBp || intakeData.bp || intakeData.bloodPressure || intakeData.historyBp || intakeData.vitals?.bloodPressure || intakeData.vitals?.bp,
-                                        pulse: apptVitals.pulse || profile.pulse || profile.pulseRate || profile.historyPulse || intakeData.pulse || intakeData.pulseRate || intakeData.historyPulse || intakeData.vitals?.pulse,
-                                        rr: apptVitals.rr || apptVitals.respiratoryRate || profile.rr || profile.respiratoryRate || intakeData.rr || intakeData.respiratoryRate || intakeData.vitals?.respiratoryRate,
-                                        temp: apptVitals.temperature || apptVitals.temp || profile.temperature || profile.temp || intakeData.temperature || intakeData.temp || intakeData.vitals?.temperature,
-                                        spo2: apptVitals.spo2 || profile.spo2 || intakeData.spo2 || intakeData.vitals?.spo2,
-                                        bloodSugar: apptVitals.bloodSugar || profile.bloodSugar || profile.blood_sugar || intakeData.bloodSugar || intakeData.blood_sugar,
-                                        heartRate: apptVitals.heartRate || apptVitals.heart_rate || profile.heartRate || profile.heart_rate || intakeData.heartRate || intakeData.heart_rate,
-                                        painScale: apptVitals.painScale || apptVitals.pain_scale || profile.painScale || profile.pain_scale || intakeData.painScale || intakeData.pain_scale,
-                                        allergies: (profile.allergies && profile.allergies !== '-') ? profile.allergies : ((intakeData.allergies && intakeData.allergies !== '-') ? intakeData.allergies : ''),
-                                        medications: profile.currentMedications || profile.currentMedication || intakeData.currentMedications || intakeData.currentMedication || profile.medications || intakeData.medications,
-                                        history: (profile.chronicConditions && profile.chronicConditions !== '-') ? profile.chronicConditions : ((intakeData.chronicConditions && intakeData.chronicConditions !== '-') ? intakeData.chronicConditions : '')
-                                    };
-
-                                    const isValAvailable = (val) => {
-                                        return val && val !== '-' && val !== 'None' && val.toString().trim() !== '';
-                                    };
-
-                                    return (
-                                        <>
-                                            {isValAvailable(vitalsInfo.height) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">Height</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.height} cm</span>
-                                                </div>
-                                            )}
-                                            {isValAvailable(vitalsInfo.weight) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">Weight</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.weight} kg</span>
-                                                </div>
-                                            )}
-                                            {isValAvailable(vitalsInfo.bmi) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">BMI</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.bmi}</span>
-                                                </div>
-                                            )}
-                                            {isValAvailable(vitalsInfo.bp) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">Blood Pressure</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.bp}</span>
-                                                </div>
-                                            )}
-                                            {isValAvailable(vitalsInfo.pulse) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">Pulse Rate</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.pulse} bpm</span>
-                                                </div>
-                                            )}
-                                            {isValAvailable(vitalsInfo.rr) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">Respiratory Rate</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.rr} breaths/min</span>
-                                                </div>
-                                            )}
-                                            {isValAvailable(vitalsInfo.temp) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">Temperature</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.temp} °F</span>
-                                                </div>
-                                            )}
-                                            {isValAvailable(vitalsInfo.spo2) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">Oxygen Saturation (SpO₂)</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.spo2}%</span>
-                                                </div>
-                                            )}
-                                            {isValAvailable(vitalsInfo.bloodSugar) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">Blood Sugar</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.bloodSugar}</span>
-                                                </div>
-                                            )}
-                                            {isValAvailable(vitalsInfo.heartRate) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">Heart Rate</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.heartRate} bpm</span>
-                                                </div>
-                                            )}
-                                            {isValAvailable(vitalsInfo.painScale) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">Pain Scale</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.painScale} / 10</span>
-                                                </div>
-                                            )}
-                                            {isValAvailable(vitalsInfo.allergies) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">Allergies</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.allergies}</span>
-                                                </div>
-                                            )}
-                                            {isValAvailable(vitalsInfo.medications) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">Current Medications</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.medications}</span>
-                                                </div>
-                                            )}
-                                            {isValAvailable(vitalsInfo.history) && (
-                                                <div className="dpd-ov-card">
-                                                    <span className="dpd-ov-label">Medical History</span>
-                                                    <span className="dpd-ov-value">{vitalsInfo.history}</span>
-                                                </div>
-                                            )}
-                                        </>
-                                    );
-                                })()}
-                                <div className="dpd-ov-card">
-                                    <span className="dpd-ov-label">Address</span>
-                                    <span className="dpd-ov-value">{patient.address || profile.address || '-'}</span>
-                                </div>
-                                <div className="dpd-ov-card">
-                                    <span className="dpd-ov-label">Reason for Visit</span>
-                                    <span className="dpd-ov-value">{profile.reasonForVisit || intakeData.reasonForVisit || '-'}</span>
-                                </div>
-                            </div>
-
-                            {/* Partner Quick Info */}
-                            {(profile.partnerFirstName || intakeData.partnerFirstName) && (
-                                <div className="dpd-partner-quick">
-                                    <h4>👫 Spouse/Partner Info</h4>
-                                    <div className="dpd-overview-grid">
-                                        <div className="dpd-ov-card">
-                                            <span className="dpd-ov-label">Partner Name</span>
-                                            <span className="dpd-ov-value">{profile.partnerFirstName || intakeData.partnerFirstName || '-'} {profile.partnerLastName || intakeData.partnerLastName || ''}</span>
+                            {viewingPastSession ? (
+                                <div className="dpd-time-machine-banner">
+                                    <div className="tm-banner-header">
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <h3 style={{ margin: 0, color: '#1e3a8a', fontSize: '1.2rem', fontWeight: 800 }}>🕰️ Past Session Replay (Read-Only)</h3>
+                                                <span style={{ fontSize: '11px', background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>Historic</span>
+                                            </div>
+                                            <p style={{ margin: '4px 0 0', color: '#3b82f6', fontSize: '13px', fontWeight: 600 }}>
+                                                Viewing notes from {new Date(viewingPastSession.appointmentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            </p>
                                         </div>
-                                        <div className="dpd-ov-card">
-                                            <span className="dpd-ov-label">Partner Phone</span>
-                                            <span className="dpd-ov-value">{profile.partnerMobile || intakeData.partnerMobile || '-'}</span>
-                                        </div>
-                                        <div className="dpd-ov-card">
-                                            <span className="dpd-ov-label">Partner Age</span>
-                                            <span className="dpd-ov-value">{profile.partnerAge || intakeData.partnerAge || profile.husbandAge || intakeData.husbandAge || '-'}</span>
-                                        </div>
-                                        <div className="dpd-ov-card">
-                                            <span className="dpd-ov-label">Partner Blood Group</span>
-                                            <span className="dpd-ov-value">{profile.partnerBloodGroup || intakeData.partnerBloodGroup || '-'}</span>
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSessionData({
+                                                        diagnosis: viewingPastSession.diagnosis || '',
+                                                        notes: viewingPastSession.doctorNotes || '',
+                                                        medicines: viewingPastSession.pharmacy?.map(p => ({
+                                                            medicineName: p.medicineName || '',
+                                                            saltName: p.saltName || '',
+                                                            dose: p.frequency || '',
+                                                            days: p.duration || ''
+                                                        })) || [],
+                                                        labTests: (viewingPastSession.labTests || []).join(', ')
+                                                    });
+                                                    setViewingPastSession(null);
+                                                    toast.success("Historical data copied into current session editor!");
+                                                }}
+                                                className="dpd-banner-btn-secondary"
+                                            >
+                                                📋 Copy to Current Session
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setViewingPastSession(null)}
+                                                className="dpd-banner-btn-primary"
+                                                style={{ background: '#64748b' }}
+                                            >
+                                                ✕ Exit Time Machine
+                                            </button>
                                         </div>
                                     </div>
+
+                                    <div className="dpd-overview-grid" style={{ marginTop: '16px' }}>
+                                        <div className="dpd-ov-card" style={{ gridColumn: '1 / -1' }}>
+                                            <span className="dpd-ov-label">Past Diagnosis</span>
+                                            <span className="dpd-ov-value" style={{ fontWeight: 700 }}>{viewingPastSession.diagnosis || 'No diagnosis recorded'}</span>
+                                        </div>
+                                        <div className="dpd-ov-card" style={{ gridColumn: '1 / -1' }}>
+                                            <span className="dpd-ov-label">Past Clinical Notes</span>
+                                            <span className="dpd-ov-value" style={{ whiteSpace: 'pre-wrap' }}>{viewingPastSession.doctorNotes || 'No notes recorded'}</span>
+                                        </div>
+                                        <div className="dpd-ov-card">
+                                            <span className="dpd-ov-label">Past Medicines Prescribed</span>
+                                            <span className="dpd-ov-value">
+                                                {viewingPastSession.pharmacy?.length > 0 
+                                                    ? viewingPastSession.pharmacy.map((p, i) => `${i + 1}. ${p.medicineName} (${p.frequency || '-'}, ${p.duration || '-'} days)`).join('\n')
+                                                    : 'None'}
+                                            </span>
+                                        </div>
+                                        <div className="dpd-ov-card">
+                                            <span className="dpd-ov-label">Past Lab Tests Ordered</span>
+                                            <span className="dpd-ov-value">
+                                                {viewingPastSession.labTests?.length > 0 
+                                                    ? viewingPastSession.labTests.join(', ')
+                                                    : 'None'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="dpd-consult-card">
+                                    {/* Section 1: Prescriptions & Medication Orders */}
+                                    <div className="dpd-consult-section">
+                                        <div className="dpd-consult-sec-header">
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <span className="dpd-sec-badge violet">💊</span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <h4 className="dpd-consult-sec-title">Prescriptions & Medication Orders</h4>
+                                                    <span className="dpd-count-badge">
+                                                        {sessionData.medicines?.length || 0} Prescribed
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="dpd-consult-sec-body">
+                                            {/* Medicine Inventory Quick Search & Add Button in Single Row */}
+                                            <div className="dpd-med-toolbar-row">
+                                                {!isLocked && (
+                                                    <div className="dpd-med-search-box">
+                                                        <div className="dpd-diag-input-wrapper">
+                                                            <FiSearch className="dpd-input-icon" />
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Search pharmacy medicines or salts to prescribe (e.g. Paracetamol, Augmentin)..."
+                                                                className="dpd-med-search-input"
+                                                                value={medSearch}
+                                                                onChange={e => setMedSearch(e.target.value)}
+                                                            />
+                                                        </div>
+                                                        {medSearch && (
+                                                            <div className="dpd-med-search-dropdown">
+                                                                {catalogMedicines.filter(m => (m.name || '').toLowerCase().includes(medSearch.toLowerCase()) || (m.genericName || '').toLowerCase().includes(medSearch.toLowerCase())).length > 0 ? (
+                                                                    catalogMedicines.filter(m => (m.name || '').toLowerCase().includes(medSearch.toLowerCase()) || (m.genericName || '').toLowerCase().includes(medSearch.toLowerCase())).map(med => {
+                                                                        const isIncluded = (sessionData.medicines || []).some(m => m.medicineName === med.name);
+                                                                        return (
+                                                                            <div
+                                                                                key={med._id}
+                                                                                className="dpd-med-search-item"
+                                                                                onClick={() => {
+                                                                                    if (!isIncluded) {
+                                                                                        setSessionData(prev => ({
+                                                                                            ...prev,
+                                                                                            medicines: [...prev.medicines, {
+                                                                                                medicineName: med.name,
+                                                                                                saltName: med.genericName || '',
+                                                                                                dose: 'OD – Once Daily',
+                                                                                                days: '7'
+                                                                                            }]
+                                                                                        }));
+                                                                                    }
+                                                                                    setMedSearch('');
+                                                                                }}
+                                                                            >
+                                                                                <div>
+                                                                                    <strong style={{ color: '#0f172a' }}>{med.name}</strong>
+                                                                                    <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px' }}>({med.category || 'Drug'})</span>
+                                                                                </div>
+                                                                                <div style={{ fontSize: '11.5px', color: '#2563eb', background: '#eff6ff', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>
+                                                                                    {med.genericName || 'Inventory'}
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })
+                                                                ) : (
+                                                                    <div style={{ padding: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '12.5px' }}>
+                                                                        No catalog match for "{medSearch}". You can type directly in the table row.
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {!isLocked && (
+                                                    <button
+                                                        type="button"
+                                                        className="dpd-table-add-btn"
+                                                        onClick={() => setSessionData(prev => ({
+                                                            ...prev,
+                                                            medicines: [...prev.medicines, { medicineName: '', saltName: '', dose: 'OD – Once Daily', days: '7' }]
+                                                        }))}
+                                                    >
+                                                        <FiPlus /> Add Medicine
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* Medicines Table */}
+                                            <div className="dpd-med-table-wrapper">
+                                                <table className="dpd-med-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style={{ width: '32%' }}>Medicine & Strength</th>
+                                                            <th style={{ width: '24%' }}>Dose / Frequency</th>
+                                                            <th style={{ width: '24%' }}>Timing / Food</th>
+                                                            <th style={{ width: '12%' }}>Duration</th>
+                                                            {!isLocked && <th style={{ width: '8%', textAlign: 'center' }}>Remove</th>}
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {(sessionData.medicines || []).map((med, idx) => (
+                                                            <tr key={idx}>
+                                                                <td>
+                                                                    <input
+                                                                        value={med.medicineName}
+                                                                        onChange={e => setSessionData(prev => {
+                                                                            const m = [...prev.medicines];
+                                                                            m[idx] = { ...m[idx], medicineName: e.target.value };
+                                                                            return { ...prev, medicines: m };
+                                                                        })}
+                                                                        placeholder="e.g. Tab. Paracetamol 650mg"
+                                                                        className="dpd-cell-input"
+                                                                        disabled={isLocked}
+                                                                    />
+                                                                </td>
+                                                                <td>
+                                                                    <select
+                                                                        value={med.dose || ''}
+                                                                        onChange={e => setSessionData(prev => {
+                                                                            const m = [...prev.medicines];
+                                                                            m[idx] = { ...m[idx], dose: e.target.value };
+                                                                            return { ...prev, medicines: m };
+                                                                        })}
+                                                                        className="dpd-cell-select"
+                                                                        disabled={isLocked}
+                                                                    >
+                                                                        <option value="">-- Select Dose --</option>
+                                                                        {doseOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                                    </select>
+                                                                </td>
+                                                                <td>
+                                                                    <select
+                                                                        value={med.saltName || ''}
+                                                                        onChange={e => setSessionData(prev => {
+                                                                            const m = [...prev.medicines];
+                                                                            m[idx] = { ...m[idx], saltName: e.target.value };
+                                                                            return { ...prev, medicines: m };
+                                                                        })}
+                                                                        className="dpd-cell-select"
+                                                                        disabled={isLocked}
+                                                                    >
+                                                                        <option value="">-- Select Timing --</option>
+                                                                        {timingOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                                    </select>
+                                                                </td>
+                                                                <td>
+                                                                    <input
+                                                                        value={med.days || ''}
+                                                                        onChange={e => setSessionData(prev => {
+                                                                            const m = [...prev.medicines];
+                                                                            m[idx] = { ...m[idx], days: e.target.value };
+                                                                            return { ...prev, medicines: m };
+                                                                        })}
+                                                                        placeholder="e.g. 5 days"
+                                                                        className="dpd-cell-input"
+                                                                        disabled={isLocked}
+                                                                    />
+                                                                </td>
+                                                                {!isLocked && (
+                                                                    <td style={{ textAlign: 'center' }}>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setSessionData(prev => ({
+                                                                                ...prev,
+                                                                                medicines: prev.medicines.filter((_, i) => i !== idx)
+                                                                            }))}
+                                                                            className="dpd-remove-row-btn"
+                                                                            title="Delete medicine row"
+                                                                        >
+                                                                            <FiTrash2 />
+                                                                        </button>
+                                                                    </td>
+                                                                )}
+                                                            </tr>
+                                                        ))}
+                                                        {(!sessionData.medicines || sessionData.medicines.length === 0) && (
+                                                            <tr>
+                                                                <td colSpan={isLocked ? 4 : 5} className="dpd-empty-table-msg">
+                                                                    💊 No medicines prescribed. Search pharmacy above or click "+ Add Medicine".
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Section 2: Diagnostic Lab Orders */}
+                                    <div className="dpd-consult-section">
+                                        <div className="dpd-consult-sec-header">
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <span className="dpd-sec-badge amber">🧪</span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <h4 className="dpd-consult-sec-title">Diagnostic Lab & Radiology Orders</h4>
+                                                    <span className="dpd-count-badge">
+                                                        {(sessionData.labTests || '').split(',').map(s => s.trim()).filter(Boolean).length} Tests
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="dpd-consult-sec-body">
+                                            {/* Search & Add Test Toolbar Row */}
+                                            {!isLocked && (
+                                                <div className="dpd-med-toolbar-row">
+                                                    <div className="dpd-med-search-box">
+                                                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
+                                                            <FiSearch className="dpd-input-icon" />
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Enter test / scan name and click '+ Add Test' (or press Enter)..."
+                                                                className="dpd-med-search-input"
+                                                                value={labSearch}
+                                                                onChange={e => setLabSearch(e.target.value)}
+                                                                onKeyDown={e => {
+                                                                    if (e.key === 'Enter') {
+                                                                        e.preventDefault();
+                                                                        handleAddLabTest();
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        className="dpd-table-add-btn"
+                                                        onClick={() => handleAddLabTest()}
+                                                    >
+                                                        <FiPlus /> Add Test
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* Selected Lab Test Tags (Only rendered when tests are selected) */}
+                                            {(sessionData.labTests || '').trim() ? (
+                                                <div className="dpd-selected-tests-wrap">
+                                                    {(sessionData.labTests || '').split(',').map(s => s.trim()).filter(Boolean).map((testName, tIdx) => (
+                                                        <span key={tIdx} className="dpd-test-tag">
+                                                            <span>🔬 {testName}</span>
+                                                            {!isLocked && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRemoveLabTest(testName)}
+                                                                    className="dpd-tag-remove-btn"
+                                                                    title="Remove test"
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            )}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            ) : null}
+
+                                            {/* Common Lab Test Quick Chips */}
+                                            {!isLocked && (
+                                                <div className="dpd-quick-chips-wrap">
+                                                    <span className="dpd-quick-chips-label">⚡ Quick Select:</span>
+                                                    {QUICK_LAB_CHIPS.map(test => {
+                                                        const isSelected = (sessionData.labTests || '').split(',').map(s => s.trim().toLowerCase()).includes(test.name.toLowerCase());
+                                                        return (
+                                                            <button
+                                                                key={test.label}
+                                                                type="button"
+                                                                className={`dpd-quick-chip ${isSelected ? 'selected' : ''}`}
+                                                                onClick={() => {
+                                                                    const currentList = (sessionData.labTests || '').split(',').map(s => s.trim()).filter(Boolean);
+                                                                    let updatedList;
+                                                                    if (currentList.some(item => item.toLowerCase() === test.name.toLowerCase())) {
+                                                                        updatedList = currentList.filter(t => t.toLowerCase() !== test.name.toLowerCase());
+                                                                    } else {
+                                                                        updatedList = [...currentList, test.name];
+                                                                    }
+                                                                    setSessionData(prev => ({ ...prev, labTests: updatedList.join(', ') }));
+                                                                }}
+                                                            >
+                                                                {isSelected ? '✓ ' : '+ '} {test.label}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Section 3: Primary Diagnosis & Quick Chips */}
+                                    <div className="dpd-consult-section">
+                                        <div className="dpd-consult-sec-header">
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <span className="dpd-sec-badge blue">🩺</span>
+                                                <h4 className="dpd-consult-sec-title">Primary Diagnosis (ICD-10 / Condition)</h4>
+                                            </div>
+                                        </div>
+
+                                        <div className="dpd-consult-sec-body">
+                                            <div className="dpd-diag-input-wrapper">
+                                                <FiSearch className="dpd-input-icon" />
+                                                <input
+                                                    ref={diagnosisInputRef}
+                                                    name="diagnosis"
+                                                    value={sessionData.diagnosis}
+                                                    onChange={handleSessionChange}
+                                                    placeholder="Enter primary diagnosis e.g. Acute Viral Bronchitis, Type 2 Diabetes..."
+                                                    className="dpd-diag-input"
+                                                    disabled={isLocked}
+                                                />
+                                            </div>
+
+                                            {!isLocked && (
+                                                <div className="dpd-quick-chips-wrap">
+                                                    <span className="dpd-quick-chips-label">⚡ Suggestions:</span>
+                                                    {[
+                                                        'Essential Hypertension',
+                                                        'Type 2 Diabetes Mellitus',
+                                                        'Acute Viral Bronchitis',
+                                                        'Acid Peptic Disease / GERD',
+                                                        'Upper Respiratory Infection',
+                                                        'Migraine without aura',
+                                                        'Lumbar Spondylosis',
+                                                        'Urinary Tract Infection (UTI)',
+                                                        'Allergic Rhinitis',
+                                                        'Routine Health Checkup'
+                                                    ].map((chip) => {
+                                                        const isSelected = (sessionData.diagnosis || '').includes(chip);
+                                                        return (
+                                                            <button
+                                                                key={chip}
+                                                                type="button"
+                                                                className={`dpd-quick-chip ${isSelected ? 'selected' : ''}`}
+                                                                onClick={() => {
+                                                                    setSessionData(prev => {
+                                                                        const current = (prev.diagnosis || '').trim();
+                                                                        if (!current) return { ...prev, diagnosis: chip };
+                                                                        if (current.includes(chip)) return prev;
+                                                                        return { ...prev, diagnosis: `${current}, ${chip}` };
+                                                                    });
+                                                                }}
+                                                            >
+                                                                {isSelected ? '✓ ' : '+ '} {chip}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Section 4: Clinical Notes & Examination */}
+                                    <div className="dpd-consult-section">
+                                        <div className="dpd-consult-sec-header">
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <span className="dpd-sec-badge emerald">📋</span>
+                                                <h4 className="dpd-consult-sec-title">Clinical Notes & Examination Findings</h4>
+                                            </div>
+
+                                            {!isLocked && (
+                                                <div className="dpd-notes-templates-row">
+                                                    <span style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 700 }}>Templates:</span>
+                                                    {[
+                                                        { name: 'General Exam', text: 'General Examination:\n- Conscious, oriented, cooperative.\n- Pallor: Nil, Icterus: Nil, Cyanosis: Nil, Clubbing: Nil, Lymphadenopathy: Nil, Edema: Nil.\n- Chest: Bilateral vesicular breath sounds heard, no added sounds.\n- CVS: S1 S2 heard, no murmurs.\n- P/A: Soft, non-tender, no organomegaly.' },
+                                                        { name: 'Follow-up Note', text: 'Follow-up Assessment:\n- Patient reports symptom improvement since last visit.\n- Adherence to prescribed medications verified.\n- Current vitals within normal parameters.\n- Plan: Continue current medication regimen.' },
+                                                        { name: 'Pre-Op Clearance', text: 'Pre-Operative Assessment:\n- Medical clearance given for proposed procedure under standard anesthesia risk.\n- Fasting instructions (NPO 8 hours prior) explained.\n- Baseline investigations verified within acceptable range.' },
+                                                        { name: 'Acute Illness', text: 'Acute Presentation:\n- Chief Complaints: \n- Onset and Duration: \n- Physical Examination: \n- Provisional Diagnosis: \n- Management Plan: ' }
+                                                    ].map(tmpl => (
+                                                        <button
+                                                            key={tmpl.name}
+                                                            type="button"
+                                                            className="dpd-template-chip"
+                                                            onClick={() => {
+                                                                setSessionData(prev => {
+                                                                    const current = (prev.notes || '').trim();
+                                                                    return {
+                                                                        ...prev,
+                                                                        notes: current ? `${current}\n\n${tmpl.text}` : tmpl.text
+                                                                    };
+                                                                });
+                                                            }}
+                                                        >
+                                                            📝 {tmpl.name}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="dpd-consult-sec-body">
+                                            <textarea
+                                                ref={notesTextareaRef}
+                                                name="notes"
+                                                value={sessionData.notes}
+                                                onChange={handleSessionChange}
+                                                placeholder="Write clinical notes, observations, examination findings, and treatment plan..."
+                                                className="dpd-notes-textarea"
+                                                rows={4}
+                                                disabled={isLocked}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Action Footer Bar (Active in Edit Mode) */}
+                                    {!isLocked && (
+                                        <div className="dpd-consult-footer">
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '12px' }}>
+                                                <button
+                                                    type="button"
+                                                    className="dpd-btn-save-draft"
+                                                    onClick={handleSaveProfile}
+                                                    disabled={saving}
+                                                >
+                                                    <FiSave style={{ marginRight: '6px' }} /> Save Profile Draft
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="dpd-btn-finish"
+                                                    onClick={handleSaveAndMerge}
+                                                    disabled={saving}
+                                                >
+                                                    <span>✨</span>
+                                                    <span>{saving ? 'Completing Session...' : 'Finish Consultation'}</span>
+                                                    <FiArrowRight style={{ fontSize: '16px' }} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
                     )}
 
-                    {/* ASSISTANT INTAKE & QUESTIONNAIRE TAB */}
+                    {/* ====== TAB 2: OPERATION REQUIRED / SURGERY PLAN ====== */}
+                    {activeTab === 'surgery' && (
+                        <div className="dpd-tab-panel">
+                            {/* Sleek Minimal Header */}
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginBottom: '16px',
+                                flexWrap: 'wrap',
+                                gap: '12px',
+                                paddingBottom: '12px',
+                                borderBottom: '1.5px solid #f1f5f9'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div style={{
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '10px',
+                                        background: '#eff6ff',
+                                        color: '#2563eb',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '18px'
+                                    }}>
+                                        🏥
+                                    </div>
+                                    <div>
+                                        <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            Surgery & OT Planning
+                                            {patientSurgeryPlans.length > 0 && (
+                                                <span style={{ fontSize: '11.5px', background: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                                                    {patientSurgeryPlans.length} Active {patientSurgeryPlans.length === 1 ? 'Plan' : 'Plans'}
+                                                </span>
+                                            )}
+                                        </h3>
+                                        <div style={{ fontSize: '12px', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' }}>
+                                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+                                            Direct OT Dashboard Sync
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Direct Action Buttons */}
+                                {!isLocked && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={openCreateSurgeryModal}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                padding: '8px 16px',
+                                                background: '#2563eb',
+                                                color: '#ffffff',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                fontSize: '13px',
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                                boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)',
+                                                transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            <FiPlus /> New Surgery Plan
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setReferralData(prev => ({ ...prev, reason: sessionData.diagnosis || '' }));
+                                                setShowReferralModal(true);
+                                            }}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                padding: '8px 14px',
+                                                background: '#f8fafc',
+                                                color: '#7c3aed',
+                                                border: '1.5px solid #ddd6fe',
+                                                borderRadius: '8px',
+                                                fontSize: '13px',
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            🔄 Refer for Surgery
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Pending Referrals (Compact Strip) */}
+                            {patientReferrals.filter(r => r.status === 'REFERRED' && (r.referredToDoctorId?._id === user?._id || r.referredToDoctorId === user?._id)).map(ref => (
+                                <div key={ref._id} style={{
+                                    background: '#fffbeb',
+                                    border: '1.5px solid #fde68a',
+                                    borderRadius: '10px',
+                                    padding: '12px 16px',
+                                    marginBottom: '14px',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    gap: '10px'
+                                }}>
+                                    <div style={{ fontSize: '13px', color: '#92400e' }}>
+                                        <strong>📋 Inbound Referral:</strong> {ref.reason} (Referred by {ref.referringDoctorId?.name || 'Doctor'})
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setActiveReferralForReview(ref); setShowReferralReviewModal(true); }}
+                                        style={{
+                                            padding: '6px 14px',
+                                            background: '#d97706',
+                                            color: '#fff',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            fontWeight: 700,
+                                            fontSize: '12px'
+                                        }}
+                                    >
+                                        Review & Accept
+                                    </button>
+                                </div>
+                            ))}
+
+                            {/* Planned Surgeries List / Table */}
+                            {loadingSurgeryPlans ? (
+                                <div style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '13px' }}>
+                                    Loading surgery plans...
+                                </div>
+                            ) : patientSurgeryPlans.length > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    {patientSurgeryPlans.map((plan) => {
+                                        const surgeonName = plan.surgeonId?.name || plan.doctorId?.name || 'Assigned Surgeon';
+                                        const prefDateStr = plan.preferredDate ? new Date(plan.preferredDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBD';
+                                        const status = plan.status || 'PLANNED';
+                                        
+                                        return (
+                                            <div
+                                                key={plan._id}
+                                                style={{
+                                                    background: '#ffffff',
+                                                    border: '1.5px solid #e2e8f0',
+                                                    borderRadius: '12px',
+                                                    padding: '16px 18px',
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'center',
+                                                    flexWrap: 'wrap',
+                                                    gap: '14px',
+                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '240px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                                                            🔪 {plan.surgery}
+                                                        </span>
+                                                        {plan.planId && (
+                                                            <span style={{ fontSize: '11px', color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                                                {plan.planId}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontSize: '12.5px', color: '#475569' }}>
+                                                        <strong>Surgeon:</strong> Dr. {surgeonName.replace(/^Dr\.?\s*/i, '')} &nbsp;•&nbsp; 
+                                                        <strong>Date:</strong> {prefDateStr} {plan.preferredTime ? `at ${plan.preferredTime}` : ''}
+                                                    </div>
+                                                    {plan.diagnosis && (
+                                                        <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                                            <strong>Diagnosis:</strong> {plan.diagnosis}
+                                                        </div>
+                                                    )}
+                                                    {plan.admissionRequired && (
+                                                        <div style={{ fontSize: '11.5px', color: '#0284c7', fontWeight: 600 }}>
+                                                            🛏️ Admission Required {plan.admissionDate ? `(${new Date(plan.admissionDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })})` : ''}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Live OT Dashboard Badge & Action */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        {status === 'PLANNED' && (
+                                                            <span style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px',
+                                                                padding: '4px 10px',
+                                                                background: '#dcfce7',
+                                                                color: '#15803d',
+                                                                borderRadius: '20px',
+                                                                fontSize: '12px',
+                                                                fontWeight: 750,
+                                                                border: '1px solid #bbf7d0'
+                                                            }}>
+                                                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a' }}></span>
+                                                                🟢 Live on OT Dashboard
+                                                            </span>
+                                                        )}
+                                                        {status === 'SCHEDULED' && (
+                                                            <span style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px',
+                                                                padding: '4px 10px',
+                                                                background: '#eff6ff',
+                                                                color: '#1d4ed8',
+                                                                borderRadius: '20px',
+                                                                fontSize: '12px',
+                                                                fontWeight: 750,
+                                                                border: '1px solid #bfdbfe'
+                                                            }}>
+                                                                🏥 OT Scheduled {plan.otRoomId?.roomName ? `(${plan.otRoomId.roomName})` : ''}
+                                                            </span>
+                                                        )}
+                                                        {status === 'IN_PROGRESS' && (
+                                                            <span style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px',
+                                                                padding: '4px 10px',
+                                                                background: '#fef3c7',
+                                                                color: '#b45309',
+                                                                borderRadius: '20px',
+                                                                fontSize: '12px',
+                                                                fontWeight: 750,
+                                                                border: '1px solid #fde68a'
+                                                            }}>
+                                                                ⚡ Surgery In Progress
+                                                            </span>
+                                                        )}
+                                                        {status === 'COMPLETED' && (
+                                                            <span style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px',
+                                                                padding: '4px 10px',
+                                                                background: '#f1f5f9',
+                                                                color: '#334155',
+                                                                borderRadius: '20px',
+                                                                fontSize: '12px',
+                                                                fontWeight: 750
+                                                            }}>
+                                                                ✅ Completed
+                                                            </span>
+                                                        )}
+                                                        {status === 'CANCELLED' && (
+                                                            <span style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '5px',
+                                                                padding: '4px 10px',
+                                                                background: '#fee2e2',
+                                                                color: '#b91c1c',
+                                                                borderRadius: '20px',
+                                                                fontSize: '12px',
+                                                                fontWeight: 750
+                                                            }}>
+                                                                ✕ Cancelled
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {!isLocked && status === 'PLANNED' && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleCancelSurgeryPlan(plan._id)}
+                                                            title="Cancel Surgery Plan"
+                                                            style={{
+                                                                padding: '6px 10px',
+                                                                background: '#fee2e2',
+                                                                color: '#dc2626',
+                                                                border: 'none',
+                                                                borderRadius: '6px',
+                                                                fontSize: '12px',
+                                                                fontWeight: 750,
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            ✕ Cancel
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div style={{
+                                    padding: '32px 20px',
+                                    textAlign: 'center',
+                                    background: '#f8fafc',
+                                    borderRadius: '12px',
+                                    border: '1.5px dashed #cbd5e1'
+                                }}>
+                                    <div style={{ fontSize: '1.6rem', marginBottom: '8px' }}>🔪</div>
+                                    <div style={{ fontSize: '14.5px', fontWeight: 750, color: '#334155', marginBottom: '4px' }}>
+                                        No Surgery Plan Created Yet
+                                    </div>
+                                    <div style={{ fontSize: '12.5px', color: '#64748b', marginBottom: '16px' }}>
+                                        Create a surgery plan here to instantly send it to the Operation Theater (OT) Dashboard.
+                                    </div>
+                                    {!isLocked && (
+                                        <button
+                                            type="button"
+                                            onClick={openCreateSurgeryModal}
+                                            style={{
+                                                padding: '9px 20px',
+                                                background: '#2563eb',
+                                                color: '#ffffff',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                fontSize: '13px',
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                                boxShadow: '0 2px 6px rgba(37, 99, 235, 0.2)'
+                                            }}
+                                        >
+                                            + Create Surgery Plan & Push to OT Dashboard
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+
+
+                    {/* ====== TAB 3: ASSISTANT INTAKE & Q&A ====== */}
                     {activeTab === 'assistant_intake' && (
                         <div className="dpd-tab-panel">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
@@ -1943,7 +2550,7 @@ const DoctorPatientDetails = () => {
                         </div>
                     )}
 
-                    {/* PAST VISITS HISTORY */}
+                    {/* ====== TAB: VITALS & HISTORY ====== */}
                     {activeTab === 'history' && (() => {
                         const currentDept = (appointment?.department || appointment?.serviceName || '').toLowerCase();
                         const filteredHistory = history.filter(h => {
@@ -1952,109 +2559,264 @@ const DoctorPatientDetails = () => {
                             const hDept = (h.department || h.serviceName || h.doctorConsultation?.department || '').toLowerCase();
                             return hDept === currentDept;
                         });
+
+                        const apptVitals = appointment?.vitals || {};
+                        const vitalsInfo = {
+                            height: apptVitals.height || profile.height || intakeData.height || intakeData.vitals?.height,
+                            weight: apptVitals.weight || profile.weight || intakeData.weight || intakeData.vitals?.weight,
+                            bmi: apptVitals.bmi || profile.bmi || intakeData.bmi || intakeData.vitals?.bmi,
+                            bp: apptVitals.bp || profile.bp || profile.bloodPressure || profile.historyBp || intakeData.bp || intakeData.bloodPressure || intakeData.historyBp || intakeData.vitals?.bloodPressure || intakeData.vitals?.bp,
+                            pulse: apptVitals.pulse || profile.pulse || profile.pulseRate || profile.historyPulse || intakeData.pulse || intakeData.pulseRate || intakeData.historyPulse || intakeData.vitals?.pulse,
+                            rr: apptVitals.rr || apptVitals.respiratoryRate || profile.rr || profile.respiratoryRate || intakeData.rr || intakeData.respiratoryRate || intakeData.vitals?.respiratoryRate,
+                            temp: apptVitals.temperature || apptVitals.temp || profile.temperature || profile.temp || intakeData.temperature || intakeData.temp || intakeData.vitals?.temperature,
+                            spo2: apptVitals.spo2 || profile.spo2 || intakeData.spo2 || intakeData.vitals?.spo2,
+                            bloodSugar: apptVitals.bloodSugar || profile.bloodSugar || profile.blood_sugar || intakeData.bloodSugar || intakeData.blood_sugar,
+                            heartRate: apptVitals.heartRate || apptVitals.heart_rate || profile.heartRate || profile.heart_rate || intakeData.heartRate || intakeData.heart_rate,
+                            painScale: apptVitals.painScale || apptVitals.pain_scale || profile.painScale || profile.pain_scale || intakeData.painScale || intakeData.pain_scale,
+                            allergies: (profile.allergies && profile.allergies !== '-') ? profile.allergies : ((intakeData.allergies && intakeData.allergies !== '-') ? intakeData.allergies : ''),
+                            medications: profile.currentMedications || profile.currentMedication || intakeData.currentMedications || intakeData.currentMedication || profile.medications || intakeData.medications,
+                            history: (profile.chronicConditions && profile.chronicConditions !== '-') ? profile.chronicConditions : ((intakeData.chronicConditions && intakeData.chronicConditions !== '-') ? intakeData.chronicConditions : '')
+                        };
+
+                        const isValAvailable = (val) => val && val !== '-' && val !== 'None' && val.toString().trim() !== '';
+
                         return (
                             <div className="dpd-tab-panel">
-                                <h3 className="dpd-panel-title">📜 Previous Consultations ({filteredHistory.length})</h3>
-                                {filteredHistory.length === 0 ? (
-                                    <div className="dpd-empty-hist">
-                                        <p>No previous visits recorded in this department context.</p>
-                                    </div>
-                                ) : (
-                                    <div className="dpd-history-list">
-                                        {filteredHistory.map(h => (
-                                        <div
-                                            key={h._id}
-                                            className={`dpd-history-card ${h._id === appointmentId ? 'current' : ''} ${viewingPastSession && viewingPastSession._id === h._id ? 'viewing-active' : ''}`}
-                                            onClick={() => {
-                                                if (h._id === appointmentId) setViewingPastSession(null);
-                                                else setViewingPastSession(viewingPastSession && viewingPastSession._id === h._id ? null : h);
-                                            }}
-                                            style={{ cursor: 'pointer', transition: 'all 0.2s', border: viewingPastSession && viewingPastSession._id === h._id ? '2px solid #3b82f6' : '' }}
-                                        >
-                                            {viewingPastSession && viewingPastSession._id === h._id && (
-                                                <div style={{ background: '#3b82f6', color: '#fff', padding: '2px 8px', fontSize: '11px', borderRadius: '4px', display: 'inline-block', marginBottom: '8px', fontWeight: 'bold' }}>
-                                                    👁️ Viewing Right Now
-                                                </div>
-                                            )}
-                                            <div className="dpd-hist-top">
-                                                <span className="dpd-hist-date">
-                                                    {new Date(h.appointmentDate || h.visitDate || h.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                </span>
-                                                <span className={`dpd-hist-status status-${h.status}`}>{h.status}</span>
+                                {/* Vitals Summary Section */}
+                                <div style={{ background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '20px', marginBottom: '24px', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <span style={{ fontSize: '1.4rem', background: '#eff6ff', padding: '6px 10px', borderRadius: '10px' }}>💓</span>
+                                            <div>
+                                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>Patient Vitals & Clinical Indicators</h3>
+                                                <div style={{ fontSize: '12px', color: '#64748b' }}>Latest recordings and baseline physiological metrics</div>
                                             </div>
-                                            {/* Diagnosis */}
-                                            <div className="dpd-hist-diagnosis">
-                                                <strong>Diagnosis:</strong>{' '}
-                                                {h.doctorConsultation?.diagnosis?.length > 0
-                                                    ? h.doctorConsultation.diagnosis.join(', ')
-                                                    : (h.diagnosis || 'No diagnosis recorded')}
-                                            </div>
-                                            {/* Notes */}
-                                            {(h.doctorConsultation?.clinicalNotes || h.doctorNotes) && (
-                                                <div className="dpd-hist-notes">
-                                                    <strong>Notes:</strong> {h.doctorConsultation?.clinicalNotes || h.doctorNotes}
-                                                </div>
-                                            )}
-                                            {/* Prescription / Medicines */}
-                                            {(h.doctorConsultation?.prescription?.length > 0 || h.pharmacy?.length > 0) && (
-                                                <div className="dpd-hist-notes">
-                                                    <strong>💊 Medicines:</strong>{' '}
-                                                    {h.doctorConsultation?.prescription?.length > 0
-                                                        ? h.doctorConsultation.prescription.map(p => `${p.medicine} (${p.dosage}, ${p.duration})`).join(' · ')
-                                                        : h.pharmacy.map(p => `${p.medicineName} (${p.frequency || p.dose || '-'}, ${p.duration || p.days || '-'} days)`).join(' · ')}
-                                                </div>
-                                            )}
-                                            {/* Lab Tests */}
-                                            {(h.doctorConsultation?.labTests?.length > 0 || h.labTests?.length > 0) && (
-                                                <div className="dpd-hist-notes">
-                                                    <strong>🧪 Lab Tests:</strong>{' '}
-                                                    {h.doctorConsultation?.labTests?.length > 0
-                                                        ? h.doctorConsultation.labTests.join(', ')
-                                                        : (h.labTests || []).join(', ')}
-                                                </div>
-                                            )}
-                                            {h._id === appointmentId && <span className="dpd-current-badge">📌 Current Session</span>}
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })()}
+                                        {assistantPrep?.vitals && (
+                                            <button 
+                                                type="button" 
+                                                className="dpd-asst-action-btn asst-btn-vitals" 
+                                                onClick={handleAcceptVitals}
+                                                style={{ fontSize: '12px', padding: '6px 12px' }}
+                                            >
+                                                <FiCheck className="btn-icon" /> Sync Assistant Vitals
+                                            </button>
+                                        )}
+                                    </div>
 
-                    {/* IPD / ADMISSION ORDERS TAB */}
-                    {activeTab === 'ipd_orders' && (() => {
-                        const resolvedPt = appointment?.userId || appointment?.clinicPatientId || {};
-                        const resolvedPtId = resolvedPt?._id || appointment?.userId?._id || appointment?.clinicPatientId?._id || (typeof appointment?.clinicPatientId === 'string' ? appointment.clinicPatientId : null) || (typeof appointment?.userId === 'string' ? appointment.userId : null) || (typeof id === 'string' && id.match(/^[0-9a-fA-F]{24}$/) ? id : null) || id;
-                        return (
-                            <DoctorIPDOrdersPanel
-                                patientId={resolvedPtId}
-                                patient={resolvedPt}
-                                appointment={appointment}
-                                currentUser={user}
-                            />
+                                    <div className="dpd-overview-grid">
+                                        <div className="dpd-ov-card">
+                                            <span className="dpd-ov-label">Blood Pressure</span>
+                                            <span className="dpd-ov-value" style={{ color: '#2563eb' }}>{isValAvailable(vitalsInfo.bp) ? vitalsInfo.bp : '-'}</span>
+                                        </div>
+                                        <div className="dpd-ov-card">
+                                            <span className="dpd-ov-label">Pulse / Heart Rate</span>
+                                            <span className="dpd-ov-value">{isValAvailable(vitalsInfo.pulse) ? `${vitalsInfo.pulse} bpm` : (isValAvailable(vitalsInfo.heartRate) ? `${vitalsInfo.heartRate} bpm` : '-')}</span>
+                                        </div>
+                                        <div className="dpd-ov-card">
+                                            <span className="dpd-ov-label">Body Temperature</span>
+                                            <span className="dpd-ov-value">{isValAvailable(vitalsInfo.temp) ? `${vitalsInfo.temp} °F` : '-'}</span>
+                                        </div>
+                                        <div className="dpd-ov-card">
+                                            <span className="dpd-ov-label">SpO₂ Oxygen Saturation</span>
+                                            <span className="dpd-ov-value" style={{ color: '#059669' }}>{isValAvailable(vitalsInfo.spo2) ? `${vitalsInfo.spo2}%` : '-'}</span>
+                                        </div>
+                                        <div className="dpd-ov-card">
+                                            <span className="dpd-ov-label">Respiratory Rate</span>
+                                            <span className="dpd-ov-value">{isValAvailable(vitalsInfo.rr) ? `${vitalsInfo.rr} /min` : '-'}</span>
+                                        </div>
+                                        <div className="dpd-ov-card">
+                                            <span className="dpd-ov-label">Random Blood Sugar</span>
+                                            <span className="dpd-ov-value">{isValAvailable(vitalsInfo.bloodSugar) ? `${vitalsInfo.bloodSugar} mg/dL` : '-'}</span>
+                                        </div>
+                                        <div className="dpd-ov-card">
+                                            <span className="dpd-ov-label">Height & Weight</span>
+                                            <span className="dpd-ov-value">{isValAvailable(vitalsInfo.height) ? `${vitalsInfo.height} cm` : '-'} / {isValAvailable(vitalsInfo.weight) ? `${vitalsInfo.weight} kg` : '-'}</span>
+                                        </div>
+                                        <div className="dpd-ov-card">
+                                            <span className="dpd-ov-label">BMI</span>
+                                            <span className="dpd-ov-value">{isValAvailable(vitalsInfo.bmi) ? vitalsInfo.bmi : '-'}</span>
+                                        </div>
+                                        <div className="dpd-ov-card">
+                                            <span className="dpd-ov-label">Pain Score</span>
+                                            <span className="dpd-ov-value">{isValAvailable(vitalsInfo.painScale) ? `${vitalsInfo.painScale} / 10` : '-'}</span>
+                                        </div>
+                                        <div className="dpd-ov-card">
+                                            <span className="dpd-ov-label">Blood Group</span>
+                                            <span className="dpd-ov-value" style={{ color: '#dc2626', fontWeight: 800 }}>{profile.bloodGroup || intakeData.bloodGroup || '-'}</span>
+                                        </div>
+                                        <div className="dpd-ov-card" style={{ gridColumn: '1 / -1' }}>
+                                            <span className="dpd-ov-label">Known Allergies</span>
+                                            <span className="dpd-ov-value" style={{ color: isValAvailable(vitalsInfo.allergies) ? '#dc2626' : '#64748b', fontWeight: isValAvailable(vitalsInfo.allergies) ? 700 : 500 }}>
+                                                {isValAvailable(vitalsInfo.allergies) ? `⚠️ ${vitalsInfo.allergies}` : 'No known drug or environmental allergies reported'}
+                                            </span>
+                                        </div>
+                                        {isValAvailable(vitalsInfo.medications) && (
+                                            <div className="dpd-ov-card" style={{ gridColumn: '1 / -1' }}>
+                                                <span className="dpd-ov-label">Current Medications</span>
+                                                <span className="dpd-ov-value">{vitalsInfo.medications}</span>
+                                            </div>
+                                        )}
+                                        {isValAvailable(vitalsInfo.history) && (
+                                            <div className="dpd-ov-card" style={{ gridColumn: '1 / -1' }}>
+                                                <span className="dpd-ov-label">Medical History / Chronic Conditions</span>
+                                                <span className="dpd-ov-value">{vitalsInfo.history}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Previous Consultations Section */}
+                                <div style={{ background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                                        <span style={{ fontSize: '1.4rem', background: '#fef3c7', padding: '6px 10px', borderRadius: '10px' }}>📜</span>
+                                        <div>
+                                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>Previous Consultations ({filteredHistory.length})</h3>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>Click any visit to preview past prescriptions, clinical notes, or copy into current session</div>
+                                        </div>
+                                    </div>
+
+                                    {filteredHistory.length === 0 ? (
+                                        <div className="dpd-empty-hist">
+                                            <p>No previous visits recorded in this department context.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="dpd-history-list">
+                                            {filteredHistory.map(h => (
+                                                <div
+                                                    key={h._id}
+                                                    className={`dpd-history-card ${h._id === appointmentId ? 'current' : ''} ${viewingPastSession && viewingPastSession._id === h._id ? 'viewing-active' : ''}`}
+                                                    onClick={() => {
+                                                        if (h._id === appointmentId) {
+                                                            setActiveTab('session');
+                                                            setViewingPastSession(null);
+                                                        } else {
+                                                            setViewingPastSession(viewingPastSession && viewingPastSession._id === h._id ? null : h);
+                                                            setActiveTab('session');
+                                                        }
+                                                    }}
+                                                    style={{ cursor: 'pointer', transition: 'all 0.2s', border: viewingPastSession && viewingPastSession._id === h._id ? '2px solid #3b82f6' : '' }}
+                                                >
+                                                    {viewingPastSession && viewingPastSession._id === h._id && (
+                                                        <div style={{ background: '#3b82f6', color: '#fff', padding: '2px 8px', fontSize: '11px', borderRadius: '4px', display: 'inline-block', marginBottom: '8px', fontWeight: 'bold' }}>
+                                                            👁️ Viewing Right Now in Session Tab
+                                                        </div>
+                                                    )}
+                                                    <div className="dpd-hist-top">
+                                                        <span className="dpd-hist-date">
+                                                            {new Date(h.appointmentDate || h.visitDate || h.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                        </span>
+                                                        <span className={`dpd-hist-status status-${h.status}`}>{h.status}</span>
+                                                    </div>
+                                                    <div className="dpd-hist-diagnosis">
+                                                        <strong>Diagnosis:</strong>{' '}
+                                                        {h.doctorConsultation?.diagnosis?.length > 0
+                                                            ? h.doctorConsultation.diagnosis.join(', ')
+                                                            : (h.diagnosis || 'No diagnosis recorded')}
+                                                    </div>
+                                                    {(h.doctorConsultation?.clinicalNotes || h.doctorNotes) && (
+                                                        <div className="dpd-hist-notes">
+                                                            <strong>Notes:</strong> {h.doctorConsultation?.clinicalNotes || h.doctorNotes}
+                                                        </div>
+                                                    )}
+                                                    {(h.doctorConsultation?.prescription?.length > 0 || h.pharmacy?.length > 0) && (
+                                                        <div className="dpd-hist-notes">
+                                                            <strong>💊 Medicines:</strong>{' '}
+                                                            {h.doctorConsultation?.prescription?.length > 0
+                                                                ? h.doctorConsultation.prescription.map(p => `${p.medicine} (${p.dosage}, ${p.duration})`).join(' · ')
+                                                                : h.pharmacy.map(p => `${p.medicineName} (${p.frequency || p.dose || '-'}, ${p.duration || p.days || '-'} days)`).join(' · ')}
+                                                        </div>
+                                                    )}
+                                                    {(h.doctorConsultation?.labTests?.length > 0 || h.labTests?.length > 0) && (
+                                                        <div className="dpd-hist-notes">
+                                                            <strong>🧪 Lab Tests:</strong>{' '}
+                                                            {h.doctorConsultation?.labTests?.length > 0
+                                                                ? h.doctorConsultation.labTests.join(', ')
+                                                                : (h.labTests || []).join(', ')}
+                                                        </div>
+                                                    )}
+                                                    {h._id === appointmentId && <span className="dpd-current-badge">📌 Current Session</span>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         );
                     })()}
 
-                    {/* REPORTS & FILES TAB */}
+                    {/* ====== TAB 6: REPORTS & FILES ====== */}
                     {activeTab === 'reports' && (
                         <AppointmentReports appointmentId={appointment?._id} prescriptions={appointment?.prescriptions} />
                     )}
 
-                    {/* DYNAMIC FORMS RENDERER */}
+                    {/* ====== DYNAMIC DEPARTMENT QUESTIONNAIRE TABS ====== */}
                     {dynamicTabs.map(dTab => (
                         activeTab === dTab.id && (
                             <div key={dTab.id} style={{ display: 'block' }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    flexWrap: 'wrap',
+                                    gap: '12px',
+                                    marginBottom: '16px',
+                                    padding: '12px 18px',
+                                    background: 'linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%)',
+                                    border: '1px solid #bae6fd',
+                                    borderRadius: '12px'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{ fontSize: '1.4rem' }}>{dTab.icon || '📋'}</span>
+                                        <div>
+                                            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem' }}>
+                                                {dTab.deptName} Clinical Questionnaire
+                                            </div>
+                                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                                Section: <strong>{dTab.shortLabel || dTab.categoryName}</strong> • {dTab.data?.length || 0} questions
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569' }}>Department Questionnaire:</label>
+                                        <select
+                                            value={activeDeptKey}
+                                            onChange={(e) => setSelectedDeptOverride(e.target.value)}
+                                            style={{
+                                                padding: '6px 12px',
+                                                borderRadius: '8px',
+                                                border: '1.5px solid #0284c7',
+                                                background: '#ffffff',
+                                                color: '#0f172a',
+                                                fontSize: '0.85rem',
+                                                fontWeight: 600,
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            {availableDepts.map(dept => (
+                                                <option key={dept} value={dept}>
+                                                    {DEPARTMENT_ICONS[dept] || '📋'} {dept}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
                                 <DynamicQuestionForm
-                                    categoryName={dTab.label}
+                                    categoryName={dTab.shortLabel || dTab.categoryName || dTab.label}
                                     questions={dTab.data}
                                     intakeData={intakeData}
                                     setIntakeData={setIntakeData}
                                     readOnly={isLocked}
                                 />
                                 {!isLocked && (
-                                    <button className="dpd-save-section" onClick={handleSaveProfile} disabled={saving} style={{ marginTop: '20px' }}>
-                                        {saving ? 'Saving...' : `💾 Save ${dTab.label} Data`}
+                                    <button 
+                                        className="dpd-save-section" 
+                                        onClick={handleSaveProfile} 
+                                        disabled={saving} 
+                                        style={{ marginTop: '20px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontWeight: 600 }}
+                                    >
+                                        <FiSave /> {saving ? 'Saving...' : `Save ${dTab.shortLabel || dTab.label} Responses`}
                                     </button>
                                 )}
                             </div>
@@ -2062,292 +2824,6 @@ const DoctorPatientDetails = () => {
                     ))}
                 </div>
             </div>
-
-            {/* RIGHT PANEL - SESSION NOTEPAD */}
-            {!isJrDoctor && (
-                <div className={`dpd-right ${viewingPastSession ? 'time-machine-active' : ''}`} style={viewingPastSession ? { background: '#f8fafc', borderLeft: '4px solid #3b82f6' } : {}}>
-                    {viewingPastSession ? (
-                    <>
-                        <div className="dpd-right-header" style={{ background: '#eff6ff', borderBottom: '1px solid #bfdbfe' }}>
-                            <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <h2 style={{ color: '#1e3a8a' }}>🕰️ Past Session</h2>
-                                    <span style={{ fontSize: '12px', background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>Read-only</span>
-                                </div>
-                                <p className="dpd-right-subtitle" style={{ color: '#3b82f6', fontWeight: 600 }}>
-                                    Viewing notes from {new Date(viewingPastSession.appointmentDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setViewingPastSession(null)}
-                                style={{ padding: '6px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
-                            >
-                                ✕ Exit Time Machine
-                            </button>
-                        </div>
-
-                        <div className="dpd-right-content">
-                            <div className="dpd-session-field">
-                                <label>🔍 Diagnosis at the time</label>
-                                <div style={{ padding: '12px', background: 'rgba(255,255,255,0.7)', border: '1px dashed #cbd5e1', borderRadius: '8px', color: '#334155' }}>
-                                    {viewingPastSession.diagnosis || <em style={{ color: '#94a3b8' }}>No diagnosis recorded</em>}
-                                </div>
-                            </div>
-
-                            <div className="dpd-session-field">
-                                <label>📋 Clinical Notes</label>
-                                <div style={{ padding: '12px', background: 'rgba(255,255,255,0.7)', border: '1px dashed #cbd5e1', borderRadius: '8px', color: '#334155', minHeight: '80px', whiteSpace: 'pre-wrap' }}>
-                                    {viewingPastSession.doctorNotes || <em style={{ color: '#94a3b8' }}>No notes recorded</em>}
-                                </div>
-                            </div>
-
-                            <div className="dpd-session-field">
-                                <label>💊 Prescription Given</label>
-                                <div style={{ padding: '12px', background: 'rgba(255,255,255,0.7)', border: '1px dashed #cbd5e1', borderRadius: '8px', color: '#334155', minHeight: '60px' }}>
-                                    {viewingPastSession.pharmacy?.length > 0 ? (
-                                        <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                                            {viewingPastSession.pharmacy.map((p, i) => (
-                                                <li key={i}><strong>{p.medicineName}</strong></li>
-                                            ))}
-                                        </ul>
-                                    ) : <em style={{ color: '#94a3b8' }}>No prescription recorded</em>}
-                                </div>
-                            </div>
-
-                            <div className="dpd-session-field">
-                                <label>🧪 Lab Tests Ordered</label>
-                                <div style={{ padding: '12px', background: 'rgba(255,255,255,0.7)', border: '1px dashed #cbd5e1', borderRadius: '8px', color: '#334155' }}>
-                                    {(viewingPastSession.labTests || []).length > 0
-                                        ? (viewingPastSession.labTests || []).join(', ')
-                                        : <em style={{ color: '#94a3b8' }}>No lab tests ordered</em>}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="dpd-right-footer" style={{ background: '#f1f5f9' }}>
-                            <button
-                                onClick={() => {
-                                    setSessionData({
-                                        diagnosis: viewingPastSession.diagnosis || '',
-                                        notes: viewingPastSession.doctorNotes || '',
-                                        prescription: viewingPastSession.pharmacy?.map(p => p.medicineName).join('\n') || '',
-                                        labTests: (viewingPastSession.labTests || []).join(', ')
-                                    });
-                                    setViewingPastSession(null);
-                                    toast.success("Historical data copied into your Current Session editor!");
-                                }}
-                                style={{ padding: '10px 18px', background: 'transparent', color: '#3b82f6', border: '1px solid #3b82f6', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
-                            >
-                                📋 Copy to Current Session
-                            </button>
-                            <button className="dpd-btn-finish" onClick={() => setViewingPastSession(null)} style={{ background: '#64748b' }}>
-                                Return to Current Editing
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    <>
-                        <div className="dpd-right-header">
-                            <div className="dpd-session-title-wrap">
-                                <div className="dpd-session-head-icon">
-                                    <FiFileText />
-                                </div>
-                                <div>
-                                    <h2>Current Session</h2>
-                                    <p className="dpd-right-subtitle">Record diagnosis, notes & prescription</p>
-                                </div>
-                            </div>
-                            <span className={`dpd-clean-session-status status-${appointment.status}`}>
-                                <FiCheck className="dpd-status-check-icon" /> {appointment.status}
-                            </span>
-                        </div>
-
-                        <div className="dpd-right-content">
-                            <div className="dpd-session-field">
-                                <label>🩺 Diagnosis</label>
-                                <input
-                                    ref={diagnosisInputRef}
-                                    name="diagnosis"
-                                    value={sessionData.diagnosis}
-                                    onChange={handleSessionChange}
-                                    placeholder="Enter diagnosis..."
-                                    className="dpd-diag-input"
-                                    disabled={isLocked}
-                                />
-                            </div>
-
-                            <div className="dpd-session-field dpd-notes-field">
-                                <label>📋 Clinical Notes</label>
-                                <textarea
-                                    ref={notesTextareaRef}
-                                    name="notes"
-                                    value={sessionData.notes}
-                                    onChange={handleSessionChange}
-                                    placeholder="Write detailed clinical notes, observations, examination findings..."
-                                    className="dpd-notes-textarea"
-                                    disabled={isLocked}
-                                />
-                            </div>
-
-                            {!isLocked && (
-                                <div className="dpd-operation-card-clean">
-                                    <div className="dpd-op-header-row">
-                                        <div className="dpd-op-header-left">
-                                            <FiChevronRight className="dpd-op-arrow" />
-                                            <FiUser className="dpd-op-icon" />
-                                            <span>Operation Required?</span>
-                                        </div>
-                                        <label className="dpd-switch" title="Toggle Operation Requirement">
-                                            <input
-                                                type="checkbox"
-                                                name="operationRequired"
-                                                checked={operationRequired}
-                                                onChange={e => setOperationRequired(e.target.checked)}
-                                            />
-                                            <span className="dpd-slider"></span>
-                                        </label>
-                                    </div>
-
-                                    {/* Referral Banner for referred doctor */}
-                                    {patientReferrals.filter(r => r.status === 'REFERRED' && (r.referredToDoctorId?._id === user?._id || r.referredToDoctorId === user?._id)).length > 0 && (
-                                        <div className="referral-banner" style={{ background: 'linear-gradient(135deg, #fef3c7, #fde68a)', padding: '14px', borderRadius: '12px', border: '2px solid #f59e0b', margin: '12px 0' }}>
-                                            <div style={{ fontWeight: '700', color: '#92400e', fontSize: '14px', marginBottom: '8px' }}>📋 Surgery Referral Pending</div>
-                                            {patientReferrals.filter(r => r.status === 'REFERRED' && (r.referredToDoctorId?._id === user?._id || r.referredToDoctorId === user?._id)).map(ref => (
-                                                <div key={ref._id} style={{ marginBottom: '8px' }}>
-                                                    <div style={{ fontSize: '13px', color: '#78350f' }}>
-                                                        <strong>From:</strong> {ref.referringDoctorId?.name || 'Unknown'} &nbsp;|&nbsp;
-                                                        <strong>Reason:</strong> {ref.reason}
-                                                    </div>
-                                                    <button 
-                                                        onClick={() => { setActiveReferralForReview(ref); setShowReferralReviewModal(true); }}
-                                                        style={{ marginTop: '6px', padding: '6px 16px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
-                                                    >
-                                                        Review Referral
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {operationRequired && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
-                                            <button 
-                                                type="button" 
-                                                onClick={() => {
-                                                    setSurgeryPlanData(prev => ({ 
-                                                        ...prev, 
-                                                        diagnosis: sessionData.diagnosis || prev.diagnosis || '',
-                                                        surgeonId: prev.surgeonId || user?._id || user?.id || ''
-                                                    }));
-                                                    setShowSurgeryPlanModal(true);
-                                                }}
-                                                style={{ padding: '12px 20px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', width: '100%', fontSize: '14px', boxShadow: '0 2px 8px rgba(37,99,235,0.25)' }}
-                                            >
-                                                + Create Surgery Plan (Self / Direct)
-                                            </button>
-                                            <button 
-                                                type="button" 
-                                                onClick={() => {
-                                                    setReferralData(prev => ({ 
-                                                        ...prev, 
-                                                        reason: sessionData.diagnosis || ''
-                                                    }));
-                                                    setShowReferralModal(true);
-                                                }}
-                                                style={{ padding: '12px 20px', background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', width: '100%', fontSize: '14px', boxShadow: '0 2px 8px rgba(124,58,237,0.25)' }}
-                                            >
-                                                🔄 Refer for Surgery (To Another Doctor)
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            <div className="dpd-session-field">
-                                {!isLocked && (
-                                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '4px' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPrescribeModal(true)}
-                                            style={{ flex: 1, minWidth: '200px', padding: '13px 16px', fontSize: '14px', background: 'linear-gradient(135deg, #4f46e5, #6366f1)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 3px 10px rgba(79, 70, 229, 0.22)' }}
-                                        >
-                                            💊 Prescribe Medicines & Lab Tests
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setActiveTab('ipd_orders')}
-                                            style={{
-                                                padding: '13px 18px',
-                                                fontSize: '14px',
-                                                background: 'linear-gradient(135deg, #0284c7, #0369a1)',
-                                                color: 'white',
-                                                border: 'none',
-                                                borderRadius: '10px',
-                                                cursor: 'pointer',
-                                                fontWeight: 'bold',
-                                                boxShadow: '0 3px 10px rgba(2, 132, 199, 0.22)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '6px'
-                                            }}
-                                        >
-                                            🏥 IPD Orders
-                                        </button>
-                                    </div>
-                                )}
-
-                                {(sessionData.medicines?.length > 0 || sessionData.labTests || (isLocked && appointment.pharmacy?.length > 0)) && (
-                                    <div style={{ padding: '12px 14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', marginTop: '10px', fontSize: '13px', color: '#475569' }}>
-                                        {(sessionData.medicines?.length > 0 || (isLocked && appointment.pharmacy?.length > 0)) && <div style={{ marginBottom: '4px' }}><b>✅ Medicines included ({sessionData.medicines?.length || appointment.pharmacy?.length || 0})</b></div>}
-                                        {(sessionData.labTests || (isLocked && appointment.labTests?.length > 0)) && <div><b>✅ Lab Tests included</b></div>}
-                                        {!isLocked && (
-                                            <div style={{ marginTop: '6px', fontSize: '12px', color: '#3b82f6', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setShowPrescribeModal(true)}>
-                                                Click to view / edit prescription details →
-                                            </div>
-                                        )}
-                                        {isLocked && (
-                                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0', fontSize: '12px' }}>
-                                                Check the Consultation Report (PDF) for full history.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="dpd-right-footer">
-                            {!isLocked ? (
-                                <>
-                                    <button className="dpd-btn-save-draft" onClick={handleSaveProfile} disabled={saving}>
-                                        <FiSave style={{ marginRight: '6px', fontSize: '16px' }} /> Save Profile
-                                    </button>
-                                    <button className="dpd-btn-finish" onClick={handleSaveAndMerge} disabled={saving}>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                                            <span>✨</span>
-                                            <span>{saving ? 'Saving...' : 'Save & Generate Prescription'}</span>
-                                            <FiArrowRight style={{ fontSize: '16px' }} />
-                                        </span>
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    <button
-                                        className="dpd-btn-save-draft"
-                                        onClick={generatePrescriptionPDF}
-                                    >
-                                        📄 Reprint Prescription
-                                    </button>
-                                    <button className="dpd-btn-finish" onClick={() => navigate('/doctor/patients')} style={{ background: '#64748b' }}>
-                                        ← Back to Queue
-                                    </button>
-                                </>
-                            )}
-                        </div>
-                    </>
-                )}
-            </div>
-            )}
-        </div>
 
             {/* ====== MODALS ====== */}
             {!isJrDoctor && showPrescribeModal && (
@@ -2541,36 +3017,43 @@ const DoctorPatientDetails = () => {
             {!isJrDoctor && showSurgeryPlanModal && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', width: '600px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                            <h3 style={{ margin: 0, color: '#0f172a', fontSize: '1.4rem', fontWeight: '800' }}>🔪 Create Surgery Plan</h3>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '14px', borderBottom: '1px solid #e2e8f0' }}>
+                            <div>
+                                <h3 style={{ margin: 0, color: '#0f172a', fontSize: '1.25rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    🔪 Create Surgery Plan
+                                </h3>
+                                <div style={{ fontSize: '12px', color: '#10b981', fontWeight: 600, marginTop: '2px' }}>
+                                    ● Direct Real-Time Push to OT Dashboard
+                                </div>
+                            </div>
                             <button onClick={() => setShowSurgeryPlanModal(false)} style={{ background: '#f1f5f9', border: 'none', width: '32px', height: '32px', borderRadius: '50%', fontSize: '16px', cursor: 'pointer', color: '#475569' }}>✕</button>
                         </div>
                         
-                        <form onSubmit={handleCreateSurgeryPlan} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', color: '#334155' }}>
-                                <strong>Patient:</strong> {intakeData?.name || appointment?.userId?.name || appointment?.patientId || 'N/A'} <br/>
-                                <strong>MRN / Age / Gender:</strong> {intakeData?.patientUid || appointment?.userId?.patientId || '-'} / {intakeData?.age || '-'} / {intakeData?.gender || '-'}
+                        <form onSubmit={handleCreateSurgeryPlan} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#334155' }}>
+                                <strong>Patient:</strong> {intakeData?.name || appointment?.userId?.name || appointment?.patientId || 'N/A'} &nbsp;|&nbsp;
+                                <strong>MRN:</strong> {intakeData?.patientUid || appointment?.userId?.patientId || '-'}
                             </div>
 
                             {surgeryPlanData.referralId && (
-                                <div style={{ background: '#f5f3ff', padding: '10px 12px', borderRadius: '8px', border: '1px solid #ddd6fe', fontSize: '13px', color: '#5b21b6', fontWeight: 600 }}>
-                                    🔄 <strong>Referred Surgery Case</strong> (Referral linked to this Surgery Plan)
+                                <div style={{ background: '#f5f3ff', padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd6fe', fontSize: '12.5px', color: '#5b21b6', fontWeight: 600 }}>
+                                    🔄 Referred Surgery Case (Referral linked)
                                 </div>
                             )}
 
                             <div>
-                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Surgery / Procedure *</label>
-                                <input required value={surgeryPlanData.surgery} onChange={e => setSurgeryPlanData(prev => ({...prev, surgery: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '5px', fontSize: '12.5px', color: '#475569' }}>Surgery / Procedure *</label>
+                                <input required placeholder="e.g. Laparoscopic Appendectomy" value={surgeryPlanData.surgery} onChange={e => setSurgeryPlanData(prev => ({...prev, surgery: e.target.value}))} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13.5px' }} />
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Diagnosis / Reason</label>
-                                <input value={surgeryPlanData.diagnosis} onChange={e => setSurgeryPlanData(prev => ({...prev, diagnosis: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '5px', fontSize: '12.5px', color: '#475569' }}>Diagnosis / Reason</label>
+                                <input placeholder="e.g. Acute Appendicitis" value={surgeryPlanData.diagnosis} onChange={e => setSurgeryPlanData(prev => ({...prev, diagnosis: e.target.value}))} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13.5px' }} />
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Surgeon *</label>
-                                <select required value={surgeryPlanData.surgeonId} onChange={e => setSurgeryPlanData(prev => ({...prev, surgeonId: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', background: '#fff' }}>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '5px', fontSize: '12.5px', color: '#475569' }}>Operating Surgeon *</label>
+                                <select required value={surgeryPlanData.surgeonId} onChange={e => setSurgeryPlanData(prev => ({...prev, surgeonId: e.target.value}))} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', background: '#fff', fontSize: '13.5px' }}>
                                     <option value="">-- Select Surgeon --</option>
                                     {surgeonsList.map(s => {
                                         const id = s.userId?._id || s.userId || s._id;
@@ -2582,46 +3065,45 @@ const DoctorPatientDetails = () => {
                                 </select>
                             </div>
 
-                            <div style={{ display: 'flex', gap: '16px' }}>
+                            <div style={{ display: 'flex', gap: '12px' }}>
                                 <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Preferred Date *</label>
-                                    <input type="date" required min={new Date().toISOString().split('T')[0]} value={surgeryPlanData.preferredDate} onChange={e => setSurgeryPlanData(prev => ({...prev, preferredDate: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '5px', fontSize: '12.5px', color: '#475569' }}>Preferred Date *</label>
+                                    <input type="date" required min={new Date().toISOString().split('T')[0]} value={surgeryPlanData.preferredDate} onChange={e => setSurgeryPlanData(prev => ({...prev, preferredDate: e.target.value}))} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13.5px' }} />
                                 </div>
                                 <div style={{ flex: 1 }}>
-                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Preferred Time *</label>
-                                    <input type="time" required value={surgeryPlanData.preferredTime} onChange={e => setSurgeryPlanData(prev => ({...prev, preferredTime: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '5px', fontSize: '12.5px', color: '#475569' }}>Preferred Time *</label>
+                                    <input type="time" required value={surgeryPlanData.preferredTime} onChange={e => setSurgeryPlanData(prev => ({...prev, preferredTime: e.target.value}))} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13.5px' }} />
                                 </div>
                             </div>
 
-                            <div>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600', fontSize: '13px', color: '#475569', cursor: 'pointer' }}>
+                            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontWeight: '600', fontSize: '12.5px', color: '#475569', cursor: 'pointer' }}>
                                     <input type="checkbox" checked={surgeryPlanData.admissionRequired} onChange={e => setSurgeryPlanData(prev => ({...prev, admissionRequired: e.target.checked}))} />
                                     Admission Required
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '7px', fontWeight: '600', fontSize: '12.5px', color: '#475569', cursor: 'pointer' }}>
+                                    <input type="checkbox" checked={surgeryPlanData.preOpRequired} onChange={e => setSurgeryPlanData(prev => ({...prev, preOpRequired: e.target.checked}))} />
+                                    Pre-Op Preparation Required
                                 </label>
                             </div>
 
                             {surgeryPlanData.admissionRequired && (
                                 <div>
-                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Admission Date *</label>
-                                    <input type="date" required={surgeryPlanData.admissionRequired} value={surgeryPlanData.admissionDate} onChange={e => setSurgeryPlanData(prev => ({...prev, admissionDate: e.target.value}))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} />
+                                    <label style={{ display: 'block', fontWeight: '600', marginBottom: '5px', fontSize: '12.5px', color: '#475569' }}>Admission Date *</label>
+                                    <input type="date" required={surgeryPlanData.admissionRequired} value={surgeryPlanData.admissionDate} onChange={e => setSurgeryPlanData(prev => ({...prev, admissionDate: e.target.value}))} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13.5px' }} />
                                 </div>
                             )}
 
                             <div>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '600', fontSize: '13px', color: '#475569', cursor: 'pointer' }}>
-                                    <input type="checkbox" checked={surgeryPlanData.preOpRequired} onChange={e => setSurgeryPlanData(prev => ({...prev, preOpRequired: e.target.checked}))} />
-                                    Pre-Operative Preparation Required
-                                </label>
+                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '5px', fontSize: '12.5px', color: '#475569' }}>Notes / Instructions</label>
+                                <textarea value={surgeryPlanData.notes} onChange={e => setSurgeryPlanData(prev => ({...prev, notes: e.target.value}))} placeholder="Specific requirements, anesthesia preferences, etc..." style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', minHeight: '70px', fontSize: '13px' }} />
                             </div>
 
-                            <div>
-                                <label style={{ display: 'block', fontWeight: '600', marginBottom: '6px', fontSize: '13px', color: '#475569' }}>Notes</label>
-                                <textarea value={surgeryPlanData.notes} onChange={e => setSurgeryPlanData(prev => ({...prev, notes: e.target.value}))} placeholder="Any specific requirements..." style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', minHeight: '80px' }} />
-                            </div>
-
-                            <div style={{ marginTop: '10px', paddingTop: '16px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                                <button type="button" onClick={() => setShowSurgeryPlanModal(false)} style={{ padding: '10px 20px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Cancel</button>
-                                <button type="submit" style={{ padding: '10px 24px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>Save Surgery Plan</button>
+                            <div style={{ marginTop: '6px', paddingTop: '14px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                <button type="button" onClick={() => setShowSurgeryPlanModal(false)} style={{ padding: '9px 18px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>Cancel</button>
+                                <button type="submit" style={{ padding: '9px 22px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)' }}>
+                                    ✨ Push to OT Dashboard
+                                </button>
                             </div>
                         </form>
                     </div>

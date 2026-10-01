@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import './DoctorAssistantPreparation.css';
 import './DoctorAssistantDashboard.css';
 import DynamicQuestionForm from '../../components/DynamicQuestionForm';
+import { MASTER_DEFAULT_QUESTION_LIBRARY, resolveDepartmentKey } from '../../config/masterQuestionLibrary';
 import {
     FiUserCheck, FiHeart, FiActivity, FiFileText, FiBookOpen,
     FiPaperclip, FiCheckSquare, FiSave, FiArrowLeft, FiClock,
@@ -305,7 +306,20 @@ const DoctorAssistantPreparation = () => {
     const isReady = preparation?.status === 'ready_for_doctor';
     const isCompleted = preparation?.status === 'completed' || appointment?.status === 'completed';
 
-    const questionCategories = Object.keys(departmentQuestions || {});
+    const effectiveDepartmentQuestions = useMemo(() => {
+        const availableMaster = Object.keys(MASTER_DEFAULT_QUESTION_LIBRARY);
+        const matchedKey = resolveDepartmentKey([department], availableMaster);
+        const fallbackQs = (matchedKey && MASTER_DEFAULT_QUESTION_LIBRARY[matchedKey]) ? MASTER_DEFAULT_QUESTION_LIBRARY[matchedKey] : {};
+        if (departmentQuestions && Object.keys(departmentQuestions).length > 0) {
+            return {
+                ...fallbackQs,
+                ...departmentQuestions
+            };
+        }
+        return fallbackQs;
+    }, [department, departmentQuestions]);
+
+    const questionCategories = Object.keys(effectiveDepartmentQuestions || {});
 
     return (
         <div className="dap-container">
@@ -722,7 +736,7 @@ const DoctorAssistantPreparation = () => {
                             <div key={catName} style={{ marginBottom: '24px' }}>
                                 <DynamicQuestionForm
                                     categoryName={catName}
-                                    questions={departmentQuestions[catName] || []}
+                                    questions={effectiveDepartmentQuestions[catName] || []}
                                     intakeData={questionnaireAnswers}
                                     setIntakeData={setQuestionnaireAnswers}
                                     readOnly={isCompleted}

@@ -32,21 +32,22 @@ const server = http.createServer(app);
 // Socket.io CORS logic
 const isAllowedOriginSocket = (origin) => {
     if (!origin) return true; 
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) return true; 
-    if (origin === 'https://medical365.in' || origin.endsWith('.medical365.in')) return true;
-    if (origin.endsWith('.vercel.app') || origin.endsWith('.onrender.com')) return true;
-    if (origin.match(/^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/)) return true;
-    if (origin.startsWith('capacitor://') || origin.startsWith('http://capacitor')) return true;
-    return true; // Allow client requests
+    const clean = String(origin).trim().toLowerCase().replace(/\/+$/, '');
+    if (clean.includes('localhost') || clean.includes('127.0.0.1')) return true; 
+    if (clean === 'https://medical365.in' || clean.endsWith('.medical365.in') || clean.includes('medical365.in')) return true;
+    if (clean.endsWith('.vercel.app') || clean.endsWith('.onrender.com') || clean.endsWith('.netlify.app')) return true;
+    if (clean.match(/^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/)) return true;
+    if (clean.startsWith('capacitor://') || clean.startsWith('http://capacitor') || clean.startsWith('ionic://')) return true;
+    return true; // Safe fallback for socket connection
 };
 
 const io = new Server(server, {
     cors: {
         origin: (origin, callback) => {
             if (isAllowedOriginSocket(origin)) return callback(null, true);
-            callback(new Error('CORS blocked: ' + origin), false);
+            callback(null, true);
         },
-        methods: ["GET", "POST"],
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         credentials: true
     },
     transports: ['websocket', 'polling'],

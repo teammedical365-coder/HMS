@@ -37,9 +37,14 @@ const tenantResolver = async (req, res, next) => {
         // ── Central Admin Domain Interception ──────────────────────────────────
         // Requests from admin.medical365.in must NEVER be routed through tenant DB.
         const forwardedHost = req.headers['x-forwarded-host'] || '';
+        const originHeader = req.headers['origin'] || '';
+        const refererHeader = req.headers['referer'] || '';
         const isCentralAdminDomain = hostname === ADMIN_HOST 
             || forwardedHost.includes(ADMIN_HOST)
-            || req.headers['x-app-type'] === 'central-admin';
+            || originHeader.includes(ADMIN_HOST)
+            || refererHeader.includes(ADMIN_HOST)
+            || req.headers['x-app-type'] === 'central-admin'
+            || req.headers['x-portal-type'] === 'central-admin';
         
         if (isCentralAdminDomain) {
             req.tenant = null;

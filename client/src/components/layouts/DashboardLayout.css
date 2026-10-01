@@ -699,6 +699,7 @@
 }
 
 .erp-page-content.erp-fullbleed-content,
+.erp-page-content:has(.dpd-page-wrapper),
 .erp-page-content:has(.rtm-page),
 .erp-page-content:has(.centraladmin-page),
 .erp-page-content:has(.ha-billing-page),

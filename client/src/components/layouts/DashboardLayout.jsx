@@ -33,11 +33,6 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Planned Surgeries', path: '/ot/planned', icon: <FiClock />, prefetchKey: 'ot_planned', prefetchFn: () => import('../../pages/ot/OTPlannedSurgeries') },
                 { label: 'OT Schedule', path: '/ot/schedule', icon: <FiCalendar />, prefetchKey: 'ot_sched', prefetchFn: () => import('../../pages/ot/OTSchedulePage') },
                 { label: 'OT Rooms', path: '/ot/rooms', icon: <FiBox />, prefetchKey: 'ot_rooms', prefetchFn: () => import('../../pages/ot/OTRoomsPage') },
-                { label: 'Pre-Op Patients', path: '/ot/pre-op', icon: <FiUserCheck />, prefetchKey: 'ot_preop', prefetchFn: () => import('../../pages/ot/OTPreOpPage') },
-                { label: 'In OT', path: '/ot/in-progress', icon: <FiActivity />, prefetchKey: 'ot_inot', prefetchFn: () => import('../../pages/ot/OTInProgressPage') },
-                { label: 'Post-Op', path: '/ot/post-op', icon: <FiHeart />, prefetchKey: 'ot_postop', prefetchFn: () => import('../../pages/ot/OTPostOpPage') },
-                { label: 'Completed Surgeries', path: '/ot/completed', icon: <FiCheckCircle />, prefetchKey: 'ot_comp', prefetchFn: () => import('../../pages/ot/OTCompletedPage') },
-                { label: 'Surgeons', path: '/ot/surgeons', icon: <FiUser />, prefetchKey: 'ot_surgeons', prefetchFn: () => import('../../pages/ot/OTSurgeonsPage') },
                 { label: 'OT Reports', path: '/ot/reports', icon: <FiFileText />, prefetchKey: 'ot_reports', prefetchFn: () => import('../../pages/ot/OTReportsPage') }
             ];
         }
@@ -161,7 +156,7 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             return currentPath === '/reception/dashboard' && (!view || view === 'welcome');
         }
 
-        if (itemPath === '/ot/dashboard' && currentPath === '/ot-dashboard') {
+        if (itemPath === '/ot/dashboard' && (currentPath === '/ot/dashboard' || currentPath === '/ot-dashboard' || currentPath === '/ot')) {
             return true;
         }
 

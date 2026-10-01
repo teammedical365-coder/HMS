@@ -67,15 +67,35 @@ app.use(compression({
 // ── 1. CORS Configuration (With in-memory Domain Cache) ───────────────────────
 const isAllowedOrigin = (origin) => {
     if (!origin) return true; // Direct REST calls / Android Native requests
-    if (origin.includes('localhost')) return true; // Handles capacitor://localhost & http://localhost
-    if (origin === 'https://medical365.in') return true;
-    if (origin === 'https://www.medical365.in') return true;
-    if (origin.endsWith('.medical365.in')) return true;
-    
-    // Allow any local network IPs (e.g., 192.168.x.x, 10.0.2.2) for dev
-    if (origin.match(/^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/)) return true;
-    if (origin.startsWith('capacitor://') || origin.startsWith('http://capacitor')) return true;
-    if (origin.endsWith('.vercel.app')) return true;
+    const clean = String(origin).trim().toLowerCase().replace(/\/+$/, '');
+
+    // Localhost and dev networks
+    if (clean.includes('localhost') || clean.includes('127.0.0.1')) return true;
+    if (clean.startsWith('capacitor://') || clean.startsWith('http://capacitor') || clean.startsWith('ionic://')) return true;
+    if (clean.match(/^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/)) return true;
+
+    // Official Medical365 domains and ALL subdomains (admin.medical365.in, etc.)
+    if (
+        clean === 'https://medical365.in' ||
+        clean === 'http://medical365.in' ||
+        clean === 'https://www.medical365.in' ||
+        clean === 'http://www.medical365.in' ||
+        clean.endsWith('.medical365.in') ||
+        clean.includes('medical365.in')
+    ) {
+        return true;
+    }
+
+    // Cloud hosting & deployment platforms
+    if (
+        clean.endsWith('.onrender.com') ||
+        clean.endsWith('.vercel.app') ||
+        clean.endsWith('.netlify.app') ||
+        clean.includes('onrender.com') ||
+        clean.includes('vercel.app')
+    ) {
+        return true;
+    }
 
     return false;
 };
@@ -83,45 +103,64 @@ const isAllowedOrigin = (origin) => {
 const HospitalModelForCors = require('./models/hospital.model');
 const verifiedDomainCache = new Map(); // domain -> { allowed: boolean, expireAt: number }
 
-app.use(cors({
-    origin: async (origin, callback) => {
-        // 1. Static Origins Check
-        if (isAllowedOrigin(origin)) {
+// Preflight & CORS Header Fallback (Guarantees preflight OPTIONS 204 response with proper CORS headers)
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && isAllowedOrigin(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
+        res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-tenant-subdomain, x-hospital-id, x-client-version, x-portal-type, x-app-type, Cache-Control, Pragma, Expires');
+        res.setHeader('Access-Control-Max-Age', '86400');
+    }
+
+    // Instant response to OPTIONS preflight
+    if (req.method === 'OPTIONS') {
+        return res.status(204).end();
+    }
+    next();
+});
+
+const corsOptions = {
+    origin: (origin, callback) => {
+        if (!origin || isAllowedOrigin(origin)) {
             return callback(null, true);
         }
 
-        // 2. Safeguard for invalid origin format
-        if (!origin || typeof origin !== 'string') {
-            return callback(new Error('CORS blocked: Invalid origin format'), false);
-        }
+        const domainOnly = origin.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0].toLowerCase();
 
-        const domainOnly = origin.replace(/^https?:\/\//, '');
-
-        // 3. Fast In-Memory Cache Check
+        // Fast In-Memory Cache Check
         const cached = verifiedDomainCache.get(domainOnly);
         const now = Date.now();
         if (cached && cached.expireAt > now) {
-            if (cached.allowed) return callback(null, true);
-            return callback(new Error('CORS blocked: ' + origin), false);
+            return callback(null, cached.allowed);
         }
 
-        // 4. Database Check for Custom Domains (Cached for 10 minutes)
-        try {
-            const hospital = await HospitalModelForCors.findOne({ customDomain: domainOnly }).select('_id').lean();
-            if (hospital) {
-                verifiedDomainCache.set(domainOnly, { allowed: true, expireAt: now + 10 * 60 * 1000 });
-                return callback(null, true);
-            } else {
-                verifiedDomainCache.set(domainOnly, { allowed: false, expireAt: now + 2 * 60 * 1000 });
-            }
-        } catch (err) {
-            console.error('[CORS ERROR] Database check failed:', err.message);
-        }
-
-        callback(new Error('CORS blocked: ' + origin), false);
+        // Safe Non-blocking Database Check for Custom Domains
+        HospitalModelForCors.findOne({ customDomain: domainOnly }).select('_id').lean()
+            .then(hospital => {
+                if (hospital) {
+                    verifiedDomainCache.set(domainOnly, { allowed: true, expireAt: now + 10 * 60 * 1000 });
+                    callback(null, true);
+                } else {
+                    verifiedDomainCache.set(domainOnly, { allowed: false, expireAt: now + 2 * 60 * 1000 });
+                    callback(null, false);
+                }
+            })
+            .catch(err => {
+                console.warn('[CORS DB Check Warning]:', err.message);
+                callback(null, true); // Fallback allow on DB error
+            });
     },
     credentials: true,
-}));
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization', 'x-tenant-subdomain', 'x-hospital-id', 'x-client-version', 'x-portal-type', 'x-app-type', 'Cache-Control', 'Pragma', 'Expires'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range', 'ETag', 'x-tenant-subdomain'],
+    maxAge: 86400
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Enable reverse proxy support for Render / Cloudflare rate-limiting
 app.set('trust proxy', 1);
@@ -129,19 +168,8 @@ app.set('trust proxy', 1);
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            imgSrc: ["'self'", 'data:', 'https://ik.imagekit.io'],
-            connectSrc: ["'self'"],
-            fontSrc: ["'self'"],
-            objectSrc: ["'none'"],
-            frameSrc: ["'none'"],
-            upgradeInsecureRequests: [],
-        },
-    },
+    crossOriginOpenerPolicy: false,
+    contentSecurityPolicy: false,
     hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
 }));
 
