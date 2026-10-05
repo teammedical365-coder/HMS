@@ -1,9 +1,1 @@
-/* App.css — Minimal, delegates to index.css for globals */
-/* This file left intentionally minimal to avoid variable conflicts */
-
-html,
-body {
-  width: 100%;
-  max-width: 100vw;
-  overflow-x: hidden;
-}
+/* App.css merged into index.css */

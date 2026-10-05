@@ -1688,3 +1688,70 @@ export const packageAPI = {
     // Stats
     getDashboardStats: async () => (await apiClient.get('/api/packages/stats/dashboard')).data,
 };
+
+// Data Migration API (Phase 1 AI-Assisted Mapping)
+export const migrationAPI = {
+    listSessions: async () => (await apiClient.get('/api/migrations')).data,
+    createSession: async () => (await apiClient.post('/api/migrations')).data,
+    getSession: async (migrationId) => (await apiClient.get(`/api/migrations/${migrationId}`)).data,
+    uploadFiles: async (migrationId, formData) => {
+        const response = await apiClient.post(`/api/migrations/${migrationId}/files`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    },
+    analyzeSession: async (migrationId) => (await apiClient.post(`/api/migrations/${migrationId}/analyze`)).data,
+    generateAiMapping: async (migrationId) => (await apiClient.post(`/api/migrations/${migrationId}/ai-mapping`)).data,
+    updateMapping: async (migrationId, data) => (await apiClient.put(`/api/migrations/${migrationId}/mapping`, data)).data,
+    acceptHighConfidence: async (migrationId) => (await apiClient.post(`/api/migrations/${migrationId}/accept-high-confidence`)).data,
+    createCustomField: async (migrationId, data) => (await apiClient.post(`/api/migrations/${migrationId}/custom-field`, data)).data,
+    approveMapping: async (migrationId) => (await apiClient.post(`/api/migrations/${migrationId}/approve`)).data,
+    saveTemplate: async (migrationId, data) => (await apiClient.post(`/api/migrations/${migrationId}/save-template`, data)).data,
+    listTemplates: async () => (await apiClient.get('/api/migrations/templates')).data,
+    getCanonicalSchema: async (entity = '') => (await apiClient.get(`/api/migrations/canonical-schema${entity ? '?entity=' + entity : ''}`)).data,
+    
+    // Phase 2: Transformation, Validation, Duplicate Review & Preview
+    prepareAndValidate: async (migrationId) => (await apiClient.post(`/api/migrations/${migrationId}/prepare`)).data,
+    getPreview: async (migrationId) => (await apiClient.get(`/api/migrations/${migrationId}/preview`)).data,
+    getStagedRecords: async (migrationId, params = {}) => (await apiClient.get(`/api/migrations/${migrationId}/records`, { params })).data,
+    getRecordDetail: async (migrationId, recordId) => (await apiClient.get(`/api/migrations/${migrationId}/records/${recordId}`)).data,
+    updateDuplicateDecision: async (migrationId, recordId, data) => (await apiClient.put(`/api/migrations/${migrationId}/records/${recordId}/duplicate-decision`, data)).data,
+    markReadyForImport: async (migrationId) => (await apiClient.post(`/api/migrations/${migrationId}/mark-ready`)).data,
+    getExportReportUrl: (migrationId) => `/api/migrations/${migrationId}/export-report`,
+
+    // Phase 3: Production Import, Real-time Progress & Verification
+    executeImport: async (migrationId) => (await apiClient.post(`/api/migrations/${migrationId}/import`)).data,
+    getImportProgress: async (migrationId) => (await apiClient.get(`/api/migrations/${migrationId}/import-progress`)).data,
+    getFailedRecords: async (migrationId, params = {}) => (await apiClient.get(`/api/migrations/${migrationId}/failed-records`, { params })).data,
+    getExportFailedReportUrl: (migrationId) => `/api/migrations/${migrationId}/export-failed-report`
+};
+
+// ── LOCAL DATABASE & OFFLINE SYNC API (PHASE 1) ──────────────────────────────
+export const localAgentAPI = {
+    getStatus: async () => (await apiClient.get('/api/local-agent/status')).data,
+    provision: async (customName = '') => (await apiClient.post('/api/local-agent/provision', { customName })).data,
+    testConnection: async () => (await apiClient.post('/api/local-agent/test-connection')).data,
+    revoke: async () => (await apiClient.post('/api/local-agent/revoke')).data
+};
+
+// ── CLOUD -> LOCAL DATA SYNCHRONIZATION API (PHASE 2, 3, 5, 6) ───────────────
+export const localSyncAPI = {
+    getSyncStatus: async () => (await apiClient.get('/api/local-sync/status')).data,
+    startInitialSync: async () => (await apiClient.post('/api/local-sync/start-initial-sync')).data,
+    syncNow: async () => (await apiClient.post('/api/local-sync/sync-now')).data,
+    retryFailed: async () => (await apiClient.post('/api/local-sync/retry-failed')).data,
+    // Phase 3 & 5: Sync Conflicts Endpoints
+    getConflicts: async (params = {}) => (await apiClient.get('/api/local-sync/conflicts', { params })).data,
+    getConflictDetail: async (conflictId) => (await apiClient.get(`/api/local-sync/conflicts/${conflictId}`)).data,
+    resolveConflict: async (conflictId, data = {}) => (await apiClient.post(`/api/local-sync/conflicts/${conflictId}/resolve`, data)).data,
+    dismissConflict: async (conflictId, data = {}) => (await apiClient.post(`/api/local-sync/conflicts/${conflictId}/dismiss`, data)).data,
+    getUploadStats: async () => (await apiClient.get('/api/local-sync/upload-stats')).data,
+    triggerUploadNow: async () => (await apiClient.post('/api/local-sync/upload-now')).data,
+    // Phase 6: Production Readiness
+    getSyncHealth: async () => (await apiClient.get('/api/local-sync/health')).data,
+    verifyIntegrity: async () => (await apiClient.post('/api/local-sync/verify-integrity')).data,
+    getRebuildStatus: async () => (await apiClient.get('/api/local-sync/rebuild-status')).data,
+    rebuildLocalDatabase: async (confirmationToken) => (await apiClient.post('/api/local-sync/rebuild', { confirmationToken })).data,
+    getBackupStatus: async () => (await apiClient.get('/api/local-sync/backup-status')).data
+};
+

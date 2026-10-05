@@ -110,7 +110,11 @@ app.use((req, res, next) => {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
-        res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-tenant-subdomain, x-hospital-id, x-client-version, x-portal-type, x-app-type, Cache-Control, Pragma, Expires');
+        const reqHeaders = req.headers['access-control-request-headers'];
+        res.setHeader(
+            'Access-Control-Allow-Headers',
+            reqHeaders || 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-tenant-subdomain, x-hospital-id, x-client-version, x-portal-type, x-app-type, x-offline-ping, X-Offline-Ping, x-client-operation-id, X-Client-Operation-Id, Cache-Control, Pragma, Expires'
+        );
         res.setHeader('Access-Control-Max-Age', '86400');
     }
 
@@ -154,7 +158,12 @@ const corsOptions = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
-    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization', 'x-tenant-subdomain', 'x-hospital-id', 'x-client-version', 'x-portal-type', 'x-app-type', 'Cache-Control', 'Pragma', 'Expires'],
+    allowedHeaders: [
+        'Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization',
+        'x-tenant-subdomain', 'x-hospital-id', 'x-client-version', 'x-portal-type', 'x-app-type',
+        'x-offline-ping', 'X-Offline-Ping', 'x-client-operation-id', 'X-Client-Operation-Id',
+        'Cache-Control', 'Pragma', 'Expires'
+    ],
     exposedHeaders: ['Content-Range', 'X-Content-Range', 'ETag', 'x-tenant-subdomain'],
     maxAge: 86400
 };
@@ -253,6 +262,9 @@ app.use('/api/voice-scribe', require('./routes/voiceScribe.routes'));
 app.use('/api/accountant', require('./routes/accountant.routes'));
 app.use('/api/refunds', require('./routes/refund.routes'));
 app.use('/api/packages', require('./routes/package.routes'));
+app.use('/api/migrations', require('./routes/migration.routes'));
+app.use('/api/local-agent', require('./routes/localAgent.routes'));
+app.use('/api/local-sync', require('./routes/localSync.routes'));
 
 // ── Serve Frontend in Production (if client/dist exists) ──────────────────────
 const clientDistPath = path.join(__dirname, '../../client/dist');

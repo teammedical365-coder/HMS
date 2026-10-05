@@ -1,0 +1,11 @@
+{
+  "cloudUrl": "http://localhost:3000",
+  "installationId": "MED365-LOCAL-XXXXXX",
+  "pairingToken": "YOUR_PAIRING_CODE",
+  "agentToken": null,
+  "localMongoUri": "mongodb://localhost:27017/medical365_local",
+  "localHealthPort": 4000,
+  "heartbeatIntervalMs": 15000,
+  "agentName": "Hospital Local Server",
+  "agentVersion": "1.0.0"
+}

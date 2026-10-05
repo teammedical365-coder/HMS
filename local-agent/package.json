@@ -1,0 +1,21 @@
+{
+  "name": "medical365-local-agent",
+  "version": "1.0.0",
+  "description": "Medical365 Local Agent - Hospital Server Infrastructure for Offline Database & Sync",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js"
+  },
+  "keywords": [
+    "medical365",
+    "hms",
+    "local-agent",
+    "offline-sync"
+  ],
+  "author": "Medical365",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.0",
+    "mongoose": "^8.0.0"
+  }
+}

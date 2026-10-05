@@ -75,6 +75,8 @@ const HospitalLogin = lazy(() => import('../pages/hospitaladmin/HospitalLogin'))
 const HospitalAdminQuestionLibrary = lazy(() => import('../pages/hospitaladmin/HospitalAdminQuestionLibrary'));
 const VialManagement = lazy(() => import('../pages/hospitaladmin/VialManagement'));
 const PackageManagement = lazy(() => import('../pages/hospitaladmin/PackageManagement'));
+const DataMigration = lazy(() => import('../pages/hospitaladmin/DataMigration'));
+const LocalSync = lazy(() => import('../pages/hospitaladmin/LocalSync'));
 
 // Cashier Routing
 const CashierDashboard = lazy(() => import('../pages/cashier/CashierDashboard'));
@@ -271,6 +273,7 @@ const MainRoutes = () => {
                 { key: 'hosp_ql', importFn: () => import('../pages/hospitaladmin/HospitalAdminQuestionLibrary') },
                 { key: 'hosp_vials', importFn: () => import('../pages/hospitaladmin/VialManagement') },
                 { key: 'hosp_packages', importFn: () => import('../pages/hospitaladmin/PackageManagement') },
+                { key: 'hosp_migration', importFn: () => import('../pages/hospitaladmin/DataMigration') },
                 { key: 'hosp_pharmacy', importFn: () => import('../pages/pharmacy/PharmacyInventory') },
                 { key: 'hosp_ipd', importFn: () => import('../pages/nurse/IPDCommandCenter') },
                 { key: 'hosp_ot', importFn: () => import('../pages/ot/OTDashboard') },
@@ -399,6 +402,11 @@ const MainRoutes = () => {
                                 <Route path="hospitaladmin/vials" element={<ProtectedRoute allowedRoles={['hospitaladmin']}><VialManagement /></ProtectedRoute>} />
                                 <Route path="hospitaladmin/refunds" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'centraladmin', 'superadmin']}><HospitalAdminRefunds /></ProtectedRoute>} />
                                 <Route path="hospitaladmin/packages" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'centraladmin', 'superadmin']}><PackageManagement /></ProtectedRoute>} />
+                                <Route path="hospitaladmin/data-migration" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'centraladmin', 'superadmin']}><DataMigration /></ProtectedRoute>} />
+                                <Route path="hospital-admin/data-migration" element={<Navigate to="/hospitaladmin/data-migration" replace />} />
+                                <Route path="hospitaladmin/local-sync" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'centraladmin', 'superadmin']}><LocalSync /></ProtectedRoute>} />
+                                <Route path="hospital-admin/local-sync" element={<Navigate to="/hospitaladmin/local-sync" replace />} />
+                                <Route path="hospitaladmin/settings" element={<ProtectedRoute allowedRoles={['hospitaladmin', 'centraladmin', 'superadmin']}><LocalSync /></ProtectedRoute>} />
 
                                 <Route path="lab/dashboard" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><LabDashboard /></ProtectedRoute>} />
                                 <Route path="lab/tests" element={<ProtectedRoute requiredPermissions={['lab_view', 'lab_manage']}><AssignedTests /></ProtectedRoute>} />

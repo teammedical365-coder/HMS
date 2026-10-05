@@ -63,7 +63,6 @@ async function pingServer() {
       method: 'GET',
       signal: controller.signal,
       cache: 'no-store',
-      headers: { 'X-Offline-Ping': '1' },
     });
 
     clearTimeout(timeoutId);

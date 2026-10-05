@@ -369,6 +369,10 @@ function getTenantModels(tenantDb) {
     const { policyAcceptanceSchema } = require('../models/policyAcceptance.model');
     const { hospitalPackageSchema } = require('../models/hospitalPackage.model');
     const { patientPackageAssignmentSchema } = require('../models/patientPackageAssignment.model');
+    const { migrationSessionSchema } = require('../models/migrationSession.model');
+    const { migrationTemplateSchema } = require('../models/migrationTemplate.model');
+    const { customFieldDefinitionSchema } = require('../models/customFieldDefinition.model');
+    const { migrationRecordSchema } = require('../models/migrationRecord.model');
 
     return {
         User: model('User', userSchema),
@@ -398,6 +402,13 @@ function getTenantModels(tenantDb) {
         PolicyAcceptance: model('PolicyAcceptance', policyAcceptanceSchema),
         HospitalPackage: model('HospitalPackage', hospitalPackageSchema),
         PatientPackageAssignment: model('PatientPackageAssignment', patientPackageAssignmentSchema),
+        MigrationSession: model('MigrationSession', migrationSessionSchema),
+        MigrationTemplate: model('MigrationTemplate', migrationTemplateSchema),
+        CustomFieldDefinition: model('CustomFieldDefinition', customFieldDefinitionSchema),
+        MigrationRecord: model('MigrationRecord', migrationRecordSchema),
+        SyncEvent: require('../models/syncEvent.model'),
+        LocalInstallation: require('../models/localInstallation.model'),
+        SyncConflict: require('../models/syncConflict.model'),
     };
 }
 

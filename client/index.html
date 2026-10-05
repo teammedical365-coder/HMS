@@ -3,6 +3,41 @@
 
 <head>
   <meta charset="UTF-8" />
+  <!-- Immediate Service Worker Purge for Local Development -->
+  <script>
+    (function () {
+      const hostname = window.location.hostname;
+      const port = window.location.port;
+      const isLocalDev =
+        hostname === 'localhost' ||
+        hostname.endsWith('.localhost') ||
+        hostname === '127.0.0.1' ||
+        hostname.endsWith('.test') ||
+        hostname.endsWith('.local') ||
+        port === '5173' ||
+        port === '5174' ||
+        port === '3000';
+
+      if (isLocalDev && 'serviceWorker' in navigator) {
+        const hadController = !!navigator.serviceWorker.controller;
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          for (var i = 0; i < registrations.length; i++) {
+            registrations[i].unregister();
+          }
+        });
+        if (typeof caches !== 'undefined') {
+          caches.keys().then(function (keys) {
+            keys.forEach(function (k) { caches.delete(k); });
+          });
+        }
+        // If an old worker was still controlling this tab, reload once cleanly without the worker
+        if (hadController && !sessionStorage.getItem('__hms_sw_purged__')) {
+          sessionStorage.setItem('__hms_sw_purged__', 'true');
+          window.location.reload();
+        }
+      }
+    })();
+  </script>
   <link rel="icon" type="image/jpeg" href="/assets/medical365fav.jpg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Medical 365</title>
@@ -70,29 +105,29 @@
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.jsx"></script>
-  <!-- PWA Service Worker Registration -->
+  <!-- Production-only PWA Service Worker Registration -->
   <script>
-    if ('serviceWorker' in navigator) {
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        // In local development, unregister any stale service workers and clear cache storage
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
-          for (const registration of registrations) {
-            registration.unregister();
-          }
-        });
-        if (typeof caches !== 'undefined') {
-          caches.keys().then((keys) => {
-            keys.forEach((key) => caches.delete(key));
-          });
-        }
-      } else {
-        window.addEventListener('load', () => {
+    (function () {
+      const hostname = window.location.hostname;
+      const port = window.location.port;
+      const isLocalDev =
+        hostname === 'localhost' ||
+        hostname.endsWith('.localhost') ||
+        hostname === '127.0.0.1' ||
+        hostname.endsWith('.test') ||
+        hostname.endsWith('.local') ||
+        port === '5173' ||
+        port === '5174' ||
+        port === '3000';
+
+      if (!isLocalDev && 'serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
           navigator.serviceWorker.register('/sw.js')
-            .then(() => console.log('Service Worker Registered!'))
-            .catch((err) => console.error('SW Error:', err));
+            .then(function () { console.log('Service Worker Registered!'); })
+            .catch(function (err) { console.error('SW Error:', err); });
         });
       }
-    }
+    })();
   </script>
 </body>
 

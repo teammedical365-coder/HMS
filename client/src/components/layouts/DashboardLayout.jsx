@@ -9,7 +9,7 @@ import {
     FiSettings, FiLogOut, FiPieChart, FiClipboard,
     FiFileText, FiPlusSquare, FiDatabase, FiGrid, FiShield, FiMenu, FiX,
     FiClock, FiBox, FiUserCheck, FiHeart, FiCheckCircle, FiUser,
-    FiChevronDown, FiChevronRight, FiCpu, FiScissors, FiDollarSign
+    FiChevronDown, FiChevronRight, FiCpu, FiScissors, FiDollarSign, FiServer
 } from 'react-icons/fi';
 import GlobalSearch from '../GlobalSearch';
 import './DashboardLayout.css';
@@ -55,6 +55,8 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                     { label: 'Refund Approvals', path: '/hospitaladmin/refunds', icon: <FiDollarSign />, prefetchKey: 'ha_refunds', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminRefunds') },
                     { label: 'Vial Management', path: '/hospitaladmin/vials', icon: <FiBox />, prefetchKey: 'ha_vials', prefetchFn: () => import('../../pages/hospitaladmin/VialManagement') },
                     { label: 'Package Management', path: '/hospitaladmin/packages', icon: <FiGrid />, prefetchKey: 'ha_packages', prefetchFn: () => import('../../pages/hospitaladmin/PackageManagement') },
+                    { label: 'Data Migration', path: '/hospitaladmin/data-migration', icon: <FiDatabase />, prefetchKey: 'ha_migration', prefetchFn: () => import('../../pages/hospitaladmin/DataMigration') },
+                    { label: 'Local DB & Sync', path: '/hospitaladmin/local-sync', icon: <FiServer />, prefetchKey: 'ha_localsync', prefetchFn: () => import('../../pages/hospitaladmin/LocalSync') },
                 ];
             }
             return [
@@ -67,6 +69,8 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Billing & Payments', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'ha_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
                 { label: 'Refund Approvals', path: '/hospitaladmin/refunds', icon: <FiDollarSign />, prefetchKey: 'ha_refunds', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminRefunds') },
                 { label: 'Package Management', path: '/hospitaladmin/packages', icon: <FiGrid />, prefetchKey: 'ha_packages', prefetchFn: () => import('../../pages/hospitaladmin/PackageManagement') },
+                { label: 'Data Migration', path: '/hospitaladmin/data-migration', icon: <FiDatabase />, prefetchKey: 'ha_migration', prefetchFn: () => import('../../pages/hospitaladmin/DataMigration') },
+                { label: 'Local DB & Sync', path: '/hospitaladmin/local-sync', icon: <FiServer />, prefetchKey: 'ha_localsync', prefetchFn: () => import('../../pages/hospitaladmin/LocalSync') },
             ];
         }
         if (role === 'doctor_assistant' || role === 'doctor assistant' || role === 'clinical assistant' || role.includes('assistant')) {
