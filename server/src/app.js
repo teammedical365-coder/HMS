@@ -111,20 +111,12 @@ app.use((req, res, next) => {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
-<<<<<<< HEAD
-        const reqHeaders = req.headers['access-control-request-headers'];
-        res.setHeader(
-            'Access-Control-Allow-Headers',
-            reqHeaders || 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-tenant-subdomain, x-hospital-id, x-client-version, x-portal-type, x-app-type, x-offline-ping, X-Offline-Ping, x-client-operation-id, X-Client-Operation-Id, Cache-Control, Pragma, Expires'
-=======
-
         const requestHeaders = req.headers['access-control-request-headers'];
         const defaultAllowedHeaders = 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-tenant-subdomain, x-hospital-id, x-client-version, x-portal-type, x-app-type, x-offline-ping, X-Offline-Ping, x-client-operation-id, X-Client-Operation-Id, Cache-Control, Pragma, Expires';
 
         res.setHeader(
             'Access-Control-Allow-Headers',
             requestHeaders ? `${defaultAllowedHeaders}, ${requestHeaders}` : defaultAllowedHeaders
->>>>>>> 4f312ba68b8112a78aac1b554520907a5469f79d
         );
         res.setHeader('Access-Control-Max-Age', '86400');
     }
@@ -170,12 +162,6 @@ const corsOptions = {
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
     allowedHeaders: [
-<<<<<<< HEAD
-        'Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization',
-        'x-tenant-subdomain', 'x-hospital-id', 'x-client-version', 'x-portal-type', 'x-app-type',
-        'x-offline-ping', 'X-Offline-Ping', 'x-client-operation-id', 'X-Client-Operation-Id',
-        'Cache-Control', 'Pragma', 'Expires'
-=======
         'Origin',
         'X-Requested-With',
         'Content-Type',
@@ -193,7 +179,6 @@ const corsOptions = {
         'Cache-Control',
         'Pragma',
         'Expires'
->>>>>>> 4f312ba68b8112a78aac1b554520907a5469f79d
     ],
     exposedHeaders: ['Content-Range', 'X-Content-Range', 'ETag', 'x-tenant-subdomain'],
     maxAge: 86400
