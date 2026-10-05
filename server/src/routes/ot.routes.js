@@ -1365,7 +1365,7 @@ router.put('/surgery-plans/:id/workflow', verifyDoctorOrAdminAccess, async (req,
         const { status } = req.body;
         const hospitalId = req.hospitalId || req.user.hospitalId;
 
-        const validStatuses = ['ADMITTED', 'PRE_OP', 'READY_FOR_OT', 'IN_OT', 'SURGERY_COMPLETED', 'POST_OP'];
+        const validStatuses = ['ADMITTED', 'PRE_OP', 'READY_FOR_OT', 'IN_OT', 'SURGERY_COMPLETED', 'POST_OP', 'COMPLETED'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ success: false, message: 'Invalid workflow status' });
         }
@@ -1399,6 +1399,9 @@ router.put('/surgery-plans/:id/workflow', verifyDoctorOrAdminAccess, async (req,
                 break;
             case 'POST_OP':
                 valid = currentStatus === 'SURGERY_COMPLETED';
+                break;
+            case 'COMPLETED':
+                valid = currentStatus === 'POST_OP' || currentStatus === 'SURGERY_COMPLETED';
                 break;
         }
 
