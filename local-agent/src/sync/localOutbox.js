@@ -201,7 +201,7 @@ class LocalOutbox {
         for (const item of this.inMemoryOutbox.values()) {
             if (item.status === 'IN_FLIGHT') {
                 const attemptTime = item.lastAttemptAt ? new Date(item.lastAttemptAt).getTime() : 0;
-                if (now - attemptTime > maxAgeMs) {
+                if (now - attemptTime >= maxAgeMs) {
                     item.status = 'PENDING';
                     item.nextRetryAt = null;
                     item.errorMessage = 'Agent restarted - recovered in-flight mutation';
@@ -631,6 +631,10 @@ class LocalOutbox {
             completedToday,
             lastSuccessfulSyncAt: this.lastSuccessfulSyncAt
         };
+    }
+
+    async getStats() {
+        return this.getOutboxStats();
     }
 }
 

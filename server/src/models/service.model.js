@@ -48,6 +48,10 @@ const serviceSchema = new mongoose.Schema({
 // Add indexes for better query performance
 serviceSchema.index({ active: 1 }); // Index for filtering active services
 
+// Cloud -> Local Sync Plugin
+const syncModelPlugin = require('../services/localAgent/syncModelPlugin');
+serviceSchema.plugin(syncModelPlugin, { entityType: 'Service' });
+
 const Service = mongoose.model('Service', serviceSchema);
 
 module.exports = Service;

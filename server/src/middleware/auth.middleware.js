@@ -5,6 +5,7 @@ const TokenBlacklist = require('../models/tokenBlacklist.model');
 const Session = require('../models/session.model');
 
 const { JWT_SECRET } = require('../config/jwt');
+const { isDemoAccount, isDemoHospital } = require('../config/demoConfig');
 
 /**
  * Verify JWT token and attach user + populated role to req.user
@@ -155,6 +156,37 @@ exports.verifyToken = async (req, res, next) => {
         req.user.id = user._id || user.id || user.userId;
         req.user.userId = user._id || user.id || user.userId;
         req.user._roleData = roleData;
+
+        // Server-side Demo Identification & Access Enrichment
+        const isDemo = Boolean(decoded.isDemo) || 
+                       isDemoAccount(user.email) || 
+                       isDemoHospital(user.hospitalId) || 
+                       (decoded.hospitalId && isDemoHospital(decoded.hospitalId));
+        if (isDemo) {
+            req.user.isDemo = true;
+            req.user.isDemoUser = true;
+            req.user.isDemoTenant = true;
+            req.isDemo = true;
+            if (req.user._roleData) {
+                // Ensure demo account can demonstrate all modules across dashboards
+                const currentPerms = req.user._roleData.permissions || [];
+                if (!currentPerms.includes('*')) {
+                    req.user._roleData.permissions = [
+                        ...new Set([
+                            ...currentPerms,
+                            '*',
+                            'admin_manage_roles', 'admin_view_stats',
+                            'patient_view', 'patient_create', 'patient_search',
+                            'appointment_manage', 'appointment_view_all',
+                            'reception_access', 'nurse_access', 'doctor_access',
+                            'pharmacy_view', 'pharmacy_manage', 'lab_view', 'lab_manage',
+                            'finance_view', 'billing_view', 'ipd_view', 'clinical_manage'
+                        ])
+                    ];
+                }
+            }
+        }
+
         next();
     } catch (dbErr) {
         console.error('[verifyToken] Database connection error:', dbErr.message);

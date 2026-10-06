@@ -19,7 +19,13 @@ const LocalInstallation = require('../src/models/localInstallation.model');
 const Hospital = require('../src/models/hospital.model');
 const User = require('../src/models/user.model');
 const Appointment = require('../src/models/appointment.model');
+const SyncConflict = require('../src/models/syncConflict.model');
 const localAgentService = require('../src/services/localAgent/localAgent.service');
+
+// Fast in-memory counts
+SyncConflict.countDocuments = async () => 0;
+User.countDocuments = async () => 0;
+Appointment.countDocuments = async () => 0;
 
 async function runTests() {
     console.log('\n======================================================');

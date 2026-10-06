@@ -13,6 +13,7 @@ const { verifyToken } = require('../middleware/auth.middleware');
 const TokenBlacklist = require('../models/tokenBlacklist.model');
 const auditLog = require('../middleware/audit.middleware');
 const { v4: uuidv4 } = require('uuid');
+const { isDemoAccount, isDemoHospital } = require('../config/demoConfig');
 
 /**
  * Helper: Build user response with full role data
@@ -38,6 +39,8 @@ async function buildUserResponse(user) {
     roleName = roleData ? roleData.name : null;
   }
 
+  const isDemo = isDemoAccount(user.email) || isDemoHospital(user.hospitalId);
+
   return {
     id: user._id,
     name: user.name,
@@ -50,6 +53,7 @@ async function buildUserResponse(user) {
     dashboardPath: roleData ? roleData.dashboardPath : '/',
     navLinks: roleData ? roleData.navLinks : [],
     lastLogin: user.lastLogin || null,
+    ...(isDemo ? { isDemo: true, isDemoUser: true, isDemoTenant: true } : {})
   };
 }
 
@@ -336,6 +340,8 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.json({ success: true, mfaRequired: true, preAuthToken });
     }
 
+    const isDemo = isDemoAccount(user.email) || isDemoHospital(user.hospitalId);
+
     const token = jwt.sign(
       {
         jti: uuidv4(),
@@ -344,6 +350,7 @@ router.post('/login', loginLimiter, async (req, res) => {
         roleId: String(user.role),
         hospitalId: user.hospitalId ? String(user.hospitalId) : null,
         tv: user.tokenVersion ?? 0,
+        ...(isDemo ? { isDemo: true, isDemoUser: true, isDemoTenant: true } : {})
       },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
@@ -362,7 +369,8 @@ router.post('/login', loginLimiter, async (req, res) => {
             tenant = {
                 name: hosp.name,
                 slug: hosp.slug,
-                subdomain: `${hosp.slug}.medical365.in`
+                subdomain: `${hosp.slug}.medical365.in`,
+                ...(isDemo ? { isDemo: true, isDemoTenant: true } : {})
             };
         }
       } catch (_) {}
@@ -386,6 +394,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       dashboardPath: roleData.dashboardPath || '/',
       navLinks: roleData.navLinks || [],
       lastLogin: now,
+      ...(isDemo ? { isDemo: true, isDemoUser: true, isDemoTenant: true } : {})
     };
 
     res.json({
@@ -393,7 +402,8 @@ router.post('/login', loginLimiter, async (req, res) => {
       message: 'Login successful',
       user: userData,
       token,
-      tenant
+      tenant,
+      ...(isDemo ? { isDemo: true, isDemoUser: true, isDemoTenant: true } : {})
     });
   } catch (error) {
     console.error('Login error:', error);

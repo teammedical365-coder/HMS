@@ -21,4 +21,8 @@ const departmentSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+// Cloud -> Local Sync Plugin
+const syncModelPlugin = require('../services/localAgent/syncModelPlugin');
+departmentSchema.plugin(syncModelPlugin, { entityType: 'Department' });
+
 module.exports = mongoose.model('Department', departmentSchema);

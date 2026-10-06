@@ -102,7 +102,9 @@ doctorSchema.index({ email: 1 }); // Index for email lookups
 doctorSchema.index({ hospitalId: 1, status: 1, isAvailable: 1 });
 doctorSchema.index({ hospitalId: 1, departments: 1 });
 doctorSchema.index({ hospitalId: 1, name: 1 });
-doctorSchema.index({ userId: 1, hospitalId: 1 });
+// Cloud -> Local Sync Plugin
+const syncModelPlugin = require('../services/localAgent/syncModelPlugin');
+doctorSchema.plugin(syncModelPlugin, { entityType: 'Doctor' });
 
 const Doctor = mongoose.model('Doctor', doctorSchema);
 

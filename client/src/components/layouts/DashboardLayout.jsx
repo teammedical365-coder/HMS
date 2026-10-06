@@ -47,6 +47,20 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             ];
         }
         if (role === 'hospitaladmin') {
+            if (user?.isDemo) {
+                return [
+                    { label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiHome />, prefetchKey: 'ha_dash', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminDashboard') },
+                    { label: 'Reception & Queue', path: '/reception/dashboard', icon: <FiUsers />, prefetchKey: 'rec_dash', prefetchFn: () => import('../../pages/reception/ReceptionDashboard') },
+                    { label: 'Doctor Clinical', path: '/doctor/patients', icon: <FiActivity />, prefetchKey: 'doc_patients', prefetchFn: () => import('../../pages/doctors/Patient') },
+                    { label: 'Nurse & IPD Care', path: '/nurse/dashboard', icon: <FiHeart />, prefetchKey: 'nurse_dash', prefetchFn: () => import('../../pages/nurse/NurseDashboard') },
+                    { label: 'Billing & Invoices', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'ha_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
+                    { label: 'Accountant Hub', path: '/accountant/dashboard', icon: <FiDollarSign />, prefetchKey: 'acc_dash', prefetchFn: () => import('../../pages/accountant/AccountantDashboard') },
+                    { label: 'Pharmacy & Stock', path: '/pharmacy/inventory', icon: <FiPackage />, prefetchKey: 'ha_pharma', prefetchFn: () => import('../../pages/pharmacy/PharmacyInventory') },
+                    { label: 'Package Management', path: '/hospitaladmin/packages', icon: <FiGrid />, prefetchKey: 'ha_packages', prefetchFn: () => import('../../pages/hospitaladmin/PackageManagement') },
+                    { label: 'Local DB & Sync', path: '/hospitaladmin/local-sync', icon: <FiServer />, prefetchKey: 'ha_localsync', prefetchFn: () => import('../../pages/hospitaladmin/LocalSync') },
+                    { label: 'Staff Directory', path: '/admin/users', icon: <FiUsers />, prefetchKey: 'ha_users', prefetchFn: () => import('../../pages/admin/Admin') },
+                ];
+            }
             const u = JSON.parse(localStorage.getItem('user') || '{}');
             if (u.clinicType === 'clinic' || u.subscriptionPlan === 'starter') {
                 return [
@@ -420,6 +434,31 @@ const TopBar = ({ toggleSidebar, sidebarOpen }) => {
 
             <div className="topbar-right">
                 <div className="ca-topbar-actions">
+                    {user?.isDemo && (
+                        <div 
+                            className="demo-mode-badge"
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                                color: '#ffffff',
+                                padding: '4px 11px',
+                                borderRadius: '9999px',
+                                fontSize: '0.72rem',
+                                fontWeight: '800',
+                                letterSpacing: '0.08em',
+                                boxShadow: '0 2px 8px rgba(217, 119, 6, 0.35)',
+                                textTransform: 'uppercase',
+                                userSelect: 'none',
+                                whiteSpace: 'nowrap'
+                            }}
+                            title="Medical365 Demo Mode (Isolated Tenant)"
+                        >
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#ffffff', display: 'inline-block' }} />
+                            DEMO MODE
+                        </div>
+                    )}
                     <GlobalSearch />
 
                     {/* Profile Dropdown Container */}

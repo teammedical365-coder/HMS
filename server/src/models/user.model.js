@@ -129,4 +129,8 @@ userSchema.methods.comparePassword = async function (entered) {
     return await bcrypt.compare(entered, this.password);
 };
 
+// Cloud -> Local Sync Plugin
+const syncModelPlugin = require('../services/localAgent/syncModelPlugin');
+userSchema.plugin(syncModelPlugin, { entityType: 'Patient' });
+
 module.exports = mongoose.model('User', userSchema);

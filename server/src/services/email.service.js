@@ -1,5 +1,12 @@
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const { isDemoAccount } = require('../config/demoConfig');
+
+function isDemoRecipient(email) {
+    if (!email || typeof email !== 'string') return false;
+    const clean = email.toLowerCase().trim();
+    return isDemoAccount(clean) || clean.endsWith('@medical365.com') || clean.includes('demo');
+}
 
 // Create reusable transporter using SMTP config from .env
 const transporter = nodemailer.createTransport({
@@ -54,6 +61,11 @@ async function sendAppointmentConfirmationEmail({
     try {
         if (!patientEmail) {
             console.log('[email-service] No patient email provided — skipping confirmation email.');
+            return;
+        }
+
+        if (isDemoRecipient(patientEmail)) {
+            console.log(`[email-service] [DEMO SAFEGUARD] Simulated confirmation email delivery for demo patient: ${patientEmail}`);
             return;
         }
 
@@ -246,6 +258,11 @@ async function sendLoginOtpEmail({
             return;
         }
 
+        if (isDemoRecipient(email)) {
+            console.log(`[email-service] [DEMO SAFEGUARD] Simulated login OTP email delivery for demo address: ${email}`);
+            return;
+        }
+
         const effectiveDisplayName = emailDisplayName || hospitalName || 'Medical365 Authentication';
         const senderEmail = process.env.MAIL_FROM || process.env.SMTP_USER || 'noreply@medical365.in';
         const fromHeader = `"${effectiveDisplayName}" <${senderEmail}>`;
@@ -304,6 +321,11 @@ Powered by Medical365`;
 async function sendStaffWelcomeEmail({ email, password, name, role, hospitalName, loginUrl }) {
     try {
         if (!email) return;
+
+        if (isDemoRecipient(email)) {
+            console.log(`[email-service] [DEMO SAFEGUARD] Simulated staff welcome email delivery for demo address: ${email}`);
+            return;
+        }
 
         const hName = hospitalName || 'Medical 365';
         const fromEmail = process.env.MAIL_FROM || process.env.SMTP_USER || 'noreply@medical365.in';

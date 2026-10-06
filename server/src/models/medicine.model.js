@@ -24,6 +24,10 @@ const medicineSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Cloud -> Local Sync Plugin
+const syncModelPlugin = require('../services/localAgent/syncModelPlugin');
+medicineSchema.plugin(syncModelPlugin, { entityType: 'Medicine' });
+
 const Medicine = mongoose.model('Medicine', medicineSchema);
 
 module.exports = Medicine;

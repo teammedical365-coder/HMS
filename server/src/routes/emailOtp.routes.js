@@ -17,6 +17,7 @@ const TokenBlacklist = require('../models/tokenBlacklist.model');
 const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/jwt');
 const { emailOtpSendLimiter, emailOtpVerifyLimiter } = require('../middleware/rateLimiter');
 const { sendLoginOtpEmail } = require('../services/email.service');
+const { isDemoAccount, isDemoHospital } = require('../config/demoConfig');
 
 const OTP_EXPIRY_MINUTES = 5;
 const OTP_MAX_ATTEMPTS = 5;
@@ -87,6 +88,17 @@ async function buildLoginUserData(user, roleData) {
         lastLogin: user.lastLogin || null,
     };
 
+    const isDemo = isDemoAccount(user.email) || isDemoHospital(user.hospitalId);
+    if (isDemo) {
+        userData.isDemo = true;
+        userData.isDemoUser = true;
+        userData.isDemoTenant = true;
+        if (tenant) {
+            tenant.isDemo = true;
+            tenant.isDemoTenant = true;
+        }
+    }
+
     return { userData, tenant };
 }
 
@@ -150,6 +162,7 @@ async function createSessionAndToken(user, roleData, req) {
     user.lastLogin = now;
 
     // Generate JWT with sessionId
+    const isDemo = isDemoAccount(user.email) || isDemoHospital(user.hospitalId);
     const token = jwt.sign(
         {
             jti,
@@ -159,6 +172,7 @@ async function createSessionAndToken(user, roleData, req) {
             hospitalId: user.hospitalId ? String(user.hospitalId) : null,
             sessionId,
             tv: user.tokenVersion ?? 0,
+            ...(isDemo ? { isDemo: true, isDemoUser: true, isDemoTenant: true } : {})
         },
         JWT_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
@@ -437,6 +451,47 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
         const isPasswordValid = await user.comparePassword(password);
         if (!isPasswordValid) {
             return res.status(401).json({ success: false, message: 'Invalid email or password' });
+        }
+
+        // ── DEDICATED DEMO ACCOUNT LOGIN (SERVER-SIDE OTP BYPASS) ───────────────
+        // For ONLY the designated demo account (demo@medical365.com), bypass OTP,
+        // invalidate existing session for clean demo access, issue full JWT, and complete login.
+        if (isDemoAccount(normalizedEmail)) {
+            if (!roleData) {
+                roleData = await resolveRoleData(user);
+                if (!roleData) {
+                    roleData = {
+                        name: 'hospitaladmin',
+                        permissions: ['*'],
+                        dashboardPath: '/hospitaladmin',
+                        navLinks: [],
+                        isSystemRole: true
+                    };
+                }
+            }
+
+            // Invalidate previous sessions so presentation login is always clean and seamless
+            await invalidateUserSessions(user._id);
+
+            const { token, userData, tenant } = await createSessionAndToken(user, roleData, req);
+
+            return res.json({
+                success: true,
+                otpBypassed: true,
+                isDemo: true,
+                isDemoUser: true,
+                isDemoTenant: true,
+                activeSessionExists: false,
+                message: 'Medical365 Demo Login Successful',
+                token,
+                user: {
+                    ...userData,
+                    isDemo: true,
+                    isDemoUser: true,
+                    isDemoTenant: true
+                },
+                tenant
+            });
         }
 
         // ── DEV BYPASS: Skip OTP when AUTH_OTP_ENABLED=false ──────────────────

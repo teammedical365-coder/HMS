@@ -69,6 +69,30 @@ const Navbar = () => {
             </NavLink>
           )}
 
+          {isAuthenticated && user?.isDemo && (
+            <div 
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                color: '#ffffff',
+                padding: '3px 9px',
+                borderRadius: '9999px',
+                fontSize: '0.68rem',
+                fontWeight: '800',
+                letterSpacing: '0.08em',
+                boxShadow: '0 2px 6px rgba(217, 119, 6, 0.35)',
+                textTransform: 'uppercase',
+                userSelect: 'none'
+              }}
+              title="Medical365 Demo Mode (Isolated Tenant)"
+            >
+              <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#ffffff', display: 'inline-block' }} />
+              DEMO MODE
+            </div>
+          )}
+
           <div className="nav-divider" />
 
           {/* Notifications */}

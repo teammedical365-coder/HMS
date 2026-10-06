@@ -23,6 +23,7 @@ class ConfigManager {
         // Merge with environment variables
         const config = {
             cloudUrl: process.env.MED365_CLOUD_URL || loaded.cloudUrl || 'http://localhost:3000',
+            hospitalId: process.env.MED365_HOSPITAL_ID || loaded.hospitalId || '',
             installationId: process.env.MED365_INSTALLATION_ID || loaded.installationId || '',
             pairingToken: process.env.MED365_PAIRING_TOKEN || loaded.pairingToken || '',
             agentToken: process.env.MED365_AGENT_TOKEN || loaded.agentToken || null,
@@ -30,7 +31,7 @@ class ConfigManager {
             localHealthPort: parseInt(process.env.MED365_HEALTH_PORT || loaded.localHealthPort || '4000', 10),
             heartbeatIntervalMs: parseInt(process.env.MED365_HEARTBEAT_INTERVAL || loaded.heartbeatIntervalMs || '15000', 10),
             agentName: loaded.agentName || 'Hospital Local Server',
-            agentVersion: '1.0.0'
+            agentVersion: '2.4.0'
         };
 
         return config;

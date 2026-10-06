@@ -84,6 +84,12 @@ const sendViaTwilio = async (phone, otp) => {
 const sendOTP = async (phone) => {
     const otp = generateOTP();
 
+    // Demo safeguard: fictional numbers never send real external SMS
+    if (!phone || phone.startsWith('555') || phone.startsWith('000') || phone === '9876543210' || phone === '9999999999') {
+        console.log(`[SMS-OTP] [DEMO SAFEGUARD] Simulated OTP dispatch for demo phone ${phone}: ${otp}`);
+        return { otp };
+    }
+
     switch (PROVIDER) {
         case 'msg91':   await sendViaMSG91(phone, otp);   break;
         case 'twilio':  await sendViaTwilio(phone, otp);  break;

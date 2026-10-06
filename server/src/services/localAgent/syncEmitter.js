@@ -12,8 +12,29 @@ class SyncEmitter {
             if (doc._source === 'LOCAL_SYNC_APPLIED' || doc._origin === 'LOCAL') {
                 return null;
             }
-            const targetHospitalId = hospitalId || doc.hospitalId || (entityType === 'Hospital' ? doc._id : null);
-            if (!targetHospitalId) return null;
+            let targetHospitalId = hospitalId || doc.hospitalId || (entityType === 'Hospital' ? doc._id : null);
+            if (!targetHospitalId) {
+                if (entityType === 'Medicine') {
+                    // Global catalog entity: broadcast to all active local installations
+                    try {
+                        const LocalInstallation = require('../../models/localInstallation.model');
+                        const activeInsts = await LocalInstallation.find({ status: { $ne: 'NOT_CONFIGURED' } }).select('hospitalId').lean();
+                        for (const inst of activeInsts) {
+                            await syncEventService.createSyncEvent({
+                                hospitalId: inst.hospitalId,
+                                entityType: 'Medicine',
+                                entityId: String(doc._id || doc.id),
+                                operation,
+                                payload: doc,
+                                version: Date.now(),
+                                io
+                            });
+                        }
+                    } catch (e) {}
+                    return true;
+                }
+                return null;
+            }
 
             // Only sync patients for User model changes
             if (entityType === 'User' || entityType === 'Patient') {

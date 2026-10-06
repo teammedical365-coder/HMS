@@ -256,11 +256,12 @@ class ConflictResolutionService {
             // Validate selected merge fields
             finalData = this.sanitizePayload(baseCloud);
 
-            for (const [field, choice] of Object.entries(selectedMergeFields || {})) {
+            for (const [field, rawChoice] of Object.entries(selectedMergeFields || {})) {
                 if (PROHIBITED_FIELDS.has(field)) {
                     continue; // Skip prohibited fields safely
                 }
 
+                const choice = String(rawChoice || '').toUpperCase();
                 if (choice === 'LOCAL') {
                     if (baseLocal[field] !== undefined) {
                         finalData[field] = baseLocal[field];
@@ -374,6 +375,8 @@ class ConflictResolutionService {
             success: true,
             message: `Conflict '${conflictId}' resolved successfully using ${resolutionType}.`,
             conflict,
+            resolutionType: conflict.resolutionType,
+            resolutionStrategy: conflict.resolutionType,
             finalCloudVersion: newCloudVersion,
             updatedDoc
         };

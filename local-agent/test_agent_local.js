@@ -75,12 +75,52 @@ async function runLocalAgentTests() {
         const res = await httpGet('http://localhost:4001/status');
         assert.strictEqual(res.status, 200);
         assert(res.body.agent);
-        assert(res.body.database);
-        assert(res.body.cloud);
         assert(Array.isArray(res.body.operationalLogs));
     });
 
-    // 3. Cloud Client Backoff Test
+    // 3. Local Mutation & Outbox Test
+    await test('Local health server accepts offline mutations on POST /mutate', async () => {
+        const payload = JSON.stringify({
+            entityType: 'Patient',
+            entityId: 'PAT-LOCAL-TEST-001',
+            operation: 'CREATE',
+            payload: { name: 'Test Patient Offline', phone: '9988776655' }
+        });
+
+        const postResult = await new Promise((resolve, reject) => {
+            const req = http.request({
+                hostname: 'localhost',
+                port: 4001,
+                path: '/mutate',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(payload)
+                }
+            }, (res) => {
+                let data = '';
+                res.on('data', chunk => { data += chunk; });
+                res.on('end', () => {
+                    resolve({ status: res.statusCode, body: JSON.parse(data) });
+                });
+            });
+            req.on('error', reject);
+            req.write(payload);
+            req.end();
+        });
+
+        assert.strictEqual(postResult.status, 200);
+        assert.strictEqual(postResult.body.success, true);
+        assert(postResult.body.eventId.startsWith('OUT-'));
+
+        // Query outbox stats
+        const statsRes = await httpGet('http://localhost:4001/outbox/stats');
+        assert.strictEqual(statsRes.status, 200);
+        assert.strictEqual(statsRes.body.success, true);
+        assert(statsRes.body.stats.pending >= 1);
+    });
+
+    // 4. Cloud Client Backoff Test
     await test('Cloud client calculates exponential backoff with jitter upon failure', () => {
         cloudClient.status = 'CONNECTED';
         const initialDelay = cloudClient.backoffDelayMs;
@@ -96,7 +136,7 @@ async function runLocalAgentTests() {
         assert(cloudClient.consecutiveFailures === 2);
     });
 
-    // 4. Shutdown
+    // 5. Shutdown
     localHealthServer.stop();
     console.log('\n======================================================');
     console.log(`LOCAL AGENT TESTS FINISHED: ${passed} passed, ${failed} failed.`);

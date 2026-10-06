@@ -100,6 +100,10 @@ class LocalDatabaseManager {
         }
     }
 
+    isConnected() {
+        return Boolean(mongoose && mongoose.connection && mongoose.connection.readyState === 1);
+    }
+
     getHealth() {
         return {
             status: this.status,

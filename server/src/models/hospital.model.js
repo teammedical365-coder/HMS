@@ -290,4 +290,8 @@ hospitalSchema.post('save', async function (doc) {
     }
 });
 
+// Cloud -> Local Sync Plugin
+const syncModelPlugin = require('../services/localAgent/syncModelPlugin');
+hospitalSchema.plugin(syncModelPlugin, { entityType: 'Hospital' });
+
 module.exports = mongoose.model('Hospital', hospitalSchema);
