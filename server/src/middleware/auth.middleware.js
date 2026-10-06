@@ -116,6 +116,7 @@ exports.verifyToken = async (req, res, next) => {
             roleData = {
                 name: 'patient',
                 permissions: ['appointment_manage', 'reception_access'],
+                dashboardPath: '/patient/dashboard',
                 isSystemRole: true
             };
         } else if (user.role) {

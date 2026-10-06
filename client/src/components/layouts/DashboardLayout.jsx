@@ -140,6 +140,11 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
                 { label: 'Patient Billing', path: '/cashier/billing', icon: <FiFileText />, prefetchKey: 'bill_page', prefetchFn: () => import('../../pages/cashier/CashierDashboard') },
             ];
         }
+        if (role === 'patient') {
+            return [
+                { label: 'Patient Dashboard', path: '/patient/dashboard', icon: <FiHome />, prefetchKey: 'pat_dash', prefetchFn: () => import('../../pages/patient/PatientDashboard') },
+            ];
+        }
         return [
             { label: 'My Dashboard', path: '/my-dashboard', icon: <FiHome />, prefetchKey: 'my_dash', prefetchFn: () => import('../../pages/RoleDashboard') },
         ];

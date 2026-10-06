@@ -95,14 +95,29 @@ const RoleDashboard = () => {
 
 
     useEffect(() => {
-        if (isReception) {
+        const cleanRole = (roleName || '').toLowerCase().replace(/\s+/g, '');
+        if (isReception || cleanRole === 'reception' || cleanRole === 'receptionist') {
             navigate('/reception/dashboard', { replace: true });
-        } else if ((roleName || '').toLowerCase() === 'centraladmin' || (roleName || '').toLowerCase() === 'superadmin') {
+        } else if (cleanRole === 'centraladmin' || cleanRole === 'superadmin') {
             navigate('/supremeadmin', { replace: true });
-        } else if (['nurse', 'staffnurse', 'headnurse'].includes((roleName || '').toLowerCase().replace(/\s+/g, ''))) {
+        } else if (['nurse', 'staffnurse', 'headnurse'].includes(cleanRole)) {
             navigate('/nurse/dashboard', { replace: true });
-        } else if ((roleName || '').toLowerCase().includes('assistant')) {
+        } else if (cleanRole.includes('assistant')) {
             navigate('/assistant/dashboard', { replace: true });
+        } else if (cleanRole === 'doctor' || cleanRole === 'clinicdoctor') {
+            navigate('/doctor/patients', { replace: true });
+        } else if (cleanRole.includes('pharmac')) {
+            navigate('/pharmacy/inventory', { replace: true });
+        } else if (cleanRole === 'lab') {
+            navigate('/lab/dashboard', { replace: true });
+        } else if (cleanRole.startsWith('ot')) {
+            navigate('/ot/dashboard', { replace: true });
+        } else if (cleanRole === 'accountant') {
+            navigate('/accountant/dashboard', { replace: true });
+        } else if (cleanRole === 'cashier' || cleanRole === 'billing') {
+            navigate('/cashier/billing', { replace: true });
+        } else if (cleanRole === 'patient') {
+            navigate('/patient/dashboard', { replace: true });
         }
     }, [isReception, roleName, navigate]);
 

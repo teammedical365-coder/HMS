@@ -29,6 +29,12 @@ const getRoleDashboardPath = (user) => {
   if (role === 'otmanager' || role === 'otstaff') {
     return '/ot/dashboard';
   }
+  if (['doctor_assistant', 'assistant', 'clinicalassistant'].includes(role)) {
+    return '/assistant/dashboard';
+  }
+  if (role === 'patient') {
+    return '/patient/dashboard';
+  }
   if (role === 'hospitaladmin') {
     return '/hospitaladmin';
   }

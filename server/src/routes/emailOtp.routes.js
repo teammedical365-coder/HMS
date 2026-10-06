@@ -118,6 +118,16 @@ async function resolveRoleData(user) {
         };
     }
 
+    if (user.role === 'patient') {
+        return {
+            name: 'patient',
+            permissions: ['appointment_manage', 'reception_access'],
+            dashboardPath: '/patient/dashboard',
+            navLinks: [],
+            isSystemRole: true,
+        };
+    }
+
     let roleData = null;
     if (mongoose.Types.ObjectId.isValid(user.role)) {
         roleData = await Role.findById(user.role);

@@ -31,12 +31,33 @@ const DEMO_NURSE_PASSWORD = process.env.DEMO_NURSE_PASSWORD || 'nurse@123';
 const DEMO_ACCOUNTANT_EMAIL = (process.env.DEMO_ACCOUNTANT_EMAIL || 'accountant@demo.com').toLowerCase().trim();
 const DEMO_ACCOUNTANT_PASSWORD = process.env.DEMO_ACCOUNTANT_PASSWORD || 'accountant@123';
 
+const DEMO_PHARMACY_EMAIL = (process.env.DEMO_PHARMACY_EMAIL || 'pharmacy@demo.com').toLowerCase().trim();
+const DEMO_PHARMACY_PASSWORD = process.env.DEMO_PHARMACY_PASSWORD || 'pharmacy@123';
+
+const DEMO_LAB_EMAIL = (process.env.DEMO_LAB_EMAIL || 'lab@demo.com').toLowerCase().trim();
+const DEMO_LAB_PASSWORD = process.env.DEMO_LAB_PASSWORD || 'lab@123';
+
+const DEMO_OT_EMAIL = (process.env.DEMO_OT_EMAIL || 'ot@demo.com').toLowerCase().trim();
+const DEMO_OT_PASSWORD = process.env.DEMO_OT_PASSWORD || 'ot@123';
+
+const DEMO_ASSISTANT_EMAIL = (process.env.DEMO_ASSISTANT_EMAIL || 'assistant@demo.com').toLowerCase().trim();
+const DEMO_ASSISTANT_PASSWORD = process.env.DEMO_ASSISTANT_PASSWORD || 'assistant@123';
+
+const DEMO_CASHIER_EMAIL = (process.env.DEMO_CASHIER_EMAIL || 'cashier@demo.com').toLowerCase().trim();
+const DEMO_CASHIER_PASSWORD = process.env.DEMO_CASHIER_PASSWORD || 'cashier@123';
+
+const DEMO_PATIENT_EMAIL = (process.env.DEMO_PATIENT_EMAIL || 'patient@demo.com').toLowerCase().trim();
+const DEMO_PATIENT_PASSWORD = process.env.DEMO_PATIENT_PASSWORD || 'patient@123';
+
+const DEMO_CENTRALADMIN_EMAIL = (process.env.DEMO_CENTRALADMIN_EMAIL || 'centraladmin@demo.com').toLowerCase().trim();
+const DEMO_CENTRALADMIN_PASSWORD = process.env.DEMO_CENTRALADMIN_PASSWORD || 'centraladmin@123';
+
 // Central / Legacy Demo Account
 const DEMO_EMAIL = (process.env.DEMO_EMAIL || 'demo@medical365.com').toLowerCase().trim();
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD || 'Demo@12345';
 
 /**
- * Predefined Demo Users Specification
+ * Predefined Demo Users Specification covering every dashboard in the platform
  */
 const PREDEFINED_DEMO_USERS = [
     {
@@ -91,6 +112,76 @@ const PREDEFINED_DEMO_USERS = [
         phone: '9000000005'
     },
     {
+        key: 'PHARMACY',
+        email: DEMO_PHARMACY_EMAIL,
+        password: DEMO_PHARMACY_PASSWORD,
+        name: 'Demo Pharmacist',
+        roleType: 'Pharmacist',
+        roleName: 'Pharmacist',
+        dashboardPath: '/pharmacy/inventory',
+        phone: '9000000006'
+    },
+    {
+        key: 'LAB',
+        email: DEMO_LAB_EMAIL,
+        password: DEMO_LAB_PASSWORD,
+        name: 'Demo Lab Technician',
+        roleType: 'Lab',
+        roleName: 'Lab',
+        dashboardPath: '/lab/dashboard',
+        phone: '9000000007'
+    },
+    {
+        key: 'OT',
+        email: DEMO_OT_EMAIL,
+        password: DEMO_OT_PASSWORD,
+        name: 'Demo OT Manager',
+        roleType: 'otmanager',
+        roleName: 'otmanager',
+        dashboardPath: '/ot/dashboard',
+        phone: '9000000008'
+    },
+    {
+        key: 'ASSISTANT',
+        email: DEMO_ASSISTANT_EMAIL,
+        password: DEMO_ASSISTANT_PASSWORD,
+        name: 'Demo Clinical Assistant',
+        roleType: 'doctor_assistant',
+        roleName: 'doctor_assistant',
+        dashboardPath: '/assistant/dashboard',
+        phone: '9000000009'
+    },
+    {
+        key: 'CASHIER',
+        email: DEMO_CASHIER_EMAIL,
+        password: DEMO_CASHIER_PASSWORD,
+        name: 'Demo Cashier',
+        roleType: 'Cashier',
+        roleName: 'Cashier',
+        dashboardPath: '/cashier/billing',
+        phone: '9000000010'
+    },
+    {
+        key: 'PATIENT',
+        email: DEMO_PATIENT_EMAIL,
+        password: DEMO_PATIENT_PASSWORD,
+        name: 'Demo Patient User',
+        roleType: 'Patient',
+        roleName: 'Patient',
+        dashboardPath: '/patient/dashboard',
+        phone: '9000000011'
+    },
+    {
+        key: 'CENTRALADMIN',
+        email: DEMO_CENTRALADMIN_EMAIL,
+        password: DEMO_CENTRALADMIN_PASSWORD,
+        name: 'Medical365 Central Admin',
+        roleType: 'centraladmin',
+        roleName: 'centraladmin',
+        dashboardPath: '/supremeadmin',
+        phone: '9000000012'
+    },
+    {
         key: 'LEGACY_DEMO',
         email: DEMO_EMAIL,
         password: DEMO_PASSWORD,
@@ -98,7 +189,7 @@ const PREDEFINED_DEMO_USERS = [
         roleType: 'hospitaladmin',
         roleName: 'hospitaladmin',
         dashboardPath: '/hospitaladmin',
-        phone: '9000000000'
+        phone: '9000000099'
     }
 ];
 
@@ -144,28 +235,30 @@ function isDemoAccount(email) {
  * entitled to OTP bypass?
  * 
  * Must satisfy ALL THREE criteria:
- * 1. User belongs to DEMO_HOSPITAL
+ * 1. User belongs to DEMO_HOSPITAL (or is global predefined centraladmin)
  * 2. User email is in the server-side predefined allowlist
  * 3. User document in DB has explicit isPredefinedDemo === true
- * 
- * Any new user created inside Demo Hospital (e.g. newstaff@demo.com) will FAIL
- * criteria #2 and #3, and MUST follow the normal authentication / OTP flow.
  */
 function isPredefinedDemoUser(user) {
     if (!user || !user.email) return false;
     
-    // 1. Must belong to DEMO_HOSPITAL
-    if (!isDemoHospital(user.hospitalId)) return false;
-
-    // 2. Must match server-side predefined allowlist
+    // 1. Must match server-side predefined allowlist
     const cleanEmail = String(user.email).toLowerCase().trim();
     const inAllowlist = PREDEFINED_DEMO_USERS.some(u => u.email === cleanEmail);
     if (!inAllowlist) return false;
 
-    // 3. Must have explicit isPredefinedDemo flag on DB user record
+    // 2. Must have explicit isPredefinedDemo flag on DB user record
     if (user.isPredefinedDemo !== true && user.isPredefinedDemo !== 'true') {
         return false;
     }
+
+    // 3. Central admin is global (hospitalId may be null)
+    if (cleanEmail === DEMO_CENTRALADMIN_EMAIL) {
+        return true;
+    }
+
+    // 4. Hospital users must belong to DEMO_HOSPITAL
+    if (!isDemoHospital(user.hospitalId)) return false;
 
     return true;
 }
@@ -197,6 +290,20 @@ module.exports = {
     DEMO_NURSE_PASSWORD,
     DEMO_ACCOUNTANT_EMAIL,
     DEMO_ACCOUNTANT_PASSWORD,
+    DEMO_PHARMACY_EMAIL,
+    DEMO_PHARMACY_PASSWORD,
+    DEMO_LAB_EMAIL,
+    DEMO_LAB_PASSWORD,
+    DEMO_OT_EMAIL,
+    DEMO_OT_PASSWORD,
+    DEMO_ASSISTANT_EMAIL,
+    DEMO_ASSISTANT_PASSWORD,
+    DEMO_CASHIER_EMAIL,
+    DEMO_CASHIER_PASSWORD,
+    DEMO_PATIENT_EMAIL,
+    DEMO_PATIENT_PASSWORD,
+    DEMO_CENTRALADMIN_EMAIL,
+    DEMO_CENTRALADMIN_PASSWORD,
     DEMO_EMAIL,
     DEMO_PASSWORD,
     PREDEFINED_DEMO_USERS,
