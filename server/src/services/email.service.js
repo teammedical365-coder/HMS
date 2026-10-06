@@ -1,11 +1,16 @@
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
-const { isDemoAccount } = require('../config/demoConfig');
+const { isDemoAccount, isDemoHospital, isPredefinedDemoEmail } = require('../config/demoConfig');
 
-function isDemoRecipient(email) {
+function isDemoRecipient(email, hospitalId) {
+    if (hospitalId && isDemoHospital(hospitalId)) return true;
     if (!email || typeof email !== 'string') return false;
     const clean = email.toLowerCase().trim();
-    return isDemoAccount(clean) || clean.endsWith('@medical365.com') || clean.includes('demo');
+    return isPredefinedDemoEmail(clean) || 
+           isDemoAccount(clean) || 
+           clean.endsWith('@demo.com') || 
+           clean.endsWith('@medical365.com') || 
+           clean.includes('demo');
 }
 
 // Create reusable transporter using SMTP config from .env

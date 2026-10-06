@@ -47,20 +47,6 @@ const DashboardSidebar = memo(({ isOpen, setOpen }) => {
             ];
         }
         if (role === 'hospitaladmin') {
-            if (user?.isDemo) {
-                return [
-                    { label: 'Hospital Overview', path: '/hospitaladmin', icon: <FiHome />, prefetchKey: 'ha_dash', prefetchFn: () => import('../../pages/hospitaladmin/HospitalAdminDashboard') },
-                    { label: 'Reception & Queue', path: '/reception/dashboard', icon: <FiUsers />, prefetchKey: 'rec_dash', prefetchFn: () => import('../../pages/reception/ReceptionDashboard') },
-                    { label: 'Doctor Clinical', path: '/doctor/patients', icon: <FiActivity />, prefetchKey: 'doc_patients', prefetchFn: () => import('../../pages/doctors/Patient') },
-                    { label: 'Nurse & IPD Care', path: '/nurse/dashboard', icon: <FiHeart />, prefetchKey: 'nurse_dash', prefetchFn: () => import('../../pages/nurse/NurseDashboard') },
-                    { label: 'Billing & Invoices', path: '/billing/patient', icon: <FiFileText />, prefetchKey: 'ha_billing', prefetchFn: () => import('../../pages/billing/PatientBillingProfile') },
-                    { label: 'Accountant Hub', path: '/accountant/dashboard', icon: <FiDollarSign />, prefetchKey: 'acc_dash', prefetchFn: () => import('../../pages/accountant/AccountantDashboard') },
-                    { label: 'Pharmacy & Stock', path: '/pharmacy/inventory', icon: <FiPackage />, prefetchKey: 'ha_pharma', prefetchFn: () => import('../../pages/pharmacy/PharmacyInventory') },
-                    { label: 'Package Management', path: '/hospitaladmin/packages', icon: <FiGrid />, prefetchKey: 'ha_packages', prefetchFn: () => import('../../pages/hospitaladmin/PackageManagement') },
-                    { label: 'Local DB & Sync', path: '/hospitaladmin/local-sync', icon: <FiServer />, prefetchKey: 'ha_localsync', prefetchFn: () => import('../../pages/hospitaladmin/LocalSync') },
-                    { label: 'Staff Directory', path: '/admin/users', icon: <FiUsers />, prefetchKey: 'ha_users', prefetchFn: () => import('../../pages/admin/Admin') },
-                ];
-            }
             const u = JSON.parse(localStorage.getItem('user') || '{}');
             if (u.clinicType === 'clinic' || u.subscriptionPlan === 'starter') {
                 return [

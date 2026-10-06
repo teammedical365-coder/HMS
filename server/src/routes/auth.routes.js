@@ -13,7 +13,7 @@ const { verifyToken } = require('../middleware/auth.middleware');
 const TokenBlacklist = require('../models/tokenBlacklist.model');
 const auditLog = require('../middleware/audit.middleware');
 const { v4: uuidv4 } = require('uuid');
-const { isDemoAccount, isDemoHospital } = require('../config/demoConfig');
+const { isDemoAccount, isDemoHospital, isPredefinedDemoUser, resolveDemoHospitalId } = require('../config/demoConfig');
 
 /**
  * Helper: Build user response with full role data
@@ -39,7 +39,8 @@ async function buildUserResponse(user) {
     roleName = roleData ? roleData.name : null;
   }
 
-  const isDemo = isDemoAccount(user.email) || isDemoHospital(user.hospitalId);
+  const isDemoTenant = isDemoHospital(user.hospitalId);
+  const isPredefinedDemo = isPredefinedDemoUser(user);
 
   return {
     id: user._id,
@@ -53,7 +54,7 @@ async function buildUserResponse(user) {
     dashboardPath: roleData ? roleData.dashboardPath : '/',
     navLinks: roleData ? roleData.navLinks : [],
     lastLogin: user.lastLogin || null,
-    ...(isDemo ? { isDemo: true, isDemoUser: true, isDemoTenant: true } : {})
+    ...(isDemoTenant ? { isDemo: true, isDemoTenant: true, isDemoUser: isPredefinedDemo } : {})
   };
 }
 
@@ -198,32 +199,36 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     const normalizedEmail = email.toLowerCase().trim();
     
-    let resolvedHospitalId = hospitalId;
+    let resolvedHospitalId = isDemoHospital(hospitalId) ? resolveDemoHospitalId(hospitalId) : hospitalId;
     if (!resolvedHospitalId && (hospitalSlug || tenantId)) {
-        const rawSlug = String(hospitalSlug || tenantId).toLowerCase().trim();
-        let cleanSlug = rawSlug;
-        if (cleanSlug.endsWith('.medical365.in')) {
-            cleanSlug = cleanSlug.replace('.medical365.in', '');
-        } else if (cleanSlug.endsWith('.localhost')) {
-            cleanSlug = cleanSlug.replace('.localhost', '');
-        }
-        const noDashSlug = cleanSlug.replace(/-/g, '');
-        const withDashSlug = cleanSlug.replace(/\s+/g, '-');
-
-        const hospital = await Hospital.findOne({
-            $or: [
-                { slug: cleanSlug },
-                { slug: noDashSlug },
-                { slug: withDashSlug },
-                { customDomain: rawSlug },
-                { customDomain: cleanSlug }
-            ]
-        });
-
-        if (hospital) {
-            resolvedHospitalId = hospital._id;
+        if (isDemoHospital(hospitalSlug || tenantId)) {
+            resolvedHospitalId = resolveDemoHospitalId(hospitalSlug || tenantId);
         } else {
-            console.log(`[Auth] Login note: Tenant slug '${rawSlug}' not found in database.`);
+            const rawSlug = String(hospitalSlug || tenantId).toLowerCase().trim();
+            let cleanSlug = rawSlug;
+            if (cleanSlug.endsWith('.medical365.in')) {
+                cleanSlug = cleanSlug.replace('.medical365.in', '');
+            } else if (cleanSlug.endsWith('.localhost')) {
+                cleanSlug = cleanSlug.replace('.localhost', '');
+            }
+            const noDashSlug = cleanSlug.replace(/-/g, '');
+            const withDashSlug = cleanSlug.replace(/\s+/g, '-');
+
+            const hospital = await Hospital.findOne({
+                $or: [
+                    { slug: cleanSlug },
+                    { slug: noDashSlug },
+                    { slug: withDashSlug },
+                    { customDomain: rawSlug },
+                    { customDomain: cleanSlug }
+                ]
+            });
+
+            if (hospital) {
+                resolvedHospitalId = hospital._id;
+            } else {
+                console.log(`[Auth] Login note: Tenant slug '${rawSlug}' not found in database.`);
+            }
         }
     }
 
@@ -340,7 +345,8 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.json({ success: true, mfaRequired: true, preAuthToken });
     }
 
-    const isDemo = isDemoAccount(user.email) || isDemoHospital(user.hospitalId);
+    const isDemoTenant = isDemoHospital(user.hospitalId);
+    const isPredefinedDemo = isPredefinedDemoUser(user);
 
     const token = jwt.sign(
       {
@@ -350,7 +356,7 @@ router.post('/login', loginLimiter, async (req, res) => {
         roleId: String(user.role),
         hospitalId: user.hospitalId ? String(user.hospitalId) : null,
         tv: user.tokenVersion ?? 0,
-        ...(isDemo ? { isDemo: true, isDemoUser: true, isDemoTenant: true } : {})
+        ...(isDemoTenant ? { isDemo: true, isDemoTenant: true, isDemoUser: isPredefinedDemo } : {})
       },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
@@ -370,7 +376,7 @@ router.post('/login', loginLimiter, async (req, res) => {
                 name: hosp.name,
                 slug: hosp.slug,
                 subdomain: `${hosp.slug}.medical365.in`,
-                ...(isDemo ? { isDemo: true, isDemoTenant: true } : {})
+                ...(isDemoTenant ? { isDemo: true, isDemoTenant: true } : {})
             };
         }
       } catch (_) {}
@@ -394,7 +400,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       dashboardPath: roleData.dashboardPath || '/',
       navLinks: roleData.navLinks || [],
       lastLogin: now,
-      ...(isDemo ? { isDemo: true, isDemoUser: true, isDemoTenant: true } : {})
+      ...(isDemoTenant ? { isDemo: true, isDemoTenant: true, isDemoUser: isPredefinedDemo } : {})
     };
 
     res.json({
@@ -403,7 +409,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       user: userData,
       token,
       tenant,
-      ...(isDemo ? { isDemo: true, isDemoUser: true, isDemoTenant: true } : {})
+      ...(isDemoTenant ? { isDemo: true, isDemoTenant: true, isDemoUser: isPredefinedDemo } : {})
     });
   } catch (error) {
     console.error('Login error:', error);
