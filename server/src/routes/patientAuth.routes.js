@@ -298,6 +298,56 @@ router.post('/send-otp', async (req, res) => {
             }
         }
 
+        // Predefined Demo Patient OTP Bypass
+        const { isDemoHospital, DEMO_PATIENT_EMAIL } = require('../config/demoConfig');
+        const isDemo = isDemoHospital(hospitalId) && (patient.isPredefinedDemo || (DEMO_PATIENT_EMAIL && patient.email === DEMO_PATIENT_EMAIL.toLowerCase()));
+        if (isDemo) {
+            const jwt = require('jsonwebtoken');
+            const { v4: uuidv4 } = require('uuid');
+            const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/jwt');
+            const token = jwt.sign(
+                {
+                    jti: uuidv4(),
+                    patientId: patient._id,
+                    email: patient.email,
+                    hospitalId: String(patient.hospitalId),
+                    role: 'patient',
+                    isDemo: true,
+                    isDemoUser: true,
+                    isDemoTenant: true
+                },
+                JWT_SECRET,
+                { expiresIn: JWT_EXPIRES_IN }
+            );
+
+            let mrn = null;
+            if (patient.linkedPatientProfileId) {
+                const User = require('../models/user.model');
+                const user = await User.findById(patient.linkedPatientProfileId);
+                if (user) mrn = user.patientId || user.uhid;
+            }
+
+            return res.json({
+                success: true,
+                otpBypassed: true,
+                isDemo: true,
+                isDemoUser: true,
+                message: 'Medical365 Demo Patient Login Successful',
+                token,
+                patient: {
+                    _id: patient._id,
+                    name: patient.name,
+                    email: patient.email,
+                    mobile: patient.mobile,
+                    hospitalId: patient.hospitalId,
+                    role: 'patient',
+                    mrn,
+                    isDemo: true,
+                    isDemoUser: true
+                }
+            });
+        }
+
         const crypto = require('crypto');
         const bcrypt = require('bcryptjs');
         const jwt = require('jsonwebtoken');

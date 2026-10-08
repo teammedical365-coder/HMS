@@ -109,6 +109,9 @@ const userSchema = new mongoose.Schema({
 
     // Last login timestamp
     lastLogin: { type: Date, default: null },
+
+    // Predefined Demo Account flag for strict role-based OTP bypass (only true for allowlisted demo users)
+    isPredefinedDemo: { type: Boolean, default: false },
 }, { timestamps: true });
 
 // Scoped compound indexes for multi-tenant isolation per hospital

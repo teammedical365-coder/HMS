@@ -472,6 +472,10 @@ const MainRoutes = () => {
                                 {/* Cashier / Billing */}
                                 <Route path="cashier/billing" element={<ProtectedRoute requiredPermissions={['billing_view', 'billing_manage', 'appointment_manage']} allowedRoles={['billing', 'cashier', 'reception', 'receptionist', 'centraladmin', 'superadmin', 'hospitaladmin']}><CashierDashboard /></ProtectedRoute>} />
 
+                                {/* Patient Portal Pages */}
+                                <Route path="patient/dashboard" element={<ProtectedRoute allowedRoles={['patient', 'hospitaladmin', 'superadmin', 'centraladmin']}><PatientDashboard /></ProtectedRoute>} />
+                                <Route path="patient/book-appointment" element={<ProtectedRoute allowedRoles={['patient', 'hospitaladmin', 'superadmin', 'centraladmin']}><ReceptionDashboard isPatientPortal={true} /></ProtectedRoute>} />
+
                                 {/* Supreme Admin remains outside of hospital slugs */}
                                 <Route path="/supremeadmin" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><CentralAdminDashboard /></ProtectedRoute>} />
                                 <Route path="/supremeadmin/revenue" element={<ProtectedRoute allowedRoles={['centraladmin', 'superadmin']}><SystemRevenueDashboard /></ProtectedRoute>} />

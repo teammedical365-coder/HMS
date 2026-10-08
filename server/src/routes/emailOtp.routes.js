@@ -17,7 +17,7 @@ const TokenBlacklist = require('../models/tokenBlacklist.model');
 const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/jwt');
 const { emailOtpSendLimiter, emailOtpVerifyLimiter } = require('../middleware/rateLimiter');
 const { sendLoginOtpEmail } = require('../services/email.service');
-const { isDemoAccount, isDemoHospital } = require('../config/demoConfig');
+const { isDemoAccount, isDemoHospital, isPredefinedDemoUser, resolveDemoHospitalId } = require('../config/demoConfig');
 
 const OTP_EXPIRY_MINUTES = 5;
 const OTP_MAX_ATTEMPTS = 5;
@@ -88,11 +88,12 @@ async function buildLoginUserData(user, roleData) {
         lastLogin: user.lastLogin || null,
     };
 
-    const isDemo = isDemoAccount(user.email) || isDemoHospital(user.hospitalId);
-    if (isDemo) {
+    const isDemoTenant = isDemoHospital(user.hospitalId);
+    const isPredefinedDemo = isPredefinedDemoUser(user);
+    if (isDemoTenant) {
         userData.isDemo = true;
-        userData.isDemoUser = true;
         userData.isDemoTenant = true;
+        userData.isDemoUser = isPredefinedDemo;
         if (tenant) {
             tenant.isDemo = true;
             tenant.isDemoTenant = true;
@@ -112,6 +113,16 @@ async function resolveRoleData(user) {
             name: user.role,
             permissions: isCentral ? ['*'] : ['admin_manage_roles', 'admin_view_stats'],
             dashboardPath: isCentral ? '/supremeadmin' : '/hospitaladmin',
+            navLinks: [],
+            isSystemRole: true,
+        };
+    }
+
+    if (user.role === 'patient') {
+        return {
+            name: 'patient',
+            permissions: ['appointment_manage', 'reception_access'],
+            dashboardPath: '/patient/dashboard',
             navLinks: [],
             isSystemRole: true,
         };
@@ -162,7 +173,8 @@ async function createSessionAndToken(user, roleData, req) {
     user.lastLogin = now;
 
     // Generate JWT with sessionId
-    const isDemo = isDemoAccount(user.email) || isDemoHospital(user.hospitalId);
+    const isDemoTenant = isDemoHospital(user.hospitalId);
+    const isPredefinedDemo = isPredefinedDemoUser(user);
     const token = jwt.sign(
         {
             jti,
@@ -172,7 +184,7 @@ async function createSessionAndToken(user, roleData, req) {
             hospitalId: user.hospitalId ? String(user.hospitalId) : null,
             sessionId,
             tv: user.tokenVersion ?? 0,
-            ...(isDemo ? { isDemo: true, isDemoUser: true, isDemoTenant: true } : {})
+            ...(isDemoTenant ? { isDemo: true, isDemoTenant: true, isDemoUser: isPredefinedDemo } : {})
         },
         JWT_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
@@ -297,32 +309,40 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
 
         let resolvedHospitalId = null;
         if (!isCentralAdminLogin) {
-            resolvedHospitalId = hospitalId;
+            if (isDemoHospital(hospitalId)) {
+                resolvedHospitalId = resolveDemoHospitalId(hospitalId);
+            } else {
+                resolvedHospitalId = hospitalId;
+            }
             if (!resolvedHospitalId && (hospitalSlug || tenantId)) {
-                const rawSlug = String(hospitalSlug || tenantId).toLowerCase().trim();
-                let cleanSlug = rawSlug;
-                if (cleanSlug.endsWith('.medical365.in')) {
-                    cleanSlug = cleanSlug.replace('.medical365.in', '');
-                } else if (cleanSlug.endsWith('.localhost')) {
-                    cleanSlug = cleanSlug.replace('.localhost', '');
-                }
-                const noDashSlug = cleanSlug.replace(/-/g, '');
-                const withDashSlug = cleanSlug.replace(/\s+/g, '-');
-
-                const hospital = await Hospital.findOne({
-                    $or: [
-                        { slug: cleanSlug },
-                        { slug: noDashSlug },
-                        { slug: withDashSlug },
-                        { customDomain: rawSlug },
-                        { customDomain: cleanSlug }
-                    ]
-                });
-
-                if (hospital) {
-                    resolvedHospitalId = hospital._id;
+                if (isDemoHospital(hospitalSlug || tenantId)) {
+                    resolvedHospitalId = resolveDemoHospitalId(hospitalSlug || tenantId);
                 } else {
-                    console.log(`[Auth] Login note: Tenant slug '${rawSlug}' not found in database.`);
+                    const rawSlug = String(hospitalSlug || tenantId).toLowerCase().trim();
+                    let cleanSlug = rawSlug;
+                    if (cleanSlug.endsWith('.medical365.in')) {
+                        cleanSlug = cleanSlug.replace('.medical365.in', '');
+                    } else if (cleanSlug.endsWith('.localhost')) {
+                        cleanSlug = cleanSlug.replace('.localhost', '');
+                    }
+                    const noDashSlug = cleanSlug.replace(/-/g, '');
+                    const withDashSlug = cleanSlug.replace(/\s+/g, '-');
+
+                    const hospital = await Hospital.findOne({
+                        $or: [
+                            { slug: cleanSlug },
+                            { slug: noDashSlug },
+                            { slug: withDashSlug },
+                            { customDomain: rawSlug },
+                            { customDomain: cleanSlug }
+                        ]
+                    });
+
+                    if (hospital) {
+                        resolvedHospitalId = hospital._id;
+                    } else {
+                        console.log(`[Auth] Login note: Tenant slug '${rawSlug}' not found in database.`);
+                    }
                 }
             }
         }
@@ -453,24 +473,19 @@ router.post('/send', emailOtpSendLimiter, async (req, res) => {
             return res.status(401).json({ success: false, message: 'Invalid email or password' });
         }
 
-        // ── DEDICATED DEMO ACCOUNT LOGIN (SERVER-SIDE OTP BYPASS) ───────────────
-        // For ONLY the designated demo account (demo@medical365.com), bypass OTP,
-        // invalidate existing session for clean demo access, issue full JWT, and complete login.
-        if (isDemoAccount(normalizedEmail)) {
+        // ── PREDEFINED DEMO USERS (SERVER-SIDE OTP BYPASS) ───────────────────────
+        // STRICT 3-POINT SERVER EVALUATION:
+        // 1. User belongs to DEMO_HOSPITAL
+        // 2. User email is in the server-side predefined allowlist
+        // 3. User document in DB has explicit isPredefinedDemo === true
+        // Any newly created user inside Demo Hospital (e.g. newstaff@demo.com)
+        // fails #2 & #3 and MUST follow the normal authentication / OTP flow.
+        if (isPredefinedDemoUser(user)) {
             if (!roleData) {
                 roleData = await resolveRoleData(user);
-                if (!roleData) {
-                    roleData = {
-                        name: 'hospitaladmin',
-                        permissions: ['*'],
-                        dashboardPath: '/hospitaladmin',
-                        navLinks: [],
-                        isSystemRole: true
-                    };
-                }
             }
 
-            // Invalidate previous sessions so presentation login is always clean and seamless
+            // Invalidate previous sessions so demo presentation login is always clean and seamless
             await invalidateUserSessions(user._id);
 
             const { token, userData, tenant } = await createSessionAndToken(user, roleData, req);

@@ -48,14 +48,14 @@ const generalLimiter = rateLimit({
     },
 });
 
-// Email OTP send — when OTP is enabled: 5 sends per 15 min; when disabled: acts as login so more generous
+// Email OTP send — skip successful logins so legitimate users and test suites are not blocked
 const emailOtpSendLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: process.env.AUTH_OTP_ENABLED === 'false' ? 20 : 5,
+    max: process.env.NODE_ENV === 'production' && process.env.AUTH_OTP_ENABLED !== 'false' ? 25 : 150,
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, message: 'Too many login attempts. Please try again after 15 minutes.' },
-    skipSuccessfulRequests: process.env.AUTH_OTP_ENABLED === 'false',
+    skipSuccessfulRequests: true,
 });
 
 // Email OTP verify — 10 attempts per 15 min per IP

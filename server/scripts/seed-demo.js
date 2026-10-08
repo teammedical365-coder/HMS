@@ -1,19 +1,26 @@
 /**
- * seed-demo.js — Production-Safe Idempotent Demo Seeder for Medical365
+ * seed-demo.js — Idempotent Demo Setup & Configuration Script for Medical365
  *
- * Usage:
- *   npm run seed:demo
- *   or: node scripts/seed-demo.js
+ * Seeds/updates all predefined demo accounts across ALL dashboards:
+ *   1. Hospital Admin     : admin@demo.com          (Password: admin@123)
+ *   2. Receptionist       : reception@demo.com      (Password: reception@123)
+ *   3. Doctor             : doctor@demo.com         (Password: doctor@123)
+ *   4. Nurse              : nurse@demo.com          (Password: nurse@123)
+ *   5. Accountant         : accountant@demo.com     (Password: accountant@123)
+ *   6. Pharmacist         : pharmacy@demo.com       (Password: pharmacy@123)
+ *   7. Lab Technician     : lab@demo.com            (Password: lab@123)
+ *   8. OT Manager         : ot@demo.com             (Password: ot@123)
+ *   9. Doctor Assistant   : assistant@demo.com      (Password: assistant@123)
+ *  10. Cashier            : cashier@demo.com        (Password: cashier@123)
+ *  11. Patient Portal     : patient@demo.com        (Password: patient@123)
+ *  12. Central Admin      : centraladmin@demo.com   (Password: centraladmin@123)
+ *  13. Legacy Demo Admin  : demo@medical365.com     (Password: Demo@12345)
  *
- * Configurable via environment variables (or defaults from demoConfig.js):
- *   DEMO_EMAIL       (default: demo@medical365.com)
- *   DEMO_PASSWORD    (default: Demo@12345)
- *   DEMO_HOSPITAL_ID (default: 660000000000000000000001)
- *
- * IDEMPOTENCY:
- *   Running this script multiple times will NEVER create duplicate records.
- *   All records use deterministic, stable demo IDs and unique identifiers.
- *   NO auto-reset or scheduled reset is configured; data persists across restarts.
+ * IDEMPOTENCY & DATA SAFETY:
+ *   Running this script multiple times will NEVER create duplicate users or records.
+ *   Running this script will NEVER delete or erase user-created business data
+ *   (patients, appointments, admissions, clinical records, billing, inventory).
+ *   NO auto-reset or scheduled reset is configured.
  */
 
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
@@ -21,11 +28,37 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const {
-    DEMO_EMAIL,
-    DEMO_PASSWORD,
     DEMO_HOSPITAL_ID,
+    DEMO_HOSPITAL_CODE,
     DEMO_HOSPITAL_SLUG,
     DEMO_HOSPITAL_NAME,
+    DEMO_ADMIN_EMAIL,
+    DEMO_ADMIN_PASSWORD,
+    DEMO_RECEPTION_EMAIL,
+    DEMO_RECEPTION_PASSWORD,
+    DEMO_DOCTOR_EMAIL,
+    DEMO_DOCTOR_PASSWORD,
+    DEMO_NURSE_EMAIL,
+    DEMO_NURSE_PASSWORD,
+    DEMO_ACCOUNTANT_EMAIL,
+    DEMO_ACCOUNTANT_PASSWORD,
+    DEMO_PHARMACY_EMAIL,
+    DEMO_PHARMACY_PASSWORD,
+    DEMO_LAB_EMAIL,
+    DEMO_LAB_PASSWORD,
+    DEMO_OT_EMAIL,
+    DEMO_OT_PASSWORD,
+    DEMO_ASSISTANT_EMAIL,
+    DEMO_ASSISTANT_PASSWORD,
+    DEMO_CASHIER_EMAIL,
+    DEMO_CASHIER_PASSWORD,
+    DEMO_PATIENT_EMAIL,
+    DEMO_PATIENT_PASSWORD,
+    DEMO_CENTRALADMIN_EMAIL,
+    DEMO_CENTRALADMIN_PASSWORD,
+    DEMO_EMAIL,
+    DEMO_PASSWORD,
+    PREDEFINED_DEMO_USERS
 } = require('../src/config/demoConfig');
 
 // Master Models
@@ -34,31 +67,23 @@ const User = require('../src/models/user.model');
 const Role = require('../src/models/role.model');
 const Department = require('../src/models/department.model');
 const Doctor = require('../src/models/doctor.model');
-const ClinicPatient = require('../src/models/clinicPatient.model');
 const Bed = require('../src/models/bed.model');
-const Admission = require('../src/models/admission.model');
-const Appointment = require('../src/models/appointment.model');
-const IPDVitals = require('../src/models/ipdVitals.model');
-const InpatientOrder = require('../src/models/inpatientOrder.model');
-const NursingTask = require('../src/models/nursingTask.model');
-const MARRecord = require('../src/models/marRecord.model');
-const PaymentTransaction = require('../src/models/paymentTransaction.model');
-const Inventory = require('../src/models/inventory.model');
-const HospitalPackage = require('../src/models/hospitalPackage.model');
+const Lab = require('../src/models/lab.model');
+const Pharmacy = require('../src/models/pharmacy.model');
+const PatientAuth = require('../src/models/patientAuth.model');
 
 // Tenant DB Connector
 const { getTenantConnection } = require('../src/db/tenantDb');
 const { getTenantModels } = require('../src/db/tenantModels');
 
 const MASTER_DB_URI = process.env.MONGODB_URL || process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/crm';
-
 const DEMO_HOSP_OBJ_ID = new mongoose.Types.ObjectId(DEMO_HOSPITAL_ID);
 
 async function runSeed() {
     console.log('====================================================');
-    console.log('  MEDICAL365 DEMO TENANT & DATA SEEDER');
+    console.log('  MEDICAL365 ALL-DASHBOARD DEMO SETUP (IDEMPOTENT)');
     console.log('====================================================');
-    console.log(`Connecting to Master DB: ${MASTER_DB_URI.replace(/:[^:@]+@/, ':****@')}`);
+    console.log(`Master DB: ${MASTER_DB_URI.replace(/:[^:@]+@/, ':****@')}`);
 
     await mongoose.connect(MASTER_DB_URI);
     console.log(' Connected to Master Database');
@@ -68,19 +93,18 @@ async function runSeed() {
     const tenantModels = getTenantModels(tenantDb);
     console.log(` Connected to Tenant Database: hms_hospital_${DEMO_HOSPITAL_ID}`);
 
-    const hashedPassword = await bcrypt.hash(DEMO_PASSWORD, 10);
-
     // ─────────────────────────────────────────────────────────────
-    // 1. SEED / UPDATE DEMO HOSPITAL
+    // 1. SEED / UPDATE DEMO HOSPITAL TENANT
     // ─────────────────────────────────────────────────────────────
-    console.log('\n[1/12] Seeding Demo Hospital Tenant...');
+    console.log('\n[1/6] Setting up Demo Hospital Tenant...');
     const hospitalData = {
         _id: DEMO_HOSP_OBJ_ID,
         name: DEMO_HOSPITAL_NAME,
         slug: DEMO_HOSPITAL_SLUG,
+        code: DEMO_HOSPITAL_CODE,
         hospitalCode: 'DEMO',
         phone: '9876543210',
-        email: 'hospital@medical365.com',
+        email: 'hospital@demo.com',
         website: 'https://demo.medical365.com',
         address: '100 Medical Innovation Boulevard, Tech Health City',
         city: 'Bengaluru',
@@ -120,1025 +144,639 @@ async function runSeed() {
         { $set: hospitalData },
         { upsert: true, new: true }
     );
-    console.log(` Demo Hospital confirmed: ${demoHospital.name} (ID: ${demoHospital._id})`);
+    console.log(` Demo Hospital active: "${demoHospital.name}" (ID: ${demoHospital._id}, Code: ${DEMO_HOSPITAL_CODE})`);
 
     // ─────────────────────────────────────────────────────────────
-    // 2. SEED / UPDATE DEMO ADMIN USER
+    // 2. ENSURE ALL STANDARD ROLES EXIST
     // ─────────────────────────────────────────────────────────────
-    console.log('\n[2/12] Seeding Demo Administrator User...');
-    const demoAdminId = new mongoose.Types.ObjectId('660000000000000000000010');
-    const demoUserData = {
-        _id: demoAdminId,
-        name: 'Dr. Rajesh Mehta (Demo Admin)',
-        email: DEMO_EMAIL,
-        password: hashedPassword,
-        phone: '9876543210',
-        role: 'hospitaladmin',
-        hospitalId: DEMO_HOSP_OBJ_ID,
-        aadhaarNumber: '999988887777',
-        age: 46,
-        isDemo: true,
-        isDemoUser: true,
-        isDemoTenant: true
-    };
-
-    const demoUser = await User.findByIdAndUpdate(
-        demoAdminId,
-        { $set: demoUserData },
-        { upsert: true, new: true }
-    );
-
-    // Link demo hospital admin user id
-    await Hospital.findByIdAndUpdate(DEMO_HOSP_OBJ_ID, { $set: { adminUserId: demoUser._id } });
-    console.log(` Demo User confirmed: ${demoUser.email} (Role: ${demoUser.role})`);
-
-    // ─────────────────────────────────────────────────────────────
-    // 3. SEED DEPARTMENTS
-    // ─────────────────────────────────────────────────────────────
-    console.log('\n[3/12] Seeding Hospital Departments...');
-    const departments = [
-        { _id: new mongoose.Types.ObjectId('660000000000000000000101'), name: 'General Medicine', description: 'Primary and internal care' },
-        { _id: new mongoose.Types.ObjectId('660000000000000000000102'), name: 'Cardiology', description: 'Comprehensive heart & vascular care' },
-        { _id: new mongoose.Types.ObjectId('660000000000000000000103'), name: 'Gynecology', description: 'Women health and maternity' },
-        { _id: new mongoose.Types.ObjectId('660000000000000000000104'), name: 'Orthopedics', description: 'Bones, joints and sports medicine' },
-        { _id: new mongoose.Types.ObjectId('660000000000000000000105'), name: 'Pediatrics', description: 'Child health and neonatal care' }
-    ];
-
-    for (const dept of departments) {
-        await Department.findByIdAndUpdate(
-            dept._id,
-            { $set: { ...dept, hospitalId: DEMO_HOSP_OBJ_ID, isActive: true } },
-            { upsert: true, new: true }
-        );
-    }
-    console.log(` ${departments.length} Departments seeded.`);
-
-    // ─────────────────────────────────────────────────────────────
-    // 4. SEED CLINICAL DOCTORS & STAFF USERS
-    // ─────────────────────────────────────────────────────────────
-    console.log('\n[4/12] Seeding Doctors & Staff Accounts...');
-    const staffList = [
+    console.log('\n[2/6] Ensuring standard RBAC Roles exist for all dashboards...');
+    const standardRoles = [
         {
-            userId: new mongoose.Types.ObjectId('660000000000000000000201'),
-            docProfileId: new mongoose.Types.ObjectId('660000000000000000000211'),
-            name: 'Dr. Sneha Iyer',
-            email: 'sneha.iyer.demo@medical365.com',
-            phone: '9876540101',
-            role: 'doctor',
-            doctorId: 'DOC-DEMO-001',
-            specialty: 'Senior Interventional Cardiologist',
-            departments: ['Cardiology'],
-            consultationFee: 800,
-            experience: '14 years',
-            education: 'MD, DM (Cardiology), FACC'
+            name: 'Receptionist',
+            description: 'Patient registration, appointment scheduling, queue and frontdesk operations',
+            permissions: [
+                'appointment_manage',
+                'appointment_view_all',
+                'patient_search',
+                'patient_create',
+                'patient_view',
+                'visit_intake',
+                'reception_access'
+            ],
+            dashboardPath: '/reception/dashboard',
+            navLinks: [
+                { label: 'Reception Dashboard', path: '/reception/dashboard' },
+                { label: 'Patient Registration', path: '/reception/dashboard?view=intake' },
+                { label: 'Patient Billing', path: '/billing/patient' },
+                { label: 'Cash Refunds', path: '/reception/refunds' }
+            ],
+            isSystemRole: true
         },
         {
-            userId: new mongoose.Types.ObjectId('660000000000000000000202'),
-            docProfileId: new mongoose.Types.ObjectId('660000000000000000000212'),
-            name: 'Dr. Vikram Joshi',
-            email: 'vikram.joshi.demo@medical365.com',
-            phone: '9876540102',
-            role: 'doctor',
-            doctorId: 'DOC-DEMO-002',
-            specialty: 'Internal Medicine & Critical Care',
-            departments: ['General Medicine'],
-            consultationFee: 500,
-            experience: '12 years',
-            education: 'MBBS, MD (General Medicine)'
+            name: 'Doctor',
+            description: 'Clinical consultations, diagnoses, e-prescriptions and patient history',
+            permissions: [
+                'visit_diagnose',
+                'patient_view',
+                'clinical_history_view',
+                'lab_view',
+                'pharmacy_view',
+                'doctor_access',
+                'doctor_dashboard'
+            ],
+            dashboardPath: '/doctor/patients',
+            navLinks: [
+                { label: 'Dashboard', path: '/my-dashboard' },
+                { label: 'My Patients', path: '/doctor/patients' },
+                { label: 'AI Assistant', path: '/doctor/ai-assistant' },
+                { label: 'Surgeries', path: '/doctor/surgeries' }
+            ],
+            isSystemRole: true
         },
         {
-            userId: new mongoose.Types.ObjectId('660000000000000000000203'),
-            docProfileId: new mongoose.Types.ObjectId('660000000000000000000213'),
-            name: 'Dr. Ananya Sen',
-            email: 'ananya.sen.demo@medical365.com',
-            phone: '9876540103',
-            role: 'doctor',
-            doctorId: 'DOC-DEMO-003',
-            specialty: 'Obstetrics & Gynecology Specialist',
-            departments: ['Gynecology'],
-            consultationFee: 700,
-            experience: '10 years',
-            education: 'MS (OBG), DNB'
+            name: 'Nurse',
+            description: 'IPD command center, vitals recording, nursing tasks, MAR and patient care',
+            permissions: [
+                'patient_search',
+                'visit_intake',
+                'clinical_history_view',
+                'appointment_view_all',
+                'lab_view',
+                'pharmacy_view',
+                'nurse_access'
+            ],
+            dashboardPath: '/nurse/dashboard',
+            navLinks: [
+                { label: 'Nurse Dashboard', path: '/nurse/dashboard' },
+                { label: 'OPD Queue', path: '/nurse/queue' },
+                { label: 'IPD Center', path: '/nurse/ipd' }
+            ],
+            isSystemRole: true
         },
         {
-            userId: new mongoose.Types.ObjectId('660000000000000000000204'),
-            docProfileId: new mongoose.Types.ObjectId('660000000000000000000214'),
-            name: 'Dr. Rohan Verma',
-            email: 'rohan.verma.demo@medical365.com',
-            phone: '9876540104',
-            role: 'doctor',
-            doctorId: 'DOC-DEMO-004',
-            specialty: 'Orthopedic & Joint Replacement Surgeon',
-            departments: ['Orthopedics'],
-            consultationFee: 750,
-            experience: '15 years',
-            education: 'MS (Ortho), MCh (Ortho)'
-        },
-        // Non-doctor Staff
-        {
-            userId: new mongoose.Types.ObjectId('660000000000000000000221'),
-            name: 'Sister Priya Nair',
-            email: 'priya.nair.demo@medical365.com',
-            phone: '9876540105',
-            role: 'nurse'
+            name: 'Accountant',
+            description: 'Hospital finance, financial records, refund management and accounting',
+            permissions: ['finance_view', 'billing_view', 'billing_manage'],
+            dashboardPath: '/accountant/dashboard',
+            navLinks: [
+                { label: 'Dashboard', path: '/accountant/dashboard' },
+                { label: 'Financial Records', path: '/accountant/financial-records' },
+                { label: 'Refunds', path: '/accountant/refunds' },
+                { label: 'History', path: '/accountant/history' }
+            ],
+            isSystemRole: true
         },
         {
-            userId: new mongoose.Types.ObjectId('660000000000000000000231'),
-            name: 'Amit Kumar (Reception)',
-            email: 'amit.kumar.demo@medical365.com',
-            phone: '9876540106',
-            role: 'receptionist'
+            name: 'Pharmacist',
+            description: 'Pharmacy management, inventory, batches, suppliers and order fulfillment',
+            permissions: ['pharmacy_view', 'pharmacy_manage'],
+            dashboardPath: '/pharmacy/inventory',
+            navLinks: [
+                { label: 'Inventory', path: '/pharmacy/inventory' },
+                { label: 'Orders', path: '/pharmacy/orders' },
+                { label: 'Purchase Invoices', path: '/pharmacy/purchase-invoices' },
+                { label: 'Returns', path: '/pharmacy/returns' }
+            ],
+            isSystemRole: true
         },
         {
-            userId: new mongoose.Types.ObjectId('660000000000000000000241'),
-            name: 'Pooja Kulkarni (Pharmacy)',
-            email: 'pooja.kulkarni.demo@medical365.com',
-            phone: '9876540107',
-            role: 'pharmacist'
+            name: 'Lab',
+            description: 'Laboratory management, diagnostic tests, assignments and test reports',
+            permissions: ['lab_view', 'lab_manage'],
+            dashboardPath: '/lab/dashboard',
+            navLinks: [
+                { label: 'Lab Dashboard', path: '/lab/dashboard' },
+                { label: 'Assigned Tests', path: '/lab/tests' },
+                { label: 'Completed Reports', path: '/lab/completed' }
+            ],
+            isSystemRole: true
         },
         {
-            userId: new mongoose.Types.ObjectId('660000000000000000000251'),
-            name: 'Ramesh Patel (Accounts)',
-            email: 'ramesh.patel.demo@medical365.com',
-            phone: '9876540108',
-            role: 'accountant'
+            name: 'otmanager',
+            description: 'Operation Theatre management, surgery scheduling and OT rooms',
+            permissions: ['ot_manage', 'ot_view', 'surgery_manage'],
+            dashboardPath: '/ot/dashboard',
+            navLinks: [
+                { label: 'OT Dashboard', path: '/ot/dashboard' },
+                { label: 'Planned Surgeries', path: '/ot/planned' },
+                { label: 'OT Schedule', path: '/ot/schedule' },
+                { label: 'OT Rooms', path: '/ot/rooms' }
+            ],
+            isSystemRole: true
+        },
+        {
+            name: 'doctor_assistant',
+            description: 'Clinical preparation, vital signs intake, question libraries and queue triage',
+            permissions: ['assistant_access', 'patient_view', 'visit_intake'],
+            dashboardPath: '/assistant/dashboard',
+            navLinks: [
+                { label: 'Assistant Dashboard', path: '/assistant/dashboard' },
+                { label: 'Assistant Queue', path: '/assistant/queue' },
+                { label: 'Preparation', path: '/assistant/preparation' },
+                { label: 'Question Library', path: '/assistant/question-library' }
+            ],
+            isSystemRole: true
+        },
+        {
+            name: 'Cashier',
+            description: 'Cashier desk, billing, invoices, receipts and payments',
+            permissions: ['billing_view', 'billing_manage', 'appointment_manage'],
+            dashboardPath: '/cashier/billing',
+            navLinks: [
+                { label: 'Cashier Billing', path: '/cashier/billing' },
+                { label: 'Patient Billing', path: '/billing/patient' }
+            ],
+            isSystemRole: true
+        },
+        {
+            name: 'Patient',
+            description: 'Patient portal access, appointment booking and report viewing',
+            permissions: ['appointment_manage', 'reception_access'],
+            dashboardPath: '/patient/dashboard',
+            navLinks: [
+                { label: 'Dashboard', path: '/patient/dashboard' },
+                { label: 'Book Appointment', path: '/patient/book-appointment' }
+            ],
+            isSystemRole: true
+        },
+        {
+            name: 'Admin',
+            description: 'Hospital administrator management and reports',
+            permissions: [
+                'admin_manage_roles',
+                'admin_view_stats',
+                'patient_search',
+                'patient_create',
+                'patient_view',
+                'patient_edit',
+                'appointment_view_all',
+                'appointment_manage',
+                'lab_view',
+                'lab_manage',
+                'pharmacy_view',
+                'pharmacy_manage',
+                'visit_intake',
+                'visit_diagnose',
+                'clinical_history_view'
+            ],
+            dashboardPath: '/hospitaladmin',
+            navLinks: [],
+            isSystemRole: true
         }
     ];
 
-    for (const staff of staffList) {
-        // Upsert User
-        await User.findByIdAndUpdate(
-            staff.userId,
+    const roleMap = new Map();
+    for (const roleDef of standardRoles) {
+        let role = await Role.findOne({ name: { $regex: new RegExp(`^${roleDef.name}$`, 'i') } });
+        if (!role) {
+            role = await Role.create(roleDef);
+            console.log(` Created missing role: ${roleDef.name}`);
+        } else {
+            // Ensure permissions and dashboardPath are complete
+            const mergedPerms = [...new Set([...(role.permissions || []), ...(roleDef.permissions || [])])];
+            role.permissions = mergedPerms;
+            if (!role.dashboardPath) role.dashboardPath = roleDef.dashboardPath;
+            if (roleDef.navLinks && (!role.navLinks || role.navLinks.length === 0)) role.navLinks = roleDef.navLinks;
+            await role.save();
+        }
+        roleMap.set(roleDef.name.toLowerCase(), role);
+    }
+    console.log(` All RBAC Roles verified: ${standardRoles.map(r => r.name).join(', ')}`);
+
+    // ─────────────────────────────────────────────────────────────
+    // 3. SEED PREDEFINED DEMO USERS (WITH REAL PASSWORDS & OTP BYPASS)
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[3/6] Seeding Predefined Demo Users for ALL Dashboards...');
+
+    // Drop stale non-sparse index on aadhaarNumber in tenant database if present
+    try {
+        if (tenantModels.User) {
+            await tenantModels.User.collection.dropIndex('aadhaarNumber_1').catch(() => {});
+        }
+    } catch (_) {}
+
+    const userConfigs = [
+        {
+            key: 'ADMIN',
+            email: DEMO_ADMIN_EMAIL,
+            rawPassword: DEMO_ADMIN_PASSWORD,
+            name: 'Demo Hospital Administrator',
+            roleStr: 'hospitaladmin',
+            roleDoc: null,
+            phone: '9000000001',
+            aadhaarNumber: '900000000001',
+            objectId: new mongoose.Types.ObjectId('660000000000000000000010'),
+            hospitalId: DEMO_HOSP_OBJ_ID
+        },
+        {
+            key: 'RECEPTION',
+            email: DEMO_RECEPTION_EMAIL,
+            rawPassword: DEMO_RECEPTION_PASSWORD,
+            name: 'Demo Receptionist',
+            roleStr: null,
+            roleDoc: roleMap.get('receptionist'),
+            phone: '9000000002',
+            aadhaarNumber: '900000000002',
+            objectId: new mongoose.Types.ObjectId('660000000000000000000020'),
+            hospitalId: DEMO_HOSP_OBJ_ID
+        },
+        {
+            key: 'DOCTOR',
+            email: DEMO_DOCTOR_EMAIL,
+            rawPassword: DEMO_DOCTOR_PASSWORD,
+            name: 'Dr. Demo Physician',
+            roleStr: null,
+            roleDoc: roleMap.get('doctor'),
+            phone: '9000000003',
+            aadhaarNumber: '900000000003',
+            objectId: new mongoose.Types.ObjectId('660000000000000000000030'),
+            specialty: 'General Medicine',
+            hospitalId: DEMO_HOSP_OBJ_ID
+        },
+        {
+            key: 'NURSE',
+            email: DEMO_NURSE_EMAIL,
+            rawPassword: DEMO_NURSE_PASSWORD,
+            name: 'Demo Staff Nurse',
+            roleStr: null,
+            roleDoc: roleMap.get('nurse'),
+            phone: '9000000004',
+            aadhaarNumber: '900000000004',
+            objectId: new mongoose.Types.ObjectId('660000000000000000000040'),
+            hospitalId: DEMO_HOSP_OBJ_ID
+        },
+        {
+            key: 'ACCOUNTANT',
+            email: DEMO_ACCOUNTANT_EMAIL,
+            rawPassword: DEMO_ACCOUNTANT_PASSWORD,
+            name: 'Demo Accountant',
+            roleStr: null,
+            roleDoc: roleMap.get('accountant'),
+            phone: '9000000005',
+            aadhaarNumber: '900000000005',
+            objectId: new mongoose.Types.ObjectId('660000000000000000000050'),
+            hospitalId: DEMO_HOSP_OBJ_ID
+        },
+        {
+            key: 'PHARMACY',
+            email: DEMO_PHARMACY_EMAIL,
+            rawPassword: DEMO_PHARMACY_PASSWORD,
+            name: 'Demo Pharmacist',
+            roleStr: null,
+            roleDoc: roleMap.get('pharmacist'),
+            phone: '9000000006',
+            aadhaarNumber: '900000000016',
+            objectId: new mongoose.Types.ObjectId('660000000000000000000060'),
+            hospitalId: DEMO_HOSP_OBJ_ID
+        },
+        {
+            key: 'LAB',
+            email: DEMO_LAB_EMAIL,
+            rawPassword: DEMO_LAB_PASSWORD,
+            name: 'Demo Lab Technician',
+            roleStr: null,
+            roleDoc: roleMap.get('lab'),
+            phone: '9000000007',
+            aadhaarNumber: '900000000017',
+            objectId: new mongoose.Types.ObjectId('660000000000000000000070'),
+            hospitalId: DEMO_HOSP_OBJ_ID
+        },
+        {
+            key: 'OT',
+            email: DEMO_OT_EMAIL,
+            rawPassword: DEMO_OT_PASSWORD,
+            name: 'Demo OT Manager',
+            roleStr: null,
+            roleDoc: roleMap.get('otmanager'),
+            phone: '9000000008',
+            aadhaarNumber: '900000000018',
+            objectId: new mongoose.Types.ObjectId('660000000000000000000080'),
+            hospitalId: DEMO_HOSP_OBJ_ID
+        },
+        {
+            key: 'ASSISTANT',
+            email: DEMO_ASSISTANT_EMAIL,
+            rawPassword: DEMO_ASSISTANT_PASSWORD,
+            name: 'Demo Clinical Assistant',
+            roleStr: null,
+            roleDoc: roleMap.get('doctor_assistant'),
+            phone: '9000000009',
+            aadhaarNumber: '900000000019',
+            objectId: new mongoose.Types.ObjectId('660000000000000000000090'),
+            hospitalId: DEMO_HOSP_OBJ_ID
+        },
+        {
+            key: 'CASHIER',
+            email: DEMO_CASHIER_EMAIL,
+            rawPassword: DEMO_CASHIER_PASSWORD,
+            name: 'Demo Cashier',
+            roleStr: null,
+            roleDoc: roleMap.get('cashier'),
+            phone: '9000000010',
+            aadhaarNumber: '900000000020',
+            objectId: new mongoose.Types.ObjectId('660000000000000000000091'),
+            hospitalId: DEMO_HOSP_OBJ_ID
+        },
+        {
+            key: 'PATIENT',
+            email: DEMO_PATIENT_EMAIL,
+            rawPassword: DEMO_PATIENT_PASSWORD,
+            name: 'Demo Patient User',
+            roleStr: 'patient',
+            roleDoc: null,
+            phone: '9000000011',
+            aadhaarNumber: '900000000021',
+            objectId: new mongoose.Types.ObjectId('660000000000000000000092'),
+            hospitalId: DEMO_HOSP_OBJ_ID
+        },
+        {
+            key: 'CENTRALADMIN',
+            email: DEMO_CENTRALADMIN_EMAIL,
+            rawPassword: DEMO_CENTRALADMIN_PASSWORD,
+            name: 'Medical365 Central Admin',
+            roleStr: 'centraladmin',
+            roleDoc: null,
+            phone: '9000000012',
+            aadhaarNumber: '900000000022',
+            objectId: new mongoose.Types.ObjectId('660000000000000000000093'),
+            hospitalId: null
+        },
+        {
+            key: 'LEGACY_DEMO',
+            email: DEMO_EMAIL,
+            rawPassword: DEMO_PASSWORD,
+            name: 'Medical365 Demo Admin',
+            roleStr: 'hospitaladmin',
+            roleDoc: null,
+            phone: '9000000000',
+            aadhaarNumber: '900000000006',
+            objectId: new mongoose.Types.ObjectId('660000000000000000000011'),
+            hospitalId: DEMO_HOSP_OBJ_ID
+        }
+    ];
+
+    const seededUsers = [];
+
+    for (const uConfig of userConfigs) {
+        const hashedPassword = await bcrypt.hash(uConfig.rawPassword, 10);
+        const assignedRole = uConfig.roleStr || (uConfig.roleDoc ? uConfig.roleDoc._id : 'hospitaladmin');
+
+        // Check if user already exists by email
+        let existingUser = await User.findOne({ email: uConfig.email });
+
+        const targetId = existingUser ? existingUser._id : uConfig.objectId;
+
+        const updateData = {
+            name: uConfig.name,
+            email: uConfig.email,
+            password: hashedPassword,
+            phone: uConfig.phone,
+            aadhaarNumber: uConfig.aadhaarNumber,
+            role: assignedRole,
+            hospitalId: uConfig.hospitalId,
+            isPredefinedDemo: true, // STRICT server-side flag required for OTP bypass
+            isDemo: true,
+            isDemoUser: true,
+            isDemoTenant: uConfig.hospitalId ? true : false
+        };
+
+        const savedUser = await User.findByIdAndUpdate(
+            targetId,
+            { $set: updateData },
+            { upsert: true, new: true }
+        );
+
+        // Also ensure present in Tenant DB if hospital-scoped
+        if (uConfig.hospitalId && tenantModels.User) {
+            await tenantModels.User.findByIdAndUpdate(
+                targetId,
+                { $set: updateData },
+                { upsert: true, new: true }
+            );
+        }
+
+        seededUsers.push(savedUser);
+        console.log(` Demo User [${uConfig.key}]: ${savedUser.email} (Role: ${uConfig.roleStr || (uConfig.roleDoc?.name)} | OTP Bypass: YES)`);
+    }
+
+    // Set demo admin user ID on Hospital record
+    await Hospital.findByIdAndUpdate(DEMO_HOSP_OBJ_ID, { $set: { adminUserId: seededUsers[0]._id } });
+
+    // ─────────────────────────────────────────────────────────────
+    // 4. ENSURE DOCTOR PROFILE FOR DEMO DOCTOR
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[4/6] Ensuring Doctor Profile for Demo Doctor...');
+    const demoDoctorUser = seededUsers.find(u => u.email === DEMO_DOCTOR_EMAIL);
+    if (demoDoctorUser) {
+        const docProfileData = {
+            doctorId: 'DOC-DEMO-001',
+            userId: demoDoctorUser._id,
+            hospitalId: DEMO_HOSP_OBJ_ID,
+            name: demoDoctorUser.name,
+            email: demoDoctorUser.email,
+            phone: demoDoctorUser.phone,
+            specialty: 'General Medicine',
+            experience: '12 Years',
+            education: 'MBBS, MD (General Medicine)',
+            departments: ['General Medicine'],
+            services: ['General Consultation', 'Preventive Health Checkup'],
+            consultationFee: 500,
+            availability: {
+                monday: { available: true, startTime: '09:00', endTime: '18:00' },
+                tuesday: { available: true, startTime: '09:00', endTime: '18:00' },
+                wednesday: { available: true, startTime: '09:00', endTime: '18:00' },
+                thursday: { available: true, startTime: '09:00', endTime: '18:00' },
+                friday: { available: true, startTime: '09:00', endTime: '18:00' },
+                saturday: { available: true, startTime: '09:00', endTime: '14:00' }
+            }
+        };
+
+        let existingDoc = await Doctor.findOne({
+            $or: [{ userId: demoDoctorUser._id }, { email: demoDoctorUser.email }]
+        });
+        const doctorIdToUse = existingDoc?.doctorId || 'DOC-DEMO-PHYSICIAN';
+        docProfileData.doctorId = doctorIdToUse;
+
+        const targetDocId = existingDoc ? existingDoc._id : new mongoose.Types.ObjectId('660000000000000000000210');
+
+        await Doctor.findByIdAndUpdate(
+            targetDocId,
+            { $set: docProfileData },
+            { upsert: true, new: true }
+        );
+
+        if (tenantModels.Doctor) {
+            await tenantModels.Doctor.findByIdAndUpdate(
+                targetDocId,
+                { $set: docProfileData },
+                { upsert: true, new: true }
+            );
+        }
+        console.log(` Doctor Profile linked for: ${demoDoctorUser.email} (ID: ${doctorIdToUse})`);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 5. ENSURE LAB, PHARMACY & PATIENT AUTH PROFILES
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[5/6] Ensuring Lab, Pharmacy & PatientAuth records...');
+
+    // 5a. Demo Lab
+    const demoLabUser = seededUsers.find(u => u.email === DEMO_LAB_EMAIL);
+    if (demoLabUser) {
+        await Lab.findOneAndUpdate(
+            { hospitalId: DEMO_HOSP_OBJ_ID },
             {
                 $set: {
-                    _id: staff.userId,
-                    name: staff.name,
-                    email: staff.email,
-                    password: hashedPassword,
-                    phone: staff.phone,
-                    role: staff.role,
+                    userId: demoLabUser._id,
                     hospitalId: DEMO_HOSP_OBJ_ID,
-                    aadhaarNumber: `8888${staff.phone}`,
-                    age: 35,
-                    isActive: true,
-                    isDemo: true
+                    name: 'Medical365 Demo Pathology & Diagnostics',
+                    email: demoLabUser.email,
+                    phone: demoLabUser.phone,
+                    address: 'Ground Floor, Medical365 Demo Hospital',
+                    services: ['Complete Blood Count', 'Lipid Profile', 'Liver Function Test', 'Thyroid Profile', 'Urine Routine', 'HbA1c', 'X-Ray Chest']
                 }
             },
             { upsert: true, new: true }
         );
+        console.log(` Demo Lab record verified for: ${DEMO_LAB_EMAIL}`);
+    }
 
-        // Upsert Doctor Profile if applicable
-        if (staff.docProfileId) {
-            await Doctor.findByIdAndUpdate(
-                staff.docProfileId,
-                {
-                    $set: {
-                        _id: staff.docProfileId,
-                        doctorId: staff.doctorId,
-                        userId: staff.userId,
-                        hospitalId: DEMO_HOSP_OBJ_ID,
-                        name: staff.name,
-                        email: staff.email,
-                        phone: staff.phone,
-                        specialty: staff.specialty,
-                        departments: staff.departments,
-                        consultationFee: staff.consultationFee,
-                        experience: staff.experience,
-                        education: staff.education,
-                        status: 'Active',
-                        isAvailable: true,
-                        availability: {
-                            monday: { available: true, startTime: '09:00', endTime: '17:00' },
-                            tuesday: { available: true, startTime: '09:00', endTime: '17:00' },
-                            wednesday: { available: true, startTime: '09:00', endTime: '17:00' },
-                            thursday: { available: true, startTime: '09:00', endTime: '17:00' },
-                            friday: { available: true, startTime: '09:00', endTime: '17:00' },
-                            saturday: { available: true, startTime: '09:00', endTime: '14:00' }
-                        }
-                    }
-                },
+    // 5b. Demo Pharmacy
+    const demoPharmacyUser = seededUsers.find(u => u.email === DEMO_PHARMACY_EMAIL);
+    if (demoPharmacyUser) {
+        await Pharmacy.findOneAndUpdate(
+            { hospitalId: DEMO_HOSP_OBJ_ID },
+            {
+                $set: {
+                    userId: demoPharmacyUser._id,
+                    hospitalId: DEMO_HOSP_OBJ_ID,
+                    name: 'Medical365 Demo Pharmacy',
+                    email: demoPharmacyUser.email,
+                    phone: demoPharmacyUser.phone,
+                    address: '1st Floor, Main Wing, Medical365 Demo Hospital',
+                    medications: [
+                        { name: 'Paracetamol 650mg', price: 30, stock: 500, category: 'Analgesic' },
+                        { name: 'Amoxicillin 500mg', price: 85, stock: 350, category: 'Antibiotic' },
+                        { name: 'Pantoprazole 40mg', price: 95, stock: 400, category: 'Antacid' },
+                        { name: 'Metformin 500mg', price: 45, stock: 300, category: 'Antidiabetic' },
+                        { name: 'Cetirizine 10mg', price: 25, stock: 600, category: 'Antihistamine' }
+                    ]
+                }
+            },
+            { upsert: true, new: true }
+        );
+        console.log(` Demo Pharmacy record verified for: ${DEMO_PHARMACY_EMAIL}`);
+    }
+
+    // 5c. Demo PatientAuth
+    const demoPatientUser = seededUsers.find(u => u.email === DEMO_PATIENT_EMAIL);
+    if (demoPatientUser) {
+        let existingPatientAuth = await PatientAuth.findOne({
+            $or: [{ email: DEMO_PATIENT_EMAIL }, { mobile: '9000000011' }],
+            hospitalId: DEMO_HOSP_OBJ_ID
+        });
+        const patientHashedPassword = await bcrypt.hash(DEMO_PATIENT_PASSWORD, 10);
+        const pAuthData = {
+            name: demoPatientUser.name,
+            email: demoPatientUser.email,
+            mobile: demoPatientUser.phone,
+            password: patientHashedPassword,
+            hospitalId: DEMO_HOSP_OBJ_ID,
+            status: 'Active',
+            emailVerified: true,
+            mobileVerified: true,
+            linkedPatientProfileId: demoPatientUser._id
+        };
+        if (existingPatientAuth) {
+            await PatientAuth.findByIdAndUpdate(existingPatientAuth._id, { $set: pAuthData });
+        } else {
+            await PatientAuth.create(pAuthData);
+        }
+        console.log(` Demo PatientAuth verified for: ${DEMO_PATIENT_EMAIL}`);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 6. ENSURE MASTER DEPARTMENTS & FACILITY BEDS EXIST
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[6/6] Ensuring Hospital Departments & Basic Beds exist...');
+    const departments = [
+        { name: 'General Medicine', description: 'Primary and internal care' },
+        { name: 'Cardiology', description: 'Comprehensive heart & vascular care' },
+        { name: 'Gynecology', description: 'Women health and maternity' },
+        { name: 'Orthopedics', description: 'Bones, joints and sports medicine' },
+        { name: 'Pediatrics', description: 'Child health and neonatal care' }
+    ];
+
+    for (const dept of departments) {
+        await Department.findOneAndUpdate(
+            { hospitalId: DEMO_HOSP_OBJ_ID, name: dept.name },
+            { $set: { ...dept, hospitalId: DEMO_HOSP_OBJ_ID, isActive: true } },
+            { upsert: true, new: true }
+        );
+        if (tenantModels.Department) {
+            await tenantModels.Department.findOneAndUpdate(
+                { hospitalId: DEMO_HOSP_OBJ_ID, name: dept.name },
+                { $set: { ...dept, hospitalId: DEMO_HOSP_OBJ_ID, isActive: true } },
                 { upsert: true, new: true }
             );
         }
     }
-    console.log(` ${staffList.length} Staff members (including 4 clinical doctors) seeded.`);
+    console.log(` 5 Departments verified.`);
 
-    // ─────────────────────────────────────────────────────────────
-    // 5. SEED FICTIONAL DEMO PATIENTS
-    // ─────────────────────────────────────────────────────────────
-    console.log('\n[5/12] Seeding Fictional Demo Patients...');
-    const patients = [
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000301'),
-            name: 'Aarav Sharma',
-            mrn: 'DEMO-M365-001',
-            patientId: 'DEMO-P-001',
-            email: 'aarav.sharma.demo@medical365.com',
-            phone: '9876540001',
-            aadhaarNumber: '111122223331',
-            gender: 'Male',
-            age: 38,
-            bloodGroup: 'B+',
-            city: 'Bengaluru',
-            address: '42 Orchid Residency, Indiranagar'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000302'),
-            name: 'Sunita Devi',
-            mrn: 'DEMO-M365-002',
-            patientId: 'DEMO-P-002',
-            email: 'sunita.devi.demo@medical365.com',
-            phone: '9876540002',
-            aadhaarNumber: '111122223332',
-            gender: 'Female',
-            age: 54,
-            bloodGroup: 'O+',
-            city: 'Bengaluru',
-            address: '15 Green Glen Layout, Bellandur'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000303'),
-            name: 'Rohit Malhotra',
-            mrn: 'DEMO-M365-003',
-            patientId: 'DEMO-P-003',
-            email: 'rohit.malhotra.demo@medical365.com',
-            phone: '9876540003',
-            aadhaarNumber: '111122223333',
-            gender: 'Male',
-            age: 29,
-            bloodGroup: 'A+',
-            city: 'Bengaluru',
-            address: '88 Tech Park View, Whitefield'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000304'),
-            name: 'Meera Nambiar',
-            mrn: 'DEMO-M365-004',
-            patientId: 'DEMO-P-004',
-            email: 'meera.nambiar.demo@medical365.com',
-            phone: '9876540004',
-            aadhaarNumber: '111122223334',
-            gender: 'Female',
-            age: 62,
-            bloodGroup: 'AB+',
-            city: 'Bengaluru',
-            address: '104 Palm Meadows, Koramangala'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000305'),
-            name: 'Kabir Khanna',
-            mrn: 'DEMO-M365-005',
-            patientId: 'DEMO-P-005',
-            email: 'kabir.khanna.demo@medical365.com',
-            phone: '9876540005',
-            aadhaarNumber: '111122223335',
-            gender: 'Male',
-            age: 7,
-            bloodGroup: 'O+',
-            city: 'Bengaluru',
-            address: '21 Sunrise Enclave, HSR Layout'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000306'),
-            name: 'Deepa Reddy',
-            mrn: 'DEMO-M365-006',
-            patientId: 'DEMO-P-006',
-            email: 'deepa.reddy.demo@medical365.com',
-            phone: '9876540006',
-            aadhaarNumber: '111122223336',
-            gender: 'Female',
-            age: 41,
-            bloodGroup: 'B-',
-            city: 'Bengaluru',
-            address: '77 Lake Breeze, Sarjapur Road'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000307'),
-            name: 'Manoj Tiwari',
-            mrn: 'DEMO-M365-007',
-            patientId: 'DEMO-P-007',
-            email: 'manoj.tiwari.demo@medical365.com',
-            phone: '9876540007',
-            aadhaarNumber: '111122223337',
-            gender: 'Male',
-            age: 48,
-            bloodGroup: 'A-',
-            city: 'Bengaluru',
-            address: '56 Silicon Town, Electronic City'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000308'),
-            name: 'Kavita Deshmukh',
-            mrn: 'DEMO-M365-008',
-            patientId: 'DEMO-P-008',
-            email: 'kavita.deshmukh.demo@medical365.com',
-            phone: '9876540008',
-            aadhaarNumber: '111122223338',
-            gender: 'Female',
-            age: 33,
-            bloodGroup: 'O-',
-            city: 'Bengaluru',
-            address: '12 Gardenia Heights, Jayanagar'
+    // Ensure a few basic beds exist for admission testing if none exist
+    const existingBedsCount = await Bed.countDocuments({ hospitalId: DEMO_HOSP_OBJ_ID });
+    if (existingBedsCount === 0) {
+        const initialBeds = [
+            { bedNumber: 'B-101', ward: 'General Ward', type: 'Standard', dailyRate: 800, status: 'Available', hospitalId: DEMO_HOSP_OBJ_ID },
+            { bedNumber: 'B-102', ward: 'General Ward', type: 'Standard', dailyRate: 800, status: 'Available', hospitalId: DEMO_HOSP_OBJ_ID },
+            { bedNumber: 'ICU-01', ward: 'ICU', type: 'Ventilator', dailyRate: 3500, status: 'Available', hospitalId: DEMO_HOSP_OBJ_ID },
+            { bedNumber: 'DLX-01', ward: 'Private Deluxe', type: 'Deluxe Suite', dailyRate: 2200, status: 'Available', hospitalId: DEMO_HOSP_OBJ_ID }
+        ];
+        for (const b of initialBeds) {
+            await Bed.findOneAndUpdate(
+                { hospitalId: DEMO_HOSP_OBJ_ID, bedNumber: b.bedNumber },
+                { $set: b },
+                { upsert: true, new: true }
+            );
+            if (tenantModels.Bed) {
+                await tenantModels.Bed.findOneAndUpdate(
+                    { hospitalId: DEMO_HOSP_OBJ_ID, bedNumber: b.bedNumber },
+                    { $set: b },
+                    { upsert: true, new: true }
+                );
+            }
         }
-    ];
-
-    for (const p of patients) {
-        // Master User representation (used by Reception, EMR, Auth)
-        await User.findByIdAndUpdate(
-            p._id,
-            {
-                $set: {
-                    ...p,
-                    role: 'patient',
-                    hospitalId: DEMO_HOSP_OBJ_ID,
-                    isActive: true,
-                    isAadhaarVerified: true,
-                    isDemo: true
-                }
-            },
-            { upsert: true, new: true }
-        );
-
-        // ClinicPatient representation (used by clinic routes)
-        await ClinicPatient.findByIdAndUpdate(
-            p._id,
-            {
-                $set: {
-                    _id: p._id,
-                    clinicId: DEMO_HOSP_OBJ_ID,
-                    hospitalId: DEMO_HOSP_OBJ_ID,
-                    patientUid: p.patientId,
-                    mrn: p.mrn,
-                    name: p.name,
-                    email: p.email,
-                    phone: p.phone,
-                    aadhaarNumber: p.aadhaarNumber,
-                    gender: p.gender,
-                    age: p.age,
-                    bloodGroup: p.bloodGroup,
-                    city: p.city,
-                    address: p.address,
-                    isActive: true
-                }
-            },
-            { upsert: true, new: true }
-        );
-
-        // Tenant DB User
-        await tenantModels.User.findByIdAndUpdate(
-            p._id,
-            {
-                $set: {
-                    ...p,
-                    role: 'patient',
-                    hospitalId: DEMO_HOSP_OBJ_ID,
-                    isActive: true,
-                    isAadhaarVerified: true
-                }
-            },
-            { upsert: true, new: true }
-        );
+        console.log(` Initial ward beds verified.`);
+    } else {
+        console.log(` ${existingBedsCount} existing beds preserved.`);
     }
-    console.log(` ${patients.length} Fictional demo patients seeded in Master and Tenant databases.`);
-
-    // ─────────────────────────────────────────────────────────────
-    // 6. SEED BEDS & WARD ALLOCATION
-    // ─────────────────────────────────────────────────────────────
-    console.log('\n[6/12] Seeding Hospital Beds & Wards...');
-    const beds = [
-        { _id: new mongoose.Types.ObjectId('660000000000000000000401'), bedNumber: 'B-101', ward: 'General Ward', bedType: 'General', status: 'OCCUPIED', currentPatient: patients[1]._id },
-        { _id: new mongoose.Types.ObjectId('660000000000000000000402'), bedNumber: 'B-102', ward: 'General Ward', bedType: 'General', status: 'OCCUPIED', currentPatient: patients[3]._id },
-        { _id: new mongoose.Types.ObjectId('660000000000000000000403'), bedNumber: 'B-103', ward: 'General Ward', bedType: 'General', status: 'AVAILABLE', currentPatient: null },
-        { _id: new mongoose.Types.ObjectId('660000000000000000000404'), bedNumber: 'B-104', ward: 'General Ward', bedType: 'General', status: 'AVAILABLE', currentPatient: null },
-        { _id: new mongoose.Types.ObjectId('660000000000000000000405'), bedNumber: 'ICU-201', ward: 'ICU', bedType: 'ICU', status: 'OCCUPIED', currentPatient: patients[6]._id },
-        { _id: new mongoose.Types.ObjectId('660000000000000000000406'), bedNumber: 'ICU-202', ward: 'ICU', bedType: 'ICU', status: 'AVAILABLE', currentPatient: null },
-        { _id: new mongoose.Types.ObjectId('660000000000000000000407'), bedNumber: 'DLX-301', ward: 'Private Deluxe', bedType: 'Private', status: 'OCCUPIED', currentPatient: patients[5]._id },
-        { _id: new mongoose.Types.ObjectId('660000000000000000000408'), bedNumber: 'DLX-302', ward: 'Private Deluxe', bedType: 'Private', status: 'AVAILABLE', currentPatient: null },
-        { _id: new mongoose.Types.ObjectId('660000000000000000000409'), bedNumber: 'SEMI-401', ward: 'Semi-Private', bedType: 'Semi-Private', status: 'AVAILABLE', currentPatient: null },
-        { _id: new mongoose.Types.ObjectId('660000000000000000000410'), bedNumber: 'SEMI-402', ward: 'Semi-Private', bedType: 'Semi-Private', status: 'MAINTENANCE', currentPatient: null }
-    ];
-
-    for (const b of beds) {
-        await Bed.findByIdAndUpdate(
-            b._id,
-            { $set: { ...b, hospitalId: DEMO_HOSP_OBJ_ID } },
-            { upsert: true, new: true }
-        );
-        await tenantModels.Bed.findByIdAndUpdate(
-            b._id,
-            { $set: { ...b, hospitalId: DEMO_HOSP_OBJ_ID } },
-            { upsert: true, new: true }
-        );
-    }
-    console.log(` ${beds.length} Beds seeded (4 Occupied, 5 Available, 1 Maintenance).`);
-
-    // ─────────────────────────────────────────────────────────────
-    // 7. SEED IPD ADMISSIONS
-    // ─────────────────────────────────────────────────────────────
-    console.log('\n[7/12] Seeding IPD Admissions...');
-    const now = new Date();
-    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-    const admissions = [
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000501'),
-            patientId: patients[1]._id, // Sunita Devi
-            doctorId: staffList[1].userId, // Dr. Vikram Joshi
-            ward: 'General Ward',
-            bedNumber: 'B-101',
-            bedId: beds[0]._id,
-            admissionDate: threeDaysAgo,
-            admissionTime: '10:30 AM',
-            wardRatePerDay: 800,
-            status: 'Admitted',
-            totalAmount: 4800,
-            paymentStatus: 'Pending',
-            notes: 'Admitted for acute exacerbation of COPD with pneumonia. IV antibiotics underway.'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000502'),
-            patientId: patients[3]._id, // Meera Nambiar
-            doctorId: staffList[0].userId, // Dr. Sneha Iyer
-            ward: 'General Ward',
-            bedNumber: 'B-102',
-            bedId: beds[1]._id,
-            admissionDate: twoDaysAgo,
-            admissionTime: '02:15 PM',
-            wardRatePerDay: 800,
-            status: 'Admitted',
-            totalAmount: 6200,
-            paymentStatus: 'Paid',
-            notes: 'Congestive heart failure management. Vitals stabilizing, oral transition scheduled.'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000503'),
-            patientId: patients[6]._id, // Manoj Tiwari
-            doctorId: staffList[0].userId, // Dr. Sneha Iyer
-            ward: 'ICU',
-            bedNumber: 'ICU-201',
-            bedId: beds[4]._id,
-            admissionDate: yesterday,
-            admissionTime: '11:00 PM',
-            wardRatePerDay: 3500,
-            status: 'Admitted',
-            totalAmount: 14500,
-            paymentStatus: 'Pending',
-            notes: 'Post-NSTEMI intensive cardiac observation. Continuous ECG and cardiac telemetry monitoring.'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000504'),
-            patientId: patients[5]._id, // Deepa Reddy
-            doctorId: staffList[3].userId, // Dr. Rohan Verma
-            ward: 'Private Deluxe',
-            bedNumber: 'DLX-301',
-            bedId: beds[6]._id,
-            admissionDate: yesterday,
-            admissionTime: '08:45 AM',
-            wardRatePerDay: 2200,
-            status: 'Admitted',
-            totalAmount: 18000,
-            paymentStatus: 'Paid',
-            notes: 'Elective right knee arthroscopic repair. Post-op physiotherapy initiated.'
-        }
-    ];
-
-    for (const adm of admissions) {
-        await Admission.findByIdAndUpdate(
-            adm._id,
-            { $set: { ...adm, hospitalId: DEMO_HOSP_OBJ_ID } },
-            { upsert: true, new: true }
-        );
-        await tenantModels.Admission.findByIdAndUpdate(
-            adm._id,
-            { $set: { ...adm, hospitalId: DEMO_HOSP_OBJ_ID } },
-            { upsert: true, new: true }
-        );
-
-        // Update bed with current admission
-        await Bed.findByIdAndUpdate(adm.bedId, { $set: { currentAdmission: adm._id } });
-        await tenantModels.Bed.findByIdAndUpdate(adm.bedId, { $set: { currentAdmission: adm._id } });
-    }
-    console.log(` ${admissions.length} IPD Admissions seeded.`);
-
-    // ─────────────────────────────────────────────────────────────
-    // 8. SEED CLINICAL IPD DATA (VITALS, ORDERS, MAR, NURSING TASKS)
-    // ─────────────────────────────────────────────────────────────
-    console.log('\n[8/12] Seeding IPD Clinical Data (Vitals, Orders, MAR, Tasks)...');
-    
-    // Vitals records
-    const vitalsRecords = [
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000601'),
-            admissionId: admissions[0]._id,
-            patientId: admissions[0].patientId,
-            recordedBy: staffList[4].userId,
-            systolicBP: 128,
-            diastolicBP: 82,
-            pulse: 76,
-            temperature: 98.6,
-            spo2: 97,
-            respiratoryRate: 18,
-            painScore: 2,
-            notes: 'Patient resting comfortably. Lung sounds clearing.'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000602'),
-            admissionId: admissions[2]._id,
-            patientId: admissions[2].patientId,
-            recordedBy: staffList[4].userId,
-            systolicBP: 135,
-            diastolicBP: 88,
-            pulse: 82,
-            temperature: 98.4,
-            spo2: 99,
-            respiratoryRate: 16,
-            painScore: 1,
-            notes: 'Normal sinus rhythm on telemetry. Pain free at rest.'
-        }
-    ];
-
-    for (const v of vitalsRecords) {
-        await IPDVitals.findByIdAndUpdate(
-            v._id,
-            { $set: { ...v, hospitalId: DEMO_HOSP_OBJ_ID, recordedAt: now } },
-            { upsert: true, new: true }
-        );
-        await tenantModels.IPDVitals.findByIdAndUpdate(
-            v._id,
-            { $set: { ...v, hospitalId: DEMO_HOSP_OBJ_ID, recordedAt: now } },
-            { upsert: true, new: true }
-        );
-    }
-
-    // Inpatient Orders
-    const orders = [
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000701'),
-            admissionId: admissions[0]._id,
-            patientId: admissions[0].patientId,
-            doctorId: staffList[1].userId,
-            medicineName: 'Inj. Ceftriaxone 1g',
-            dosageValue: 1,
-            dosageUnit: 'g',
-            route: 'IV',
-            frequency: 'BD',
-            duration: '5 days',
-            instructions: 'Slow IV push in 100ml NS',
-            clinicalNotes: 'Pneumonia therapy'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000702'),
-            admissionId: admissions[2]._id,
-            patientId: admissions[2].patientId,
-            doctorId: staffList[0].userId,
-            medicineName: 'Tab. Telmisartan 40mg',
-            dosageValue: 40,
-            dosageUnit: 'mg',
-            route: 'Oral',
-            frequency: 'OD',
-            duration: 'Continuous',
-            instructions: 'Post-breakfast with water',
-            clinicalNotes: 'Blood pressure control'
-        }
-    ];
-
-    for (const o of orders) {
-        await InpatientOrder.findByIdAndUpdate(
-            o._id,
-            { $set: { ...o, hospitalId: DEMO_HOSP_OBJ_ID, startDate: now } },
-            { upsert: true, new: true }
-        );
-        await tenantModels.InpatientOrder.findByIdAndUpdate(
-            o._id,
-            { $set: { ...o, hospitalId: DEMO_HOSP_OBJ_ID, startDate: now } },
-            { upsert: true, new: true }
-        );
-    }
-
-    // MAR Records
-    const marRecords = [
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000801'),
-            orderId: orders[0]._id,
-            admissionId: admissions[0]._id,
-            patientId: admissions[0].patientId,
-            scheduledTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
-            administeredTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
-            administeredBy: staffList[4].userId,
-            status: 'ADMINISTERED',
-            actualDoseValue: 1,
-            actualDoseUnit: 'g',
-            notes: 'Infused over 20 mins without adverse event.'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000802'),
-            orderId: orders[1]._id,
-            admissionId: admissions[2]._id,
-            patientId: admissions[2].patientId,
-            scheduledTime: new Date(Date.now() + 2 * 60 * 60 * 1000),
-            status: 'SCHEDULED',
-            actualDoseValue: 40,
-            actualDoseUnit: 'mg',
-            notes: 'Due at 2:00 PM.'
-        }
-    ];
-
-    for (const m of marRecords) {
-        await MARRecord.findByIdAndUpdate(
-            m._id,
-            { $set: { ...m, hospitalId: DEMO_HOSP_OBJ_ID } },
-            { upsert: true, new: true }
-        );
-        await tenantModels.MARRecord.findByIdAndUpdate(
-            m._id,
-            { $set: { ...m, hospitalId: DEMO_HOSP_OBJ_ID } },
-            { upsert: true, new: true }
-        );
-    }
-
-    // Nursing Tasks
-    const tasks = [
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000901'),
-            admissionId: admissions[0]._id,
-            patientId: admissions[0].patientId,
-            assignedTo: staffList[4].userId,
-            taskType: 'VITALS_CHECK',
-            title: 'Q4H Vitals & SpO2 Monitoring',
-            description: 'Check pulse, blood pressure, temperature and pulse oximetry.',
-            priority: 'HIGH',
-            status: 'COMPLETED',
-            scheduledAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
-            completedAt: new Date(Date.now() - 2 * 60 * 60 * 1000)
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000000902'),
-            admissionId: admissions[2]._id,
-            patientId: admissions[2].patientId,
-            assignedTo: staffList[4].userId,
-            taskType: 'POST_OP_MONITORING',
-            title: 'Continuous ECG Strip Verification',
-            description: 'Record 12-lead ECG rhythm strip and inspect ST segment.',
-            priority: 'URGENT',
-            status: 'IN_PROGRESS',
-            scheduledAt: new Date(Date.now() + 30 * 60 * 1000)
-        }
-    ];
-
-    for (const t of tasks) {
-        await NursingTask.findByIdAndUpdate(
-            t._id,
-            { $set: { ...t, hospitalId: DEMO_HOSP_OBJ_ID } },
-            { upsert: true, new: true }
-        );
-        await tenantModels.NursingTask.findByIdAndUpdate(
-            t._id,
-            { $set: { ...t, hospitalId: DEMO_HOSP_OBJ_ID } },
-            { upsert: true, new: true }
-        );
-    }
-    console.log(` Vitals, Inpatient Orders, MAR records and Nursing Tasks seeded.`);
-
-    // ─────────────────────────────────────────────────────────────
-    // 9. SEED APPOINTMENTS (TODAY, UPCOMING, PAST)
-    // ─────────────────────────────────────────────────────────────
-    console.log('\n[9/12] Seeding Appointments (Dynamic Today/Upcoming/Completed)...');
-    const todayDate = new Date();
-    todayDate.setHours(0, 0, 0, 0);
-
-    const tomorrowDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    tomorrowDate.setHours(0, 0, 0, 0);
-
-    const pastDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    pastDate.setHours(0, 0, 0, 0);
-
-    const appointments = [
-        // Today's Appointments
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001001'),
-            patientId: patients[0]._id,
-            userId: patients[0]._id,
-            doctorId: staffList[0].userId,
-            doctorName: staffList[0].name,
-            department: 'Cardiology',
-            serviceName: 'Cardiology Consultation',
-            appointmentDate: todayDate,
-            date: todayDate,
-            appointmentTime: '10:00 AM',
-            time: '10:00 AM',
-            tokenNumber: 1,
-            fee: 800,
-            amount: 800,
-            paymentStatus: 'Paid',
-            status: 'Completed',
-            notes: 'Routine hypertension follow-up. BP 124/80. Well controlled.'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001002'),
-            patientId: patients[2]._id,
-            userId: patients[2]._id,
-            doctorId: staffList[1].userId,
-            doctorName: staffList[1].name,
-            department: 'General Medicine',
-            serviceName: 'General Consultation',
-            appointmentDate: todayDate,
-            date: todayDate,
-            appointmentTime: '11:30 AM',
-            time: '11:30 AM',
-            tokenNumber: 2,
-            fee: 500,
-            amount: 500,
-            paymentStatus: 'Paid',
-            status: 'Scheduled',
-            notes: 'Seasonal viral flu and mild dry cough for 3 days.'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001003'),
-            patientId: patients[4]._id,
-            userId: patients[4]._id,
-            doctorId: staffList[2].userId,
-            doctorName: staffList[2].name,
-            department: 'Gynecology',
-            serviceName: 'Antenatal Checkup',
-            appointmentDate: todayDate,
-            date: todayDate,
-            appointmentTime: '02:00 PM',
-            time: '02:00 PM',
-            tokenNumber: 3,
-            fee: 700,
-            amount: 700,
-            paymentStatus: 'Pending',
-            status: 'Scheduled',
-            notes: 'Second trimester ultrasound scan review.'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001004'),
-            patientId: patients[7]._id,
-            userId: patients[7]._id,
-            doctorId: staffList[3].userId,
-            doctorName: staffList[3].name,
-            department: 'Orthopedics',
-            serviceName: 'Orthopedic Consultation',
-            appointmentDate: todayDate,
-            date: todayDate,
-            appointmentTime: '03:30 PM',
-            time: '03:30 PM',
-            tokenNumber: 4,
-            fee: 750,
-            amount: 750,
-            paymentStatus: 'Paid',
-            status: 'Scheduled',
-            notes: 'Lumbar spondylosis review, MRI lumbosacral spine.'
-        },
-        // Tomorrow / Upcoming Appointments
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001005'),
-            patientId: patients[0]._id,
-            userId: patients[0]._id,
-            doctorId: staffList[1].userId,
-            doctorName: staffList[1].name,
-            department: 'General Medicine',
-            serviceName: 'Preventive Health Review',
-            appointmentDate: tomorrowDate,
-            date: tomorrowDate,
-            appointmentTime: '09:30 AM',
-            time: '09:30 AM',
-            tokenNumber: 1,
-            fee: 500,
-            amount: 500,
-            paymentStatus: 'Paid',
-            status: 'Scheduled',
-            notes: 'Annual corporate health checkup.'
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001006'),
-            patientId: patients[7]._id,
-            userId: patients[7]._id,
-            doctorId: staffList[0].userId,
-            doctorName: staffList[0].name,
-            department: 'Cardiology',
-            serviceName: 'Echocardiogram Review',
-            appointmentDate: tomorrowDate,
-            date: tomorrowDate,
-            appointmentTime: '11:00 AM',
-            time: '11:00 AM',
-            tokenNumber: 2,
-            fee: 800,
-            amount: 800,
-            paymentStatus: 'Pending',
-            status: 'Scheduled',
-            notes: 'Follow-up 2D Echo report discussion.'
-        },
-        // Past Completed Appointments
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001007'),
-            patientId: patients[1]._id,
-            userId: patients[1]._id,
-            doctorId: staffList[1].userId,
-            doctorName: staffList[1].name,
-            department: 'General Medicine',
-            serviceName: 'Initial Consultation',
-            appointmentDate: pastDate,
-            date: pastDate,
-            appointmentTime: '10:00 AM',
-            time: '10:00 AM',
-            tokenNumber: 1,
-            fee: 500,
-            amount: 500,
-            paymentStatus: 'Paid',
-            status: 'Completed',
-            notes: 'Patient examined and subsequently admitted for pneumonia.'
-        }
-    ];
-
-    for (const app of appointments) {
-        await Appointment.findByIdAndUpdate(
-            app._id,
-            { $set: { ...app, hospitalId: DEMO_HOSP_OBJ_ID } },
-            { upsert: true, new: true }
-        );
-        await tenantModels.Appointment.findByIdAndUpdate(
-            app._id,
-            { $set: { ...app, hospitalId: DEMO_HOSP_OBJ_ID } },
-            { upsert: true, new: true }
-        );
-    }
-    console.log(` ${appointments.length} Appointments seeded (Today's, Upcoming, Completed).`);
-
-    // ─────────────────────────────────────────────────────────────
-    // 10. SEED BILLING & FINANCIAL TRANSACTIONS
-    // ─────────────────────────────────────────────────────────────
-    console.log('\n[10/12] Seeding Billing & Financial Records...');
-    const billingTxns = [
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001101'),
-            patientId: patients[0]._id,
-            paymentMode: 'UPI',
-            paymentStatus: 'Paid',
-            amount: 800,
-            transactionId: 'TXN-DEMO-UPI-001',
-            upiId: 'aarav.sharma@okaxis',
-            paymentDate: todayDate,
-            description: 'Cardiology Consultation Fee - Dr. Sneha Iyer',
-            addedBy: staffList[5].userId
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001102'),
-            patientId: patients[2]._id,
-            paymentMode: 'Cash',
-            paymentStatus: 'Paid',
-            amount: 500,
-            transactionId: 'TXN-DEMO-CSH-002',
-            paymentDate: todayDate,
-            description: 'General Medicine Consultation Fee - Dr. Vikram Joshi',
-            addedBy: staffList[5].userId
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001103'),
-            patientId: patients[5]._id,
-            paymentMode: 'Card',
-            paymentStatus: 'Paid',
-            amount: 18000,
-            transactionId: 'TXN-DEMO-CRD-003',
-            cardDetails: 'HDFC Bank Visa ending 4129',
-            paymentDate: yesterday,
-            description: 'IPD Knee Arthroscopy Advance & Package Deposit',
-            addedBy: staffList[7].userId
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001104'),
-            patientId: patients[3]._id,
-            paymentMode: 'UPI',
-            paymentStatus: 'Paid',
-            amount: 6200,
-            transactionId: 'TXN-DEMO-UPI-004',
-            upiId: 'meera.nambiar@okhdfc',
-            paymentDate: twoDaysAgo,
-            description: 'IPD Ward Bed & Medical Management Settlement',
-            addedBy: staffList[7].userId
-        }
-    ];
-
-    for (const txn of billingTxns) {
-        await PaymentTransaction.findByIdAndUpdate(
-            txn._id,
-            { $set: { ...txn, hospitalId: DEMO_HOSP_OBJ_ID } },
-            { upsert: true, new: true }
-        );
-    }
-    console.log(` ${billingTxns.length} Billing transactions seeded.`);
-
-    // ─────────────────────────────────────────────────────────────
-    // 11. SEED PHARMACY INVENTORY
-    // ─────────────────────────────────────────────────────────────
-    console.log('\n[11/12] Seeding Pharmacy & Clinical Inventory...');
-    const inventoryItems = [
-        { _id: new mongoose.Types.ObjectId('660000000000000000001201'), name: 'Paracetamol 650mg (Dolo)', category: 'Tablet', currentStock: 850, minStock: 200, unitPrice: 3.5, sellingPrice: 5.0, batchNumber: 'BAT-2026-A1', expiryDate: new Date('2028-12-31'), supplier: 'Cipla Ltd' },
-        { _id: new mongoose.Types.ObjectId('660000000000000000001202'), name: 'Amoxicillin + Clavulanic Acid 625mg', category: 'Tablet', currentStock: 420, minStock: 100, unitPrice: 18.0, sellingPrice: 24.0, batchNumber: 'BAT-2026-A2', expiryDate: new Date('2027-10-31'), supplier: 'GlaxoSmithKline' },
-        { _id: new mongoose.Types.ObjectId('660000000000000000001203'), name: 'Pantoprazole 40mg (Pan-40)', category: 'Tablet', currentStock: 620, minStock: 150, unitPrice: 8.5, sellingPrice: 12.0, batchNumber: 'BAT-2026-A3', expiryDate: new Date('2028-06-30'), supplier: 'Alkem Laboratories' },
-        { _id: new mongoose.Types.ObjectId('660000000000000000001204'), name: 'Telmisartan 40mg (Telma)', category: 'Tablet', currentStock: 510, minStock: 120, unitPrice: 7.2, sellingPrice: 10.5, batchNumber: 'BAT-2026-A4', expiryDate: new Date('2028-04-30'), supplier: 'Glenmark' },
-        { _id: new mongoose.Types.ObjectId('660000000000000000001205'), name: 'Atorvastatin 20mg (Atorva)', category: 'Tablet', currentStock: 340, minStock: 80, unitPrice: 14.0, sellingPrice: 19.5, batchNumber: 'BAT-2026-A5', expiryDate: new Date('2027-08-31'), supplier: 'Zydus Cadila' },
-        { _id: new mongoose.Types.ObjectId('660000000000000000001206'), name: 'Ceftriaxone 1g Injection (Monocef)', category: 'Injectable', currentStock: 180, minStock: 50, unitPrice: 42.0, sellingPrice: 65.0, batchNumber: 'BAT-2026-I1', expiryDate: new Date('2027-11-30'), supplier: 'Aristo Pharma' },
-        { _id: new mongoose.Types.ObjectId('660000000000000000001207'), name: 'Normal Saline (0.9% NaCl) 500ml', category: 'IV Fluid', currentStock: 220, minStock: 60, unitPrice: 30.0, sellingPrice: 45.0, batchNumber: 'BAT-2026-IV1', expiryDate: new Date('2029-01-31'), supplier: 'Baxter India' },
-        { _id: new mongoose.Types.ObjectId('660000000000000000001208'), name: 'Low Stock Demo: Azithromycin 500mg', category: 'Tablet', currentStock: 12, minStock: 100, unitPrice: 22.0, sellingPrice: 32.0, batchNumber: 'BAT-2026-LOW1', expiryDate: new Date('2027-05-31'), supplier: 'Sun Pharma' },
-        { _id: new mongoose.Types.ObjectId('660000000000000000001209'), name: 'Insulin Glargine (Lantus SoloStar)', category: 'Injectable', currentStock: 45, minStock: 25, unitPrice: 480.0, sellingPrice: 580.0, batchNumber: 'BAT-2026-INS1', expiryDate: new Date('2027-09-30'), supplier: 'Sanofi' },
-        { _id: new mongoose.Types.ObjectId('660000000000000000001210'), name: 'Sterile Surgical Gloves (Size 7.5)', category: 'Consumable', currentStock: 1200, minStock: 300, unitPrice: 15.0, sellingPrice: 25.0, batchNumber: 'BAT-2026-GLV1', expiryDate: new Date('2030-01-31'), supplier: 'Kanam Latex' }
-    ];
-
-    for (const item of inventoryItems) {
-        await Inventory.findByIdAndUpdate(
-            item._id,
-            {
-                $set: {
-                    ...item,
-                    hospitalId: DEMO_HOSP_OBJ_ID,
-                    status: item.currentStock <= item.minStock ? 'Low Stock' : 'In Stock'
-                }
-            },
-            { upsert: true, new: true }
-        );
-    }
-    console.log(` ${inventoryItems.length} Pharmacy inventory items seeded (including 1 low-stock item for widget demo).`);
-
-    // ─────────────────────────────────────────────────────────────
-    // 12. SEED PACKAGES & MASTER PROCEDURES
-    // ─────────────────────────────────────────────────────────────
-    console.log('\n[12/12] Seeding Hospital Care Packages...');
-    const packages = [
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001301'),
-            name: 'Comprehensive Heart Checkup',
-            code: 'PKG-CARD-01',
-            department: 'Cardiology',
-            price: 3499,
-            durationDays: 1,
-            description: 'Lipid profile, ECG, 2D Echocardiogram, TMT, and Senior Cardiologist consultation.',
-            isActive: true
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001302'),
-            name: 'Executive Whole Body Wellness',
-            code: 'PKG-EXEC-02',
-            department: 'General Medicine',
-            price: 4999,
-            durationDays: 1,
-            description: '64 diagnostic parameters, Ultrasound Abdomen, Chest X-Ray, HbA1c, and Physician consultation.',
-            isActive: true
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001303'),
-            name: 'Maternity Antenatal Care Package',
-            code: 'PKG-MAT-03',
-            department: 'Gynecology',
-            price: 18500,
-            durationDays: 270,
-            description: 'Complete 9-month prenatal care, 4 targeted ultrasounds, routine labs, and nutritional guidance.',
-            isActive: true
-        },
-        {
-            _id: new mongoose.Types.ObjectId('660000000000000000001304'),
-            name: 'Orthopedic Joint Mobility Screening',
-            code: 'PKG-ORTHO-04',
-            department: 'Orthopedics',
-            price: 2499,
-            durationDays: 1,
-            description: 'Bilateral knee/hip digital X-Rays, Serum Calcium, Vitamin D3, and Orthopedic Surgeon evaluation.',
-            isActive: true
-        }
-    ];
-
-    for (const pkg of packages) {
-        await HospitalPackage.findByIdAndUpdate(
-            pkg._id,
-            { $set: { ...pkg, hospitalId: DEMO_HOSP_OBJ_ID } },
-            { upsert: true, new: true }
-        );
-    }
-    console.log(` ${packages.length} Care Packages seeded.`);
 
     console.log('\n====================================================');
-    console.log('🎉 DEMO TENANT SEEDING COMPLETED SUCCESSFULLY!');
+    console.log('  ALL-DASHBOARD DEMO SETUP COMPLETED SUCCESSFULLY');
     console.log('====================================================');
-    console.log(`Demo Hospital : ${DEMO_HOSPITAL_NAME} (ID: ${DEMO_HOSPITAL_ID})`);
-    console.log(`Demo Email    : ${DEMO_EMAIL}`);
-    console.log(`Demo Password : ${DEMO_PASSWORD}`);
-    console.log('OTP Bypass    : Active ONLY for this demo account');
-    console.log('Data State    : Persistent (NO auto-reset scheduled)');
+    console.log(`Tenant Name   : ${DEMO_HOSPITAL_NAME}`);
+    console.log(`Tenant ID     : ${DEMO_HOSPITAL_ID} (Code: ${DEMO_HOSPITAL_CODE}, Slug: ${DEMO_HOSPITAL_SLUG})`);
+    console.log('\nAll Predefined Demo Accounts (Direct Password Login, OTP Bypassed):');
+    console.log(` 1. Hospital Admin     : ${DEMO_ADMIN_EMAIL.padEnd(25)} Password: ${DEMO_ADMIN_PASSWORD.padEnd(15)} -> /hospitaladmin`);
+    console.log(` 2. Receptionist       : ${DEMO_RECEPTION_EMAIL.padEnd(25)} Password: ${DEMO_RECEPTION_PASSWORD.padEnd(15)} -> /reception/dashboard`);
+    console.log(` 3. Doctor             : ${DEMO_DOCTOR_EMAIL.padEnd(25)} Password: ${DEMO_DOCTOR_PASSWORD.padEnd(15)} -> /doctor/patients`);
+    console.log(` 4. Nurse              : ${DEMO_NURSE_EMAIL.padEnd(25)} Password: ${DEMO_NURSE_PASSWORD.padEnd(15)} -> /nurse/dashboard`);
+    console.log(` 5. Accountant         : ${DEMO_ACCOUNTANT_EMAIL.padEnd(25)} Password: ${DEMO_ACCOUNTANT_PASSWORD.padEnd(15)} -> /accountant/dashboard`);
+    console.log(` 6. Pharmacist         : ${DEMO_PHARMACY_EMAIL.padEnd(25)} Password: ${DEMO_PHARMACY_PASSWORD.padEnd(15)} -> /pharmacy/inventory`);
+    console.log(` 7. Lab Technician     : ${DEMO_LAB_EMAIL.padEnd(25)} Password: ${DEMO_LAB_PASSWORD.padEnd(15)} -> /lab/dashboard`);
+    console.log(` 8. OT Manager         : ${DEMO_OT_EMAIL.padEnd(25)} Password: ${DEMO_OT_PASSWORD.padEnd(15)} -> /ot/dashboard`);
+    console.log(` 9. Doctor Assistant   : ${DEMO_ASSISTANT_EMAIL.padEnd(25)} Password: ${DEMO_ASSISTANT_PASSWORD.padEnd(15)} -> /assistant/dashboard`);
+    console.log(`10. Cashier            : ${DEMO_CASHIER_EMAIL.padEnd(25)} Password: ${DEMO_CASHIER_PASSWORD.padEnd(15)} -> /cashier/billing`);
+    console.log(`11. Patient Portal     : ${DEMO_PATIENT_EMAIL.padEnd(25)} Password: ${DEMO_PATIENT_PASSWORD.padEnd(15)} -> /patient/dashboard`);
+    console.log(`12. Central Admin      : ${DEMO_CENTRALADMIN_EMAIL.padEnd(25)} Password: ${DEMO_CENTRALADMIN_PASSWORD.padEnd(15)} -> /supremeadmin`);
+    console.log(`13. Demo Admin (Legacy): ${DEMO_EMAIL.padEnd(25)} Password: ${DEMO_PASSWORD.padEnd(15)} -> /hospitaladmin`);
+    console.log('\nData Persistence: Persistent MongoDB storage (NO auto-reset / NO scheduled reset).');
     console.log('====================================================\n');
 
-    await mongoose.disconnect();
-    if (tenantDb) await tenantDb.close().catch(() => {});
+    process.exit(0);
 }
 
-if (require.main === module) {
-    runSeed()
-        .then(() => process.exit(0))
-        .catch((err) => {
-            console.error('\n❌ Error during demo seeding:', err);
-            process.exit(1);
-        });
-}
-
-module.exports = runSeed;
+runSeed().catch(err => {
+    console.error('\n❌ Seed Script Error:', err);
+    process.exit(1);
+});

@@ -98,7 +98,22 @@ const HospitalLogin = () => {
                 headnurse: '/nurse/dashboard',
                 otmanager: '/ot/dashboard',
                 otstaff: '/ot/dashboard',
-                ot: '/ot/dashboard'
+                ot: '/ot/dashboard',
+                pharmacist: '/pharmacy/inventory',
+                pharmacy: '/pharmacy/inventory',
+                lab: '/lab/dashboard',
+                cashier: '/cashier/billing',
+                accountant: '/accountant/dashboard',
+                doctor_assistant: '/assistant/dashboard',
+                assistant: '/assistant/dashboard',
+                doctor: '/doctor/patients',
+                receptionist: '/reception/dashboard',
+                reception: '/reception/dashboard',
+                hospitaladmin: '/hospitaladmin',
+                patient: '/patient/dashboard',
+                centraladmin: '/supremeadmin',
+                superadmin: '/supremeadmin',
+                admin: '/supremeadmin'
             };
             const rawPath = redirectMap[role] || user.dashboardPath || 'my-dashboard';
             const cleanPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
