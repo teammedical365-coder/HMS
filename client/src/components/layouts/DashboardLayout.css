@@ -732,6 +732,13 @@
   padding: 0 0 24px 0 !important;
 }
 
+.erp-page-content:has(.reg-page-root) {
+  padding: 0 !important;
+  height: calc(100vh - var(--topbar-height, 64px));
+  max-height: calc(100vh - var(--topbar-height, 64px));
+  overflow: hidden !important;
+}
+
 /* Animation */
 @keyframes fadeIn {
   from {

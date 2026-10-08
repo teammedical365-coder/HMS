@@ -32,37 +32,37 @@ const REPORT_CATEGORIES = [
 const CONSENT_TEMPLATES = [
     {
         value: 'GENERAL_ADMISSION',
-        label: '🏥 General Inpatient Admission & Treatment Consent',
+        label: 'General Inpatient Admission',
         title: 'GENERAL INFORMED ADMISSION & TREATMENT CONSENT',
         description: 'Standard consent for inpatient admission, routine clinical diagnostic tests, vital monitoring, and general nursing care.'
     },
     {
         value: 'SURGERY_PROCEDURE',
-        label: '🔪 Surgical Operation & Invasive Procedure Consent',
+        label: 'Surgery & Invasive Procedure',
         title: 'INFORMED CONSENT FOR SURGERY / INVASIVE PROCEDURE',
         description: 'Specific consent explaining operative procedure, surgical risks, alternatives, and emergency contingency interventions.'
     },
     {
         value: 'ANESTHESIA',
-        label: '💉 General / Regional Anesthesia Administration Consent',
+        label: 'Anesthesia Administration',
         title: 'CONSENT FOR ANESTHESIA & ANALGESIC ADMINISTRATION',
         description: 'Consent for general, spinal, epidural, or local sedation detailing anesthetic risks and hemodynamic monitoring.'
     },
     {
         value: 'HIGH_RISK',
-        label: '⚠️ High-Risk Clinical Treatment & Critical Care Consent',
+        label: 'High-Risk Critical Care (ICU)',
         title: 'HIGH-RISK CLINICAL INTERVENTION & ICU CARE CONSENT',
         description: 'Consent for critical care management, mechanical ventilation, central venous line access, and advanced life support.'
     },
     {
         value: 'BLOOD_TRANSFUSION',
-        label: '🩸 Blood & Blood Component Transfusion Consent',
+        label: 'Blood Transfusion',
         title: 'CONSENT FOR BLOOD & BLOOD PRODUCTS TRANSFUSION',
         description: 'Consent explaining transfusion indication, compatibility cross-matching, and potential immunological/allergic risks.'
     },
     {
         value: 'DAMA',
-        label: '🚪 Discharge Against Medical Advice (DAMA) Declaration',
+        label: 'DAMA (Discharge Against Medical Advice)',
         title: 'DISCHARGE AGAINST MEDICAL ADVICE (DAMA) REFUSAL',
         description: 'Patient/Family legal declaration releasing hospital and doctors from liability upon self-directed premature discharge.'
     }
@@ -707,7 +707,6 @@ const NursePatientDocuments = () => {
                                     <div className="npd-card npd-form-card">
                                         <div className="npd-card-header">
                                             <h3><FiUploadCloud /> Upload Diagnostic / Lab Report</h3>
-                                            <span className="npd-card-sub">Will be instantly visible to Doctor & Reception</span>
                                         </div>
 
                                         <form onSubmit={handleReportSubmit}>
@@ -863,19 +862,18 @@ const NursePatientDocuments = () => {
                                     {/* ── STEP 1: DOWNLOAD / PRINT CONSENT TEMPLATE ── */}
                                     <div className="npd-card consent-download-card">
                                         <div className="npd-card-header">
-                                            <h3><FiPrinter /> Step 1: Download & Print Official Consent Form</h3>
-                                            <span className="npd-card-sub purple">Print first for physical patient signature</span>
+                                            <h3><FiPrinter /> Print Consent Template</h3>
                                         </div>
-                                        <p className="npd-step-desc">
-                                            Select the required clinical consent form. You can print the form pre-filled with this patient's details or print a blank copy to get signed physically.
-                                        </p>
 
-                                        <div className="npd-form-grid-3" style={{ alignItems: 'flex-end' }}>
-                                            <div className="npd-form-group">
-                                                <label>Select Consent Type</label>
+                                        <div className="npd-consent-toolbar">
+                                            <div className="npd-form-group form-col-type">
+                                                <label>Consent Form</label>
                                                 <select
                                                     value={selectedDownloadTemplate}
-                                                    onChange={e => setSelectedDownloadTemplate(e.target.value)}
+                                                    onChange={e => {
+                                                        setSelectedDownloadTemplate(e.target.value);
+                                                        setConsentForm(prev => ({ ...prev, consentType: e.target.value }));
+                                                    }}
                                                 >
                                                     {CONSENT_TEMPLATES.map(t => (
                                                         <option key={t.value} value={t.value}>{t.label}</option>
@@ -883,8 +881,8 @@ const NursePatientDocuments = () => {
                                                 </select>
                                             </div>
 
-                                            <div className="npd-form-group">
-                                                <label>Doctor Name on Form (Optional)</label>
+                                            <div className="npd-form-group form-col-doctor">
+                                                <label>Doctor Name (Optional)</label>
                                                 <input
                                                     type="text"
                                                     placeholder="e.g. Dr. Ramesh Singh"
@@ -893,14 +891,14 @@ const NursePatientDocuments = () => {
                                                 />
                                             </div>
 
-                                            <div className="npd-consent-print-btns">
+                                            <div className="form-col-actions">
                                                 <button
                                                     type="button"
                                                     className="npd-btn-print"
                                                     onClick={() => handlePrintConsentForm(selectedDownloadTemplate, false)}
                                                 >
                                                     <FiPrinter size={15} />
-                                                    <span>Print Pre-Filled Form</span>
+                                                    <span>Print Pre-Filled</span>
                                                 </button>
                                                 <button
                                                     type="button"
@@ -908,7 +906,7 @@ const NursePatientDocuments = () => {
                                                     onClick={() => handlePrintConsentForm(selectedDownloadTemplate, true)}
                                                 >
                                                     <FiDownload size={14} />
-                                                    <span>Blank Form</span>
+                                                    <span>Blank Copy</span>
                                                 </button>
                                             </div>
                                         </div>
@@ -917,8 +915,7 @@ const NursePatientDocuments = () => {
                                     {/* ── STEP 2: UPLOAD SIGNED CONSENT COPY ── */}
                                     <div className="npd-card npd-form-card">
                                         <div className="npd-card-header">
-                                            <h3><FiUploadCloud /> Step 2: Upload Signed Patient Consent Form</h3>
-                                            <span className="npd-card-sub">Upload scanned paper copy or photo signed by patient/witness</span>
+                                            <h3><FiUploadCloud /> Upload Signed Form</h3>
                                         </div>
 
                                         <form onSubmit={handleConsentSubmit}>
@@ -936,17 +933,17 @@ const NursePatientDocuments = () => {
                                                 </div>
 
                                                 <div className="npd-form-group">
-                                                    <label>Procedure / Treatment Name</label>
+                                                    <label>Procedure Name</label>
                                                     <input
                                                         type="text"
-                                                        placeholder="e.g. Inpatient Care, Laparoscopic Surgery"
+                                                        placeholder="e.g. Inpatient Care, Surgery"
                                                         value={consentForm.procedureName}
                                                         onChange={e => setConsentForm({ ...consentForm, procedureName: e.target.value })}
                                                     />
                                                 </div>
 
                                                 <div className="npd-form-group">
-                                                    <label>Attending / Operating Doctor</label>
+                                                    <label>Doctor Name</label>
                                                     <input
                                                         type="text"
                                                         placeholder="e.g. Dr. Ramesh Singh"
@@ -956,36 +953,36 @@ const NursePatientDocuments = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="npd-form-grid-3" style={{ marginTop: '14px' }}>
+                                            <div className="npd-form-grid-3" style={{ marginTop: '12px' }}>
                                                 <div className="npd-form-group">
-                                                    <label>Signatory / Witness Name</label>
+                                                    <label>Signatory Name</label>
                                                     <input
                                                         type="text"
-                                                        placeholder="Patient or Guardian full name"
+                                                        placeholder="Patient or Guardian name"
                                                         value={consentForm.witnessName}
                                                         onChange={e => setConsentForm({ ...consentForm, witnessName: e.target.value })}
                                                     />
                                                 </div>
 
                                                 <div className="npd-form-group">
-                                                    <label>Relationship to Patient</label>
+                                                    <label>Relationship</label>
                                                     <select
                                                         value={consentForm.witnessRelation}
                                                         onChange={e => setConsentForm({ ...consentForm, witnessRelation: e.target.value })}
                                                     >
                                                         <option value="Self">Self (Patient)</option>
-                                                        <option value="Spouse">Spouse (Husband / Wife)</option>
+                                                        <option value="Spouse">Spouse</option>
                                                         <option value="Father">Father</option>
                                                         <option value="Mother">Mother</option>
                                                         <option value="Son">Son</option>
                                                         <option value="Daughter">Daughter</option>
                                                         <option value="Guardian">Legal Guardian</option>
-                                                        <option value="Other">Other Relative</option>
+                                                        <option value="Other">Other</option>
                                                     </select>
                                                 </div>
 
                                                 <div className="npd-form-group">
-                                                    <label>Signatory Contact Phone</label>
+                                                    <label>Contact Phone</label>
                                                     <input
                                                         type="tel"
                                                         placeholder="e.g. 9876543210"
@@ -995,9 +992,9 @@ const NursePatientDocuments = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="npd-form-grid-2" style={{ marginTop: '14px' }}>
+                                            <div className="npd-form-grid-2" style={{ marginTop: '12px' }}>
                                                 <div className="npd-form-group">
-                                                    <label>Upload Signed Document / Photo <span className="req">*</span></label>
+                                                    <label>Signed Document <span className="req">*</span></label>
                                                     <div className="file-input-wrapper">
                                                         <input
                                                             type="file"
@@ -1008,16 +1005,16 @@ const NursePatientDocuments = () => {
                                                         />
                                                         <label htmlFor="consent-file-input" className="custom-file-label purple">
                                                             <FiShield size={16} />
-                                                            <span>{consentForm.file ? consentForm.file.name : 'Choose Signed Consent Copy (PDF / Image)...'}</span>
+                                                            <span>{consentForm.file ? consentForm.file.name : 'Choose PDF / Image File...'}</span>
                                                         </label>
                                                     </div>
                                                 </div>
 
                                                 <div className="npd-form-group">
-                                                    <label>Additional Notes / Remarks</label>
+                                                    <label>Notes (Optional)</label>
                                                     <input
                                                         type="text"
-                                                        placeholder="e.g. Risks explained in Hindi, signed in presence of staff..."
+                                                        placeholder="Optional remarks..."
                                                         value={consentForm.notes}
                                                         onChange={e => setConsentForm({ ...consentForm, notes: e.target.value })}
                                                     />
@@ -1031,7 +1028,7 @@ const NursePatientDocuments = () => {
                                                     disabled={uploadingConsent || !consentForm.file}
                                                 >
                                                     <FiCheckCircle />
-                                                    <span>{uploadingConsent ? 'Archiving Consent...' : 'Save Signed Consent Form'}</span>
+                                                    <span>{uploadingConsent ? 'Saving...' : 'Save Signed Consent'}</span>
                                                 </button>
                                             </div>
                                         </form>
@@ -1040,7 +1037,7 @@ const NursePatientDocuments = () => {
                                     {/* ── STEP 3: SIGNED CONSENTS ARCHIVE ── */}
                                     <div className="npd-card">
                                         <div className="npd-card-header">
-                                            <h3><FiShield /> Patient's Signed Consent Documents ({consentList.length})</h3>
+                                            <h3><FiShield /> Signed Consent Documents ({consentList.length})</h3>
                                             <button className="npd-btn-link" onClick={fetchPatientRecords}>
                                                 <FiRefreshCw size={12} /> Refresh List
                                             </button>

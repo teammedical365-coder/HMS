@@ -551,15 +551,35 @@
 }
 
 .consent-download-card {
-    background: linear-gradient(135deg, #ffffff 0%, #faf5ff 100%);
-    border-color: #e9d5ff;
+    background: #ffffff;
+    border-color: #e2e8f0;
+}
+
+.npd-consent-toolbar {
+    display: flex;
+    gap: 14px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.npd-consent-toolbar .form-col-type {
+    flex: 2;
+    min-width: 250px;
+}
+
+.npd-consent-toolbar .form-col-doctor {
+    flex: 1.2;
+    min-width: 180px;
+}
+
+.npd-consent-toolbar .form-col-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
 }
 
 .npd-step-desc {
-    font-size: 13px;
-    color: #64748b;
-    margin: -6px 0 16px 0;
-    line-height: 1.45;
+    display: none;
 }
 
 .npd-consent-print-btns {

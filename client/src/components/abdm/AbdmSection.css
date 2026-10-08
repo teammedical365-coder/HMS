@@ -1,0 +1,328 @@
+/* AbdmSection.css — ABDM / ABHA Healthcare Design System */
+
+.abdm-section-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+}
+
+.abdm-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f1f5f9;
+    margin-bottom: 16px;
+}
+
+.abdm-title-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.abdm-gov-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #2563eb;
+    font-size: 18px;
+}
+
+.abdm-heading {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.abdm-subheading {
+    margin: 2px 0 0 0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+/* Status Badges */
+.abdm-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.abdm-badge-verified {
+    background: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+}
+
+.abdm-badge-unlinked {
+    background: #f8fafc;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
+.abdm-badge-pending {
+    background: #fffbeb;
+    color: #d97706;
+    border: 1px solid #fde68a;
+}
+
+/* Verified Content State */
+.abdm-verified-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 16px;
+}
+
+.abdm-field-box {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.abdm-field-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.abdm-field-val {
+    font-size: 14px;
+    font-weight: 600;
+    color: #0f172a;
+    font-family: inherit;
+}
+
+.abdm-verified-footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: #059669;
+}
+
+/* Unlinked Content State */
+.abdm-unlinked-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+}
+
+.abdm-unlinked-info {
+    font-size: 13px;
+    color: #475569;
+    max-width: 480px;
+    line-height: 1.4;
+}
+
+.abdm-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.abdm-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+}
+
+.abdm-btn-primary {
+    background: #2563eb;
+    color: #ffffff;
+}
+.abdm-btn-primary:hover:not(:disabled) {
+    background: #1d4ed8;
+}
+
+.abdm-btn-secondary {
+    background: #ffffff;
+    color: #0284c7;
+    border: 1px solid #bae6fd;
+}
+.abdm-btn-secondary:hover:not(:disabled) {
+    background: #f0f9ff;
+    border-color: #7dd3fc;
+}
+
+.abdm-btn-outline {
+    background: transparent;
+    color: #64748b;
+    border: 1px solid #cbd5e1;
+}
+.abdm-btn-outline:hover:not(:disabled) {
+    background: #f1f5f9;
+    color: #334155;
+}
+
+.abdm-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/* Modal Overlay & Card */
+.abdm-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 16px;
+}
+
+.abdm-modal-card {
+    background: #ffffff;
+    width: 100%;
+    max-width: 460px;
+    border-radius: 14px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+    animation: abdmFadeIn 0.2s ease-out;
+}
+
+@keyframes abdmFadeIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.abdm-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.abdm-modal-title {
+    margin: 0;
+    font-size: 15.5px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.abdm-modal-close-btn {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 6px;
+}
+.abdm-modal-close-btn:hover {
+    color: #0f172a;
+    background: #e2e8f0;
+}
+
+.abdm-modal-body {
+    padding: 20px;
+}
+
+.abdm-form-group {
+    margin-bottom: 16px;
+}
+
+.abdm-input-label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 6px;
+}
+
+.abdm-input {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease;
+}
+.abdm-input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.abdm-input-hint {
+    margin: 6px 0 0 0;
+    font-size: 11.5px;
+    color: #64748b;
+}
+
+.abdm-alert-box {
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    line-height: 1.45;
+}
+
+.abdm-alert-warning {
+    background: #fffbeb;
+    border: 1px solid #fef3c7;
+    color: #b45309;
+}
+
+.abdm-alert-info {
+    background: #f0f9ff;
+    border: 1px solid #e0f2fe;
+    color: #0369a1;
+}
+
+.abdm-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 20px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+}

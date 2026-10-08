@@ -66,6 +66,17 @@ const userSchema = new mongoose.Schema({
     },
     panNumber: String,
     isAadhaarVerified: { type: Boolean, default: false },
+
+    // ABDM / ABHA Integration (Separate from MRN, non-mandatory)
+    abdm: {
+        abhaNumber: { type: String, sparse: true, trim: true, default: null },
+        abhaAddress: { type: String, sparse: true, trim: true, default: null },
+        isVerified: { type: Boolean, default: false },
+        verifiedAt: { type: Date, default: null },
+        linkedAt: { type: Date, default: null },
+        status: { type: String, enum: ['Not Linked', 'Verified', 'Pending', 'Failed'], default: 'Not Linked' }
+    },
+
     age: { 
         type: Number, 
         min: 1,
@@ -119,6 +130,8 @@ userSchema.index({ hospitalId: 1, phone: 1 }, { unique: true, partialFilterExpre
 userSchema.index({ hospitalId: 1, email: 1 }, { unique: true, partialFilterExpression: { email: { $type: "string" } } });
 userSchema.index({ hospitalId: 1, aadhaarNumber: 1 }, { unique: true, partialFilterExpression: { aadhaarNumber: { $type: "string" } } });
 userSchema.index({ hospitalId: 1, patientId: 1 }, { unique: true, partialFilterExpression: { patientId: { $type: "string" } } });
+userSchema.index({ hospitalId: 1, 'abdm.abhaNumber': 1 }, { sparse: true });
+userSchema.index({ hospitalId: 1, 'abdm.abhaAddress': 1 }, { sparse: true });
 
 userSchema.pre('save', async function (next) {
     if (!this.isModified('password')) return next();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { receptionAPI, publicAPI, hospitalAPI, uploadAPI, admissionAPI, patientAuthAPI, bedAPI, ipdClinicalAPI, policyAPI } from '../../utils/api';
 import HospitalPolicyModal from '../../components/HospitalPolicyModal';
@@ -12,7 +12,7 @@ import autoTable from 'jspdf-autotable';
 import { 
     FiSearch, FiUserPlus, FiFileText, FiDollarSign, FiUsers, FiCalendar, FiHome, FiPlusSquare, 
     FiActivity, FiSliders, FiPhone, FiEye, FiUpload, FiMoreVertical, FiCpu, FiCheckCircle, FiClock, 
-    FiPrinter, FiFilter, FiX 
+    FiPrinter, FiFilter, FiX, FiAlertCircle 
 } from 'react-icons/fi';
 import { FaRupeeSign, FaHeartbeat } from 'react-icons/fa';
 import PaymentSection from '../../components/PaymentSection';
@@ -296,6 +296,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             'reg-step-card-5'
         ];
 
+        const formScroller = document.querySelector('.reg-form-area');
+
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
@@ -306,8 +308,8 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                 }
             });
         }, {
-            root: null,
-            rootMargin: '-15% 0px -65% 0px',
+            root: formScroller || null,
+            rootMargin: '-5% 0px -55% 0px',
             threshold: 0.05
         });
 
@@ -716,6 +718,108 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
     const totalIntakeSplitAmount = (intakeForm.splitPayments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
+    const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+    // Comprehensive Form Validation Status for Patient Registration
+    const formValidation = useMemo(() => {
+        const missing = [];
+
+        // 1. Identity & Demographics (Card 01 - Required)
+        if (!intakeForm.aadhaar || !/^\d{12}$/.test(String(intakeForm.aadhaar).trim())) {
+            missing.push('Aadhaar (12 digits)');
+        }
+        if (!intakeForm.firstName || intakeForm.firstName.trim().length < 2) {
+            missing.push('First Name');
+        }
+        if (!intakeForm.age || Number(intakeForm.age) < 1) {
+            missing.push('Age');
+        }
+        if (!intakeForm.mobile || !/^\d{10}$/.test(String(intakeForm.mobile).trim())) {
+            missing.push('Mobile (10 digits)');
+        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!intakeForm.email || !emailRegex.test(String(intakeForm.email).trim())) {
+            missing.push('Valid Email');
+        }
+        if (!intakeForm.gender || String(intakeForm.gender).trim() === '') {
+            missing.push('Gender');
+        }
+
+        // 2. Doctor Assignment & Booking (Card 04 - Required when registering/booking)
+        if (!isEditingProfileOnly) {
+            if (!intakeForm.department || String(intakeForm.department).trim() === '') {
+                missing.push('Department');
+            }
+            if (!intakeForm.doctor || String(intakeForm.doctor).trim() === '') {
+                missing.push('Doctor / Specialist');
+            }
+            if (!intakeForm.visitDate || String(intakeForm.visitDate).trim() === '') {
+                missing.push('Visit Date');
+            } else if (intakeForm.visitDate < todayStr) {
+                missing.push('Valid Future Visit Date');
+            }
+
+            const isTokenMode = hospitalContext?.appointmentMode === 'token';
+            if (!isTokenMode && (!intakeForm.visitTime || String(intakeForm.visitTime).trim() === '')) {
+                missing.push('Time Slot');
+            }
+
+            // 3. Payment (Card 05 - Required if fee > 0 and not free follow-up)
+            const requiredFee = Number(intakeForm.consultationFee) || 0;
+            if (!followupStatus?.active && requiredFee > 0) {
+                if (totalIntakeSplitAmount !== requiredFee) {
+                    missing.push(`Payment (₹${totalIntakeSplitAmount}/₹${requiredFee})`);
+                }
+                const hasNonCash = (intakeForm.splitPayments || []).some(p => p.method !== 'Cash');
+                if (hasNonCash && !paymentScreenshot) {
+                    missing.push('Payment Screenshot');
+                }
+            }
+
+            // 4. Hospital Policy Agreement Checkbox
+            if (!intakePolicyAgreed) {
+                missing.push('Policy Agreement');
+            }
+        }
+
+        return {
+            isValid: missing.length === 0,
+            missing
+        };
+    }, [
+        intakeForm.aadhaar,
+        intakeForm.firstName,
+        intakeForm.age,
+        intakeForm.mobile,
+        intakeForm.email,
+        intakeForm.gender,
+        intakeForm.department,
+        intakeForm.doctor,
+        intakeForm.visitDate,
+        intakeForm.visitTime,
+        intakeForm.consultationFee,
+        intakeForm.splitPayments,
+        totalIntakeSplitAmount,
+        paymentScreenshot,
+        isEditingProfileOnly,
+        hospitalContext?.appointmentMode,
+        followupStatus?.active,
+        intakePolicyAgreed,
+        todayStr
+    ]);
+
+    const getSubmitButtonLabel = () => {
+        if (saving) return '⏳ Processing Registration...';
+        if (isEditingProfileOnly) return '✓ Update Patient Profile';
+        if (followupStatus?.active) return '✓ Confirm & Re-Book Follow-up';
+        if (hospitalContext?.appointmentMode === 'token') {
+            return '✓ Register Patient & Issue Token';
+        }
+        if (isPatientPortal) {
+            return '✓ Confirm & Book Appointment';
+        }
+        return '✓ Confirm & Register Patient';
+    };
 
     useEffect(() => {
         const fetchHospital = async () => {
@@ -1021,8 +1125,6 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
         } catch (err) { console.error(err); }
     };
 
-    const todayStr = new Date().toISOString().split('T')[0];
-
     const isSlotInPast = (time) => {
         if (intakeForm.visitDate !== todayStr) return false;
         const now = new Date();
@@ -1060,6 +1162,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             splitPayments: [{ method: 'Cash', amount: '' }]
         });
         setViewMode('intake');
+        if (!isPatientPortal && !location.search.includes('view=intake')) {
+            navigate('/reception/dashboard?view=intake', { replace: true });
+        }
     };
 
     const handleEditPatient = (patient, isEditOnly = false) => {
@@ -1100,6 +1205,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             department: '', doctor: '', visitDate: new Date().toISOString().split('T')[0], visitTime: ''
         }));
         setViewMode('intake');
+        if (!isPatientPortal && !location.search.includes('view=intake')) {
+            navigate('/reception/dashboard?view=intake', { replace: true });
+        }
     };
 
     const handleSelectSearchResult = async (patient) => {
@@ -1583,7 +1691,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
         if (name === 'visitDate') {
             // Prevent past dates
-            if (value < todayStr) return;
+            if (value && value < todayStr) {
+                toast.error("Visit date cannot be in the past. Please select today or a future date.");
+                return;
+            }
 
             // Validate doctor availability for the selected day
             if (intakeForm.doctor) {
@@ -1732,6 +1843,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             setSaving(false); return;
         }
 
+        if (!intakeForm.gender) {
+            toast.error("Please select a Gender.");
+            setSaving(false); return;
+        }
+
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (intakeForm.email && !emailRegex.test(intakeForm.email)) {
             toast.error("Please enter a valid email address (e.g. patient@gmail.com).");
@@ -1745,27 +1861,48 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
             .join(', ');
         intakeForm.address = fullAddress || intakeForm.address || '';
 
-        const hasNonCash = (intakeForm.splitPayments || []).some(p => p.method !== 'Cash');
-        if ((intakeForm.doctor || intakeForm.department) && hasNonCash && !paymentScreenshot && !followupStatus?.active) {
-            toast.error(`Please upload a payment screenshot/proof for non-cash payment before booking.`);
-            setSaving(false); return;
-        }
-
-        const isTokenMode = hospitalContext?.appointmentMode === 'token';
-        const isBooking = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
-        
-        const requiredFee = Number(intakeForm.consultationFee) || 0;
-        if (!followupStatus?.active && (intakeForm.department || isBooking) && requiredFee > 0) {
-            const totalSplit = (intakeForm.splitPayments || []).reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-            if (totalSplit !== requiredFee) {
-                toast.error(`Payment breakdown total (₹${totalSplit}) must exactly match the full Consultation Fee (₹${requiredFee}) before booking.`);
+        if (!isEditingProfileOnly) {
+            if (!intakeForm.department || String(intakeForm.department).trim() === '') {
+                toast.error("Department is required. Please select a department.");
                 setSaving(false); return;
             }
-        }
+            if (!intakeForm.doctor || String(intakeForm.doctor).trim() === '') {
+                toast.error("Doctor / Specialist is required. Please select a specialist.");
+                setSaving(false); return;
+            }
+            if (!intakeForm.visitDate || String(intakeForm.visitDate).trim() === '') {
+                toast.error("Visit Date is required. Please choose a visit date.");
+                setSaving(false); return;
+            }
+            if (intakeForm.visitDate < todayStr) {
+                toast.error("Visit Date cannot be in the past. Please select today or a future date.");
+                setSaving(false); return;
+            }
 
-        if (!isEditingProfileOnly && !intakePolicyAgreed) {
-            toast.error("Please review and agree to the Hospital Terms & Policies before proceeding.");
-            setSaving(false); return;
+            const isTokenMode = hospitalContext?.appointmentMode === 'token';
+            if (!isTokenMode && (!intakeForm.visitTime || String(intakeForm.visitTime).trim() === '')) {
+                toast.error("Please select an available Time Slot.");
+                setSaving(false); return;
+            }
+
+            const requiredFee = Number(intakeForm.consultationFee) || 0;
+            if (!followupStatus?.active && requiredFee > 0) {
+                const totalSplit = (intakeForm.splitPayments || []).reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+                if (totalSplit !== requiredFee) {
+                    toast.error(`Payment breakdown total (₹${totalSplit}) must exactly match the full Consultation Fee (₹${requiredFee}) before booking.`);
+                    setSaving(false); return;
+                }
+                const hasNonCash = (intakeForm.splitPayments || []).some(p => p.method !== 'Cash');
+                if (hasNonCash && !paymentScreenshot) {
+                    toast.error(`Please upload a payment screenshot/proof for non-cash payment before booking.`);
+                    setSaving(false); return;
+                }
+            }
+
+            if (!intakePolicyAgreed) {
+                toast.error("Please review and agree to the Hospital Terms & Policies before proceeding.");
+                setSaving(false); return;
+            }
         }
 
         try {
@@ -2129,26 +2266,28 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                     <div className="form-row">
                                         <div className="field">
                                             <label>Department {followupStatus?.active && '(Read Only)'}</label>
-                                            <select
+                                            <CustomSelect
                                                 name="department"
                                                 value={intakeForm.department}
                                                 onChange={handleInputChange}
                                                 disabled={followupStatus?.active}
+                                                maxVisibleItems={3}
                                                 style={followupStatus?.active ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
                                             >
                                                 <option value="">-- Choose Department --</option>
                                                 {[...new Set([...(hospitalContext?.departments || []), ...doctorsList.flatMap(d => d.departments || [])])].filter(Boolean).map(dept => (
                                                     <option key={dept} value={dept}>{dept}</option>
                                                 ))}
-                                            </select>
+                                            </CustomSelect>
                                         </div>
                                         <div className="field">
                                             <label>Select Specialist {followupStatus?.active && '(Read Only)'}</label>
-                                            <select
+                                            <CustomSelect
                                                 name="doctor"
                                                 value={intakeForm.doctor}
                                                 onChange={handleInputChange}
                                                 disabled={!intakeForm.department || followupStatus?.active}
+                                                maxVisibleItems={3}
                                                 style={(!intakeForm.department || followupStatus?.active) ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
                                             >
                                                 {!intakeForm.department ? (
@@ -2161,7 +2300,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                         ))}
                                                     </>
                                                 )}
-                                            </select>
+                                            </CustomSelect>
                                         </div>
                                     </div>
                                     <div className="form-row" style={{ marginTop: '10px' }}>
@@ -2260,21 +2399,29 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                             </div>
 
                             <div className="form-footer">
-                                <button
-                                    type="submit"
-                                    className="btn-save"
-                                    disabled={saving || (!followupStatus?.active && Number(intakeForm.consultationFee) > 0 && totalIntakeSplitAmount !== Number(intakeForm.consultationFee))}
-                                >
-                                    {saving
-                                        ? 'Booking...'
-                                        : (() => {
-                                            const isTokenMode = hospitalContext?.appointmentMode === 'token';
-                                            const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
-                                            const actionText = followupStatus?.active ? 'Re-Book Appointment' : 'Book Appointment';
-                                            return canBook ? `${actionText} & Receipt` : 'Select Doctor & Slot';
-                                        })()
-                                    }
-                                </button>
+                                {(() => {
+                                    const isTokenMode = hospitalContext?.appointmentMode === 'token';
+                                    const canBook = Boolean(
+                                        intakeForm.department && 
+                                        intakeForm.doctor && 
+                                        intakeForm.visitDate && 
+                                        (intakeForm.visitTime || isTokenMode) && 
+                                        intakePolicyAgreed &&
+                                        (followupStatus?.active || Number(intakeForm.consultationFee) <= 0 || totalIntakeSplitAmount === Number(intakeForm.consultationFee))
+                                    );
+                                    const actionText = followupStatus?.active ? 'Re-Book Follow-up' : (isTokenMode ? 'Issue Token' : 'Book Appointment');
+                                    
+                                    return (
+                                        <button
+                                            type="submit"
+                                            className="btn-save"
+                                            disabled={saving || !canBook}
+                                            title={!canBook ? 'Please select department, doctor, date/slot and agree to terms' : 'Confirm and complete booking'}
+                                        >
+                                            {saving ? 'Processing...' : (canBook ? `✓ Confirm ${actionText} & Receipt` : 'Select Doctor & Details First')}
+                                        </button>
+                                    );
+                                })()}
                                 <button type="button" className="btn-cancel" onClick={handleCloseRegistration} disabled={saving} style={{ marginLeft: '10px' }}>
                                     Cancel
                                 </button>
@@ -2297,7 +2444,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
         // ─── NEW REGISTRATION / PATIENT PORTAL MODE (UPGRADED WITH MODERN AI DESIGN) ────────────
         return (
-            <div className="reg-page-root" data-lenis-prevent="true">
+            <div className={`reg-page-root ${isPatientPortal ? 'standalone-portal' : 'dashboard-embedded'}`} data-lenis-prevent="true">
                 {/* Animated Background AI Particles */}
                 <div className="ai-particles">
                     <div className="particle p1"></div>
@@ -2308,86 +2455,118 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                     <div className="particle p6"></div>
                 </div>
 
-                {/* Real Dashboard TopBar with search, notifications, profile dropdown & branding */}
-                <TopBar toggleSidebar={() => {}} sidebarOpen={false} />
+                {/* Only render TopBar here if in standalone patient portal (DashboardLayout provides main TopBar) */}
+                {isPatientPortal && <TopBar toggleSidebar={() => {}} sidebarOpen={false} />}
 
                 <main className="reg-main">
-                    {/* Centered Colorful Page Heading with Right Close Button */}
-                    <div className="reg-page-heading-row">
-                        <div className="reg-heading-placeholder"></div>
-                        <div className="reg-heading-center">
-                            <h1 className="reg-title-gradient">
-                                {isPatientPortal ? (followupStatus?.active ? 'Re-Book Appointment' : 'Book Appointment') : 'New Patient Registration'}
-                            </h1>
-                            <div className="reg-title-glow-accent"></div>
-                        </div>
-                        <div className="reg-heading-right-action">
-                            <button 
-                                type="button" 
-                                className="reg-btn-close-prominent" 
-                                onClick={handleCloseRegistration}
-                            >
-                                ✕ Close
-                            </button>
-                        </div>
-                    </div>
-
                     <div className="reg-workspace">
-                        {/* LEFT STEP SIDEBAR */}
-                        <aside className="reg-steps">
-                            <div className="reg-steps-title">Registration Flow</div>
-
-                            <div className={`reg-step ${activeStep === 1 ? 'active' : ''}`} onClick={() => scrollToStep(1)}>
-                                <div className="reg-step-num">01</div>
-                                <div className="reg-step-text">
-                                    <strong>Patient Identity</strong>
-                                    <span>KYC & basic details</span>
+                        {/* TOP HORIZONTAL STEPPER: REGISTRATION FLOW */}
+                        <div className="reg-top-flow-card">
+                            <div className="reg-top-flow-header">
+                                <div className="reg-top-flow-title-wrap">
+                                    <div className="reg-top-flow-icon">✦</div>
+                                    <div>
+                                        <span className="reg-top-flow-badge">Registration Flow</span>
+                                        <span className="reg-top-flow-sub">Click any step to navigate the registration workflow</span>
+                                    </div>
+                                </div>
+                                <div className="reg-top-flow-right-actions">
+                                    <div className="reg-top-flow-ai">
+                                        <div className="reg-scan">
+                                            <div className="reg-scan-icon">✦</div>
+                                            <span>Verified</span>
+                                        </div>
+                                        <div className="reg-scan-line"></div>
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        className="reg-btn-close-banner" 
+                                        onClick={handleCloseRegistration}
+                                        title="Close Registration"
+                                    >
+                                        ✕ Close
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className={`reg-step ${activeStep === 2 ? 'active' : ''}`} onClick={() => scrollToStep(2)}>
-                                <div className="reg-step-num">02</div>
-                                <div className="reg-step-text">
-                                    <strong>Address</strong>
-                                    <span>Contact information</span>
+                            <div className="reg-top-flow-steps">
+                                <div 
+                                    className={`reg-top-step ${activeStep === 1 ? 'active' : ''}`} 
+                                    onClick={() => scrollToStep(1)}
+                                    role="button"
+                                    tabIndex={0}
+                                >
+                                    <div className="reg-top-step-num">01</div>
+                                    <div className="reg-top-step-text">
+                                        <strong>Patient Identity</strong>
+                                        <span>KYC & basic details</span>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div className={`reg-step ${activeStep === 3 ? 'active' : ''}`} onClick={() => scrollToStep(3)}>
-                                <div className="reg-step-num">03</div>
-                                <div className="reg-step-text">
-                                    <strong>Source</strong>
-                                    <span>Referral details</span>
-                                </div>
-                            </div>
+                                <div className="reg-top-step-connector"></div>
 
-                            <div className={`reg-step ${activeStep === 4 ? 'active' : ''}`} onClick={() => scrollToStep(4)}>
-                                <div className="reg-step-num">04</div>
-                                <div className="reg-step-text">
-                                    <strong>Assignment</strong>
-                                    <span>Doctor & department</span>
+                                <div 
+                                    className={`reg-top-step ${activeStep === 2 ? 'active' : ''}`} 
+                                    onClick={() => scrollToStep(2)}
+                                    role="button"
+                                    tabIndex={0}
+                                >
+                                    <div className="reg-top-step-num">02</div>
+                                    <div className="reg-top-step-text">
+                                        <strong>Address</strong>
+                                        <span>Contact information</span>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div className={`reg-step ${activeStep === 5 ? 'active' : ''}`} onClick={() => scrollToStep(5)}>
-                                <div className="reg-step-num">05</div>
-                                <div className="reg-step-text">
-                                    <strong>Payment</strong>
-                                    <span>Registration fee</span>
-                                </div>
-                            </div>
+                                <div className="reg-top-step-connector"></div>
 
-                            <div className="reg-steps-ai">
-                                <div className="reg-scan">
-                                    <div className="reg-scan-icon">✦</div>
-                                    Verification
+                                <div 
+                                    className={`reg-top-step ${activeStep === 3 ? 'active' : ''}`} 
+                                    onClick={() => scrollToStep(3)}
+                                    role="button"
+                                    tabIndex={0}
+                                >
+                                    <div className="reg-top-step-num">03</div>
+                                    <div className="reg-top-step-text">
+                                        <strong>Source</strong>
+                                        <span>Referral details</span>
+                                    </div>
                                 </div>
-                                <div className="reg-scan-line"></div>
+
+                                <div className="reg-top-step-connector"></div>
+
+                                <div 
+                                    className={`reg-top-step ${activeStep === 4 ? 'active' : ''}`} 
+                                    onClick={() => scrollToStep(4)}
+                                    role="button"
+                                    tabIndex={0}
+                                >
+                                    <div className="reg-top-step-num">04</div>
+                                    <div className="reg-top-step-text">
+                                        <strong>Assignment <em>*</em></strong>
+                                        <span>Doctor & department</span>
+                                    </div>
+                                </div>
+
+                                <div className="reg-top-step-connector"></div>
+
+                                <div 
+                                    className={`reg-top-step ${activeStep === 5 ? 'active' : ''}`} 
+                                    onClick={() => scrollToStep(5)}
+                                    role="button"
+                                    tabIndex={0}
+                                >
+                                    <div className="reg-top-step-num">05</div>
+                                    <div className="reg-top-step-text">
+                                        <strong>Payment <em>*</em></strong>
+                                        <span>Registration fee</span>
+                                    </div>
+                                </div>
                             </div>
-                        </aside>
+                        </div>
 
                         {/* MAIN FORM AREA */}
-                        <section className="reg-form-area">
+                        <section className="reg-form-area" data-lenis-prevent="true">
                             <form onSubmit={handleSave}>
                                 {/* CARD 1: PATIENT IDENTITY & KYC */}
                                 <div className="reg-form-card" id="reg-step-card-1">
@@ -2399,7 +2578,6 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                 <p>Secure identification details</p>
                                             </div>
                                         </div>
-                                        <div className="reg-ai-tag">AI VERIFIED</div>
                                     </div>
 
                                     <div className="reg-card-body">
@@ -2531,18 +2709,18 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
                                                 <div className="reg-field">
                                                     <label>Gender <em>*</em></label>
-                                                    <select 
+                                                    <CustomSelect 
                                                         className="reg-select"
                                                         name="gender" 
                                                         value={intakeForm.gender} 
                                                         onChange={handleInputChange} 
-                                                        required
+                                                        maxVisibleItems={3}
                                                     >
                                                         <option value="">Select Gender</option>
                                                         <option value="Male">Male</option>
                                                         <option value="Female">Female</option>
                                                         <option value="Other">Other</option>
-                                                    </select>
+                                                    </CustomSelect>
                                                 </div>
 
                                                 <div className="reg-field">
@@ -2563,6 +2741,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                         name="relationToPatient" 
                                                         value={intakeForm.relationToPatient || ''} 
                                                         onChange={handleInputChange}
+                                                        maxVisibleItems={3}
                                                     >
                                                         <option value="">-- Select Relation --</option>
                                                         <option value="Father">Father</option>
@@ -2684,6 +2863,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                 name="referralType" 
                                                 value={intakeForm.referralType || ''} 
                                                 onChange={handleInputChange}
+                                                maxVisibleItems={3}
                                             >
                                                 <option value="">-- Select Source / Referral --</option>
                                                 <option value="Walk In">Walk In</option>
@@ -2706,7 +2886,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             <div className="reg-card-title">
                                                 <div className="reg-card-icon">⚕</div>
                                                 <div>
-                                                    <h2>Assign To Doctor / Counsellor</h2>
+                                                    <h2>Assign To Doctor / Counsellor <em>*</em></h2>
                                                     <p>Choose the appropriate medical professional</p>
                                                 </div>
                                             </div>
@@ -2715,13 +2895,14 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                         <div className="reg-card-body">
                                             <div className="reg-assign-grid">
                                                 <div className="reg-field">
-                                                    <label>Department {followupStatus?.active && '(Read Only)'}</label>
+                                                    <label>Department <em>*</em> {followupStatus?.active && '(Read Only)'}</label>
                                                     <CustomSelect 
                                                         className="reg-select"
                                                         name="department" 
                                                         value={intakeForm.department} 
                                                         onChange={handleInputChange}
                                                         disabled={followupStatus?.active}
+                                                        maxVisibleItems={3}
                                                         style={followupStatus?.active ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
                                                     >
                                                         <option value="">-- Choose Department --</option>
@@ -2732,13 +2913,14 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                 </div>
 
                                                 <div className="reg-field">
-                                                    <label>Select Specialist {followupStatus?.active && '(Read Only)'}</label>
-                                                    <select
+                                                    <label>Select Specialist <em>*</em> {followupStatus?.active && '(Read Only)'}</label>
+                                                    <CustomSelect
                                                         className="reg-select"
                                                         name="doctor"
                                                         value={intakeForm.doctor}
                                                         onChange={handleInputChange}
                                                         disabled={!intakeForm.department || followupStatus?.active}
+                                                        maxVisibleItems={3}
                                                         style={(!intakeForm.department || followupStatus?.active) ? { backgroundColor: '#f1f5f9', cursor: 'not-allowed' } : {}}
                                                     >
                                                         {!intakeForm.department ? (
@@ -2751,11 +2933,11 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                                 ))}
                                                             </>
                                                         )}
-                                                    </select>
+                                                    </CustomSelect>
                                                 </div>
 
                                                 <div className="reg-field">
-                                                    <label>Date</label>
+                                                    <label>Visit Date <em>*</em></label>
                                                     <input 
                                                         className="reg-input"
                                                         type="date" 
@@ -2787,6 +2969,9 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                                     </div>
                                                 ) : (
                                                     <div style={{ marginTop: '14px' }}>
+                                                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>
+                                                            Available Slots <em>*</em>
+                                                        </label>
                                                         <SlotPicker
                                                             doctorId={intakeForm.doctor}
                                                             date={intakeForm.visitDate}
@@ -2807,7 +2992,7 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             <div className="reg-card-title">
                                                 <div className="reg-card-icon">₹</div>
                                                 <div>
-                                                    <h2>Payment</h2>
+                                                    <h2>Payment <em>*</em></h2>
                                                     <p>Registration & consultation payment details</p>
                                                 </div>
                                             </div>
@@ -2929,7 +3114,24 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
 
                                     <div className="reg-form-footer">
                                         <div className="reg-footer-info">
-                                            🔒 Patient information is encrypted & securely stored
+                                            <div className="reg-footer-info-col">
+                                                <span className="reg-footer-secure">
+                                                    🔒 Patient information is encrypted & securely stored
+                                                </span>
+                                                <div className="reg-validation-indicator">
+                                                    {!formValidation.isValid ? (
+                                                        <span className="reg-val-pill pending" title={formValidation.missing.join(', ')}>
+                                                            <span className="reg-val-dot pending" />
+                                                            <span><strong>{formValidation.missing.length} Required Field{formValidation.missing.length > 1 ? 's' : ''} Pending:</strong> {formValidation.missing.slice(0, 3).join(', ')}{formValidation.missing.length > 3 ? ` +${formValidation.missing.length - 3} more` : ''}</span>
+                                                        </span>
+                                                    ) : (
+                                                        <span className="reg-val-pill ready">
+                                                            <span className="reg-val-dot ready" />
+                                                            <span><strong>Ready:</strong> All required fields completed</span>
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
 
                                         <div className="reg-actions">
@@ -2944,19 +3146,10 @@ const ReceptionDashboard = ({ isPatientPortal = false }) => {
                                             <button 
                                                 type="submit" 
                                                 className="reg-btn reg-btn-save" 
-                                                disabled={saving || (!isEditingProfileOnly && !followupStatus?.active && Number(intakeForm.consultationFee) > 0 && totalIntakeSplitAmount !== Number(intakeForm.consultationFee))}
+                                                disabled={!formValidation.isValid || saving}
+                                                title={!formValidation.isValid ? `Please fill required fields: ${formValidation.missing.join(', ')}` : 'Click to complete registration'}
                                             >
-                                                {saving
-                                                    ? 'Saving...'
-                                                    : (() => {
-                                                        if (isEditingProfileOnly) return '✓ Save Patient Details';
-                                                        const isTokenMode = hospitalContext?.appointmentMode === 'token';
-                                                        const canBook = intakeForm.doctor && intakeForm.visitDate && (intakeForm.visitTime || isTokenMode);
-                                                        const actionText = followupStatus?.active ? 'Re-Book Appointment' : (isTokenMode && !isPatientPortal ? 'Issue Token' : 'Book Appointment');
-                                                        if (isPatientPortal) return canBook ? actionText : '✓ Complete Profile & Continue';
-                                                        return canBook ? `✓ Register, ${actionText} & Receipt` : '✓ Save Patient Details';
-                                                    })()
-                                                }
+                                                {getSubmitButtonLabel()}
                                             </button>
                                         </div>
                                     </div>

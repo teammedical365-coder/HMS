@@ -1755,3 +1755,13 @@ export const localSyncAPI = {
     getBackupStatus: async () => (await apiClient.get('/api/local-sync/backup-status')).data
 };
 
+// ── ABDM ABHA INTEGRATION API ──────────────────────────────────────────────────
+export const abdmAPI = {
+    getStatus: async (patientId) => (await apiClient.get(`/api/abdm/abha/status/${patientId}`)).data,
+    startLink: async (data) => (await apiClient.post('/api/abdm/abha/link/start', data)).data,
+    verifyLink: async (data) => (await apiClient.post('/api/abdm/abha/link/verify', data)).data,
+    startCreate: async (data) => (await apiClient.post('/api/abdm/abha/create/start', data)).data,
+    verifyCreate: async (data) => (await apiClient.post('/api/abdm/abha/create/verify', data)).data
+};
+
+
