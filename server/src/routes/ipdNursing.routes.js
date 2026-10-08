@@ -130,17 +130,26 @@ const findAdmissionOrFail = async (req, admissionId) => {
     } else if (mongoose.Types.ObjectId.isValid(admissionId)) {
         if (hospitalId) {
             admission = await Admission.findOne({ _id: admissionId, hospitalId }).lean();
-        }
-        if (!admission) {
-            admission = await Admission.findById(admissionId).lean();
-        }
-        if (!admission) {
-            // Check if admissionId is actually a patientId
-            admission = await Admission.findOne({
-                ...(hospitalId ? { hospitalId } : {}),
-                patientId: admissionId,
-                status: { $in: ['Admitted', 'ADMITTED', 'admitted'] }
-            }).lean();
+            if (!admission) {
+                // Check if admissionId is actually a patientId within this hospital
+                admission = await Admission.findOne({
+                    patientId: admissionId,
+                    hospitalId,
+                    status: { $in: ['Admitted', 'ADMITTED', 'admitted'] }
+                }).lean();
+            }
+        } else {
+            // Global unrestricted lookup permitted ONLY when hospitalId is unset AND user has system-level admin role
+            const role = getUserRole(req);
+            if (['superadmin', 'centraladmin'].includes(role)) {
+                admission = await Admission.findById(admissionId).lean();
+                if (!admission) {
+                    admission = await Admission.findOne({
+                        patientId: admissionId,
+                        status: { $in: ['Admitted', 'ADMITTED', 'admitted'] }
+                    }).lean();
+                }
+            }
         }
     }
 

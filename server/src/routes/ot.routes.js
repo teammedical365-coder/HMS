@@ -72,15 +72,23 @@ async function populateSurgeryPlans(plans, req) {
         } catch {}
     }
 
+    const validUserIds = allUserIds.filter(id => id && /^[0-9a-fA-F]{24}$/.test(id));
+    const validDoctorIds = allDoctorIds.filter(id => id && /^[0-9a-fA-F]{24}$/.test(id));
+    const validRoomIds = allRoomIds.filter(id => id && /^[0-9a-fA-F]{24}$/.test(id));
+
+    const doctorOrConditions = [];
+    if (validDoctorIds.length > 0) doctorOrConditions.push({ _id: { $in: validDoctorIds } });
+    if (validDoctorIds.length > 0) doctorOrConditions.push({ userId: { $in: validDoctorIds } });
+
     const [users, doctors, rooms] = await Promise.all([
-        allUserIds.length > 0
-            ? UserMaster.find({ _id: { $in: allUserIds } }).select('name email phone patientId mrn age gender dob specialization firstName lastName').lean()
+        validUserIds.length > 0
+            ? UserMaster.find({ _id: { $in: validUserIds } }).select('name email phone patientId mrn age gender dob specialization firstName lastName').lean()
             : [],
-        allDoctorIds.length > 0
-            ? DoctorMaster.find({ $or: [{ _id: { $in: allDoctorIds } }, { userId: { $in: allDoctorIds } }] }).select('name email phone specialization firstName lastName userId').lean()
+        doctorOrConditions.length > 0
+            ? DoctorMaster.find({ $or: doctorOrConditions }).select('name email phone specialization firstName lastName userId').lean()
             : [],
-        allRoomIds.length > 0
-            ? OTRoomModel.find({ _id: { $in: allRoomIds } }).select('name status').lean()
+        validRoomIds.length > 0
+            ? OTRoomModel.find({ _id: { $in: validRoomIds } }).select('name status').lean()
             : []
     ]);
 
@@ -1009,10 +1017,62 @@ router.get('/surgery-plans/patient/:patientId', verifyDoctorOrAdminAccess, async
     }
 });
 
+// GET /api/ot/surgery-plans/scheduled
+router.get('/surgery-plans/scheduled', verifyAdminAccess, async (req, res) => {
+    try {
+        const hospitalId = req.hospitalId || req.user?.hospitalId;
+        const SurgeryPlan = getSurgeryPlanModel(req);
+        const { date } = req.query;
+
+        const activeStatuses = ['SCHEDULED', 'ADMITTED', 'PRE_OP', 'READY_FOR_OT', 'IN_OT', 'SURGERY_COMPLETED', 'POST_OP', 'COMPLETED', 'CANCELLED'];
+        let query = { status: { $in: activeStatuses } };
+        if (hospitalId && !req.tenantDb) {
+            query.$or = [
+                { hospitalId },
+                { hospitalId: hospitalId.toString() },
+                ...(require('mongoose').Types.ObjectId.isValid(hospitalId) ? [{ hospitalId: new (require('mongoose')).Types.ObjectId(hospitalId) }] : [])
+            ];
+        }
+        if (date) {
+            const startDate = new Date(date);
+            startDate.setHours(0,0,0,0);
+            const endDate = new Date(date);
+            endDate.setHours(23,59,59,999);
+            query.surgeryDate = { $gte: startDate, $lte: endDate };
+        }
+
+        let rawScheduled = await SurgeryPlan.find(query)
+            .sort({ startTime: 1, createdAt: 1 })
+            .lean();
+
+        if (rawScheduled.length === 0 && req.tenantDb) {
+            let masterQuery = { ...query };
+            if (hospitalId) {
+                masterQuery.$or = [
+                    { hospitalId },
+                    { hospitalId: hospitalId.toString() },
+                    ...(require('mongoose').Types.ObjectId.isValid(hospitalId) ? [{ hospitalId: new (require('mongoose')).Types.ObjectId(hospitalId) }] : [])
+                ];
+            }
+            let masterScheduled = await SurgeryPlanMaster.find(masterQuery).sort({ startTime: 1, createdAt: 1 }).lean();
+            if (masterScheduled.length > 0) rawScheduled = masterScheduled;
+        }
+
+        const scheduled = await populateSurgeryPlans(rawScheduled, req);
+        res.json({ success: true, schedule: scheduled, scheduled, surgeries: scheduled, data: scheduled });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Error fetching scheduled surgeries' });
+    }
+});
+
 // GET /api/ot/surgery-plans/:id — Single surgery plan details
-router.get('/surgery-plans/:id', verifyDoctorOrAdminAccess, async (req, res) => {
+router.get('/surgery-plans/:id', verifyDoctorOrAdminAccess, async (req, res, next) => {
     try {
         const { id } = req.params;
+        if (!require('mongoose').Types.ObjectId.isValid(id)) {
+            return next();
+        }
         const SurgeryPlan = getSurgeryPlanModel(req);
 
         let rawPlan = await SurgeryPlan.findById(id)
@@ -1025,6 +1085,24 @@ router.get('/surgery-plans/:id', verifyDoctorOrAdminAccess, async (req, res) => 
 
         if (!rawPlan) return res.status(404).json({ success: false, message: 'Surgery Plan not found' });
 
+        const hospitalId = req.hospitalId || req.user?.hospitalId;
+        const userRole = (req.user?._roleData?.name || String(req.user?.role || '')).toLowerCase().replace(/\s+/g, '');
+        const isSuperOrCentralAdmin = ['superadmin', 'centraladmin'].includes(userRole);
+
+        if (!isSuperOrCentralAdmin && !hospitalId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Hospital context required'
+            });
+        }
+
+        if (!isSuperOrCentralAdmin) {
+            const planHospId = rawPlan.hospitalId ? String(rawPlan.hospitalId) : null;
+            if (!planHospId || planHospId !== String(hospitalId)) {
+                return res.status(403).json({ success: false, message: 'Access denied: surgery plan belongs to another hospital' });
+            }
+        }
+
         const plan = await populateSurgeryPlans(rawPlan, req);
         res.json({ success: true, plan, data: plan });
     } catch (err) {
@@ -1036,7 +1114,7 @@ router.get('/surgery-plans/:id', verifyDoctorOrAdminAccess, async (req, res) => 
 // GET /api/ot/today-schedule — Dedicated endpoint for Today's OT Schedule
 router.get('/today-schedule', verifyAdminAccess, async (req, res) => {
     try {
-        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const hospitalId = req.hospitalId || req.user?.hospitalId;
         const SurgeryPlan = getSurgeryPlanModel(req);
         const { date } = req.query;
 
@@ -1087,47 +1165,6 @@ router.get('/today-schedule', verifyAdminAccess, async (req, res) => {
     }
 });
 
-// GET /api/ot/surgery-plans/scheduled
-router.get('/surgery-plans/scheduled', verifyAdminAccess, async (req, res) => {
-    try {
-        const hospitalId = req.hospitalId || req.user.hospitalId;
-        const SurgeryPlan = getSurgeryPlanModel(req);
-        const { date } = req.query;
-
-        const activeStatuses = ['SCHEDULED', 'ADMITTED', 'PRE_OP', 'READY_FOR_OT', 'IN_OT', 'SURGERY_COMPLETED', 'POST_OP', 'COMPLETED', 'CANCELLED'];
-        let query = { status: { $in: activeStatuses } };
-        if (hospitalId && !req.tenantDb) {
-            query.$or = [
-                { hospitalId },
-                { hospitalId: hospitalId.toString() },
-                ...(require('mongoose').Types.ObjectId.isValid(hospitalId) ? [{ hospitalId: new (require('mongoose')).Types.ObjectId(hospitalId) }] : [])
-            ];
-        }
-        if (date) {
-            const startDate = new Date(date);
-            startDate.setHours(0,0,0,0);
-            const endDate = new Date(date);
-            endDate.setHours(23,59,59,999);
-            query.surgeryDate = { $gte: startDate, $lte: endDate };
-        }
-
-        let rawScheduled = await SurgeryPlan.find(query)
-            .sort({ startTime: 1, createdAt: 1 })
-            .lean();
-
-        if (rawScheduled.length === 0 && req.tenantDb) {
-            let masterScheduled = await SurgeryPlanMaster.find(query).sort({ startTime: 1, createdAt: 1 }).lean();
-            if (masterScheduled.length > 0) rawScheduled = masterScheduled;
-        }
-
-        const scheduled = await populateSurgeryPlans(rawScheduled, req);
-        res.json({ success: true, schedule: scheduled, scheduled, surgeries: scheduled, data: scheduled });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ success: false, message: 'Error fetching scheduled surgeries' });
-    }
-});
-
 const checkConflict = async (SurgeryPlan, hospitalId, otRoomId, surgeonId, surgeryDate, startTime, endTime, excludePlanId = null) => {
     const sDate = new Date(surgeryDate);
     sDate.setHours(0,0,0,0);
@@ -1175,7 +1212,16 @@ const handleScheduleSurgery = async (req, res) => {
             priority, 
             notes 
         } = req.body;
-        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const hospitalId = req.hospitalId || req.user?.hospitalId;
+        const userRole = (req.user?._roleData?.name || String(req.user?.role || '')).toLowerCase().replace(/\s+/g, '');
+        const isSuperOrCentralAdmin = ['superadmin', 'centraladmin'].includes(userRole);
+
+        if (!isSuperOrCentralAdmin && !hospitalId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Hospital context required'
+            });
+        }
 
         if (!otRoomId || !surgeryDate || !startTime || !endTime || !surgeonId) {
             return res.status(400).json({ success: false, message: 'Missing required fields (OT Room, Surgery Date, Start Time, End Time, Operating Surgeon)' });
@@ -1218,7 +1264,11 @@ const handleScheduleSurgery = async (req, res) => {
             return res.status(409).json({ success: false, message: conflictCheck.message });
         }
 
-        const existingPlan = await SurgeryPlan.findOne({ _id: id, hospitalId });
+        const planQuery = { _id: id };
+        if (!isSuperOrCentralAdmin) {
+            planQuery.hospitalId = hospitalId;
+        }
+        const existingPlan = await SurgeryPlan.findOne(planQuery);
         if (!existingPlan) return res.status(404).json({ success: false, message: 'Surgery Plan not found' });
 
         const cost = Number(surgeryCost) >= 0 ? Number(surgeryCost) : (existingPlan.surgeryCost || 0);
@@ -1312,24 +1362,39 @@ router.put('/surgery-plans/:id/schedule', verifyDoctorOrAdminAccess, handleSched
 router.put('/surgery-plans/:id/cancel', verifyDoctorOrAdminAccess, async (req, res) => {
     try {
         const { id } = req.params;
-        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const hospitalId = req.hospitalId || req.user?.hospitalId;
+        const userRole = (req.user?._roleData?.name || String(req.user?.role || '')).toLowerCase().replace(/\s+/g, '');
+        const isSuperOrCentralAdmin = ['superadmin', 'centraladmin'].includes(userRole);
+
+        if (!isSuperOrCentralAdmin && !hospitalId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Hospital context required'
+            });
+        }
+
         const SurgeryPlan = getSurgeryPlanModel(req);
 
+        const cancelQuery = { _id: id };
+        if (!isSuperOrCentralAdmin) {
+            cancelQuery.hospitalId = hospitalId;
+        }
+
         let plan = await SurgeryPlan.findOneAndUpdate(
-            { _id: id },
+            cancelQuery,
             { $set: { status: 'CANCELLED' } },
             { new: true }
         ).lean();
 
         if (!plan && req.tenantDb) {
             plan = await SurgeryPlanMaster.findOneAndUpdate(
-                { _id: id },
+                cancelQuery,
                 { $set: { status: 'CANCELLED' } },
                 { new: true }
             ).lean();
-        } else if (req.tenantDb && SurgeryPlan !== SurgeryPlanMaster) {
+        } else if (req.tenantDb && SurgeryPlan !== SurgeryPlanMaster && plan) {
             try {
-                await SurgeryPlanMaster.findByIdAndUpdate(id, { $set: { status: 'CANCELLED' } }).catch(() => {});
+                await SurgeryPlanMaster.findOneAndUpdate(cancelQuery, { $set: { status: 'CANCELLED' } }).catch(() => {});
             } catch {}
         }
 
@@ -1363,17 +1428,31 @@ router.put('/surgery-plans/:id/workflow', verifyDoctorOrAdminAccess, async (req,
     try {
         const { id } = req.params;
         const { status } = req.body;
-        const hospitalId = req.hospitalId || req.user.hospitalId;
+        const hospitalId = req.hospitalId || req.user?.hospitalId;
+        const userRole = (req.user?._roleData?.name || String(req.user?.role || '')).toLowerCase().replace(/\s+/g, '');
+        const isSuperOrCentralAdmin = ['superadmin', 'centraladmin'].includes(userRole);
+
+        if (!isSuperOrCentralAdmin && !hospitalId) {
+            return res.status(403).json({
+                success: false,
+                message: 'Hospital context required'
+            });
+        }
 
         const validStatuses = ['ADMITTED', 'PRE_OP', 'READY_FOR_OT', 'IN_OT', 'SURGERY_COMPLETED', 'POST_OP', 'COMPLETED'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ success: false, message: 'Invalid workflow status' });
         }
 
+        const planQuery = { _id: id };
+        if (!isSuperOrCentralAdmin) {
+            planQuery.hospitalId = hospitalId;
+        }
+
         const SurgeryPlan = getSurgeryPlanModel(req);
-        let plan = await SurgeryPlan.findOne({ _id: id });
+        let plan = await SurgeryPlan.findOne(planQuery);
         if (!plan && req.tenantDb) {
-            plan = await SurgeryPlanMaster.findOne({ _id: id });
+            plan = await SurgeryPlanMaster.findOne(planQuery);
         }
         if (!plan) return res.status(404).json({ success: false, message: 'Surgery Plan not found' });
 
